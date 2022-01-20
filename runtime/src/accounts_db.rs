@@ -84,6 +84,8 @@ use {
     tempfile::TempDir,
 };
 
+pub type Rewrites = DashMap<Pubkey, Hash>;
+
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
@@ -5510,6 +5512,7 @@ impl AccountsDb {
                     None
                 },
                 self.num_hash_scan_passes,
+                slots_per_epoch,
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5589,6 +5592,66 @@ impl AccountsDb {
         (hash, total_lamports)
     }
 
+    fn maybe_rehash_rewrites(
+        loaded_account: &LoadedAccount,
+        pubkey: &Pubkey,
+        storage_slot: Slot,
+        storage: &SortedStorages,
+        slots_per_epoch: Option<Slot>,
+        rehash: &AtomicUsize,
+    ) -> Hash {
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
+        if slots_per_epoch.is_none() {
+            return loaded_account.loaded_hash();
+        }
+
+        // if we are not ancient, we can calculate based on distance of this slot from max
+        let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
+        let partition_from_pubkey =
+            crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
+        let max_slot_in_storages = storage.range().end;
+        let partition_index_from_max_slot = max_slot_in_storages % slots_per_epoch;
+        if max_slot_in_storages >= slots_per_epoch && storage_slot <= max_slot_in_storages - slots_per_epoch {
+            // this storage_slot is ancient and we know we have to recompute
+        }
+        // now, we have to find the root that is >= that storage_slot
+        let first_slot_in_max_epoch = max_slot_in_storages - partition_index_from_max_slot;
+        let mut expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch + partition_from_pubkey;
+        if expected_rent_collection_slot_max_epoch > max_slot_in_storages {
+            // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
+            expected_rent_collection_slot_max_epoch = expected_rent_collection_slot_max_epoch.saturating_sub(slots_per_epoch);
+        }
+        let mut use_stored = true;
+        if storage_slot >= expected_rent_collection_slot_max_epoch {
+            // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
+            // we have not collected rent yet in this epoch for this pubkey
+            // we can use the previously calculated hash
+            return loaded_account.loaded_hash();
+        }
+        let expected_slot_start = expected_rent_collection_slot_max_epoch;
+        let find = storage.find_valid_slot(expected_slot_start);
+        if let Some(find) = find {
+            // found a root (because we have a storage) that is >= expected_rent_collection_slot.
+            expected_rent_collection_slot_max_epoch = find;
+            use_stored = false;
+        }
+
+        if use_stored {
+            // we can use the previously calculated hash
+            return loaded_account.loaded_hash();
+        }
+
+        let num = rehash.fetch_add(1, Ordering::Relaxed);
+        if num % 100_000 == 0 {
+            error!("rehashed: {}", num);
+        }
+        // recompute based on rent collection/rewrite slot
+        // Rent would have been collected AT 'expected_rent_collection_slot', so hash according to that slot.
+        // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.
+        loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn scan_snapshot_stores_with_cache(
         cache_hash_data: &CacheHashData,
         storage: &SortedStorages,
@@ -5602,6 +5665,8 @@ impl AccountsDb {
             &AccountInfoAccountsIndex,
         )>,
         filler_account_suffix: Option<&Pubkey>,
+        slots_per_epoch: Option<Slot>,
+        rehash: &AtomicUsize,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -5634,11 +5699,26 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let source_item =
-                    CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
+                let hash = Self::maybe_rehash_rewrites(
+                    &loaded_account,
+                    pubkey,
+                    slot,
+                    storage,
+                    slots_per_epoch,
+                    rehash,
+                );
+
+                let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
 
                 if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
-                    let computed_hash = loaded_account.compute_hash(slot, pubkey);
+                    let computed_hash = Self::maybe_rehash_rewrites(
+                        &loaded_account,
+                        pubkey,
+                        slot,
+                        storage,
+                        slots_per_epoch,
+                        rehash,
+                    );
                     if computed_hash != source_item.hash {
                         info!(
                             "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
@@ -5712,7 +5792,9 @@ impl AccountsDb {
         )>,
         filler_account_suffix: Option<&Pubkey>,
         num_hash_scan_passes: Option<usize>,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let rehash = AtomicUsize::default();
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
             let mut previous_pass = PreviousPass::default();
@@ -5735,6 +5817,8 @@ impl AccountsDb {
                     check_hash,
                     accounts_cache_and_ancestors,
                     filler_account_suffix,
+                    slots_per_epoch,
+                    &rehash,
                 )?;
 
                 let hash = AccountsHash {
@@ -5750,6 +5834,7 @@ impl AccountsDb {
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
+            stats.rehash = rehash.load(Ordering::Relaxed);
 
             Ok(final_result)
         };
@@ -5855,6 +5940,9 @@ impl AccountsDb {
     }
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+        self.get_accounts_delta_hash_new(slot, &Rewrites::default())
+    }
+    pub fn get_accounts_delta_hash_new(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
@@ -5896,6 +5984,20 @@ impl AccountsDb {
         if self.filler_accounts_enabled() {
             // filler accounts must be added to 'dirty_keys' above but cannot be used to calculate hash
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
+        }
+
+        let rewrites = rewrites.clone(); // todo
+        hashes.iter().for_each(|(key, _)| {
+            let key: &Pubkey = key;
+            rewrites.remove(key);
+        });
+        hashes.extend(rewrites.into_iter());
+
+        if slot == 116979357 {
+            let mut h2 = hashes.clone();
+            AccountsHash::sort_hashes_by_pubkey(&mut h2);
+
+            info!("hash calc: {:?}", h2,);
         }
 
         let ret = AccountsHash::accumulate_account_hashes(hashes);
@@ -7459,6 +7561,7 @@ pub mod tests {
         std::{
             iter::FromIterator,
             str::FromStr,
+            sync::atomic::AtomicUsize,
             thread::{self, sleep, Builder, JoinHandle},
             time::Duration,
         },
@@ -7495,6 +7598,8 @@ pub mod tests {
                 check_hash,
                 None,
                 None,
+                None,
+                &AtomicUsize::default(),
             )
         }
     }
@@ -7851,6 +7956,7 @@ pub mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -7873,6 +7979,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
+            None,
             None,
             None,
             None,

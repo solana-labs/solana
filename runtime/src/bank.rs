@@ -39,7 +39,7 @@ use {
     crate::{
         accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, Rewrites, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
@@ -1179,6 +1179,8 @@ pub struct Bank {
 
     sysvar_cache: RwLock<SysvarCache>,
 
+    rewrites: Rewrites,
+
     /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
     /// maximum size.
     accounts_data_len: AtomicU64,
@@ -1268,6 +1270,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let bank = Self {
+            rewrites: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1507,6 +1510,7 @@ impl Bank {
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let mut new = Bank {
+            rewrites: Rewrites::default(),
             rc,
             src,
             slot,
@@ -1704,6 +1708,7 @@ impl Bank {
             T::default()
         }
         let mut bank = Self {
+            rewrites: Rewrites::default(),
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -2722,7 +2727,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly();
+            self.collect_rent_eagerly(false);
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
@@ -4317,7 +4322,16 @@ impl Bank {
         }
     }
 
-    fn collect_rent_eagerly(&self) {
+    /// after deserialize, populate rewrites with accounts that would normally have had their data rewritten in this slot due to rent collection (but didn't)
+    pub fn prepare_rewrites_for_hash(&self) {
+        self.collect_rent_eagerly(true);
+        error!(
+            "ancient_append_vec: collecting rewrites: {}",
+            self.rewrites.len()
+        );
+    }
+
+    fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
         }
@@ -4327,13 +4341,14 @@ impl Bank {
         let count = partitions.len();
         let account_count: usize = partitions
             .into_iter()
-            .map(|partition| self.collect_rent_in_partition(partition))
+            .map(|partition| self.collect_rent_in_partition(partition, just_rewrites))
             .sum();
         measure.stop();
         datapoint_info!(
             "collect_rent_eagerly",
             ("accounts", account_count, i64),
-            ("partitions", count, i64)
+            ("partitions", count, i64),
+            ("skipped_rewrite", self.rewrites.len(), i64),
         );
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
@@ -4363,7 +4378,7 @@ impl Bank {
         }
     }
 
-    fn collect_rent_in_partition(&self, partition: Partition) -> usize {
+    fn collect_rent_in_partition(&self, partition: Partition, just_rewrites: bool) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
@@ -4387,12 +4402,20 @@ impl Bank {
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_collected += collected;
-            // Store all of them unconditionally to purge old AppendVec,
-            // even if collected rent is 0 (= not updated).
-            // Also, there's another subtle side-effect from this: this
-            // ensures we verify the whole on-chain state (= all accounts)
-            // via the account delta hash slowly once per an epoch.
-            self.store_account(&pubkey, &account);
+            // only store accounts where we collected rent
+            // because of this, we are not doing this:
+            //  verify the whole on-chain state (= all accounts)
+            //  via the account delta hash slowly once per an epoch.
+            if true {
+                // collected.rent_amount != 0 {
+                if !just_rewrites {
+                    self.store_account(&pubkey, &account);
+                }
+            } else {
+                let hash =
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                self.rewrites.insert(pubkey, hash); // this would have been rewritten, except we're not going to do so
+            }
             rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
         }
         self.collected_rent
@@ -4413,7 +4436,6 @@ impl Bank {
 
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
-    #[cfg(test)]
     pub fn partition_from_pubkey(
         pubkey: &Pubkey,
         partition_count: PartitionsPerCycle,
@@ -5423,7 +5445,11 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot());
+        let len = self.rewrites.len();
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .bank_hash_info_at(self.slot(), &self.rewrites);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
 
@@ -5445,14 +5471,19 @@ impl Bank {
         }
 
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}",
+            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}, rewrites: {}",
             self.slot(),
             hash,
             accounts_delta_hash.hash,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
+            len,
         );
+
+        if self.slot() == 116979357 {
+            //panic!("end");
+        }
 
         info!(
             "accounts hash slot: {} stats: {:?}",
@@ -8356,7 +8387,7 @@ pub(crate) mod tests {
             vec![genesis_slot]
         );
 
-        bank.collect_rent_in_partition((0, 0, 1)); // all range
+        bank.collect_rent_in_partition((0, 0, 1), false); // all range
 
         assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
         assert_eq!(
@@ -8434,8 +8465,8 @@ pub(crate) mod tests {
         assert_eq!(hash1_with_zero, hash1_without_zero);
         assert_ne!(hash1_with_zero, Hash::default());
 
-        bank2_with_zero.collect_rent_in_partition((0, 0, 1)); // all
-        bank2_without_zero.collect_rent_in_partition((0, 0, 1)); // all
+        bank2_with_zero.collect_rent_in_partition((0, 0, 1), false); // all
+        bank2_without_zero.collect_rent_in_partition((0, 0, 1), false); // all
 
         bank2_with_zero.freeze();
         let hash2_with_zero = bank2_with_zero.hash();

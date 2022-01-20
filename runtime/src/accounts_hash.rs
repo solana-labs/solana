@@ -33,6 +33,7 @@ pub struct HashStats {
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
     pub max_bin_size: usize,
+    pub rehash: usize,
 }
 impl HashStats {
     fn log(&mut self) {
@@ -65,6 +66,7 @@ impl HashStats {
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             ("total", total_time_us as i64, i64),
+            ("rehashed", self.rehash as i64, i64),
         );
     }
 }

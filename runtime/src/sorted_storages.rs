@@ -37,10 +37,6 @@ impl<'a> SortedStorages<'a> {
         }
     }
 
-    pub fn contains(&self, slot: Slot) -> bool {
-        self.get(slot).is_some()
-    }
-
     pub fn range_width(&self) -> Slot {
         self.range.end - self.range.start
     }
