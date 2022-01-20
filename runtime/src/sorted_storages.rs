@@ -13,6 +13,7 @@ pub struct SortedStorages<'a> {
     range: Range<Slot>,
     /// the actual storages. index is (slot - range.start)
     storages: Vec<Option<&'a SnapshotStorage>>,
+    next_valid_slot: Vec<Slot>,
     slot_count: usize,
     storage_count: usize,
 }
@@ -33,6 +34,26 @@ impl<'a> SortedStorages<'a> {
             let index = (slot - self.range.start) as usize;
             self.storages[index]
         }
+    }
+
+    /// find slot that is valid and >= 'slot'
+    pub fn find_valid_slot(&self, slot: Slot) -> Option<Slot> {
+        if slot >= self.range.end {
+            None
+        } else if slot < self.range.start || self.next_valid_slot.is_empty() {
+            self.next_valid_slot.first().cloned()
+        } else {
+            let index = (slot - self.range.start) as usize;
+            if index < self.next_valid_slot.len() {
+                Some(self.next_valid_slot[index])
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn contains(&self, slot: Slot) -> bool {
+        self.get(slot).is_some()
     }
 
     pub fn range_width(&self) -> Slot {
@@ -107,20 +128,30 @@ impl<'a> SortedStorages<'a> {
         let mut time2 = Measure::start("sort");
         let range;
         let mut storages;
+        let mut next_valid_slot;
         if min > max {
             range = Range::default();
             storages = vec![];
+            next_valid_slot = vec![];
         } else {
             range = Range {
                 start: min,
                 end: max,
             };
-            let len = max - min;
-            storages = vec![None; len as usize];
+            let len = (max - min) as usize;
+            storages = vec![None; len];
+            next_valid_slot = vec![Slot::MAX; len];
             source.for_each(|(original_storages, slot)| {
                 let index = (slot - min) as usize;
                 assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
                 storages[index] = Some(original_storages);
+            });
+            let mut last = max - 1;
+            storages.iter().enumerate().rev().for_each(|(i, storage)| {
+                if storage.is_some() {
+                    last = i as Slot + min;
+                }
+                next_valid_slot[i] = last;
             });
         }
         time2.stop();
@@ -130,6 +161,7 @@ impl<'a> SortedStorages<'a> {
             storages,
             slot_count,
             storage_count,
+            next_valid_slot,
         }
     }
 }
@@ -214,6 +246,7 @@ pub mod tests {
                 storages,
                 slot_count,
                 storage_count: 0,
+                next_valid_slot: vec![],
             }
         }
     }
@@ -391,5 +424,37 @@ pub mod tests {
         assert!(result.get(8).is_none());
         assert_eq!(result.get(slots[0]).unwrap().len(), vec_check.len());
         assert_eq!(result.get(slots[1]).unwrap().len(), vec_check.len());
+    }
+
+    #[test]
+    fn test_sorted_storages_next() {
+        solana_logger::setup();
+        for slots in [[4, 7], [7, 4]] {
+            let vec = vec![];
+            let vecs = [vec.clone(), vec];
+            let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()), None, None);
+            assert_eq!(
+                result.range,
+                Range {
+                    start: *slots.iter().min().unwrap(),
+                    end: *slots.iter().max().unwrap() + 1,
+                }
+            );
+            let expected = [
+                Some(4),
+                Some(4),
+                Some(4),
+                Some(4),
+                Some(4), // slot 4
+                Some(7),
+                Some(7),
+                Some(7),
+                None, // slot 8 (past the end, so no next slot)
+            ];
+            expected.into_iter().enumerate().for_each(|(i, expected)| {
+                let slot = i as Slot;
+                assert_eq!(result.find_valid_slot(slot), expected, "{}, {:?}", i, slots);
+            });
+        }
     }
 }
