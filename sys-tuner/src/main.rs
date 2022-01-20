@@ -69,6 +69,8 @@ fn tune_poh_service_priority(uid: u32) {
 fn tune_kernel_udp_buffers_and_vmmap() {
     use std::collections::HashMap;
 
+    // limits should be kept in sync with limits in validator and
+    // https://docs.solana.com/running-validator/validator-start#manual
     fn get_recommended_net_limits() -> HashMap<&str, i64> {
         let mut limits = HashMap::default();
         // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
@@ -90,7 +92,7 @@ fn tune_kernel_udp_buffers_and_vmmap() {
         limits
     }
 
-    fn set_if_less_than_existing(name: &str, new_value: i64) {
+    fn increase_value_to_recommended(name: &str, new_value: i64) {
         let ctl = sysctl::Ctl::new(name);
         if let Err(e) = ctl {
             error!("Failed to find sysctl {}", name);
@@ -131,7 +133,7 @@ fn tune_kernel_udp_buffers_and_vmmap() {
 
     let recommened_limits = get_recemmended_mem_limits().append(get_recommended_net_limits());
     for (name, val) in recommened_limits.entries() {
-        set_if_less_than_existing(name, val);
+        increase_value_to_recommended(name, val);
     }
 }
 

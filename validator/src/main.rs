@@ -23,6 +23,7 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
+        system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
@@ -32,7 +33,6 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
-    solana_metrics::datapoint_info,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
@@ -409,101 +409,6 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
         }
     }
     None
-}
-
-fn platform_id() -> String {
-    format!(
-        "{}/{}/{}",
-        std::env::consts::FAMILY,
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn check_os_network_limits() {
-    use {solana_metrics::datapoint_warn, std::collections::HashMap, sysctl::Sysctl};
-
-    fn get_recommended_net_limits() -> HashMap<&str, i64> {
-        let mut limits = HashMap::default();
-        // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-        limits.insert("net.core.rmem_max", 134217728);
-        limits.insert("net.core.rmem_default", 134217728);
-        limits.insert("net.core.wmem_max", 134217728);
-        limits.insert("net.core.wmem_default", 134217728);
-        limits.insert("vm.max_map_count", 1000000);
-        // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
-        limits.insert("net.core.optmem_max", 4194304);
-        limits.insert("net.core.netdev_max_backlog", 250000);
-        limits
-    }
-
-    fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
-        sysctl::Ctl::new(name)?.value_string()
-    }
-    let mut check_failed = false;
-
-    info!("Testing OS network limits:");
-
-    /*
-    // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-    let mut recommended_limits: HashMap<&str, i64> = HashMap::default();
-    recommended_limits.insert("net.core.rmem_max", 134217728);
-    recommended_limits.insert("net.core.rmem_default", 134217728);
-    recommended_limits.insert("net.core.wmem_max", 134217728);
-    recommended_limits.insert("net.core.wmem_default", 134217728);
-    recommended_limits.insert("vm.max_map_count", 1000000);
-
-    // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
-    recommended_limits.insert("net.core.optmem_max", 4194304);
-    recommended_limits.insert("net.core.netdev_max_backlog", 250000);
-
-    let mut current_limits: HashMap<&str, i64> = HashMap::default();
-    */
-
-    let recommended_limits = get_recommended_net_limits();
-    for (key, _) in recommended_limits.iter() {
-        let current_val = match sysctl_read(key) {
-            Ok(val) => val.parse::<i64>().unwrap(),
-            Err(e) => {
-                error!("Failed to query value for {}: {}", key, e);
-                check_failed = true;
-                -1
-            }
-        };
-        current_limits.insert(key, current_val);
-    }
-
-    for (key, recommended_val) in recommended_limits.iter() {
-        let current_val = *current_limits.get(key).unwrap();
-        if current_val < *recommended_val {
-            datapoint_warn!("os-config", (key, current_val, i64));
-            warn!(
-                "  {}: recommended={} current={}, too small",
-                key, recommended_val, current_val
-            );
-            check_failed = true;
-        } else {
-            datapoint_info!("os-config", (key, current_val, i64));
-            info!(
-                "  {}: recommended={} current={}",
-                key, recommended_val, current_val
-            );
-        }
-    }
-    datapoint_info!("os-config", ("platform", platform_id(), String));
-
-    if check_failed {
-        datapoint_warn!("os-config", ("network_limit_test_failed", 1, i64));
-        warn!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
-    } else {
-        info!("OS network limits test passed.");
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn check_os_network_limits() {
-    datapoint_info!("os-config", ("platform", platform_id(), String));
 }
 
 pub fn main() {
@@ -2532,7 +2437,11 @@ pub fn main() {
     });
 
     if !matches.is_present("no_os_network_limits_test") {
-        check_os_network_limits();
+        if SystemMonitorService::check_os_network_limits() {
+            info!("OS network limits test passed.");
+        } else {
+            eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+        }
     }
 
     let mut ledger_lock = ledger_lockfile(&ledger_path);

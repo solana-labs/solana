@@ -1,12 +1,11 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
     solana_perf::packet::PacketBatch,
-    solana_runtime::bank::Bank,
+    solana_runtime::{bank::Bank, vote_transaction::VoteTransaction},
     solana_sdk::{
         account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
         slot_hashes::SlotHashes, sysvar,
     },
-    solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,

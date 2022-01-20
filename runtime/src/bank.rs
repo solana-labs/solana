@@ -61,6 +61,7 @@ use {
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         vote_account::VoteAccount,
+        vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::DashMap,
@@ -117,7 +118,6 @@ use {
         nonce, nonce_account,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
-        program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
@@ -135,10 +135,7 @@ use {
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
-    solana_vote_program::{
-        vote_instruction::VoteInstruction,
-        vote_state::{VoteState, VoteStateVersions},
-    },
+    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -3912,7 +3909,7 @@ impl Bank {
                     }
                 }
 
-                let is_vote = is_simple_vote_transaction(tx);
+                let is_vote = vote_parser::is_simple_vote_transaction(tx);
                 let store = match transaction_log_collector_config.filter {
                     TransactionLogCollectorFilter::All => {
                         !is_vote || !filtered_mentioned_addresses.is_empty()
@@ -6407,29 +6404,6 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
             return;
         }
     }
-}
-
-fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
-    if transaction.message().instructions().len() == 1 {
-        let (program_pubkey, instruction) = transaction
-            .message()
-            .program_instructions_iter()
-            .next()
-            .unwrap();
-        if program_pubkey == &solana_vote_program::id() {
-            if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
-            {
-                return matches!(
-                    vote_instruction,
-                    VoteInstruction::Vote(_)
-                        | VoteInstruction::VoteSwitch(_, _)
-                        | VoteInstruction::UpdateVoteState(_)
-                        | VoteInstruction::UpdateVoteStateSwitch(_, _)
-                );
-            }
-        }
-    }
-    false
 }
 
 #[cfg(test)]

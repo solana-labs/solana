@@ -218,7 +218,7 @@ impl Accounts {
         message: &SanitizedMessage,
         is_owned_by_sysvar: bool,
     ) -> AccountSharedData {
-        let data = construct_instructions_data(message);
+        let data = construct_instructions_data(&message.decompile_instructions());
         let owner = if is_owned_by_sysvar {
             sysvar::id()
         } else {
