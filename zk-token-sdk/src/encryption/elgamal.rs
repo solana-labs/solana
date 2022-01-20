@@ -577,7 +577,7 @@ define_mul_variants!(LHS = DecryptHandle, RHS = Scalar, Output = DecryptHandle);
 mod tests {
     use {
         super::*,
-        crate::encryption::pedersen::Pedersen,
+        crate::encryption::{discrete_log::DECODE_U32_PRECOMPUTATION_FOR_G, pedersen::Pedersen},
         solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
     };
 
@@ -593,6 +593,7 @@ mod tests {
         };
 
         assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ciphertext));
+        assert_eq!(57_u32, secret.decrypt_u32_online(&ciphertext, &(*DECODE_U32_PRECOMPUTATION_FOR_G)).unwrap());
     }
 
     #[test]

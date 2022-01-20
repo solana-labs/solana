@@ -16,7 +16,9 @@ use {
 };
 
 lazy_static::lazy_static!{
+    /// Pedersen base point for encoding messages to be committed.
     pub static ref G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
+    /// Pedersen base point for encoding the commitment openings.
     pub static ref H: RistrettoPoint =
         RistrettoPoint::hash_from_bytes::<Sha3_512>(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
 }
