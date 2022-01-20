@@ -3,7 +3,6 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        instruction_recorder::InstructionRecorder,
         invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
@@ -58,7 +57,6 @@ impl MessageProcessor {
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
@@ -75,7 +73,6 @@ impl MessageProcessor {
             log_collector,
             compute_budget,
             executors,
-            instruction_recorder,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -242,7 +239,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
@@ -267,7 +264,6 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -308,7 +304,6 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -341,7 +336,6 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -441,7 +435,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
@@ -468,7 +462,6 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -502,7 +495,6 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -533,7 +525,6 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -586,7 +577,7 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
 
         let message = SanitizedMessage::Legacy(Message::new(
             &[
@@ -607,7 +598,6 @@ mod tests {
             RentCollector::default().rent,
             None,
             Rc::new(RefCell::new(Executors::default())),
-            None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),

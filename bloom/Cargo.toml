@@ -1,0 +1,32 @@
+[package]
+name = "solana-bloom"
+version = "1.10.0"
+description = "Solana bloom filter"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-bloom"
+edition = "2021"
+
+[dependencies]
+bv = { version = "0.11.1", features = ["serde"] }
+fnv = "1.0.7"
+rand = "0.7.0"
+serde = { version = "1.0.133", features = ["rc"] }
+rayon = "1.5.1"
+serde_derive = "1.0.103"
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.0" }
+solana-sdk = { path = "../sdk", version = "=1.10.0" }
+log = "0.4.14"
+
+[lib]
+crate-type = ["lib"]
+name = "solana_bloom"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = "0.4"

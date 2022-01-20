@@ -75,7 +75,6 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        instruction_recorder::InstructionRecorder,
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext, TransactionExecutor,
         },
@@ -3661,18 +3660,11 @@ impl Bank {
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             compute_budget.max_invoke_depth.saturating_add(1),
+            tx.message().instructions().len(),
         );
 
         let pre_account_state_info =
             self.get_transaction_account_state_info(&transaction_context, tx.message());
-
-        let instruction_recorder = if enable_cpi_recording {
-            Some(InstructionRecorder::new_ref(
-                tx.message().instructions().len(),
-            ))
-        } else {
-            None
-        };
 
         let log_collector = if enable_log_recording {
             Some(LogCollector::new_ref())
@@ -3691,7 +3683,6 @@ impl Bank {
             self.rent_collector.rent,
             log_collector.clone(),
             executors.clone(),
-            instruction_recorder.clone(),
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -3747,16 +3738,17 @@ impl Bank {
                     .ok()
             });
 
-        let inner_instructions = instruction_recorder
-            .and_then(|instruction_recorder| Rc::try_unwrap(instruction_recorder).ok())
-            .map(|instruction_recorder| instruction_recorder.into_inner().deconstruct());
-
-        loaded_transaction.accounts = transaction_context.deconstruct();
+        let (accounts, instruction_trace) = transaction_context.deconstruct();
+        loaded_transaction.accounts = accounts;
 
         TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages,
-            inner_instructions,
+            inner_instructions: if enable_cpi_recording {
+                Some(instruction_trace)
+            } else {
+                None
+            },
             durable_nonce_fee,
         })
     }
@@ -15657,6 +15649,7 @@ pub(crate) mod tests {
             sol_to_lamports(1.),
             bank.last_blockhash(),
         );
+        let number_of_instructions_at_transaction_level = tx.message().instructions.len();
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
         let mut error_counters = ErrorCounters::default();
@@ -15674,6 +15667,7 @@ pub(crate) mod tests {
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             compute_budget.max_invoke_depth.saturating_add(1),
+            number_of_instructions_at_transaction_level,
         );
 
         assert_eq!(

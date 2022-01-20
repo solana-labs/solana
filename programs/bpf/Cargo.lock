@@ -2687,6 +2687,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bloom"
+version = "1.10.0"
+dependencies = [
+ "bv",
+ "fnv",
+ "log",
+ "rand 0.7.3",
+ "rayon",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_derive",
+ "solana-frozen-abi 1.10.0",
+ "solana-frozen-abi-macro 1.10.0",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-bpf-loader-program"
 version = "1.10.0"
 dependencies = [
@@ -3309,10 +3326,12 @@ name = "solana-perf"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "bv",
  "caps",
  "curve25519-dalek 3.2.0",
  "dlopen",
  "dlopen_derive",
+ "fnv",
  "lazy_static",
  "libc",
  "log",
@@ -3320,6 +3339,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
+ "solana-bloom",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
@@ -3501,6 +3521,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-address-lookup-table-program",
+ "solana-bloom",
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
