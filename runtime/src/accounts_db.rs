@@ -2079,7 +2079,7 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
-        let _ = self.active_stats.get_state(ActiveStatItems::Clean);
+        let stats_ = self.active_stats.get_state(ActiveStatItems::Clean);
 
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
