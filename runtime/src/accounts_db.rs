@@ -6206,7 +6206,7 @@ if false {
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
-        check_hash: bool,
+        mut check_hash: bool,
         accounts_cache_and_ancestors: Option<(
             &AccountsCache,
             &Ancestors,
@@ -6216,6 +6216,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
+        check_hash = false;
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
