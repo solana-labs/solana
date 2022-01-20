@@ -47,9 +47,9 @@ impl fmt::Debug for PedersenCommitment {
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct PedersenDecryptHandle(pub [u8; 32]);
+pub struct DecryptHandle(pub [u8; 32]);
 
-impl fmt::Debug for PedersenDecryptHandle {
+impl fmt::Debug for DecryptHandle {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }

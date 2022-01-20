@@ -55,7 +55,7 @@ impl Pedersen {
 /// Pedersen opening type.
 ///
 /// Instances of Pedersen openings are zeroized on drop.
-#[derive(Clone, Debug, Serialize, Deserialize, Zeroize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Zeroize)]
 #[zeroize(drop)]
 pub struct PedersenOpening(pub(crate) Scalar);
 impl PedersenOpening {
