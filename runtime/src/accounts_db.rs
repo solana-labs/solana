@@ -33,6 +33,7 @@ use {
             ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        active_stats::{ActiveStatItems, ActiveStats},
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         cache_hash_data::CacheHashData,
@@ -966,12 +967,6 @@ type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDb {
-    clean_active: AtomicUsize,
-    shrink_slot_stores_active: AtomicUsize,
-    shrink_all_slots_active    : AtomicUsize,
-    shrink_candidate_slots_active:AtomicUsize,
-    hash_active: AtomicUsize,
-    flush_active: AtomicUsize,
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: AccountInfoAccountsIndex,
 
@@ -1076,6 +1071,8 @@ pub struct AccountsDb {
 
     filler_account_count: usize,
     pub filler_account_suffix: Option<Pubkey>,
+
+    active_stats: ActiveStats,
 
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage
@@ -1529,23 +1526,6 @@ struct IndexAccountMapEntry<'a> {
 type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
 impl AccountsDb {
-    fn log_active_stats(&self, stat: &AtomicUsize, increment: bool) {
-        if increment {
-            stat.fetch_add(1, Ordering::Relaxed);
-        }
-        else {
-            stat.fetch_sub(1, Ordering::Relaxed);
-        }
-        datapoint_info!(
-            "accounts_db_active",
-            ("clean_active", self.clean_active.load(Ordering::Relaxed), i64),
-            ("shrink_all_slots_active", self.shrink_all_slots_active.load(Ordering::Relaxed), i64),
-            ("hash_active", self.hash_active.load(Ordering::Relaxed), i64),
-            ("flush_active", self.flush_active.load(Ordering::Relaxed), i64),
-            ("shrink_candidate_slots_active", self.shrink_candidate_slots_active.load(Ordering::Relaxed), i64),
-        );
-    }
-
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
     }
@@ -1592,12 +1572,7 @@ impl AccountsDb {
         Self::bins_per_pass(num_hash_scan_passes);
 
         AccountsDb {
-            shrink_candidate_slots_active: AtomicUsize::default(),
-            shrink_slot_stores_active: AtomicUsize::default(),
-            clean_active: AtomicUsize::default(),
-            flush_active: AtomicUsize::default(),
-            hash_active: AtomicUsize::default(),
-            shrink_all_slots_active: AtomicUsize::default(),
+            active_stats: ActiveStats::default(),
             accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
@@ -2104,7 +2079,7 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
-        self.log_active_stats(&self.clean_active, true);
+        let _ = self.active_stats.get_state(ActiveStatItems::Clean);
 
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
@@ -2433,7 +2408,6 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
-        self.log_active_stats(&self.clean_active, false);
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of
@@ -3414,7 +3388,7 @@ if false {
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
     */
     pub fn shrink_candidate_slots(&self) -> usize {
-        self.log_active_stats(&self.shrink_candidate_slots_active, true);
+        self.active_stats.log(ActiveStatItems::Shrink, true);
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
@@ -3464,13 +3438,13 @@ if false {
             }
         }
         inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
-        self.log_active_stats(&self.shrink_candidate_slots_active, false);
+        self.active_stats.log(ActiveStatItems::Shrink, false);
 
         num_candidates
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
-        self.log_active_stats(&self.shrink_all_slots_active, true);
+        self.active_stats.log(ActiveStatItems::Shrink, true);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
 
@@ -3508,11 +3482,7 @@ if false {
                 }
             }
         }
-        error!(
-            "ancient_append_vec: DONE shrink_all_slots, last full {:?}, startup {}",
-            last_full_snapshot_slot, is_startup
-        );
-        self.log_active_stats(&self.shrink_all_slots_active, false);
+        self.active_stats.log(ActiveStatItems::Shrink, false);
     }
 
     pub fn scan_accounts<F, A>(
@@ -4990,7 +4960,7 @@ if false {
         let mut account_bytes_saved = 0;
         let mut num_accounts_saved = 0;
 
-        self.log_active_stats(&self.flush_active, true);
+        self.active_stats.log(ActiveStatItems::Flush, true);
 
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
@@ -5148,8 +5118,7 @@ if false {
                 );
             }
         }
-        self.log_active_stats(&self.flush_active, false);
-
+        self.active_stats.log(ActiveStatItems::Flush, false);
     }
 
     fn flush_rooted_accounts_cache(
@@ -6151,7 +6120,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> (Hash, u64) {
-        self.log_active_stats(&self.hash_active, true);
+        self.active_stats.log(ActiveStatItems::Hash, true);
         let check_hash = false;
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
@@ -6169,7 +6138,7 @@ if false {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
-        self.log_active_stats(&self.hash_active, false);
+        self.active_stats.log(ActiveStatItems::Hash, false);
         (hash, total_lamports)
     }
 
