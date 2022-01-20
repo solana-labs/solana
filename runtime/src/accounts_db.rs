@@ -2075,6 +2075,8 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
+        inc_new_counter_info!("clean_accounts", 1);
+
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
 
@@ -2402,6 +2404,7 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
+        inc_new_counter_info!("clean_accounts_done", 1);
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of
@@ -2671,6 +2674,8 @@ impl AccountsDb {
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
+        inc_new_counter_info!("do_shrink_slot_stores", 1);
+
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let (stored_accounts, num_stores, original_bytes) =
             self.get_unique_accounts_from_storages(stores);
@@ -2874,6 +2879,8 @@ impl AccountsDb {
             .fetch_add(aligned_total, Ordering::Relaxed);
 
         self.shrink_stats.report();
+
+        inc_new_counter_info!("do_shrink_slot_stores_done", 1);
 
         total_accounts_after_shrink
     }
@@ -3435,6 +3442,7 @@ if false {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
+        inc_new_counter_info!("shrink_all_slots", 1);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
 
@@ -3476,6 +3484,7 @@ if false {
             "ancient_append_vec: DONE shrink_all_slots, last full {:?}, startup {}",
             last_full_snapshot_slot, is_startup
         );
+        inc_new_counter_info!("shrink_all_slots_done", 1);
     }
 
     pub fn scan_accounts<F, A>(
@@ -4953,6 +4962,8 @@ if false {
         let mut account_bytes_saved = 0;
         let mut num_accounts_saved = 0;
 
+        inc_new_counter_info!("flush_accounts_cache", 1);
+
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
         // cleaning due to an ongoing scan
@@ -5109,6 +5120,8 @@ if false {
                 );
             }
         }
+        inc_new_counter_info!("flush_accounts_cache_done", 1);
+
     }
 
     fn flush_rooted_accounts_cache(
@@ -6324,6 +6337,8 @@ if false {
         num_hash_scan_passes: Option<usize>,
         slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        inc_new_counter_info!("calculate_accounts_hash_without_index", 1);
+
         let rehash = AtomicUsize::default();
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
@@ -6373,6 +6388,8 @@ if false {
         } else {
             scan_and_hash()
         };
+        inc_new_counter_info!("calculate_accounts_hash_without_index_done", 1);
+
         result
     }
 
