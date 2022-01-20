@@ -25,16 +25,13 @@ impl<'a> SortedStorages<'a> {
     pub fn find_valid_slot(&self, slot: Slot) -> Option<Slot> {
         if slot > self.range.end {
             None
-        }
-        else if slot < self.range.start || self.next_valid_slot.is_empty() {
+        } else if slot < self.range.start || self.next_valid_slot.is_empty() {
             self.next_valid_slot.first().cloned()
-        }
-        else {
+        } else {
             let index = (slot - self.range.start) as usize;
             if index < self.next_valid_slot.len() {
                 Some(self.next_valid_slot[index])
-            }
-            else {
+            } else {
                 None
             }
         }
@@ -130,13 +127,13 @@ impl<'a> SortedStorages<'a> {
             let len = (max - min) as usize;
             storages = vec![None; len];
             next_valid_slot = Vec::with_capacity(len);
-            let mut previous_unwritten_valid_slot_index = 0;
+            let mut next_valid_index_to_fill = 0;
             let mut fill_next_valid_slot = |valid_slot: Slot| {
                 let valid_index = (valid_slot - min) as usize;
-                (previous_unwritten_valid_slot_index..=valid_index).for_each(|previous_index| {
+                (next_valid_index_to_fill..=valid_index).for_each(|_previous_index| {
                     next_valid_slot.push(valid_slot);
                 });
-                previous_unwritten_valid_slot_index = valid_index;
+                next_valid_index_to_fill = valid_index + 1;
             };
             source.for_each(|(original_storages, slot)| {
                 let index = (slot - min) as usize;
@@ -177,6 +174,7 @@ pub mod tests {
                 storages,
                 slot_count,
                 storage_count: 0,
+                next_valid_slot: vec![],
             }
         }
     }
@@ -248,5 +246,26 @@ pub mod tests {
         assert!(result.get(8).is_none());
         assert_eq!(result.get(slots[0]).unwrap().len(), vec_check.len());
         assert_eq!(result.get(slots[1]).unwrap().len(), vec_check.len());
+    }
+
+    #[test]
+    fn test_sorted_storages_next() {
+        solana_logger::setup();
+        let vec = vec![];
+        let slots = [4, 7];
+        let vecs = [vec.clone(), vec];
+        let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()), None, None);
+        assert_eq!(
+            result.range,
+            Range {
+                start: slots[0],
+                end: slots[1] + 1,
+            }
+        );
+        let expected = [Some(4), Some(4), Some(4), Some(4), Some(4), Some(7), Some(7), Some(7), None];
+        expected.into_iter().enumerate().for_each(|(i, expected)| {
+            let slot = i as Slot;
+            assert_eq!(result.find_valid_slot(slot), expected, "{}", i);
+        });
     }
 }
