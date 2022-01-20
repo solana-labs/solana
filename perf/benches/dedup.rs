@@ -21,7 +21,7 @@ fn bench_dedup_same(bencher: &mut Bencher) {
         let _ans = sigverify::dedup_packets(&bloom, &mut batches);
         count += 4096;
     });
-    println!("total {}", count);
+    println!("same total {}", count);
 }
 
 #[bench]
@@ -33,7 +33,7 @@ fn bench_dedup_same_baseline(bencher: &mut Bencher) {
             to_packet_batches(&std::iter::repeat(tx).take(4096).collect::<Vec<_>>(), 128);
         count += 4096;
     });
-    println!("total {}", count);
+    println!("same baseline total {}", count);
 }
 
 #[bench]
@@ -48,7 +48,7 @@ fn bench_dedup_diff(bencher: &mut Bencher) {
         let _ans = sigverify::dedup_packets(&bloom, &mut batches);
         count += 4096;
     });
-    println!("total {}", count);
+    println!("diff total {}", count);
 }
 
 #[bench]
@@ -59,5 +59,5 @@ fn bench_dedup_diff_baseline(bencher: &mut Bencher) {
             to_packet_batches(&(0..4096).map(|_| test_tx()).collect::<Vec<_>>(), 128);
         count += 4096;
     });
-    println!("total {}", count);
+    println!("diff baseline total {}", count);
 }
