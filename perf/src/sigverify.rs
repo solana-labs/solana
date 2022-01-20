@@ -14,6 +14,9 @@ use {
         perf_libs,
         recycler::Recycler,
     },
+    core::sync::atomic::AtomicBool,
+    fnv::FnvHasher,
+    rand::{thread_rng, Rng},
     rayon::ThreadPool,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
@@ -21,6 +24,7 @@ use {
         hash::Hash, message::MESSAGE_HEADER_LENGTH, pubkey::Pubkey, short_vec::decode_shortu16_len,
         signature::Signature,
     },
+    std::hash::Hasher,
     std::sync::atomic::{AtomicU64, Ordering},
     std::{convert::TryFrom, mem::size_of},
 };
@@ -390,35 +394,58 @@ pub fn generate_offsets(
     )
 }
 
-fn dedup_packet(count: &AtomicU64, packet: &mut Packet, bloom: &AtomicBloom<&[u8]>) {
-    // If this packet was already marked as discard, drop it
-    if packet.meta.discard {
-        return;
-    }
-
-    if bloom.contains(&&packet.data[..]) {
-        packet.meta.discard = true;
-        count.fetch_add(1, Ordering::Relaxed);
-        return;
-    }
-    bloom.add(&&packet.data[..]);
+pub struct Deduper {
+    filter: Vec<AtomicBool>,
+    seed: u64,
 }
 
-pub fn dedup_packets(bloom: &AtomicBloom<&[u8]>, batches: &mut [PacketBatch]) -> u64 {
-    use rayon::prelude::*;
-    let packet_count = count_packets_in_batches(batches);
-    // machine specific random offset to read the u64 from the packet signature
-    let count = AtomicU64::new(0);
-    PAR_THREAD_POOL.install(|| {
-        batches.into_par_iter().for_each(|batch| {
-            batch
-                .packets
-                .par_iter_mut()
-                .for_each(|p| dedup_packet(&count, p, bloom))
-        })
-    });
-    inc_new_counter_debug!("dedup_packets_total", packet_count);
-    count.load(Ordering::Relaxed)
+impl Deduper {
+    pub fn new(size: usize) -> Self {
+        let filter: Vec<AtomicBool> = (0usize..size)
+            .into_iter()
+            .map(|_| AtomicBool::new(false))
+            .collect();
+        let seed = thread_rng().gen();
+        Self { filter, seed }
+    }
+
+    fn dedup_packet(&self, count: &AtomicU64, packet: &mut Packet) {
+        // If this packet was already marked as discard, drop it
+        if packet.meta.discard {
+            return;
+        }
+
+        let mut hasher = FnvHasher::with_key(self.seed);
+        hasher.write(&&packet.data[..]);
+        let hash = hasher.finish();
+        let pos = hash.wrapping_rem(self.filter.len() as u64);
+        let prev = self.filter[pos as usize].compare_exchange_weak(
+            false,
+            true,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
+        if prev != Ok(false) {
+            packet.meta.discard = true;
+            count.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    }
+
+    pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {
+        use rayon::prelude::*;
+        // machine specific random offset to read the u64 from the packet signature
+        let count = AtomicU64::new(0);
+        PAR_THREAD_POOL.install(|| {
+            batches.into_par_iter().for_each(|batch| {
+                batch
+                    .packets
+                    .par_iter_mut()
+                    .for_each(|p| self.dedup_packet(&count, p))
+            })
+        });
+        count.load(Ordering::Relaxed)
+    }
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
@@ -1251,8 +1278,8 @@ mod tests {
         let mut batches =
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
-        let bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 20).into();
-        let discard = sigverify::dedup_packets(&bloom, &mut batches) as usize;
+        let filter = Deduper::new(1_000_000);
+        let discard = filter.dedup_packets(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         let n = get_thread_count();
         assert!(packet_count < discard + n * 2);
@@ -1261,10 +1288,10 @@ mod tests {
     #[test]
     fn test_dedup_diff() {
         // generate packet vector
+        let filter = Deduper::new(1_000_000);
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
 
-        let bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 20).into();
-        let discard = sigverify::dedup_packets(&bloom, &mut batches) as usize;
+        let discard = sigverify::dedup_packets(&filter, &mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         let n = get_thread_count();
         assert!(discard < n * 2);

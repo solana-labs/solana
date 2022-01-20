@@ -3,61 +3,55 @@
 extern crate test;
 
 use {
-    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_perf::{packet::to_packet_batches, sigverify, test_tx::test_tx},
     test::Bencher,
 };
 
+const NUM: usize = 10_000;
 #[bench]
 fn bench_dedup_same(bencher: &mut Bencher) {
     // generate packet vector
-    let bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+    let deduper = sigverify::Deduper::new(1_000_000);
     let mut count = 0;
     // verify packets
+    let tx = test_tx();
+    let mut batches = to_packet_batches(&std::iter::repeat(tx).take(NUM).collect::<Vec<_>>(), 128);
     bencher.iter(|| {
-        let tx = test_tx();
-        let mut batches =
-            to_packet_batches(&std::iter::repeat(tx).take(4096).collect::<Vec<_>>(), 128);
-        let _ans = sigverify::dedup_packets(&bloom, &mut batches);
-        count += 4096;
+        let _ans = deduper.dedup_packets(&mut batches);
+        batches
+            .iter_mut()
+            .for_each(|b| b.packets.iter_mut().for_each(|p| p.meta.discard = false));
+        count += NUM;
     });
     println!("same total {}", count);
 }
 
 #[bench]
-fn bench_dedup_same_baseline(bencher: &mut Bencher) {
-    let mut count = 0;
-    bencher.iter(|| {
-        let tx = test_tx();
-        let mut batches =
-            to_packet_batches(&std::iter::repeat(tx).take(4096).collect::<Vec<_>>(), 128);
-        count += 4096;
-    });
-    println!("same baseline total {}", count);
-}
-
-#[bench]
 fn bench_dedup_diff(bencher: &mut Bencher) {
     // generate packet vector
-    let bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+    let deduper = sigverify::Deduper::new(1_000_000);
 
     let mut count = 0;
-    // verify packets
+    let mut batches = to_packet_batches(&(0..NUM).map(|_| test_tx()).collect::<Vec<_>>(), 128);
     bencher.iter(|| {
-        let mut batches = to_packet_batches(&(0..4096).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-        let _ans = sigverify::dedup_packets(&bloom, &mut batches);
-        count += 4096;
+        let _ans = deduper.dedup_packets(&mut batches);
+        batches
+            .iter_mut()
+            .for_each(|b| b.packets.iter_mut().for_each(|p| p.meta.discard = false));
+        count += NUM;
     });
     println!("diff total {}", count);
 }
 
 #[bench]
-fn bench_dedup_diff_baseline(bencher: &mut Bencher) {
+fn bench_dedup_baseline(bencher: &mut Bencher) {
     let mut count = 0;
+    let mut batches = to_packet_batches(&(0..NUM).map(|_| test_tx()).collect::<Vec<_>>(), 128);
     bencher.iter(|| {
-        let mut _batches =
-            to_packet_batches(&(0..4096).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-        count += 4096;
+        batches
+            .iter_mut()
+            .for_each(|b| b.packets.iter_mut().for_each(|p| p.meta.discard = false));
+        count += NUM;
     });
     println!("diff baseline total {}", count);
 }
