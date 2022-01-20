@@ -331,7 +331,9 @@ mod test {
         assert_eq!(bloom.keys.len(), 3);
         assert_eq!(bloom.num_bits, 6168);
         assert_eq!(bloom.bits.len(), 97);
-        hash_values.par_iter().for_each(|v| bloom.add(v));
+        hash_values.par_iter().for_each(|v| {
+            bloom.add(v);
+        });
         let bloom: Bloom<Hash> = bloom.into();
         assert_eq!(bloom.keys.len(), 3);
         assert_eq!(bloom.bits.len(), 6168);
@@ -373,7 +375,9 @@ mod test {
         }
         // Round trip, re-inserting the same hash values.
         let bloom: AtomicBloom<_> = bloom.into();
-        hash_values.par_iter().for_each(|v| bloom.add(v));
+        hash_values.par_iter().for_each(|v| {
+            bloom.add(v);
+        });
         for hash_value in &hash_values {
             assert!(bloom.contains(hash_value));
         }
@@ -391,7 +395,9 @@ mod test {
         let bloom: AtomicBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
-        more_hash_values.par_iter().for_each(|v| bloom.add(v));
+        more_hash_values.par_iter().for_each(|v| {
+            bloom.add(v);
+        });
         for hash_value in &hash_values {
             assert!(bloom.contains(hash_value));
         }
