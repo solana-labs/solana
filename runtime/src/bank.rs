@@ -1075,6 +1075,9 @@ pub struct NewBankOptions {
 }
 
 impl Bank {
+    pub fn set_active(&self, item: crate::active_stats::ActiveStatItem) -> crate::active_stats::ActiveState {
+        self.rc.accounts.accounts_db.active_stats.get_state(item)
+    }
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
     }

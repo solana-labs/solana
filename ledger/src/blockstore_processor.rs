@@ -580,6 +580,8 @@ fn do_process_blockstore_from_root(
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
 
+    let stats = bank.set_active(solana_runtime::active_stats::ActiveStatItem::ProcessBlockstoreFromRoot);
+
     // Starting slot must be a root, and thus has no parents
     assert!(bank.parent().is_none());
     let start_slot = bank.slot();
@@ -651,6 +653,7 @@ fn do_process_blockstore_from_root(
             // and there's no point in processing the rest of blockstore and implies blockstore
             // should be empty past this point.
             let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
+            drop(stats);
             (vec![bank], leader_schedule_cache)
         }
     };

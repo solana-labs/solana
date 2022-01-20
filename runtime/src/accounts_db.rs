@@ -1072,7 +1072,7 @@ pub struct AccountsDb {
     filler_account_count: usize,
     pub filler_account_suffix: Option<Pubkey>,
 
-    active_stats: ActiveStats,
+    pub active_stats: ActiveStats,
 
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage

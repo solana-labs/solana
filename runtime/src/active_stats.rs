@@ -6,6 +6,7 @@ pub struct ActiveStats {
     shrink: AtomicUsize,
     hash: AtomicUsize,
     flush: AtomicUsize,
+    process_blockstore_from_root: AtomicUsize,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -14,6 +15,7 @@ pub enum ActiveStatItem {
     Shrink,
     Hash,
     Flush,
+    ProcessBlockstoreFromRoot,
 }
 
 /// sole purpose is to handle 'drop' so that stat is decremented when self is dropped
@@ -45,6 +47,7 @@ impl ActiveStats {
             ActiveStatItem::Shrink => &self.shrink,
             ActiveStatItem::Hash => &self.hash,
             ActiveStatItem::Flush => &self.flush,
+            ActiveStatItem::ProcessBlockstoreFromRoot => &self.process_blockstore_from_root,
         };
         if increment {
             stat.fetch_add(1, Ordering::Relaxed);
@@ -57,6 +60,10 @@ impl ActiveStats {
             ActiveStatItem::Shrink => {
                 datapoint_info!("accounts_db_active", ("shrink", value, i64))
             }
+            ActiveStatItem::ProcessBlockstoreFromRoot => datapoint_info!(
+                "accounts_db_active",
+                ("process_blockstore_from_root", value, i64)
+            ),
             ActiveStatItem::Hash => datapoint_info!("accounts_db_active", ("hash", value, i64)),
             ActiveStatItem::Flush => datapoint_info!("accounts_db_active", ("flush", value, i64)),
         };
