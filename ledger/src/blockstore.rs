@@ -70,6 +70,7 @@ use {
 pub mod blockstore_purge;
 
 pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
+pub const ROCKSDB_TOTAL_SST_FILES_SIZE: &str = "rocksdb.total-sst-files-size";
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -3165,6 +3166,24 @@ impl Blockstore {
 
     pub fn storage_size(&self) -> Result<u64> {
         self.db.storage_size()
+    }
+
+    /// Returns the total physical storage size contributed by all data shreds.
+    ///
+    /// Note that the reported size does not include those recently inserted
+    /// shreds that are still in memory.
+    pub fn total_data_shred_storage_size(&self) -> Result<u64> {
+        let shred_data_cf = self.db.column::<cf::ShredData>();
+        shred_data_cf.get_int_property(ROCKSDB_TOTAL_SST_FILES_SIZE)
+    }
+
+    /// Returns the total physical storage size contributed by all coding shreds.
+    ///
+    /// Note that the reported size does not include those recently inserted
+    /// shreds that are still in memory.
+    pub fn total_coding_shred_storage_size(&self) -> Result<u64> {
+        let shred_code_cf = self.db.column::<cf::ShredCode>();
+        shred_code_cf.get_int_property(ROCKSDB_TOTAL_SST_FILES_SIZE)
     }
 
     pub fn is_primary_access(&self) -> bool {
