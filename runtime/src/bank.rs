@@ -5305,10 +5305,6 @@ impl Bank {
             len,
         );
 
-        if self.slot() == 116979357 {
-            panic!("end");
-        }
-
         info!(
             "accounts hash slot: {} stats: {:?}",
             self.slot(),
