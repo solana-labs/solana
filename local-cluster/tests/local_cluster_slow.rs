@@ -28,6 +28,7 @@ use {
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
+    solana_runtime::vote_parser,
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
         hash::Hash,
@@ -499,7 +500,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                     .filter_map(|(label, leader_vote_tx)| {
                         // Filter out votes not from the bad leader
                         if label.pubkey() == bad_leader_id {
-                            let vote = vote_transaction::parse_vote_transaction(&leader_vote_tx)
+                            let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
                                 .map(|(_, vote, _)| vote)
                                 .unwrap();
                             // Filter out empty votes

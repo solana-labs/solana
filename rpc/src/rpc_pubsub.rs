@@ -594,6 +594,7 @@ mod tests {
                 create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
+            vote_transaction::VoteTransaction,
         },
         solana_sdk::{
             account::ReadableAccount,
@@ -611,7 +612,7 @@ mod tests {
             transaction::{self, Transaction},
         },
         solana_stake_program::stake_state,
-        solana_vote_program::vote_state::{Vote, VoteTransaction},
+        solana_vote_program::vote_state::Vote,
         std::{
             sync::{
                 atomic::{AtomicBool, AtomicU64},
