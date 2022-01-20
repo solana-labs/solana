@@ -2774,8 +2774,9 @@ mod tests {
             fee_calculator::FeeCalculator,
             hash::hashv,
             process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
+            sysvar_cache::SysvarCache,
         },
-        std::str::FromStr,
+        std::{borrow::Cow, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -3620,6 +3621,40 @@ mod tests {
     #[test]
     fn test_syscall_get_sysvar() {
         let config = Config::default();
+        let src_clock = Clock {
+            slot: 1,
+            epoch_start_timestamp: 2,
+            epoch: 3,
+            leader_schedule_epoch: 4,
+            unix_timestamp: 5,
+        };
+        let src_epochschedule = EpochSchedule {
+            slots_per_epoch: 1,
+            leader_schedule_slot_offset: 2,
+            warmup: false,
+            first_normal_epoch: 3,
+            first_normal_slot: 4,
+        };
+        let src_fees = Fees {
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 1,
+            },
+        };
+        let src_rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 2.0,
+            burn_percent: 3,
+        };
+
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
+        sysvar_cache.push_entry(
+            sysvar::epoch_schedule::id(),
+            bincode::serialize(&src_epochschedule).unwrap(),
+        );
+        sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
+
         // Test clock sysvar
         {
             let got_clock = Clock::default();
@@ -3640,17 +3675,8 @@ mod tests {
             )
             .unwrap();
 
-            let src_clock = Clock {
-                slot: 1,
-                epoch_start_timestamp: 2,
-                epoch: 3,
-                leader_schedule_epoch: 4,
-                unix_timestamp: 5,
-            };
             let mut invoke_context = MockInvokeContext::new(vec![]);
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_clock).unwrap();
-            invoke_context.sysvars = vec![(sysvar::clock::id(), data)];
+            invoke_context.sysvar_cache = Cow::Borrowed(&sysvar_cache);
 
             let mut syscall = SyscallGetClockSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3683,17 +3709,8 @@ mod tests {
             )
             .unwrap();
 
-            let src_epochschedule = EpochSchedule {
-                slots_per_epoch: 1,
-                leader_schedule_slot_offset: 2,
-                warmup: false,
-                first_normal_epoch: 3,
-                first_normal_slot: 4,
-            };
             let mut invoke_context = MockInvokeContext::new(vec![]);
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
-            invoke_context.sysvars = vec![(sysvar::epoch_schedule::id(), data)];
+            invoke_context.sysvar_cache = Cow::Borrowed(&sysvar_cache);
 
             let mut syscall = SyscallGetEpochScheduleSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3734,15 +3751,8 @@ mod tests {
             )
             .unwrap();
 
-            let src_fees = Fees {
-                fee_calculator: FeeCalculator {
-                    lamports_per_signature: 1,
-                },
-            };
             let mut invoke_context = MockInvokeContext::new(vec![]);
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_fees).unwrap();
-            invoke_context.sysvars = vec![(sysvar::fees::id(), data)];
+            invoke_context.sysvar_cache = Cow::Borrowed(&sysvar_cache);
 
             let mut syscall = SyscallGetFeesSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3775,15 +3785,8 @@ mod tests {
             )
             .unwrap();
 
-            let src_rent = Rent {
-                lamports_per_byte_year: 1,
-                exemption_threshold: 2.0,
-                burn_percent: 3,
-            };
             let mut invoke_context = MockInvokeContext::new(vec![]);
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_rent).unwrap();
-            invoke_context.sysvars = vec![(sysvar::rent::id(), data)];
+            invoke_context.sysvar_cache = Cow::Borrowed(&sysvar_cache);
 
             let mut syscall = SyscallGetRentSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),

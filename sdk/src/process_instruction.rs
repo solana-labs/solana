@@ -1,4 +1,5 @@
 use {
+    crate::sysvar_cache::SysvarCache,
     itertools::Itertools,
     solana_sdk::{
         account::AccountSharedData,
@@ -8,7 +9,7 @@ use {
         pubkey::Pubkey,
         sysvar::Sysvar,
     },
-    std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc},
+    std::{borrow::Cow, cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc},
 };
 
 /// Prototype of a native loader entry point
@@ -104,8 +105,8 @@ pub trait InvokeContext {
         execute_us: u64,
         deserialize_us: u64,
     );
-    /// Get sysvars
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)];
+    /// Get sysvar cache
+    fn get_sysvar_cache(&self) -> &SysvarCache;
     /// Set the return data
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
     /// Get the return data
@@ -149,7 +150,7 @@ pub fn get_sysvar<T: Sysvar>(
     id: &Pubkey,
 ) -> Result<T, InstructionError> {
     invoke_context
-        .get_sysvars()
+        .get_sysvar_cache()
         .iter()
         .find_map(|(key, data)| {
             if id == key {
@@ -394,7 +395,7 @@ pub struct MockInvokeContext<'a> {
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    pub sysvars: Vec<(Pubkey, Vec<u8>)>,
+    pub sysvar_cache: Cow<'a, SysvarCache>,
     pub disabled_features: HashSet<Pubkey>,
     pub return_data: Option<(Pubkey, Vec<u8>)>,
     pub execute_timings: ExecuteDetailsTimings,
@@ -412,7 +413,7 @@ impl<'a> MockInvokeContext<'a> {
             },
             programs: vec![],
             accounts: vec![],
-            sysvars: vec![],
+            sysvar_cache: Cow::Owned(SysvarCache::default()),
             disabled_features: HashSet::default(),
             return_data: None,
             execute_timings: ExecuteDetailsTimings::default(),
@@ -514,8 +515,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _deserialize_us: u64,
     ) {
     }
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        &self.sysvars
+    fn get_sysvar_cache(&self) -> &SysvarCache {
+        &self.sysvar_cache
     }
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
         self.return_data = return_data;

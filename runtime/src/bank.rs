@@ -116,6 +116,7 @@ use {
         slot_history::SlotHistory,
         system_transaction,
         sysvar::{self},
+        sysvar_cache::SysvarCache,
         timing::years_as_slots,
         transaction::{self, Result, Transaction, TransactionError},
     },
@@ -143,6 +144,8 @@ use {
         time::{Duration, Instant},
     },
 };
+
+mod sysvar_cache;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
@@ -1159,7 +1162,7 @@ pub struct Bank {
 
     pub cost_tracker: RwLock<CostTracker>,
 
-    sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
+    sysvar_cache: RwLock<SysvarCache>,
 }
 
 impl Default for BlockhashQueue {
@@ -1433,7 +1436,7 @@ impl Bank {
             )),
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
-            sysvar_cache: RwLock::new(Vec::new()),
+            sysvar_cache: RwLock::new(SysvarCache::default()),
         };
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
@@ -1610,7 +1613,7 @@ impl Bank {
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
-            sysvar_cache: RwLock::new(Vec::new()),
+            sysvar_cache: RwLock::new(SysvarCache::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -1789,11 +1792,7 @@ impl Bank {
 
         // Update the entry in the cache
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
-        if let Some(position) = sysvar_cache.iter().position(|(id, _data)| id == pubkey) {
-            sysvar_cache[position].1 = new_account.data().to_vec();
-        } else {
-            sysvar_cache.push((*pubkey, new_account.data().to_vec()));
-        }
+        sysvar_cache.update_entry(pubkey, &new_account);
     }
 
     fn inherit_specially_retained_account_fields(
@@ -1929,17 +1928,6 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
-    }
-
-    fn fill_sysvar_cache(&mut self) {
-        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
-        for id in sysvar::ALL_IDS.iter() {
-            if !sysvar_cache.iter().any(|(key, _data)| key == id) {
-                if let Some(account) = self.get_account_with_fixed_root(id) {
-                    sysvar_cache.push((*id, account.data().to_vec()));
-                }
-            }
-        }
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {

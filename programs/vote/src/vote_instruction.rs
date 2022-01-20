@@ -404,9 +404,9 @@ mod tests {
             account::{self, Account, AccountSharedData},
             process_instruction::MockInvokeContext,
             rent::Rent,
-            sysvar::Sysvar,
+            sysvar_cache::SysvarCache,
         },
-        std::{cell::RefCell, str::FromStr},
+        std::{borrow::Cow, cell::RefCell, str::FromStr},
     };
 
     fn create_default_account() -> RefCell<AccountSharedData> {
@@ -463,9 +463,20 @@ mod tests {
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
             let mut invoke_context = MockInvokeContext::new(keyed_accounts);
-            let mut data = Vec::with_capacity(sysvar::rent::Rent::size_of());
-            bincode::serialize_into(&mut data, &sysvar::rent::Rent::default()).unwrap();
-            invoke_context.sysvars = vec![(sysvar::rent::id(), data)];
+            let mut sysvar_cache = SysvarCache::default();
+            sysvar_cache.push_entry(
+                sysvar::rent::id(),
+                bincode::serialize(&Rent::default()).unwrap(),
+            );
+            sysvar_cache.push_entry(
+                sysvar::clock::id(),
+                bincode::serialize(&Clock::default()).unwrap(),
+            );
+            sysvar_cache.push_entry(
+                sysvar::slot_hashes::id(),
+                bincode::serialize(&SlotHashes::default()).unwrap(),
+            );
+            invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
     }
