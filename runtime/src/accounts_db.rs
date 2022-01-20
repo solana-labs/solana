@@ -6347,7 +6347,7 @@ if false {
                     check_hash,
                     accounts_cache_and_ancestors,
                     filler_account_suffix,
-                    None,
+                    slots_per_epoch,
                     &rehash,
                 )?;
 
