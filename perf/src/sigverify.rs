@@ -1291,7 +1291,7 @@ mod tests {
         let filter = Deduper::new(1_000_000);
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
 
-        let discard = sigverify::dedup_packets(&filter, &mut batches) as usize;
+        let discard = filter.dedup_packets(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         let n = get_thread_count();
         assert!(discard < n * 2);
