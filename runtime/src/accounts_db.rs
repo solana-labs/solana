@@ -2703,8 +2703,6 @@ impl AccountsDb {
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        self.log_active_stats(&self.shrink_slot_stores_active, true);
-
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let (stored_accounts, num_stores, original_bytes) =
             self.get_unique_accounts_from_storages(stores);
@@ -2908,8 +2906,6 @@ impl AccountsDb {
             .fetch_add(aligned_total, Ordering::Relaxed);
 
         self.shrink_stats.report();
-
-        self.log_active_stats(&self.shrink_slot_stores_active, false);
 
         total_accounts_after_shrink
     }
