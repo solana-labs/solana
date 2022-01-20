@@ -177,11 +177,11 @@ impl SystemMonitorService {
         );
     }
 
-    fn calc_percent(numerator: u64, denom: u64) -> f32 {
+    fn calc_percent(numerator: u64, denom: u64) -> f64 {
         if denom == 0 {
             0.0
         } else {
-            (numerator as f32 / denom as f32) * 100.0
+            (numerator as f64 / denom as f64) * 100.0
         }
     }
 
@@ -280,5 +280,12 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
         let mut mock_snmp = b"unexpected data" as &[u8];
         let stats = parse_udp_stats(&mut mock_snmp);
         assert!(stats.is_err());
+    }
+
+    #[test]
+    fn test_calc_percent() {
+        assert!(SystemMonitorService::calc_percent(99, 100) < 100.0);
+        let one_tb_as_kb = (1u64 << 40) >> 10;
+        assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
     }
 }
