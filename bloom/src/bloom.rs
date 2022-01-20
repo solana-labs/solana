@@ -174,11 +174,16 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
         (index as usize, mask)
     }
 
-    pub fn add(&self, key: &T) {
+    /// Adds an item to the bloom filter and returns true if the item
+    /// was not in the filter before.
+    pub fn add(&self, key: &T) -> bool {
+        let mut added = false;
         for k in &self.keys {
             let (index, mask) = self.pos(key, *k);
-            self.bits[index].fetch_or(mask, Ordering::Relaxed);
+            let prev_val = self.bits[index].fetch_or(mask, Ordering::Relaxed);
+            added = added || prev_val & mask == 0u64;
         }
+        added
     }
 
     pub fn contains(&self, key: &T) -> bool {
@@ -187,6 +192,12 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
             let bit = self.bits[index].load(Ordering::Relaxed) & mask;
             bit != 0u64
         })
+    }
+
+    pub fn clear_for_tests(&mut self) {
+        self.bits.iter().for_each(|bit| {
+            bit.store(0u64, Ordering::Relaxed);
+        });
     }
 
     // Only for tests and simulations.
