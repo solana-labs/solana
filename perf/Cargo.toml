@@ -23,6 +23,7 @@ solana-logger = { path = "../logger", version = "=1.8.14" }
 solana-metrics = { path = "../metrics", version = "=1.8.14" }
 solana-sdk = { path = "../sdk", version = "=1.8.14" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.14" }
+solana-bloom = { path = "../bloom", version = "=1.8.14" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.14" }
 
 [target."cfg(target_os = \"linux\")".dependencies]

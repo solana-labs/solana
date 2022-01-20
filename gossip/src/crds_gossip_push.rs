@@ -22,7 +22,7 @@ use {
     indexmap::map::IndexMap,
     lru::LruCache,
     rand::{seq::SliceRandom, Rng},
-    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp},
     solana_streamer::socket::SocketAddrSpace,
     std::{
