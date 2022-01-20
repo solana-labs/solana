@@ -38,6 +38,8 @@ fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) 
     })
 }
 
+const NUM_PACKETS: usize = 32 * 1024;
+
 #[bench]
 #[ignore]
 fn bench_dedup_same_small_packets(bencher: &mut Bencher) {
@@ -46,7 +48,7 @@ fn bench_dedup_same_small_packets(bencher: &mut Bencher) {
 
     let batches = to_packet_batches(
         &std::iter::repeat(small_packet)
-            .take(4096)
+            .take(NUM_PACKETS)
             .collect::<Vec<_>>(),
         128,
     );
@@ -61,7 +63,7 @@ fn bench_dedup_same_big_packets(bencher: &mut Bencher) {
     let big_packet = test_packet_with_size(1024, &mut rng);
 
     let batches = to_packet_batches(
-        &std::iter::repeat(big_packet).take(4096).collect::<Vec<_>>(),
+        &std::iter::repeat(big_packet).take(NUM_PACKETS).collect::<Vec<_>>(),
         128,
     );
 
@@ -74,7 +76,7 @@ fn bench_dedup_diff_small_packets(bencher: &mut Bencher) {
     let mut rng = rand::thread_rng();
 
     let batches = to_packet_batches(
-        &(0..4096)
+        &(0..NUM_PACKETS)
             .map(|_| test_packet_with_size(128, &mut rng))
             .collect::<Vec<_>>(),
         128,
@@ -89,7 +91,7 @@ fn bench_dedup_diff_big_packets(bencher: &mut Bencher) {
     let mut rng = rand::thread_rng();
 
     let batches = to_packet_batches(
-        &(0..4096)
+        &(0..NUM_PACKETS)
             .map(|_| test_packet_with_size(1024, &mut rng))
             .collect::<Vec<_>>(),
         128,

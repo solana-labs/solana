@@ -25,7 +25,7 @@ impl Default for PacketHasher {
 }
 
 impl PacketHasher {
-    pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
+    pub fn hash_packet(&self, packet: &Packet) -> u64 {
         let size = packet.data.len().min(packet.meta.size);
         self.hash_data(&packet.data[..size])
     }
