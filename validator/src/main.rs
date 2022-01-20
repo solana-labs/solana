@@ -424,15 +424,28 @@ fn platform_id() -> String {
 fn check_os_network_limits() {
     use {solana_metrics::datapoint_warn, std::collections::HashMap, sysctl::Sysctl};
 
+    fn get_recommended_net_limits() -> HashMap<&str, i64> {
+        let mut limits = HashMap::default();
+        // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+        limits.insert("net.core.rmem_max", 134217728);
+        limits.insert("net.core.rmem_default", 134217728);
+        limits.insert("net.core.wmem_max", 134217728);
+        limits.insert("net.core.wmem_default", 134217728);
+        limits.insert("vm.max_map_count", 1000000);
+        // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
+        limits.insert("net.core.optmem_max", 4194304);
+        limits.insert("net.core.netdev_max_backlog", 250000);
+        limits
+    }
+
     fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
-        let ctl = sysctl::Ctl::new(name)?;
-        let val = ctl.value_string()?;
-        Ok(val)
+        sysctl::Ctl::new(name)?.value_string()
     }
     let mut check_failed = false;
 
     info!("Testing OS network limits:");
 
+    /*
     // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
     let mut recommended_limits: HashMap<&str, i64> = HashMap::default();
     recommended_limits.insert("net.core.rmem_max", 134217728);
@@ -446,6 +459,9 @@ fn check_os_network_limits() {
     recommended_limits.insert("net.core.netdev_max_backlog", 250000);
 
     let mut current_limits: HashMap<&str, i64> = HashMap::default();
+    */
+
+    let recommended_limits = get_recommended_net_limits();
     for (key, _) in recommended_limits.iter() {
         let current_val = match sysctl_read(key) {
             Ok(val) => val.parse::<i64>().unwrap(),

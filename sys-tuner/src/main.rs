@@ -67,36 +67,72 @@ fn tune_poh_service_priority(uid: u32) {
 
 #[cfg(target_os = "linux")]
 fn tune_kernel_udp_buffers_and_vmmap() {
-    use sysctl::{CtlValue::String, Sysctl};
-    fn sysctl_write(name: &str, value: &str) {
-        if let Ok(ctl) = sysctl::Ctl::new(name) {
-            info!("Old {} value {:?}", name, ctl.value());
-            let ctl_value = String(value.to_string());
-            match ctl.set_value(String(value.to_string())) {
-                Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
-                Ok(v) => info!(
-                    "Update returned success but {} was set to {:?}, instead of {:?}",
-                    name, v, ctl_value
-                ),
-                Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
-            }
-        } else {
+    use std::collections::HashMap;
+
+    fn get_recommended_net_limits() -> HashMap<&str, i64> {
+        let mut limits = HashMap::default();
+        // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+        limits.insert("net.core.rmem_max", 134217728);
+        limits.insert("net.core.rmem_default", 134217728);
+        limits.insert("net.core.wmem_max", 134217728);
+        limits.insert("net.core.wmem_default", 134217728);
+        limits.insert("vm.max_map_count", 1000000);
+        // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
+        limits.insert("net.core.optmem_max", 4194304);
+        limits.insert("net.core.netdev_max_backlog", 250000);
+        limits
+    }
+
+    fn get_recemmended_mem_limits() -> HashMap<&str, i64> {
+        let mut limits = HashMap::default();
+        // increase mmap counts for many append_vecs
+        limits.insert("vm.max_map_count", 1000000);
+        limits
+    }
+
+    fn set_if_less_than_existing(name: &str, new_value: i64) {
+        let ctl = sysctl::Ctl::new(name);
+        if let Err(e) = ctl {
             error!("Failed to find sysctl {}", name);
+            return;
+        }
+        let ctl = ctl.unwrap();
+        info("Old {} value {:?}", name, ctl.value());
+
+        let existing_value = ctl.value_string();
+        if let Err(e) = existing_value {
+            error!("Failed to obtain value for {}: {:?}", name, e);
+            return;
+        }
+        let existing_value = existing_value.unwrap();
+
+        let existing_int_value = existing_value.parse::<i64>();
+        if let Err(e) = existing_int_value {
+            error!("Failed to parse value for {}: {:?}", name, existing_int_value);
+            return;
+        }
+        let existing_int_value = existing_int_value.unwrap();
+
+        if existing_int_value >= new_value {
+            info!("{}={} >= {}, ignoring update", name, existing_int_value, new_value);
+            return;
+        }
+
+        let ctl_value = sysctl::CtlValue::String(new_value.to_string());
+        match ctl.set_value(ctl_value) {
+            Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
+            Ok(v) => info!(
+                "Update returned success but {} was set to {:?}, instead of {:?}",
+                name, v, ctl_value
+            ),
+            Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
         }
     }
 
-    // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-    sysctl_write("net.core.rmem_max", "134217728");
-    sysctl_write("net.core.rmem_default", "134217728");
-    sysctl_write("net.core.wmem_max", "134217728");
-    sysctl_write("net.core.wmem_default", "134217728");
-
-    // increase mmap counts for many append_vecs
-    sysctl_write("vm.max_map_count", "1000000");
-
-    // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
-    sysctl_write("net.core.optmem_max", "4194304");
-    sysctl_write("net.core.netdev_max_backlog", "250000");
+    let recommened_limits = get_recemmended_mem_limits().append(get_recommended_net_limits());
+    for (name, val) in recommened_limits.entries() {
+        set_if_less_than_existing(name, val);
+    }
 }
 
 #[cfg(unix)]
