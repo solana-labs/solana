@@ -25,7 +25,7 @@ use {
     lru::LruCache,
     rand::Rng,
     rayon::{prelude::*, ThreadPool},
-    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_sdk::{
         hash::{hash, Hash},
         pubkey::Pubkey,

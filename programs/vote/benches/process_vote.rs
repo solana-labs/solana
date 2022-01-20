@@ -139,6 +139,7 @@ fn do_bench(bencher: &mut Bencher, feature: Option<Pubkey>) {
                 (solana_vote_program::id(), AccountSharedData::default()),
             ],
             1,
+            1,
         );
 
         let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
