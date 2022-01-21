@@ -2,7 +2,6 @@
 members = [
     "accountsdb-plugin-interface",
     "accountsdb-plugin-manager",
-    "accountsdb-plugin-postgres",
     "accounts-cluster-bench",
     "bench-streamer",
     "bench-tps",
@@ -12,6 +11,7 @@ members = [
     "banks-interface",
     "banks-server",
     "bucket_map",
+    "bloom",
     "clap-utils",
     "cli-config",
     "cli-output",

@@ -2,7 +2,6 @@
 
 pub mod accounts_data_meter;
 pub mod compute_budget;
-pub mod instruction_recorder;
 pub mod invoke_context;
 pub mod log_collector;
 pub mod native_loader;

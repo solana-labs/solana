@@ -501,6 +501,19 @@ impl Rocks {
     fn is_primary_access(&self) -> bool {
         self.1 == ActualAccessType::Primary
     }
+
+    /// Retrieves the specified RocksDB integer property of the current
+    /// column family.
+    ///
+    /// Full list of properties that return int values could be found
+    /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
+    fn get_int_property_cf(&self, cf: &ColumnFamily, name: &str) -> Result<u64> {
+        match self.0.property_int_value_cf(cf, name) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Ok(0),
+            Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
+    }
 }
 
 pub trait Column {
@@ -1137,6 +1150,15 @@ where
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
         self.backend.put_cf(self.handle(), &C::key(key), value)
+    }
+
+    /// Retrieves the specified RocksDB integer property of the current
+    /// column family.
+    ///
+    /// Full list of properties that return int values could be found
+    /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
+    pub fn get_int_property(&self, name: &str) -> Result<u64> {
+        self.backend.get_int_property_cf(self.handle(), name)
     }
 }
 

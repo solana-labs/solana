@@ -3,7 +3,6 @@ use {
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
-        instruction_recorder::InstructionRecorder,
         log_collector::LogCollector,
         native_loader::NativeLoader,
         pre_account::PreAccount,
@@ -192,7 +191,6 @@ pub struct InvokeContext<'a> {
     compute_meter: Rc<RefCell<ComputeMeter>>,
     accounts_data_meter: AccountsDataMeter,
     executors: Rc<RefCell<Executors>>,
-    pub instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -209,7 +207,6 @@ impl<'a> InvokeContext<'a> {
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -228,7 +225,6 @@ impl<'a> InvokeContext<'a> {
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
             accounts_data_meter: AccountsDataMeter::new(current_accounts_data_len),
             executors,
-            instruction_recorder,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -249,7 +245,6 @@ impl<'a> InvokeContext<'a> {
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
-            None,
             feature_set,
             Hash::default(),
             0,
@@ -269,7 +264,6 @@ impl<'a> InvokeContext<'a> {
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
-            None,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -811,11 +805,7 @@ impl<'a> InvokeContext<'a> {
             .transaction_context
             .get_instruction_context_stack_height()
             == 0;
-        if is_lowest_invocation_level {
-            if let Some(instruction_recorder) = &self.instruction_recorder {
-                instruction_recorder.borrow_mut().begin_next_recording();
-            }
-        } else {
+        if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
             let mut verify_caller_time = Measure::start("verify_caller_time");
             let verify_caller_result = self.verify_and_update(instruction_accounts, true);
@@ -830,23 +820,19 @@ impl<'a> InvokeContext<'a> {
             verify_caller_result?;
 
             // Record instruction
-            if let Some(instruction_recorder) = &self.instruction_recorder {
-                let compiled_instruction = CompiledInstruction {
-                    program_id_index: self
-                        .transaction_context
-                        .find_index_of_account(&program_id)
-                        .unwrap_or(0) as u8,
-                    data: instruction_data.to_vec(),
-                    accounts: instruction_accounts
-                        .iter()
-                        .map(|instruction_account| instruction_account.index_in_transaction as u8)
-                        .collect(),
-                };
-
-                instruction_recorder
-                    .borrow_mut()
-                    .record_compiled_instruction(compiled_instruction);
-            }
+            let compiled_instruction = CompiledInstruction {
+                program_id_index: self
+                    .transaction_context
+                    .find_index_of_account(&program_id)
+                    .unwrap_or(0) as u8,
+                data: instruction_data.to_vec(),
+                accounts: instruction_accounts
+                    .iter()
+                    .map(|instruction_account| instruction_account.index_in_transaction as u8)
+                    .collect(),
+            };
+            self.transaction_context
+                .record_compiled_instruction(compiled_instruction);
         }
 
         let result = self
@@ -1075,6 +1061,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
+        1,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
@@ -1103,6 +1090,7 @@ pub fn mock_process_instruction_with_sysvars(
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
+        1,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
@@ -1351,7 +1339,7 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut transaction_context = TransactionContext::new(accounts, MAX_DEPTH);
+        let mut transaction_context = TransactionContext::new(accounts, MAX_DEPTH, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit
@@ -1430,7 +1418,7 @@ mod tests {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
         let instruction_accounts = vec![];
         let program_indices = vec![0];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &program_indices, &[])
@@ -1474,7 +1462,7 @@ mod tests {
                 is_writable: index_in_transaction < 2,
             })
             .collect::<Vec<_>>();
-        let mut transaction_context = TransactionContext::new(accounts, 2);
+        let mut transaction_context = TransactionContext::new(accounts, 2, 8);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1600,7 +1588,7 @@ mod tests {
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
         feature_set.deactivate(&requestable_heap_size::id());
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
 
@@ -1652,7 +1640,7 @@ mod tests {
             process_instruction: mock_process_instruction,
         }];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 

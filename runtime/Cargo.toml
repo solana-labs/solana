@@ -38,6 +38,7 @@ serde = { version = "1.0.133", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.10.0" }
+solana-bloom = { path = "../bloom", version = "=1.10.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.10.0" }
 solana-config-program = { path = "../programs/config", version = "=1.10.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.0" }

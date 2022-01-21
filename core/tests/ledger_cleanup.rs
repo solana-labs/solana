@@ -232,13 +232,15 @@ mod tests {
     }
 
     fn emit_header() {
-        println!("TIME_MS,DELTA_MS,START_SLOT,BATCH_SIZE,SHREDS,MAX,SIZE,DELTA_SIZE,CPU_USER,CPU_SYSTEM,CPU_IDLE");
+        println!("TIME_MS,DELTA_MS,START_SLOT,BATCH_SIZE,SHREDS,MAX,SIZE,DELTA_SIZE,DATA_SHRED_SIZE,DATA_SHRED_SIZE_DELTA,CPU_USER,CPU_SYSTEM,CPU_IDLE");
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_stats(
         time_initial: Instant,
         time_previous: &mut Instant,
         storage_previous: &mut u64,
+        data_shred_storage_previous: &mut u64,
         start_slot: u64,
         batch_size: u64,
         num_shreds: u64,
@@ -248,10 +250,11 @@ mod tests {
     ) {
         let time_now = Instant::now();
         let storage_now = blockstore.storage_size().unwrap_or(0);
+        let data_shred_storage_now = blockstore.total_data_shred_storage_size().unwrap();
         let (cpu_user, cpu_system, cpu_idle) = (cpu.cpu_user, cpu.cpu_system, cpu.cpu_idle);
 
         info!(
-            "{},{},{},{},{},{},{},{},{:.2},{:.2},{:.2}",
+            "{},{},{},{},{},{},{},{},{},{},{:.2},{:.2},{:.2}",
             time_now.duration_since(time_initial).as_millis(),
             time_now.duration_since(*time_previous).as_millis(),
             start_slot,
@@ -260,6 +263,8 @@ mod tests {
             max_shreds,
             storage_now,
             storage_now as i64 - *storage_previous as i64,
+            data_shred_storage_now,
+            data_shred_storage_now as i64 - *data_shred_storage_previous as i64,
             cpu_user,
             cpu_system,
             cpu_idle,
@@ -267,6 +272,7 @@ mod tests {
 
         *time_previous = time_now;
         *storage_previous = storage_now;
+        *data_shred_storage_previous = data_shred_storage_now;
     }
 
     /// The ledger cleanup compaction test which can also be used as a benchmark
@@ -355,6 +361,7 @@ mod tests {
         let time_initial = Instant::now();
         let mut time_previous = time_initial;
         let mut storage_previous = 0;
+        let mut data_shred_storage_previous = 0;
         let mut stop_size_bytes_exceeded_iterations = 0;
 
         emit_header();
@@ -362,6 +369,7 @@ mod tests {
             time_initial,
             &mut time_previous,
             &mut storage_previous,
+            &mut data_shred_storage_previous,
             0,
             0,
             0,
@@ -493,6 +501,7 @@ mod tests {
                 time_initial,
                 &mut time_previous,
                 &mut storage_previous,
+                &mut data_shred_storage_previous,
                 finished_slot,
                 batch_size_slots,
                 shreds_per_slot,

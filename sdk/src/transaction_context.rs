@@ -2,7 +2,7 @@
 
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::InstructionError,
+    instruction::{CompiledInstruction, InstructionError},
     lamports::LamportsError,
     pubkey::Pubkey,
 };
@@ -31,6 +31,8 @@ pub struct TransactionContext {
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
     instruction_context_capacity: usize,
     instruction_context_stack: Vec<InstructionContext>,
+    number_of_instructions_at_transaction_level: usize,
+    instruction_trace: Vec<Vec<CompiledInstruction>>,
     return_data: (Pubkey, Vec<u8>),
 }
 
@@ -39,6 +41,7 @@ impl TransactionContext {
     pub fn new(
         transaction_accounts: Vec<TransactionAccount>,
         instruction_context_capacity: usize,
+        number_of_instructions_at_transaction_level: usize,
     ) -> Self {
         let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
             transaction_accounts
@@ -50,20 +53,25 @@ impl TransactionContext {
             accounts: Pin::new(accounts.into_boxed_slice()),
             instruction_context_capacity,
             instruction_context_stack: Vec::with_capacity(instruction_context_capacity),
+            number_of_instructions_at_transaction_level,
+            instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: (Pubkey::default(), Vec::new()),
         }
     }
 
-    /// Used by the bank in the runtime to write back the processed accounts
-    pub fn deconstruct(self) -> Vec<TransactionAccount> {
-        Vec::from(Pin::into_inner(self.account_keys))
-            .into_iter()
-            .zip(
-                Vec::from(Pin::into_inner(self.accounts))
-                    .into_iter()
-                    .map(|account| account.into_inner()),
-            )
-            .collect()
+    /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
+    pub fn deconstruct(self) -> (Vec<TransactionAccount>, Vec<Vec<CompiledInstruction>>) {
+        (
+            Vec::from(Pin::into_inner(self.account_keys))
+                .into_iter()
+                .zip(
+                    Vec::from(Pin::into_inner(self.accounts))
+                        .into_iter()
+                        .map(|account| account.into_inner()),
+                )
+                .collect(),
+            self.instruction_trace,
+        )
     }
 
     /// Used in mock_process_instruction
@@ -143,6 +151,12 @@ impl TransactionContext {
         if self.instruction_context_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
+        if self.instruction_context_stack.is_empty() {
+            debug_assert!(
+                self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
+            );
+            self.instruction_trace.push(Vec::new());
+        }
         self.instruction_context_stack.push(InstructionContext {
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
@@ -187,6 +201,13 @@ impl TransactionContext {
     ) -> Result<(), InstructionError> {
         self.return_data = (program_id, data);
         Ok(())
+    }
+
+    /// Used by the runtime when a new CPI instruction begins
+    pub fn record_compiled_instruction(&mut self, instruction: CompiledInstruction) {
+        if let Some(records) = self.instruction_trace.last_mut() {
+            records.push(instruction);
+        }
     }
 }
 
