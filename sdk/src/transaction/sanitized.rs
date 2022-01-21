@@ -13,7 +13,6 @@ use {
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
-    std::net::{IpAddr, Ipv4Addr},
     std::sync::Arc,
 };
 
@@ -29,8 +28,6 @@ pub struct SanitizedTransaction {
     message_hash: Hash,
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
-    sender_stake: u64,
-    sender_ip: IpAddr,
 }
 
 /// Set of accounts that must be locked for safe transaction processing
@@ -51,8 +48,6 @@ impl SanitizedTransaction {
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
         address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
-        sender_stake: Option<u64>,
-        sender_ip: Option<IpAddr>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -71,16 +66,11 @@ impl SanitizedTransaction {
             ix_iter.next().map(|(program_id, _ix)| program_id) == Some(&crate::vote::program::id())
         });
 
-        let sender_stake = sender_stake.unwrap_or(0);
-        let sender_ip = sender_ip.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
-
         Ok(Self {
             message,
             message_hash,
             is_simple_vote_tx,
             signatures,
-            sender_stake,
-            sender_ip,
         })
     }
 
@@ -92,8 +82,6 @@ impl SanitizedTransaction {
             message: SanitizedMessage::Legacy(tx.message),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
-            sender_stake: 0u64,
-            sender_ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         })
     }
 
@@ -131,16 +119,6 @@ impl SanitizedTransaction {
     /// Returns true if this transaction is a simple vote
     pub fn is_simple_vote_transaction(&self) -> bool {
         self.is_simple_vote_tx
-    }
-
-    /// Returns sender's stake at the time of sending this transaction
-    pub fn sender_stake(&self) -> u64 {
-        self.sender_stake
-    }
-
-    /// Returns sender's IP
-    pub fn sender_ip(&self) -> IpAddr {
-        self.sender_ip
     }
 
     /// Convert this sanitized transaction into a versioned transaction for

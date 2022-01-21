@@ -298,15 +298,11 @@ pub(crate) mod tests {
         let message_hash = Hash::new_unique();
         let transaction = build_test_transaction_legacy();
         let transaction = VersionedTransaction::from(transaction);
-        let transaction = SanitizedTransaction::try_create(
-            transaction,
-            message_hash,
-            Some(true),
-            |_| Err(TransactionError::UnsupportedVersion),
-            None,
-            None,
-        )
-        .unwrap();
+        let transaction =
+            SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_| {
+                Err(TransactionError::UnsupportedVersion)
+            })
+            .unwrap();
 
         let expected_transaction = transaction.clone();
         let pubkey = Pubkey::new_unique();

@@ -7,7 +7,6 @@ use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
     solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction},
     std::collections::HashMap,
-    std::net::IpAddr,
 };
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
@@ -26,13 +25,6 @@ pub enum CostTrackerError {
     WouldExceedAccountDataMaxLimit,
 }
 
-#[derive(AbiExample, Debug, Default)]
-pub struct SenderTrackingDetails {
-    stake: u64,
-    transaction_count: u64,
-    transaction_cu: u64,
-}
-
 #[derive(AbiExample, Debug)]
 pub struct CostTracker {
     account_cost_limit: u64,
@@ -43,7 +35,6 @@ pub struct CostTracker {
     vote_cost: u64,
     transaction_count: u64,
     account_data_size: u64,
-    sender_tracking: HashMap<IpAddr, SenderTrackingDetails>,
 }
 
 impl Default for CostTracker {
@@ -65,7 +56,6 @@ impl CostTracker {
             vote_cost: 0,
             transaction_count: 0,
             account_data_size: 0,
-            sender_tracking: HashMap::new(),
         }
     }
 
@@ -151,17 +141,6 @@ impl CostTracker {
             ("costliest_account_cost", costliest_account_cost as i64, i64),
             ("account_data_size", self.account_data_size, i64),
         );
-
-        self.sender_tracking.iter().for_each(|(ip, detail)| {
-            datapoint_info!(
-                "cost_tracker_sender_details",
-                ("bank_slot", bank_slot as i64, i64),
-                ("ip", ip.to_string(), String),
-                ("stake", detail.stake as i64, i64),
-                ("transaction_count", detail.transaction_count as i64, i64),
-                ("transaction_cu", detail.transaction_cu as i64, i64),
-            );
-        });
     }
 
     fn find_costliest_account(&self) -> (Pubkey, u64) {
@@ -242,17 +221,6 @@ impl CostTracker {
         }
         self.account_data_size = self.account_data_size.saturating_add(account_data_size);
         self.transaction_count = self.transaction_count.saturating_add(1);
-
-        let sender_tracking = self
-            .sender_tracking
-            .entry(transaction.sender_ip())
-            .or_insert(SenderTrackingDetails {
-                stake: transaction.sender_stake(),
-                transaction_count: 0,
-                transaction_cu: 0,
-            });
-        sender_tracking.transaction_count = sender_tracking.transaction_count.saturating_add(1);
-        sender_tracking.transaction_cu = sender_tracking.transaction_cu.saturating_add(cost);
     }
 }
 
@@ -318,8 +286,6 @@ mod tests {
             message_hash,
             Some(true),
             |_| Err(TransactionError::UnsupportedVersion),
-            None,
-            None,
         )
         .unwrap();
         (vote_transaction, vec![mint_keypair.pubkey()], 10)

@@ -1312,8 +1312,6 @@ impl BankingStage {
                     message_hash,
                     Some(p.meta.is_simple_vote_tx()),
                     &address_loader,
-                    Some(p.meta.weight),
-                    Some(p.meta.addr),
                 )
                 .ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
@@ -2859,15 +2857,11 @@ mod tests {
 
         let tx = VersionedTransaction::try_new(message, &[&keypair]).unwrap();
         let message_hash = tx.message.hash();
-        let sanitized_tx = SanitizedTransaction::try_create(
-            tx.clone(),
-            message_hash,
-            Some(false),
-            |lookups| Ok(bank.load_lookup_table_addresses(lookups).unwrap()),
-            None,
-            None,
-        )
-        .unwrap();
+        let sanitized_tx =
+            SanitizedTransaction::try_create(tx.clone(), message_hash, Some(false), |lookups| {
+                Ok(bank.load_lookup_table_addresses(lookups).unwrap())
+            })
+            .unwrap();
 
         let entry = next_versioned_entry(&genesis_config.hash(), 1, vec![tx]);
         let entries = vec![entry];
