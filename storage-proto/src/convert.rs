@@ -689,6 +689,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     48 => InstructionError::UnsupportedSysvar,
                     49 => InstructionError::IllegalOwner,
                     50 => InstructionError::AccountsDataBudgetExceeded,
+                    51 => InstructionError::ActiveVoteAccountClose,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -978,6 +979,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::AccountsDataBudgetExceeded => {
                                 tx_by_addr::InstructionErrorType::AccountsDataBudgetExceeded
+                            }
+                            InstructionError::ActiveVoteAccountClose => {
+                                tx_by_addr::InstructionErrorType::ActiveVoteAccountClose
                             }
                         } as i32,
                         custom: match instruction_error {

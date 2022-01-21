@@ -153,7 +153,10 @@ pub fn process_instruction(
             } else {
                 None
             };
-            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar.as_deref())
+            let reject_vote_account_close_feature_active = 
+                invoke_context.feature_set.is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id());
+
+            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar.as_deref(), reject_vote_account_close_feature_active)
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context
