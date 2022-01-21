@@ -402,7 +402,7 @@ pub struct Deduper {
 }
 
 impl Deduper {
-    pub fn new(size: u32, max_age_ms: u64) -> Self {
+    pub fn new(size: u32, max_age: Duration) -> Self {
         let mut filter: Vec<AtomicU64> = Vec::with_capacity(size as usize);
         filter.resize_with(size as usize, Default::default);
         let seed = thread_rng().gen();
@@ -410,7 +410,7 @@ impl Deduper {
             filter,
             seed,
             age: Instant::now(),
-            max_age: Duration::from_millis(max_age_ms),
+            max_age,
             saturated: AtomicBool::new(false),
         }
     }
@@ -430,10 +430,10 @@ impl Deduper {
         }
     }
 
-    fn dedup_packet(&self, count: &AtomicU64, packet: &mut Packet) {
+    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
         // If this packet was already marked as discard, drop it
         if packet.meta.discard {
-            return;
+            return 0;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(&packet.data[0..packet.meta.size]);
@@ -449,19 +449,16 @@ impl Deduper {
         }
         if hash == prev & hash {
             packet.meta.discard = true;
-            count.fetch_add(1, Ordering::Relaxed);
+            return 1;
         }
+        0
     }
 
     pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {
-        let count = AtomicU64::new(0);
-        batches.iter_mut().for_each(|batch| {
-            batch
-                .packets
-                .iter_mut()
-                .for_each(|p| self.dedup_packet(&count, p))
-        });
-        count.load(Ordering::Relaxed)
+        batches
+            .iter_mut()
+            .flat_map(|batch| batch.packets.iter_mut().map(|p| self.dedup_packet(p)))
+            .sum()
     }
 }
 
@@ -1293,14 +1290,14 @@ mod tests {
         let mut batches =
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
-        let filter = Deduper::new(1_000_000, 0);
+        let filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let discard = filter.dedup_packets(&mut batches) as usize;
         assert_eq!(packet_count, discard + 1);
     }
 
     #[test]
     fn test_dedup_diff() {
-        let mut filter = Deduper::new(1_000_000, 0);
+        let mut filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
 
         let discard = filter.dedup_packets(&mut batches) as usize;
@@ -1315,7 +1312,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_dedup_saturated() {
-        let filter = Deduper::new(1_000_000, 0);
+        let filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut discard = 0;
         assert!(!filter.saturated.load(Ordering::Relaxed));
         for i in 0..1000 {
@@ -1332,7 +1329,7 @@ mod tests {
 
     #[test]
     fn test_dedup_false_positive() {
-        let filter = Deduper::new(1_000_000, 0);
+        let filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut discard = 0;
         for i in 0..10 {
             let mut batches =
