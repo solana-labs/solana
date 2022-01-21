@@ -35,7 +35,7 @@ impl Pedersen {
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: Into<Scalar>>(message: T) -> (PedersenCommitment, PedersenOpening) {
-        let opening = PedersenOpening::random();
+        let opening = PedersenOpening::new_rand();
         let commitment = Pedersen::with(message, &opening);
 
         (commitment, opening)
@@ -66,7 +66,7 @@ impl PedersenOpening {
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    pub fn random() -> Self {
+    pub fn new_rand() -> Self {
         PedersenOpening(Scalar::random(&mut OsRng))
     }
 

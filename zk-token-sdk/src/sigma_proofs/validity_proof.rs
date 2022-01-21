@@ -179,8 +179,8 @@ mod test {
 
     #[test]
     fn test_validity_proof() {
-        let elgamal_pubkey_dest = ElGamalKeypair::random().public;
-        let elgamal_pubkey_auditor = ElGamalKeypair::random().public;
+        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
+        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
 
         let x_lo: u64 = 55;
         let x_hi: u64 = 77;

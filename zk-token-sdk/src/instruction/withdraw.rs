@@ -201,7 +201,7 @@ mod test {
     #[test]
     fn test_withdraw_correctness() {
         // generate and verify proof for the proper setting
-        let elgamal_keypair = ElGamalKeypair::random();
+        let elgamal_keypair = ElGamalKeypair::new_rand();
 
         let current_balance: u64 = 77;
         let current_balance_ct = elgamal_keypair.public.encrypt(current_balance);

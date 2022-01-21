@@ -179,7 +179,7 @@ impl ElGamalKeypair {
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
-    pub fn random() -> Self {
+    pub fn new_rand() -> Self {
         ElGamal::keygen()
     }
 
@@ -342,7 +342,7 @@ impl ElGamalSecretKey {
     /// Randomly samples an ElGamal secret key.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    pub fn random() -> Self {
+    pub fn new_rand() -> Self {
         ElGamalSecretKey(Scalar::random(&mut OsRng))
     }
 
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_correctness() {
-        let ElGamalKeypair { public, secret } = ElGamalKeypair::random();
+        let ElGamalKeypair { public, secret } = ElGamalKeypair::new_rand();
         let amount: u32 = 57;
         let ciphertext = ElGamal::encrypt(&public, amount);
 
@@ -619,11 +619,11 @@ mod tests {
         let ElGamalKeypair {
             public: public_0,
             secret: secret_0,
-        } = ElGamalKeypair::random();
+        } = ElGamalKeypair::new_rand();
         let ElGamalKeypair {
             public: public_1,
             secret: secret_1,
-        } = ElGamalKeypair::random();
+        } = ElGamalKeypair::new_rand();
 
         let amount: u32 = 77;
         let (commitment, opening) = Pedersen::new(amount);
@@ -651,13 +651,13 @@ mod tests {
 
     #[test]
     fn test_homomorphic_addition() {
-        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::random();
+        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::new_rand();
         let amount_0: u64 = 57;
         let amount_1: u64 = 77;
 
         // Add two ElGamal ciphertexts
-        let opening_0 = PedersenOpening::random();
-        let opening_1 = PedersenOpening::random();
+        let opening_0 = PedersenOpening::new_rand();
+        let opening_1 = PedersenOpening::new_rand();
 
         let ciphertext_0 = ElGamal::encrypt_with(amount_0, &public, &opening_0);
         let ciphertext_1 = ElGamal::encrypt_with(amount_1, &public, &opening_1);
@@ -668,7 +668,7 @@ mod tests {
         assert_eq!(ciphertext_sum, ciphertext_0 + ciphertext_1);
 
         // Add to ElGamal ciphertext
-        let opening = PedersenOpening::random();
+        let opening = PedersenOpening::new_rand();
         let ciphertext = ElGamal::encrypt_with(amount_0, &public, &opening);
         let ciphertext_sum = ElGamal::encrypt_with(amount_0 + amount_1, &public, &opening);
 
@@ -677,13 +677,13 @@ mod tests {
 
     #[test]
     fn test_homomorphic_subtraction() {
-        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::random();
+        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::new_rand();
         let amount_0: u64 = 77;
         let amount_1: u64 = 55;
 
         // Subtract two ElGamal ciphertexts
-        let opening_0 = PedersenOpening::random();
-        let opening_1 = PedersenOpening::random();
+        let opening_0 = PedersenOpening::new_rand();
+        let opening_1 = PedersenOpening::new_rand();
 
         let ciphertext_0 = ElGamal::encrypt_with(amount_0, &public, &opening_0);
         let ciphertext_1 = ElGamal::encrypt_with(amount_1, &public, &opening_1);
@@ -694,7 +694,7 @@ mod tests {
         assert_eq!(ciphertext_sub, ciphertext_0 - ciphertext_1);
 
         // Subtract to ElGamal ciphertext
-        let opening = PedersenOpening::random();
+        let opening = PedersenOpening::new_rand();
         let ciphertext = ElGamal::encrypt_with(amount_0, &public, &opening);
         let ciphertext_sub = ElGamal::encrypt_with(amount_0 - amount_1, &public, &opening);
 
@@ -703,11 +703,11 @@ mod tests {
 
     #[test]
     fn test_homomorphic_multiplication() {
-        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::random();
+        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::new_rand();
         let amount_0: u64 = 57;
         let amount_1: u64 = 77;
 
-        let opening = PedersenOpening::random();
+        let opening = PedersenOpening::new_rand();
 
         let ciphertext = ElGamal::encrypt_with(amount_0, &public, &opening);
         let scalar = Scalar::from(amount_1);
@@ -720,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_serde_ciphertext() {
-        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::random();
+        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::new_rand();
         let amount: u64 = 77;
         let ciphertext = public.encrypt(amount);
 
@@ -732,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_serde_pubkey() {
-        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::random();
+        let ElGamalKeypair { public, secret: _ } = ElGamalKeypair::new_rand();
 
         let encoded = bincode::serialize(&public).unwrap();
         let decoded: ElGamalPubkey = bincode::deserialize(&encoded).unwrap();
@@ -742,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_serde_secretkey() {
-        let ElGamalKeypair { public: _, secret } = ElGamalKeypair::random();
+        let ElGamalKeypair { public: _, secret } = ElGamalKeypair::new_rand();
 
         let encoded = bincode::serialize(&secret).unwrap();
         let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();
@@ -753,14 +753,16 @@ mod tests {
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = ElGamalKeypair::random();
+        let keypair = ElGamalKeypair::new_rand();
         format!("{}/tmp/{}-{}", out_dir, name, keypair.public)
     }
 
     #[test]
     fn test_write_keypair_file() {
         let outfile = tmp_file_path("test_write_keypair_file.json");
-        let serialized_keypair = ElGamalKeypair::random().write_json_file(&outfile).unwrap();
+        let serialized_keypair = ElGamalKeypair::new_rand()
+            .write_json_file(&outfile)
+            .unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(
@@ -792,15 +794,21 @@ mod tests {
     fn test_write_keypair_file_overwrite_ok() {
         let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
 
-        ElGamalKeypair::random().write_json_file(&outfile).unwrap();
-        ElGamalKeypair::random().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::new_rand()
+            .write_json_file(&outfile)
+            .unwrap();
+        ElGamalKeypair::new_rand()
+            .write_json_file(&outfile)
+            .unwrap();
     }
 
     #[test]
     fn test_write_keypair_file_truncate() {
         let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
 
-        ElGamalKeypair::random().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::new_rand()
+            .write_json_file(&outfile)
+            .unwrap();
         ElGamalKeypair::read_json_file(&outfile).unwrap();
 
         // Ensure outfile is truncated
@@ -809,7 +817,9 @@ mod tests {
             f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
                 .unwrap();
         }
-        ElGamalKeypair::random().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::new_rand()
+            .write_json_file(&outfile)
+            .unwrap();
         ElGamalKeypair::read_json_file(&outfile).unwrap();
     }
 

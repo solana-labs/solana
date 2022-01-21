@@ -185,7 +185,7 @@ mod test {
     #[test]
     fn test_equality_proof() {
         // success case
-        let elgamal_keypair = ElGamalKeypair::random();
+        let elgamal_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
         let ciphertext = elgamal_keypair.public.encrypt(message);
@@ -212,7 +212,7 @@ mod test {
             .is_ok());
 
         // fail case: encrypted and committed messages are different
-        let elgamal_keypair = ElGamalKeypair::random();
+        let elgamal_keypair = ElGamalKeypair::new_rand();
         let encrypted_message: u64 = 55;
         let committed_message: u64 = 77;
 

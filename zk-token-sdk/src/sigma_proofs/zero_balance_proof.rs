@@ -135,7 +135,7 @@ mod test {
 
     #[test]
     fn test_zero_balance_proof() {
-        let source_keypair = ElGamalKeypair::random();
+        let source_keypair = ElGamalKeypair::new_rand();
 
         let mut transcript_prover = Transcript::new(b"test");
         let mut transcript_verifier = Transcript::new(b"test");

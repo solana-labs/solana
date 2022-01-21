@@ -116,7 +116,7 @@ mod test {
 
     #[test]
     fn test_close_account_correctness() {
-        let source_keypair = ElGamalKeypair::random();
+        let source_keypair = ElGamalKeypair::new_rand();
 
         // general case: encryption of 0
         let balance = source_keypair.public.encrypt(0_u64);
