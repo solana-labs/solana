@@ -6031,7 +6031,7 @@ if false {
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
             collect_time.stop();
 
-            error!("{} {} slot: {}, len: {}", file!(), line!(), slot, combined_maps.len());
+            error!("{} {} slot: {}, len: {} {}", file!(), line!(), slot, combined_maps.len(), slots.len());
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_root();
             error!("{} {} slot: {}, min_root: {:?}", file!(), line!(), slot, min_root);

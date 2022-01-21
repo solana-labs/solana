@@ -125,6 +125,7 @@ impl<'a> SortedStorages<'a> {
                 end: max,
             };
             let len = (max - min) as usize;
+            error!("{} {}, len: {}, {}, {}", file!(), line!(), min, max, len);
             storages = vec![None; len];
             next_valid_slot = Vec::with_capacity(len);
             let mut next_valid_index_to_fill = 0;
