@@ -1,7 +1,7 @@
 //! The twisted ElGamal encryption implementation.
 //!
 //! The message space consists of any number that is representable as a scalar (a.k.a. "exponent")
-//! for Curve25519. 
+//! for Curve25519.
 //!
 //! A twisted ElGamal ciphertext consists of two components:
 //! - A Pedersen commitment that encodes a message to be encrypted
