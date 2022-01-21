@@ -78,6 +78,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
+        compute_budget::ComputeBudget,
         instruction_recorder::InstructionRecorder,
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
@@ -98,7 +99,6 @@ use {
             INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
             MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
         },
-        compute_budget::ComputeBudget,
         ed25519_program,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
