@@ -3552,11 +3552,7 @@ impl Bank {
         let executable_keys: Vec<_> = accounts
             .iter()
             .filter_map(|(key, account)| {
-                if account.executable()
-                    && (account.owner() == &bpf_loader_upgradeable::id()
-                        || account.owner() == &bpf_loader_deprecated::id()
-                        || account.owner() == &bpf_loader::id())
-                {
+                if account.executable() && account.owner() != &native_loader::id() {
                     Some(key)
                 } else {
                     None
