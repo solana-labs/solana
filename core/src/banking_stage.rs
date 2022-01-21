@@ -490,7 +490,7 @@ impl BankingStage {
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
-        buffered_packet_batches.retain_mut(|buffered_packet_batch_and_offsets| {
+        RetainMut::retain_mut(buffered_packet_batches, |buffered_packet_batch_and_offsets| {
             let (packet_batch, ref mut original_unprocessed_indexes, _forwarded) =
                 buffered_packet_batch_and_offsets;
             if let Some((next_leader, bank)) = &reached_end_of_slot {
