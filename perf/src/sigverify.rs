@@ -462,7 +462,7 @@ impl Deduper {
 
     fn dedup_packet(&self, count: &AtomicU64, packet: &mut Packet) {
         // If this packet was already marked as discard, drop it
-        if packet.meta.discard {
+        if packet.meta.discard() {
             return;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
@@ -478,7 +478,7 @@ impl Deduper {
             self.filter[pos].store(hash, Ordering::Relaxed);
         }
         if hash == prev & hash {
-            packet.meta.discard = true;
+            packet.meta.set_discard(true);
             count.fetch_add(1, Ordering::Relaxed);
         }
     }
