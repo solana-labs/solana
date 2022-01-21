@@ -16,6 +16,6 @@ PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 solana --version
 
 if [[ -n $GITHUB_ACTIONS ]]; then
-  echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+  echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
   npm install -g npm@7
 fi
