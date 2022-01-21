@@ -13102,7 +13102,7 @@ pub(crate) mod tests {
 
         let accounts = &[
             (key1, executable_account.clone()),
-            (key2, executable_account.clone()),
+            (key2, executable_account),
         ];
 
         // add one to root bank
