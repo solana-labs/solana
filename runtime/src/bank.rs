@@ -5329,6 +5329,7 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
+            Some(self.epoch_schedule().slots_per_epoch)
         )
     }
 

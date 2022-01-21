@@ -6424,6 +6424,7 @@ if false {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -6440,7 +6441,7 @@ if false {
                 None,
                 can_cached_slot_be_unflushed,
                 check_hash,
-                None,
+                slots_per_epoch,
                 is_startup,
             )?;
 
