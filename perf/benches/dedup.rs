@@ -30,10 +30,9 @@ fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) 
         // reset
         bloom.clear_for_tests();
         batches.iter_mut().for_each(|batch| {
-            batch
-                .packets
-                .iter_mut()
-                .for_each(|p| p.meta.set_discard(false))
+            batch.packets.iter_mut().for_each(|p| {
+                p.meta.discard = false;
+            })
         });
     })
 }
