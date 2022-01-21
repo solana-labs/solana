@@ -3,6 +3,7 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
+    crate::banking_stage::BatchedTransactionCostDetails,
     solana_measure::measure::Measure,
     solana_runtime::{
         bank::Bank,
@@ -147,6 +148,36 @@ impl QosService {
         select_results
     }
 
+    pub fn accumulate_estimated_transaction_costs(
+        &self,
+        cost_details: &BatchedTransactionCostDetails,
+    ) {
+        self.metrics
+            .estimated_signature_cu
+            .fetch_add(cost_details.batched_signature_cost, Ordering::Relaxed);
+        self.metrics
+            .estimated_write_lock_cu
+            .fetch_add(cost_details.batched_write_lock_cost, Ordering::Relaxed);
+        self.metrics
+            .estimated_data_bytes_cu
+            .fetch_add(cost_details.batched_data_bytes_cost, Ordering::Relaxed);
+        self.metrics
+            .estimated_execute_cu
+            .fetch_add(cost_details.batched_execute_cost, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_actual_execute_cu(&self, units: u64) {
+        self.metrics
+            .actual_execute_cu
+            .fetch_add(units, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_actual_execute_time(&self, micro_sec: u64) {
+        self.metrics
+            .actual_execute_time_us
+            .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
     fn reporting_loop(
         running_flag: Arc<AtomicBool>,
         metrics: Arc<QosServiceMetrics>,
@@ -169,6 +200,24 @@ struct QosServiceMetrics {
     retried_txs_per_block_limit_count: AtomicU64,
     retried_txs_per_vote_limit_count: AtomicU64,
     retried_txs_per_account_limit_count: AtomicU64,
+
+    // accumulated estimated signature Compute Unites to be packed into block
+    estimated_signature_cu: AtomicU64,
+
+    // accumulated estimated write locks Compute Units to be packed into block
+    estimated_write_lock_cu: AtomicU64,
+
+    // accumulated estimated instructino data Compute Units to be packed into block
+    estimated_data_bytes_cu: AtomicU64,
+
+    // accumulated estimated program Compute Units to be packed into block
+    estimated_execute_cu: AtomicU64,
+
+    // accumulated actual program Compute Units that have been packed into block
+    actual_execute_cu: AtomicU64,
+
+    // accumulated actual program execute micro-sec that have been packed into block
+    actual_execute_time_us: AtomicU64,
 }
 
 impl QosServiceMetrics {
@@ -212,6 +261,36 @@ impl QosServiceMetrics {
                     "retried_txs_per_account_limit_count",
                     self.retried_txs_per_account_limit_count
                         .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_signature_cu",
+                    self.estimated_signature_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_write_lock_cu",
+                    self.estimated_write_lock_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_data_bytes_cu",
+                    self.estimated_data_bytes_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_execute_cu",
+                    self.estimated_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_execute_cu",
+                    self.actual_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_execute_time_us",
+                    self.actual_execute_time_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
