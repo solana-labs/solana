@@ -3,7 +3,7 @@ import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
 import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";
-import { parsWormholeInstructionTitle } from "./wormhole/types";
+import { parseWormholeInstructionTitle } from "./wormhole/types";
 
 export function WormholeDetailsCard({
   ix,
@@ -24,7 +24,7 @@ export function WormholeDetailsCard({
 
   let title;
   try {
-    title = parsWormholeInstructionTitle(ix);
+    title = parseWormholeInstructionTitle(ix);
   } catch (error) {
     reportError(error, {
       url: url,
