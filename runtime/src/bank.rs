@@ -5440,6 +5440,7 @@ impl Bank {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> Hash {
+        assert!(slots_per_epoch.is_some());
         let (hash, total_lamports) = self
             .rc
             .accounts

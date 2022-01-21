@@ -6013,9 +6013,9 @@ if false {
         check_hash: bool,
         can_cached_slot_be_unflushed: bool,
         slots_per_epoch: Option<Slot>,
-        mut is_startup: bool,
+        is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        is_startup = false;
+        assert!(slots_per_epoch.is_some());
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
                 Some((&self.accounts_cache, ancestors, &self.accounts_index))
@@ -6082,6 +6082,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        assert!(slots_per_epoch.is_some());
         let stat_ = self.active_stats.get_state(ActiveStatItem::Hash);
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
@@ -6123,6 +6124,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> (Hash, u64) {
+        assert!(slots_per_epoch.is_some());
         let check_hash = false;
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
@@ -6152,10 +6154,7 @@ if false {
         rehash: &AtomicUsize,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        if slots_per_epoch.is_none() {
-            panic!("this should be specified");
-            return loaded_account.loaded_hash();
-        }
+        assert!(slots_per_epoch.is_some());
 
         let mut is_ancient = false;
         if let Some(storages) = storage.get(storage_slot) {
@@ -6227,6 +6226,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
+        assert!(slots_per_epoch.is_some());
         // check_hash = false;
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -6356,6 +6356,7 @@ if false {
         num_hash_scan_passes: Option<usize>,
         slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        assert!(slots_per_epoch.is_some());
 
         
         let rehash = AtomicUsize::default();
