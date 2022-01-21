@@ -4856,7 +4856,7 @@ if false {
                                 // See if an account overflows the append vecs in the slot.
                 let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
-                    panic!("ancient_append_vec: creating new store");
+                    error!("ancient_append_vec: creating new store");
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
                     if self
                         .try_recycle_and_insert_store(slot, special_store_size, std::u64::MAX)
