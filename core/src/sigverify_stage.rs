@@ -227,18 +227,17 @@ impl SigVerifyStage {
             num_packets,
         );
 
-        //50ns per packet with a single core
-        let mut discard_time = Measure::start("sigverify_discard_time");
-        if num_packets > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
-        };
-        let excess_fail = num_packets.saturating_sub(MAX_SIGVERIFY_BATCH);
-        discard_time.stop();
-
-        //100ns per packet with N cores
         let mut dedup_time = Measure::start("sigverify_dedup_time");
         let dedup_fail = deduper.dedup_packets(&mut batches) as usize;
         dedup_time.stop();
+        let num_unique = num_packets.saturating_sub(dedup_fail);
+
+        let mut discard_time = Measure::start("sigverify_discard_time");
+        if num_unique > MAX_SIGVERIFY_BATCH {
+            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
+        };
+        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+        discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
         let batches = verifier.verify_batches(batches);

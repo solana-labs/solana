@@ -484,16 +484,12 @@ impl Deduper {
     }
 
     pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {
-        use rayon::prelude::*;
-        // machine specific random offset to read the u64 from the packet signature
         let count = AtomicU64::new(0);
-        PAR_THREAD_POOL.install(|| {
-            batches.into_par_iter().for_each(|batch| {
-                batch
-                    .packets
-                    .par_iter_mut()
-                    .for_each(|p| self.dedup_packet(&count, p))
-            })
+        batches.iter_mut().for_each(|batch| {
+            batch
+                .packets
+                .iter_mut()
+                .for_each(|p| self.dedup_packet(&count, p))
         });
         count.load(Ordering::Relaxed)
     }
@@ -509,7 +505,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
                 .packets
                 .par_iter_mut()
                 .for_each(|p| verify_packet(p, reject_non_vote))
-        })
+        });
     });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
