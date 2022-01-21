@@ -5643,10 +5643,10 @@ impl AccountsDb {
             assert_eq!(loaded_account.compute_hash(storage_slot, pubkey), loaded_account.loaded_hash());
             return loaded_account.loaded_hash();
         }
-        panic!("shouldn't be rehashing yet: {:?}", (storage_slot, pubkey, expected_rent_collection_slot_max_epoch, partition_from_pubkey, slots_per_epoch, max_slot_in_storages, first_slot_in_max_epoch));
+        //panic!("shouldn't be rehashing yet: {:?}", (storage_slot, pubkey, expected_rent_collection_slot_max_epoch, partition_from_pubkey, slots_per_epoch, max_slot_in_storages, first_slot_in_max_epoch));
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
-        if num % 100_000 == 0 {
+        if num % 1_000 == 0 {
             error!("rehashed: {}", num);
         }
         // recompute based on rent collection/rewrite slot
