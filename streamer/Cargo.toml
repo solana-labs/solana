@@ -19,6 +19,11 @@ thiserror = "1.0"
 libc = "0.2.112"
 nix = "0.23.1"
 solana-perf = { path = "../perf", version = "=1.10.0" }
+quinn = "0.8.0"
+rustls = {version = "0.20.0", features = ["dangerous_configuration"]}
+anyhow = "1.0.22"
+bytes = "1"
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.10.0" }

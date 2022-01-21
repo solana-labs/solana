@@ -13,8 +13,15 @@ use {
         io,
         iter::repeat,
         net::{SocketAddr, UdpSocket},
+        sync::Arc,
     },
     thiserror::Error,
+    quinn::{ClientConfig, Endpoint, NewConnection, EndpointConfig},
+    anyhow::{Context, Result, anyhow},
+    bytes::Bytes,
+    solana_sdk::packet::MAX_TRANSACTION_SIZE,
+    solana_sdk::packet::PacketInterface,
+    rustls::*,
 };
 
 #[derive(Debug, Error)]
@@ -47,6 +54,147 @@ where
         Ok(())
     }
 }
+
+
+/// Dummy certificate verifier that treats any certificate as valid.
+struct SkipServerVerification;
+
+impl SkipServerVerification {
+    fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+impl rustls::client::ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
+fn configure_client() -> ClientConfig {
+    let crypto = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_custom_certificate_verifier(SkipServerVerification::new())
+        .with_no_client_auth();
+
+    ClientConfig::new(Arc::new(crypto))
+}
+
+#[tokio::main]
+pub async fn batch_send_quic<P: PacketInterface + 'static>(sock: &UdpSocket, packets: Vec<&P>, dest: &SocketAddr) -> Result<()>
+{
+    /*let url = options.url;
+    let remote = (url.host_str().unwrap(), url.port().unwrap_or(4433))
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow!("couldn't resolve to an address"))?;*/
+/*
+    let mut roots = rustls::RootCertStore::empty();
+    if let Some(ca_path) = options.ca {
+        roots.add(&rustls::Certificate(fs::read(&ca_path)?))?;
+    } else {
+        let dirs = directories_next::ProjectDirs::from("org", "quinn", "quinn-examples").unwrap();
+        match fs::read(dirs.data_local_dir().join("cert.der")) {
+            Ok(cert) => {
+                roots.add(&rustls::Certificate(cert))?;
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
+                info!("local server certificate not found");
+            }
+            Err(e) => {
+                error!("failed to open local server certificate: {}", e);
+            }
+        }
+    }*/
+    let client_crypto = configure_client();
+
+    /*
+    client_crypto.alpn_protocols = common::ALPN_QUIC_HTTP.iter().map(|&x| x.into()).collect();
+    if options.keylog {
+        client_crypto.key_log = Arc::new(rustls::KeyLogFile::new());
+    }*/
+
+    let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, sock.try_clone()?)?.0;
+    endpoint.set_default_client_config(client_crypto);
+
+    //let request = format!("GET {}\r\n", url.path());
+    //let start = Instant::now();
+    //let rebind = options.rebind;
+    /*
+    let host = options
+        .host
+        .as_ref()
+        .map_or_else(|| url.host_str(), |x| Some(x))
+        .ok_or_else(|| anyhow!("no hostname specified"))?;
+
+    eprintln!("connecting to {} at {}", host, remote);
+    */
+    let new_conn = endpoint
+        .connect(*dest, "host")?
+        .await
+        .map_err(|e| anyhow!("failed to connect: {}", e))?;
+    //eprintln!("connected at {:?}", start.elapsed());
+    let quinn::NewConnection {
+        connection: conn, ..
+    } = new_conn;
+    /*let (mut send, recv) = conn
+        .open_bi()
+        .await
+        .map_err(|e| anyhow!("failed to open stream: {}", e))?;*/
+
+        let max_dgram_size = conn.max_datagram_size();
+        assert!(max_dgram_size.is_some() && max_dgram_size.unwrap() >= MAX_TRANSACTION_SIZE);
+
+        /*
+    if rebind {
+        let socket = std::net::UdpSocket::bind("[::]:0").unwrap();
+        let addr = socket.local_addr().unwrap();
+        eprintln!("rebinding to {}", addr);
+        endpoint.rebind(socket).expect("rebind failed");
+    }
+*/
+/*
+    send.write_all(request.as_bytes())
+        .await
+        .map_err(|e| anyhow!("failed to send request: {}", e))?;
+    send.finish()
+        .await
+        .map_err(|e| anyhow!("failed to shutdown stream: {}", e))?;
+    let response_start = Instant::now();
+    eprintln!("request sent at {:?}", response_start - start);
+    let resp = recv
+        .read_to_end(usize::max_value())
+        .await
+        .map_err(|e| anyhow!("failed to read response: {}", e))?;
+    let duration = response_start.elapsed();
+    eprintln!(
+        "response received in {:?} - {} KiB/s",
+        duration,
+        resp.len() as f32 / (duration_secs(&duration) * 1024.0)
+    );
+    io::stdout().write_all(&resp).unwrap();
+    io::stdout().flush().unwrap();
+*/
+    //todo: is there a way to get rid of this copy?
+    packets.iter().try_for_each(|packet| {conn.send_datagram(Bytes::copy_from_slice(&packet.get_data()[0..packet.get_meta().size]))})?;
+
+    conn.close(0u32.into(), b"done");
+
+    // Give the server a fair chance to receive the close packet
+    endpoint.wait_idle().await;
+
+    Ok(())
+}
+
+
 
 #[cfg(target_os = "linux")]
 fn mmsghdr_for_packet(

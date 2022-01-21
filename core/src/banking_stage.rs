@@ -46,7 +46,7 @@ use {
         timing::{duration_as_ms, timestamp, AtomicInterval},
         transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
     },
-    solana_streamer::sendmmsg::{batch_send, SendPktsError},
+    solana_streamer::sendmmsg::{batch_send, SendPktsError, batch_send_quic},
     solana_transaction_status::token_balances::{
         collect_token_balances, TransactionTokenBalancesSet,
     },
@@ -534,6 +534,24 @@ impl BankingStage {
             )
         });
 
+        if PacketType::is_extended() {
+            let packet_vec: Vec<&PacketType> = packets
+            .into_iter()
+            .filter(|p| {
+                !p.get_meta().forwarded && data_budget.take(p.get_meta().size)
+            })
+            .collect();
+            if !packet_vec.is_empty() {
+                inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
+
+                // todo: handle this properly
+                match batch_send_quic(socket, packet_vec, tpu_forwards) {
+                    Ok(()) => {}
+                    _ => return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "Send packet error"))
+                }
+            }
+        }
+        else {
         let packet_vec: Vec<_> = packets
             .iter()
             .filter_map(|p| {
@@ -552,7 +570,7 @@ impl BankingStage {
                 return Err(ioerr);
             }
         }
-
+    }
         Ok(())
     }
 
