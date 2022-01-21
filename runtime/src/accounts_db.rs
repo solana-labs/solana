@@ -6169,6 +6169,7 @@ if false {
                 }
                 else {
                     let capacity =  storages[0].accounts.capacity();
+                    use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
                     let size = (MAXIMUM_APPEND_VEC_FILE_SIZE - 2048) / 1; // below max? todo - too small to make us do this more often
                     if capacity == size {
                         is_ancient = true;
