@@ -1583,18 +1583,77 @@ impl BankingStage {
         banking_stage_stats: &mut BankingStageStats,
     ) {
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
+            *newly_buffered_packets_count += packet_indexes.len();
+
             if unprocessed_packet_batches.len() >= batch_limit {
+                // when reached buffer limit, start to drop unprocessed packet from bottom of
+                // weight shuffled indexes, until find a batch has no more unprocessed packet,
+                // swap it with the new packet. It is likely it will drop more unprocessed packets
+                // than the dropped batch contains.
+                Self::swap_packet_with_weight_shuffle(
+                    unprocessed_packet_batches,
+                    packet_batch,
+                    packet_indexes,
+                    dropped_packets_count,
+                );
                 *dropped_packet_batches_count += 1;
-                if let Some(dropped_batch) = unprocessed_packet_batches.pop_front() {
-                    *dropped_packets_count += dropped_batch.1.len();
+            } else {
+                unprocessed_packet_batches.push_back((packet_batch, packet_indexes, false));
+            }
+        }
+    }
+
+    // 1. Push new batch to the end of VecDeque, so it will be shuffled with existing batches;
+    // 2. Shuffle buffer to get weighted packet locator for reverse iteration, per packet;
+    // 3. Remove the packet from batch's unprocessed_indiexes, then check the batch if no
+    //    more unprocessed packet; Once found,
+    // 4. swap that batch with the new batch at the end of queue.
+    // Note: it is possible the new batch will be the one should be dropped.
+    fn swap_packet_with_weight_shuffle(
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        packet_batch: PacketBatch,
+        packet_indexes: Vec<usize>,
+        dropped_packets_count: &mut usize,
+    ) -> Option<PacketBatchAndOffsets> {
+        buffered_packet_batches.push_back((packet_batch, packet_indexes, false));
+        let new_batch_index = buffered_packet_batches.len() - 1;
+
+        let (stakes, locators) = Self::get_stakes_and_locators(buffered_packet_batches);
+        let shuffled_packet_locators = Self::weighted_shuffle(&stakes, &locators);
+
+        let mut eviction_candidate_index: Option<usize> = None;
+        for (batch_index, packet_indexes) in shuffled_packet_locators.into_iter().rev() {
+            if let Some((_packet_batch, ref mut original_unprocessed_indexes, _forwarded)) =
+                buffered_packet_batches.get_mut(batch_index)
+            {
+                original_unprocessed_indexes.retain(|index| {
+                    if packet_indexes.contains(index) {
+                        *dropped_packets_count += 1;
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                if !Self::packet_has_more_unprocessed_transactions(original_unprocessed_indexes) {
+                    eviction_candidate_index = Some(batch_index);
+                    break;
                 }
             }
-            let _ = banking_stage_stats
-                .batch_packet_indexes_len
-                .increment(packet_indexes.len() as u64);
+        }
 
-            *newly_buffered_packets_count += packet_indexes.len();
-            unprocessed_packet_batches.push_back((packet_batch, packet_indexes, false));
+        if let Some(eviction_batch_index) = eviction_candidate_index {
+            if eviction_batch_index == new_batch_index {
+                // the new batch is identified to be the one for eviction
+                buffered_packet_batches.pop_back()
+            } else {
+                // we have a spot in the queue for new item, which is at the back of queue right now
+                buffered_packet_batches.swap_remove_back(eviction_batch_index)
+            }
+        } else {
+            // should not be here
+            warn!("Cannot find eviction candidate from buffer");
+            buffered_packet_batches.pop_back()
         }
     }
 
@@ -3311,7 +3370,9 @@ mod tests {
     fn test_push_unprocessed_batch_limit() {
         solana_logger::setup();
         // Create `PacketBatch` with 2 unprocessed packets
-        let new_packet_batch = PacketBatch::new(vec![Packet::default(); 2]);
+        let mut heavy_packet = Packet::default();
+        heavy_packet.meta.weight = 1_000_000u64;
+        let new_packet_batch = PacketBatch::new(vec![heavy_packet; 2]);
         let mut unprocessed_packets: UnprocessedPacketBatches =
             vec![(new_packet_batch, vec![0, 1], false)]
                 .into_iter()
@@ -3319,7 +3380,10 @@ mod tests {
         // Set the limit to 2
         let batch_limit = 2;
         // Create new unprocessed packets and add to a batch
-        let new_packet_batch = PacketBatch::new(vec![Packet::default()]);
+        let mut light_packet =
+            Packet::from_data(Some(&SocketAddr::from(([10, 10, 10, 1], 9001))), 42).unwrap();
+        light_packet.meta.weight = 1u64;
+        let new_packet_batch = PacketBatch::new(vec![light_packet; 3]);
         let packet_indexes = vec![];
 
         let mut dropped_packet_batches_count = 0;
@@ -3345,11 +3409,11 @@ mod tests {
 
         // Because the set of unprocessed `packet_indexes` is non-empty, the
         // packets are added to the unprocessed queue
-        let packet_indexes = vec![0];
+        let packet_indexes = vec![0, 1, 2];
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packet_batch,
-            packet_indexes.clone(),
+            packet_indexes,
             &mut dropped_packet_batches_count,
             &mut dropped_packets_count,
             &mut newly_buffered_packets_count,
@@ -3359,15 +3423,15 @@ mod tests {
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
         assert_eq!(dropped_packets_count, 0);
-        assert_eq!(newly_buffered_packets_count, 1);
+        assert_eq!(newly_buffered_packets_count, 3);
 
-        // Because we've reached the batch limit, old unprocessed packets are
+        // Because we've reached the batch limit, the light_weight unprocessed packets are
         // dropped and the new one is appended to the end
-        let new_packet_batch = PacketBatch::new(vec![Packet::from_data(
-            Some(&SocketAddr::from(([127, 0, 0, 1], 8001))),
-            42,
-        )
-        .unwrap()]);
+        let mut also_heavy_packet =
+            Packet::from_data(Some(&SocketAddr::from(([127, 0, 0, 1], 8001))), 42).unwrap();
+        also_heavy_packet.meta.weight = 100_000_000u64;
+        let new_packet_batch = PacketBatch::new(vec![also_heavy_packet]);
+        let packet_indexes = vec![0];
         assert_eq!(unprocessed_packets.len(), batch_limit);
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
@@ -3385,8 +3449,8 @@ mod tests {
             new_packet_batch.packets[0]
         );
         assert_eq!(dropped_packet_batches_count, 1);
-        assert_eq!(dropped_packets_count, 2);
-        assert_eq!(newly_buffered_packets_count, 2);
+        assert_eq!(dropped_packets_count, 3);
+        assert_eq!(newly_buffered_packets_count, 4);
     }
 
     #[test]
@@ -3599,21 +3663,23 @@ mod tests {
         assert_eq!(expected_us, us);
     }
 
-    #[test]
-    fn test_get_stakes_and_locators() {
-        solana_logger::setup();
+    fn packet_with_weight(weight: u64) -> Packet {
+        let mut packet = Packet::default();
+        packet.meta.weight = weight;
+        packet
+    }
 
-        fn packet_with_weight(weight: u64) -> Packet {
-            let mut packet = Packet::default();
-            packet.meta.weight = weight;
-            packet
-        }
-
-        let unprocessed_packets: UnprocessedPacketBatches = vec![
+    // build a buffer of four batches, each contains packet with following stake:
+    // 0: [ 10, 300]
+    // 1: [100, 200, 300]
+    // 2: [ 20,  30,  40]
+    // 3: [500,  30, 200]
+    fn build_unprocessed_packets_buffer() -> UnprocessedPacketBatches {
+        vec![
             (
                 PacketBatch::new(vec![
-                    packet_with_weight(0),
-                    packet_with_weight(100),
+                    packet_with_weight(10),
+                    packet_with_weight(300),
                     packet_with_weight(200),
                 ]),
                 vec![0, 1],
@@ -3630,9 +3696,9 @@ mod tests {
             ),
             (
                 PacketBatch::new(vec![
-                    packet_with_weight(10),
-                    packet_with_weight(2),
-                    packet_with_weight(0),
+                    packet_with_weight(20),
+                    packet_with_weight(30),
+                    packet_with_weight(40),
                 ]),
                 vec![0, 1, 2],
                 false,
@@ -3640,7 +3706,7 @@ mod tests {
             (
                 PacketBatch::new(vec![
                     packet_with_weight(500),
-                    packet_with_weight(2),
+                    packet_with_weight(30),
                     packet_with_weight(200),
                 ]),
                 vec![0, 1, 2],
@@ -3648,7 +3714,14 @@ mod tests {
             ),
         ]
         .into_iter()
-        .collect();
+        .collect()
+    }
+
+    #[test]
+    fn test_get_stakes_and_locators() {
+        solana_logger::setup();
+
+        let unprocessed_packets = build_unprocessed_packets_buffer();
 
         let (stakes, locators) = BankingStage::get_stakes_and_locators(&unprocessed_packets);
         debug!("stakes: {:?}, locators: {:?}", stakes, locators);
@@ -3659,5 +3732,60 @@ mod tests {
         let shuffled_indexes = BankingStage::weighted_shuffle(&stakes, &locators);
         debug!("shuffled indexes: {:?}", shuffled_indexes);
         assert!(11 >= shuffled_indexes.len());
+    }
+
+    #[test]
+    fn test_swap_packet_with_weight_shuffle() {
+        solana_logger::setup();
+
+        let mut unprocessed_packets = build_unprocessed_packets_buffer();
+
+        // try to insert one with weight lesser than anything in buffer.
+        // the new one should be rejected, and buffer should be unchanged
+        {
+            let mut dropped_packets_count = 0usize;
+            let weight = 0u64;
+            let new_batch = PacketBatch::new(vec![packet_with_weight(weight)]);
+            let dropped_batch = BankingStage::swap_packet_with_weight_shuffle(
+                &mut unprocessed_packets,
+                new_batch,
+                vec![0],
+                &mut dropped_packets_count,
+            );
+            // dropped batch should be the one made from new packet:
+            assert_eq!(1, dropped_packets_count);
+            let dropped_packets = &dropped_batch.unwrap().0;
+            assert_eq!(1, dropped_packets.packets.len());
+            assert_eq!(weight, dropped_packets.packets[0].meta.weight);
+            // buffer should be unchanged
+            assert_eq!(4, unprocessed_packets.len());
+        }
+
+        // try to insert one with weight higher than anything in buffer.
+        // the new one should be rejected, and buffer should be unchanged
+        {
+            let mut dropped_packets_count = 0usize;
+            let weight = 5000u64;
+            let new_batch = PacketBatch::new(vec![packet_with_weight(weight)]);
+            let dropped_batch = BankingStage::swap_packet_with_weight_shuffle(
+                &mut unprocessed_packets,
+                new_batch,
+                vec![0],
+                &mut dropped_packets_count,
+            );
+            // dropped batch should be the one with lest weight in buffer (the 3rd batch):
+            let dropped_packets = &dropped_batch.unwrap().0;
+            assert_eq!(3, dropped_packets.packets.len());
+            assert_eq!(20, dropped_packets.packets[0].meta.weight);
+            assert_eq!(30, dropped_packets.packets[1].meta.weight);
+            assert_eq!(40, dropped_packets.packets[2].meta.weight);
+            // buffer should still have 4 batches
+            assert_eq!(4, unprocessed_packets.len());
+            // the 3rd item should be the new batch with one packet
+            assert_eq!(1, unprocessed_packets[2].0.packets.len());
+            assert_eq!(weight, unprocessed_packets[2].0.packets[0].meta.weight);
+            assert_eq!(1, unprocessed_packets[2].1.len());
+            assert_eq!(0, unprocessed_packets[2].1[0]);
+        }
     }
 }
