@@ -177,6 +177,7 @@ impl Tvu {
             ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
             MAX_SIGVERIFY_BATCH,
             None,
+            "tvu_shred_sigverify",
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());

@@ -118,6 +118,7 @@ impl Tpu {
                 verifier,
                 tpu_sigverify_batch_size,
                 tpu_packet_rate_per_second,
+                "tpu_sigverify",
             )
         };
 
@@ -131,6 +132,7 @@ impl Tpu {
                 verifier,
                 tpu_sigverify_batch_size,
                 tpu_packet_rate_per_second,
+                "tpu_votes_only_sigverify",
             )
         };
 

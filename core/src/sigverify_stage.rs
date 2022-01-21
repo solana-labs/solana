@@ -61,9 +61,9 @@ struct SigVerifierStats {
 }
 
 impl SigVerifierStats {
-    fn report(&self) {
+    fn report(&self, name: &'static str) {
         datapoint_info!(
-            "sigverify_stage-total_verify_time",
+            name,
             (
                 "recv_batches_us_90pct",
                 self.recv_batches_us_hist.percentile(90.0).unwrap_or(0),
@@ -185,6 +185,7 @@ impl SigVerifyStage {
         verifier: T,
         max_batch_size: usize,
         max_packet_throughput: Option<usize>,
+        name: &'static str,
     ) -> Self {
         let thread_hdl = Self::verifier_services(
             packet_receiver,
@@ -192,6 +193,7 @@ impl SigVerifyStage {
             verifier,
             max_batch_size,
             max_packet_throughput,
+            name,
         );
         Self { thread_hdl }
     }
@@ -299,6 +301,7 @@ impl SigVerifyStage {
         verifier: &T,
         max_batch_size: usize,
         max_packet_throughput: Option<usize>,
+        name: &'static str,
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
@@ -341,7 +344,7 @@ impl SigVerifyStage {
                         }
                     }
                     if last_print.elapsed().as_secs() > 2 {
-                        stats.report();
+                        stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
                     }
@@ -356,6 +359,7 @@ impl SigVerifyStage {
         verifier: T,
         max_batch_size: usize,
         max_packet_throughput: Option<usize>,
+        name: &'static str,
     ) -> JoinHandle<()> {
         Self::verifier_service(
             packet_receiver,
@@ -363,6 +367,7 @@ impl SigVerifyStage {
             &verifier,
             max_batch_size,
             max_packet_throughput,
+            name,
         )
     }
 
