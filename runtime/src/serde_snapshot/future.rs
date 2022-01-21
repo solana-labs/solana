@@ -46,6 +46,7 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
 // because it's handled by SerializableVersionedBank.
 // So, sync fields with it!
 #[derive(Clone, Deserialize)]
+<<<<<<< HEAD:runtime/src/serde_snapshot/future.rs
 pub(crate) struct DeserializableVersionedBank {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
@@ -76,6 +77,39 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
     pub(crate) stakes: Stakes,
+=======
+struct DeserializableVersionedBank {
+    blockhash_queue: BlockhashQueue,
+    ancestors: AncestorsForSerialization,
+    hash: Hash,
+    parent_hash: Hash,
+    parent_slot: Slot,
+    hard_forks: HardForks,
+    transaction_count: u64,
+    tick_height: u64,
+    signature_count: u64,
+    capitalization: u64,
+    max_tick_height: u64,
+    hashes_per_tick: Option<u64>,
+    ticks_per_slot: u64,
+    ns_per_slot: u128,
+    genesis_creation_time: UnixTimestamp,
+    slots_per_year: f64,
+    #[allow(dead_code)]
+    unused: u64,
+    slot: Slot,
+    epoch: Epoch,
+    block_height: u64,
+    collector_id: Pubkey,
+    collector_fees: u64,
+    fee_calculator: FeeCalculator,
+    fee_rate_governor: FeeRateGovernor,
+    collected_rent: u64,
+    rent_collector: RentCollector,
+    epoch_schedule: EpochSchedule,
+    inflation: Inflation,
+    stakes: Stakes,
+>>>>>>> 9977396d8 (Remove unused fields from Bank (#22491)):runtime/src/serde_snapshot/newer.rs
     #[allow(dead_code)]
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
@@ -101,7 +135,6 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             ns_per_slot: dvb.ns_per_slot,
             genesis_creation_time: dvb.genesis_creation_time,
             slots_per_year: dvb.slots_per_year,
-            unused: dvb.unused,
             slot: dvb.slot,
             epoch: dvb.epoch,
             block_height: dvb.block_height,
@@ -160,9 +193,6 @@ pub(crate) struct SerializableVersionedBank<'a> {
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
     fn from(rhs: crate::bank::BankFieldsToSerialize<'a>) -> Self {
-        fn new<T: Default>() -> T {
-            T::default()
-        }
         Self {
             blockhash_queue: rhs.blockhash_queue,
             ancestors: rhs.ancestors,
@@ -180,7 +210,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             ns_per_slot: rhs.ns_per_slot,
             genesis_creation_time: rhs.genesis_creation_time,
             slots_per_year: rhs.slots_per_year,
-            unused: rhs.unused,
+            unused: u64::default(),
             slot: rhs.slot,
             epoch: rhs.epoch,
             block_height: rhs.block_height,
@@ -193,7 +223,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
             stakes: rhs.stakes,
-            unused_accounts: new(),
+            unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
         }
