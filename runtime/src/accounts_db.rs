@@ -6186,7 +6186,7 @@ if false {
         let mut expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch + partition_from_pubkey;
         if expected_rent_collection_slot_max_epoch > max_slot_in_storages {
             // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
-            expected_rent_collection_slot_max_epoch.saturating_sub(slots_per_epoch);
+            expected_rent_collection_slot_max_epoch = expected_rent_collection_slot_max_epoch.saturating_sub(slots_per_epoch);
         }
         let mut use_stored = true;
         if !is_ancient && storage_slot >= expected_rent_collection_slot_max_epoch {
