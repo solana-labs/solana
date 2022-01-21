@@ -13,6 +13,8 @@ use {
         perf_libs,
         recycler::Recycler,
     },
+    ahash::AHasher,
+    rand::{thread_rng, Rng},
     rayon::ThreadPool,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
@@ -23,8 +25,6 @@ use {
         short_vec::decode_shortu16_len,
         signature::Signature,
     },
-    std::collections::hash_map::RandomState,
-    std::hash::BuildHasher,
     std::hash::Hasher,
     std::sync::atomic::{AtomicBool, AtomicU64, Ordering},
     std::time::{Duration, Instant},
@@ -425,17 +425,17 @@ pub fn generate_offsets(
 
 pub struct Deduper {
     filter: Vec<AtomicU64>,
-    seed: RandomState,
+    seed: (u128, u128),
     age: Instant,
     max_age: Duration,
-    saturated: AtomicBool,
+    pub saturated: AtomicBool,
 }
 
 impl Deduper {
     pub fn new(size: u32, max_age_ms: u64) -> Self {
         let mut filter: Vec<AtomicU64> = Vec::with_capacity(size as usize);
         filter.resize_with(size as usize, Default::default);
-        let seed = RandomState::new();
+        let seed = thread_rng().gen();
         Self {
             filter,
             seed,
@@ -454,7 +454,7 @@ impl Deduper {
             for i in &self.filter {
                 i.store(0, Ordering::Relaxed);
             }
-            self.seed = RandomState::new();
+            self.seed = thread_rng().gen();
             self.age = now;
             self.saturated.store(false, Ordering::Relaxed);
         }
@@ -465,7 +465,7 @@ impl Deduper {
         if packet.meta.discard() {
             return;
         }
-        let mut hasher = self.seed.build_hasher();
+        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(&packet.data[0..packet.meta.size]);
         let hash = hasher.finish();
         let len = self.filter.len();
@@ -1386,6 +1386,7 @@ mod tests {
         }
         assert!(filter.saturated.load(Ordering::Relaxed));
     }
+
     #[test]
     fn test_dedup_false_positive() {
         let filter = Deduper::new(1_000_000, 0);
@@ -1396,6 +1397,7 @@ mod tests {
             discard += filter.dedup_packets(&mut batches) as usize;
             println!("false positive rate: {}/{}", discard, i * 1024);
         }
-        assert!(discard < 1);
+        //allow for 1 false positive even if extremely unlikely
+        assert!(discard < 2);
     }
 }

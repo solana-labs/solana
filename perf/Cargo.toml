@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-perf"
 edition = "2021"
 
 [dependencies]
+ahash = "0.7.6"
 bincode = "1.3.3"
 curve25519-dalek = { version = "3" }
 dlopen = "0.1.8"
