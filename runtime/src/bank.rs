@@ -6099,13 +6099,12 @@ impl Bank {
             );
         }
 
-        if new_feature_activations
-            .contains(&feature_set::spl_associated_token_account_v1_0_4_release::id())
+        if new_feature_activations.contains(&feature_set::spl_associated_token_account_v1_0_4::id())
         {
             self.replace_program_account(
                 &inline_spl_associated_token_account::id(),
-                &inline_spl_associated_token_account::new_program::id(),
-                "bank-apply_spl_associated_token_account_v1_4_0_release",
+                &inline_spl_associated_token_account::program_v1_0_4::id(),
+                "bank-apply_spl_associated_token_account_v1_4_0",
             );
         }
 
