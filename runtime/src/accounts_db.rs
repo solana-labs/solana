@@ -6031,7 +6031,7 @@ if false {
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
             collect_time.stop();
 
-            error!("{} {} slot: {}", file!(), line!(), slot);
+            error!("{} {} slot: {}, len: {}", file!(), line!(), slot, combined_maps.len());
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_root();
             let storages = SortedStorages::new_with_slots(
@@ -6040,6 +6040,7 @@ if false {
                 Some(slot),
             );
 
+            error!("{} {} slot: {}", file!(), line!(), slot);
             self.mark_old_slots_as_dirty(&storages, slots_per_epoch);
             sort_time.stop();
             error!("{} {} slot: {}", file!(), line!(), slot);
