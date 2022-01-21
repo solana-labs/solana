@@ -125,12 +125,16 @@ impl<'a> SortedStorages<'a> {
                 end: max,
             };
             let len = (max - min) as usize;
-            error!("{} {}, len: {}, {}, {}", file!(), line!(), min, max, len);
+            error!("{} {}, min: {}, max: {}, len: {}, sizeof: {}", file!(), line!(), min, max, len, std::mem::size_of::<SnapshotStorage>()); // len: 116425633, 116857634, 432001
             storages = vec![None; len];
+            error!("{} {}, min: {}, max: {}, len: {}", file!(), line!(), min, max, len); // len: 116425633, 116857634, 432001
             next_valid_slot = Vec::with_capacity(len);
+            error!("{} {}, min: {}, max: {}, len: {}", file!(), line!(), min, max, len); // len: 116425633, 116857634, 432001
             let mut next_valid_index_to_fill = 0;
             let mut fill_next_valid_slot = |valid_slot: Slot| {
                 let valid_index = (valid_slot - min) as usize;
+                error!("{} {}, len: {}, adding: {}", file!(), line!(), next_valid_slot.len(), valid_index - next_valid_index_to_fill);
+
                 (next_valid_index_to_fill..=valid_index).for_each(|_previous_index| {
                     next_valid_slot.push(valid_slot);
                 });
