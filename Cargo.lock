@@ -4395,8 +4395,6 @@ dependencies = [
  "json5",
  "libloading",
  "log 0.4.14",
- "serde",
- "serde_derive",
  "serde_json",
  "solana-accountsdb-plugin-interface",
  "solana-measure",
