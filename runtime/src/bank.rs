@@ -3549,26 +3549,34 @@ impl Bank {
         accounts: &[TransactionAccount],
         program_indices: &[Vec<usize>],
     ) -> Rc<RefCell<Executors>> {
-        let mut num_executors = message.account_keys_len();
-        for program_indices_of_instruction in program_indices.iter() {
-            num_executors += program_indices_of_instruction.len();
-        }
-        let mut executors = HashMap::with_capacity(num_executors);
-        let cache = self.cached_executors.read().unwrap();
-
-        for key in message.account_keys_iter() {
-            if let Some(executor) = cache.get(key) {
-                executors.insert(*key, TransactionExecutor::new_cached(executor));
-            }
-        }
-        for program_indices_of_instruction in program_indices.iter() {
-            for account_index in program_indices_of_instruction.iter() {
-                let key = accounts[*account_index].0;
-                if let Some(executor) = cache.get(&key) {
-                    executors.insert(key, TransactionExecutor::new_cached(executor));
+        let executable_keys: Vec<_> = accounts
+            .iter()
+            .filter_map(|(key, account)| {
+                if account.executable()
+                    && (account.owner() == &bpf_loader_upgradeable::id()
+                        || account.owner() == &bpf_loader_deprecated::id()
+                        || account.owner() == &bpf_loader::id())
+                {
+                    Some(key)
+                } else {
+                    None
                 }
-            }
+            })
+            .collect();
+
+        if executable_keys.is_empty() {
+            return Rc::new(RefCell::new(Executors::default()));
         }
+
+        let cache = self.cached_executors.read().unwrap();
+        let executors = executable_keys
+            .into_iter()
+            .filter_map(|key| {
+                cache
+                    .get(key)
+                    .map(|executor| (*key, TransactionExecutor::new_cached(executor)))
+            })
+            .collect();
 
         Rc::new(RefCell::new(executors))
     }
