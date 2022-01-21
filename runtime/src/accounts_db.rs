@@ -5549,7 +5549,7 @@ impl AccountsDb {
                 ancestors,
                 check_hash,
                 can_cached_slot_be_unflushed,
-                None,
+                slots_per_epoch,
                 is_startup,
             )?;
 
@@ -5856,6 +5856,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -5872,7 +5873,7 @@ impl AccountsDb {
                 None,
                 can_cached_slot_be_unflushed,
                 check_hash,
-                None,
+                slots_per_epoch,
                 is_startup,
             )?;
 
