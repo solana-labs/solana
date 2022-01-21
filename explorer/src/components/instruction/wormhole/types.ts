@@ -21,7 +21,7 @@ export function isWormholeInstruction(
   return PROGRAM_IDS.includes(instruction.programId.toBase58());
 }
 
-export function parsWormholeInstructionTitle(
+export function parseWormholeInstructionTitle(
   instruction: TransactionInstruction
 ): string {
   const code = instruction.data[0];
