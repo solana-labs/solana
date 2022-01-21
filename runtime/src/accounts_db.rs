@@ -6155,20 +6155,32 @@ if false {
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         assert!(slots_per_epoch.is_some());
+        let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
 
+        let max_slot_in_storages = storage.range().end;
         let mut is_ancient = false;
         if let Some(storages) = storage.get(storage_slot) {
-            if storages.len() == 1 && storages[0].accounts.is_ancient() {
-                is_ancient = true;
+            if storages.len() == 1 {
+                if storages[0].accounts.is_ancient() {
+                    is_ancient = true;
+                }
+                else if storage_slot + slots_per_epoch < max_slot_in_storages {
+                    is_ancient = true; // has to be treated like ancient since we are older than an epoch
+                }
+                else {
+                    let capacity =  storages[0].accounts.capacity();
+                    let size = (MAXIMUM_APPEND_VEC_FILE_SIZE - 2048) / 1; // below max? todo - too small to make us do this more often
+                    if capacity == size {
+                        is_ancient = true;
+                    }
+                }
             }
         }
 
         // todo: if we are ancient, then we should assume we need to recompute
         // if we are not ancient, we can calculate based on distance of this slot from max
-        let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
-        let max_slot_in_storages = storage.range().end;
         let partition_index_from_max_slot = max_slot_in_storages % slots_per_epoch;
         if max_slot_in_storages >= slots_per_epoch && storage_slot <= max_slot_in_storages - slots_per_epoch {
             // this storage_slot is ancient and we know we have to recompute
