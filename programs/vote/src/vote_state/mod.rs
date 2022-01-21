@@ -2408,7 +2408,7 @@ mod tests {
         }
 
         // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // with 0 credit epoch, before ALBk3EWd feature activation       
+        // with 0 credit epoch, before ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) = create_test_account_with_epoch_credits(true);
             let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account_with_epoch_credits)];
@@ -2435,7 +2435,7 @@ mod tests {
         }
 
         // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // without 0 credit epoch, before ALBk3EWd feature activation       
+        // without 0 credit epoch, before ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) = create_test_account_with_epoch_credits(false);
             let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account_with_epoch_credits)];
@@ -2462,7 +2462,7 @@ mod tests {
         }
 
         // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // with 0 credit epoch, after ALBk3EWd feature activation       
+        // with 0 credit epoch, after ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) = create_test_account_with_epoch_credits(true);
             let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account_with_epoch_credits)];
