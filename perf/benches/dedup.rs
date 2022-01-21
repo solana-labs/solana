@@ -112,7 +112,7 @@ fn bench_dedup_baseline(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_dedup_reset(bencher: &mut Bencher) {
-    let mut deduper = sigverify::Deduper::new(1_000_000, 0);
+    let mut deduper = sigverify::Deduper::new(1_000_000, Duration::from_millis(0));
     bencher.iter(|| {
         deduper.reset();
     });

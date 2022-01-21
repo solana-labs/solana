@@ -460,10 +460,10 @@ impl Deduper {
         }
     }
 
-    fn dedup_packet(&self, count: &AtomicU64, packet: &mut Packet) {
+    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
         // If this packet was already marked as discard, drop it
         if packet.meta.discard() {
-            return;
+            return 0;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(&packet.data[0..packet.meta.size]);
@@ -479,19 +479,16 @@ impl Deduper {
         }
         if hash == prev & hash {
             packet.meta.set_discard(true);
-            count.fetch_add(1, Ordering::Relaxed);
+            return 1;
         }
+        0
     }
 
     pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {
-        let count = AtomicU64::new(0);
-        batches.iter_mut().for_each(|batch| {
-            batch
-                .packets
-                .iter_mut()
-                .for_each(|p| self.dedup_packet(&count, p))
-        });
-        count.load(Ordering::Relaxed)
+        batches
+            .iter_mut()
+            .flat_map(|batch| batch.packets.iter_mut().map(|p| self.dedup_packet(p)))
+            .sum()
     }
 }
 
