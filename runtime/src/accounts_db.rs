@@ -6290,9 +6290,6 @@ if false {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
                 let len = accum[pubkey_to_bin_index].len();
-                if len % 10_000 == 0 {
-                    error!("len is : {}", len);
-                }
             },
             |x| {
                 
