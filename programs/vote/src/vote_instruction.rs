@@ -15,15 +15,11 @@ use {
         feature_set,
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
-<<<<<<< HEAD
-        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-        process_instruction::{get_sysvar, InvokeContext},
-=======
         keyed_account::{
             check_sysvar_keyed_account, from_keyed_account, get_signers, keyed_account_at_index,
             KeyedAccount,
         },
->>>>>>> b211f839cb (Fetch sysvars from invoke context for vote program (#22444))
+        process_instruction::{get_sysvar, InvokeContext},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         system_instruction,
@@ -322,10 +318,10 @@ fn verify_rent_exemption(
 /// loading them instead of deserializing from account data.
 fn get_sysvar_with_keyed_account_check<S: Sysvar>(
     keyed_account: &KeyedAccount,
-    invoke_context: &InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<S, InstructionError> {
     check_sysvar_keyed_account::<S>(keyed_account)?;
-    invoke_context.get_sysvar(keyed_account.unsigned_key())
+    get_sysvar(invoke_context, keyed_account.unsigned_key())
 }
 
 pub fn process_instruction(
@@ -350,42 +346,24 @@ pub fn process_instruction(
 
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-<<<<<<< HEAD
-            verify_rent_exemption(me, keyed_account_at_index(keyed_accounts, 1)?)?;
-            vote_state::initialize_account(
-                me,
-                &vote_init,
-                &signers,
-                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
-            )
-        }
-        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(
-            me,
-            &voter_pubkey,
-            vote_authorize,
-            &signers,
-            &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?,
-        ),
-=======
             let rent: Rent = get_sysvar_with_keyed_account_check(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 invoke_context,
             )?;
             verify_rent_exemption(me, &rent)?;
             let clock: Clock = get_sysvar_with_keyed_account_check(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                keyed_account_at_index(keyed_accounts, 2)?,
                 invoke_context,
             )?;
             vote_state::initialize_account(me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             let clock: Clock = get_sysvar_with_keyed_account_check(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 invoke_context,
             )?;
             vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers, &clock)
         }
->>>>>>> b211f839cb (Fetch sysvars from invoke context for vote program (#22444))
         VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
             me,
             keyed_account_at_index(keyed_accounts, 1)?.unsigned_key(),
@@ -396,25 +374,15 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
-<<<<<<< HEAD
-            vote_state::process_vote(
-                me,
-                &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?,
-                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
-                &vote,
-                &signers,
-            )
-=======
             let slot_hashes: SlotHashes = get_sysvar_with_keyed_account_check(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 invoke_context,
             )?;
             let clock: Clock = get_sysvar_with_keyed_account_check(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                keyed_account_at_index(keyed_accounts, 2)?,
                 invoke_context,
             )?;
             vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
->>>>>>> b211f839cb (Fetch sysvars from invoke context for vote program (#22444))
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, 1)?;
@@ -452,7 +420,6 @@ mod tests {
     use {
         super::*,
         bincode::serialize,
-<<<<<<< HEAD
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             process_instruction::MockInvokeContext,
@@ -460,14 +427,6 @@ mod tests {
             sysvar_cache::SysvarCache,
         },
         std::{borrow::Cow, cell::RefCell, str::FromStr},
-=======
-        solana_program_runtime::{
-            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
-            sysvar_cache::SysvarCache,
-        },
-        solana_sdk::account::{self, Account, AccountSharedData},
-        std::str::FromStr,
->>>>>>> b211f839cb (Fetch sysvars from invoke context for vote program (#22444))
     };
 
     fn create_default_account() -> RefCell<AccountSharedData> {
@@ -512,7 +471,6 @@ mod tests {
                 })
             })
             .collect();
-<<<<<<< HEAD
 
         for _ in 0..instruction.accounts.len() {
             accounts.push(RefCell::new(AccountSharedData::default()));
@@ -528,7 +486,7 @@ mod tests {
             let mut sysvar_cache = SysvarCache::default();
             sysvar_cache.push_entry(
                 sysvar::rent::id(),
-                bincode::serialize(&Rent::default()).unwrap(),
+                bincode::serialize(&Rent::free()).unwrap(),
             );
             sysvar_cache.push_entry(
                 sysvar::clock::id(),
@@ -541,28 +499,6 @@ mod tests {
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
-=======
-        let mut sysvar_cache = SysvarCache::default();
-        let rent = Rent::free();
-        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
-        let clock = Clock::default();
-        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
-        let slot_hashes = SlotHashes::default();
-        sysvar_cache.push_entry(
-            sysvar::slot_hashes::id(),
-            bincode::serialize(&slot_hashes).unwrap(),
-        );
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
-            &instruction.data,
-            transaction_accounts,
-            instruction.accounts.clone(),
-            expected_result,
-            &sysvar_cache,
-            super::process_instruction,
-        )
->>>>>>> b211f839cb (Fetch sysvars from invoke context for vote program (#22444))
     }
 
     fn invalid_vote_state_pubkey() -> Pubkey {
