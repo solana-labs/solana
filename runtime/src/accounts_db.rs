@@ -6034,6 +6034,7 @@ if false {
             error!("{} {} slot: {}, len: {}", file!(), line!(), slot, combined_maps.len());
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_root();
+            error!("{} {} slot: {}, min_root: {:?}", file!(), line!(), slot, min_root);
             let storages = SortedStorages::new_with_slots(
                 combined_maps.iter().zip(slots.iter()),
                 min_root,
