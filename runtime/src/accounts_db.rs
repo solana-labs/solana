@@ -33,6 +33,7 @@ use {
             ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         cache_hash_data::CacheHashData,
@@ -1061,6 +1062,8 @@ pub struct AccountsDb {
     filler_account_count: usize,
     pub filler_account_suffix: Option<Pubkey>,
 
+    active_stats: ActiveStats,
+
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage
     // lower passes = faster total time, higher dynamic memory usage
@@ -1555,6 +1558,7 @@ impl AccountsDb {
         Self::bins_per_pass(num_hash_scan_passes);
 
         AccountsDb {
+            active_stats: ActiveStats::default(),
             accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
@@ -2061,6 +2065,8 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
+        let _guard = self.active_stats.activate(ActiveStatItem::Clean);
+
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
 
@@ -3011,6 +3017,8 @@ impl AccountsDb {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
+        let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
+
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let (shrink_slots, shrink_slots_next_batch) = {
@@ -3057,6 +3065,7 @@ impl AccountsDb {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
+        let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
         if is_startup && self.caching_enabled {
@@ -4554,6 +4563,8 @@ impl AccountsDb {
         let mut account_bytes_saved = 0;
         let mut num_accounts_saved = 0;
 
+        let _guard = self.active_stats.activate(ActiveStatItem::Flush);
+
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
         // cleaning due to an ongoing scan
@@ -5529,6 +5540,7 @@ impl AccountsDb {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
             slot,

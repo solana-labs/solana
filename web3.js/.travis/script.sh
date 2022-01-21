@@ -13,4 +13,3 @@ npm run doc
 npm run lint
 npm run codecov
 npm run test:live-with-test-validator
-npm run test:browser-with-test-validator

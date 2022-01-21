@@ -19,6 +19,12 @@ impl fmt::Debug for ElGamalCiphertext {
     }
 }
 
+impl Default for ElGamalCiphertext {
+    fn default() -> Self {
+        Self::zeroed()
+    }
+}
+
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);

@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-client-test"
 edition = "2021"
 
 [dependencies]
-serde_json = "1.0.74"
+serde_json = "1.0.75"
 serial_test = "0.5.1"
 solana-client = { path = "../client", version = "=1.10.0" }
 solana-ledger = { path = "../ledger", version = "=1.10.0" }
