@@ -9,6 +9,7 @@ use {
         packet::{to_packet_batches, PacketBatch},
         sigverify,
     },
+    std::time::Duration,
     test::Bencher,
 };
 
@@ -23,7 +24,7 @@ fn test_packet_with_size(size: usize, rng: &mut ThreadRng) -> Vec<u8> {
 
 fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) {
     // verify packets
-    let mut deduper = sigverify::Deduper::new(1_000_000, 2_000);
+    let mut deduper = sigverify::Deduper::new(1_000_000, Duration::from_millis(2_000));
     bencher.iter(|| {
         let _ans = deduper.dedup_packets(&mut batches);
         deduper.reset();
@@ -111,7 +112,7 @@ fn bench_dedup_baseline(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_dedup_reset(bencher: &mut Bencher) {
-    let mut deduper = sigverify::Deduper::new(1_000_000, 0);
+    let mut deduper = sigverify::Deduper::new(1_000_000, Duration::from_millis(0));
     bencher.iter(|| {
         deduper.reset();
     });
