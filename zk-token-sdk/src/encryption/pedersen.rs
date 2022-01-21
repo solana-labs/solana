@@ -15,7 +15,7 @@ use {
     zeroize::Zeroize,
 };
 
-lazy_static::lazy_static!{
+lazy_static::lazy_static! {
     /// Pedersen base point for encoding messages to be committed.
     pub static ref G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
     /// Pedersen base point for encoding the commitment openings.

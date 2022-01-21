@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::op_ref)]
 
 #[cfg(not(target_arch = "bpf"))]
 #[macro_use]

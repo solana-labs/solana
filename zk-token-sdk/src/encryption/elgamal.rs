@@ -593,7 +593,12 @@ mod tests {
         };
 
         assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ciphertext));
-        assert_eq!(57_u32, secret.decrypt_u32_online(&ciphertext, &(*DECODE_U32_PRECOMPUTATION_FOR_G)).unwrap());
+        assert_eq!(
+            57_u32,
+            secret
+                .decrypt_u32_online(&ciphertext, &(*DECODE_U32_PRECOMPUTATION_FOR_G))
+                .unwrap()
+        );
     }
 
     #[test]

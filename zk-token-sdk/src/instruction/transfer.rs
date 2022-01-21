@@ -7,7 +7,9 @@ use {
     crate::{
         encryption::{
             discrete_log::*,
-            elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
+            elgamal::{
+                DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey,
+            },
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
@@ -470,10 +472,7 @@ pub fn combine_u32_comms(
 }
 
 #[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_handles(
-    handle_lo: DecryptHandle,
-    handle_hi: DecryptHandle,
-) -> DecryptHandle {
+pub fn combine_u32_handles(handle_lo: DecryptHandle, handle_hi: DecryptHandle) -> DecryptHandle {
     handle_lo + handle_hi * Scalar::from(TWO_32)
 }
 

@@ -324,17 +324,13 @@ mod tests {
         let comm_hi: pod::PedersenCommitment = comm_hi.into();
 
         // decryption handles associated with TransferValidityProof
-        let handle_source_lo: pod::DecryptHandle =
-            source_pk.decrypt_handle(&open_lo).into();
+        let handle_source_lo: pod::DecryptHandle = source_pk.decrypt_handle(&open_lo).into();
         let handle_dest_lo: pod::DecryptHandle = dest_pk.decrypt_handle(&open_lo).into();
-        let _handle_auditor_lo: pod::DecryptHandle =
-            auditor_pk.decrypt_handle(&open_lo).into();
+        let _handle_auditor_lo: pod::DecryptHandle = auditor_pk.decrypt_handle(&open_lo).into();
 
-        let handle_source_hi: pod::DecryptHandle =
-            source_pk.decrypt_handle(&open_hi).into();
+        let handle_source_hi: pod::DecryptHandle = source_pk.decrypt_handle(&open_hi).into();
         let handle_dest_hi: pod::DecryptHandle = dest_pk.decrypt_handle(&open_hi).into();
-        let _handle_auditor_hi: pod::DecryptHandle =
-            auditor_pk.decrypt_handle(&open_hi).into();
+        let _handle_auditor_hi: pod::DecryptHandle = auditor_pk.decrypt_handle(&open_hi).into();
 
         // source spendable and recipient pending
         let source_open = PedersenOpening::random();

@@ -2,7 +2,7 @@
 use {
     crate::encryption::{
         elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-        pedersen::{G, H, PedersenCommitment, PedersenOpening},
+        pedersen::{PedersenCommitment, PedersenOpening, G, H},
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -121,7 +121,19 @@ impl EqualityProof {
                 -ww * c,
                 -ww,
             ],
-            vec![P_EG, &(*H), &Y_0, &(*G), D_EG, C_EG, &Y_1, &(*G), &(*H), C_Ped, &Y_2],
+            vec![
+                P_EG,
+                &(*H),
+                &Y_0,
+                &(*G),
+                D_EG,
+                C_EG,
+                &Y_1,
+                &(*G),
+                &(*H),
+                C_Ped,
+                &Y_2,
+            ],
         );
 
         if check.is_identity() {

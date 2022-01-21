@@ -2,7 +2,7 @@
 use {
     crate::encryption::{
         elgamal::{DecryptHandle, ElGamalPubkey},
-        pedersen::{G, H, PedersenCommitment, PedersenOpening},
+        pedersen::{PedersenCommitment, PedersenOpening, G, H},
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -120,7 +120,18 @@ impl ValidityProof {
                 -ww * c,
                 -ww,
             ],
-            vec![&(*H), &(*G), &C, &Y_0, P_dest, &D_dest, &Y_1, P_auditor, &D_auditor, &Y_2],
+            vec![
+                &(*H),
+                &(*G),
+                &C,
+                &Y_0,
+                P_dest,
+                &D_dest,
+                &Y_1,
+                P_auditor,
+                &D_auditor,
+                &Y_2,
+            ],
         );
 
         if check.is_identity() {

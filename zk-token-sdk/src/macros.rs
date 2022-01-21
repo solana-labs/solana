@@ -74,4 +74,3 @@ macro_rules! define_mul_variants {
         }
     };
 }
-
