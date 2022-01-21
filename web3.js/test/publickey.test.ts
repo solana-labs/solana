@@ -4,7 +4,7 @@ import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
 import {Keypair} from '../src/keypair';
-import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
+import {PublicKey, MAX_SEED_LENGTH, PublicKeyData} from '../src/publickey';
 
 use(chaiAsPromised);
 
@@ -37,6 +37,14 @@ describe('PublicKey', function () {
 
     expect(() => {
       new PublicKey('12345');
+    }).to.throw();
+
+    expect(() => {
+      const rawJSONPublicKeyData = {
+        _bn: '135693854574979916511997248057056142015550763280047535983739356259273198796800000',
+      };
+      // Type must be cast due to _bn being labeled internal
+      new PublicKey(rawJSONPublicKeyData as unknown as PublicKeyData);
     }).to.throw();
   });
 

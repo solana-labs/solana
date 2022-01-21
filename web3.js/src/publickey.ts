@@ -32,7 +32,7 @@ export type PublicKeyData = {
 };
 
 function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
-  return (value as PublicKeyData)._bn !== undefined;
+  return BN.isBN((value as PublicKeyData)._bn);
 }
 
 /**
