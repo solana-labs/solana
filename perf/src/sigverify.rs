@@ -396,12 +396,11 @@ fn dedup_packet(count: &AtomicU64, packet: &mut Packet, bloom: &AtomicBloom<&[u8
         return;
     }
 
-    if bloom.contains(&&packet.data[..]) {
+    // If this packet was not newly added, it's a dup and should be discarded
+    if !bloom.add(&&packet.data[0..packet.meta.size]) {
         packet.meta.discard = true;
         count.fetch_add(1, Ordering::Relaxed);
-        return;
     }
-    bloom.add(&&packet.data[..]);
 }
 
 pub fn dedup_packets(bloom: &AtomicBloom<&[u8]>, batches: &mut [PacketBatch]) -> u64 {
