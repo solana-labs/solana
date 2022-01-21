@@ -125,26 +125,19 @@ impl<'a> SortedStorages<'a> {
                 end: max,
             };
             let len = (max - min) as usize;
-            error!("{} {}, min: {}, max: {}, len: {}, sizeof: {}", file!(), line!(), min, max, len, std::mem::size_of::<SnapshotStorage>()); // len: 116425633, 116857634, 432001
             storages = vec![None; len];
-            error!("{} {}, min: {}, max: {}, len: {}", file!(), line!(), min, max, len); // len: 116425633, 116857634, 432001
-            next_valid_slot = Vec::with_capacity(len);
-            error!("{} {}, min: {}, max: {}, len: {}", file!(), line!(), min, max, len); // len: 116425633, 116857634, 432001
-            let mut next_valid_index_to_fill = 0;
-            let mut fill_next_valid_slot = |valid_slot: Slot| {
-                let valid_index = (valid_slot - min) as usize;
-                error!("{} {}, len: {}, adding: {}", file!(), line!(), next_valid_slot.len(), valid_index - next_valid_index_to_fill);
-
-                (next_valid_index_to_fill..=valid_index).for_each(|_previous_index| {
-                    next_valid_slot.push(valid_slot);
-                });
-                next_valid_index_to_fill = valid_index + 1;
-            };
+            next_valid_slot = vec![Slot::MAX; len];
             source.for_each(|(original_storages, slot)| {
                 let index = (slot - min) as usize;
                 assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
                 storages[index] = Some(original_storages);
-                fill_next_valid_slot(*slot);
+            });
+            let mut last = max;
+            storages.iter().enumerate().rev().for_each(|(i, storage)| {
+                if storage.is_some() {
+                    last = i as Slot + min;
+                }
+                next_valid_slot[i] = last;
             });
         }
         time2.stop();
@@ -256,21 +249,32 @@ pub mod tests {
     #[test]
     fn test_sorted_storages_next() {
         solana_logger::setup();
-        let vec = vec![];
-        let slots = [4, 7];
-        let vecs = [vec.clone(), vec];
-        let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()), None, None);
-        assert_eq!(
-            result.range,
-            Range {
-                start: slots[0],
-                end: slots[1] + 1,
-            }
-        );
-        let expected = [Some(4), Some(4), Some(4), Some(4), Some(4), Some(7), Some(7), Some(7), None];
-        expected.into_iter().enumerate().for_each(|(i, expected)| {
-            let slot = i as Slot;
-            assert_eq!(result.find_valid_slot(slot), expected, "{}", i);
-        });
+        for slots in [[4, 7], [7, 4]] {
+            let vec = vec![];
+            let vecs = [vec.clone(), vec];
+            let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()), None, None);
+            assert_eq!(
+                result.range,
+                Range {
+                    start: *slots.iter().min().unwrap(),
+                    end: *slots.iter().max().unwrap() + 1,
+                }
+            );
+            let expected = [
+                Some(4),
+                Some(4),
+                Some(4),
+                Some(4),
+                Some(4), // slot 4
+                Some(7),
+                Some(7),
+                Some(7),
+                None, // slot 8 (past the end, so no next slot)
+            ];
+            expected.into_iter().enumerate().for_each(|(i, expected)| {
+                let slot = i as Slot;
+                assert_eq!(result.find_valid_slot(slot), expected, "{}, {:?}", i, slots);
+            });
+        }
     }
 }
