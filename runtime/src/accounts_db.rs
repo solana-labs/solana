@@ -6410,6 +6410,8 @@ if false {
             scan_and_hash()
         };
 
+        error!("hash: {:?}, slot: {}", result, storages.range().end);
+
         result
     }
 
