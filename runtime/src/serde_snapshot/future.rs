@@ -46,7 +46,6 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
 // because it's handled by SerializableVersionedBank.
 // So, sync fields with it!
 #[derive(Clone, Deserialize)]
-<<<<<<< HEAD:runtime/src/serde_snapshot/future.rs
 pub(crate) struct DeserializableVersionedBank {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
@@ -64,6 +63,7 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) ns_per_slot: u128,
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
+    #[allow(dead_code)]
     pub(crate) unused: u64,
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
@@ -77,39 +77,6 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
     pub(crate) stakes: Stakes,
-=======
-struct DeserializableVersionedBank {
-    blockhash_queue: BlockhashQueue,
-    ancestors: AncestorsForSerialization,
-    hash: Hash,
-    parent_hash: Hash,
-    parent_slot: Slot,
-    hard_forks: HardForks,
-    transaction_count: u64,
-    tick_height: u64,
-    signature_count: u64,
-    capitalization: u64,
-    max_tick_height: u64,
-    hashes_per_tick: Option<u64>,
-    ticks_per_slot: u64,
-    ns_per_slot: u128,
-    genesis_creation_time: UnixTimestamp,
-    slots_per_year: f64,
-    #[allow(dead_code)]
-    unused: u64,
-    slot: Slot,
-    epoch: Epoch,
-    block_height: u64,
-    collector_id: Pubkey,
-    collector_fees: u64,
-    fee_calculator: FeeCalculator,
-    fee_rate_governor: FeeRateGovernor,
-    collected_rent: u64,
-    rent_collector: RentCollector,
-    epoch_schedule: EpochSchedule,
-    inflation: Inflation,
-    stakes: Stakes,
->>>>>>> 9977396d8 (Remove unused fields from Bank (#22491)):runtime/src/serde_snapshot/newer.rs
     #[allow(dead_code)]
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
