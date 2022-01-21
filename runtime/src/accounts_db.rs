@@ -5934,7 +5934,6 @@ if false {
                 }
 
                 for slot in start..end {
-                    error!("{} {} slot: {}", file!(), line!(), slot);
 
                     let sub_storages = snapshot_storages.get(slot);
                     let valid_slot = sub_storages.is_some();
@@ -5957,7 +5956,6 @@ if false {
                             }
                         }
                     }
-                    error!("{} {} slot: {}", file!(), line!(), slot);
 
                     if let Some(sub_storages) = sub_storages {
                         Self::scan_multiple_account_storages_one_slot(
@@ -5967,10 +5965,8 @@ if false {
                             &mut retval,
                         );
                     }
-                    error!("{} {} slot: {}", file!(), line!(), slot);
                 }
                 let r = after_func(retval);
-                error!("{} {} slots: {}, {}", file!(), line!(), start, end);
                 if !file_name.is_empty() {
                     let result = cache_hash_data.save(Path::new(&file_name), &r);
 
@@ -5990,7 +5986,7 @@ if false {
     // storages are sorted by slot and have range info.
     // if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
     fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
-        error!("{} {}", file!(), line!());
+        
         if let Some(slots_per_epoch) = slots_per_epoch {
             let max = storages.range().end;
             let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
@@ -6005,7 +6001,7 @@ if false {
                 }
             }
         }
-        error!("{} {}", file!(), line!());
+        
     }
 
     fn calculate_accounts_hash_helper(
@@ -6026,25 +6022,20 @@ if false {
                 None
             };
 
-            error!("{} {} slot: {}", file!(), line!(), slot);
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
             collect_time.stop();
 
-            error!("{} {} slot: {}, len: {} {}", file!(), line!(), slot, combined_maps.len(), slots.len());
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_root();
-            error!("{} {} slot: {}, min_root: {:?}", file!(), line!(), slot, min_root);
             let storages = SortedStorages::new_with_slots(
                 combined_maps.iter().zip(slots.iter()),
                 min_root,
                 Some(slot),
             );
 
-            error!("{} {} slot: {}", file!(), line!(), slot);
             self.mark_old_slots_as_dirty(&storages, slots_per_epoch);
             sort_time.stop();
-            error!("{} {} slot: {}", file!(), line!(), slot);
 
             let timings = HashStats {
                 collect_snapshots_us: collect_time.as_us(),
@@ -6304,9 +6295,8 @@ if false {
                 }
             },
             |x| {
-                error!("{} {}", file!(), line!());
+                
                 let (result, timing) = Self::sort_slot_storage_scan(x);
-                error!("{} {} {}", file!(), line!(), timing);
                 sort_time.fetch_add(timing, Ordering::Relaxed);
                 result
             },
@@ -6368,7 +6358,7 @@ if false {
         slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
 
-        error!("{} {}", file!(), line!());
+        
         let rehash = AtomicUsize::default();
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
@@ -6395,7 +6385,7 @@ if false {
                     slots_per_epoch,
                     &rehash,
                 )?;
-                error!("{} {}", file!(), line!());
+                
 
                 let hash = AccountsHash {
                     filler_account_suffix: filler_account_suffix.cloned(),
@@ -6407,7 +6397,7 @@ if false {
                     previous_pass,
                     bins_per_pass,
                 );
-                error!("{} {}", file!(), line!());
+                
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
@@ -6415,7 +6405,7 @@ if false {
 
             Ok(final_result)
         };
-        error!("{} {}", file!(), line!());
+        
         let result = if let Some(thread_pool) = thread_pool {
             thread_pool.install(scan_and_hash)
         } else {
