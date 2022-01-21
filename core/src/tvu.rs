@@ -178,6 +178,8 @@ impl Tvu {
             MAX_SIGVERIFY_BATCH,
             None,
             "tvu_shred_sigverify",
+            bank_forks,
+            cluster_info,
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());

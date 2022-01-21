@@ -9,14 +9,21 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_ledger::genesis_utils::GenesisConfigInfo,
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+    solana_runtime::{bank::Bank, bank_forks::BankForks, genesis_utils::create_genesis_config},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signer},
         system_transaction,
-        timing::duration_as_ms,
+        timing::{duration_as_ms, timestamp},
     },
-    std::time::{Duration, Instant},
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        sync::{Arc, RwLock},
+        time::{Duration, Instant},
+    },
     test::Bencher,
 };
 
@@ -115,7 +122,28 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::default();
-    let stage = SigVerifyStage::new(packet_r, verified_s, verifier, 10_000, None);
+
+    let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+    let cluster_info = Arc::new(ClusterInfo::new(
+        d,
+        Arc::new(Keypair::new()),
+        SocketAddrSpace::Unspecified,
+    ));
+
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+    let stage = SigVerifyStage::new(
+        packet_r,
+        verified_s,
+        verifier,
+        10_000,
+        None,
+        "bench",
+        &bank_forks,
+        &cluster_info,
+    );
 
     let now = Instant::now();
     let len = 4096;

@@ -18,6 +18,10 @@ impl DataBudget {
         }
     }
 
+    pub fn last_update(&self) -> u64 {
+        self.last_timestamp_ms.load(Ordering::Relaxed)
+    }
+
     // If there are enough bytes in the budget, consumes from
     // the budget and returns true. Otherwise returns false.
     #[must_use]
@@ -41,8 +45,7 @@ impl DataBudget {
 
     // Updates timestamp and returns true, if at least given milliseconds
     // has passed since last update. Otherwise returns false.
-    fn can_update(&self, duration_millis: u64) -> bool {
-        let now = solana_sdk::timing::timestamp();
+    fn can_update(&self, now: u64, duration_millis: u64) -> bool {
         let mut last_timestamp = self.last_timestamp_ms.load(Ordering::Acquire);
         loop {
             if now < last_timestamp.saturating_add(duration_millis) {
@@ -60,14 +63,22 @@ impl DataBudget {
         }
     }
 
-    /// Updates the budget if at least given milliseconds has passed since last
-    /// update. Updater function maps current value of bytes to the new one.
-    /// Returns current data-budget after the update.
     pub fn update<F>(&self, duration_millis: u64, updater: F) -> usize
     where
         F: Fn(usize) -> usize,
     {
-        if self.can_update(duration_millis) {
+        let now = solana_sdk::timing::timestamp();
+        self.update_with_now(now, duration_millis, updater)
+    }
+
+    /// Updates the budget if at least given milliseconds has passed since last
+    /// update. Updater function maps current value of bytes to the new one.
+    /// Returns current data-budget after the update.
+    pub fn update_with_now<F>(&self, now: u64, duration_millis: u64, updater: F) -> usize
+    where
+        F: Fn(usize) -> usize,
+    {
+        if self.can_update(now, duration_millis) {
             let mut bytes = self.bytes.load(Ordering::Acquire);
             loop {
                 match self.bytes.compare_exchange_weak(

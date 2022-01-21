@@ -10,12 +10,18 @@ use {
     core::time::Duration,
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
+    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
+    solana_perf::data_budget::DataBudget,
     solana_perf::packet::PacketBatch,
+    solana_perf::qos::{qos_packets, Qos, StakeMap},
     solana_perf::sigverify::Deduper,
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
+        collections::hash_map::Entry,
+        sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -186,6 +192,8 @@ impl SigVerifyStage {
         max_batch_size: usize,
         max_packet_throughput: Option<usize>,
         name: &'static str,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        cluster_info: &Arc<ClusterInfo>,
     ) -> Self {
         let thread_hdl = Self::verifier_services(
             packet_receiver,
@@ -194,6 +202,8 @@ impl SigVerifyStage {
             max_batch_size,
             max_packet_throughput,
             name,
+            bank_forks,
+            cluster_info,
         );
         Self { thread_hdl }
     }
@@ -223,14 +233,18 @@ impl SigVerifyStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
         recvr: &PacketBatchReceiver,
         sendr: &Sender<Vec<PacketBatch>>,
         verifier: &T,
         stats: &mut SigVerifierStats,
-        mut max_batch_size: usize,
-        packets_available: &mut usize,
+        max_batch_size: usize,
+        max_packet_throughput: Option<usize>,
+        stake_map: &StakeMap,
+        total_stake: u64,
+        qos: &Qos,
     ) -> Result<()> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
 
@@ -241,14 +255,18 @@ impl SigVerifyStage {
             num_packets,
         );
 
+        let mut valid_packets = num_packets;
+        let mut discard_time = Measure::start("sigverify_discard_time");
+        if max_packet_throughput.is_some() {
+            let qos_fail = qos_packets(qos, total_stake, stake_map, &mut batches);
+            valid_packets = valid_packets.saturating_sub(qos_fail);
+        }
+
         let mut dedup_time = Measure::start("sigverify_dedup_time");
         let dedup_fail = deduper.dedup_packets(&mut batches) as usize;
         dedup_time.stop();
-        let num_unique = num_packets.saturating_sub(dedup_fail);
+        valid_packets = valid_packets.saturating_sub(dedup_fail);
 
-        let mut discard_time = Measure::start("sigverify_discard_time");
-        *packets_available = packets_available.saturating_sub(valid_packets);
-        max_batch_size = max_batch_size.min(*packets_available);
         if valid_packets > max_batch_size {
             Self::discard_excess_packets(&mut batches, max_batch_size);
         };
@@ -302,24 +320,53 @@ impl SigVerifyStage {
         max_batch_size: usize,
         max_packet_throughput: Option<usize>,
         name: &'static str,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        cluster_info: &Arc<ClusterInfo>,
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
+
+        let bank_forks = bank_forks.clone();
+        let cluster_info = cluster_info.clone();
+        const MAX_QOS_ITEMS: usize = 1_000_000;
+        const MAX_STAKES_AGE: Duration = Duration::from_secs(2);
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
-                let mut last_packets_update = Instant::now();
-                let mut packets_available = max_packet_throughput.unwrap_or(usize::MAX);
+                let mut last_stakes_update = Instant::now();
+                let mut total_stake = 1;
+                let mut stake_map = StakeMap::default();
+                let qos = Qos::new(MAX_QOS_ITEMS, max_packet_throughput.unwrap_or(usize::MAX));
                 loop {
                     deduper.reset();
                     let now = Instant::now();
-                    if now.duration_since(last_packets_update) > MAX_PACKETS_AGE {
-                        packets_available = max_packet_throughput.unwrap_or(usize::MAX);
-                        last_packets_update = now;
+                    if max_packet_throughput.is_some()
+                        && now.duration_since(last_stakes_update) > MAX_STAKES_AGE
+                    {
+                        let root_bank = bank_forks.read().unwrap().root_bank();
+                        let staked_nodes = root_bank.staked_nodes();
+                        total_stake = staked_nodes.values().sum();
+                        for node in cluster_info.tvu_peers() {
+                            if let Some(stake) = staked_nodes.get(&node.id) {
+                                match stake_map.entry(node.tvu.ip()) {
+                                    Entry::Occupied(mut e) => {
+                                        e.get_mut().0 = *stake;
+                                    }
+                                    Entry::Vacant(e) => {
+                                        e.insert((*stake, DataBudget::default()));
+                                    }
+                                }
+                            }
+                        }
+                        let now_ts = solana_sdk::timing::timestamp();
+                        stake_map.retain(|_key, budget| {
+                            now_ts.saturating_sub(budget.1.last_update()) > 10_000
+                        });
+                        last_stakes_update = now;
                     }
                     if let Err(e) = Self::verifier(
                         &deduper,
@@ -328,7 +375,10 @@ impl SigVerifyStage {
                         &verifier,
                         &mut stats,
                         max_batch_size,
-                        &mut packets_available,
+                        max_packet_throughput,
+                        &stake_map,
+                        total_stake,
+                        &qos,
                     ) {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -360,6 +410,8 @@ impl SigVerifyStage {
         max_batch_size: usize,
         max_packet_throughput: Option<usize>,
         name: &'static str,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        cluster_info: &Arc<ClusterInfo>,
     ) -> JoinHandle<()> {
         Self::verifier_service(
             packet_receiver,
@@ -368,6 +420,8 @@ impl SigVerifyStage {
             max_batch_size,
             max_packet_throughput,
             name,
+            bank_forks,
+            cluster_info,
         )
     }
 

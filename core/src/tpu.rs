@@ -117,8 +117,10 @@ impl Tpu {
                 verified_sender,
                 verifier,
                 tpu_sigverify_batch_size,
-                tpu_packet_rate_per_second,
+                None,
                 "tpu_sigverify",
+                &bank_forks,
+                cluster_info,
             )
         };
 
@@ -133,6 +135,8 @@ impl Tpu {
                 tpu_sigverify_batch_size,
                 tpu_packet_rate_per_second,
                 "tpu_votes_only_sigverify",
+                &bank_forks,
+                cluster_info,
             )
         };
 
