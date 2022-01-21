@@ -5602,6 +5602,7 @@ impl AccountsDb {
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         if slots_per_epoch.is_none() {
+            panic!("this should be specified");
             return loaded_account.loaded_hash();
         }
 
@@ -5626,6 +5627,7 @@ impl AccountsDb {
             // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
             // we have not collected rent yet in this epoch for this pubkey
             // we can use the previously calculated hash
+            assert_eq!(loaded_account.compute_hash(storage_slot, pubkey), loaded_account.loaded_hash());
             return loaded_account.loaded_hash();
         }
         let expected_slot_start = expected_rent_collection_slot_max_epoch;
@@ -5638,8 +5640,10 @@ impl AccountsDb {
 
         if use_stored {
             // we can use the previously calculated hash
+            assert_eq!(loaded_account.compute_hash(storage_slot, pubkey), loaded_account.loaded_hash());
             return loaded_account.loaded_hash();
         }
+        panic!("shouldn't be rehashing yet");
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
         if num % 100_000 == 0 {
