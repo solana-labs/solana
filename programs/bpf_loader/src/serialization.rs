@@ -506,7 +506,7 @@ pub fn mock_transaction_context(
         )
         .collect::<Vec<_>>();
 
-    let mut transaction_context = TransactionContext::new(transaction_accounts, 1);
+    let mut transaction_context = TransactionContext::new(transaction_accounts, 1, 1);
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     let program_accounts: Vec<usize> = (0..n_program_accounts).collect();
     transaction_context
