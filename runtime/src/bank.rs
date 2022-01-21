@@ -3545,14 +3545,12 @@ impl Bank {
     /// Get any cached executors needed by the transaction
     fn get_executors(
         &self,
-        message: &SanitizedMessage,
         accounts: &[TransactionAccount],
-        program_indices: &[Vec<usize>],
     ) -> Rc<RefCell<Executors>> {
         let executable_keys: Vec<_> = accounts
             .iter()
             .filter_map(|(key, account)| {
-                if account.executable() && account.owner() != &native_loader::id() {
+                if account.executable() && !native_loader::check_id(account.owner()) {
                     Some(key)
                 } else {
                     None
@@ -3646,9 +3644,7 @@ impl Bank {
     ) -> TransactionExecutionResult {
         let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(
-            tx.message(),
             &loaded_transaction.accounts,
-            &loaded_transaction.program_indices,
         );
         get_executors_time.stop();
         saturating_add_assign!(
@@ -13028,20 +13024,6 @@ pub(crate) mod tests {
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
 
-        let message = Message {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                num_readonly_signed_accounts: 0,
-                num_readonly_unsigned_accounts: 1,
-            },
-            account_keys: vec![key1, key2],
-            recent_blockhash: Hash::default(),
-            instructions: vec![],
-        }
-        .try_into()
-        .unwrap();
-
-        let program_indices = &[vec![0, 1], vec![2]];
         let accounts = &[
             (key3, AccountSharedData::default()),
             (key4, AccountSharedData::default()),
@@ -13061,7 +13043,7 @@ pub(crate) mod tests {
             .unwrap()
             .clear_miss_for_test();
         bank.update_executors(true, executors);
-        let executors = bank.get_executors(&message, accounts, program_indices);
+        let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 0);
 
         // do work
@@ -13072,7 +13054,7 @@ pub(crate) mod tests {
         executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         bank.update_executors(true, executors);
-        let executors = bank.get_executors(&message, accounts, program_indices);
+        let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 4);
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
@@ -13081,7 +13063,7 @@ pub(crate) mod tests {
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-        let executors = bank.get_executors(&message, accounts, program_indices);
+        let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 4);
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
@@ -13093,7 +13075,7 @@ pub(crate) mod tests {
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
-        let executors = bank.get_executors(&message, accounts, program_indices);
+        let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 0);
         assert!(!executors.borrow().contains_key(&key1));
         assert!(!executors.borrow().contains_key(&key2));
@@ -13111,10 +13093,7 @@ pub(crate) mod tests {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let message =
-            SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
 
-        let program_indices = &[vec![0, 1]];
         let accounts = &[
             (key1, AccountSharedData::default()),
             (key2, AccountSharedData::default()),
@@ -13125,15 +13104,15 @@ pub(crate) mod tests {
         executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         root.update_executors(true, executors);
-        let executors = root.get_executors(&message, accounts, program_indices);
+        let executors = root.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
         let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
 
-        let executors = fork1.get_executors(&message, accounts, program_indices);
+        let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(&message, accounts, program_indices);
+        let executors = fork2.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
         let mut executors = Executors::default();
@@ -13141,16 +13120,16 @@ pub(crate) mod tests {
         let executors = Rc::new(RefCell::new(executors));
         fork1.update_executors(true, executors);
 
-        let executors = fork1.get_executors(&message, accounts, program_indices);
+        let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 2);
-        let executors = fork2.get_executors(&message, accounts, program_indices);
+        let executors = fork2.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
         fork1.remove_executor(&key1);
 
-        let executors = fork1.get_executors(&message, accounts, program_indices);
+        let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(&message, accounts, program_indices);
+        let executors = fork2.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
     }
 
