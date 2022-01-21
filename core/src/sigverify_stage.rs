@@ -7,6 +7,7 @@
 
 use {
     crate::sigverify,
+    core::time::Duration,
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
     itertools::Itertools,
     solana_measure::measure::Measure,
@@ -297,12 +298,12 @@ impl SigVerifyStage {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
-        const MAX_DEDUPER_AGE_MS: u64 = 2_000;
+        const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
-                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE_MS);
+                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
                     if let Err(e) = Self::verifier(
