@@ -10,6 +10,7 @@ pub mod accounts_hash;
 pub mod accounts_index;
 pub mod accounts_index_storage;
 pub mod accounts_update_notifier_interface;
+mod active_stats;
 pub mod ancestors;
 pub mod append_vec;
 pub mod bank;
