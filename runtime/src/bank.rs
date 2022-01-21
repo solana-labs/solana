@@ -3543,32 +3543,31 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
-    fn get_executors(
-        &self,
-        message: &SanitizedMessage,
-        accounts: &[TransactionAccount],
-        program_indices: &[Vec<usize>],
-    ) -> Rc<RefCell<Executors>> {
-        let mut num_executors = message.account_keys_len();
-        for program_indices_of_instruction in program_indices.iter() {
-            num_executors += program_indices_of_instruction.len();
-        }
-        let mut executors = HashMap::with_capacity(num_executors);
-        let cache = self.cached_executors.read().unwrap();
-
-        for key in message.account_keys_iter() {
-            if let Some(executor) = cache.get(key) {
-                executors.insert(*key, TransactionExecutor::new_cached(executor));
-            }
-        }
-        for program_indices_of_instruction in program_indices.iter() {
-            for account_index in program_indices_of_instruction.iter() {
-                let key = accounts[*account_index].0;
-                if let Some(executor) = cache.get(&key) {
-                    executors.insert(key, TransactionExecutor::new_cached(executor));
+    fn get_executors(&self, accounts: &[TransactionAccount]) -> Rc<RefCell<Executors>> {
+        let executable_keys: Vec<_> = accounts
+            .iter()
+            .filter_map(|(key, account)| {
+                if account.executable() && !native_loader::check_id(account.owner()) {
+                    Some(key)
+                } else {
+                    None
                 }
-            }
+            })
+            .collect();
+
+        if executable_keys.is_empty() {
+            return Rc::new(RefCell::new(Executors::default()));
         }
+
+        let cache = self.cached_executors.read().unwrap();
+        let executors = executable_keys
+            .into_iter()
+            .filter_map(|key| {
+                cache
+                    .get(key)
+                    .map(|executor| (*key, TransactionExecutor::new_cached(executor)))
+            })
+            .collect();
 
         Rc::new(RefCell::new(executors))
     }
@@ -3641,11 +3640,7 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> TransactionExecutionResult {
         let mut get_executors_time = Measure::start("get_executors_time");
-        let executors = self.get_executors(
-            tx.message(),
-            &loaded_transaction.accounts,
-            &loaded_transaction.program_indices,
-        );
+        let executors = self.get_executors(&loaded_transaction.accounts);
         get_executors_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.get_executors_us,
@@ -6430,6 +6425,7 @@ pub(crate) mod tests {
         solana_program_runtime::invoke_context::InvokeContext,
         solana_sdk::{
             account::Account,
+            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
             clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -13022,26 +13018,23 @@ pub(crate) mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
+        let key5 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
 
-        let message = Message {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                num_readonly_signed_accounts: 0,
-                num_readonly_unsigned_accounts: 1,
-            },
-            account_keys: vec![key1, key2],
-            recent_blockhash: Hash::default(),
-            instructions: vec![],
+        fn new_executable_account(owner: Pubkey) -> AccountSharedData {
+            AccountSharedData::from(Account {
+                owner,
+                executable: true,
+                ..Account::default()
+            })
         }
-        .try_into()
-        .unwrap();
 
-        let program_indices = &[vec![0, 1], vec![2]];
         let accounts = &[
-            (key3, AccountSharedData::default()),
-            (key4, AccountSharedData::default()),
-            (key1, AccountSharedData::default()),
+            (key1, new_executable_account(bpf_loader_upgradeable::id())),
+            (key2, new_executable_account(bpf_loader::id())),
+            (key3, new_executable_account(bpf_loader_deprecated::id())),
+            (key4, new_executable_account(native_loader::id())),
+            (key5, AccountSharedData::default()),
         ];
 
         // don't do any work if not dirty
@@ -13057,7 +13050,7 @@ pub(crate) mod tests {
             .unwrap()
             .clear_miss_for_test();
         bank.update_executors(true, executors);
-        let executors = bank.get_executors(&message, accounts, program_indices);
+        let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 0);
 
         // do work
@@ -13068,33 +13061,27 @@ pub(crate) mod tests {
         executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         bank.update_executors(true, executors);
-        let executors = bank.get_executors(&message, accounts, program_indices);
-        assert_eq!(executors.borrow().len(), 4);
+        let executors = bank.get_executors(accounts);
+        assert_eq!(executors.borrow().len(), 3);
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
         assert!(executors.borrow().contains_key(&key3));
-        assert!(executors.borrow().contains_key(&key4));
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-        let executors = bank.get_executors(&message, accounts, program_indices);
-        assert_eq!(executors.borrow().len(), 4);
+        let executors = bank.get_executors(accounts);
+        assert_eq!(executors.borrow().len(), 3);
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
         assert!(executors.borrow().contains_key(&key3));
-        assert!(executors.borrow().contains_key(&key4));
 
         // Remove all
         bank.remove_executor(&key1);
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
-        let executors = bank.get_executors(&message, accounts, program_indices);
+        let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 0);
-        assert!(!executors.borrow().contains_key(&key1));
-        assert!(!executors.borrow().contains_key(&key2));
-        assert!(!executors.borrow().contains_key(&key3));
-        assert!(!executors.borrow().contains_key(&key4));
     }
 
     #[test]
@@ -13107,13 +13094,15 @@ pub(crate) mod tests {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let message =
-            SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
+        let executable_account = AccountSharedData::from(Account {
+            owner: bpf_loader_upgradeable::id(),
+            executable: true,
+            ..Account::default()
+        });
 
-        let program_indices = &[vec![0, 1]];
         let accounts = &[
-            (key1, AccountSharedData::default()),
-            (key2, AccountSharedData::default()),
+            (key1, executable_account.clone()),
+            (key2, executable_account),
         ];
 
         // add one to root bank
@@ -13121,15 +13110,15 @@ pub(crate) mod tests {
         executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         root.update_executors(true, executors);
-        let executors = root.get_executors(&message, accounts, program_indices);
+        let executors = root.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
-        let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
+        let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
 
-        let executors = fork1.get_executors(&message, accounts, program_indices);
+        let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(&message, accounts, program_indices);
+        let executors = fork2.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
         let mut executors = Executors::default();
@@ -13137,16 +13126,16 @@ pub(crate) mod tests {
         let executors = Rc::new(RefCell::new(executors));
         fork1.update_executors(true, executors);
 
-        let executors = fork1.get_executors(&message, accounts, program_indices);
+        let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 2);
-        let executors = fork2.get_executors(&message, accounts, program_indices);
+        let executors = fork2.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
         fork1.remove_executor(&key1);
 
-        let executors = fork1.get_executors(&message, accounts, program_indices);
+        let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(&message, accounts, program_indices);
+        let executors = fork2.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
     }
 
