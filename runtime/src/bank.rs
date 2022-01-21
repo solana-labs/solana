@@ -5391,18 +5391,21 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
+    pub fn calculate_capitalization(&self, debug_verify: bool,
+        slots_per_epoch: Option<Slot>,
+    ) -> u64 {
         let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
+            slots_per_epoch,
         )
     }
 
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
-        let calculated = self.calculate_capitalization(debug_verify);
+        let calculated = self.calculate_capitalization(debug_verify, Some(self.epoch_schedule().slots_per_epoch));
         let expected = self.capitalization();
         if calculated == expected {
             true
@@ -5421,7 +5424,7 @@ impl Bank {
         let old = self.capitalization();
         let debug_verify = true;
         self.capitalization
-            .store(self.calculate_capitalization(debug_verify), Relaxed);
+            .store(self.calculate_capitalization(debug_verify, Some(self.epoch_schedule().slots_per_epoch)), Relaxed);
         old
     }
 

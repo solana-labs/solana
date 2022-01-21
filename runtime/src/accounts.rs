@@ -675,6 +675,7 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> u64 {
         let use_index = false;
         let is_startup = false; // there may be conditions where this is called at startup.
@@ -686,7 +687,7 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
-                None,
+                slots_per_epoch,
                 is_startup,
             )
             .1
