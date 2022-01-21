@@ -3054,6 +3054,7 @@ impl AccountsDb {
     }
 
     fn shrink_ancient_slots(&self) {
+        return;
                 let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 99 / 100; // todo - put some 'in-this-epoch' slots into an ancient append vec
@@ -6453,8 +6454,8 @@ if false {
                 Ok(())
             } else {
                 warn!(
-                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.snapshot_hash
+                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected), expected: {:?}",
+                    slot, calculated_hash, found_hash_info.snapshot_hash, found_hash_info,
                 );
                 Err(MismatchedBankHash)
             }
