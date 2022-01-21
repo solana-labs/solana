@@ -1,3 +1,5 @@
+//! Pedersen commitment implementation using the Ristretto prime-order group.
+
 #[cfg(not(target_arch = "bpf"))]
 use rand::rngs::OsRng;
 use {
