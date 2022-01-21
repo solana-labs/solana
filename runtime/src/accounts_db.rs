@@ -6153,6 +6153,7 @@ if false {
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         if slots_per_epoch.is_none() {
+            panic!("this should be specified");
             return loaded_account.loaded_hash();
         }
 
