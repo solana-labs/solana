@@ -1,11 +1,6 @@
 use {
     super::Bank,
-<<<<<<< HEAD
-    solana_sdk::{account::ReadableAccount, sysvar},
-=======
-    solana_program_runtime::sysvar_cache::SysvarCache,
     solana_sdk::{account::ReadableAccount, sysvar::Sysvar},
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 };
 
 impl Bank {
@@ -21,7 +16,6 @@ impl Bank {
                 sysvar_cache.set_epoch_schedule(epoch_schedule);
             }
         }
-        #[allow(deprecated)]
         if sysvar_cache.get_fees().is_err() {
             if let Some(fees) = self.load_sysvar_account() {
                 sysvar_cache.set_fees(fees);
@@ -38,13 +32,6 @@ impl Bank {
             }
         }
     }
-<<<<<<< HEAD
-=======
-
-    pub(crate) fn reset_sysvar_cache(&self) {
-        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
-        *sysvar_cache = SysvarCache::default();
-    }
 
     fn load_sysvar_account<T: Sysvar>(&self) -> Option<T> {
         if let Some(account) = self.get_account_with_fixed_root(&T::id()) {
@@ -59,15 +46,23 @@ impl Bank {
 mod tests {
     use {
         super::*,
-        solana_sdk::{genesis_config::create_genesis_config, pubkey::Pubkey},
+        solana_sdk::{
+            genesis_config::create_genesis_config, pubkey::Pubkey, sysvar_cache::SysvarCache,
+        },
         std::sync::Arc,
     };
 
+    impl Bank {
+        pub(crate) fn reset_sysvar_cache(&self) {
+            let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+            *sysvar_cache = SysvarCache::default();
+        }
+    }
+
     #[test]
-    #[allow(deprecated)]
     fn test_sysvar_cache_initialization() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank0 = Arc::new(Bank::new(&genesis_config));
 
         let bank0_sysvar_cache = bank0.sysvar_cache.read().unwrap();
         let bank0_cached_clock = bank0_sysvar_cache.get_clock();
@@ -107,10 +102,9 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_reset_and_fill_sysvar_cache() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank0 = Arc::new(Bank::new(&genesis_config));
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.slot() + 1);
 
         let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
@@ -152,5 +146,4 @@ mod tests {
             bank1_cached_slot_hashes
         );
     }
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 }

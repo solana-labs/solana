@@ -1,10 +1,9 @@
-#[allow(deprecated)]
-use solana_sdk::sysvar::fees::Fees;
 use {
     solana_sdk::{
         instruction::InstructionError,
         sysvar::{
-            clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
+            clock::Clock, epoch_schedule::EpochSchedule, fees::Fees, rent::Rent,
+            slot_hashes::SlotHashes,
         },
     },
     std::sync::Arc,
@@ -22,7 +21,6 @@ impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
 pub struct SysvarCache {
     clock: Option<Arc<Clock>>,
     epoch_schedule: Option<Arc<EpochSchedule>>,
-    #[allow(deprecated)]
     fees: Option<Arc<Fees>>,
     rent: Option<Arc<Rent>>,
     slot_hashes: Option<Arc<SlotHashes>>,
@@ -49,14 +47,10 @@ impl SysvarCache {
         self.epoch_schedule = Some(Arc::new(epoch_schedule));
     }
 
-    #[deprecated]
-    #[allow(deprecated)]
     pub fn get_fees(&self) -> Result<Arc<Fees>, InstructionError> {
         self.fees.clone().ok_or(InstructionError::UnsupportedSysvar)
     }
 
-    #[deprecated]
-    #[allow(deprecated)]
     pub fn set_fees(&mut self, fees: Fees) {
         self.fees = Some(Arc::new(fees));
     }

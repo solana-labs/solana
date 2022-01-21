@@ -13,14 +13,9 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         account_info::AccountInfo,
-<<<<<<< HEAD
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Clock,
-=======
-        blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             allow_native_ids, check_seed_length, close_upgradeable_program_accounts, cpi_data_cost,
@@ -36,18 +31,13 @@ use {
         keccak,
         keyed_account::KeyedAccount,
         native_loader,
-        process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+        process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
         program::MAX_RETURN_DATA,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-<<<<<<< HEAD
-        sysvar::{self, fees::Fees, Sysvar, SysvarId},
-=======
-        sysvar::{Sysvar, SysvarId},
-        transaction_context::InstructionAccount,
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
+        sysvar::{self, Sysvar, SysvarId},
     },
     std::{
         alloc::Layout,
@@ -1155,13 +1145,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
-    invoke_context: Rc<RefCell<&mut dyn InvokeContext>>,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let invoke_context = invoke_context
-        .try_borrow()
-        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
-<<<<<<< HEAD
     invoke_context.get_compute_meter().consume(
         invoke_context.get_bpf_compute_budget().sysvar_base_cost + size_of::<T>() as u64,
     )?;
@@ -1172,12 +1157,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id()),
     )?;
 
-    *var = process_instruction::get_sysvar::<T>(*invoke_context, id)
-        .map_err(SyscallError::InstructionError)?;
-=======
     let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
     *var = T::clone(sysvar.as_ref());
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 
     Ok(SUCCESS)
 }
@@ -1198,30 +1179,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetClockSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-<<<<<<< HEAD
-        *result = get_sysvar::<Clock>(
-            &sysvar::clock::id(),
-=======
-        let mut invoke_context = question_mark!(
+        let invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow_mut()
+                .try_borrow()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_loader_key()
-                .map_err(SyscallError::InstructionError),
             result
         );
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_clock(),
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -1241,30 +1210,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-<<<<<<< HEAD
-        *result = get_sysvar::<EpochSchedule>(
-            &sysvar::epoch_schedule::id(),
-=======
-        let mut invoke_context = question_mark!(
+        let invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow_mut()
+                .try_borrow()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_loader_key()
-                .map_err(SyscallError::InstructionError),
             result
         );
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_epoch_schedule(),
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -1284,30 +1241,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-<<<<<<< HEAD
-        *result = get_sysvar::<Fees>(
-            &sysvar::fees::id(),
-=======
-        let mut invoke_context = question_mark!(
+        let invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow_mut()
+                .try_borrow()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_loader_key()
-                .map_err(SyscallError::InstructionError),
             result
         );
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_fees(),
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -1327,30 +1272,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-<<<<<<< HEAD
-        *result = get_sysvar::<Rent>(
-            &sysvar::rent::id(),
-=======
-        let mut invoke_context = question_mark!(
+        let invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow_mut()
+                .try_borrow()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_loader_key()
-                .map_err(SyscallError::InstructionError),
             result
         );
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_rent(),
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -2849,28 +2782,21 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 
 #[cfg(test)]
 mod tests {
-    #[allow(deprecated)]
-    use solana_sdk::sysvar::fees::Fees;
     use {
         super::*,
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
         solana_sdk::{
-<<<<<<< HEAD
             bpf_loader,
+            clock::Clock,
+            epoch_schedule::EpochSchedule,
             fee_calculator::FeeCalculator,
             hash::hashv,
             process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
+            rent::Rent,
+            sysvar::fees::Fees,
             sysvar_cache::SysvarCache,
-=======
-            account::AccountSharedData,
-            bpf_loader,
-            fee_calculator::FeeCalculator,
-            hash::hashv,
-            sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
-            transaction_context::TransactionContext,
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         },
         std::{borrow::Cow, str::FromStr},
     };

@@ -175,16 +175,12 @@ fn do_bench_transactions(
     let ns_per_s = 1_000_000_000;
     let (mut genesis_config, mint_keypair) = create_genesis_config(100_000_000_000_000);
     genesis_config.ticks_per_slot = 100;
-<<<<<<< HEAD
-    let mut bank = Bank::new(&genesis_config);
-=======
 
-    let bank = Bank::new_for_benches(&genesis_config);
+    let bank = Bank::new(&genesis_config);
     // freeze bank so that slot hashes is populated
     bank.freeze();
 
     let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 1);
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     bank.add_builtin(
         "builtin_program",
         Pubkey::new(&BUILTIN_PROGRAM_ID),

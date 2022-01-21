@@ -1,11 +1,8 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 #![allow(clippy::integer_arithmetic)]
 
-<<<<<<< HEAD
 // Export types so test clients can limit their solana crate dependencies
 pub use solana_banks_client::BanksClient;
-=======
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 // Export tokio for test clients
 pub use tokio;
 use {
@@ -23,17 +20,10 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
-<<<<<<< HEAD
-        clock::{Clock, Slot},
+        clock::Slot,
         entrypoint::{ProgramResult, SUCCESS},
-        epoch_schedule::EpochSchedule,
         execute_timings::ExecuteTimings,
         feature_set::demote_program_write_locks,
-=======
-        clock::Slot,
-        compute_budget::ComputeBudget,
-        entrypoint::{ProgramResult, SUCCESS},
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -42,21 +32,13 @@ use {
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         process_instruction::{
-            self, stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
+            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
         },
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
-<<<<<<< HEAD
-        sysvar::{
-            clock, epoch_schedule,
-            fees::{self, Fees},
-            rent, Sysvar,
-        },
-=======
-        sysvar::{Sysvar, SysvarId},
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
+        sysvar::Sysvar,
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
@@ -220,12 +202,8 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
     {
         panic!("Exceeded compute budget");
     }
-<<<<<<< HEAD
-    match process_instruction::get_sysvar::<T>(invoke_context, id) {
-=======
 
     match sysvar {
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         Ok(sysvar_data) => unsafe {
             *(var_addr as *mut _ as *mut T) = T::clone(&sysvar_data);
             SUCCESS

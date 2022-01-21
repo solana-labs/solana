@@ -7,7 +7,6 @@ use {
         instruction::{CompiledInstruction, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, KeyedAccount},
         pubkey::Pubkey,
-        sysvar::Sysvar,
     },
     std::{borrow::Cow, cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc},
 };
@@ -143,26 +142,6 @@ macro_rules! ic_msg {
     ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
     };
-}
-
-pub fn get_sysvar<T: Sysvar>(
-    invoke_context: &dyn InvokeContext,
-    id: &Pubkey,
-) -> Result<T, InstructionError> {
-    invoke_context
-        .get_sysvar_cache()
-        .iter()
-        .find_map(|(key, data)| {
-            if id == key {
-                bincode::deserialize(data).ok()
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-            InstructionError::UnsupportedSysvar
-        })
 }
 
 #[derive(Clone, Copy, Debug, AbiExample, PartialEq)]
