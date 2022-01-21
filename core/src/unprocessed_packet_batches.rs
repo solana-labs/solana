@@ -225,6 +225,110 @@ pub fn sanitize_transactions(
         .unzip()
 }
 
+// insert new packet batch into buffer,
+// if buffer is at limit, using eviction strategy to evict lower priority packets
+// until an empty batch is located, swap that with new batch
+pub fn insert_or_swap_batch(
+    unprocessed_packet_batches: &mut UnprocessedPacketBatches,
+    deserialized_packet_batch: DeserializedPacketBatch,
+    batch_limit: usize,
+) {
+    if deserialized_packet_batch.unprocessed_packets.len() == 0 {
+        return;
+    }
+
+    if unprocessed_packet_batches.len() >= batch_limit {
+        swap_packet_with_eviction_strategy(unprocessed_packet_batches, deserialized_packet_batch);
+    } else {
+        unprocessed_packet_batches.push_back(deserialized_packet_batch);
+    }
+}
+
+fn swap_packet_with_eviction_strategy(
+    buffered_packet_batches: &mut UnprocessedPacketBatches,
+    deserialized_packet_batch: DeserializedPacketBatch,
+) -> Option<DeserializedPacketBatch> {
+    // add new batch into into selection process
+    buffered_packet_batches.push_back(deserialized_packet_batch);
+    let new_batch_index = buffered_packet_batches.len() - 1;
+
+    let ordered_locators_for_eviction = create_evictioin_locators(buffered_packet_batches);
+
+    let mut eviction_batch_index: Option<usize> = None;
+    let mut evicting_packets = HashMap::<usize, Vec<usize>>::new();
+    for locator in ordered_locators_for_eviction.iter().rev() {
+        let batch = buffered_packet_batches.get(locator.batch_index)?;
+        if batch
+            .unprocessed_packets
+            .contains_key(&locator.packet_index)
+        {
+            let packet_indexes = evicting_packets
+                .entry(locator.batch_index)
+                .or_insert(vec![]);
+            packet_indexes.push(locator.packet_index);
+
+            if would_be_empty_batch(batch, packet_indexes) {
+                // found an empty batch can be swapped with new batch
+                eviction_batch_index = Some(locator.batch_index);
+                break;
+            }
+        }
+    }
+    // remove those evicted packets
+    evicting_packets
+        .iter()
+        .for_each(|(batch_index, evicted_packet_indexes)| {
+            if let Some(batch) = buffered_packet_batches.get_mut(*batch_index) {
+                batch
+                    .unprocessed_packets
+                    .retain(|&k, _| !evicted_packet_indexes.contains(&k));
+            }
+        });
+
+    if let Some(eviction_batch_index) = eviction_batch_index {
+        if eviction_batch_index == new_batch_index {
+            // the new batch is identified to be the one for eviction
+            buffered_packet_batches.pop_back()
+        } else {
+            // we have a spot in the queue for new item, which is at the back of queue right now
+            buffered_packet_batches.swap_remove_back(eviction_batch_index)
+        }
+    } else {
+        // should not be here
+        warn!("Cannot find eviction candidate from buffer");
+        buffered_packet_batches.pop_back()
+    }
+}
+
+// would be empty batch if all unprocessed packets are in eviction list
+fn would_be_empty_batch(
+    deserialized_packet_batch: &DeserializedPacketBatch,
+    eviction_list: &[usize],
+) -> bool {
+    if deserialized_packet_batch.unprocessed_packets.len() != eviction_list.len() {
+        return false;
+    }
+
+    for (k, _) in deserialized_packet_batch.unprocessed_packets.iter() {
+        if !eviction_list.contains(k) {
+            return false;
+        }
+    }
+
+    true
+}
+
+// Creates an ordered packet locators vector, close to head are the packets preferred to be kept,
+// close to tail are packets should be removed from buffer
+fn create_evictioin_locators(
+    buffered_packet_batches: &UnprocessedPacketBatches,
+) -> Vec<PacketLocator> {
+    // NOTE: currently evicting packets by sender stake weight prioritization, can add fee/CU
+    // prioritization later
+    let (stakes, locators) = get_stakes_and_locators(buffered_packet_batches, &mut None);
+    weighted_shuffle(&stakes, &locators, &mut None)
+}
+
 fn update_packet_sender_info(packet_sender_info: &mut PacketSenderInfo, packet: &Packet) {
     let ip = packet.meta.addr;
     packet_sender_info.packet_senders_ip.push(ip);
@@ -251,7 +355,7 @@ mod tests {
         solana_vote_program::vote_transaction,
     };
 
-    fn packet_with_weight(weight: u64, ip: IpAddr) -> Packet {
+    fn packet_with_weight(weight: u64, ip: Option<IpAddr>) -> Packet {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -260,7 +364,9 @@ mod tests {
         );
         let mut packet = Packet::from_data(None, &tx).unwrap();
         packet.meta.weight = weight;
-        packet.meta.addr = ip;
+        if let Some(ip) = ip {
+            packet.meta.addr = ip;
+        }
         packet
     }
 
@@ -285,7 +391,7 @@ mod tests {
                         (0..batch_size)
                             .map(|packet_index| {
                                 let n = (batch_index * batch_size + packet_index) % senders.len();
-                                packet_with_weight(senders[n].1, senders[n].0)
+                                packet_with_weight(senders[n].1, Some(senders[n].0))
                             })
                             .collect(),
                     ),
@@ -353,7 +459,7 @@ mod tests {
                         (0..batch_size)
                             .map(|packet_index| {
                                 let n = (batch_index * batch_size + packet_index) % senders.len();
-                                packet_with_weight(senders[n].1, senders[n].0)
+                                packet_with_weight(senders[n].1, Some(senders[n].0))
                             })
                             .collect(),
                     ),
@@ -460,6 +566,108 @@ mod tests {
             assert_eq!(2, txs.len());
             assert_eq!(locators[1], tx_locators[0]);
             assert_eq!(locators[3], tx_locators[1]);
+        }
+    }
+
+    // build a buffer of four batches, each contains packet with following stake:
+    // 0: [ 10, 300]
+    // 1: [100, 200, 300]
+    // 2: [ 20,  30,  40]
+    // 3: [500,  30, 200]
+    fn build_unprocessed_packets_buffer() -> UnprocessedPacketBatches {
+        vec![
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_weight(10, None),
+                    packet_with_weight(300, None),
+                    packet_with_weight(200, None),
+                ]),
+                vec![0, 1],
+                false,
+            ),
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_weight(100, None),
+                    packet_with_weight(200, None),
+                    packet_with_weight(300, None),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_weight(20, None),
+                    packet_with_weight(30, None),
+                    packet_with_weight(40, None),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_weight(500, None),
+                    packet_with_weight(30, None),
+                    packet_with_weight(200, None),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    #[test]
+    fn test_swap_packet_with_eviction_strategy() {
+        solana_logger::setup();
+
+        let mut unprocessed_packets = build_unprocessed_packets_buffer();
+
+        // try to insert one with weight lesser than anything in buffer.
+        // the new one should be rejected, and buffer should be unchanged
+        {
+            let weight = 0u64;
+            let new_batch = DeserializedPacketBatch::new(
+                PacketBatch::new(vec![packet_with_weight(weight, None)]),
+                vec![0],
+                false,
+            );
+            let dropped_batch =
+                swap_packet_with_eviction_strategy(&mut unprocessed_packets, new_batch);
+            // dropped batch should be the one made from new packet:
+            let dropped_packets = dropped_batch.unwrap();
+            assert_eq!(1, dropped_packets.packet_batch.packets.len());
+            assert_eq!(weight, dropped_packets.packet_batch.packets[0].meta.weight);
+            // buffer should be unchanged
+            assert_eq!(4, unprocessed_packets.len());
+        }
+
+        // try to insert one with weight higher than anything in buffer.
+        // the new one should be rejected, and buffer should be unchanged
+        {
+            let weight = 5000u64;
+            let new_batch = DeserializedPacketBatch::new(
+                PacketBatch::new(vec![packet_with_weight(weight, None)]),
+                vec![0],
+                false,
+            );
+            let dropped_batch =
+                swap_packet_with_eviction_strategy(&mut unprocessed_packets, new_batch);
+            // dropped batch should be the one with lest weight in buffer (the 3rd batch):
+            let dropped_packets = dropped_batch.unwrap();
+            assert_eq!(3, dropped_packets.packet_batch.packets.len());
+            assert_eq!(20, dropped_packets.packet_batch.packets[0].meta.weight);
+            assert_eq!(30, dropped_packets.packet_batch.packets[1].meta.weight);
+            assert_eq!(40, dropped_packets.packet_batch.packets[2].meta.weight);
+            // buffer should still have 4 batches
+            assert_eq!(4, unprocessed_packets.len());
+            // the 3rd item should be the new batch with one packet
+            assert_eq!(1, unprocessed_packets[2].packet_batch.packets.len());
+            assert_eq!(
+                weight,
+                unprocessed_packets[2].packet_batch.packets[0].meta.weight
+            );
+            assert_eq!(1, unprocessed_packets[2].unprocessed_packets.len());
         }
     }
 }

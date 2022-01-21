@@ -2082,28 +2082,17 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
-            if unprocessed_packet_batches.len() >= batch_limit {
-                *dropped_packet_batches_count += 1;
-                if let Some(dropped_batch) = unprocessed_packet_batches.pop_front() {
-                    *dropped_packets_count += dropped_batch.unprocessed_packets.len();
-                    slot_metrics_tracker.increment_exceeded_buffer_limit_dropped_packets_count(
-                        dropped_batch.unprocessed_packets.len() as u64,
-                    );
-                }
-            }
             let _ = banking_stage_stats
                 .batch_packet_indexes_len
                 .increment(packet_indexes.len() as u64);
 
             *newly_buffered_packets_count += packet_indexes.len();
-            slot_metrics_tracker
-                .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
 
-            unprocessed_packet_batches.push_back(DeserializedPacketBatch::new(
-                packet_batch,
-                packet_indexes,
-                false,
-            ));
+            insert_or_swap_batch(
+                unprocessed_packet_batches,
+                DeserializedPacketBatch::new(packet_batch, packet_indexes, false),
+                batch_limit,
+            );
         }
     }
 
@@ -4086,8 +4075,9 @@ mod tests {
             1,
             Hash::new_unique(),
         );
-        let packet = Packet::from_data(None, &tx).unwrap();
-        let new_packet_batch = PacketBatch::new(vec![packet; 2]);
+        let mut heavy_packet = Packet::from_data(None, &tx).unwrap();
+        heavy_packet.meta.weight = 1_000_000u64;
+        let new_packet_batch = PacketBatch::new(vec![heavy_packet; 2]);
         let mut unprocessed_packets: UnprocessedPacketBatches = vec![DeserializedPacketBatch::new(
             new_packet_batch,
             vec![0, 1],
@@ -4101,7 +4091,10 @@ mod tests {
         // Set the limit to 2
         let batch_limit = 2;
         // Create new unprocessed packets and add to a batch
-        let new_packet_batch = PacketBatch::new(vec![Packet::default()]);
+        let mut light_packet =
+            Packet::from_data(Some(&SocketAddr::from(([10, 10, 10, 1], 9001))), 42).unwrap();
+        light_packet.meta.weight = 1u64;
+        let new_packet_batch = PacketBatch::new(vec![light_packet; 3]);
         let packet_indexes = vec![];
 
         let mut dropped_packet_batches_count = 0;
@@ -4128,11 +4121,11 @@ mod tests {
 
         // Because the set of unprocessed `packet_indexes` is non-empty, the
         // packets are added to the unprocessed queue
-        let packet_indexes = vec![0];
+        let packet_indexes = vec![0, 1, 2];
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packet_batch,
-            packet_indexes.clone(),
+            packet_indexes,
             &mut dropped_packet_batches_count,
             &mut dropped_packets_count,
             &mut newly_buffered_packets_count,
@@ -4143,15 +4136,15 @@ mod tests {
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
         assert_eq!(dropped_packets_count, 0);
-        assert_eq!(newly_buffered_packets_count, 1);
+        assert_eq!(newly_buffered_packets_count, 3);
 
-        // Because we've reached the batch limit, old unprocessed packets are
+        // Because we've reached the batch limit, the light_weight unprocessed packets are
         // dropped and the new one is appended to the end
-        let new_packet_batch = PacketBatch::new(vec![Packet::from_data(
-            Some(&SocketAddr::from(([127, 0, 0, 1], 8001))),
-            42,
-        )
-        .unwrap()]);
+        let mut also_heavy_packet =
+            Packet::from_data(Some(&SocketAddr::from(([127, 0, 0, 1], 8001))), 42).unwrap();
+        also_heavy_packet.meta.weight = 100_000_000u64;
+        let new_packet_batch = PacketBatch::new(vec![also_heavy_packet]);
+        let packet_indexes = vec![0];
         assert_eq!(unprocessed_packets.len(), batch_limit);
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
@@ -4170,8 +4163,8 @@ mod tests {
             new_packet_batch.packets[0]
         );
         assert_eq!(dropped_packet_batches_count, 1);
-        assert_eq!(dropped_packets_count, 2);
-        assert_eq!(newly_buffered_packets_count, 2);
+        assert_eq!(dropped_packets_count, 3);
+        assert_eq!(newly_buffered_packets_count, 4);
     }
 
     #[test]
