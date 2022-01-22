@@ -4,7 +4,6 @@
 //! to the GPU.
 //!
 
-use solana_bloom::bloom::AtomicBloom;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
 use {
@@ -14,6 +13,8 @@ use {
         perf_libs,
         recycler::Recycler,
     },
+    ahash::AHasher,
+    rand::{thread_rng, Rng},
     rayon::ThreadPool,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
@@ -24,7 +25,9 @@ use {
         short_vec::decode_shortu16_len,
         signature::Signature,
     },
-    std::sync::atomic::{AtomicU64, Ordering},
+    std::hash::Hasher,
+    std::sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    std::time::{Duration, Instant},
     std::{convert::TryFrom, mem::size_of},
 };
 
@@ -420,34 +423,73 @@ pub fn generate_offsets(
     )
 }
 
-fn dedup_packet(count: &AtomicU64, packet: &mut Packet, bloom: &AtomicBloom<&[u8]>) {
-    // If this packet was already marked as discard, drop it
-    if packet.meta.discard() {
-        return;
-    }
-
-    // If this packet was not newly added, it's a dup and should be discarded
-    if !bloom.add(&&packet.data.as_slice()[0..packet.meta.size]) {
-        packet.meta.set_discard(true);
-        count.fetch_add(1, Ordering::Relaxed);
-    }
+pub struct Deduper {
+    filter: Vec<AtomicU64>,
+    seed: (u128, u128),
+    age: Instant,
+    max_age: Duration,
+    pub saturated: AtomicBool,
 }
 
-pub fn dedup_packets(bloom: &AtomicBloom<&[u8]>, batches: &mut [PacketBatch]) -> u64 {
-    use rayon::prelude::*;
-    let packet_count = count_packets_in_batches(batches);
-    // machine specific random offset to read the u64 from the packet signature
-    let count = AtomicU64::new(0);
-    PAR_THREAD_POOL.install(|| {
-        batches.into_par_iter().for_each(|batch| {
-            batch
-                .packets
-                .par_iter_mut()
-                .for_each(|p| dedup_packet(&count, p, bloom))
-        })
-    });
-    inc_new_counter_debug!("dedup_packets_total", packet_count);
-    count.load(Ordering::Relaxed)
+impl Deduper {
+    pub fn new(size: u32, max_age: Duration) -> Self {
+        let mut filter: Vec<AtomicU64> = Vec::with_capacity(size as usize);
+        filter.resize_with(size as usize, Default::default);
+        let seed = thread_rng().gen();
+        Self {
+            filter,
+            seed,
+            age: Instant::now(),
+            max_age,
+            saturated: AtomicBool::new(false),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        let now = Instant::now();
+        //this should reset every 500k unique packets per 1m sized deduper
+        //false positive rate is 1/1000 at that point
+        let saturated = self.saturated.load(Ordering::Relaxed);
+        if saturated || now.duration_since(self.age) > self.max_age {
+            for i in &self.filter {
+                i.store(0, Ordering::Relaxed);
+            }
+            self.seed = thread_rng().gen();
+            self.age = now;
+            self.saturated.store(false, Ordering::Relaxed);
+        }
+    }
+
+    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
+        // If this packet was already marked as discard, drop it
+        if packet.meta.discard() {
+            return 0;
+        }
+        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
+        hasher.write(&packet.data[0..packet.meta.size]);
+        let hash = hasher.finish();
+        let len = self.filter.len();
+        let pos = (usize::try_from(hash).unwrap()).wrapping_rem(len);
+        // saturate each position with or
+        let prev = self.filter[pos].fetch_or(hash, Ordering::Relaxed);
+        if prev == u64::MAX {
+            self.saturated.store(true, Ordering::Relaxed);
+            //reset this value
+            self.filter[pos].store(hash, Ordering::Relaxed);
+        }
+        if hash == prev & hash {
+            packet.meta.set_discard(true);
+            return 1;
+        }
+        0
+    }
+
+    pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {
+        batches
+            .iter_mut()
+            .flat_map(|batch| batch.packets.iter_mut().map(|p| self.dedup_packet(p)))
+            .sum()
+    }
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
@@ -460,7 +502,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
                 .packets
                 .par_iter_mut()
                 .for_each(|p| verify_packet(p, reject_non_vote))
-        })
+        });
     });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
@@ -634,7 +676,6 @@ mod tests {
             test_tx::{new_test_vote_tx, test_multisig_tx, test_tx},
         },
         bincode::{deserialize, serialize},
-        solana_bloom::bloom::{AtomicBloom, Bloom},
         solana_sdk::{
             instruction::CompiledInstruction,
             message::{Message, MessageHeader},
@@ -1299,26 +1340,57 @@ mod tests {
     fn test_dedup_same() {
         let tx = test_tx();
 
-        // generate packet vector
         let mut batches =
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
-        let bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 20).into();
-        let discard = sigverify::dedup_packets(&bloom, &mut batches) as usize;
-        // because dedup uses a threadpool, there maybe up to N threads of txs that go through
-        let n = get_thread_count();
-        assert!(packet_count < discard + n * 2);
+        let filter = Deduper::new(1_000_000, Duration::from_millis(0));
+        let discard = filter.dedup_packets(&mut batches) as usize;
+        assert_eq!(packet_count, discard + 1);
     }
 
     #[test]
     fn test_dedup_diff() {
-        // generate packet vector
+        let mut filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
 
-        let bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 20).into();
-        let discard = sigverify::dedup_packets(&bloom, &mut batches) as usize;
+        let discard = filter.dedup_packets(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
-        let n = get_thread_count();
-        assert!(discard < n * 2);
+        assert_eq!(discard, 0);
+        filter.reset();
+        for i in filter.filter {
+            assert_eq!(i.load(Ordering::Relaxed), 0);
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_dedup_saturated() {
+        let filter = Deduper::new(1_000_000, Duration::from_millis(0));
+        let mut discard = 0;
+        assert!(!filter.saturated.load(Ordering::Relaxed));
+        for i in 0..1000 {
+            let mut batches =
+                to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
+            discard += filter.dedup_packets(&mut batches) as usize;
+            println!("{} {}", i, discard);
+            if filter.saturated.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+        assert!(filter.saturated.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_dedup_false_positive() {
+        let filter = Deduper::new(1_000_000, Duration::from_millis(0));
+        let mut discard = 0;
+        for i in 0..10 {
+            let mut batches =
+                to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
+            discard += filter.dedup_packets(&mut batches) as usize;
+            println!("false positive rate: {}/{}", discard, i * 1024);
+        }
+        //allow for 1 false positive even if extremely unlikely
+        assert!(discard < 2);
     }
 }

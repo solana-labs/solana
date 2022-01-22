@@ -5260,6 +5260,7 @@ dependencies = [
 name = "solana-perf"
 version = "1.10.0"
 dependencies = [
+ "ahash 0.7.6",
  "bincode",
  "bv",
  "caps",
