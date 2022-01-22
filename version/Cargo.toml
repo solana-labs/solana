@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 log = "0.4.14"
-serde = "1.0.133"
+serde = "1.0.134"
 serde_derive = "1.0.103"
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.0" }
