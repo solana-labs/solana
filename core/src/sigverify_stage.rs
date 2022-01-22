@@ -10,10 +10,9 @@ use {
     core::time::Duration,
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
-    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::dedup_packets,
+    solana_perf::sigverify::Deduper,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -195,6 +194,7 @@ impl SigVerifyStage {
             .iter_mut()
             .rev()
             .flat_map(|batch| batch.packets.iter_mut().rev())
+            .filter(|packet| !packet.meta.discard())
             .map(|packet| (packet.meta.addr, packet))
             .into_group_map();
         // Allocate max_packets evenly across addresses.
@@ -214,7 +214,7 @@ impl SigVerifyStage {
     }
 
     fn verifier<T: SigVerifier>(
-        bloom: &AtomicBloom<&[u8]>,
+        deduper: &Deduper,
         recvr: &PacketBatchReceiver,
         sendr: &Sender<Vec<PacketBatch>>,
         verifier: &T,
@@ -230,15 +230,15 @@ impl SigVerifyStage {
         );
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let dedup_fail = dedup_packets(bloom, &mut batches) as usize;
+        let dedup_fail = deduper.dedup_packets(&mut batches) as usize;
         dedup_time.stop();
-        let valid_packets = num_packets.saturating_sub(dedup_fail);
+        let num_unique = num_packets.saturating_sub(dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
-        if valid_packets > MAX_SIGVERIFY_BATCH {
+        if num_unique > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
         };
-        let excess_fail = valid_packets.saturating_sub(MAX_SIGVERIFY_BATCH);
+        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
@@ -289,25 +289,16 @@ impl SigVerifyStage {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
-        const MAX_BLOOM_AGE: Duration = Duration::from_millis(2_000);
-        const MAX_BLOOM_ITEMS: usize = 1_000_000;
-        const MAX_BLOOM_FAIL: f64 = 0.0001;
-        const MAX_BLOOM_BITS: usize = 8 << 22;
+        const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
+        const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
-                let mut bloom =
-                    Bloom::random(MAX_BLOOM_ITEMS, MAX_BLOOM_FAIL, MAX_BLOOM_BITS).into();
-                let mut bloom_age = Instant::now();
+                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
-                    let now = Instant::now();
-                    if now.duration_since(bloom_age) > MAX_BLOOM_AGE {
-                        bloom =
-                            Bloom::random(MAX_BLOOM_ITEMS, MAX_BLOOM_FAIL, MAX_BLOOM_BITS).into();
-                        bloom_age = now;
-                    }
+                    deduper.reset();
                     if let Err(e) = Self::verifier(
-                        &bloom,
+                        &deduper,
                         &packet_receiver,
                         &verified_sender,
                         &verifier,
@@ -372,11 +363,14 @@ mod tests {
         let mut batch = PacketBatch::default();
         batch.packets.resize(10, Packet::default());
         batch.packets[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
+        batch.packets[3].meta.set_discard(true);
+        batch.packets[4].meta.addr = std::net::IpAddr::from([2u16; 8]);
         let mut batches = vec![batch];
         let max = 3;
         SigVerifyStage::discard_excess_packets(&mut batches, max);
         assert_eq!(count_non_discard(&batches), max);
         assert!(!batches[0].packets[0].meta.discard());
-        assert!(!batches[0].packets[3].meta.discard());
+        assert!(batches[0].packets[3].meta.discard());
+        assert!(!batches[0].packets[4].meta.discard());
     }
 }

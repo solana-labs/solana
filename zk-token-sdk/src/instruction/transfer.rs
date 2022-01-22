@@ -7,8 +7,10 @@ use {
     crate::{
         encryption::{
             discrete_log::*,
-            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
-            pedersen::{Pedersen, PedersenCommitment, PedersenDecryptHandle, PedersenOpening},
+            elgamal::{
+                DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey,
+            },
+            pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
         instruction::{Role, Verifiable},
@@ -128,8 +130,8 @@ impl TransferData {
         };
 
         // subtract transfer amount from the spendable ciphertext
-        let spendable_comm = spendable_balance_ciphertext.message_comm;
-        let spendable_handle = spendable_balance_ciphertext.decrypt_handle;
+        let spendable_comm = spendable_balance_ciphertext.commitment;
+        let spendable_handle = spendable_balance_ciphertext.handle;
 
         let new_spendable_balance = spendable_balance - transfer_amount;
         let new_spendable_comm = spendable_comm - combine_u32_comms(comm_lo, comm_hi);
@@ -137,8 +139,8 @@ impl TransferData {
             spendable_handle - combine_u32_handles(handle_source_lo, handle_source_hi);
 
         let new_spendable_ct = ElGamalCiphertext {
-            message_comm: new_spendable_comm,
-            decrypt_handle: new_spendable_handle,
+            commitment: new_spendable_comm,
+            handle: new_spendable_handle,
         };
 
         // range_proof and validity_proof should be generated together
@@ -172,7 +174,10 @@ impl TransferData {
         }
         .try_into()?;
 
-        Ok((transfer_comm_lo, decryption_handle_lo).into())
+        Ok(ElGamalCiphertext {
+            commitment: transfer_comm_lo,
+            handle: decryption_handle_lo,
+        })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
@@ -187,7 +192,10 @@ impl TransferData {
         }
         .try_into()?;
 
-        Ok((transfer_comm_hi, decryption_handle_hi).into())
+        Ok(ElGamalCiphertext {
+            commitment: transfer_comm_hi,
+            handle: decryption_handle_hi,
+        })
     }
 
     /// Decrypts transfer amount from transfer data
@@ -274,8 +282,8 @@ impl TransferProof {
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_EG = source_keypair.public.get_point();
-        let C_EG = source_new_balance_ct.message_comm.get_point();
-        let D_EG = source_new_balance_ct.decrypt_handle.get_point();
+        let C_EG = source_new_balance_ct.commitment.get_point();
+        let D_EG = source_new_balance_ct.handle.get_point();
         let C_Ped = source_commitment.get_point();
 
         // append all current state to the transcript
@@ -339,8 +347,8 @@ impl TransferProof {
         let new_spendable_ct: ElGamalCiphertext = (*new_spendable_ct).try_into()?;
 
         let P_EG = source_pk.get_point();
-        let C_EG = new_spendable_ct.message_comm.get_point();
-        let D_EG = new_spendable_ct.decrypt_handle.get_point();
+        let C_EG = new_spendable_ct.commitment.get_point();
+        let D_EG = new_spendable_ct.handle.get_point();
         let C_Ped = commitment.get_point();
 
         // append all current state to the transcript
@@ -361,11 +369,11 @@ impl TransferProof {
         let amount_comm_lo: PedersenCommitment = amount_comms.lo.try_into()?;
         let amount_comm_hi: PedersenCommitment = amount_comms.hi.try_into()?;
 
-        let handle_lo_dest: PedersenDecryptHandle = decryption_handles_lo.dest.try_into()?;
-        let handle_hi_dest: PedersenDecryptHandle = decryption_handles_hi.dest.try_into()?;
+        let handle_lo_dest: DecryptHandle = decryption_handles_lo.dest.try_into()?;
+        let handle_hi_dest: DecryptHandle = decryption_handles_hi.dest.try_into()?;
 
-        let handle_lo_auditor: PedersenDecryptHandle = decryption_handles_lo.auditor.try_into()?;
-        let handle_hi_auditor: PedersenDecryptHandle = decryption_handles_hi.auditor.try_into()?;
+        let handle_lo_auditor: DecryptHandle = decryption_handles_lo.auditor.try_into()?;
+        let handle_hi_auditor: DecryptHandle = decryption_handles_hi.auditor.try_into()?;
 
         // TODO: validity proof
         validity_proof.verify(
@@ -419,9 +427,9 @@ pub struct EncryptedTransferAmount {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferDecryptHandles {
-    pub source: pod::PedersenDecryptHandle,  // 32 bytes
-    pub dest: pod::PedersenDecryptHandle,    // 32 bytes
-    pub auditor: pod::PedersenDecryptHandle, // 32 bytes
+    pub source: pod::DecryptHandle,  // 32 bytes
+    pub dest: pod::DecryptHandle,    // 32 bytes
+    pub auditor: pod::DecryptHandle, // 32 bytes
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -437,9 +445,9 @@ pub struct EncryptedTransferFee {
     /// The transfer fee commitment
     pub fee_comm: pod::PedersenCommitment,
     /// The decryption handle for destination ElGamal pubkey
-    pub decrypt_handle_dest: pod::PedersenDecryptHandle,
+    pub decrypt_handle_dest: pod::DecryptHandle,
     /// The decryption handle for fee collector ElGamal pubkey
-    pub decrypt_handle_fee_collector: pod::PedersenDecryptHandle,
+    pub decrypt_handle_fee_collector: pod::DecryptHandle,
 }
 
 /// Split u64 number into two u32 numbers
@@ -464,10 +472,7 @@ pub fn combine_u32_comms(
 }
 
 #[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_handles(
-    handle_lo: PedersenDecryptHandle,
-    handle_hi: PedersenDecryptHandle,
-) -> PedersenDecryptHandle {
+pub fn combine_u32_handles(handle_lo: DecryptHandle, handle_hi: DecryptHandle) -> DecryptHandle {
     handle_lo + handle_hi * Scalar::from(TWO_32)
 }
 
@@ -483,9 +488,9 @@ mod test {
     #[test]
     fn test_transfer_correctness() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
-        let source_keypair = ElGamalKeypair::default();
-        let dest_pk = ElGamalKeypair::default().public;
-        let auditor_pk = ElGamalKeypair::default().public;
+        let source_keypair = ElGamalKeypair::new_rand();
+        let dest_pk = ElGamalKeypair::new_rand().public;
+        let auditor_pk = ElGamalKeypair::new_rand().public;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
@@ -510,17 +515,17 @@ mod test {
     #[test]
     fn test_source_dest_ciphertext() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
-        let source_keypair = ElGamalKeypair::default();
+        let source_keypair = ElGamalKeypair::new_rand();
 
         let ElGamalKeypair {
             public: dest_pk,
             secret: dest_sk,
-        } = ElGamalKeypair::default();
+        } = ElGamalKeypair::new_rand();
 
         let ElGamalKeypair {
             public: auditor_pk,
             secret: auditor_sk,
-        } = ElGamalKeypair::default();
+        } = ElGamalKeypair::new_rand();
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;

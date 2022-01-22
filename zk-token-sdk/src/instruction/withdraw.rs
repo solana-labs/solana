@@ -117,8 +117,8 @@ impl WithdrawProof {
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_EG = source_keypair.public.get_point();
-        let C_EG = final_balance_ct.message_comm.get_point();
-        let D_EG = final_balance_ct.decrypt_handle.get_point();
+        let C_EG = final_balance_ct.commitment.get_point();
+        let D_EG = final_balance_ct.handle.get_point();
         let C_Ped = commitment.get_point();
 
         // append all current state to the transcript
@@ -166,8 +166,8 @@ impl WithdrawProof {
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_EG = source_pk.get_point();
-        let C_EG = final_balance_ct.message_comm.get_point();
-        let D_EG = final_balance_ct.decrypt_handle.get_point();
+        let C_EG = final_balance_ct.commitment.get_point();
+        let D_EG = final_balance_ct.handle.get_point();
         let C_Ped = commitment.get_point();
 
         // append all current state to the transcript
@@ -201,7 +201,7 @@ mod test {
     #[test]
     fn test_withdraw_correctness() {
         // generate and verify proof for the proper setting
-        let elgamal_keypair = ElGamalKeypair::default();
+        let elgamal_keypair = ElGamalKeypair::new_rand();
 
         let current_balance: u64 = 77;
         let current_balance_ct = elgamal_keypair.public.encrypt(current_balance);

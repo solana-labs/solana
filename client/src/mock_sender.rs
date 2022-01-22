@@ -435,7 +435,7 @@ impl RpcSender for MockSender {
                 value: vec![Value::Null, Value::Null]
             })?,
             "getProgramAccounts" => {
-                let pubkey = Pubkey::from_str(&PUBKEY.to_string()).unwrap();
+                let pubkey = Pubkey::from_str(PUBKEY).unwrap();
                 let account = Account {
                     lamports: 1_000_000,
                     data: vec![],

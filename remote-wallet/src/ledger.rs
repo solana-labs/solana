@@ -373,7 +373,7 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
             .product_string()
             .unwrap_or("Unknown")
             .to_lowercase()
-            .replace(" ", "-");
+            .replace(' ', "-");
         let serial = dev_info.serial_number().unwrap_or("Unknown").to_string();
         let host_device_path = dev_info.path().to_string_lossy().to_string();
         let version = self.get_firmware_version()?;

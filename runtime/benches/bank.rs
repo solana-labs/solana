@@ -90,7 +90,7 @@ fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Tra
 }
 
 fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Transaction]) {
-    for transaction in transactions.to_owned() {
+    for transaction in transactions.iter().cloned() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
     for _ in 0..1_000_000_000_u64 {

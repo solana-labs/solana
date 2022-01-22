@@ -31,7 +31,7 @@ sha3 = "0.9"
 solana-sdk = { path = "../sdk", version = "=1.10.0" }
 subtle = "2"
 thiserror = "1"
-zeroize = { version = "1.2.0", default-features = false, features = ["zeroize_derive"] }
+zeroize = { version = "1.3", default-features = false, features = ["zeroize_derive"] }
 
 [dev-dependencies]
 time = "0.1.40"

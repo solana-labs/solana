@@ -169,10 +169,9 @@ impl Dashboard {
                                 .unwrap_or_else(|| '-'.to_string()),
                             snapshot_slot_info
                                 .as_ref()
-                                .map(|snapshot_slot_info| snapshot_slot_info
+                                .and_then(|snapshot_slot_info| snapshot_slot_info
                                     .incremental
                                     .map(|incremental| incremental.to_string()))
-                                .flatten()
                                 .unwrap_or_else(|| '-'.to_string()),
                             transaction_count,
                             identity_balance

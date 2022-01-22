@@ -577,8 +577,7 @@ impl VersionedTransactionWithStatusMeta {
         let dynamic_keys_iter = self
             .meta
             .iter()
-            .map(|meta| meta.loaded_addresses.ordered_iter())
-            .flatten();
+            .flat_map(|meta| meta.loaded_addresses.ordered_iter());
 
         static_keys_iter.chain(dynamic_keys_iter)
     }

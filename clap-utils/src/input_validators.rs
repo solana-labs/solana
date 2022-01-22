@@ -328,7 +328,7 @@ pub fn is_derivation<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    let value = value.as_ref().replace("'", "");
+    let value = value.as_ref().replace('\'', "");
     let mut parts = value.split('/');
     let account = parts.next().unwrap();
     account

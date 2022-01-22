@@ -1,8 +1,8 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::encryption::{
-        elgamal::ElGamalPubkey,
-        pedersen::{PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening},
+        elgamal::{DecryptHandle, ElGamalPubkey},
+        pedersen::{PedersenCommitment, PedersenOpening, G, H},
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -39,9 +39,6 @@ impl ValidityProof {
         transcript: &mut Transcript,
     ) -> Self {
         // extract the relevant scalar and Ristretto points from the inputs
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
         let P_dest = elgamal_pubkey_dest.get_point();
         let P_auditor = elgamal_pubkey_auditor.get_point();
 
@@ -49,7 +46,7 @@ impl ValidityProof {
         let y_r = Scalar::random(&mut OsRng);
         let y_x = Scalar::random(&mut OsRng);
 
-        let Y_0 = RistrettoPoint::multiscalar_mul(vec![y_r, y_x], vec![H, G]).compress();
+        let Y_0 = RistrettoPoint::multiscalar_mul(vec![y_r, y_x], vec![&(*H), &(*G)]).compress();
         let Y_1 = (y_r * P_dest).compress();
         let Y_2 = (y_r * P_auditor).compress();
 
@@ -84,14 +81,10 @@ impl ValidityProof {
         elgamal_pubkey_dest: &ElGamalPubkey,
         elgamal_pubkey_auditor: &ElGamalPubkey,
         commitments: (&PedersenCommitment, &PedersenCommitment),
-        handle_dest: (&PedersenDecryptHandle, &PedersenDecryptHandle),
-        handle_auditor: (&PedersenDecryptHandle, &PedersenDecryptHandle),
+        handle_dest: (&DecryptHandle, &DecryptHandle),
+        handle_auditor: (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
-        // extract the relevant scalar and Ristretto points from the inputs
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
@@ -127,7 +120,18 @@ impl ValidityProof {
                 -ww * c,
                 -ww,
             ],
-            vec![H, G, C, Y_0, P_dest, D_dest, Y_1, P_auditor, D_auditor, Y_2],
+            vec![
+                &(*H),
+                &(*G),
+                &C,
+                &Y_0,
+                P_dest,
+                &D_dest,
+                &Y_1,
+                P_auditor,
+                &D_auditor,
+                &Y_2,
+            ],
         );
 
         if check.is_identity() {
@@ -175,8 +179,8 @@ mod test {
 
     #[test]
     fn test_validity_proof() {
-        let elgamal_pubkey_dest = ElGamalKeypair::default().public;
-        let elgamal_pubkey_auditor = ElGamalKeypair::default().public;
+        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
+        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
 
         let x_lo: u64 = 55;
         let x_hi: u64 = 77;

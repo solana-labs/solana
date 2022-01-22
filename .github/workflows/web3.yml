@@ -65,20 +65,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: 'npm'
           cache-dependency-path: web3.js/package-lock.json
-      - run: npm i -g npm@7
-      - run: npm ci
-      - run: npm run lint
       - run: |
-          npm run build
-          ls -l lib
-          test -r lib/index.iife.js
-          test -r lib/index.cjs.js
-          test -r lib/index.esm.js
-      - run: npm run doc
-      - run: npm run codecov
-      - run: |
-          sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          solana --version
-      - run: npm run test:live-with-test-validator
+          source .travis/before_install.sh
+          npm install
+          source .travis/script.sh

@@ -161,7 +161,7 @@ fn get_data_slice<'a>(
         if signature_index >= instruction_datas.len() {
             return Err(PrecompileError::InvalidDataOffsets);
         }
-        &instruction_datas[signature_index]
+        instruction_datas[signature_index]
     };
 
     let start = offset_start as usize;

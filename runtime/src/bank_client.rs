@@ -315,8 +315,7 @@ impl SyncClient for BankClient {
     fn get_fee_for_message(&self, message: &Message) -> Result<u64> {
         SanitizedMessage::try_from(message.clone())
             .ok()
-            .map(|sanitized_message| self.bank.get_fee_for_message(&sanitized_message))
-            .flatten()
+            .and_then(|sanitized_message| self.bank.get_fee_for_message(&sanitized_message))
             .ok_or_else(|| {
                 TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,

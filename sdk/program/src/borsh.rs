@@ -188,7 +188,7 @@ mod tests {
     fn packed_len() {
         assert_eq!(
             get_packed_len::<TestEnum>(),
-            size_of::<u8>() + size_of::<u64>() + size_of::<u8>() * 8
+            size_of::<u8>() + size_of::<u64>() + u8::BITS as usize
         );
         assert_eq!(
             get_packed_len::<TestStruct>(),

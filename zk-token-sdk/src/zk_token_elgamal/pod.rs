@@ -19,6 +19,12 @@ impl fmt::Debug for ElGamalCiphertext {
     }
 }
 
+impl Default for ElGamalCiphertext {
+    fn default() -> Self {
+        Self::zeroed()
+    }
+}
+
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
@@ -41,9 +47,9 @@ impl fmt::Debug for PedersenCommitment {
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct PedersenDecryptHandle(pub [u8; 32]);
+pub struct DecryptHandle(pub [u8; 32]);
 
-impl fmt::Debug for PedersenDecryptHandle {
+impl fmt::Debug for DecryptHandle {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }
