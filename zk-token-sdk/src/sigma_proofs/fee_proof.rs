@@ -1,6 +1,6 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
-    crate::encryption::pedersen::{PedersenBase, PedersenCommitment, PedersenOpening},
+    crate::encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
     rand::rngs::OsRng,
 };
 use {
@@ -36,9 +36,6 @@ impl FeeProof {
         transcript: &mut Transcript,
     ) -> Self {
         // extract the relevant scalar and Ristretto points from the input
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
         let x = Scalar::from(delta_fee);
         let m = Scalar::from(max_fee);
 
@@ -65,9 +62,11 @@ impl FeeProof {
             // simulate max proof
             let z_max = Scalar::random(&mut OsRng);
             let c_max = Scalar::random(&mut OsRng);
-            let Y_max =
-                RistrettoPoint::multiscalar_mul(vec![z_max, -c_max, c_max * m], vec![H, C_max, G])
-                    .compress();
+            let Y_max = RistrettoPoint::multiscalar_mul(
+                vec![z_max, -c_max, c_max * m],
+                vec![&(*H), C_max, &(*G)],
+            )
+            .compress();
 
             let fee_max_proof = FeeMaxProof {
                 Y_max,
@@ -81,9 +80,11 @@ impl FeeProof {
             let y_delta_claimed = Scalar::random(&mut OsRng);
 
             let Y_delta_real =
-                RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_real], vec![G, H]).compress();
+                RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_real], vec![&(*G), &(*H)])
+                    .compress();
             let Y_delta_claimed =
-                RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_claimed], vec![G, H]).compress();
+                RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_claimed], vec![&(*G), &(*H)])
+                    .compress();
 
             transcript.append_point(b"Y_max", &Y_max);
             transcript.append_point(b"Y_delta_real", &Y_delta_real);
@@ -119,13 +120,13 @@ impl FeeProof {
 
             let Y_delta_real = RistrettoPoint::multiscalar_mul(
                 vec![z_x, z_delta_real, -c_equality],
-                vec![G, H, C_delta_real],
+                vec![&(*G), &(*H), C_delta_real],
             )
             .compress();
 
             let Y_delta_claimed = RistrettoPoint::multiscalar_mul(
                 vec![z_x, z_delta_claimed, -c_equality],
-                vec![G, H, C_delta_claimed],
+                vec![&(*G), &(*H), C_delta_claimed],
             )
             .compress();
 
@@ -139,7 +140,7 @@ impl FeeProof {
 
             // generate max proof
             let y_max = Scalar::random(&mut OsRng);
-            let Y_max = (y_max * H).compress();
+            let Y_max = (y_max * &(*H)).compress();
 
             transcript.append_point(b"Y_max", &Y_max);
             transcript.append_point(b"Y_delta_real", &Y_delta_real);
@@ -174,9 +175,6 @@ impl FeeProof {
         transcript: &mut Transcript,
     ) -> Result<(), FeeProofError> {
         // extract the relevant scalar and Ristretto points from the input
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
         let m = Scalar::from(max_fee);
 
         let C_max = commitment_fee.get_point();
@@ -243,17 +241,17 @@ impl FeeProof {
             ],
             vec![
                 C_max,
-                G,
-                H,
-                Y_max,
-                G,
-                H,
+                &(*G),
+                &(*H),
+                &Y_max,
+                &(*G),
+                &(*H),
                 C_delta_real,
-                Y_delta_real,
-                G,
-                H,
+                &Y_delta_real,
+                &(*G),
+                &(*H),
                 C_delta_claimed,
-                Y_delta_claimed,
+                &Y_delta_claimed,
             ],
         );
 

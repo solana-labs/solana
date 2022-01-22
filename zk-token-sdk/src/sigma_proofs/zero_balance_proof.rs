@@ -2,7 +2,7 @@
 use {
     crate::encryption::{
         elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-        pedersen::PedersenBase,
+        pedersen::H,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -38,8 +38,8 @@ impl ZeroBalanceProof {
         let P = elgamal_keypair.public.get_point();
         let s = elgamal_keypair.secret.get_scalar();
 
-        let C = elgamal_ciphertext.message_comm.get_point();
-        let D = elgamal_ciphertext.decrypt_handle.get_point();
+        let C = elgamal_ciphertext.commitment.get_point();
+        let D = elgamal_ciphertext.handle.get_point();
 
         // record ElGamal pubkey and ciphertext in the transcript
         transcript.append_point(b"P", &P.compress());
@@ -71,10 +71,8 @@ impl ZeroBalanceProof {
     ) -> Result<(), ZeroBalanceProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
-        let C = elgamal_ciphertext.message_comm.get_point();
-        let D = elgamal_ciphertext.decrypt_handle.get_point();
-
-        let H = PedersenBase::default().H;
+        let C = elgamal_ciphertext.commitment.get_point();
+        let D = elgamal_ciphertext.handle.get_point();
 
         // record ElGamal pubkey and ciphertext in the transcript
         transcript.validate_and_append_point(b"P", &P.compress())?;
@@ -96,7 +94,7 @@ impl ZeroBalanceProof {
         // check the required algebraic relation
         let check = RistrettoPoint::multiscalar_mul(
             vec![z, -c, -Scalar::one(), w * z, -w * c, -w],
-            vec![P, H, Y_P, D, C, Y_D],
+            vec![P, &(*H), &Y_P, D, C, &Y_D],
         );
 
         if check.is_identity() {
@@ -131,13 +129,13 @@ impl ZeroBalanceProof {
 mod test {
     use super::*;
     use crate::encryption::{
-        elgamal::ElGamalKeypair,
-        pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening},
+        elgamal::{DecryptHandle, ElGamalKeypair},
+        pedersen::{Pedersen, PedersenOpening},
     };
 
     #[test]
     fn test_zero_balance_proof() {
-        let source_keypair = ElGamalKeypair::default();
+        let source_keypair = ElGamalKeypair::new_rand();
 
         let mut transcript_prover = Transcript::new(b"test");
         let mut transcript_verifier = Transcript::new(b"test");
@@ -175,11 +173,11 @@ mod test {
 
         // edge cases: only C or D is zero - such ciphertext is always invalid
         let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
-        let handle = elgamal_ciphertext.decrypt_handle;
+        let handle = elgamal_ciphertext.handle;
 
         let zeroed_comm_ciphertext = ElGamalCiphertext {
-            message_comm: zeroed_comm,
-            decrypt_handle: handle,
+            commitment: zeroed_comm,
+            handle,
         };
 
         let proof = ZeroBalanceProof::new(
@@ -197,8 +195,8 @@ mod test {
 
         let (zero_comm, _) = Pedersen::new(0_u64);
         let zeroed_handle_ciphertext = ElGamalCiphertext {
-            message_comm: zero_comm,
-            decrypt_handle: PedersenDecryptHandle::default(),
+            commitment: zero_comm,
+            handle: DecryptHandle::default(),
         };
 
         let proof = ZeroBalanceProof::new(

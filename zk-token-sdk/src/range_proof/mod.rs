@@ -7,7 +7,7 @@ use {
 };
 use {
     crate::{
-        encryption::pedersen::PedersenBase,
+        encryption::pedersen::{G, H},
         range_proof::{
             errors::RangeProofError, generators::BulletproofGens, inner_product::InnerProductProof,
         },
@@ -71,12 +71,10 @@ impl RangeProof {
         // TODO: precompute generators
         // TODO: double check Pedersen generators and range proof generators does not interfere
         let bp_gens = BulletproofGens::new(nm);
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
 
         // bit-decompose values and generate their Pedersen vector commitment
         let a_blinding = Scalar::random(&mut OsRng);
-        let mut A = a_blinding * H;
+        let mut A = a_blinding * &(*H);
 
         let mut gens_iter = bp_gens.G(nm).zip(bp_gens.H(nm));
         for (amount_i, n_i) in amounts.iter().zip(bit_lengths.iter()) {
@@ -100,7 +98,7 @@ impl RangeProof {
 
         let S = RistrettoPoint::multiscalar_mul(
             iter::once(&s_blinding).chain(s_L.iter()).chain(s_R.iter()),
-            iter::once(&H).chain(bp_gens.G(nm)).chain(bp_gens.H(nm)),
+            iter::once(&(*H)).chain(bp_gens.G(nm)).chain(bp_gens.H(nm)),
         )
         .compress();
 
@@ -168,8 +166,8 @@ impl RangeProof {
 
         let t_blinding_poly = util::Poly2(
             agg_opening,
-            t_1_blinding.get_scalar(),
-            t_2_blinding.get_scalar(),
+            *t_1_blinding.get_scalar(),
+            *t_2_blinding.get_scalar(),
         );
 
         let t_x = t_poly.eval(x);
@@ -188,7 +186,7 @@ impl RangeProof {
         // compute the inner product argument on the commitment:
         // P = <l(x), G> + <r(x), H'> + <l(x), r(x)>*Q
         let w = transcript.challenge_scalar(b"w");
-        let Q = w * G;
+        let Q = w * &(*G);
 
         let G_factors: Vec<Scalar> = iter::repeat(Scalar::one()).take(nm).collect();
         let H_factors: Vec<Scalar> = util::exp_iter(y.invert()).take(nm).collect();
@@ -228,9 +226,6 @@ impl RangeProof {
     ) -> Result<(), RangeProofError> {
         // commitments and bit-lengths must be same length vectors
         assert_eq!(comms.len(), bit_lengths.len());
-
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
 
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
@@ -307,8 +302,8 @@ impl RangeProof {
                 .chain(iter::once(self.S.decompress()))
                 .chain(iter::once(self.T_1.decompress()))
                 .chain(iter::once(self.T_2.decompress()))
-                .chain(iter::once(Some(H)))
-                .chain(iter::once(Some(G)))
+                .chain(iter::once(Some(*H)))
+                .chain(iter::once(Some(*G)))
                 .chain(self.ipp_proof.L_vec.iter().map(|L| L.decompress()))
                 .chain(self.ipp_proof.R_vec.iter().map(|R| R.decompress()))
                 .chain(bp_gens.G(nm).map(|&x| Some(x)))

@@ -2,7 +2,7 @@
 use {
     crate::encryption::{
         elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-        pedersen::{PedersenBase, PedersenCommitment, PedersenOpening},
+        pedersen::{PedersenCommitment, PedersenOpening, G, H},
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -40,11 +40,8 @@ impl EqualityProof {
         transcript: &mut Transcript,
     ) -> Self {
         // extract the relevant scalar and Ristretto points from the inputs
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
         let P_EG = elgamal_keypair.public.get_point();
-        let D_EG = ciphertext.decrypt_handle.get_point();
+        let D_EG = ciphertext.handle.get_point();
 
         let s = elgamal_keypair.secret.get_scalar();
         let x = Scalar::from(message);
@@ -56,8 +53,8 @@ impl EqualityProof {
         let y_r = Scalar::random(&mut OsRng);
 
         let Y_0 = (y_s * P_EG).compress();
-        let Y_1 = RistrettoPoint::multiscalar_mul(vec![y_x, y_s], vec![G, D_EG]).compress();
-        let Y_2 = RistrettoPoint::multiscalar_mul(vec![y_x, y_r], vec![G, H]).compress();
+        let Y_1 = RistrettoPoint::multiscalar_mul(vec![y_x, y_s], vec![&(*G), D_EG]).compress();
+        let Y_2 = RistrettoPoint::multiscalar_mul(vec![y_x, y_r], vec![&(*G), &(*H)]).compress();
 
         // record masking factors in transcript
         transcript.append_point(b"Y_0", &Y_0);
@@ -90,12 +87,9 @@ impl EqualityProof {
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
         // extract the relevant scalar and Ristretto points from the inputs
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
         let P_EG = elgamal_pubkey.get_point();
-        let C_EG = ciphertext.message_comm.get_point();
-        let D_EG = ciphertext.decrypt_handle.get_point();
+        let C_EG = ciphertext.commitment.get_point();
+        let D_EG = ciphertext.handle.get_point();
 
         let C_Ped = commitment.get_point();
 
@@ -127,7 +121,19 @@ impl EqualityProof {
                 -ww * c,
                 -ww,
             ],
-            vec![P_EG, H, Y_0, G, D_EG, C_EG, Y_1, G, H, C_Ped, Y_2],
+            vec![
+                P_EG,
+                &(*H),
+                &Y_0,
+                &(*G),
+                D_EG,
+                C_EG,
+                &Y_1,
+                &(*G),
+                &(*H),
+                C_Ped,
+                &Y_2,
+            ],
         );
 
         if check.is_identity() {
@@ -179,7 +185,7 @@ mod test {
     #[test]
     fn test_equality_proof() {
         // success case
-        let elgamal_keypair = ElGamalKeypair::default();
+        let elgamal_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
         let ciphertext = elgamal_keypair.public.encrypt(message);
@@ -206,7 +212,7 @@ mod test {
             .is_ok());
 
         // fail case: encrypted and committed messages are different
-        let elgamal_keypair = ElGamalKeypair::default();
+        let elgamal_keypair = ElGamalKeypair::new_rand();
         let encrypted_message: u64 = 55;
         let committed_message: u64 = 77;
 
