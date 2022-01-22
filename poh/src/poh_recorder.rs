@@ -190,6 +190,12 @@ pub struct WorkingBank {
     pub max_tick_height: u64,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum PohLeaderStatus {
+    NotReached,
+    Reached { poh_slot: Slot, parent_slot: Slot },
+}
+
 pub struct PohRecorder {
     pub poh: Arc<Mutex<Poh>>,
     tick_height: u64,
@@ -355,10 +361,10 @@ impl PohRecorder {
         self.start_bank.slot()
     }
 
-    /// returns if leader slot has been reached, how many grace ticks were afforded,
-    ///   imputed leader_slot and self.start_slot()
-    /// reached_leader_slot() == true means "ready for a bank"
-    pub fn reached_leader_slot(&self) -> (bool, u64, Slot, Slot) {
+    /// Returns if the leader slot has been reached along with the current poh
+    /// slot and the parent slot (could be a few slots ago if any previous
+    /// leaders needed to be skipped).
+    pub fn reached_leader_slot(&self) -> PohLeaderStatus {
         trace!(
             "tick_height {}, start_tick_height {}, leader_first_tick_height_including_grace_ticks {:?}, grace_ticks {}, has_bank {}",
             self.tick_height,
@@ -369,25 +375,21 @@ impl PohRecorder {
         );
 
         let next_tick_height = self.tick_height + 1;
-        let next_leader_slot = self.slot_for_tick_height(next_tick_height);
+        let next_poh_slot = self.slot_for_tick_height(next_tick_height);
         if let Some(leader_first_tick_height_including_grace_ticks) =
             self.leader_first_tick_height_including_grace_ticks
         {
-            let target_tick_height =
-                leader_first_tick_height_including_grace_ticks.saturating_sub(1);
             if self.reached_leader_tick(leader_first_tick_height_including_grace_ticks) {
                 assert!(next_tick_height >= self.start_tick_height);
-                let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
-
-                return (
-                    true,
-                    self.tick_height.saturating_sub(ideal_target_tick_height),
-                    next_leader_slot,
-                    self.start_slot(),
-                );
+                let poh_slot = next_poh_slot;
+                let parent_slot = self.start_slot();
+                return PohLeaderStatus::Reached {
+                    poh_slot,
+                    parent_slot,
+                };
             }
         }
-        (false, 0, next_leader_slot, self.start_slot())
+        PohLeaderStatus::NotReached
     }
 
     // returns (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) given the next
@@ -1614,12 +1616,18 @@ mod tests {
             );
 
             // Test that with no next leader slot, we don't reach the leader slot
-            assert!(!poh_recorder.reached_leader_slot().0);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::NotReached
+            );
 
             // Test that with no next leader slot in reset(), we don't reach the leader slot
             assert_eq!(bank0.slot(), 0);
             poh_recorder.reset(bank0.clone(), None);
-            assert!(!poh_recorder.reached_leader_slot().0);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::NotReached
+            );
 
             // Provide a leader slot one slot down
             poh_recorder.reset(bank0.clone(), Some((2, 2)));
@@ -1647,17 +1655,22 @@ mod tests {
                 .unwrap();
 
             // Test that we don't reach the leader slot because of grace ticks
-            assert!(!poh_recorder.reached_leader_slot().0);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::NotReached
+            );
 
             // reset poh now. we should immediately be leader
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             assert_eq!(bank1.slot(), 1);
             poh_recorder.reset(bank1.clone(), Some((2, 2)));
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, 0);
-            assert_eq!(leader_slot, 2);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::Reached {
+                    poh_slot: 2,
+                    parent_slot: 1,
+                }
+            );
 
             // Now test that with grace ticks we can reach leader slot
             // Set the leader slot one slot down
@@ -1669,7 +1682,10 @@ mod tests {
             }
 
             // We are not the leader yet, as expected
-            assert!(!poh_recorder.reached_leader_slot().0);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::NotReached
+            );
 
             // Send the grace ticks
             for _ in 0..bank1.ticks_per_slot() / GRACE_TICKS_FACTOR {
@@ -1677,11 +1693,14 @@ mod tests {
             }
 
             // We should be the leader now
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, bank1.ticks_per_slot() / GRACE_TICKS_FACTOR);
-            assert_eq!(leader_slot, 3);
+            // without sending more ticks, we should be leader now
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::Reached {
+                    poh_slot: 3,
+                    parent_slot: 1,
+                }
+            );
 
             // Let's test that correct grace ticks are reported
             // Set the leader slot one slot down
@@ -1694,17 +1713,22 @@ mod tests {
             }
 
             // We are not the leader yet, as expected
-            assert!(!poh_recorder.reached_leader_slot().0);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::NotReached
+            );
             let bank3 = Arc::new(Bank::new_from_parent(&bank2, &Pubkey::default(), 3));
             assert_eq!(bank3.slot(), 3);
             poh_recorder.reset(bank3.clone(), Some((4, 4)));
 
             // without sending more ticks, we should be leader now
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, 0);
-            assert_eq!(leader_slot, 4);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::Reached {
+                    poh_slot: 4,
+                    parent_slot: 3,
+                }
+            );
 
             // Let's test that if a node overshoots the ticks for its target
             // leader slot, reached_leader_slot() will return true, because it's overdue
@@ -1719,11 +1743,13 @@ mod tests {
             }
 
             // We are overdue to lead
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, overshoot_factor * bank4.ticks_per_slot());
-            assert_eq!(leader_slot, 9);
+            assert_eq!(
+                poh_recorder.reached_leader_slot(),
+                PohLeaderStatus::Reached {
+                    poh_slot: 9,
+                    parent_slot: 4,
+                }
+            );
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }
