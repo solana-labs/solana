@@ -3191,7 +3191,7 @@ Before submitting, the following preflight checks are performed:
    preflight commitment to avoid confusing behavior.
 
 The returned signature is the first signature in the transaction, which
-is used to identify the transaction ([transaction id](../../terminology.md#transanction-id)).
+is used to identify the transaction ([transaction id](../../terminology.md#transaction-id)).
 This identifier can be easily extracted from the transaction data before
 submission.
 
@@ -3207,7 +3207,7 @@ submission.
 
 #### Results:
 
-- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transanction-id))
+- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transaction-id))
 
 #### Example:
 
