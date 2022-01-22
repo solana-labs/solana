@@ -194,6 +194,7 @@ impl SigVerifyStage {
             .iter_mut()
             .rev()
             .flat_map(|batch| batch.packets.iter_mut().rev())
+            .filter(|packet| !packet.meta.discard)
             .map(|packet| (packet.meta.addr, packet))
             .into_group_map();
         // Allocate max_packets evenly across addresses.
@@ -370,11 +371,14 @@ mod tests {
         let mut batch = PacketBatch::default();
         batch.packets.resize(10, Packet::default());
         batch.packets[3].meta.addr = [1u16; 8];
+        batch.packets[3].meta.discard = true;
+        batch.packets[4].meta.addr = [2u16; 8];
         let mut batches = vec![batch];
         let max = 3;
         SigVerifyStage::discard_excess_packets(&mut batches, max);
         assert_eq!(count_non_discard(&batches), max);
         assert!(!batches[0].packets[0].meta.discard);
-        assert!(!batches[0].packets[3].meta.discard);
+        assert!(batches[0].packets[3].meta.discard);
+        assert!(!batches[0].packets[4].meta.discard);
     }
 }
