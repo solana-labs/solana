@@ -256,28 +256,17 @@ impl Meta {
         &mut self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
-        clock: Option<&Clock>,
+        clock: &Clock,
     ) -> Result<(), InstructionError> {
-        match clock {
-            None => {
-                // pre-stake_program_v4 behavior: custodian can set lockups at any time
-                if !signers.contains(&self.lockup.custodian) {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
+        // post-stake_program_v4 behavior:
+        // * custodian can update the lockup while in force
+        // * withdraw authority can set a new lockup
+        if self.lockup.is_in_force(clock, None) {
+            if !signers.contains(&self.lockup.custodian) {
+                return Err(InstructionError::MissingRequiredSignature);
             }
-            Some(clock) => {
-                // post-stake_program_v4 behavior:
-                // * custodian can update the lockup while in force
-                // * withdraw authority can set a new lockup
-                //
-                if self.lockup.is_in_force(clock, None) {
-                    if !signers.contains(&self.lockup.custodian) {
-                        return Err(InstructionError::MissingRequiredSignature);
-                    }
-                } else if !signers.contains(&self.authorized.withdrawer) {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-            }
+        } else if !signers.contains(&self.authorized.withdrawer) {
+            return Err(InstructionError::MissingRequiredSignature);
         }
         if let Some(unix_timestamp) = lockup.unix_timestamp {
             self.lockup.unix_timestamp = unix_timestamp;
