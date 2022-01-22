@@ -3444,10 +3444,16 @@ fn commit_slot_meta_working_set(
     Ok((should_signal, newly_completed_slots))
 }
 
-// 1) Find the slot metadata in the cache of dirty slot metadata we've previously touched,
-// else:
-// 2) Search the database for that slot metadata. If still no luck, then:
-// 3) Create a dummy orphan slot in the database
+/// Returns the `SlotMeta` with the specified `slot_index`.  The resulting
+/// `SlotMeta` could be either from the cache or from the DB.  Specifically,
+/// the function:
+///
+/// 1) Finds the slot metadata in the cache of dirty slot metadata we've
+///    previously touched, otherwise:
+/// 2) Searchs the database for that slot metadata. If still no luck, then:
+/// 3) Create a dummy orphan slot in the database.
+///
+/// Also see [`find_slot_meta_in_cached_state`] and [`find_slot_meta_in_db_else_create`].
 fn find_slot_meta_else_create<'a>(
     db: &Database,
     working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
@@ -3462,8 +3468,11 @@ fn find_slot_meta_else_create<'a>(
     }
 }
 
-// Search the database for that slot metadata. If still no luck, then
-// create a dummy orphan slot in the database
+/// A helper function to [`find_slot_meta_else_create`] that searches the
+/// `SlotMeta` based on the specified `slot` in `db` and updates `insert_map`.
+///
+/// If the specified `db` does not contain a matched entry, then it will create
+/// a dummy orphan slot in the database.
 fn find_slot_meta_in_db_else_create(
     db: &Database,
     slot: Slot,
@@ -3480,7 +3489,9 @@ fn find_slot_meta_in_db_else_create(
     Ok(insert_map.get(&slot).unwrap().clone())
 }
 
-// Find the slot metadata in the cache of dirty slot metadata we've previously touched
+/// Returns the `SlotMeta` of the specified `slot` from the two cached states:
+/// `working_set` and `chained_slots`.  If both contain the `SlotMeta`, then
+/// the latest one from the `working_set` will be returned.
 fn find_slot_meta_in_cached_state<'a>(
     working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
     chained_slots: &'a HashMap<u64, Rc<RefCell<SlotMeta>>>,
