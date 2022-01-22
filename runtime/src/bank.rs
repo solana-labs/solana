@@ -3584,32 +3584,7 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
-<<<<<<< HEAD
-    fn get_executors(
-        &self,
-        message: &SanitizedMessage,
-        accounts: &[(Pubkey, AccountSharedData)],
-        program_indices: &[Vec<usize>],
-    ) -> Rc<RefCell<Executors>> {
-        let mut num_executors = message.account_keys_len();
-        for program_indices_of_instruction in program_indices.iter() {
-            num_executors += program_indices_of_instruction.len();
-        }
-        let mut executors = HashMap::with_capacity(num_executors);
-        let cache = self.cached_executors.read().unwrap();
-
-        for key in message.account_keys_iter() {
-            if let Some(executor) = cache.get(key) {
-                executors.insert(*key, TransactionExecutor::new_cached(executor));
-            }
-        }
-        for program_indices_of_instruction in program_indices.iter() {
-            for account_index in program_indices_of_instruction.iter() {
-                let key = accounts[*account_index].0;
-                if let Some(executor) = cache.get(&key) {
-                    executors.insert(key, TransactionExecutor::new_cached(executor));
-=======
-    fn get_executors(&self, accounts: &[TransactionAccount]) -> Rc<RefCell<Executors>> {
+    fn get_executors(&self, accounts: &[(Pubkey, AccountSharedData)]) -> Rc<RefCell<Executors>> {
         let executable_keys: Vec<_> = accounts
             .iter()
             .filter_map(|(key, account)| {
@@ -3617,7 +3592,6 @@ impl Bank {
                     Some(key)
                 } else {
                     None
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
                 }
             })
             .collect();
