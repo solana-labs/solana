@@ -39,16 +39,18 @@ impl ValidityProof {
     ///
     /// TODO: mention that this is randomized
     /// TODO: standardize parameter order
-    pub fn new(
-        elgamal_pubkey_dest: &ElGamalPubkey,
-        elgamal_pubkey_auditor: &ElGamalPubkey,
-        messages: (u64, u64),
-        openings: (&PedersenOpening, &PedersenOpening),
+    pub fn new<T: Into<Scalar>>(
+        message: T,
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_dest = elgamal_pubkey_dest.get_point();
-        let P_auditor = elgamal_pubkey_auditor.get_point();
+        let P_dest = pubkey_dest.get_point();
+        let P_auditor = pubkey_auditor.get_point();
+
+        let x = message.into();
+        let r = opening.get_scalar();
 
         // generate random masking factors that also serves as nonces
         let mut y_r = Scalar::random(&mut OsRng);
@@ -63,16 +65,11 @@ impl ValidityProof {
         transcript.append_point(b"Y_1", &Y_1);
         transcript.append_point(b"Y_2", &Y_2);
 
-        let t = transcript.challenge_scalar(b"t");
         let c = transcript.challenge_scalar(b"c");
         transcript.challenge_scalar(b"w");
 
-        // aggregate lo and hi messages and openings
-        let x = &Scalar::from(messages.0) + &t * &Scalar::from(messages.1);
-        let r = openings.0.get_scalar() + &t * openings.1.get_scalar();
-
         // compute masked message and opening
-        let z_r = &(&c * &r) + &y_r;
+        let z_r = &(&c * r) + &y_r;
         let z_x = &(&c * &x) + &y_x;
 
         y_r.zeroize();
@@ -90,11 +87,9 @@ impl ValidityProof {
     /// TODO:
     pub fn verify(
         self,
-        elgamal_pubkey_dest: &ElGamalPubkey,
-        elgamal_pubkey_auditor: &ElGamalPubkey,
-        commitments: (&PedersenCommitment, &PedersenCommitment),
-        handle_dest: (&DecryptHandle, &DecryptHandle),
-        handle_auditor: (&DecryptHandle, &DecryptHandle),
+        commitment: &PedersenCommitment,
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (handle_dest, handle_auditor): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
@@ -102,7 +97,6 @@ impl ValidityProof {
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
         transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
 
-        let t = transcript.challenge_scalar(b"t");
         let c = transcript.challenge_scalar(b"c");
         let w = transcript.challenge_scalar(b"w");
         let ww = &w * &w;
@@ -115,12 +109,12 @@ impl ValidityProof {
         let Y_1 = self.Y_1.decompress().ok_or(ValidityProofError::Format)?;
         let Y_2 = self.Y_2.decompress().ok_or(ValidityProofError::Format)?;
 
-        let P_dest = elgamal_pubkey_dest.get_point();
-        let P_auditor = elgamal_pubkey_auditor.get_point();
+        let P_dest = pubkey_dest.get_point();
+        let P_auditor = pubkey_auditor.get_point();
 
-        let C = commitments.0.get_point() + &t * commitments.1.get_point();
-        let D_dest = handle_dest.0.get_point() + &t * handle_dest.1.get_point();
-        let D_auditor = handle_auditor.0.get_point() + &t * handle_auditor.1.get_point();
+        let C = commitment.get_point();
+        let D_dest = handle_dest.get_point();
+        let D_auditor = handle_auditor.get_point();
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -187,6 +181,65 @@ impl ValidityProof {
     }
 }
 
+#[allow(non_snake_case)]
+#[derive(Clone)]
+pub struct AggregatedValidityProof(ValidityProof);
+
+#[allow(non_snake_case)]
+#[cfg(not(target_arch = "bpf"))]
+impl AggregatedValidityProof {
+    pub fn new<T: Into<Scalar>>(
+        (amount_lo, amount_hi): (T, T),
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
+        transcript: &mut Transcript,
+    ) -> Self {
+        let t = transcript.challenge_scalar(b"t");
+
+        let aggregated_message = amount_lo.into() + amount_hi.into() * t;
+        let aggregated_opening = opening_lo + opening_hi * t;
+
+        AggregatedValidityProof(ValidityProof::new(
+            aggregated_message,
+            (pubkey_dest, pubkey_auditor),
+            &aggregated_opening, // TODO: double check opening copy
+            transcript,
+        ))
+    }
+
+    pub fn verify(
+        self,
+        (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (handle_lo_dest, handle_hi_dest): (&DecryptHandle, &DecryptHandle),
+        (handle_lo_auditor, handle_hi_auditor): (&DecryptHandle, &DecryptHandle),
+        transcript: &mut Transcript,
+    ) -> Result<(), ValidityProofError> {
+        let t = transcript.challenge_scalar(b"t");
+
+        let aggregated_commitment = commitment_lo + commitment_hi * t;
+        let aggregated_handle_dest = handle_lo_dest + handle_hi_dest * t;
+        let aggregated_handle_auditor = handle_lo_auditor + handle_hi_auditor * t;
+
+        let AggregatedValidityProof(validity_proof) = self;
+
+        validity_proof.verify(
+            &aggregated_commitment,
+            (pubkey_dest, pubkey_auditor),
+            (&aggregated_handle_dest, &aggregated_handle_auditor),
+            transcript,
+        )
+    }
+
+    pub fn to_bytes(&self) -> [u8; 160] {
+        self.0.to_bytes()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
+        ValidityProof::from_bytes(bytes).map(|proof| Self(proof))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -197,11 +250,42 @@ mod test {
         let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
         let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
 
-        let x_lo: u64 = 55;
-        let x_hi: u64 = 77;
+        let amount: u64 = 55;
+        let (commitment, opening) = Pedersen::new(amount);
 
-        let (commitment_lo, open_lo) = Pedersen::new(x_lo);
-        let (commitment_hi, open_hi) = Pedersen::new(x_hi);
+        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
+        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = ValidityProof::new(
+            amount,
+            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment,
+                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&handle_dest, &handle_auditor),
+                &mut transcript_verifier,
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn test_aggregated_validity_proof() {
+        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
+        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+
+        let amount_lo: u64 = 55;
+        let amount_hi: u64 = 77;
+
+        let (commitment_lo, open_lo) = Pedersen::new(amount_lo);
+        let (commitment_hi, open_hi) = Pedersen::new(amount_hi);
 
         let handle_lo_dest = elgamal_pubkey_dest.decrypt_handle(&open_lo);
         let handle_hi_dest = elgamal_pubkey_dest.decrypt_handle(&open_hi);
@@ -212,27 +296,21 @@ mod test {
         let mut transcript_prover = Transcript::new(b"Test");
         let mut transcript_verifier = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
-            &elgamal_pubkey_dest,
-            &elgamal_pubkey_auditor,
-            (x_lo, x_hi),
+        let proof = AggregatedValidityProof::new(
+            (amount_lo, amount_hi),
+            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
             (&open_lo, &open_hi),
             &mut transcript_prover,
         );
 
         assert!(proof
             .verify(
-                &elgamal_pubkey_dest,
-                &elgamal_pubkey_auditor,
                 (&commitment_lo, &commitment_hi),
+                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
                 (&handle_lo_dest, &handle_hi_dest),
                 (&handle_lo_auditor, &handle_hi_auditor),
                 &mut transcript_verifier,
             )
             .is_ok());
-
-        // TODO: Test invalid cases
-
-        // TODO: Test serialization, deserialization
     }
 }

@@ -31,7 +31,7 @@ mod sigma_proofs;
 #[cfg(not(target_arch = "bpf"))]
 mod transcript;
 
-mod instruction;
+// mod instruction;
 pub mod zk_token_elgamal;
-pub mod zk_token_proof_instruction;
-pub mod zk_token_proof_program;
+// pub mod zk_token_proof_instruction;
+// pub mod zk_token_proof_program;
