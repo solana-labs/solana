@@ -48,124 +48,34 @@ pub struct DisabledSigVerifier {}
 
 #[derive(Default)]
 struct SigVerifierStats {
-    recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
-    verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
-    discard_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
-    dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
-    batches_hist: histogram::Histogram,         // number of packet batches per verify call
-    packets_hist: histogram::Histogram,         // number of packets per verify call
+    recv_batches_us: u64,    // time to call recv_batch
+    verify_batches_us: u64,  // per-packet time to call verify_batch
+    discard_packets_us: u64, // per-packet time to call verify_batch
+    dedup_packets_us: u64,
     total_batches: usize,
     total_packets: usize,
     total_dedup: usize,
     total_excess_fail: usize,
+    total_time_us: u64,
 }
 
 impl SigVerifierStats {
     fn report(&self) {
         datapoint_info!(
             "sigverify_stage-total_verify_time",
-            (
-                "recv_batches_us_90pct",
-                self.recv_batches_us_hist.percentile(90.0).unwrap_or(0),
-                i64
-            ),
-            (
-                "recv_batches_us_min",
-                self.recv_batches_us_hist.minimum().unwrap_or(0),
-                i64
-            ),
-            (
-                "recv_batches_us_max",
-                self.recv_batches_us_hist.maximum().unwrap_or(0),
-                i64
-            ),
-            (
-                "recv_batches_us_mean",
-                self.recv_batches_us_hist.mean().unwrap_or(0),
-                i64
-            ),
-            (
-                "verify_batches_pp_us_90pct",
-                self.verify_batches_pp_us_hist.percentile(90.0).unwrap_or(0),
-                i64
-            ),
-            (
-                "verify_batches_pp_us_min",
-                self.verify_batches_pp_us_hist.minimum().unwrap_or(0),
-                i64
-            ),
-            (
-                "verify_batches_pp_us_max",
-                self.verify_batches_pp_us_hist.maximum().unwrap_or(0),
-                i64
-            ),
-            (
-                "verify_batches_pp_us_mean",
-                self.verify_batches_pp_us_hist.mean().unwrap_or(0),
-                i64
-            ),
-            (
-                "discard_packets_pp_us_90pct",
-                self.discard_packets_pp_us_hist
-                    .percentile(90.0)
-                    .unwrap_or(0),
-                i64
-            ),
-            (
-                "discard_packets_pp_us_min",
-                self.discard_packets_pp_us_hist.minimum().unwrap_or(0),
-                i64
-            ),
-            (
-                "discard_packets_pp_us_max",
-                self.discard_packets_pp_us_hist.maximum().unwrap_or(0),
-                i64
-            ),
-            (
-                "discard_packets_pp_us_mean",
-                self.discard_packets_pp_us_hist.mean().unwrap_or(0),
-                i64
-            ),
-            (
-                "dedup_packets_pp_us_90pct",
-                self.dedup_packets_pp_us_hist.percentile(90.0).unwrap_or(0),
-                i64
-            ),
-            (
-                "dedup_packets_pp_us_min",
-                self.dedup_packets_pp_us_hist.minimum().unwrap_or(0),
-                i64
-            ),
-            (
-                "dedup_packets_pp_us_max",
-                self.dedup_packets_pp_us_hist.maximum().unwrap_or(0),
-                i64
-            ),
-            (
-                "dedup_packets_pp_us_mean",
-                self.dedup_packets_pp_us_hist.mean().unwrap_or(0),
-                i64
-            ),
-            (
-                "batches_90pct",
-                self.batches_hist.percentile(90.0).unwrap_or(0),
-                i64
-            ),
-            ("batches_min", self.batches_hist.minimum().unwrap_or(0), i64),
-            ("batches_max", self.batches_hist.maximum().unwrap_or(0), i64),
-            ("batches_mean", self.batches_hist.mean().unwrap_or(0), i64),
-            (
-                "packets_90pct",
-                self.packets_hist.percentile(90.0).unwrap_or(0),
-                i64
-            ),
-            ("packets_min", self.packets_hist.minimum().unwrap_or(0), i64),
-            ("packets_max", self.packets_hist.maximum().unwrap_or(0), i64),
-            ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
+            ("recv_batches_us", self.recv_batches_us, i64),
+            ("verify_batches_us", self.verify_batches_us, i64),
+            ("discard_packets_us", self.discard_packets_us, i64),
+            ("dedup_packets_us", self.dedup_packets_us, i64),
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
+            (
+                "packets_per_second",
+                u64::try_from(self.total_packets).unwrap() / (self.total_time_us / 1_000_000_u64),
+                i64
+            ),
         );
     }
 }
@@ -221,6 +131,7 @@ impl SigVerifyStage {
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
+        let mut total_time = Measure::start("total_time");
 
         let batches_len = batches.len();
         debug!(
@@ -254,30 +165,23 @@ impl SigVerifyStage {
             num_packets,
             (num_packets as f32 / verify_batch_time.as_s())
         );
+        total_time.stop();
 
-        stats
-            .recv_batches_us_hist
-            .increment(recv_duration.as_micros() as u64)
-            .unwrap();
-        stats
-            .verify_batches_pp_us_hist
-            .increment(verify_batch_time.as_us() / (num_packets as u64))
-            .unwrap();
-        stats
-            .discard_packets_pp_us_hist
-            .increment(discard_time.as_us() / (num_packets as u64))
-            .unwrap();
-        stats
-            .dedup_packets_pp_us_hist
-            .increment(dedup_time.as_us() / (num_packets as u64))
-            .unwrap();
-        stats.batches_hist.increment(batches_len as u64).unwrap();
-        stats.packets_hist.increment(num_packets as u64).unwrap();
-        stats.total_batches += batches_len;
-        stats.total_packets += num_packets;
-        stats.total_dedup += dedup_fail;
-        stats.total_excess_fail += excess_fail;
-
+        stats.recv_batches_us = stats
+            .recv_batches_us
+            .saturating_add(recv_duration.as_micros().try_into().unwrap());
+        stats.verify_batches_us = stats
+            .verify_batches_us
+            .saturating_add(verify_batch_time.as_us());
+        stats.discard_packets_us = stats
+            .discard_packets_us
+            .saturating_add(discard_time.as_us());
+        stats.dedup_packets_us = stats.dedup_packets_us.saturating_add(dedup_time.as_us());
+        stats.total_batches = stats.total_batches.saturating_add(batches_len);
+        stats.total_packets = stats.total_packets.saturating_add(num_packets);
+        stats.total_dedup = stats.total_dedup.saturating_add(dedup_fail);
+        stats.total_excess_fail = stats.total_excess_fail.saturating_add(excess_fail);
+        stats.total_time_us = stats.total_time_us.saturating_add(total_time.as_us());
         Ok(())
     }
 
