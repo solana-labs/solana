@@ -5725,6 +5725,7 @@ dependencies = [
 name = "solana-sdk"
 version = "1.9.5"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "base64 0.13.0",
  "bincode",
