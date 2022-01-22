@@ -270,8 +270,16 @@ impl PohRecorder {
             )
     }
 
+    // Return the slot for a given tick height
+    fn slot_for_tick_height(&self, tick_height: u64) -> Slot {
+        // We need to subtract by one here because, assuming ticks per slot is 64,
+        // tick heights [1..64] correspond to slot 0. The last tick height of a slot
+        // is always a multiple of 64.
+        tick_height.saturating_sub(1) / self.ticks_per_slot
+    }
+
     pub fn leader_after_n_slots(&self, slots: u64) -> Option<Pubkey> {
-        let current_slot = self.tick_height.saturating_sub(1) / self.ticks_per_slot;
+        let current_slot = self.slot_for_tick_height(self.tick_height);
         self.leader_schedule_cache
             .slot_leader_at(current_slot + slots, None)
     }
@@ -331,15 +339,16 @@ impl PohRecorder {
     fn reached_leader_tick(&self, leader_first_tick_height_including_grace_ticks: u64) -> bool {
         let target_tick_height = leader_first_tick_height_including_grace_ticks.saturating_sub(1);
         let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
-        let current_slot = self.tick_height / self.ticks_per_slot;
+        let next_tick_height = self.tick_height.saturating_add(1);
+        let next_slot = self.slot_for_tick_height(next_tick_height);
         // We've approached target_tick_height OR poh was reset to run immediately
         // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
         self.tick_height >= target_tick_height
             || self.start_tick_height + self.grace_ticks
                 == leader_first_tick_height_including_grace_ticks
             || (self.tick_height >= ideal_target_tick_height
-                && (self.prev_slot_was_mine(current_slot)
-                    || !self.is_same_fork_as_previous_leader(current_slot)))
+                && (self.prev_slot_was_mine(next_slot)
+                    || !self.is_same_fork_as_previous_leader(next_slot)))
     }
 
     pub fn start_slot(&self) -> Slot {
@@ -360,7 +369,7 @@ impl PohRecorder {
         );
 
         let next_tick_height = self.tick_height + 1;
-        let next_leader_slot = (next_tick_height - 1) / self.ticks_per_slot;
+        let next_leader_slot = self.slot_for_tick_height(next_tick_height);
         if let Some(leader_first_tick_height_including_grace_ticks) =
             self.leader_first_tick_height_including_grace_ticks
         {
