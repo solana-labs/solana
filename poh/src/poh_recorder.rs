@@ -199,7 +199,7 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntry>,
-    leader_first_tick_height: Option<u64>,
+    leader_first_tick_height_including_grace_ticks: Option<u64>,
     leader_last_tick_height: u64, // zero if none
     grace_ticks: u64,
     id: Pubkey,
@@ -235,10 +235,14 @@ impl PohRecorder {
                 GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
-            let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
-                Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
+            let (
+                leader_first_tick_height_including_grace_ticks,
+                leader_last_tick_height,
+                grace_ticks,
+            ) = Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
             self.grace_ticks = grace_ticks;
-            self.leader_first_tick_height = leader_first_tick_height;
+            self.leader_first_tick_height_including_grace_ticks =
+                leader_first_tick_height_including_grace_ticks;
             self.leader_last_tick_height = leader_last_tick_height;
 
             datapoint_info!(
@@ -255,14 +259,15 @@ impl PohRecorder {
 
     pub fn would_be_leader(&self, within_next_n_ticks: u64) -> bool {
         self.has_bank()
-            || self
-                .leader_first_tick_height
-                .map_or(false, |leader_first_tick_height| {
-                    let ideal_leader_tick_height =
-                        leader_first_tick_height.saturating_sub(self.grace_ticks);
+            || self.leader_first_tick_height_including_grace_ticks.map_or(
+                false,
+                |leader_first_tick_height_including_grace_ticks| {
+                    let ideal_leader_tick_height = leader_first_tick_height_including_grace_ticks
+                        .saturating_sub(self.grace_ticks);
                     self.tick_height + within_next_n_ticks >= ideal_leader_tick_height
                         && self.tick_height <= self.leader_last_tick_height
-                })
+                },
+            )
     }
 
     pub fn leader_after_n_slots(&self, slots: u64) -> Option<Pubkey> {
@@ -323,14 +328,15 @@ impl PohRecorder {
         }
     }
 
-    fn reached_leader_tick(&self, leader_first_tick_height: u64) -> bool {
-        let target_tick_height = leader_first_tick_height.saturating_sub(1);
+    fn reached_leader_tick(&self, leader_first_tick_height_including_grace_ticks: u64) -> bool {
+        let target_tick_height = leader_first_tick_height_including_grace_ticks.saturating_sub(1);
         let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
         let current_slot = self.tick_height / self.ticks_per_slot;
         // We've approached target_tick_height OR poh was reset to run immediately
         // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
         self.tick_height >= target_tick_height
-            || self.start_tick_height + self.grace_ticks == leader_first_tick_height
+            || self.start_tick_height + self.grace_ticks
+                == leader_first_tick_height_including_grace_ticks
             || (self.tick_height >= ideal_target_tick_height
                 && (self.prev_slot_was_mine(current_slot)
                     || !self.is_same_fork_as_previous_leader(current_slot)))
@@ -345,19 +351,22 @@ impl PohRecorder {
     /// reached_leader_slot() == true means "ready for a bank"
     pub fn reached_leader_slot(&self) -> (bool, u64, Slot, Slot) {
         trace!(
-            "tick_height {}, start_tick_height {}, leader_first_tick_height {:?}, grace_ticks {}, has_bank {}",
+            "tick_height {}, start_tick_height {}, leader_first_tick_height_including_grace_ticks {:?}, grace_ticks {}, has_bank {}",
             self.tick_height,
             self.start_tick_height,
-            self.leader_first_tick_height,
+            self.leader_first_tick_height_including_grace_ticks,
             self.grace_ticks,
             self.has_bank()
         );
 
         let next_tick_height = self.tick_height + 1;
         let next_leader_slot = (next_tick_height - 1) / self.ticks_per_slot;
-        if let Some(leader_first_tick_height) = self.leader_first_tick_height {
-            let target_tick_height = leader_first_tick_height.saturating_sub(1);
-            if self.reached_leader_tick(leader_first_tick_height) {
+        if let Some(leader_first_tick_height_including_grace_ticks) =
+            self.leader_first_tick_height_including_grace_ticks
+        {
+            let target_tick_height =
+                leader_first_tick_height_including_grace_ticks.saturating_sub(1);
+            if self.reached_leader_tick(leader_first_tick_height_including_grace_ticks) {
                 assert!(next_tick_height >= self.start_tick_height);
                 let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
 
@@ -372,7 +381,7 @@ impl PohRecorder {
         (false, 0, next_leader_slot, self.start_slot())
     }
 
-    // returns (leader_first_tick_height, leader_last_tick_height, grace_ticks) given the next
+    // returns (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) given the next
     //  slot this recorder will lead
     fn compute_leader_slot_tick_heights(
         next_leader_slot: Option<(Slot, Slot)>,
@@ -387,8 +396,10 @@ impl PohRecorder {
                     ticks_per_slot * MAX_GRACE_SLOTS,
                     ticks_per_slot * num_slots / GRACE_TICKS_FACTOR,
                 );
+                let leader_first_tick_height_including_grace_ticks =
+                    leader_first_tick_height + grace_ticks;
                 (
-                    Some(leader_first_tick_height + grace_ticks),
+                    Some(leader_first_tick_height_including_grace_ticks),
                     last_tick_height,
                     grace_ticks,
                 )
@@ -428,10 +439,11 @@ impl PohRecorder {
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
 
-        let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
+        let (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) =
             Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
         self.grace_ticks = grace_ticks;
-        self.leader_first_tick_height = leader_first_tick_height;
+        self.leader_first_tick_height_including_grace_ticks =
+            leader_first_tick_height_including_grace_ticks;
         self.leader_last_tick_height = leader_last_tick_height;
     }
 
@@ -534,7 +546,10 @@ impl PohRecorder {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
 
-            if self.leader_first_tick_height.is_none() {
+            if self
+                .leader_first_tick_height_including_grace_ticks
+                .is_none()
+            {
                 self.tick_overhead_us += timing::duration_as_us(&now.elapsed());
                 return;
             }
@@ -679,7 +694,7 @@ impl PohRecorder {
         );
         let (sender, receiver) = unbounded();
         let (record_sender, record_receiver) = unbounded();
-        let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
+        let (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) =
             Self::compute_leader_slot_tick_heights(next_leader_slot, ticks_per_slot);
         (
             Self {
@@ -691,7 +706,7 @@ impl PohRecorder {
                 clear_bank_signal,
                 start_bank,
                 start_tick_height: tick_height + 1,
-                leader_first_tick_height,
+                leader_first_tick_height_including_grace_ticks,
                 leader_last_tick_height,
                 grace_ticks,
                 id: *id,
