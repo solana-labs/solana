@@ -375,6 +375,17 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
     }
+
+    fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+        let (program_id, data) = &get_invoke_context().return_data;
+        Some((*program_id, data.to_vec()))
+    }
+
+    fn sol_set_return_data(&self, data: &[u8]) {
+        let invoke_context = get_invoke_context();
+        let caller = *invoke_context.get_caller().unwrap();
+        invoke_context.return_data = (caller, data.to_vec());
+    }
 }
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
