@@ -1392,9 +1392,6 @@ pub fn process_ping(
             blockhash_acquired = Instant::now();
         }
 
-        if lamports >= rpc_client.get_balance(&config.signers[0].pubkey())? {
-            lamports = 0;
-        }
         let to = config.signers[0].pubkey();
         lamports += 1;
 
