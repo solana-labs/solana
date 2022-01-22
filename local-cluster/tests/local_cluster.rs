@@ -2591,7 +2591,7 @@ fn test_votes_land_in_fork_during_long_partition() {
                 // Should finish faster than if the cluster were relying on replay vote
                 // refreshing to refresh the vote on blockhash expiration for the vote
                 // transaction.
-                !(start.elapsed() > Duration::from_millis(max_wait)),
+                start.elapsed() <= Duration::from_millis(max_wait),
                 "Went too long {} ms without a root",
                 max_wait,
             );

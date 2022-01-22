@@ -116,7 +116,7 @@ fn make_create_message(
 
     let instructions: Vec<_> = (0..num_instructions)
         .into_iter()
-        .map(|_| {
+        .flat_map(|_| {
             let program_id = if mint.is_some() {
                 inline_spl_token::id()
             } else {
@@ -148,7 +148,6 @@ fn make_create_message(
 
             instructions
         })
-        .flatten()
         .collect();
 
     Message::new(&instructions, Some(&keypair.pubkey()))

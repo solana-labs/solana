@@ -4207,16 +4207,15 @@ impl AccountsDb {
             .fetch_add(scan_storages_elasped.as_us(), Ordering::Relaxed);
 
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
-        let reclaims;
-        match scan_result {
+        let reclaims = match scan_result {
             ScanStorageResult::Cached(_) => {
                 panic!("Should not see cached keys in this `else` branch, since we checked this slot did not exist in the cache above");
             }
             ScanStorageResult::Stored(stored_keys) => {
                 // Purge this slot from the accounts index
-                reclaims = self.purge_keys_exact(stored_keys.lock().unwrap().iter());
+                self.purge_keys_exact(stored_keys.lock().unwrap().iter())
             }
-        }
+        };
         purge_accounts_index_elapsed.stop();
         purge_stats
             .purge_accounts_index_elapsed
@@ -5104,12 +5103,11 @@ impl AccountsDb {
             .accounts_index
             .account_maps
             .iter()
-            .map(|map| {
+            .flat_map(|map| {
                 let mut keys = map.read().unwrap().keys();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })
-            .flatten()
             .collect();
         collect.stop();
 

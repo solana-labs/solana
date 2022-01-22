@@ -6344,7 +6344,7 @@ pub mod tests {
         assert_eq!(verify_pubkey(&pubkey.to_string()).unwrap(), pubkey);
         let bad_pubkey = "a1b2c3d4";
         assert_eq!(
-            verify_pubkey(&bad_pubkey.to_string()),
+            verify_pubkey(bad_pubkey),
             Err(Error::invalid_params("Invalid param: WrongSize"))
         );
     }
@@ -6363,7 +6363,7 @@ pub mod tests {
         );
         let bad_signature = "a1b2c3d4";
         assert_eq!(
-            verify_signature(&bad_signature.to_string()),
+            verify_signature(bad_signature),
             Err(Error::invalid_params("Invalid param: WrongSize"))
         );
     }

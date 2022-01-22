@@ -671,7 +671,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     where
         R: RangeBounds<Pubkey>,
     {
-        assert!(!(only_add_if_already_held && !start_holding));
+        assert!(!only_add_if_already_held || start_holding);
         let start = match range.start_bound() {
             Bound::Included(bound) | Bound::Excluded(bound) => *bound,
             Bound::Unbounded => Pubkey::new(&[0; 32]),

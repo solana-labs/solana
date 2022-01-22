@@ -334,10 +334,9 @@ fn wait_for_restart_window(
                         .unwrap_or_else(|| '-'.to_string()),
                     snapshot_slot_info
                         .as_ref()
-                        .map(|snapshot_slot_info| snapshot_slot_info
+                        .and_then(|snapshot_slot_info| snapshot_slot_info
                             .incremental
                             .map(|incremental| incremental.to_string()))
-                        .flatten()
                         .unwrap_or_else(|| '-'.to_string()),
                 )
             },

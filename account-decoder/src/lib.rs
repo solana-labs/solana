@@ -136,16 +136,13 @@ impl UiAccount {
             UiAccountData::Binary(blob, encoding) => match encoding {
                 UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
                 UiAccountEncoding::Base64 => base64::decode(blob).ok(),
-                UiAccountEncoding::Base64Zstd => base64::decode(blob)
-                    .ok()
-                    .map(|zstd_data| {
-                        let mut data = vec![];
-                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
-                            .and_then(|mut reader| reader.read_to_end(&mut data))
-                            .map(|_| data)
-                            .ok()
-                    })
-                    .flatten(),
+                UiAccountEncoding::Base64Zstd => base64::decode(blob).ok().and_then(|zstd_data| {
+                    let mut data = vec![];
+                    zstd::stream::read::Decoder::new(zstd_data.as_slice())
+                        .and_then(|mut reader| reader.read_to_end(&mut data))
+                        .map(|_| data)
+                        .ok()
+                }),
                 UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;

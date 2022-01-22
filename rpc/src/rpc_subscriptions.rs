@@ -1097,7 +1097,7 @@ impl RpcSubscriptions {
             inc_new_counter_info!("rpc-subscription-notify-bank-or-gossip", total_notified);
             datapoint_info!(
                 "rpc_subscriptions",
-                ("source", source.to_string(), String),
+                ("source", source, String),
                 (
                     "num_account_subscriptions",
                     num_accounts_found.load(Ordering::Relaxed),
