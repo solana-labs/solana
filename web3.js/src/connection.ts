@@ -2552,38 +2552,39 @@ export class Connection {
   }
 
   /**
-   * Fetch all the account info for multiple accounts specified by an array of public keys
+   * Fetch all the account info for multiple accounts specified by an array of public keys, return with context
    */
-  async getMultipleAccountsInfo(
+  async getMultipleAccountsInfoAndContext(
     publicKeys: PublicKey[],
-    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
-  ): Promise<(AccountInfo<Buffer | ParsedAccountData> | null)[]> {
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<(AccountInfo<Buffer> | null)[]>> {
     const keys = publicKeys.map(key => key.toBase58());
-
-    let commitment;
-    let encoding: 'base64' | 'jsonParsed' = 'base64';
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-        encoding = 'base64';
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding || 'base64';
-      }
-    }
-
-    const args = this._buildArgs([keys], commitment, encoding);
+    const args = this._buildArgs([keys], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
-      jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
+      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
     );
     if ('error' in res) {
       throw new Error(
         'failed to get info for accounts ' + keys + ': ' + res.error.message,
       );
     }
-    return res.result.value;
+    return res.result;
+  }
+
+  /**
+   * Fetch all the account info for multiple accounts specified by an array of public keys
+   */
+  async getMultipleAccountsInfo(
+    publicKeys: PublicKey[],
+    commitment?: Commitment,
+  ): Promise<(AccountInfo<Buffer> | null)[]> {
+    const res = await this.getMultipleAccountsInfoAndContext(
+      publicKeys,
+      commitment,
+    );
+    return res.value;
   }
 
   /**
