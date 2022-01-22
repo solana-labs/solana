@@ -2934,7 +2934,7 @@ impl Node {
             tvu: SocketAddr::new(gossip_addr.ip(), tvu_port),
             tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
             repair: SocketAddr::new(gossip_addr.ip(), repair_port),
-            tpu: overwrite_tpu_addr.unwrap_or(SocketAddr::new(gossip_addr.ip(), tpu_port)),
+            tpu: overwrite_tpu_addr.unwrap_or_else(|| SocketAddr::new(gossip_addr.ip(), tpu_port)),
             tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
             tpu_vote: SocketAddr::new(gossip_addr.ip(), tpu_vote_port),
             rpc: socketaddr_any!(),
