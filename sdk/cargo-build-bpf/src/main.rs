@@ -418,7 +418,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
                 );
                 None
             }
-            1 => Some(cdylib_targets[0].replace("-", "_")),
+            1 => Some(cdylib_targets[0].replace('-', "_")),
             _ => {
                 eprintln!(
                     "{} crate contains multiple cdylib targets: {:?}",
@@ -821,7 +821,7 @@ fn main() {
         dump: matches.is_present("dump"),
         features: values_t!(matches, "features", String)
             .ok()
-            .unwrap_or_else(Vec::new),
+            .unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         offline: matches.is_present("offline"),

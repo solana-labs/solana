@@ -574,7 +574,7 @@ mod tests {
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.insert(bank);
         let descendants = bank_forks.descendants();
-        let children: HashSet<u64> = [1u64, 2u64].to_vec().into_iter().collect();
+        let children: HashSet<u64> = [1u64, 2u64].iter().copied().collect();
         assert_eq!(children, *descendants.get(&0).unwrap());
         assert!(descendants[&1].is_empty());
         assert!(descendants[&2].is_empty());

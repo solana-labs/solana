@@ -12891,8 +12891,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key4).is_some());
         let num_retained = [&key1, &key2, &key3]
             .iter()
-            .map(|key| cache.get(key))
-            .flatten()
+            .filter_map(|key| cache.get(key))
             .count();
         assert_eq!(num_retained, 2);
 
@@ -12903,8 +12902,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key3).is_some());
         let num_retained = [&key1, &key2, &key4]
             .iter()
-            .map(|key| cache.get(key))
-            .flatten()
+            .filter_map(|key| cache.get(key))
             .count();
         assert_eq!(num_retained, 2);
     }
@@ -12937,8 +12935,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key4).is_some());
         let num_retained = [&key1, &key2, &key3]
             .iter()
-            .map(|key| cache.get(key))
-            .flatten()
+            .filter_map(|key| cache.get(key))
             .count();
         assert_eq!(num_retained, 2);
 
@@ -12948,8 +12945,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key3).is_some());
         let num_retained = [&key2, &key4]
             .iter()
-            .map(|key| cache.get(key))
-            .flatten()
+            .filter_map(|key| cache.get(key))
             .count();
         assert_eq!(num_retained, 1);
 

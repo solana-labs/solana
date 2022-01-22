@@ -78,7 +78,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     assert_eq!(account0.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account0.owner, bpf_loader::id());
     assert!(account0.executable);
-    let mut file = File::open(noop_path.to_str().unwrap().to_string()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     assert_eq!(account0.data, elf);

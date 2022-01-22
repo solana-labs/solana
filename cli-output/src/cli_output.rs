@@ -2285,6 +2285,7 @@ impl fmt::Display for CliBlock {
                 let sign = if reward.lamports < 0 { "-" } else { "" };
 
                 total_rewards += reward.lamports;
+                #[allow(clippy::format_in_format_args)]
                 writeln!(
                     f,
                     "  {:<44}  {:^15}  {:>15}  {}  {}",

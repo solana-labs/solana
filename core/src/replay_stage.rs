@@ -4327,9 +4327,9 @@ pub mod tests {
         for i in 0..std::cmp::max(new_vote_pubkeys.len(), new_node_pubkeys.len()) {
             propagated_stats.is_propagated = false;
             let len = std::cmp::min(i, new_vote_pubkeys.len());
-            let mut voted_pubkeys = new_vote_pubkeys[..len].iter().copied().collect();
+            let mut voted_pubkeys = new_vote_pubkeys[..len].to_vec();
             let len = std::cmp::min(i, new_node_pubkeys.len());
-            let mut node_pubkeys = new_node_pubkeys[..len].iter().copied().collect();
+            let mut node_pubkeys = new_node_pubkeys[..len].to_vec();
             let did_newly_reach_threshold =
                 ReplayStage::update_slot_propagated_threshold_from_votes(
                     &mut voted_pubkeys,
