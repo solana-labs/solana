@@ -2,12 +2,12 @@ const endpoint = {
   http: {
     devnet: 'http://api.devnet.solana.com',
     testnet: 'http://api.testnet.solana.com',
-    'mainnet-beta': 'http://api.mainnet-beta.solana.com',
+    'mainnet-beta': 'http://ssc-dao.genesysgo.net/',
   },
   https: {
     devnet: 'https://api.devnet.solana.com',
     testnet: 'https://api.testnet.solana.com',
-    'mainnet-beta': 'https://api.mainnet-beta.solana.com',
+    'mainnet-beta': 'https://ssc-dao.genesysgo.net/',
   },
 };
 
