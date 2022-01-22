@@ -1,3 +1,5 @@
+//! TODO: usage
+
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::encryption::{
@@ -6,6 +8,7 @@ use {
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
+    zeroize::Zeroize,
 };
 use {
     crate::{sigma_proofs::errors::ZeroBalanceProofError, transcript::TranscriptProtocol},
@@ -18,17 +21,19 @@ use {
     merlin::Transcript,
 };
 
+/// TODO
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct ZeroBalanceProof {
-    pub Y_P: CompressedRistretto,
-    pub Y_D: CompressedRistretto,
-    pub z: Scalar,
+    Y_P: CompressedRistretto,
+    Y_D: CompressedRistretto,
+    z: Scalar,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl ZeroBalanceProof {
+    /// TODO: mention that public inputs are not hashed and that they should be hashed by the caller
     pub fn new(
         elgamal_keypair: &ElGamalKeypair,
         elgamal_ciphertext: &ElGamalCiphertext,
@@ -37,32 +42,30 @@ impl ZeroBalanceProof {
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.public.get_point();
         let s = elgamal_keypair.secret.get_scalar();
-
-        let C = elgamal_ciphertext.commitment.get_point();
         let D = elgamal_ciphertext.handle.get_point();
 
-        // record ElGamal pubkey and ciphertext in the transcript
-        transcript.append_point(b"P", &P.compress());
-        transcript.append_point(b"C", &C.compress());
-        transcript.append_point(b"D", &D.compress());
-
         // generate a random masking factor that also serves as a nonce
-        let y = Scalar::random(&mut OsRng);
-        let Y_P = (y * P).compress();
-        let Y_D = (y * D).compress();
+        let mut y = Scalar::random(&mut OsRng);
+        let Y_P = (&y * P).compress();
+        let Y_D = (&y * D).compress();
 
-        // record Y in transcript and receive a challenge scalar
+        // record Y in the transcript and receive a challenge scalar
         transcript.append_point(b"Y_P", &Y_P);
         transcript.append_point(b"Y_D", &Y_D);
+
         let c = transcript.challenge_scalar(b"c");
         transcript.challenge_scalar(b"w");
 
         // compute the masked secret key
-        let z = c * s + y;
+        let z = &(&c * s) + &y;
+
+        // zeroize random scalar
+        y.zeroize();
 
         Self { Y_P, Y_D, z }
     }
 
+    /// TODO:
     pub fn verify(
         self,
         elgamal_pubkey: &ElGamalPubkey,
@@ -74,27 +77,37 @@ impl ZeroBalanceProof {
         let C = elgamal_ciphertext.commitment.get_point();
         let D = elgamal_ciphertext.handle.get_point();
 
-        // record ElGamal pubkey and ciphertext in the transcript
-        transcript.validate_and_append_point(b"P", &P.compress())?;
-        transcript.append_point(b"C", &C.compress());
-        transcript.append_point(b"D", &D.compress());
-
         // record Y in transcript and receive challenge scalars
         transcript.validate_and_append_point(b"Y_P", &self.Y_P)?;
         transcript.append_point(b"Y_D", &self.Y_D);
 
         let c = transcript.challenge_scalar(b"c");
-        let w = transcript.challenge_scalar(b"w"); // w used for multiscalar multiplication verification
+        let w = transcript.challenge_scalar(b"w"); // w used for batch verification
+
+        let w_negated = -&w;
 
         // decompress R or return verification error
         let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::Format)?;
         let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::Format)?;
-        let z = self.z;
 
         // check the required algebraic relation
         let check = RistrettoPoint::multiscalar_mul(
-            vec![z, -c, -Scalar::one(), w * z, -w * c, -w],
-            vec![P, &(*H), &Y_P, D, C, &Y_D],
+            vec![
+                &self.z,            // z
+                &(-&c),             // -c
+                &(-&Scalar::one()), // -identity
+                &(&w * &self.z),    // w * z
+                &(&w_negated * &c), // -w * c
+                &w_negated,         // -w
+            ],
+            vec![
+                P,     // P
+                &(*H), // H
+                &Y_P,  // Y_P
+                D,     // D
+                C,     // C
+                &Y_D,  // Y_D
+            ],
         );
 
         if check.is_identity() {
@@ -133,6 +146,7 @@ mod test {
         pedersen::{Pedersen, PedersenOpening},
     };
 
+    // TODO: edge cases
     #[test]
     fn test_zero_balance_proof() {
         let source_keypair = ElGamalKeypair::new_rand();
