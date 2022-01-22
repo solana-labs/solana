@@ -1,3 +1,5 @@
+//! TODO: usage
+
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::encryption::{
@@ -6,6 +8,7 @@ use {
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
+    zeroize::Zeroize,
 };
 use {
     crate::{sigma_proofs::errors::ValidityProofError, transcript::TranscriptProtocol},
@@ -18,6 +21,7 @@ use {
     merlin::Transcript,
 };
 
+/// TODO
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct ValidityProof {
@@ -31,6 +35,10 @@ pub struct ValidityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl ValidityProof {
+    /// TODO: mention that public inputs are not hashed and that they should be hashed by the caller
+    ///
+    /// TODO: mention that this is randomized
+    /// TODO: standardize parameter order
     pub fn new(
         elgamal_pubkey_dest: &ElGamalPubkey,
         elgamal_pubkey_auditor: &ElGamalPubkey,
@@ -42,13 +50,13 @@ impl ValidityProof {
         let P_dest = elgamal_pubkey_dest.get_point();
         let P_auditor = elgamal_pubkey_auditor.get_point();
 
-        // generate random masking factors that also serves as a nonce
-        let y_r = Scalar::random(&mut OsRng);
-        let y_x = Scalar::random(&mut OsRng);
+        // generate random masking factors that also serves as nonces
+        let mut y_r = Scalar::random(&mut OsRng);
+        let mut y_x = Scalar::random(&mut OsRng);
 
-        let Y_0 = RistrettoPoint::multiscalar_mul(vec![y_r, y_x], vec![&(*H), &(*G)]).compress();
-        let Y_1 = (y_r * P_dest).compress();
-        let Y_2 = (y_r * P_auditor).compress();
+        let Y_0 = RistrettoPoint::multiscalar_mul(vec![&y_r, &y_x], vec![&(*H), &(*G)]).compress();
+        let Y_1 = (&y_r * P_dest).compress();
+        let Y_2 = (&y_r * P_auditor).compress();
 
         // record masking factors in transcript and get challenges
         transcript.append_point(b"Y_0", &Y_0);
@@ -60,12 +68,15 @@ impl ValidityProof {
         transcript.challenge_scalar(b"w");
 
         // aggregate lo and hi messages and openings
-        let x = Scalar::from(messages.0) + t * Scalar::from(messages.1);
-        let r = openings.0.get_scalar() + t * openings.1.get_scalar();
+        let x = &Scalar::from(messages.0) + &t * &Scalar::from(messages.1);
+        let r = openings.0.get_scalar() + &t * openings.1.get_scalar();
 
         // compute masked message and opening
-        let z_r = c * r + y_r;
-        let z_x = c * x + y_x;
+        let z_r = &(&c * &r) + &y_r;
+        let z_x = &(&c * &x) + &y_x;
+
+        y_r.zeroize();
+        y_x.zeroize();
 
         Self {
             Y_0,
@@ -76,6 +87,7 @@ impl ValidityProof {
         }
     }
 
+    /// TODO:
     pub fn verify(
         self,
         elgamal_pubkey_dest: &ElGamalPubkey,
@@ -93,7 +105,10 @@ impl ValidityProof {
         let t = transcript.challenge_scalar(b"t");
         let c = transcript.challenge_scalar(b"c");
         let w = transcript.challenge_scalar(b"w");
-        let ww = w * w;
+        let ww = &w * &w;
+
+        let w_negated = -&w;
+        let ww_negated = -&ww;
 
         // check the required algebraic conditions
         let Y_0 = self.Y_0.decompress().ok_or(ValidityProofError::Format)?;
@@ -103,34 +118,34 @@ impl ValidityProof {
         let P_dest = elgamal_pubkey_dest.get_point();
         let P_auditor = elgamal_pubkey_auditor.get_point();
 
-        let C = commitments.0.get_point() + t * commitments.1.get_point();
-        let D_dest = handle_dest.0.get_point() + t * handle_dest.1.get_point();
-        let D_auditor = handle_auditor.0.get_point() + t * handle_auditor.1.get_point();
+        let C = commitments.0.get_point() + &t * commitments.1.get_point();
+        let D_dest = handle_dest.0.get_point() + &t * handle_dest.1.get_point();
+        let D_auditor = handle_auditor.0.get_point() + &t * handle_auditor.1.get_point();
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
-                self.z_r,
-                self.z_x,
-                -c,
-                -Scalar::one(),
-                w * self.z_r,
-                -w * c,
-                -w,
-                ww * self.z_r,
-                -ww * c,
-                -ww,
+                &self.z_r,           // z_r
+                &self.z_x,           // z_x
+                &(-&c),              // -c
+                &-(&Scalar::one()),  // -identity
+                &(&w * &self.z_r),   // w * z_r
+                &(&w_negated * &c),  // -w * c
+                &w_negated,          // -w
+                &(&ww * &self.z_r),  // ww * z_r
+                &(&ww_negated * &c), // -ww * c
+                &ww_negated,         // -ww
             ],
             vec![
-                &(*H),
-                &(*G),
-                &C,
-                &Y_0,
-                P_dest,
-                &D_dest,
-                &Y_1,
-                P_auditor,
-                &D_auditor,
-                &Y_2,
+                &(*H),      // H
+                &(*G),      // G
+                &C,         // C
+                &Y_0,       // Y_0
+                P_dest,     // P_dest
+                &D_dest,    // D_dest
+                &Y_1,       // Y_1
+                P_auditor,  // P_auditor
+                &D_auditor, // D_auditor
+                &Y_2,       // Y_2
             ],
         );
 
