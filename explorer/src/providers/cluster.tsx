@@ -65,7 +65,7 @@ export function clusterUrl(cluster: Cluster, customUrl: string): string {
     case Cluster.Devnet:
       return DEVNET_URL.replace("api", "explorer-api");
     case Cluster.MainnetBeta:
-      return MAINNET_BETA_URL.replace("api.mainnet-beta.solana.com", "ssc-dao.genesysgo.net");
+      return MAINNET_BETA_URL.replace("api", "explorer-api");
     case Cluster.Testnet:
       return TESTNET_URL.replace("api", "explorer-api");
     case Cluster.Custom:
