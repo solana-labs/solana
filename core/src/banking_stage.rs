@@ -2,7 +2,10 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use {
-    crate::qos_service::QosService,
+    crate::{
+        packet_sender_info::{PacketSenderInfo, SenderDetailInfo},
+        qos_service::QosService,
+    },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
     itertools::Itertools,
@@ -54,7 +57,7 @@ use {
         collections::{HashMap, VecDeque},
         env,
         mem::size_of,
-        net::{SocketAddr, UdpSocket},
+        net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
@@ -478,50 +481,81 @@ impl BankingStage {
     // and its location (batch_index plus packet_index within batch)
     fn get_stakes_and_locators(
         buffered_packet_batches: &UnprocessedPacketBatches,
+        packet_sender_info: &mut Option<PacketSenderInfo>,
     ) -> (Vec<u64>, Vec<(usize, usize)>) {
         let mut stakes = Vec::<u64>::new();
         let mut locators = Vec::<(usize, usize)>::new();
 
-        buffered_packet_batches
-            .iter()
-            .enumerate()
-            .map(|(batch_index, buffered_packet_batch_and_offsets)| {
+        buffered_packet_batches.iter().enumerate().for_each(
+            |(batch_index, buffered_packet_batch_and_offsets)| {
                 let (packet_batch, original_unprocessed_indexes, _forwarded) =
                     buffered_packet_batch_and_offsets;
                 original_unprocessed_indexes
                     .iter()
-                    .map(|tx_index| {
-                        let p = &packet_batch.packets[*tx_index];
+                    .for_each(|packet_index| {
+                        let p = &packet_batch.packets[*packet_index];
                         stakes.push(p.meta.weight);
-                        locators.push((batch_index, *tx_index));
-                    })
-                    .collect_vec();
-            })
-            .collect_vec();
+                        locators.push((batch_index, *packet_index));
+
+                        if let Some(packet_sender_info) = packet_sender_info {
+                            let ip = p.meta.addr;
+                            packet_sender_info.packet_senders_ip.push(ip);
+                            let sender_detail = packet_sender_info
+                                .senders_detail
+                                .entry(ip)
+                                .or_insert(SenderDetailInfo {
+                                    stake: p.meta.weight,
+                                    packet_count: 0u64,
+                                });
+                            sender_detail.packet_count =
+                                sender_detail.packet_count.saturating_add(1);
+                        }
+                    });
+            },
+        );
+
         (stakes, locators)
     }
 
-    fn weighted_shuffle(stakes: &[u64], locators: &[(usize, usize)]) -> Vec<(usize, Vec<usize>)> {
+    fn weighted_shuffle(
+        stakes: &[u64],
+        locators: &[(usize, usize)],
+        packet_sender_info: &mut Option<PacketSenderInfo>,
+    ) -> Vec<(usize, Vec<usize>)> {
+        let need_to_shuffle_sender_ips = packet_sender_info.is_some();
+        let mut shuffled_packet_senders_ip = Vec::<IpAddr>::new();
+
         let mut rng = rand::thread_rng();
         let mut shuffled_locators: Vec<(usize, usize)> = WeightedShuffle::new(&mut rng, stakes)
             .unwrap()
-            .map(|i| locators[i])
+            .map(|i| {
+                if need_to_shuffle_sender_ips {
+                    let packet_sender_info = packet_sender_info.as_ref().unwrap();
+                    shuffled_packet_senders_ip.push(packet_sender_info.packet_senders_ip[i]);
+                }
+                locators[i]
+            })
             .collect();
         // append zero weight packets to the end
         let zero_staked_packets_locators: Vec<(usize, usize)> = stakes
             .iter()
             .enumerate()
-            .filter_map(
-                |(i, stake)| {
-                    if *stake == 0 {
-                        Some(locators[i])
-                    } else {
-                        None
+            .filter_map(|(i, stake)| {
+                if *stake == 0 {
+                    if need_to_shuffle_sender_ips {
+                        let packet_sender_info = packet_sender_info.as_ref().unwrap();
+                        shuffled_packet_senders_ip.push(packet_sender_info.packet_senders_ip[i]);
                     }
-                },
-            )
+                    Some(locators[i])
+                } else {
+                    None
+                }
+            })
             .collect();
         shuffled_locators.extend(zero_staked_packets_locators);
+        if let Some(packet_sender_info) = packet_sender_info {
+            packet_sender_info.packet_senders_ip = shuffled_packet_senders_ip;
+        }
 
         // coalesce neighboring same batch locators into one entry
         shuffled_locators
@@ -557,8 +591,14 @@ impl BankingStage {
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
-        let (stakes, locators) = Self::get_stakes_and_locators(buffered_packet_batches);
-        let shuffled_packet_locators = Self::weighted_shuffle(&stakes, &locators);
+        let mut packet_sender_info = Some(PacketSenderInfo::default());
+        let (stakes, locators) =
+            Self::get_stakes_and_locators(buffered_packet_batches, &mut packet_sender_info);
+        let shuffled_packet_locators =
+            Self::weighted_shuffle(&stakes, &locators, &mut packet_sender_info);
+        if let Some(packet_sender_info) = packet_sender_info {
+            packet_sender_info.report(banking_stage_stats.id);
+        }
         shuffled_packet_locators
             .into_iter()
             .for_each(|(batch_index, packet_indexes)| {
@@ -1616,8 +1656,8 @@ impl BankingStage {
         buffered_packet_batches.push_back((packet_batch, packet_indexes, false));
         let new_batch_index = buffered_packet_batches.len() - 1;
 
-        let (stakes, locators) = Self::get_stakes_and_locators(buffered_packet_batches);
-        let shuffled_packet_locators = Self::weighted_shuffle(&stakes, &locators);
+        let (stakes, locators) = Self::get_stakes_and_locators(buffered_packet_batches, &mut None);
+        let shuffled_packet_locators = Self::weighted_shuffle(&stakes, &locators, &mut None);
 
         let mut eviction_candidate_index: Option<usize> = None;
         for (batch_index, packet_indexes) in shuffled_packet_locators.into_iter().rev() {
@@ -3657,129 +3697,154 @@ mod tests {
         assert_eq!(expected_us, us);
     }
 
-    fn packet_with_weight(weight: u64) -> Packet {
+    fn packet_with_weight(weight: u64, ip: IpAddr) -> Packet {
         let mut packet = Packet::default();
         packet.meta.weight = weight;
+        packet.meta.addr = ip;
         packet
     }
 
-    // build a buffer of four batches, each contains packet with following stake:
-    // 0: [ 10, 300]
-    // 1: [100, 200, 300]
-    // 2: [ 20,  30,  40]
-    // 3: [500,  30, 200]
-    fn build_unprocessed_packets_buffer() -> UnprocessedPacketBatches {
-        vec![
-            (
-                PacketBatch::new(vec![
-                    packet_with_weight(10),
-                    packet_with_weight(300),
-                    packet_with_weight(200),
-                ]),
-                vec![0, 1],
-                false,
-            ),
-            (
-                PacketBatch::new(vec![
-                    packet_with_weight(100),
-                    packet_with_weight(200),
-                    packet_with_weight(300),
-                ]),
-                vec![0, 1, 2],
-                false,
-            ),
-            (
-                PacketBatch::new(vec![
-                    packet_with_weight(20),
-                    packet_with_weight(30),
-                    packet_with_weight(40),
-                ]),
-                vec![0, 1, 2],
-                false,
-            ),
-            (
-                PacketBatch::new(vec![
-                    packet_with_weight(500),
-                    packet_with_weight(30),
-                    packet_with_weight(200),
-                ]),
-                vec![0, 1, 2],
-                false,
-            ),
-        ]
-        .into_iter()
-        .collect()
-    }
-
     #[test]
-    fn test_get_stakes_and_locators() {
+    fn test_get_stakes_and_locators_with_sender_info() {
         solana_logger::setup();
 
-        let unprocessed_packets = build_unprocessed_packets_buffer();
+        // setup senders' addr and stake
+        let senders: Vec<(IpAddr, u64)> = vec![
+            (IpAddr::from([127, 0, 0, 1]), 1),
+            (IpAddr::from([127, 0, 0, 2]), 2),
+            (IpAddr::from([127, 0, 0, 3]), 3),
+        ];
+        // create a buffer with 3 batches, each has 2 packet from above sender.
+        // so: [1, 2] [3, 1] [2, 3]
+        let batch_size = 2usize;
+        let batch_count = 3usize;
+        let unprocessed_packets = (0..batch_count)
+            .map(|batch_index| {
+                (
+                    PacketBatch::new(
+                        (0..batch_size)
+                            .map(|packet_index| {
+                                let n = (batch_index * batch_size + packet_index) % senders.len();
+                                packet_with_weight(senders[n].1, senders[n].0)
+                            })
+                            .collect(),
+                    ),
+                    (0..batch_size).collect(),
+                    false,
+                )
+            })
+            .collect();
+        debug!("unprocessed batches: {:?}", unprocessed_packets);
 
-        let (stakes, locators) = BankingStage::get_stakes_and_locators(&unprocessed_packets);
+        let mut packet_sender_info = Some(PacketSenderInfo::default());
+
+        let (stakes, locators) =
+            BankingStage::get_stakes_and_locators(&unprocessed_packets, &mut packet_sender_info);
         debug!("stakes: {:?}, locators: {:?}", stakes, locators);
-        assert_eq!(11, stakes.len());
-        assert_eq!(11, locators.len());
+        assert_eq!(batch_size * batch_count, stakes.len());
+        stakes.into_iter().enumerate().for_each(|(index, stake)| {
+            assert_eq!(stake, senders[index % senders.len()].1);
+        });
+        assert_eq!(batch_size * batch_count, locators.len());
+        locators
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, (batch_index, packet_index))| {
+                assert_eq!(batch_index, (index / batch_size));
+                assert_eq!(packet_index, (index % batch_size));
+            });
 
-        // weighted shuffle
-        let shuffled_indexes = BankingStage::weighted_shuffle(&stakes, &locators);
-        debug!("shuffled indexes: {:?}", shuffled_indexes);
-        assert!(11 >= shuffled_indexes.len());
+        // verify the sender info are collected correctly
+        let packet_sender_info = packet_sender_info.unwrap();
+        assert_eq!(
+            batch_size * batch_count,
+            packet_sender_info.packet_senders_ip.len()
+        );
+        packet_sender_info
+            .packet_senders_ip
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, ip)| {
+                assert_eq!(ip, senders[index % senders.len()].0);
+            });
+        assert_eq!(senders.len(), packet_sender_info.senders_detail.len());
+        senders.into_iter().for_each(|(ip, stake)| {
+            let sender_detail = packet_sender_info.senders_detail.get(&ip).unwrap();
+            assert_eq!(stake, sender_detail.stake);
+            assert_eq!(2u64, sender_detail.packet_count);
+        });
     }
 
     #[test]
-    fn test_swap_packet_with_weight_shuffle() {
+    fn test_weighted_shuffle_with_sender_info() {
         solana_logger::setup();
 
-        let mut unprocessed_packets = build_unprocessed_packets_buffer();
+        // setup senders' addr and stake
+        let senders: Vec<(IpAddr, u64)> = vec![
+            (IpAddr::from([127, 0, 0, 1]), 100),
+            (IpAddr::from([127, 0, 0, 2]), 200),
+            (IpAddr::from([127, 0, 0, 3]), 0),
+        ];
+        // create a buffer with 3 batches, each has 2 packet from above sender.
+        // so: [1, 2] [3, 1] [2, 3]
+        let batch_size = 2usize;
+        let batch_count = 3usize;
+        let unprocessed_packets = (0..batch_count)
+            .map(|batch_index| {
+                (
+                    PacketBatch::new(
+                        (0..batch_size)
+                            .map(|packet_index| {
+                                let n = (batch_index * batch_size + packet_index) % senders.len();
+                                packet_with_weight(senders[n].1, senders[n].0)
+                            })
+                            .collect(),
+                    ),
+                    (0..batch_size).collect(),
+                    false,
+                )
+            })
+            .collect();
+        debug!("unprocessed batches: {:?}", unprocessed_packets);
 
-        // try to insert one with weight lesser than anything in buffer.
-        // the new one should be rejected, and buffer should be unchanged
-        {
-            let mut dropped_packets_count = 0usize;
-            let weight = 0u64;
-            let new_batch = PacketBatch::new(vec![packet_with_weight(weight)]);
-            let dropped_batch = BankingStage::swap_packet_with_weight_shuffle(
-                &mut unprocessed_packets,
-                new_batch,
-                vec![0],
-                &mut dropped_packets_count,
-            );
-            // dropped batch should be the one made from new packet:
-            assert_eq!(1, dropped_packets_count);
-            let dropped_packets = &dropped_batch.unwrap().0;
-            assert_eq!(1, dropped_packets.packets.len());
-            assert_eq!(weight, dropped_packets.packets[0].meta.weight);
-            // buffer should be unchanged
-            assert_eq!(4, unprocessed_packets.len());
-        }
+        let mut packet_sender_info = Some(PacketSenderInfo::default());
 
-        // try to insert one with weight higher than anything in buffer.
-        // the new one should be rejected, and buffer should be unchanged
-        {
-            let mut dropped_packets_count = 0usize;
-            let weight = 5000u64;
-            let new_batch = PacketBatch::new(vec![packet_with_weight(weight)]);
-            let dropped_batch = BankingStage::swap_packet_with_weight_shuffle(
-                &mut unprocessed_packets,
-                new_batch,
-                vec![0],
-                &mut dropped_packets_count,
-            );
-            // dropped batch should be the one with lest weight in buffer (the 3rd batch):
-            let dropped_packets = &dropped_batch.unwrap().0;
-            assert_eq!(3, dropped_packets.packets.len());
-            assert_eq!(20, dropped_packets.packets[0].meta.weight);
-            assert_eq!(30, dropped_packets.packets[1].meta.weight);
-            assert_eq!(40, dropped_packets.packets[2].meta.weight);
-            // buffer should still have 4 batches
-            assert_eq!(4, unprocessed_packets.len());
-            // the 3rd item should be the new batch with one packet
-            assert_eq!(1, unprocessed_packets[2].0.packets.len());
-            assert_eq!(weight, unprocessed_packets[2].0.packets[0].meta.weight);
-            assert_eq!(1, unprocessed_packets[2].1.len());
-            assert_eq!(0, unprocessed_packets[2].1[0]);
-        }
+        let (stakes, locators) =
+            BankingStage::get_stakes_and_locators(&unprocessed_packets, &mut packet_sender_info);
+        debug!("stakes: {:?}, locators: {:?}", stakes, locators);
+        let shuffled_packet_locators =
+            BankingStage::weighted_shuffle(&stakes, &locators, &mut packet_sender_info);
+        debug!(
+            "shuffled locators: {:?}, shuffled sender_ips: {:?}",
+            shuffled_packet_locators,
+            packet_sender_info.as_ref().unwrap().packet_senders_ip
+        );
+
+        // verify after shuffle, each locator:(batch_index, packet_index) still in sync with
+        // sender_info
+        let mut count = 0usize;
+        let packet_sender_info = packet_sender_info.unwrap();
+        assert_eq!(
+            batch_size * batch_count,
+            packet_sender_info.packet_senders_ip.len()
+        );
+        shuffled_packet_locators
+            .into_iter()
+            .for_each(|(batch_index, packet_index)| {
+                packet_index.into_iter().for_each(|packet_index| {
+                    let position = batch_index * batch_size + packet_index;
+                    assert_eq!(
+                        senders[position % senders.len()].0,
+                        packet_sender_info.packet_senders_ip[count]
+                    );
+                    count += 1;
+                });
+            });
+        assert_eq!(senders.len(), packet_sender_info.senders_detail.len());
+        senders.into_iter().for_each(|(ip, stake)| {
+            let sender_detail = packet_sender_info.senders_detail.get(&ip).unwrap();
+            assert_eq!(stake, sender_detail.stake);
+            assert_eq!(2u64, sender_detail.packet_count);
+        });
     }
 }

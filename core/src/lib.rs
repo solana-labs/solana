@@ -32,6 +32,7 @@ pub mod ledger_cleanup_service;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_hasher;
+pub mod packet_sender_info;
 pub mod progress_map;
 pub mod qos_service;
 pub mod repair_generic_traversal;
