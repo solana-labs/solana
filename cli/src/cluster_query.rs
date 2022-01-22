@@ -44,13 +44,13 @@ use {
         message::Message,
         native_token::lamports_to_sol,
         nonce::State as NonceState,
-        pubkey::{self, Pubkey},
+        pubkey::Pubkey,
         rent::Rent,
         rpc_port::DEFAULT_RPC_PORT_STR,
         signature::Signature,
         slot_history,
         stake::{self, state::StakeState},
-        system_instruction, system_program,
+        system_instruction,
         sysvar::{
             self,
             slot_history::SlotHistory,
@@ -262,15 +262,6 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("print-timestamp")
                         .takes_value(false)
                         .help("Print timestamp (unix time + microseconds as in gettimeofday) before each line"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .default_value("1")
-                        .validator(is_amount)
-                        .help("Number of lamports to transfer for each transaction"),
                 )
                 .arg(
                     Arg::with_name("timeout")
@@ -516,7 +507,6 @@ pub fn parse_cluster_ping(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let lamports = value_t_or_exit!(matches, "lamports", u64);
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
         Some(value_t_or_exit!(matches, "count", u64))
@@ -528,7 +518,6 @@ pub fn parse_cluster_ping(
     let print_timestamp = matches.is_present("print_timestamp");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
-            lamports,
             interval,
             count,
             timeout,
@@ -1359,7 +1348,6 @@ pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig
 pub fn process_ping(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    lamports: u64,
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
@@ -1380,7 +1368,7 @@ pub fn process_ping(
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
     let mut blockhash = rpc_client.get_latest_blockhash()?;
-    let mut blockhash_transaction_count = 0;
+    let mut lamports = 0;
     let mut blockhash_acquired = Instant::now();
     if let Some(fixed_blockhash) = fixed_blockhash {
         let blockhash_origin = if *fixed_blockhash != Hash::default() {
@@ -1400,15 +1388,12 @@ pub fn process_ping(
             // Fetch a new blockhash every minute
             let new_blockhash = rpc_client.get_new_latest_blockhash(&blockhash)?;
             blockhash = new_blockhash;
-            blockhash_transaction_count = 0;
+            lamports = 0;
             blockhash_acquired = Instant::now();
         }
 
-        let seed =
-            &format!("{}{}", blockhash_transaction_count, blockhash)[0..pubkey::MAX_SEED_LEN];
-        let to = Pubkey::create_with_seed(&config.signers[0].pubkey(), seed, &system_program::id())
-            .unwrap();
-        blockhash_transaction_count += 1;
+        let to = config.signers[0].pubkey();
+        lamports += 1;
 
         let build_message = |lamports| {
             let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
@@ -2305,7 +2290,6 @@ mod tests {
             parse_command(&test_ping, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Ping {
-                    lamports: 1,
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
