@@ -20,9 +20,8 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
-        clock::{Clock, Slot},
+        clock::Slot,
         entrypoint::{ProgramResult, SUCCESS},
-        epoch_schedule::EpochSchedule,
         execute_timings::ExecuteTimings,
         feature_set::demote_program_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -33,17 +32,13 @@ use {
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         process_instruction::{
-            self, stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
+            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
         },
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
-        sysvar::{
-            clock, epoch_schedule,
-            fees::{self, Fees},
-            rent, Sysvar,
-        },
+        sysvar::Sysvar,
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
@@ -192,8 +187,8 @@ macro_rules! processor {
     };
 }
 
-fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
-    id: &Pubkey,
+fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
     var_addr: *mut u8,
 ) -> u64 {
     let invoke_context = get_invoke_context();
@@ -207,9 +202,10 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
     {
         panic!("Exceeded compute budget");
     }
-    match process_instruction::get_sysvar::<T>(invoke_context, id) {
+
+    match sysvar {
         Ok(sysvar_data) => unsafe {
-            *(var_addr as *mut _ as *mut T) = sysvar_data;
+            *(var_addr as *mut _ as *mut T) = T::clone(&sysvar_data);
             SUCCESS
         },
         Err(_) => UNSUPPORTED_SYSVAR,
@@ -368,19 +364,25 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     }
 
     fn sol_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<Clock>(&clock::id(), var_addr)
+        get_sysvar(
+            get_invoke_context().get_sysvar_cache().get_clock(),
+            var_addr,
+        )
     }
 
     fn sol_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<EpochSchedule>(&epoch_schedule::id(), var_addr)
+        get_sysvar(
+            get_invoke_context().get_sysvar_cache().get_epoch_schedule(),
+            var_addr,
+        )
     }
 
     fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<Fees>(&fees::id(), var_addr)
+        get_sysvar(get_invoke_context().get_sysvar_cache().get_fees(), var_addr)
     }
 
     fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<Rent>(&rent::id(), var_addr)
+        get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
     }
 }
 

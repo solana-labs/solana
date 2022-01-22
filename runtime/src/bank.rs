@@ -114,8 +114,7 @@ use {
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
-        system_transaction,
-        sysvar::{self},
+        system_transaction, sysvar,
         sysvar_cache::SysvarCache,
         timing::years_as_slots,
         transaction::{self, Result, Transaction, TransactionError},
@@ -1295,7 +1294,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
-        bank.fill_sysvar_cache();
+        bank.fill_missing_sysvar_cache_entries();
         bank
     }
 
@@ -1478,7 +1477,7 @@ impl Bank {
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
-        new.fill_sysvar_cache();
+        new.fill_missing_sysvar_cache_entries();
 
         time.stop();
 
@@ -1537,7 +1536,7 @@ impl Bank {
                 new.inherit_specially_retained_account_fields(account),
             )
         });
-
+        new.fill_missing_sysvar_cache_entries();
         new.freeze();
         new
     }
@@ -1789,10 +1788,6 @@ impl Bank {
         }
 
         self.store_account_and_update_capitalization(pubkey, &new_account);
-
-        // Update the entry in the cache
-        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
-        sysvar_cache.update_entry(pubkey, &new_account);
     }
 
     fn inherit_specially_retained_account_fields(

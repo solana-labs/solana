@@ -10,7 +10,7 @@ use {
         feature_set,
         instruction::InstructionError,
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
-        process_instruction::{get_sysvar, InvokeContext},
+        process_instruction::InvokeContext,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         stake::{
@@ -18,7 +18,7 @@ use {
             program::id,
             state::{Authorized, Lockup},
         },
-        sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
+        sysvar::{clock::Clock, rent::Rent, stake_history::StakeHistory},
     },
 };
 
@@ -167,11 +167,11 @@ pub fn process_instruction(
         ),
         StakeInstruction::SetLockup(lockup) => {
             let clock = if invoke_context.is_feature_active(&feature_set::stake_program_v4::id()) {
-                Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?)
+                Some(invoke_context.get_sysvar_cache().get_clock()?)
             } else {
                 None
             };
-            me.set_lockup(&lockup, &signers, clock.as_ref())
+            me.set_lockup(&lockup, &signers, clock.as_deref())
         }
         StakeInstruction::InitializeChecked => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
@@ -262,8 +262,8 @@ pub fn process_instruction(
                     epoch: lockup_checked.epoch,
                     custodian,
                 };
-                let clock = Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?);
-                me.set_lockup(&lockup, &signers, clock.as_ref())
+                let clock = Some(invoke_context.get_sysvar_cache().get_clock()?);
+                me.set_lockup(&lockup, &signers, clock.as_deref())
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
@@ -288,7 +288,7 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            sysvar::stake_history::StakeHistory,
+            sysvar::{self, stake_history::StakeHistory},
             sysvar_cache::SysvarCache,
         },
         std::{borrow::Cow, cell::RefCell, str::FromStr},
@@ -372,10 +372,7 @@ mod tests {
 
             let mut invoke_context = MockInvokeContext::new(keyed_accounts);
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(
-                sysvar::clock::id(),
-                bincode::serialize(&Clock::default()).unwrap(),
-            );
+            sysvar_cache.set_clock(Clock::default());
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
@@ -1040,10 +1037,7 @@ mod tests {
 
         let mut invoke_context = MockInvokeContext::new(keyed_accounts);
         let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.push_entry(
-            sysvar::clock::id(),
-            bincode::serialize(&Clock::default()).unwrap(),
-        );
+        sysvar_cache.set_clock(Clock::default());
         invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
 
         assert_eq!(

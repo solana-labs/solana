@@ -16,9 +16,7 @@ use {
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Clock,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-        epoch_schedule::EpochSchedule,
         feature_set::{
             allow_native_ids, check_seed_length, close_upgradeable_program_accounts, cpi_data_cost,
             demote_program_write_locks, enforce_aligned_host_addrs, keccak256_syscall_enabled,
@@ -33,14 +31,13 @@ use {
         keccak,
         keyed_account::KeyedAccount,
         native_loader,
-        process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+        process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
         program::MAX_RETURN_DATA,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
-        rent::Rent,
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-        sysvar::{self, fees::Fees, Sysvar, SysvarId},
+        sysvar::{self, Sysvar, SysvarId},
     },
     std::{
         alloc::Layout,
@@ -50,6 +47,7 @@ use {
         rc::Rc,
         slice::from_raw_parts_mut,
         str::{from_utf8, Utf8Error},
+        sync::Arc,
     },
     thiserror::Error as ThisError,
 };
@@ -1142,17 +1140,13 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
     }
 }
 
-fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
-    id: &Pubkey,
+fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
-    invoke_context: Rc<RefCell<&mut dyn InvokeContext>>,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let invoke_context = invoke_context
-        .try_borrow()
-        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
     invoke_context.get_compute_meter().consume(
         invoke_context.get_bpf_compute_budget().sysvar_base_cost + size_of::<T>() as u64,
     )?;
@@ -1163,8 +1157,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id()),
     )?;
 
-    *var = process_instruction::get_sysvar::<T>(*invoke_context, id)
-        .map_err(SyscallError::InstructionError)?;
+    let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
+    *var = T::clone(sysvar.as_ref());
 
     Ok(SUCCESS)
 }
@@ -1185,12 +1179,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetClockSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = get_sysvar::<Clock>(
-            &sysvar::clock::id(),
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -1210,12 +1210,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = get_sysvar::<EpochSchedule>(
-            &sysvar::epoch_schedule::id(),
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -1235,12 +1241,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = get_sysvar::<Fees>(
-            &sysvar::fees::id(),
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_fees(),
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -1260,12 +1272,18 @@ impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = get_sysvar::<Rent>(
-            &sysvar::rent::id(),
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_rent(),
             var_addr,
             self.loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            *invoke_context,
         );
     }
 }
@@ -2771,9 +2789,13 @@ mod tests {
         },
         solana_sdk::{
             bpf_loader,
+            clock::Clock,
+            epoch_schedule::EpochSchedule,
             fee_calculator::FeeCalculator,
             hash::hashv,
             process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
+            rent::Rent,
+            sysvar::fees::Fees,
             sysvar_cache::SysvarCache,
         },
         std::{borrow::Cow, str::FromStr},
@@ -3647,13 +3669,10 @@ mod tests {
         };
 
         let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
-        sysvar_cache.push_entry(
-            sysvar::epoch_schedule::id(),
-            bincode::serialize(&src_epochschedule).unwrap(),
-        );
-        sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
-        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
+        sysvar_cache.set_clock(src_clock.clone());
+        sysvar_cache.set_epoch_schedule(src_epochschedule);
+        sysvar_cache.set_fees(src_fees.clone());
+        sysvar_cache.set_rent(src_rent);
 
         // Test clock sysvar
         {
