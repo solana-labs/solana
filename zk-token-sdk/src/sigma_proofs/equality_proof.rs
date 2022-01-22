@@ -1,3 +1,5 @@
+//! TODO: usage
+
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::encryption::{
@@ -6,6 +8,7 @@ use {
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
+    zeroize::Zeroize,
 };
 use {
     crate::{sigma_proofs::errors::EqualityProofError, transcript::TranscriptProtocol},
@@ -18,6 +21,7 @@ use {
     merlin::Transcript,
 };
 
+/// TODO
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct EqualityProof {
@@ -32,6 +36,7 @@ pub struct EqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl EqualityProof {
+    /// TODO: mention that public inputs are not hashed and that they should be hashed by the caller
     pub fn new(
         elgamal_keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
@@ -47,14 +52,14 @@ impl EqualityProof {
         let x = Scalar::from(message);
         let r = opening.get_scalar();
 
-        // generate random masking factors that also serves as a nonce
-        let y_s = Scalar::random(&mut OsRng);
-        let y_x = Scalar::random(&mut OsRng);
-        let y_r = Scalar::random(&mut OsRng);
+        // generate random masking factors that also serves as nonces
+        let mut y_s = Scalar::random(&mut OsRng);
+        let mut y_x = Scalar::random(&mut OsRng);
+        let mut y_r = Scalar::random(&mut OsRng);
 
-        let Y_0 = (y_s * P_EG).compress();
-        let Y_1 = RistrettoPoint::multiscalar_mul(vec![y_x, y_s], vec![&(*G), D_EG]).compress();
-        let Y_2 = RistrettoPoint::multiscalar_mul(vec![y_x, y_r], vec![&(*G), &(*H)]).compress();
+        let Y_0 = (&y_s * P_EG).compress();
+        let Y_1 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_EG]).compress();
+        let Y_2 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_r], vec![&(*G), &(*H)]).compress();
 
         // record masking factors in transcript
         transcript.append_point(b"Y_0", &Y_0);
@@ -65,9 +70,14 @@ impl EqualityProof {
         transcript.challenge_scalar(b"w");
 
         // compute the masked values
-        let z_s = c * s + y_s;
-        let z_x = c * x + y_x;
-        let z_r = c * r + y_r;
+        let z_s = &(&c * s) + &y_s;
+        let z_x = &(&c * &x) + &y_x;
+        let z_r = &(&c * r) + &y_r;
+
+        // zeroize random scalars
+        y_s.zeroize();
+        y_x.zeroize();
+        y_r.zeroize();
 
         EqualityProof {
             Y_0,
@@ -79,6 +89,7 @@ impl EqualityProof {
         }
     }
 
+    /// TODO:
     pub fn verify(
         self,
         elgamal_pubkey: &ElGamalPubkey,
@@ -90,7 +101,6 @@ impl EqualityProof {
         let P_EG = elgamal_pubkey.get_point();
         let C_EG = ciphertext.commitment.get_point();
         let D_EG = ciphertext.handle.get_point();
-
         let C_Ped = commitment.get_point();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
@@ -99,8 +109,11 @@ impl EqualityProof {
         transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
 
         let c = transcript.challenge_scalar(b"c");
-        let w = transcript.challenge_scalar(b"w");
-        let ww = w * w;
+        let w = transcript.challenge_scalar(b"w"); // w used for batch verification
+        let ww = &w * &w;
+
+        let w_negated = -&w;
+        let ww_negated = -&ww;
 
         // check that the required algebraic condition holds
         let Y_0 = self.Y_0.decompress().ok_or(EqualityProofError::Format)?;
@@ -109,30 +122,30 @@ impl EqualityProof {
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
-                self.z_s,
-                -c,
-                -Scalar::one(),
-                w * self.z_x,
-                w * self.z_s,
-                -w * c,
-                -w,
-                ww * self.z_x,
-                ww * self.z_r,
-                -ww * c,
-                -ww,
+                &self.z_s,           // z_s
+                &(-&c),              // -c
+                &(-&Scalar::one()),  // -identity
+                &(&w * &self.z_x),   // w * z_x
+                &(&w * &self.z_s),   // w * z_s
+                &(&w_negated * &c),  // -w * c
+                &w_negated,          // -w
+                &(&ww * &self.z_x),  // ww * z_x
+                &(&ww * &self.z_r),  // ww * z_r
+                &(&ww_negated * &c), // -ww * c
+                &ww_negated,         // -ww
             ],
             vec![
-                P_EG,
-                &(*H),
-                &Y_0,
-                &(*G),
-                D_EG,
-                C_EG,
-                &Y_1,
-                &(*G),
-                &(*H),
-                C_Ped,
-                &Y_2,
+                P_EG,  // P_EG
+                &(*H), // H
+                &Y_0,  // Y_0
+                &(*G), // G
+                D_EG,  // D_EG
+                C_EG,  // C_EG
+                &Y_1,  // Y_1
+                &(*G), // G
+                &(*H), // H
+                C_Ped, // C_Ped
+                &Y_2,  // Y_2
             ],
         );
 
@@ -182,6 +195,7 @@ mod test {
     use super::*;
     use crate::encryption::pedersen::Pedersen;
 
+    // TODO: edge cases
     #[test]
     fn test_equality_proof() {
         // success case
