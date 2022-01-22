@@ -3399,38 +3399,16 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
-<<<<<<< HEAD
-    fn get_executors(
+    fn get_executors<'a>(
         &self,
-        message: &Message,
-        loaders: &[Vec<(Pubkey, AccountSharedData)>],
+        accounts_iter: impl Iterator<Item = &'a (Pubkey, AccountSharedData)>,
     ) -> Rc<RefCell<Executors>> {
-        let mut num_executors = message.account_keys.len();
-        for instruction_loaders in loaders.iter() {
-            num_executors += instruction_loaders.len();
-        }
-        let mut executors = HashMap::with_capacity(num_executors);
-        let cache = self.cached_executors.read().unwrap();
-
-        for key in message.account_keys.iter() {
-            if let Some(executor) = cache.get(key) {
-                executors.insert(*key, TransactionExecutor::new_cached(executor));
-            }
-        }
-        for instruction_loaders in loaders.iter() {
-            for (key, _) in instruction_loaders.iter() {
-                if let Some(executor) = cache.get(key) {
-                    executors.insert(*key, TransactionExecutor::new_cached(executor));
-=======
-    fn get_executors(&self, accounts: &[TransactionAccount]) -> Rc<RefCell<Executors>> {
-        let executable_keys: Vec<_> = accounts
-            .iter()
+        let executable_keys: Vec<_> = accounts_iter
             .filter_map(|(key, account)| {
                 if account.executable() && !native_loader::check_id(account.owner()) {
                     Some(key)
                 } else {
                     None
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
                 }
             })
             .collect();
@@ -3479,155 +3457,6 @@ impl Bank {
         Arc::make_mut(&mut cache).remove(pubkey);
     }
 
-<<<<<<< HEAD
-=======
-    pub fn load_lookup_table_addresses(
-        &self,
-        address_table_lookups: &[MessageAddressTableLookup],
-    ) -> Result<LoadedAddresses> {
-        if !self.versioned_tx_message_enabled() {
-            return Err(TransactionError::UnsupportedVersion);
-        }
-
-        let slot_hashes = self
-            .sysvar_cache
-            .read()
-            .unwrap()
-            .get_slot_hashes()
-            .map_err(|_| TransactionError::AccountNotFound)?;
-
-        Ok(address_table_lookups
-            .iter()
-            .map(|address_table_lookup| {
-                self.rc.accounts.load_lookup_table_addresses(
-                    &self.ancestors,
-                    address_table_lookup,
-                    &slot_hashes,
-                )
-            })
-            .collect::<std::result::Result<_, AddressLookupError>>()?)
-    }
-
-    /// Execute a transaction using the provided loaded accounts and update
-    /// the executors cache if the transaction was successful.
-    fn execute_loaded_transaction(
-        &self,
-        tx: &SanitizedTransaction,
-        loaded_transaction: &mut LoadedTransaction,
-        compute_budget: ComputeBudget,
-        durable_nonce_fee: Option<DurableNonceFee>,
-        enable_cpi_recording: bool,
-        enable_log_recording: bool,
-        timings: &mut ExecuteTimings,
-        error_counters: &mut ErrorCounters,
-    ) -> TransactionExecutionResult {
-        let mut get_executors_time = Measure::start("get_executors_time");
-        let executors = self.get_executors(&loaded_transaction.accounts);
-        get_executors_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.get_executors_us,
-            get_executors_time.as_us()
-        );
-
-        let mut transaction_accounts = Vec::new();
-        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
-            compute_budget.max_invoke_depth.saturating_add(1),
-            tx.message().instructions().len(),
-        );
-
-        let pre_account_state_info =
-            self.get_transaction_account_state_info(&transaction_context, tx.message());
-
-        let log_collector = if enable_log_recording {
-            Some(LogCollector::new_ref())
-        } else {
-            None
-        };
-
-        let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
-
-        let mut process_message_time = Measure::start("process_message_time");
-        let process_result = MessageProcessor::process_message(
-            &self.builtin_programs.vec,
-            tx.message(),
-            &loaded_transaction.program_indices,
-            &mut transaction_context,
-            self.rent_collector.rent,
-            log_collector.clone(),
-            executors.clone(),
-            self.feature_set.clone(),
-            compute_budget,
-            timings,
-            &*self.sysvar_cache.read().unwrap(),
-            blockhash,
-            lamports_per_signature,
-            self.load_accounts_data_len(),
-        );
-        process_message_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.process_message_us,
-            process_message_time.as_us()
-        );
-
-        let mut update_executors_time = Measure::start("update_executors_time");
-        self.update_executors(process_result.is_ok(), executors);
-        update_executors_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.update_executors_us,
-            update_executors_time.as_us()
-        );
-
-        let status = process_result
-            .and_then(|info| {
-                let post_account_state_info =
-                    self.get_transaction_account_state_info(&transaction_context, tx.message());
-                self.verify_transaction_account_state_changes(
-                    &pre_account_state_info,
-                    &post_account_state_info,
-                    &transaction_context,
-                )
-                .map(|_| info)
-            })
-            .map(|info| {
-                self.store_accounts_data_len(info.accounts_data_len);
-            })
-            .map_err(|err| {
-                match err {
-                    TransactionError::InvalidRentPayingAccount => {
-                        error_counters.invalid_rent_paying_account += 1;
-                    }
-                    _ => {
-                        error_counters.instruction_error += 1;
-                    }
-                }
-                err
-            });
-
-        let log_messages: Option<TransactionLogMessages> =
-            log_collector.and_then(|log_collector| {
-                Rc::try_unwrap(log_collector)
-                    .map(|log_collector| log_collector.into_inner().into())
-                    .ok()
-            });
-
-        let (accounts, instruction_trace) = transaction_context.deconstruct();
-        loaded_transaction.accounts = accounts;
-
-        TransactionExecutionResult::Executed(TransactionExecutionDetails {
-            status,
-            log_messages,
-            inner_instructions: if enable_cpi_recording {
-                Some(instruction_trace)
-            } else {
-                None
-            },
-            durable_nonce_fee,
-        })
-    }
-
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3729,8 +3558,15 @@ impl Bank {
 
                     if process_result.is_ok() {
                         let mut get_executors_time = Measure::start("get_executors_time");
-                        let executors =
-                            self.get_executors(&tx.message, &loaded_transaction.loaders);
+                        let executors = self.get_executors(
+                            loaded_transaction.accounts.iter().chain(
+                                loaded_transaction
+                                    .loaders
+                                    .iter()
+                                    .map(|loaders| loaders.iter())
+                                    .flatten(),
+                            ),
+                        );
                         get_executors_time.stop();
                         saturating_add_assign!(
                             timings.execute_accessories.get_executors_us,
@@ -12267,25 +12103,6 @@ pub(crate) mod tests {
         let key5 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
 
-<<<<<<< HEAD
-        let message = Message {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                num_readonly_signed_accounts: 0,
-                num_readonly_unsigned_accounts: 1,
-            },
-            account_keys: vec![key1, key2],
-            recent_blockhash: Hash::default(),
-            instructions: vec![],
-        };
-
-        let loaders = &[
-            vec![
-                (key3, AccountSharedData::default()),
-                (key4, AccountSharedData::default()),
-            ],
-            vec![(key1, AccountSharedData::default())],
-=======
         fn new_executable_account(owner: Pubkey) -> AccountSharedData {
             AccountSharedData::from(Account {
                 owner,
@@ -12300,7 +12117,6 @@ pub(crate) mod tests {
             (key3, new_executable_account(bpf_loader_deprecated::id())),
             (key4, new_executable_account(native_loader::id())),
             (key5, AccountSharedData::default()),
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
         ];
 
         // don't do any work if not dirty
@@ -12316,11 +12132,7 @@ pub(crate) mod tests {
             .unwrap()
             .clear_miss_for_test();
         bank.update_executors(true, executors);
-<<<<<<< HEAD
-        let executors = bank.get_executors(&message, loaders);
-=======
-        let executors = bank.get_executors(accounts);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
+        let executors = bank.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 0);
 
         // do work
@@ -12331,26 +12143,16 @@ pub(crate) mod tests {
         executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         bank.update_executors(true, executors);
-<<<<<<< HEAD
-        let executors = bank.get_executors(&message, loaders);
-        assert_eq!(executors.borrow().len(), 4);
-=======
-        let executors = bank.get_executors(accounts);
+        let executors = bank.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 3);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
         assert!(executors.borrow().contains_key(&key3));
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-<<<<<<< HEAD
-        let executors = bank.get_executors(&message, loaders);
-        assert_eq!(executors.borrow().len(), 4);
-=======
-        let executors = bank.get_executors(accounts);
+        let executors = bank.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 3);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
         assert!(executors.borrow().contains_key(&key3));
@@ -12360,11 +12162,7 @@ pub(crate) mod tests {
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
-<<<<<<< HEAD
-        let executors = bank.get_executors(&message, loaders);
-=======
-        let executors = bank.get_executors(accounts);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
+        let executors = bank.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 0);
     }
 
@@ -12378,13 +12176,6 @@ pub(crate) mod tests {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-<<<<<<< HEAD
-
-        let loaders = &[vec![
-            (key1, AccountSharedData::default()),
-            (key2, AccountSharedData::default()),
-        ]];
-=======
         let executable_account = AccountSharedData::from(Account {
             owner: bpf_loader_upgradeable::id(),
             executable: true,
@@ -12395,32 +12186,21 @@ pub(crate) mod tests {
             (key1, executable_account.clone()),
             (key2, executable_account),
         ];
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
 
         // add one to root bank
         let mut executors = Executors::default();
         executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         root.update_executors(true, executors);
-<<<<<<< HEAD
-        let executors = root.get_executors(&Message::default(), loaders);
-=======
-        let executors = root.get_executors(accounts);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
+        let executors = root.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
         let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
 
-<<<<<<< HEAD
-        let executors = fork1.get_executors(&Message::default(), loaders);
+        let executors = fork1.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(&Message::default(), loaders);
-=======
-        let executors = fork1.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(accounts);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
+        let executors = fork2.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 1);
 
         let mut executors = Executors::default();
@@ -12428,28 +12208,16 @@ pub(crate) mod tests {
         let executors = Rc::new(RefCell::new(executors));
         fork1.update_executors(true, executors);
 
-<<<<<<< HEAD
-        let executors = fork1.get_executors(&Message::default(), loaders);
+        let executors = fork1.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 2);
-        let executors = fork2.get_executors(&Message::default(), loaders);
-=======
-        let executors = fork1.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 2);
-        let executors = fork2.get_executors(accounts);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
+        let executors = fork2.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 1);
 
         fork1.remove_executor(&key1);
 
-<<<<<<< HEAD
-        let executors = fork1.get_executors(&Message::default(), loaders);
+        let executors = fork1.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(&Message::default(), loaders);
-=======
-        let executors = fork1.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(accounts);
->>>>>>> 7d34a7aca (Perf: Only check executors cache for executable bpf program ids (#22624))
+        let executors = fork2.get_executors(accounts.iter());
         assert_eq!(executors.borrow().len(), 1);
     }
 
