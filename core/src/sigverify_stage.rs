@@ -40,7 +40,7 @@ pub struct SigVerifyStage {
 }
 
 pub trait SigVerifier {
-    fn verify_batches(&self, batches: Vec<PacketBatch>) -> Vec<PacketBatch>;
+    fn verify_batches(&self, batches: Vec<PacketBatch>, valid_packets: usize) -> Vec<PacketBatch>;
 }
 
 #[derive(Default, Clone)]
@@ -171,7 +171,11 @@ impl SigVerifierStats {
 }
 
 impl SigVerifier for DisabledSigVerifier {
-    fn verify_batches(&self, mut batches: Vec<PacketBatch>) -> Vec<PacketBatch> {
+    fn verify_batches(
+        &self,
+        mut batches: Vec<PacketBatch>,
+        _valid_packets: usize,
+    ) -> Vec<PacketBatch> {
         sigverify::ed25519_verify_disabled(&mut batches);
         batches
     }
@@ -235,14 +239,16 @@ impl SigVerifyStage {
         let num_unique = num_packets.saturating_sub(dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
+        let mut num_valid_packets = num_unique;
         if num_unique > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
-        };
+            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
+            num_valid_packets = MAX_SIGVERIFY_BATCH;
+        }
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        let batches = verifier.verify_batches(batches);
+        let batches = verifier.verify_batches(batches, num_valid_packets);
         sendr.send(batches)?;
         verify_batch_time.stop();
 
