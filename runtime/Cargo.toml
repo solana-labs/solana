@@ -1,6 +1,6 @@
 [package]
 name = "solana-runtime"
-version = "1.8.14"
+version = "1.8.15"
 description = "Solana runtime"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -36,20 +36,20 @@ rayon = "1.5.0"
 regex = "1.3.9"
 serde = { version = "1.0.122", features = ["rc"] }
 serde_derive = "1.0.103"
-solana-config-program = { path = "../programs/config", version = "=1.8.14" }
-solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.8.14" }
-solana-bloom = { path = "../bloom", version = "=1.8.14" }
-solana-ed25519-program = { path = "../programs/ed25519", version = "=1.8.14" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.14" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.14" }
-solana-logger = { path = "../logger", version = "=1.8.14" }
-solana-measure = { path = "../measure", version = "=1.8.14" }
-solana-metrics = { path = "../metrics", version = "=1.8.14" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.14" }
-solana-sdk = { path = "../sdk", version = "=1.8.14" }
-solana-secp256k1-program = { path = "../programs/secp256k1", version = "=1.8.14" }
-solana-stake-program = { path = "../programs/stake", version = "=1.8.14" }
-solana-vote-program = { path = "../programs/vote", version = "=1.8.14" }
+solana-config-program = { path = "../programs/config", version = "=1.8.15" }
+solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.8.15" }
+solana-bloom = { path = "../bloom", version = "=1.8.15" }
+solana-ed25519-program = { path = "../programs/ed25519", version = "=1.8.15" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.15" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.15" }
+solana-logger = { path = "../logger", version = "=1.8.15" }
+solana-measure = { path = "../measure", version = "=1.8.15" }
+solana-metrics = { path = "../metrics", version = "=1.8.15" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.15" }
+solana-sdk = { path = "../sdk", version = "=1.8.15" }
+solana-secp256k1-program = { path = "../programs/secp256k1", version = "=1.8.15" }
+solana-stake-program = { path = "../programs/stake", version = "=1.8.15" }
+solana-vote-program = { path = "../programs/vote", version = "=1.8.15" }
 symlink = "0.1.0"
 tar = "0.4.37"
 tempfile = "3.1.0"
