@@ -5635,6 +5635,7 @@ if false {
         max_root: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
+        //slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
@@ -6007,7 +6008,7 @@ if false {
 
     fn calculate_accounts_hash_helper(
         &self,
-        use_index: bool,
+        mut use_index: bool,
         slot: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
@@ -6016,6 +6017,7 @@ if false {
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
+        use_index = true;
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
                 Some((&self.accounts_cache, ancestors, &self.accounts_index))
