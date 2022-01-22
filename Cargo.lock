@@ -2812,6 +2812,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "num_threads"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71a1eb3a36534514077c1e079ada2fb170ef30c47d203aa6916138cf882ecd52"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "number_prefix"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3646,7 +3655,7 @@ dependencies = [
  "solana-program-runtime",
  "solana-sdk",
  "solana_rbpf",
- "time 0.3.5",
+ "time 0.3.6",
 ]
 
 [[package]]
@@ -6218,7 +6227,7 @@ dependencies = [
  "solana-sdk",
  "subtle",
  "thiserror",
- "time 0.1.43",
+ "time 0.3.6",
  "zeroize",
 ]
 
@@ -6654,11 +6663,12 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
+checksum = "c8d54b9298e05179c335de2b9645d061255bcd5155f843b3e328d2cfe0a5b413"
 dependencies = [
  "libc",
+ "num_threads",
 ]
 
 [[package]]

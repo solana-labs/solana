@@ -34,7 +34,7 @@ thiserror = "1"
 zeroize = { version = "1.3", default-features = false, features = ["zeroize_derive"] }
 
 [dev-dependencies]
-time = "0.1.40"
+time = "0.3.6"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
