@@ -292,7 +292,8 @@ solana-validator \
   --rpc-port 8899 \
   --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
-  --log ~/solana-validator.log
+  --log ~/solana-validator.log \
+  --private-rpc
 ```
 
 To force validator logging to the console add a `--log -` argument, otherwise
@@ -300,6 +301,8 @@ the validator will automatically log to a file.
 
 The ledger will be placed in the `ledger/` directory by default, use the
 `--ledger` argument to specify a different location.
+
+For validators running on Mainnet-Beta it is strongly recommended to use `--private-rpc` as well as to block the RPC port on the OS firewall or network level (default port is 8899 or the one set explicitly with `--rpc-port` asll we as the websocket port 8900 or the custom RPC port + 1).
 
 > Note: You can use a
 > [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
