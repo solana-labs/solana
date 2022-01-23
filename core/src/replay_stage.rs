@@ -40,7 +40,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
-    solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     solana_program_runtime::timings::ExecuteTimings,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -1479,13 +1479,17 @@ impl ReplayStage {
 
         assert!(!poh_recorder.lock().unwrap().has_bank());
 
-        let (reached_leader_slot, _grace_ticks, poh_slot, parent_slot) =
-            poh_recorder.lock().unwrap().reached_leader_slot();
+        let (poh_slot, parent_slot) = match poh_recorder.lock().unwrap().reached_leader_slot() {
+            PohLeaderStatus::Reached {
+                poh_slot,
+                parent_slot,
+            } => (poh_slot, parent_slot),
+            PohLeaderStatus::NotReached => {
+                trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
+                return;
+            }
+        };
 
-        if !reached_leader_slot {
-            trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
-            return;
-        }
         trace!("{} reached_leader_slot", my_pubkey);
 
         let parent = bank_forks
