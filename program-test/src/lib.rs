@@ -397,14 +397,18 @@ fn default_shared_object_dirs() -> Vec<PathBuf> {
     search_path
 }
 
-pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
+pub fn read_file_into<P: AsRef<Path>>(path: P, buf: &mut Vec<u8>) {
     let path = path.as_ref();
     let mut file = File::open(path)
         .unwrap_or_else(|err| panic!("Failed to open \"{}\": {}", path.display(), err));
 
-    let mut file_data = Vec::new();
-    file.read_to_end(&mut file_data)
+    file.read_to_end(buf)
         .unwrap_or_else(|err| panic!("Failed to read \"{}\": {}", path.display(), err));
+}
+
+pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
+    let mut file_data = Vec::new();
+    read_file_into(path, &mut file_data);
     file_data
 }
 
@@ -448,6 +452,7 @@ pub struct ProgramTest {
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
     use_bpf_jit: bool,
+    genesis_mint_keypair: Keypair,
 }
 
 impl Default for ProgramTest {
@@ -478,6 +483,7 @@ impl Default for ProgramTest {
             compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
+            genesis_mint_keypair: Keypair::new(),
         }
     }
 }
@@ -586,7 +592,15 @@ impl ProgramTest {
         process_instruction: Option<ProcessInstructionWithContext>,
     ) {
         let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
-            let data = read_file(&program_file);
+            let mut program_data = bincode::serialize(
+                &solana_sdk::bpf_loader_upgradeable::UpgradeableLoaderState::ProgramData {
+                    slot: 1,
+                    upgrade_authority_address: Some(this.genesis_mint_keypair.pubkey()),
+                },
+            )
+            .unwrap();
+            read_file_into(&program_file, &mut program_data);
+
             info!(
                 "\"{}\" BPF program from {}{}",
                 program_name,
@@ -609,13 +623,34 @@ impl ProgramTest {
                     .unwrap_or_else(|| "".to_string())
             );
 
+            let (programdata_address, _) = Pubkey::find_program_address(
+                &[program_id.as_ref()],
+                &solana_sdk::bpf_loader_upgradeable::ID,
+            );
+            let program = bincode::serialize(
+                &solana_sdk::bpf_loader_upgradeable::UpgradeableLoaderState::Program {
+                    programdata_address,
+                },
+            )
+            .unwrap();
+
             this.add_account(
                 program_id,
                 Account {
-                    lamports: Rent::default().minimum_balance(data.len()).min(1),
-                    data,
-                    owner: solana_sdk::bpf_loader::id(),
+                    lamports: Rent::default().minimum_balance(program.len()).min(1),
+                    data: program,
+                    owner: solana_sdk::bpf_loader_upgradeable::id(),
                     executable: true,
+                    rent_epoch: 0,
+                },
+            );
+            this.add_account(
+                programdata_address,
+                Account {
+                    lamports: Rent::default().minimum_balance(program_data.len()).min(1),
+                    data: program_data,
+                    owner: solana_sdk::bpf_loader_upgradeable::id(),
+                    executable: false,
                     rent_epoch: 0,
                 },
             );
@@ -730,12 +765,11 @@ impl ProgramTest {
         let bootstrap_validator_stake_lamports =
             rent.minimum_balance(VoteState::size_of()) + sol_to_lamports(1_000_000.0);
 
-        let mint_keypair = Keypair::new();
         let voting_keypair = Keypair::new();
 
         let mut genesis_config = create_genesis_config_with_leader_ex(
             sol_to_lamports(1_000_000.0),
-            &mint_keypair.pubkey(),
+            &self.genesis_mint_keypair.pubkey(),
             &bootstrap_validator_pubkey,
             &voting_keypair.pubkey(),
             &Pubkey::new_unique(),
@@ -748,7 +782,7 @@ impl ProgramTest {
         );
         let target_tick_duration = Duration::from_micros(100);
         genesis_config.poh_config = PohConfig::new_sleep(target_tick_duration);
-        debug!("Payer address: {}", mint_keypair.pubkey());
+        debug!("Payer address: {}", self.genesis_mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
         let mut bank = Bank::new_for_tests(&genesis_config);
@@ -809,7 +843,7 @@ impl ProgramTest {
             last_blockhash,
             GenesisConfigInfo {
                 genesis_config,
-                mint_keypair,
+                mint_keypair: Keypair::from_bytes(&self.genesis_mint_keypair.to_bytes()).unwrap(),
                 voting_keypair,
                 validator_pubkey: bootstrap_validator_pubkey,
             },
