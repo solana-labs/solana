@@ -196,6 +196,22 @@ pub enum PohLeaderStatus {
     Reached { poh_slot: Slot, parent_slot: Slot },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LeaderTickHeights {
+    pub first_tick_height: u64,
+    pub last_tick_height: u64,
+    pub grace_ticks: u64,
+}
+
+impl LeaderTickHeights {
+    // Return the tick height when the leader will start producing a block building from any block produced by the
+    // previous leader in the leader schedule. The tick height includes grace ticks to give some extra time for the
+    // previous leader's block to be propagated.
+    fn target_start_tick_height(&self) -> u64 {
+        self.first_tick_height.saturating_add(self.grace_ticks)
+    }
+}
+
 pub struct PohRecorder {
     pub poh: Arc<Mutex<Poh>>,
     tick_height: u64,
@@ -205,9 +221,7 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntry>,
-    leader_first_tick_height_including_grace_ticks: Option<u64>,
-    leader_last_tick_height: u64, // zero if none
-    grace_ticks: u64,
+    leader_tick_heights: Option<LeaderTickHeights>,
     id: Pubkey,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -241,15 +255,8 @@ impl PohRecorder {
                 GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
-            let (
-                leader_first_tick_height_including_grace_ticks,
-                leader_last_tick_height,
-                grace_ticks,
-            ) = Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
-            self.grace_ticks = grace_ticks;
-            self.leader_first_tick_height_including_grace_ticks =
-                leader_first_tick_height_including_grace_ticks;
-            self.leader_last_tick_height = leader_last_tick_height;
+            self.leader_tick_heights =
+                Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
 
             datapoint_info!(
                 "leader-slot-start-to-cleared-elapsed-ms",
@@ -265,22 +272,23 @@ impl PohRecorder {
 
     pub fn would_be_leader(&self, within_next_n_ticks: u64) -> bool {
         self.has_bank()
-            || self.leader_first_tick_height_including_grace_ticks.map_or(
+            || self.leader_tick_heights.map_or(
                 false,
-                |leader_first_tick_height_including_grace_ticks| {
-                    let ideal_leader_tick_height = leader_first_tick_height_including_grace_ticks
-                        .saturating_sub(self.grace_ticks);
-                    self.tick_height + within_next_n_ticks >= ideal_leader_tick_height
-                        && self.tick_height <= self.leader_last_tick_height
+                |LeaderTickHeights {
+                     first_tick_height,
+                     last_tick_height,
+                     ..
+                 }| {
+                    self.tick_height + within_next_n_ticks >= first_tick_height
+                        && self.tick_height <= last_tick_height
                 },
             )
     }
 
     // Return the slot for a given tick height
     fn slot_for_tick_height(&self, tick_height: u64) -> Slot {
-        // We need to subtract by one here because, assuming ticks per slot is 64,
-        // tick heights [1..64] correspond to slot 0. The last tick height of a slot
-        // is always a multiple of 64.
+        // We need to subtract by one here because, assuming ticks per slot is 64, tick heights [1..64] correspond to
+        // slot 0. The last tick height of a slot is always a multiple of 64.
         tick_height.saturating_sub(1) / self.ticks_per_slot
     }
 
@@ -342,87 +350,72 @@ impl PohRecorder {
         }
     }
 
-    fn reached_leader_tick(&self, leader_first_tick_height_including_grace_ticks: u64) -> bool {
-        let target_tick_height = leader_first_tick_height_including_grace_ticks.saturating_sub(1);
-        let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
+    fn reached_leader_tick(&self) -> bool {
+        let leader_tick_heights = match self.leader_tick_heights {
+            Some(leader_tick_heights) => leader_tick_heights,
+            None => return false,
+        };
+
         let next_tick_height = self.tick_height.saturating_add(1);
-        let next_slot = self.slot_for_tick_height(next_tick_height);
         // We've approached target_tick_height OR poh was reset to run immediately
         // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
-        self.tick_height >= target_tick_height
-            || self.start_tick_height + self.grace_ticks
-                == leader_first_tick_height_including_grace_ticks
-            || (self.tick_height >= ideal_target_tick_height
-                && (self.prev_slot_was_mine(next_slot)
-                    || !self.is_same_fork_as_previous_leader(next_slot)))
+        next_tick_height >= leader_tick_heights.target_start_tick_height()
+            || self.start_tick_height == leader_tick_heights.first_tick_height
+            || (next_tick_height >= leader_tick_heights.first_tick_height && {
+                let next_slot = self.slot_for_tick_height(next_tick_height);
+                self.prev_slot_was_mine(next_slot)
+                    || !self.is_same_fork_as_previous_leader(next_slot)
+            })
     }
 
     pub fn start_slot(&self) -> Slot {
         self.start_bank.slot()
     }
 
-    /// Returns if the leader slot has been reached along with the current poh
-    /// slot and the parent slot (could be a few slots ago if any previous
-    /// leaders needed to be skipped).
+    /// Returns whether the leader slot has been reached and if so, returns the current poh slot and the parent slot
+    /// (could be a few slots ago if any previous leaders needed to be skipped).
     pub fn reached_leader_slot(&self) -> PohLeaderStatus {
         trace!(
-            "tick_height {}, start_tick_height {}, leader_first_tick_height_including_grace_ticks {:?}, grace_ticks {}, has_bank {}",
+            "tick_height {}, start_tick_height {}, leader_tick_heights {:?}, has_bank {}",
             self.tick_height,
             self.start_tick_height,
-            self.leader_first_tick_height_including_grace_ticks,
-            self.grace_ticks,
+            self.leader_tick_heights,
             self.has_bank()
         );
 
-        let next_tick_height = self.tick_height + 1;
-        let next_poh_slot = self.slot_for_tick_height(next_tick_height);
-        if let Some(leader_first_tick_height_including_grace_ticks) =
-            self.leader_first_tick_height_including_grace_ticks
-        {
-            if self.reached_leader_tick(leader_first_tick_height_including_grace_ticks) {
-                assert!(next_tick_height >= self.start_tick_height);
-                let poh_slot = next_poh_slot;
-                let parent_slot = self.start_slot();
-                return PohLeaderStatus::Reached {
-                    poh_slot,
-                    parent_slot,
-                };
-            }
+        if self.reached_leader_tick() {
+            let next_tick_height = self.tick_height.saturating_add(1);
+            assert!(next_tick_height >= self.start_tick_height);
+            let poh_slot = self.slot_for_tick_height(next_tick_height);
+            let parent_slot = self.start_slot();
+            return PohLeaderStatus::Reached {
+                poh_slot,
+                parent_slot,
+            };
         }
+
         PohLeaderStatus::NotReached
     }
 
-    // returns (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) given the next
-    //  slot this recorder will lead
+    // Returns the tick heights for when a validator next has its leader slots
     fn compute_leader_slot_tick_heights(
         next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
-    ) -> (Option<u64>, u64, u64) {
-        next_leader_slot
-            .map(|(first_slot, last_slot)| {
-                let leader_first_tick_height = first_slot * ticks_per_slot + 1;
-                let last_tick_height = (last_slot + 1) * ticks_per_slot;
-                let num_slots = last_slot - first_slot + 1;
-                let grace_ticks = cmp::min(
-                    ticks_per_slot * MAX_GRACE_SLOTS,
-                    ticks_per_slot * num_slots / GRACE_TICKS_FACTOR,
-                );
-                let leader_first_tick_height_including_grace_ticks =
-                    leader_first_tick_height + grace_ticks;
-                (
-                    Some(leader_first_tick_height_including_grace_ticks),
-                    last_tick_height,
-                    grace_ticks,
-                )
-            })
-            .unwrap_or((
-                None,
-                0,
-                cmp::min(
-                    ticks_per_slot * MAX_GRACE_SLOTS,
-                    ticks_per_slot * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR,
-                ),
-            ))
+    ) -> Option<LeaderTickHeights> {
+        next_leader_slot.map(|(first_slot, last_slot)| {
+            let first_tick_height = first_slot * ticks_per_slot + 1;
+            let last_tick_height = (last_slot + 1) * ticks_per_slot;
+            let num_leader_slots = last_slot - first_slot + 1;
+            let grace_ticks = cmp::min(
+                ticks_per_slot * MAX_GRACE_SLOTS,
+                ticks_per_slot * num_leader_slots / GRACE_TICKS_FACTOR,
+            );
+            LeaderTickHeights {
+                first_tick_height,
+                last_tick_height,
+                grace_ticks,
+            }
+        })
     }
 
     // synchronize PoH with a bank
@@ -450,12 +443,8 @@ impl PohRecorder {
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
 
-        let (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) =
+        self.leader_tick_heights =
             Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
-        self.grace_ticks = grace_ticks;
-        self.leader_first_tick_height_including_grace_ticks =
-            leader_first_tick_height_including_grace_ticks;
-        self.leader_last_tick_height = leader_last_tick_height;
     }
 
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
@@ -557,10 +546,7 @@ impl PohRecorder {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
 
-            if self
-                .leader_first_tick_height_including_grace_ticks
-                .is_none()
-            {
+            if self.leader_tick_heights.is_none() {
                 self.tick_overhead_us += timing::duration_as_us(&now.elapsed());
                 return;
             }
@@ -705,7 +691,7 @@ impl PohRecorder {
         );
         let (sender, receiver) = unbounded();
         let (record_sender, record_receiver) = unbounded();
-        let (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) =
+        let leader_tick_heights =
             Self::compute_leader_slot_tick_heights(next_leader_slot, ticks_per_slot);
         (
             Self {
@@ -717,9 +703,7 @@ impl PohRecorder {
                 clear_bank_signal,
                 start_bank,
                 start_tick_height: tick_height + 1,
-                leader_first_tick_height_including_grace_ticks,
-                leader_last_tick_height,
-                grace_ticks,
+                leader_tick_heights,
                 id: *id,
                 blockstore: blockstore.clone(),
                 leader_schedule_cache: leader_schedule_cache.clone(),
@@ -851,6 +835,7 @@ mod tests {
         crossbeam_channel::bounded,
         solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path},
         solana_perf::test_tx::test_tx,
+        solana_runtime::bank_utils::setup_bank_and_vote_pubkeys_for_tests,
         solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, hash::hash},
     };
 
@@ -1532,62 +1517,161 @@ mod tests {
         solana_logger::setup();
 
         let ledger_path = get_tmp_ledger_path!();
+        let bank = Arc::new(setup_bank_and_vote_pubkeys_for_tests(2, 42).0);
+        let prev_hash = bank.last_blockhash();
+        let blockstore = Arc::new(
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        );
+
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let bootstrap_validator_id = leader_schedule_cache.slot_leader_at(0, None).unwrap();
+        let other_validator_id = leader_schedule_cache.slot_leader_at(4, None).unwrap();
+        assert_ne!(bootstrap_validator_id, other_validator_id);
+
+        // assert the leader schedule order assumed by the following tests
+        assert_eq!(
+            vec![
+                bootstrap_validator_id,
+                bootstrap_validator_id,
+                bootstrap_validator_id,
+                bootstrap_validator_id,
+                other_validator_id,
+                other_validator_id,
+                other_validator_id,
+                other_validator_id,
+                other_validator_id,
+                other_validator_id,
+                other_validator_id,
+                other_validator_id,
+                bootstrap_validator_id,
+                bootstrap_validator_id,
+                bootstrap_validator_id,
+                bootstrap_validator_id,
+            ],
+            (0..16)
+                .map(|slot| leader_schedule_cache.slot_leader_at(slot, None).unwrap())
+                .collect::<Vec<_>>(),
+        );
+
+        let next_leader_slots = Some((4, 7));
+        let (mut poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
+            0,
+            prev_hash,
+            bank.clone(),
+            next_leader_slots,
+            bank.ticks_per_slot(),
+            &other_validator_id,
+            &blockstore,
+            &leader_schedule_cache,
+            &Arc::new(PohConfig::default()),
+            Arc::new(AtomicBool::default()),
+        );
+
+        // False, because the first leader is the bootstrap validator, "other validator" is not leader yet
+        assert!(!poh_recorder.reached_leader_tick());
+
         {
-            let blockstore = Blockstore::open(&ledger_path)
-                .expect("Expected to be able to open database ledger");
-            let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-            let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-            let prev_hash = bank.last_blockhash();
-            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-            let (mut poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
-                0,
-                prev_hash,
-                bank.clone(),
-                None,
-                bank.ticks_per_slot(),
-                &Pubkey::default(),
-                &Arc::new(blockstore),
-                &leader_schedule_cache,
-                &Arc::new(PohConfig::default()),
-                Arc::new(AtomicBool::default()),
+            // Tick through bootstrap leader slots
+            let ticks_for_bootstrap_leader_slots = 4 * bank.ticks_per_slot();
+            for _ in 0..ticks_for_bootstrap_leader_slots {
+                poh_recorder.tick();
+            }
+
+            // False, because the previous block was produced by bootstrap validator, so a grace period must be
+            // given
+            assert!(!poh_recorder.reached_leader_tick());
+            assert_eq!(
+                poh_recorder.tick_height + 1,
+                poh_recorder.leader_tick_heights.unwrap().first_tick_height
             );
+        }
 
-            let bootstrap_validator_id = leader_schedule_cache.slot_leader_at(0, None).unwrap();
-
-            assert!(poh_recorder.reached_leader_tick(0));
-
-            let grace_ticks = bank.ticks_per_slot() * MAX_GRACE_SLOTS;
-            let new_tick_height = NUM_CONSECUTIVE_LEADER_SLOTS * bank.ticks_per_slot();
-            for _ in 0..new_tick_height {
+        {
+            // Tick through grace period
+            let grace_ticks = poh_recorder
+                .leader_tick_heights
+                .map(|lth| lth.grace_ticks)
+                .unwrap();
+            for _ in 0..grace_ticks {
                 poh_recorder.tick();
             }
 
-            poh_recorder.grace_ticks = grace_ticks;
+            // True, because the grace period has now passed
+            assert!(poh_recorder.reached_leader_tick());
+            assert_eq!(
+                poh_recorder.tick_height + 1,
+                poh_recorder
+                    .leader_tick_heights
+                    .unwrap()
+                    .target_start_tick_height()
+            );
+        }
 
-            // False, because the Poh was reset on slot 0, which
-            // is a block produced by the previous leader, so a grace
-            // period must be given
-            assert!(!poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
+        {
+            // Reset poh to the bank for the last slot of "other validator's" first consecutive set of leader slots
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 7));
 
-            // Tick `NUM_CONSECUTIVE_LEADER_SLOTS` more times
-            let new_tick_height = 2 * NUM_CONSECUTIVE_LEADER_SLOTS * bank.ticks_per_slot();
-            for _ in 0..new_tick_height {
+            let next_leader_slots = Some((8, 11));
+            poh_recorder.reset(bank, next_leader_slots);
+
+            // True, because Poh was reset to the bank right before "other validator's" next set of leader slots and
+            // can start immediately
+            assert!(poh_recorder.reached_leader_tick());
+            assert_eq!(
+                poh_recorder.start_tick_height,
+                poh_recorder.leader_tick_heights.unwrap().first_tick_height
+            );
+        }
+
+        {
+            // Reset poh to the bank for the next to last slot of "other validator's" first consecutive set of leader slots
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 6));
+
+            let next_leader_slots = Some((8, 11));
+            poh_recorder.reset(bank.clone(), next_leader_slots);
+
+            // False, because next leader slot hasn't been reached
+            assert!(!poh_recorder.reached_leader_tick());
+
+            // Tick through the slot
+            for _ in 0..bank.ticks_per_slot() {
                 poh_recorder.tick();
             }
-            // True, because
-            // 1) the Poh was reset on slot 0
-            // 2) Our slot starts at 2 * NUM_CONSECUTIVE_LEADER_SLOTS, which means
-            // none of the previous leader's `NUM_CONSECUTIVE_LEADER_SLOTS` were slots
-            // this Poh built on (previous leader was on different fork). Thus, skip the
-            // grace period.
-            assert!(poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
 
-            // From the bootstrap validator's perspective, it should have reached
-            // the tick because the previous slot was also it's own slot (all slots
-            // belong to the bootstrap leader b/c it's the only staked node!), and
-            // validators don't give grace periods if previous slot was also their own.
+            // True, because previous slot was for the same leader
+            assert!(poh_recorder.reached_leader_tick());
+            assert_ne!(
+                poh_recorder.start_tick_height,
+                poh_recorder.leader_tick_heights.unwrap().first_tick_height
+            );
+            assert_eq!(
+                poh_recorder.tick_height + 1,
+                poh_recorder.leader_tick_heights.unwrap().first_tick_height
+            );
+        }
+
+        {
+            // Switch the validator id to test the case where the previous leader is not on the same fork
             poh_recorder.id = bootstrap_validator_id;
-            assert!(poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
+
+            // Reset poh to the bank for last slot of the bootstrap validator's first set of leader slots
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 3));
+            let next_leader_slots = Some((12, 15));
+            poh_recorder.reset(bank.clone(), next_leader_slots);
+
+            let ticks_for_other_validators_slots = 8 * bank.ticks_per_slot();
+            for _ in 0..ticks_for_other_validators_slots {
+                poh_recorder.tick();
+            }
+
+            // From the bootstrap validator's perspective, it should have reached the leader tick because its next
+            // leader slot is not on the same fork as the previous leaders slots because that leader was skipped,
+            // and validators don't give grace periods if they skip the previous leader.
+            assert!(poh_recorder.reached_leader_tick());
+            assert_eq!(
+                poh_recorder.tick_height + 1,
+                poh_recorder.leader_tick_heights.unwrap().first_tick_height
+            );
         }
     }
 
@@ -1840,29 +1924,42 @@ mod tests {
 
     #[test]
     fn test_compute_leader_slot_tick_heights() {
-        assert_eq!(
-            PohRecorder::compute_leader_slot_tick_heights(None, 0),
-            (None, 0, 0)
-        );
+        assert_eq!(PohRecorder::compute_leader_slot_tick_heights(None, 0), None);
 
         assert_eq!(
             PohRecorder::compute_leader_slot_tick_heights(Some((4, 4)), 8),
-            (Some(37), 40, 4)
+            Some(LeaderTickHeights {
+                first_tick_height: 33,
+                last_tick_height: 40,
+                grace_ticks: 4,
+            })
         );
 
         assert_eq!(
             PohRecorder::compute_leader_slot_tick_heights(Some((4, 7)), 8),
-            (Some(49), 64, 2 * 8)
+            Some(LeaderTickHeights {
+                first_tick_height: 33,
+                last_tick_height: 64,
+                grace_ticks: 2 * 8,
+            })
         );
 
         assert_eq!(
             PohRecorder::compute_leader_slot_tick_heights(Some((6, 7)), 8),
-            (Some(57), 64, 8)
+            Some(LeaderTickHeights {
+                first_tick_height: 49,
+                last_tick_height: 64,
+                grace_ticks: 8,
+            })
         );
 
         assert_eq!(
             PohRecorder::compute_leader_slot_tick_heights(Some((6, 7)), 4),
-            (Some(29), 32, 4)
+            Some(LeaderTickHeights {
+                first_tick_height: 25,
+                last_tick_height: 32,
+                grace_ticks: 4,
+            })
         );
     }
 }
