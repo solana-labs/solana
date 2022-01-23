@@ -5497,7 +5497,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, None, false)
+        self.update_accounts_hash_with_index_option(true, false, self.epoch_schedule().slots_per_epoch, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
