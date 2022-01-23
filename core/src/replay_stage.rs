@@ -36,7 +36,12 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
+<<<<<<< HEAD
     solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+=======
+    solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    solana_program_runtime::timings::ExecuteTimings,
+>>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
         rpc_subscriptions::RpcSubscriptions,
@@ -1120,13 +1125,17 @@ impl ReplayStage {
 
         assert!(!poh_recorder.lock().unwrap().has_bank());
 
-        let (reached_leader_slot, _grace_ticks, poh_slot, parent_slot) =
-            poh_recorder.lock().unwrap().reached_leader_slot();
+        let (poh_slot, parent_slot) = match poh_recorder.lock().unwrap().reached_leader_slot() {
+            PohLeaderStatus::Reached {
+                poh_slot,
+                parent_slot,
+            } => (poh_slot, parent_slot),
+            PohLeaderStatus::NotReached => {
+                trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
+                return;
+            }
+        };
 
-        if !reached_leader_slot {
-            trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
-            return;
-        }
         trace!("{} reached_leader_slot", my_pubkey);
 
         let parent = bank_forks
