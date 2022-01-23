@@ -33,8 +33,8 @@ is only an option for validator operators that have control of datacenter networ
 
 TPU traffic should be processed in a way that cannot affect other validator services.
 
-An effective way to do so is to accept TPU on another physical host than the validator itself
-which is trivially done by advertising a different IP address for the TPU service on the gossip protocol.
+An effective way is to accept TPU on another physical host than the validator itself
+which is trivially done by advertising a different TPU IP address through gossip.
 TPU nodes periodically call out to the validator request gossip registration.
 
 *Network Diagram: TPU node route*
