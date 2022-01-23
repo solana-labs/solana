@@ -322,17 +322,10 @@ impl PohRecorder {
         self.start_slot
     }
 
-<<<<<<< HEAD
-    /// returns if leader slot has been reached, how many grace ticks were afforded,
-    ///   imputed leader_slot and self.start_slot
-    /// reached_leader_slot() == true means "ready for a bank"
-    pub fn reached_leader_slot(&self) -> (bool, u64, Slot, Slot) {
-=======
     /// Returns if the leader slot has been reached along with the current poh
     /// slot and the parent slot (could be a few slots ago if any previous
     /// leaders needed to be skipped).
     pub fn reached_leader_slot(&self) -> PohLeaderStatus {
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
         trace!(
             "tick_height {}, start_tick_height {}, leader_first_tick_height_including_grace_ticks {:?}, grace_ticks {}, has_bank {}",
             self.tick_height,
@@ -349,21 +342,8 @@ impl PohRecorder {
         {
             if self.reached_leader_tick(leader_first_tick_height_including_grace_ticks) {
                 assert!(next_tick_height >= self.start_tick_height);
-<<<<<<< HEAD
-                let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
-
-                return (
-                    true,
-                    self.tick_height.saturating_sub(ideal_target_tick_height),
-                    next_leader_slot,
-                    self.start_slot,
-                );
-            }
-        }
-        (false, 0, next_leader_slot, self.start_slot)
-=======
                 let poh_slot = next_poh_slot;
-                let parent_slot = self.start_slot();
+                let parent_slot = self.start_slot;
                 return PohLeaderStatus::Reached {
                     poh_slot,
                     parent_slot,
@@ -371,7 +351,6 @@ impl PohRecorder {
             }
         }
         PohLeaderStatus::NotReached
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
     }
 
     // returns (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) given the next
@@ -1575,17 +1554,11 @@ mod tests {
             );
 
             // Test that with no next leader slot in reset(), we don't reach the leader slot
-<<<<<<< HEAD
             poh_recorder.reset(bank.last_blockhash(), 0, None);
-            assert!(!poh_recorder.reached_leader_slot().0);
-=======
-            assert_eq!(bank0.slot(), 0);
-            poh_recorder.reset(bank0.clone(), None);
             assert_eq!(
                 poh_recorder.reached_leader_slot(),
                 PohLeaderStatus::NotReached
             );
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
 
             // Provide a leader slot one slot down
             poh_recorder.reset(bank.last_blockhash(), 0, Some((2, 2)));
@@ -1619,17 +1592,7 @@ mod tests {
             );
 
             // reset poh now. we should immediately be leader
-<<<<<<< HEAD
             poh_recorder.reset(bank.last_blockhash(), 1, Some((2, 2)));
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, 0);
-            assert_eq!(leader_slot, 2);
-=======
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            assert_eq!(bank1.slot(), 1);
-            poh_recorder.reset(bank1.clone(), Some((2, 2)));
             assert_eq!(
                 poh_recorder.reached_leader_slot(),
                 PohLeaderStatus::Reached {
@@ -1637,7 +1600,6 @@ mod tests {
                     parent_slot: 1,
                 }
             );
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
 
             // Now test that with grace ticks we can reach leader slot
             // Set the leader slot one slot down
@@ -1660,13 +1622,6 @@ mod tests {
             }
 
             // We should be the leader now
-<<<<<<< HEAD
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, bank.ticks_per_slot() / GRACE_TICKS_FACTOR);
-            assert_eq!(leader_slot, 3);
-=======
             // without sending more ticks, we should be leader now
             assert_eq!(
                 poh_recorder.reached_leader_slot(),
@@ -1675,7 +1630,6 @@ mod tests {
                     parent_slot: 1,
                 }
             );
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
 
             // Let's test that correct grace ticks are reported
             // Set the leader slot one slot down
@@ -1687,18 +1641,11 @@ mod tests {
             }
 
             // We are not the leader yet, as expected
-<<<<<<< HEAD
-            assert!(!poh_recorder.reached_leader_slot().0);
-            poh_recorder.reset(bank.last_blockhash(), 3, Some((4, 4)));
-=======
             assert_eq!(
                 poh_recorder.reached_leader_slot(),
                 PohLeaderStatus::NotReached
             );
-            let bank3 = Arc::new(Bank::new_from_parent(&bank2, &Pubkey::default(), 3));
-            assert_eq!(bank3.slot(), 3);
-            poh_recorder.reset(bank3.clone(), Some((4, 4)));
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
+            poh_recorder.reset(bank.last_blockhash(), 3, Some((4, 4)));
 
             // without sending more ticks, we should be leader now
             assert_eq!(
@@ -1721,13 +1668,6 @@ mod tests {
             }
 
             // We are overdue to lead
-<<<<<<< HEAD
-            let (reached_leader_slot, grace_ticks, leader_slot, ..) =
-                poh_recorder.reached_leader_slot();
-            assert!(reached_leader_slot);
-            assert_eq!(grace_ticks, overshoot_factor * bank.ticks_per_slot());
-            assert_eq!(leader_slot, 9);
-=======
             assert_eq!(
                 poh_recorder.reached_leader_slot(),
                 PohLeaderStatus::Reached {
@@ -1735,7 +1675,6 @@ mod tests {
                     parent_slot: 4,
                 }
             );
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }

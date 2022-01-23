@@ -36,12 +36,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
-<<<<<<< HEAD
-    solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-=======
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    solana_program_runtime::timings::ExecuteTimings,
->>>>>>> 1240217a7 (Refactor: Rename variables and helper method to `PohRecorder` (#22676))
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
         rpc_subscriptions::RpcSubscriptions,
