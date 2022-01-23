@@ -117,7 +117,7 @@ import "google/protobuf/duration.proto";
 service TPUProxy {
     // Use this method to advertise a new TPU endpoint in gossip.
     // Clients should repeatedly invoke this endpoint before their TPU registration expires
-    // or when a transaction stream terminates. 
+    // or when a transaction stream terminates.
     rpc register_tpu_endpoint(RegisterTPURequest) returns (RegisterTPUResponse);
 
     // Use this method to push a stream of transactions to the validator.
