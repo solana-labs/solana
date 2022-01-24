@@ -3804,7 +3804,7 @@ impl Bank {
             thread_pool.install(|| {
                 loaded_txs
                     .par_iter_mut()
-                    .zip(sanitized_txs.into_par_iter())
+                    .zip(sanitized_txs.par_iter())
                     .map(|(accs, tx)| match accs {
                         (Err(e), _nonce) => ExecutionResultWithTimingAndError {
                             result: TransactionExecutionResult::NotExecuted(e.clone()),
