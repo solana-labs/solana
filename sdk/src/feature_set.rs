@@ -285,6 +285,45 @@ pub mod evict_invalid_stakes_cache_entries {
     solana_sdk::declare_id!("EMX9Q7TVFAmQ9V1CggAkhMzhXSg8ECp7fHrWQX2G1chf");
 }
 
+<<<<<<< HEAD
+=======
+pub mod allow_votes_to_directly_update_vote_state {
+    solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
+}
+
+pub mod reject_all_elf_rw {
+    solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
+}
+
+pub mod cap_accounts_data_len {
+    solana_sdk::declare_id!("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r");
+}
+
+pub mod max_tx_account_locks {
+    solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
+}
+
+pub mod require_rent_exempt_accounts {
+    solana_sdk::declare_id!("BkFDxiJQWZXGTZaJQxH7wVEHkAmwCgSEVkrvswFfRJPD");
+}
+
+pub mod filter_votes_outside_slot_hashes {
+    solana_sdk::declare_id!("3gtZPqvPpsbXZVCx6hceMfWxtsmrjMzmg8C7PLKSxS2d");
+}
+
+pub mod update_syscall_base_costs {
+    solana_sdk::declare_id!("2h63t332mGCCsWK2nqqqHhN4U9ayyqhLVFvczznHDoTZ");
+}
+
+pub mod vote_withdraw_authority_may_change_authorized_voter {
+    solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
+}
+
+pub mod spl_associated_token_account_v1_0_4 {
+    solana_sdk::declare_id!("FaTa4SpiaSNH44PGC4z8bnGVTkSRYaWvrBs3KTu8XQQq");
+}
+
+>>>>>>> fc21af4e6 (spl-associated-token-account: Add feature for new program (#22648))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -356,6 +395,18 @@ lazy_static! {
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
+<<<<<<< HEAD
+=======
+        (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
+        (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
+        (cap_accounts_data_len::id(), "cap the accounts data len"),
+        (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
+        (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
+        (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
+        (update_syscall_base_costs::id(), "Update syscall base costs"),
+        (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
+        (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
+>>>>>>> fc21af4e6 (spl-associated-token-account: Add feature for new program (#22648))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

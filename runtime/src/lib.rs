@@ -24,7 +24,12 @@ pub mod epoch_stakes;
 pub mod execute_cost_table;
 pub mod genesis_utils;
 pub mod hardened_unpack;
+<<<<<<< HEAD
 pub mod hashed_transaction;
+=======
+pub mod in_mem_accounts_index;
+pub mod inline_spl_associated_token_account;
+>>>>>>> fc21af4e6 (spl-associated-token-account: Add feature for new program (#22648))
 pub mod inline_spl_token;
 pub mod instruction_recorder;
 pub mod loader_utils;
