@@ -494,6 +494,7 @@ impl PohRecorder {
                 {
                     datapoint_info!(
                         "poh-recorder-set-bank-stats",
+                        ("slot", current_leader_slot, i64),
                         (
                             "leader_first_tick_elapsed_us",
                             first_tick_reached_at.elapsed().as_micros(),
@@ -507,6 +508,7 @@ impl PohRecorder {
                 {
                     datapoint_info!(
                         "poh-recorder-set-bank-stats",
+                        ("slot", current_leader_slot, i64),
                         (
                             "leader_target_tick_elapsed_us",
                             target_tick_reached_at.elapsed().as_micros(),
