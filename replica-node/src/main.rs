@@ -291,6 +291,7 @@ pub fn main() {
         &gossip_addr,
         dynamic_port_range,
         bind_address,
+        None,
     );
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());

@@ -776,12 +776,13 @@ pub fn main() {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
-            Arg::with_name("overwrite_tpu_addr")
-                .long("overwrite-tpu-addr")
-                .value_name("OVERWRITE_TPU_ADDR")
+            Arg::with_name("tpu_host_addr")
+                .long("tpu-host-addr")
+                .value_name("HOST:PORT")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
-                .help("Force overwrite the tpu address to advertise in gossip"),
+                .help("Specify TPU address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
 
         )
         .arg(
@@ -2611,7 +2612,7 @@ pub fn main() {
         }),
     );
 
-    let overwrite_tpu_addr = matches.value_of("overwrite_tpu_addr").map(|tpu_addr| {
+    let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
         solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
             eprintln!("Failed to parse --overwrite-tpu-addr: {}", err);
             exit(1);
