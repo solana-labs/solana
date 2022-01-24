@@ -97,6 +97,7 @@ pub struct TestValidatorGenesis {
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     programs: Vec<ProgramInfo>,
+    ticks_per_slot: Option<u64>,
     epoch_schedule: Option<EpochSchedule>,
     node_config: TestValidatorNodeConfig,
     pub validator_exit: Arc<RwLock<Exit>>,
@@ -126,6 +127,11 @@ impl TestValidatorGenesis {
 
     pub fn fee_rate_governor(&mut self, fee_rate_governor: FeeRateGovernor) -> &mut Self {
         self.fee_rate_governor = fee_rate_governor;
+        self
+    }
+
+    pub fn ticks_per_slot(&mut self, ticks_per_slot: u64) -> &mut Self {
+        self.ticks_per_slot = Some(ticks_per_slot);
         self
     }
 
@@ -470,6 +476,10 @@ impl TestValidator {
         genesis_config.epoch_schedule = config
             .epoch_schedule
             .unwrap_or_else(EpochSchedule::without_warmup);
+
+        if let Some(ticks_per_slot) = config.ticks_per_slot {
+            genesis_config.ticks_per_slot = ticks_per_slot;
+        }
 
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
