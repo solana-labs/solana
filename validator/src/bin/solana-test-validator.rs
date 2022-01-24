@@ -188,6 +188,13 @@ fn main() {
                 .help("Disable the just-in-time compiler and instead use the interpreter for BPF. Windows always disables JIT."),
         )
         .arg(
+            Arg::with_name("ticks_per_slot")
+                .long("ticks-per-slot")
+                .value_name("TICKS")
+                .takes_value(true)
+                .help("The number of ticks in a slot"),
+        )
+        .arg(
             Arg::with_name("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
@@ -397,6 +404,7 @@ fn main() {
 
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
     let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
+    let ticks_per_slot = value_t!(matches, "ticks_per_slot", u64).ok();
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
     let gossip_host = matches.value_of("gossip_host").map(|gossip_host| {
         solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
@@ -539,6 +547,7 @@ fn main() {
             ("clone_account", "--clone"),
             ("account", "--account"),
             ("mint_address", "--mint"),
+            ("ticks_per_slot", "--ticks-per-slot"),
             ("slots_per_epoch", "--slots-per-epoch"),
             ("faucet_sol", "--faucet-sol"),
         ] {
@@ -618,6 +627,10 @@ fn main() {
 
     if let Some(warp_slot) = warp_slot {
         genesis.warp_slot(warp_slot);
+    }
+
+    if let Some(ticks_per_slot) = ticks_per_slot {
+        genesis.ticks_per_slot(ticks_per_slot);
     }
 
     if let Some(slots_per_epoch) = slots_per_epoch {
