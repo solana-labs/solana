@@ -24,6 +24,8 @@ export * from './util/borsh-schema';
 export * from './util/send-and-confirm-transaction';
 export * from './util/send-and-confirm-raw-transaction';
 export * from './util/cluster';
+export * as inspect from './util/inspect-transaction';
+export {inspectTransaction} from './util/inspect-transaction';
 
 /**
  * There are 1-billion lamports in one SOL

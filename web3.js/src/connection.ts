@@ -38,6 +38,10 @@ import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
 import {makeWebsocketUrl} from './util/url';
+import {
+  inspectTransaction,
+  checkLogAllTransactions,
+} from './util/inspect-transaction';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -3960,6 +3964,11 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
     const res = create(unsafeRes, SimulatedTransactionResponseStruct);
     if ('error' in res) {
+      const groupTag = `failed to simulate transaction: ${res.error.message}`;
+      console.groupCollapsed(groupTag);
+
+      inspectTransaction(wireTransaction, this._rpcEndpoint, console.error);
+
       let logs;
       if ('data' in res.error) {
         logs = res.error.data.logs;
@@ -3969,10 +3978,14 @@ export class Connection {
           console.error(res.error.message, logTrace);
         }
       }
-      throw new SendTransactionError(
-        'failed to simulate transaction: ' + res.error.message,
-        logs,
+
+      throw new SendTransactionError(groupTag, logs);
+    } else if (checkLogAllTransactions()) {
+      console.groupCollapsed(
+        `transaction simulated successfully: ${res.result}`,
       );
+      inspectTransaction(wireTransaction, this._rpcEndpoint, console.warn);
+      console.groupEnd();
     }
     return res.result;
   }
@@ -4059,14 +4072,27 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = create(unsafeRes, SendTransactionRpcResult);
     if ('error' in res) {
+      const groupTag = `failed to send transaction: ${res.error.message}`;
+      console.groupCollapsed(groupTag);
+
+      inspectTransaction(
+        Buffer.from(encodedTransaction, 'base64'),
+        this._rpcEndpoint,
+        console.error,
+      );
+
       let logs;
       if ('data' in res.error) {
         logs = res.error.data.logs;
       }
-      throw new SendTransactionError(
-        'failed to send transaction: ' + res.error.message,
-        logs,
-      );
+
+      console.groupEnd();
+
+      throw new SendTransactionError(groupTag, logs);
+    } else if (checkLogAllTransactions()) {
+      console.groupCollapsed(`transaction sent successfully: ${res.result}`);
+      inspectTransaction(res.result, this._rpcEndpoint, console.warn);
+      console.groupEnd();
     }
     return res.result;
   }

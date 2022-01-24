@@ -11,7 +11,8 @@ const endpoint = {
   },
 };
 
-export type Cluster = 'devnet' | 'testnet' | 'mainnet-beta';
+export const CLUSTER_NAMES = ['devnet', 'testnet', 'mainnet-beta'] as const;
+export type Cluster = typeof CLUSTER_NAMES[number];
 
 /**
  * Retrieves the RPC API URL for the specified cluster
