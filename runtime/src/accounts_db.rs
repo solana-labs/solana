@@ -6243,12 +6243,27 @@ if false {
             return loaded_account.loaded_hash();
         }
         */
+
         let expected_slot_start = expected_rent_collection_slot_max_epoch;
         let find = storage.find_valid_slot(expected_slot_start);
         if let Some(find) = find {
             // found a root (because we have a storage) that is >= expected_rent_collection_slot.
             expected_rent_collection_slot_max_epoch = find;
             use_stored = false;
+        }
+
+        if pubkey == &Pubkey::from_str("71XcyZxXp4hWYfE9Xuafnp8R4vqNHSoT1jhynuQ3yGYx").unwrap() {
+            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}",
+            pubkey,
+            loaded_account.loaded_hash(),
+            storage_slot,
+            max_slot_in_storages,
+            expected_rent_collection_slot_max_epoch,
+            partition_index_from_max_slot,
+            partition_from_pubkey,
+            loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey),
+            use_stored,
+        );
         }
 
         if use_stored && !force_rehash {
