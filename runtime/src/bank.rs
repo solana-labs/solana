@@ -47,18 +47,12 @@ use {
         builtins::{self, ActivationType},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-<<<<<<< HEAD
         hashed_transaction::{HashedTransaction, HashedTransactionSlice},
-        inline_spl_token,
+        inline_spl_associated_token_account, inline_spl_token,
         instruction_recorder::InstructionRecorder,
         log_collector::LogCollector,
         message_processor::{Executors, MessageProcessor, TransactionExecutor},
         rent_collector::RentCollector,
-=======
-        inline_spl_associated_token_account, inline_spl_token,
-        message_processor::MessageProcessor,
-        rent_collector::{CollectedInfo, RentCollector},
->>>>>>> fc21af4e6 (spl-associated-token-account: Add feature for new program (#22648))
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
