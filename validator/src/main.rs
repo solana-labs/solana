@@ -1333,7 +1333,7 @@ pub fn main() {
 
         )
         .arg(
-            Arg::with_name("overwrite_tpu_addr")
+            Arg::with_name("tpu_host_address")
                 .long("overwrite-tpu-addr")
                 .value_name("OVERWRITE_TPU_ADDR")
                 .takes_value(true)
