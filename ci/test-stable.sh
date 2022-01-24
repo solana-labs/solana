@@ -21,15 +21,16 @@ export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 source scripts/ulimit-n.sh
 
-# Limit compiler jobs to reduce memory usage
-# on machines with 2gb/thread of memory
+# limit jobs to 4gb/thread
+JOBS=$(grep MemTotal /proc/meminfo | awk '{printf "%.0f", ($2 / (4 * 1024 * 1024))}')
 NPROC=$(nproc)
-NPROC=$((NPROC>14 ? 14 : NPROC))
+JOBS=$((JOBS>NPROC ? NPROC : JOBS))
+
 
 echo "Executing $testName"
 case $testName in
 test-stable)
-  _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ "$cargo" stable test --jobs "$JOBS" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-bpf)
   # Clear the C dependency files, if dependency moves these files are not regenerated
