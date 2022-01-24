@@ -2744,16 +2744,35 @@ impl AccountsDb {
 
         let total_starting_accounts = stored_accounts.len();
         let total_accounts_after_shrink = alive_accounts.len();
+        let was_ancient = {
+            let stores = stores.clone();
+            stores.next().map(|store| store.accounts.is_ancient()).unwrap_or_default() && stores.next().is_none()
+        };
+        if !was_ancient {
+            debug!(
+                "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}, id: {}",
+                slot,
+                total_starting_accounts,
+                total_accounts_after_shrink,
+                alive_total,
+                aligned_total,
+                original_bytes,
+                stores.clone().next().map(|store| store.append_vec_id()).unwrap_or_default(),
+            );
+    
+        }
+        else {
         info!(
-            "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}, id: {}",
+            "shrinking ancient_append_vec: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}, id: {}",
             slot,
             total_starting_accounts,
             total_accounts_after_shrink,
             alive_total,
             aligned_total,
             original_bytes,
-            stores.next().map(|store| store.append_vec_id()).unwrap_or_default(),
+            stores.clone().next().map(|store| store.append_vec_id()).unwrap_or_default(),
         );
+    }
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut dead_storages = vec![];
@@ -2777,6 +2796,18 @@ impl AccountsDb {
 
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
             create_and_insert_store_elapsed = time;
+
+            if was_ancient {
+                let is_full_ancient = {
+                    let stores = stores.clone();
+                    stores.next().map(|store| store.accounts.is_full_ancient()).unwrap_or_default() && stores.next().is_none()
+                };
+        
+                shrunken_store.accounts.set_ancient();
+                if is_full_ancient {
+                    shrunken_store.set_full_ancient();
+                }
+            }
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
