@@ -6,7 +6,7 @@ use {
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
             is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            normalize_to_url_if_moniker,
+            normalize_to_url_if_moniker, is_parsable,
         },
     },
     solana_client::rpc_client::RpcClient,
@@ -191,6 +191,7 @@ fn main() {
             Arg::with_name("ticks_per_slot")
                 .long("ticks-per-slot")
                 .value_name("TICKS")
+                .validator(is_parsable::<u64>)
                 .takes_value(true)
                 .help("The number of ticks in a slot"),
         )
