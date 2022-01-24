@@ -255,8 +255,7 @@ pub enum InstructionError {
 
     /// Active vote account close
     #[error("Cannot close vote account unless it received 0 credits in the most recent epoch")]
-    ActiveVoteAccountClose
-
+    ActiveVoteAccountClose,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }
