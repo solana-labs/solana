@@ -637,7 +637,7 @@ impl ProgramTest {
             this.add_account(
                 program_id,
                 Account {
-                    lamports: Rent::default().minimum_balance(program.len()).min(1),
+                    lamports: Rent::default().minimum_balance(program.len()).max(1),
                     data: program,
                     owner: solana_sdk::bpf_loader_upgradeable::id(),
                     executable: true,
@@ -647,7 +647,7 @@ impl ProgramTest {
             this.add_account(
                 programdata_address,
                 Account {
-                    lamports: Rent::default().minimum_balance(program_data.len()).min(1),
+                    lamports: Rent::default().minimum_balance(program_data.len()).max(1),
                     data: program_data,
                     owner: solana_sdk::bpf_loader_upgradeable::id(),
                     executable: false,
