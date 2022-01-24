@@ -35,6 +35,7 @@ use {
         cmp,
         ffi::OsStr,
         sync::{
+            atomic::{AtomicUsize, Ordering},
             mpsc::{Receiver, Sender},
             Arc, Mutex, Once,
         },
@@ -499,11 +500,13 @@ pub fn start_verify_transactions(
                 })
                 .flatten()
                 .collect::<Vec<_>>();
+            let total_packets = AtomicUsize::new(0);
             let mut packet_batches = entry_txs
                 .par_iter()
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
+                    total_packets.fetch_add(vec_size, Ordering::Relaxed);
                     let mut packet_batch = PacketBatch::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
@@ -546,6 +549,7 @@ pub fn start_verify_transactions(
                     &tx_offset_recycler,
                     &out_recycler,
                     false,
+                    total_packets.load(Ordering::Relaxed),
                 );
                 let verified = packet_batches
                     .iter()
