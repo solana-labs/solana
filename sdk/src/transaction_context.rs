@@ -565,10 +565,15 @@ impl<'a> BorrowedAccount<'a> {
         self.verify_writability()
     }
 
-    /*pub fn realloc(&self, new_len: usize, zero_init: bool) {
+    /// Resizes the account data (transaction wide)
+    ///
+    /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
+    pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
+        self.account.data_mut().resize(new_len, 0);
         // TODO: return Err(InstructionError::InvalidRealloc);
         // TODO: return Err(InstructionError::AccountDataSizeChanged);
-    }*/
+        self.verify_writability()
+    }
 
     /// Deserializes the account data into a state
     pub fn get_state<T: serde::de::DeserializeOwned>(&self) -> Result<T, InstructionError> {
