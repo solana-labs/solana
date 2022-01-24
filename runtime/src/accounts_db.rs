@@ -2805,7 +2805,7 @@ impl AccountsDb {
         
                 shrunken_store.accounts.set_ancient();
                 if is_full_ancient {
-                    shrunken_store.set_full_ancient();
+                    shrunken_store.accounts.set_full_ancient();
                 }
             }
 
@@ -3145,7 +3145,7 @@ if false {
                     let capacity = first_storage.accounts.capacity();
                     if first_storage.accounts.is_ancient() {
                         if first_storage.accounts.is_full_ancient() {
-                            error!("ancient_append_vec: skipping existing full ancient append vec: {}, capacity: {}, free% {}, accounts: {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count());
+                            error!("ancient_append_vec: skipping existing full ancient append vec: {}, capacity: {}, free% {}, accounts: {}, cap of expected% {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), capacity * 100 / size);
                             continue; // skip this full ancient append vec completely
                         }
                         error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}, free%: {}, accounts: {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count());
@@ -3153,7 +3153,7 @@ if false {
                         continue; // we're done with this slot - this slot IS the ancient append vec
                     } else {
                         if capacity > size * 8 / 10 { // if the existing append vec is 80% of the size we desire for ancient, then don't recopy it all
-                            error!("ancient_append_vec: skipping existing LARGE NON-ancient append vec: {}, capacity: {}, free% {}, accounts: {}, id: {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), first_storage.append_vec_id());
+                            error!("ancient_append_vec: skipping existing LARGE NON-ancient append vec: {}, capacity: {}, free% {}, accounts: {}, id: {}, cap of expected% {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), first_storage.append_vec_id(), capacity * 100 / size);
                             continue;
                         }
                         else {
