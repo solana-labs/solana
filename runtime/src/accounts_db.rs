@@ -3088,7 +3088,8 @@ impl AccountsDb {
     fn shrink_ancient_slots(&self) {
         let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 60 / 100; // todo - put some 'in-this-epoch' slots into an ancient append vec
+        // This can't practically be within the current epoch. Otherwise, we would lose track of the roots that used to exist and we couldn't load from a snapshot.
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH; // * 60 / 100; // todo - put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width);
 
         let mut m = Measure::start("get slots");
@@ -6270,6 +6271,7 @@ if false {
             }
         }
 
+        /*
         if pubkey == &Pubkey::from_str("71XcyZxXp4hWYfE9Xuafnp8R4vqNHSoT1jhynuQ3yGYx").unwrap() {
             error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}",
             pubkey,
@@ -6283,6 +6285,7 @@ if false {
             use_stored,
         );
         }
+        */
 
         if use_stored && !force_rehash {
             // we can use the previously calculated hash
