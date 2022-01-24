@@ -6260,10 +6260,10 @@ if false {
         if !use_stored && maybe_db.is_some() {
             let maybe_db =  maybe_db.as_ref().unwrap();
             // see if this account is written later. if so, then we don't need to rehash it
-            let list = maybe_db.accounts_index.get_account_read_entry(pubkey).unwrap().slot_list();
+            let list = maybe_db.accounts_index.get_account_read_entry(pubkey).unwrap();
             let mut found=false;
-            for (slot, info) in maybe_db {
-                if slot > storage_slot {
+            for (slot, info) in list.slot_list() {
+                if slot > &storage_slot {
                     found = true;
                     use_stored = true;
                 }
