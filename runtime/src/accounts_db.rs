@@ -62,6 +62,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
+        saturating_add_assign,
         timing::AtomicInterval,
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
@@ -215,6 +216,39 @@ pub struct ErrorCounters {
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
     pub invalid_rent_paying_account: usize,
+}
+
+impl ErrorCounters {
+    pub fn accumulate(&mut self, other: &ErrorCounters) {
+        saturating_add_assign!(self.total, other.total);
+        saturating_add_assign!(self.account_in_use, other.account_in_use);
+        saturating_add_assign!(self.account_loaded_twice, other.account_loaded_twice);
+        saturating_add_assign!(self.account_not_found, other.account_not_found);
+        saturating_add_assign!(self.blockhash_not_found, other.blockhash_not_found);
+        saturating_add_assign!(self.blockhash_too_old, other.blockhash_too_old);
+        saturating_add_assign!(self.call_chain_too_deep, other.call_chain_too_deep);
+        saturating_add_assign!(self.already_processed, other.already_processed);
+        saturating_add_assign!(self.instruction_error, other.instruction_error);
+        saturating_add_assign!(self.insufficient_funds, other.insufficient_funds);
+        saturating_add_assign!(self.invalid_account_for_fee, other.invalid_account_for_fee);
+        saturating_add_assign!(self.invalid_account_index, other.invalid_account_index);
+        saturating_add_assign!(
+            self.invalid_program_for_execution,
+            other.invalid_program_for_execution
+        );
+        saturating_add_assign!(
+            self.not_allowed_during_cluster_maintenance,
+            other.not_allowed_during_cluster_maintenance
+        );
+        saturating_add_assign!(
+            self.invalid_writable_account,
+            other.invalid_writable_account
+        );
+        saturating_add_assign!(
+            self.invalid_rent_paying_account,
+            other.invalid_rent_paying_account
+        );
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
