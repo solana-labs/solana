@@ -6191,6 +6191,7 @@ if false {
         storage: &SortedStorages,
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
+        force_rehash: bool,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         assert!(slots_per_epoch.is_some());
@@ -6250,13 +6251,13 @@ if false {
             use_stored = false;
         }
 
-        if use_stored {
+        if use_stored && !force_rehash {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
-        if num % 100_000 == 0 {
+        if num % 10_000_000 == 0 {
             error!("rehashed: {}", num);
         }
         // recompute based on rent collection/rewrite slot
@@ -6321,6 +6322,7 @@ if false {
                     storage,
                     slots_per_epoch,
                     rehash,
+                    false,
                 );
 
                 let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
@@ -6333,6 +6335,7 @@ if false {
                         storage,
                         slots_per_epoch,
                         &rehash,
+                        true,
                     );
                     if computed_hash != source_item.hash {
                         info!(
