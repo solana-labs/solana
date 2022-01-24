@@ -49,7 +49,7 @@ use {
         builtins::{self, ActivationType, Builtin, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        inline_spl_token,
+        inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         stake_weighted_timestamp::{
@@ -6092,7 +6092,20 @@ impl Bank {
         }
 
         if new_feature_activations.contains(&feature_set::spl_token_v3_3_0_release::id()) {
-            self.apply_spl_token_v3_3_0_release();
+            self.replace_program_account(
+                &inline_spl_token::id(),
+                &inline_spl_token::new_token_program::id(),
+                "bank-apply_spl_token_v3_3_0_release",
+            );
+        }
+
+        if new_feature_activations.contains(&feature_set::spl_associated_token_account_v1_0_4::id())
+        {
+            self.replace_program_account(
+                &inline_spl_associated_token_account::id(),
+                &inline_spl_associated_token_account::program_v1_0_4::id(),
+                "bank-apply_spl_associated_token_account_v1_4_0",
+            );
         }
 
         if !debug_do_not_add_builtins {
@@ -6190,33 +6203,31 @@ impl Bank {
         }
     }
 
-    fn apply_spl_token_v3_3_0_release(&mut self) {
-        if let Some(old_account) = self.get_account_with_fixed_root(&inline_spl_token::id()) {
-            if let Some(new_account) =
-                self.get_account_with_fixed_root(&inline_spl_token::new_token_program::id())
-            {
-                datapoint_info!(
-                    "bank-apply_spl_token_v3_3_0_release",
-                    ("slot", self.slot, i64),
-                );
+    fn replace_program_account(
+        &mut self,
+        old_address: &Pubkey,
+        new_address: &Pubkey,
+        datapoint_name: &'static str,
+    ) {
+        if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
+            if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
+                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                // Burn lamports in the old token account
+                // Burn lamports in the old account
                 self.capitalization
                     .fetch_sub(old_account.lamports(), Relaxed);
 
-                // Transfer new token account to old token account
-                self.store_account(&inline_spl_token::id(), &new_account);
+                // Transfer new account to old account
+                self.store_account(old_address, &new_account);
 
-                // Clear new token account
-                self.store_account(
-                    &inline_spl_token::new_token_program::id(),
-                    &AccountSharedData::default(),
-                );
+                // Clear new account
+                self.store_account(new_address, &AccountSharedData::default());
 
-                self.remove_executor(&inline_spl_token::id());
+                self.remove_executor(old_address);
             }
         }
     }
+
     fn reconfigure_token2_native_mint(&mut self) {
         let reconfigure_token2_native_mint = match self.cluster_type() {
             ClusterType::Development => true,
@@ -13173,49 +13184,39 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_spl_token_replacement() {
+    fn test_program_replacement() {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
         let mut bank = Bank::new_for_tests(&genesis_config);
 
-        // Setup original token account
+        // Setup original program account
+        let old_address = Pubkey::new_unique();
+        let new_address = Pubkey::new_unique();
         bank.store_account_and_update_capitalization(
-            &inline_spl_token::id(),
+            &old_address,
             &AccountSharedData::from(Account {
                 lamports: 100,
                 ..Account::default()
             }),
         );
-        assert_eq!(bank.get_balance(&inline_spl_token::id()), 100);
+        assert_eq!(bank.get_balance(&old_address), 100);
 
-        // Setup new token account
-        let new_token_account = AccountSharedData::from(Account {
+        // Setup new program account
+        let new_program_account = AccountSharedData::from(Account {
             lamports: 123,
             ..Account::default()
         });
-        bank.store_account_and_update_capitalization(
-            &inline_spl_token::new_token_program::id(),
-            &new_token_account,
-        );
-        assert_eq!(
-            bank.get_balance(&inline_spl_token::new_token_program::id()),
-            123
-        );
+        bank.store_account_and_update_capitalization(&new_address, &new_program_account);
+        assert_eq!(bank.get_balance(&new_address), 123);
 
         let original_capitalization = bank.capitalization();
 
-        bank.apply_spl_token_v3_3_0_release();
+        bank.replace_program_account(&old_address, &new_address, "bank-apply_program_replacement");
 
-        // New token account is now empty
-        assert_eq!(
-            bank.get_balance(&inline_spl_token::new_token_program::id()),
-            0
-        );
+        // New program account is now empty
+        assert_eq!(bank.get_balance(&new_address), 0);
 
-        // Old token account holds the new token account
-        assert_eq!(
-            bank.get_account(&inline_spl_token::id()),
-            Some(new_token_account)
-        );
+        // Old program account holds the new program account
+        assert_eq!(bank.get_account(&old_address), Some(new_program_account));
 
         // Lamports in the old token account were burnt
         assert_eq!(bank.capitalization(), original_capitalization - 100);

@@ -33,6 +33,7 @@ pub mod execute_cost_table;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod in_mem_accounts_index;
+pub mod inline_spl_associated_token_account;
 pub mod inline_spl_token;
 pub mod loader_utils;
 pub mod message_processor;
