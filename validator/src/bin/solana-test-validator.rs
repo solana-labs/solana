@@ -5,8 +5,8 @@ use {
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
-            is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            normalize_to_url_if_moniker, is_parsable,
+            is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
+            normalize_to_url_if_moniker,
         },
     },
     solana_client::rpc_client::RpcClient,
