@@ -2673,13 +2673,13 @@ impl AccountsDb {
         (stored_accounts, num_stores, original_bytes)
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, mut stores: I) -> usize
     where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
+        I: Iterator<Item = &'a Arc<AccountStorageEntry>> + Clone,
     {
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let (stored_accounts, num_stores, original_bytes) =
-            self.get_unique_accounts_from_storages(stores);
+            self.get_unique_accounts_from_storages(stores.clone());
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -2744,14 +2744,15 @@ impl AccountsDb {
 
         let total_starting_accounts = stored_accounts.len();
         let total_accounts_after_shrink = alive_accounts.len();
-        debug!(
-            "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}",
+        info!(
+            "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}, id: {}",
             slot,
             total_starting_accounts,
             total_accounts_after_shrink,
             alive_total,
             aligned_total,
             original_bytes,
+            stores.next().map(|store| store.append_vec_id()).unwrap_or_default(),
         );
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
@@ -3120,7 +3121,13 @@ if false {
                         current_storage = Some((slot, Arc::clone(first_storage)));
                         continue; // we're done with this slot - this slot IS the ancient append vec
                     } else {
-                        error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}, id: {}", slot, capacity, size, size.saturating_sub(capacity), first_storage.append_vec_id());
+                        if capacity > size * 8 / 10 { // if the existing append vec is 80% of the size we desire for ancient, then don't recopy it all
+                            error!("ancient_append_vec: skipping existing LARGE NON-ancient append vec: {}, capacity: {}, free% {}, accounts: {}, id: {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), first_storage.append_vec_id());
+                            continue;
+                        }
+                        else {
+                            error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}, id: {}", slot, capacity, size, size.saturating_sub(capacity), first_storage.append_vec_id());
+                        }
                     }
                 } else if current_storage.is_none() && all_storages.len() > 1 {
                     let first_storage = all_storages.first().unwrap();
