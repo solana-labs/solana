@@ -6052,6 +6052,7 @@ if false {
         can_cached_slot_be_unflushed: bool,
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
+        maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
         use_index = false;
@@ -6102,6 +6103,7 @@ if false {
                 },
                 self.num_hash_scan_passes,
                 slots_per_epoch,
+                maybe_db,
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -6131,6 +6133,7 @@ if false {
             can_cached_slot_be_unflushed,
             slots_per_epoch,
             is_startup,
+            &Some(self),
         )?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
@@ -6142,6 +6145,7 @@ if false {
                 can_cached_slot_be_unflushed,
                 slots_per_epoch,
                 is_startup,
+                &Some(self),
             )?;
 
             let success = hash == hash_other
@@ -6192,6 +6196,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
         force_rehash: bool,
+        maybe_db: &Option<&AccountsDb>,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         assert!(slots_per_epoch.is_some());
@@ -6252,6 +6257,19 @@ if false {
             use_stored = false;
         }
 
+        if !use_stored && maybe_db.is_some() {
+            let maybe_db =  maybe_db.as_ref().unwrap();
+            // see if this account is written later. if so, then we don't need to rehash it
+            let list = maybe_db.accounts_index.get_account_read_entry(pubkey).unwrap().slot_list();
+            let mut found=false;
+            for (slot, info) in maybe_db {
+                if slot > storage_slot {
+                    found = true;
+                    use_stored = true;
+                }
+            }
+        }
+
         if pubkey == &Pubkey::from_str("71XcyZxXp4hWYfE9Xuafnp8R4vqNHSoT1jhynuQ3yGYx").unwrap() {
             error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}",
             pubkey,
@@ -6296,6 +6314,7 @@ if false {
         filler_account_suffix: Option<&Pubkey>,
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
+        maybe_db: &Option<&AccountsDb>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
         // check_hash = false;
@@ -6338,6 +6357,7 @@ if false {
                     slots_per_epoch,
                     rehash,
                     false,
+                    maybe_db,
                 );
 
                 let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
@@ -6351,6 +6371,7 @@ if false {
                         slots_per_epoch,
                         &rehash,
                         true,
+                        maybe_db,
                     );
                     if computed_hash != source_item.hash {
                         info!(
@@ -6428,6 +6449,7 @@ if false {
         filler_account_suffix: Option<&Pubkey>,
         num_hash_scan_passes: Option<usize>,
         slots_per_epoch: Option<Slot>,
+        maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
 
@@ -6457,6 +6479,7 @@ if false {
                     filler_account_suffix,
                     slots_per_epoch,
                     &rehash,
+                    maybe_db,
                 )?;
                 
 
