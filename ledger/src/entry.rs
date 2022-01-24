@@ -29,7 +29,11 @@ use {
         cmp,
         ffi::OsStr,
         sync::{
+<<<<<<< HEAD:ledger/src/entry.rs
             mpsc::{Receiver, Sender},
+=======
+            atomic::{AtomicUsize, Ordering},
+>>>>>>> 2e56c59bc (Handle already discarded packets in gpu sigverify path (#22680)):entry/src/entry.rs
             Arc, Mutex, Once,
         },
         thread::{self, JoinHandle},
@@ -332,6 +336,202 @@ impl EntryVerificationState {
     }
 }
 
+<<<<<<< HEAD:ledger/src/entry.rs
+=======
+pub fn verify_transactions(
+    entries: Vec<Entry>,
+    verify: Arc<dyn Fn(VersionedTransaction) -> Result<SanitizedTransaction> + Send + Sync>,
+) -> Result<Vec<EntryType>> {
+    PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            entries
+                .into_par_iter()
+                .map(|entry| {
+                    if entry.transactions.is_empty() {
+                        Ok(EntryType::Tick(entry.hash))
+                    } else {
+                        Ok(EntryType::Transactions(
+                            entry
+                                .transactions
+                                .into_par_iter()
+                                .map(verify.as_ref())
+                                .collect::<Result<Vec<_>>>()?,
+                        ))
+                    }
+                })
+                .collect()
+        })
+    })
+}
+
+pub fn start_verify_transactions(
+    entries: Vec<Entry>,
+    skip_verification: bool,
+    verify_recyclers: VerifyRecyclers,
+    verify: Arc<
+        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+            + Send
+            + Sync,
+    >,
+) -> Result<EntrySigVerificationState> {
+    let api = perf_libs::api();
+
+    // Use the CPU if we have too few transactions for GPU signature verification to be worth it.
+    // We will also use the CPU if no acceleration API is used or if we're skipping
+    // the signature verification as we'd have nothing to do on the GPU in that case.
+    // TODO: make the CPU-to GPU crossover point dynamic, perhaps based on similar future
+    // heuristics to what might be used in sigverify::ed25519_verify when a dynamic crossover
+    // is introduced for that function (see TODO in sigverify::ed25519_verify)
+    let use_cpu = skip_verification
+        || api.is_none()
+        || entries
+            .iter()
+            .try_fold(0, |accum: usize, entry: &Entry| -> Option<usize> {
+                if accum.saturating_add(entry.transactions.len()) < 512 {
+                    Some(accum.saturating_add(entry.transactions.len()))
+                } else {
+                    None
+                }
+            })
+            .is_some();
+
+    if use_cpu {
+        let verify_func = {
+            let verification_mode = if skip_verification {
+                TransactionVerificationMode::HashOnly
+            } else {
+                TransactionVerificationMode::FullVerification
+            };
+            move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+                verify(versioned_tx, verification_mode)
+            }
+        };
+
+        let entries = verify_transactions(entries, Arc::new(verify_func));
+
+        match entries {
+            Ok(entries_val) => {
+                return Ok(EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Success,
+                    entries: Some(entries_val),
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    gpu_verify_duration_us: 0,
+                });
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+    }
+
+    let verify_func = {
+        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+            verify(
+                versioned_tx,
+                TransactionVerificationMode::HashAndVerifyPrecompiles,
+            )
+        }
+    };
+    let entries = verify_transactions(entries, Arc::new(verify_func));
+    match entries {
+        Ok(entries) => {
+            let num_transactions: usize = entries
+                .iter()
+                .map(|entry: &EntryType| -> usize {
+                    match entry {
+                        EntryType::Transactions(transactions) => transactions.len(),
+                        EntryType::Tick(_) => 0,
+                    }
+                })
+                .sum();
+
+            if num_transactions == 0 {
+                return Ok(EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Success,
+                    entries: Some(entries),
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    gpu_verify_duration_us: 0,
+                });
+            }
+            let entry_txs: Vec<&SanitizedTransaction> = entries
+                .iter()
+                .filter_map(|entry_type| match entry_type {
+                    EntryType::Tick(_) => None,
+                    EntryType::Transactions(transactions) => Some(transactions),
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            let total_packets = AtomicUsize::new(0);
+            let mut packet_batches = entry_txs
+                .par_iter()
+                .chunks(PACKETS_PER_BATCH)
+                .map(|slice| {
+                    let vec_size = slice.len();
+                    total_packets.fetch_add(vec_size, Ordering::Relaxed);
+                    let mut packet_batch = PacketBatch::new_with_recycler(
+                        verify_recyclers.packet_recycler.clone(),
+                        vec_size,
+                        "entry-sig-verify",
+                    );
+                    // We use set_len here instead of resize(num_transactions, Packet::default()), to save
+                    // memory bandwidth and avoid writing a large amount of data that will be overwritten
+                    // soon afterwards. As well, Packet::default() actually leaves the packet data
+                    // uninitialized anyway, so the initilization would simply write junk into
+                    // the vector anyway.
+                    unsafe {
+                        packet_batch.packets.set_len(vec_size);
+                    }
+                    let entry_tx_iter = slice
+                        .into_par_iter()
+                        .map(|tx| tx.to_versioned_transaction());
+
+                    let res = packet_batch
+                        .packets
+                        .par_iter_mut()
+                        .zip(entry_tx_iter)
+                        .all(|pair| {
+                            pair.0.meta = Meta::default();
+                            Packet::populate_packet(pair.0, None, &pair.1).is_ok()
+                        });
+                    if res {
+                        Ok(packet_batch)
+                    } else {
+                        Err(TransactionError::SanitizeFailure)
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
+            let out_recycler = verify_recyclers.out_recycler;
+            let gpu_verify_thread = thread::spawn(move || {
+                let mut verify_time = Measure::start("sigverify");
+                sigverify::ed25519_verify(
+                    &mut packet_batches,
+                    &tx_offset_recycler,
+                    &out_recycler,
+                    false,
+                    total_packets.load(Ordering::Relaxed),
+                );
+                let verified = packet_batches
+                    .iter()
+                    .all(|batch| batch.packets.iter().all(|p| !p.meta.discard()));
+                verify_time.stop();
+                (verified, verify_time.as_us())
+            });
+            Ok(EntrySigVerificationState {
+                verification_status: EntryVerificationStatus::Pending,
+                entries: Some(entries),
+                device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
+                    thread_h: Some(gpu_verify_thread),
+                }),
+                gpu_verify_duration_us: 0,
+            })
+        }
+        Err(err) => Err(err),
+    }
+}
+
+>>>>>>> 2e56c59bc (Handle already discarded packets in gpu sigverify path (#22680)):entry/src/entry.rs
 fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
     let actual = if !ref_entry.transactions.is_empty() {
         let tx_hash = hash_transactions(&ref_entry.transactions);

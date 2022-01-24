@@ -41,7 +41,11 @@ impl ShredSigVerifier {
 }
 
 impl SigVerifier for ShredSigVerifier {
-    fn verify_batches(&self, mut batches: Vec<PacketBatch>) -> Vec<PacketBatch> {
+    fn verify_batches(
+        &self,
+        mut batches: Vec<PacketBatch>,
+        _valid_packets: usize,
+    ) -> Vec<PacketBatch> {
         let r_bank = self.bank_forks.read().unwrap().working_bank();
         let slots: HashSet<u64> = Self::read_slots(&batches);
         let mut leader_slots: HashMap<u64, [u8; 32]> = slots
@@ -160,8 +164,15 @@ pub mod tests {
         batches[0].packets[1].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[1].meta.size = shred.payload.len();
 
+<<<<<<< HEAD
         let rv = verifier.verify_batches(batches);
         assert!(!rv[0].packets[0].meta.discard);
         assert!(rv[0].packets[1].meta.discard);
+=======
+        let num_packets = solana_perf::sigverify::count_packets_in_batches(&batches);
+        let rv = verifier.verify_batches(batches, num_packets);
+        assert!(!rv[0].packets[0].meta.discard());
+        assert!(rv[0].packets[1].meta.discard());
+>>>>>>> 2e56c59bc (Handle already discarded packets in gpu sigverify path (#22680))
     }
 }
