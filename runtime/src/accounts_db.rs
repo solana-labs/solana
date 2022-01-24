@@ -6054,7 +6054,7 @@ if false {
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
-        use_index = true;
+        use_index = false;
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
                 Some((&self.accounts_cache, ancestors, &self.accounts_index))
