@@ -35,6 +35,7 @@ pub struct TransactionContext {
     number_of_instructions_at_transaction_level: usize,
     instruction_trace: InstructionTrace,
     return_data: (Pubkey, Vec<u8>),
+    verify_access: bool,
 }
 
 impl TransactionContext {
@@ -57,6 +58,7 @@ impl TransactionContext {
             number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: (Pubkey::default(), Vec::new()),
+            verify_access: false,
         }
     }
 
@@ -471,9 +473,10 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Assignes the owner of this account (transaction wide)
     pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
-        self.account.copy_into_owner_from_slice(pubkey);
-        self.verify_writability()
+        self.verify_writability()?;
         // TODO: return Err(InstructionError::ModifiedProgramId);
+        self.account.copy_into_owner_from_slice(pubkey);
+        Ok(())
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -483,14 +486,16 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Overwrites the number of lamports of this account (transaction wide)
     pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+        if self.transaction_context.verify_access {
+            if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+                return Err(InstructionError::ExecutableLamportChange);
+            }
+            if !self.is_writable() {
+                return Err(InstructionError::ReadonlyLamportChange);
+            }
+            // TODO: return Err(InstructionError::ExternalAccountLamportSpend);
+        }
         self.account.set_lamports(lamports);
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            return Err(InstructionError::ExecutableLamportChange);
-        }
-        if !self.is_writable() {
-            return Err(InstructionError::ReadonlyLamportChange);
-        }
-        // TODO: return Err(InstructionError::ExternalAccountLamportSpend);
         Ok(())
     }
 
@@ -514,13 +519,15 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Verifies that this account is writable (instruction wide)
     fn verify_writability(&self) -> Result<(), InstructionError> {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            return Err(InstructionError::ExecutableDataModified);
+        if self.transaction_context.verify_access {
+            if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+                return Err(InstructionError::ExecutableDataModified);
+            }
+            if !self.is_writable() {
+                return Err(InstructionError::ReadonlyDataModified);
+            }
+            // TODO: return Err(InstructionError::ExternalAccountDataModified);
         }
-        if !self.is_writable() {
-            return Err(InstructionError::ReadonlyDataModified);
-        }
-        // TODO: return Err(InstructionError::ExternalAccountDataModified);
         Ok(())
     }
 
@@ -531,32 +538,31 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns a writable slice of the account data (transaction wide)
     pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
-        if self.is_writable() {
-            Ok(self.account.data_as_mut_slice())
-        } else {
-            Err(InstructionError::Immutable)
-        }
+        self.verify_writability()?;
+        Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide)
     pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+        self.verify_writability()?;
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
             // TODO: return Err(InstructionError::AccountDataSizeChanged);
         }
-        self.verify_writability()
+        Ok(())
     }
 
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
     pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
+        self.verify_writability()?;
         self.account.data_mut().resize(new_len, 0);
         // TODO: return Err(InstructionError::InvalidRealloc);
         // TODO: return Err(InstructionError::AccountDataSizeChanged);
-        self.verify_writability()
+        Ok(())
     }
 
     /// Deserializes the account data into a state
@@ -568,6 +574,7 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Serializes a state into the account data
     pub fn set_state<T: serde::Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
+        self.verify_writability()?;
         let data = self.account.data_as_mut_slice();
         let serialized_size =
             bincode::serialized_size(state).map_err(|_| InstructionError::GenericError)?;
@@ -575,7 +582,7 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::AccountDataTooSmall);
         }
         bincode::serialize_into(&mut *data, state).map_err(|_| InstructionError::GenericError)?;
-        self.verify_writability()
+        Ok(())
     }
 
     /// Returns whether this account is executable (transaction wide)
@@ -585,8 +592,9 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Configures whether this account is executable (transaction wide)
     pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
+        self.verify_writability()?;
         self.account.set_executable(is_executable);
-        self.verify_writability()
+        Ok(())
         // TODO: return Err(InstructionError::ExecutableAccountNotRentExempt);
         // TODO: return Err(InstructionError::ExecutableModified);
     }
