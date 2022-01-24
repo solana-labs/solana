@@ -2745,7 +2745,7 @@ impl AccountsDb {
         let total_starting_accounts = stored_accounts.len();
         let total_accounts_after_shrink = alive_accounts.len();
         let was_ancient = {
-            let stores = stores.clone();
+            let mut stores = stores.clone();
             stores.next().map(|store| store.accounts.is_ancient()).unwrap_or_default() && stores.next().is_none()
         };
         if !was_ancient {
@@ -2799,7 +2799,7 @@ impl AccountsDb {
 
             if was_ancient {
                 let is_full_ancient = {
-                    let stores = stores.clone();
+                    let mut stores = stores.clone();
                     stores.next().map(|store| store.accounts.is_full_ancient()).unwrap_or_default() && stores.next().is_none()
                 };
         
