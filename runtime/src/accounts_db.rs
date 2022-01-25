@@ -6305,12 +6305,13 @@ if false {
         }
         let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
         if recalc_hash != loaded_account.loaded_hash() {
-        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
+        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
         pubkey,
         loaded_account.loaded_hash(),
         storage_slot,
         max_slot_in_storages,
         expected_rent_collection_slot_max_epoch,
+        max_slot_in_storages - storage_slot,
         partition_index_from_max_slot,
         partition_from_pubkey,
         recalc_hash,
