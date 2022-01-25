@@ -289,7 +289,6 @@ Connect to the cluster by running:
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --rpc-port 8899 \
   --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log

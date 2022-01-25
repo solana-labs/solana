@@ -97,6 +97,7 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+const DEFAULT_RPC_PORT: u16 = 8899;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -565,10 +566,37 @@ pub fn main() {
                 .help("Halt the validator when it reaches the given slot"),
         )
         .arg(
+            Arg::with_name("rpc")
+                .long("--rpc")
+                .takes_value(true)
+                .help("Controls the JSON RPC functionality of the validator.  Possible values:\n\
+                           none -- no JSON RPC ports will be opened for any reason.  All other RPC command line \
+                               arguments have no effect\n\
+                           private[:port] -- JSON RPC functionality will only be enabled on 127.0.0.1, which means \
+                               that only processes on the local host can access the JSON RPC API\n\
+                           public-snapshots-only[:port] -- JSON RPC functionality will be enabled on all network \
+                               interfaces, but only the subset of the API needed to support snapshot serving will \
+                               be exposed\n\
+                           public[:bind-address][:port] -- full JSON RPC functionality bound either to the specified \
+                               address (if bind-address is supplied) or all addresses (if bind-address is not \
+                               supplied) is supported.  Examples\n\
+                                   public -- publicly available on all networks at the default port of 8899\n\
+                                   public:10.100.0.10 -- publicly available and bound to address 10.100.0.10 at \
+                                       port 8899\n\
+                                   public:50000 -- publicly available and bound to all addresses at port 50000\n\
+                                   public:10.100.0.10:50000 -- publicly available and bound only to address \
+                                       10.100.0.10 at port 50000\n\
+                       For all options, if port is not specified, it defaults to 8899.
+                       The default value is 'private' if the validator is a voting node and 'public' if the validator \
+                           is not a voting node.  A voting node has both --vote-account but does not have --no-voting.")
+        )
+        .arg(
             Arg::with_name("rpc_port")
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
+                .hidden(true)
+                .conflicts_with("rpc")
                 .validator(solana_validator::port_validator)
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
         )
@@ -576,6 +604,8 @@ pub fn main() {
             Arg::with_name("minimal_rpc_api")
                 .long("--minimal-rpc-api")
                 .takes_value(false)
+                .hidden(true)
+                .conflicts_with("rpc")
                 .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         )
         .arg(
@@ -588,6 +618,8 @@ pub fn main() {
             Arg::with_name("private_rpc")
                 .long("--private-rpc")
                 .takes_value(false)
+                .hidden(true)
+                .conflicts_with("rpc")
                 .help("Do not publish the RPC port for use by others")
         )
         .arg(
@@ -759,6 +791,8 @@ pub fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .conflicts_with("private_rpc")
+                .hidden(true)
+                .conflicts_with("rpc")
                 .validator(solana_net_utils::is_host_port)
                 .help("RPC address for the validator to advertise publicly in gossip. \
                       Useful for validators running behind a load balancer or proxy \
@@ -1083,6 +1117,8 @@ pub fn main() {
                 .long("rpc-bind-address")
                 .value_name("HOST")
                 .takes_value(true)
+                .hidden(true)
+                .conflicts_with("rpc")
                 .validator(solana_net_utils::is_host)
                 .help("IP address to bind the RPC port [default: 127.0.0.1 if --private-rpc is present, otherwise use --bind-address]"),
         )
@@ -1905,7 +1941,8 @@ pub fn main() {
         incremental_snapshot_fetch: matches.is_present("incremental_snapshots"),
     };
 
-    let private_rpc = matches.is_present("private_rpc");
+    let private_rpc = matches.is_present("private_rpc") || get_rpc_config(&matches).0;
+
     let do_port_check = !matches.is_present("no_port_check");
     let no_rocksdb_compaction = true;
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
@@ -1961,7 +1998,9 @@ pub fn main() {
     } else if private_rpc {
         solana_net_utils::parse_host("127.0.0.1").unwrap()
     } else {
-        bind_address
+        get_rpc_config(&matches)
+            .1
+            .map_or(bind_address, |s| solana_net_utils::parse_host(s).unwrap())
     };
 
     let contact_debug_interval = value_t_or_exit!(matches, "contact_debug_interval", u64);
@@ -2123,6 +2162,14 @@ pub fn main() {
         None
     };
 
+    let (minimal_api, rpc_port) = (
+        matches.is_present("minimal_rpc_api") || get_rpc_config(&matches).2,
+        value_t!(matches, "rpc_port", u16).ok().or_else(|| {
+            let rpc = get_rpc_config(&matches);
+            rpc.3
+        }),
+    );
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2144,7 +2191,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            minimal_api: matches.is_present("minimal_rpc_api"),
+            minimal_api,
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -2166,7 +2213,7 @@ pub fn main() {
         },
         accountsdb_repl_service_config,
         accountsdb_plugin_config_files,
-        rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
+        rpc_addrs: rpc_port.map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),
                 SocketAddr::new(rpc_bind_address, rpc_port + 1),
@@ -2659,4 +2706,49 @@ fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
         keys,
         indexes: account_indexes,
     }
+}
+
+fn get_rpc_config<'a>(
+    matches: &'a ArgMatches,
+) -> (
+    bool,            // is_private
+    Option<&'a str>, // bind_address,
+    bool,            // is_minimal,
+    Option<u16>,     // port
+) {
+    let rpc = matches.value_of("rpc").unwrap_or_else(|| {
+        if matches.is_present("vote_account") && !matches.is_present("no_voting") {
+            "private"
+        } else {
+            "public"
+        }
+    });
+
+    let v: Vec<&str> = rpc.split(':').collect();
+
+    match v[..] {
+        ["none"] => Some((false, None, false, None)),
+        ["private"] => Some((true, Some("127.0.0.1"), false, Some(DEFAULT_RPC_PORT))),
+        ["private", port] => Some((true, Some("127.0.0.1"), false, parse_port(port))),
+        ["public-snapshots-only"] => Some((false, None, true, Some(DEFAULT_RPC_PORT))),
+        ["public-snapshots-only", port] => Some((false, None, true, parse_port(port))),
+        ["public"] => Some((false, None, false, Some(DEFAULT_RPC_PORT))),
+        ["public", address_or_port] => address_or_port.parse::<u16>().map_or(
+            Some((false, Some(address_or_port), false, Some(DEFAULT_RPC_PORT))),
+            |port| Some((false, None, false, Some(port))),
+        ),
+        ["public", address, port] => Some((false, Some(address), false, parse_port(port))),
+        _ => None,
+    }
+    .unwrap_or_else(|| {
+        eprintln!("Invalid rpc argument: {}", rpc);
+        exit(1);
+    })
+}
+
+fn parse_port(port: &str) -> Option<u16> {
+    Some(port.parse().unwrap_or_else(|e| {
+        eprintln!("Invalid port {}: {}", port, e);
+        exit(1);
+    }))
 }

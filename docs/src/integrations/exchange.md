@@ -33,7 +33,6 @@ solana-validator \
   --identity <VALIDATOR_IDENTITY_KEYPAIR> \
   --entrypoint <CLUSTER_ENTRYPOINT> \
   --expected-genesis-hash <EXPECTED_GENESIS_HASH> \
-  --rpc-port 8899 \
   --no-voting \
   --enable-rpc-transaction-history \
   --limit-ledger-size \
@@ -60,8 +59,7 @@ Specifying one or more `--known-validator` parameters can protect you from booti
 
 Optional parameters to consider:
 
-- `--private-rpc` prevents your RPC port from being published for use by other nodes
-- `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
+- `--rpc=public:<BIND_ADDRESS>` allows you to specify a different IP address to bind the RPC port
 
 ### Automatic Restarts and Monitoring
 
