@@ -23,7 +23,7 @@ impl<'a> SortedStorages<'a> {
 
     /// find slot that is valid and >= 'slot'
     pub fn find_valid_slot(&self, slot: Slot) -> Option<Slot> {
-        if slot > self.range.end {
+        if slot >= self.range.end {
             None
         } else if slot < self.range.start || self.next_valid_slot.is_empty() {
             self.next_valid_slot.first().cloned()
@@ -132,7 +132,7 @@ impl<'a> SortedStorages<'a> {
                 assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
                 storages[index] = Some(original_storages);
             });
-            let mut last = max;
+            let mut last = max - 1;
             storages.iter().enumerate().rev().for_each(|(i, storage)| {
                 if storage.is_some() {
                     last = i as Slot + min;
