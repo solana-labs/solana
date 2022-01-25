@@ -2671,7 +2671,7 @@ mod tests {
                 assert_eq!(vote_account.borrow().lamports(), lamports);
                 assert_eq!(to_account.borrow().lamports(), 0);
                 let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-                // State has been deinitialized since balance is zero
+                // State is still initialized
                 assert!(!post_state.is_uninitialized());
             }
         }
