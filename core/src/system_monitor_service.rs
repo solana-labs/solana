@@ -227,13 +227,14 @@ impl SystemMonitorService {
         }
     }
 
-    pub fn run(exit: Arc<AtomicBool>, report_os_network_stats: bool) {
+    fn run(exit: Arc<AtomicBool>, report_os_network_stats: bool) {
         let mut udp_stats = None;
 
         let udp_timer = AtomicInterval::default();
         let mem_timer = AtomicInterval::default();
         loop {
             if exit.load(Ordering::Relaxed) {
+                info!("memory-stats used_bytes exiting");
                 break;
             }
 

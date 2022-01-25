@@ -408,7 +408,10 @@ impl Validator {
                 .validator_exit
                 .write()
                 .unwrap()
-                .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
+                .register_exit(Box::new(move || {
+                    error!("validator exit set!");
+                    exit.store(true, Ordering::Relaxed);
+                }));
         }
 
         let accounts_package_channel = channel();
