@@ -6384,7 +6384,13 @@ if false {
         let sort_time = AtomicU64::new(0);
 
         let find_next_slot = |slot: Slot| {
-            storage.find_valid_slot(slot)
+            let storage = storage.find_valid_slot(slot);
+            let roots = maybe_db.unwrap().accounts_index.get_next_root(slot);
+            if storage == roots {
+                return storage;
+            }
+            error!("ancient_append_vec, next slot different: {:?} vs {:?}", storage, roots);
+            roots
         };
 
         let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
@@ -6741,15 +6747,6 @@ if false {
             rewrites.remove(key);
         });
         hashes.extend(rewrites.into_iter());
-
-        if slot == 116979357 {
-            let mut h2 = hashes.clone();
-            AccountsHash::sort_hashes_by_pubkey(&mut h2); 
-
-            info!(
-                "hash calc: {:?}", h2,
-            );
-        }
 
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();

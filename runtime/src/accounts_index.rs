@@ -1974,9 +1974,9 @@ impl<T: IndexValue> AccountsIndex<T> {
                     if contains {
                         error!("ancient_append_vecs: removing root that isn't old: {}, max: {}, min: {}, distance from max: {}", slot, max, max - length, max - slot);
                         if max - slot < 100 {
-                            panic!("figure out where this is coming from");
+                            //panic!("figure out where this is coming from");
                         }
-                        //return true; // short circuit to not actually remove
+                        return true; // short circuit to not actually remove
                     }
                 }
             }
