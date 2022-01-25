@@ -6248,7 +6248,7 @@ if false {
         let mut use_stored = true;
         
         // todo think about: can't rely on 'is_ancient'
-        if !is_ancient && storage_slot >= expected_rent_collection_slot_max_epoch {
+        if /*!is_ancient && */ storage_slot >= expected_rent_collection_slot_max_epoch {
             // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
             // we have not collected rent yet in this epoch for this pubkey
             // we can use the previously calculated hash
