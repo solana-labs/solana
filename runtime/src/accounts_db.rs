@@ -6299,7 +6299,7 @@ if false {
         }
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
-        if num % /*10_000_00*/0 == 0 {
+        if num % /*10_000_00*/1 == 0 {
             error!("rehashed: {}", num);
         }
         // recompute based on rent collection/rewrite slot
