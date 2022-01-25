@@ -2,7 +2,7 @@
 use {
     log::*,
     solana_cli_output::CliAccount,
-    solana_client::rpc_client::RpcClient,
+    solana_client::{nonblocking, rpc_client::RpcClient},
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -43,9 +43,9 @@ use {
         path::{Path, PathBuf},
         str::FromStr,
         sync::{Arc, RwLock},
-        thread::sleep,
         time::Duration,
     },
+    tokio::time::sleep,
 };
 
 #[derive(Clone)]
@@ -358,9 +358,39 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space)
-            .map(|test_validator| (test_validator, mint_keypair))
-            .expect("Test validator failed to start")
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
+            Ok(test_validator) => {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_io()
+                    .enable_time()
+                    .build()
+                    .unwrap();
+                runtime.block_on(test_validator.wait_for_nonzero_fees());
+                (test_validator, mint_keypair)
+            }
+            Err(err) => panic!("Test validator failed to start: {}", err),
+        }
+    }
+
+    pub async fn start_async(&self) -> (TestValidator, Keypair) {
+        self.start_async_with_socket_addr_space(SocketAddrSpace::new(
+            /*allow_private_addr=*/ true,
+        ))
+        .await
+    }
+
+    pub async fn start_async_with_socket_addr_space(
+        &self,
+        socket_addr_space: SocketAddrSpace,
+    ) -> (TestValidator, Keypair) {
+        let mint_keypair = Keypair::new();
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
+            Ok(test_validator) => {
+                test_validator.wait_for_nonzero_fees().await;
+                (test_validator, mint_keypair)
+            }
+            Err(err) => panic!("Test validator failed to start: {}", err),
+        }
     }
 }
 
@@ -617,53 +647,7 @@ impl TestValidator {
         discover_cluster(&gossip, 1, socket_addr_space)
             .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
-        // This is a hack to delay until the fees are non-zero for test consistency
-        // (fees from genesis are zero until the first block with a transaction in it is completed
-        //  due to a bug in the Bank)
-        {
-            let rpc_client =
-                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
-            let mut message = Message::new(
-                &[Instruction::new_with_bytes(
-                    Pubkey::new_unique(),
-                    &[],
-                    vec![AccountMeta::new(Pubkey::new_unique(), true)],
-                )],
-                None,
-            );
-            const MAX_TRIES: u64 = 10;
-            let mut num_tries = 0;
-            loop {
-                num_tries += 1;
-                if num_tries > MAX_TRIES {
-                    break;
-                }
-                println!("Waiting for fees to stabilize {:?}...", num_tries);
-                match rpc_client.get_latest_blockhash() {
-                    Ok(blockhash) => {
-                        message.recent_blockhash = blockhash;
-                        match rpc_client.get_fee_for_message(&message) {
-                            Ok(fee) => {
-                                if fee != 0 {
-                                    break;
-                                }
-                            }
-                            Err(err) => {
-                                warn!("get_fee_for_message() failed: {:?}", err);
-                                break;
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        warn!("get_latest_blockhash() failed: {:?}", err);
-                        break;
-                    }
-                }
-                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-            }
-        }
-
-        Ok(TestValidator {
+        let test_validator = TestValidator {
             ledger_path,
             preserve_ledger,
             rpc_pubsub_url,
@@ -672,7 +656,56 @@ impl TestValidator {
             gossip,
             validator,
             vote_account_address,
-        })
+        };
+        Ok(test_validator)
+    }
+
+    /// This is a hack to delay until the fees are non-zero for test consistency
+    /// (fees from genesis are zero until the first block with a transaction in it is completed
+    ///  due to a bug in the Bank)
+    async fn wait_for_nonzero_fees(&self) {
+        let rpc_client = nonblocking::rpc_client::RpcClient::new_with_commitment(
+            self.rpc_url.clone(),
+            CommitmentConfig::processed(),
+        );
+        let mut message = Message::new(
+            &[Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![AccountMeta::new(Pubkey::new_unique(), true)],
+            )],
+            None,
+        );
+        const MAX_TRIES: u64 = 10;
+        let mut num_tries = 0;
+        loop {
+            num_tries += 1;
+            if num_tries > MAX_TRIES {
+                break;
+            }
+            println!("Waiting for fees to stabilize {:?}...", num_tries);
+            match rpc_client.get_latest_blockhash().await {
+                Ok(blockhash) => {
+                    message.recent_blockhash = blockhash;
+                    match rpc_client.get_fee_for_message(&message).await {
+                        Ok(fee) => {
+                            if fee != 0 {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            warn!("get_fee_for_message() failed: {:?}", err);
+                            break;
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!("get_latest_blockhash() failed: {:?}", err);
+                    break;
+                }
+            }
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT)).await;
+        }
     }
 
     /// Return the validator's TPU address
@@ -719,6 +752,14 @@ impl TestValidator {
         RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed())
     }
 
+    /// Return a nonblocking RpcClient for the validator.
+    pub fn get_async_rpc_client(&self) -> nonblocking::rpc_client::RpcClient {
+        nonblocking::rpc_client::RpcClient::new_with_commitment(
+            self.rpc_url.clone(),
+            CommitmentConfig::processed(),
+        )
+    }
+
     pub fn join(mut self) {
         if let Some(validator) = self.validator.take() {
             validator.join();
@@ -744,5 +785,31 @@ impl Drop for TestValidator {
                 )
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn get_health() {
+        let (test_validator, _payer) = TestValidatorGenesis::default().start();
+        let rpc_client = test_validator.get_rpc_client();
+        rpc_client.get_health().expect("health");
+    }
+
+    #[tokio::test]
+    async fn nonblocking_get_health() {
+        let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
+        let rpc_client = test_validator.get_async_rpc_client();
+        rpc_client.get_health().await.expect("health");
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn document_tokio_panic() {
+        // `start()` blows up when run within tokio
+        let (_test_validator, _payer) = TestValidatorGenesis::default().start();
     }
 }

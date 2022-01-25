@@ -1,4 +1,4 @@
-//! An [`RpcSender`] used for unit testing [`RpcClient`](crate::rpc_client::RpcClient).
+//! A nonblocking [`RpcSender`] used for unit testing [`RpcClient`](crate::rpc_client::RpcClient).
 
 use {
     crate::{
@@ -15,6 +15,7 @@ use {
         },
         rpc_sender::*,
     },
+    async_trait::async_trait,
     serde_json::{json, Number, Value},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_sdk::{
@@ -40,8 +41,6 @@ use {
 };
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
-pub const SIGNATURE: &str =
-    "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
 pub type Mocks = HashMap<RpcRequest, Value>;
 pub struct MockSender {
@@ -87,12 +86,17 @@ impl MockSender {
     }
 }
 
+#[async_trait]
 impl RpcSender for MockSender {
     fn get_transport_stats(&self) -> RpcTransportStats {
         RpcTransportStats::default()
     }
 
-    fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
+    async fn send(
+        &self,
+        request: RpcRequest,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(&request) {
             return Ok(value);
         }
@@ -386,7 +390,7 @@ impl RpcSender for MockSender {
             "getBlocksWithLimit" => serde_json::to_value(vec![1, 2, 3])?,
             "getSignaturesForAddress" => {
                 serde_json::to_value(vec![RpcConfirmedTransactionStatusWithSignature {
-                    signature: SIGNATURE.to_string(),
+                    signature: crate::mock_sender_for_cli::SIGNATURE.to_string(),
                     slot: 123,
                     err: None,
                     memo: None,
