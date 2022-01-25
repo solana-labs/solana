@@ -1938,6 +1938,16 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.roots_tracker.read().unwrap().max_root
     }
 
+    pub fn get_next_root(&self, slot: Slot) -> Option<Slot> {
+        let w_roots_tracker = self.roots_tracker.read().unwrap();
+        for root in slot..w_roots_tracker.max_root() {
+            if w_roots_tracker.roots.contains(&root) {
+                return Some(root);
+            }
+        }
+        None
+    }
+
     pub fn remove_old_roots(&self, newest_slot: Slot, keep: HashSet<Slot>) {
         let w_roots_tracker = self.roots_tracker.read().unwrap();
         let mut roots = w_roots_tracker.roots.get_all_less_than(newest_slot);

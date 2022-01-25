@@ -5734,7 +5734,22 @@ if false {
                                     .get_loaded_account()
                                     .and_then(
                                         |loaded_account| {
-                                            let loaded_hash = loaded_account.loaded_hash();
+                                            let find_next_slot = |slot: Slot| {
+                                                self.accounts_index.get_next_root(slot)
+                                            };
+                                            let slots_per_epoch = Some(432_000);
+                                            let rehash = AtomicUsize::default();
+                                            let loaded_hash = Self::maybe_rehash_rewrites(
+                                                &loaded_account,
+                                                pubkey,
+                                                *slot,
+                                                slots_per_epoch,
+                                                &rehash,
+                                                false,
+                                                &Some(self),
+                                                max_root,
+                                                find_next_slot,
+                                            );
                                             let balance = loaded_account.lamports();
                                             if false && check_hash && !self.is_filler_account(pubkey) { // cannot compute hash if we are not doing rewrites
                                                 let computed_hash = self.compute_hash_maybe_rewrite(max_root, slot, &loaded_account, pubkey);
@@ -6062,7 +6077,7 @@ if false {
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
-        use_index = false;
+        //use_index = false;
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
                 Some((&self.accounts_cache, ancestors, &self.accounts_index))
@@ -6199,18 +6214,22 @@ if false {
         loaded_account: &LoadedAccount,
         pubkey: &Pubkey,
         storage_slot: Slot,
-        storage: &SortedStorages,
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
         force_rehash: bool,
         maybe_db: &Option<&AccountsDb>,
+        max_slot_in_storages: Slot,
+        find_next_slot: impl Fn(Slot) -> Option<Slot>,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         assert!(slots_per_epoch.is_some());
         let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
 
-        let max_slot_in_storages = storage.range().end;
         let mut is_ancient = false;
+        if storage_slot + slots_per_epoch <= max_slot_in_storages {
+            is_ancient = true; // has to be treated like ancient since we are older than an epoch
+        }
+/*
         if let Some(storages) = storage.get(storage_slot) {
             if storages.len() == 1 {
                 if storages[0].accounts.is_ancient() {
@@ -6229,6 +6248,7 @@ if false {
                 }
             }
         }
+        */
 
         // todo: if we are ancient, then we should assume we need to recompute
         // if we are not ancient, we can calculate based on distance of this slot from max
@@ -6257,7 +6277,7 @@ if false {
         
 
         let expected_slot_start = expected_rent_collection_slot_max_epoch;
-        let find = storage.find_valid_slot(expected_slot_start);
+        let find = find_next_slot(expected_slot_start);
         if let Some(find) = find {
             // found a root (because we have a storage) that is >= expected_rent_collection_slot.
             expected_rent_collection_slot_max_epoch = find;
@@ -6359,6 +6379,10 @@ if false {
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);
 
+        let find_next_slot = |slot: Slot| {
+            storage.find_valid_slot(slot)
+        };
+
         let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
             cache_hash_data,
             accounts_cache_and_ancestors,
@@ -6385,11 +6409,12 @@ if false {
                     &loaded_account,
                     pubkey,
                     slot,
-                    storage,
                     slots_per_epoch,
                     rehash,
                     false,
                     maybe_db,
+                    storage.range().end,
+                    find_next_slot,
                 );
 
                 let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
@@ -6399,11 +6424,12 @@ if false {
                         &loaded_account,
                         pubkey,
                         slot,
-                        storage,
                         slots_per_epoch,
                         &rehash,
                         false,//true,
                         maybe_db,
+                        storage.range().end,
+                        find_next_slot,
                     );
                     if computed_hash != source_item.hash {
                         info!(
