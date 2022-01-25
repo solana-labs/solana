@@ -3090,7 +3090,7 @@ impl AccountsDb {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         // This can't practically be within the current epoch. Otherwise, we would lose track of the roots that used to exist and we couldn't load from a snapshot.
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH; // * 60 / 100; // todo - put some 'in-this-epoch' slots into an ancient append vec
-        let old_root = max_root.saturating_sub(epoch_width);
+        let old_root = max_root.saturating_sub(epoch_width + 100);
 
         let mut m = Measure::start("get slots");
         let mut old_slots = self
