@@ -6293,6 +6293,12 @@ if false {
         }
         */
         assert!(!force_rehash);
+
+        let partition_storage_slot = storage_slot % slots_per_epoch;
+        if !use_stored && partition_storage_slot < partition_from_pubkey {
+            // we have an account we wrote in this epoch already, so we collected rent then, so we would not have rewritten it again later in this same slot
+            use_stored = true;
+        }
         if use_stored && !force_rehash {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
