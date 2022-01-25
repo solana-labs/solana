@@ -4523,10 +4523,12 @@ if false {
         // 2) Those slots/roots should have already been purged from the accounts index root
         // tracking metadata via `accounts_index.clean_dead_slot()`.
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
+        /*
         assert!(self
             .accounts_index
             .get_rooted_from_list(removed_slots.clone())
             .is_empty());
+            */
         safety_checks_elapsed.stop();
         purge_stats
             .safety_checks_elapsed
