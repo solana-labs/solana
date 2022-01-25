@@ -3180,9 +3180,9 @@ if false {
                     created_this_slot = true;
                     current_storage = Some((slot, shrunken_store));
                 }
-                let writer = current_storage.as_ref().unwrap();
                 let (stored_accounts, num_stores, original_bytes) =
                     self.get_unique_accounts_from_storages(all_storages.iter());
+                let writer = current_storage.as_ref().unwrap();
                 let mut available_bytes = writer.1.accounts.remaining_bytes();
                 let mut hashes_this_append_vec = Vec::default();
                 let mut hashes_next_append_vec = Vec::default();
