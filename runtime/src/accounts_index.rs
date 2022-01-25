@@ -1962,7 +1962,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 if slot >= max - length {
                     let contains = w_roots_tracker.roots.contains(&slot);
                     if contains {
-                        error!("ancient_append_vecs: removing root that isn't old: {}, max: {}, min: {}", slot, max, max - length);
+                        error!("ancient_append_vecs: removing root that isn't old: {}, max: {}, min: {}, distance from max: {}", slot, max, max - length, max - slot);
                         return true; // short circuit to not actually remove
                     }
                 }
