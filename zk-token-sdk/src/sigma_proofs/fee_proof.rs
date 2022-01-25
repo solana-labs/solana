@@ -1,6 +1,6 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
-    crate::encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
+    crate::encryption::pedersen::{G, H, Pedersen, PedersenCommitment, PedersenOpening},
     rand::rngs::OsRng,
 };
 use {
@@ -11,6 +11,7 @@ use {
         traits::{IsIdentity, MultiscalarMul, VartimeMultiscalarMul},
     },
     merlin::Transcript,
+    subtle::{Choice, ConditionallySelectable, ConstantTimeGreater},
 };
 
 #[derive(Clone)]
@@ -22,147 +23,192 @@ pub struct FeeProof {
 #[allow(non_snake_case, dead_code)]
 #[cfg(not(target_arch = "bpf"))]
 impl FeeProof {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        amount_fee: u64,
+    fn create_proof_fee_above_max(
+        (commitment_fee, opening_fee): (&PedersenCommitment, &PedersenOpening),
+        (delta_fee, commitment_delta, opening_delta): (u64, &PedersenCommitment, &PedersenOpening),
+        (commitment_delta_claimed, opening_delta_claimed): (&PedersenCommitment, &PedersenOpening),
         max_fee: u64,
-        delta_fee: u64,
-        commitment_fee: &PedersenCommitment,
-        opening_fee: &PedersenOpening,
-        commitment_delta_real: &PedersenCommitment,
-        opening_delta_real: &PedersenOpening,
-        commitment_delta_claimed: &PedersenCommitment,
-        opening_delta_claimed: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
-        // extract the relevant scalar and Ristretto points from the input
-        let x = Scalar::from(delta_fee);
-        let m = Scalar::from(max_fee);
-
-        let C_max = commitment_fee.get_point();
-        let r_max = opening_fee.get_scalar();
-
-        let C_delta_real = commitment_delta_real.get_point();
-        let r_delta_real = opening_delta_real.get_scalar();
+        // simulate equality proof
+        let C_delta = commitment_delta.get_point();
+        let r_delta = opening_delta.get_scalar();
 
         let C_delta_claimed = commitment_delta_claimed.get_point();
         let r_delta_claimed = opening_delta_claimed.get_scalar();
 
-        // record public values in transcript
-        //
-        // TODO: consider committing to these points outside this method
-        transcript.append_point(b"C_max", &C_max.compress());
-        transcript.append_point(b"C_delta_real", &C_delta_real.compress());
-        transcript.append_point(b"C_delta_claimed", &C_delta_claimed.compress());
+        let z_x = Scalar::random(&mut OsRng);
+        let z_delta = Scalar::random(&mut OsRng);
+        let z_delta_claimed = Scalar::random(&mut OsRng);
+        let c_equality = Scalar::random(&mut OsRng);
 
-        // generate z values depending on whether the fee exceeds max fee or not
-        //
-        // TODO: must implement this for constant time
-        if amount_fee < max_fee {
-            // simulate max proof
-            let z_max = Scalar::random(&mut OsRng);
-            let c_max = Scalar::random(&mut OsRng);
-            let Y_max = RistrettoPoint::multiscalar_mul(
-                vec![z_max, -c_max, c_max * m],
-                vec![&(*H), C_max, &(*G)],
-            )
-            .compress();
+        let Y_delta = RistrettoPoint::multiscalar_mul(
+            vec![z_x, z_delta, -c_equality],
+            vec![&(*G), &(*H), C_delta],
+        )
+        .compress();
 
-            let fee_max_proof = FeeMaxProof {
-                Y_max,
-                z_max,
-                c_max,
-            };
+        let Y_delta_claimed = RistrettoPoint::multiscalar_mul(
+            vec![z_x, z_delta_claimed, -c_equality],
+            vec![&(*G), &(*H), C_delta_claimed],
+        )
+        .compress();
 
-            // generate equality proof
-            let y_x = Scalar::random(&mut OsRng);
-            let y_delta_real = Scalar::random(&mut OsRng);
-            let y_delta_claimed = Scalar::random(&mut OsRng);
+        let fee_equality_proof = FeeEqualityProof {
+            Y_delta,
+            Y_delta_claimed,
+            z_x,
+            z_delta,
+            z_delta_claimed,
+        };
 
-            let Y_delta_real =
-                RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_real], vec![&(*G), &(*H)])
-                    .compress();
-            let Y_delta_claimed =
-                RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_claimed], vec![&(*G), &(*H)])
-                    .compress();
+        // generate max proof
+        let r_fee = opening_fee.get_scalar();
 
-            transcript.append_point(b"Y_max", &Y_max);
-            transcript.append_point(b"Y_delta_real", &Y_delta_real);
-            transcript.append_point(b"Y_delta_claimed", &Y_delta_claimed);
+        let y_max_proof = Scalar::random(&mut OsRng);
+        let Y_max_proof = (y_max_proof * &(*H)).compress();
 
-            let c = transcript.challenge_scalar(b"c");
-            let c_equality = c - c_max;
+        transcript.append_point(b"Y_max", &Y_max_proof);
+        transcript.append_point(b"Y_delta_real", &Y_delta);
+        transcript.append_point(b"Y_delta_claimed", &Y_delta_claimed);
 
-            transcript.challenge_scalar(b"w");
+        let c = transcript.challenge_scalar(b"c");
+        let c_max_proof = c - c_equality;
 
-            let z_x = c_equality * x + y_x;
-            let z_delta_real = c_equality * r_delta_real + y_delta_real;
-            let z_delta_claimed = c_equality * r_delta_claimed + y_delta_claimed;
+        transcript.challenge_scalar(b"w");
 
-            let fee_equality_proof = FeeEqualityProof {
-                Y_delta_real,
-                Y_delta_claimed,
-                z_x,
-                z_delta_real,
-                z_delta_claimed,
-            };
+        let z_max_proof = c_max_proof * r_fee + y_max_proof;
 
-            Self {
-                fee_max_proof,
-                fee_equality_proof,
-            }
+        let fee_max_proof = FeeMaxProof {
+            Y_max_proof,
+            z_max_proof,
+            c_max_proof,
+        };
+
+        Self {
+            fee_max_proof,
+            fee_equality_proof,
+        }
+    }
+
+    fn create_proof_fee_below_max(
+        (commitment_fee, opening_fee): (&PedersenCommitment, &PedersenOpening),
+        (delta_fee, commitment_delta, opening_delta): (u64, &PedersenCommitment, &PedersenOpening),
+        (commitment_delta_claimed, opening_delta_claimed): (&PedersenCommitment, &PedersenOpening),
+        max_fee: u64,
+        transcript: &mut Transcript,
+    ) -> Self {
+        // simulate max proof
+        let m = Scalar::from(max_fee);
+
+        let C_fee = commitment_fee.get_point();
+        let r_fee = opening_fee.get_scalar();
+
+        let z_max_proof = Scalar::random(&mut OsRng);
+        let c_max_proof = Scalar::random(&mut OsRng); // random challenge
+
+        // solve for Y_max in the verification algebraic relation
+        let Y_max_proof = RistrettoPoint::multiscalar_mul(
+            vec![z_max_proof, -c_max_proof, c_max_proof * m],
+            vec![&(*H), C_fee, &(*G)],
+        )
+        .compress();
+
+        let fee_max_proof = FeeMaxProof {
+            Y_max_proof,
+            z_max_proof,
+            c_max_proof,
+        };
+
+        // generate equality proof
+        let x = Scalar::from(delta_fee);
+
+        let C_delta = commitment_delta.get_point();
+        let r_delta = opening_delta.get_scalar();
+
+        let C_delta_claimed = commitment_delta_claimed.get_point();
+        let r_delta_claimed = opening_delta_claimed.get_scalar();
+
+        let y_x = Scalar::random(&mut OsRng);
+        let y_delta = Scalar::random(&mut OsRng);
+        let y_delta_claimed = Scalar::random(&mut OsRng);
+
+        let Y_delta =
+            RistrettoPoint::multiscalar_mul(vec![y_x, y_delta], vec![&(*G), &(*H)]).compress();
+        let Y_delta_claimed =
+            RistrettoPoint::multiscalar_mul(vec![y_x, y_delta_claimed], vec![&(*G), &(*H)])
+                .compress();
+
+        transcript.append_point(b"Y_max", &Y_max_proof);
+        transcript.append_point(b"Y_delta_real", &Y_delta);
+        transcript.append_point(b"Y_delta_claimed", &Y_delta_claimed);
+
+        let c = transcript.challenge_scalar(b"c");
+        let c_equality = c - c_max_proof;
+
+        transcript.challenge_scalar(b"w");
+
+        let z_x = c_equality * x + y_x;
+        let z_delta = c_equality * r_delta + y_delta;
+        let z_delta_claimed = c_equality * r_delta_claimed + y_delta_claimed;
+
+        let fee_equality_proof = FeeEqualityProof {
+            Y_delta,
+            Y_delta_claimed,
+            z_x,
+            z_delta,
+            z_delta_claimed,
+        };
+
+        Self {
+            fee_max_proof,
+            fee_equality_proof,
+        }
+    }
+
+    pub fn new(
+        (fee_amount, commitment_fee, opening_fee): (u64, &PedersenCommitment, &PedersenOpening),
+        (delta_fee, commitment_delta, opening_delta): (u64, &PedersenCommitment, &PedersenOpening),
+        (commitment_delta_claimed, opening_delta_claimed): (&PedersenCommitment, &PedersenOpening),
+        max_fee: u64,
+        transcript: &mut Transcript,
+    ) -> Self {
+        let mut transcript_fee_above_max = transcript.clone();
+        let mut transcript_fee_below_max = transcript.clone();
+
+        // compute proof for both cases `fee_amount' >= `max_fee` and `fee_amount` < `max_fee`
+        let proof_fee_above_max = Self::create_proof_fee_above_max(
+            (commitment_fee, opening_fee),
+            (delta_fee, commitment_delta, opening_delta),
+            (commitment_delta_claimed, opening_delta_claimed),
+            max_fee,
+            &mut transcript_fee_above_max,
+        );
+
+        let proof_fee_below_max = Self::create_proof_fee_below_max(
+            (commitment_fee, opening_fee),
+            (delta_fee, commitment_delta, opening_delta),
+            (commitment_delta_claimed, opening_delta_claimed),
+            max_fee,
+            &mut transcript_fee_below_max,
+        );
+
+        let above_max = u64::ct_gt(&fee_amount, &max_fee);
+
+        // conditionally assign transcript; transcript is not conditionally selectable
+        if bool::from(above_max) {
+            *transcript = transcript_fee_above_max;
         } else {
-            // simulate equality proof
-            let z_x = Scalar::random(&mut OsRng);
-            let z_delta_real = Scalar::random(&mut OsRng);
-            let z_delta_claimed = Scalar::random(&mut OsRng);
-            let c_equality = Scalar::random(&mut OsRng);
+            *transcript = transcript_fee_below_max;
+        }
 
-            let Y_delta_real = RistrettoPoint::multiscalar_mul(
-                vec![z_x, z_delta_real, -c_equality],
-                vec![&(*G), &(*H), C_delta_real],
-            )
-            .compress();
-
-            let Y_delta_claimed = RistrettoPoint::multiscalar_mul(
-                vec![z_x, z_delta_claimed, -c_equality],
-                vec![&(*G), &(*H), C_delta_claimed],
-            )
-            .compress();
-
-            let fee_equality_proof = FeeEqualityProof {
-                Y_delta_real,
-                Y_delta_claimed,
-                z_x,
-                z_delta_real,
-                z_delta_claimed,
-            };
-
-            // generate max proof
-            let y_max = Scalar::random(&mut OsRng);
-            let Y_max = (y_max * &(*H)).compress();
-
-            transcript.append_point(b"Y_max", &Y_max);
-            transcript.append_point(b"Y_delta_real", &Y_delta_real);
-            transcript.append_point(b"Y_delta_claimed", &Y_delta_claimed);
-
-            let c = transcript.challenge_scalar(b"c");
-            let c_max = c - c_equality;
-
-            transcript.challenge_scalar(b"w");
-
-            let z_max = c_max * r_max + y_max;
-
-            let fee_max_proof = FeeMaxProof {
-                Y_max,
-                z_max,
-                c_max,
-            };
-
-            Self {
-                fee_max_proof,
-                fee_equality_proof,
-            }
+        Self {
+            fee_max_proof: FeeMaxProof::conditional_select(&proof_fee_above_max.fee_max_proof,
+                                                           &proof_fee_below_max.fee_max_proof,
+                                                           above_max),
+            fee_equality_proof: FeeEqualityProof::conditional_select(&proof_fee_above_max.fee_equality_proof,
+                                                                     &proof_fee_below_max.fee_equality_proof,
+                                                                     above_max),
         }
     }
 
@@ -188,9 +234,9 @@ impl FeeProof {
         transcript.validate_and_append_point(b"C_delta_real", &C_delta_real.compress())?;
         transcript.validate_and_append_point(b"C_delta_claimed", &C_delta_claimed.compress())?;
 
-        transcript.validate_and_append_point(b"Y_max", &self.fee_max_proof.Y_max)?;
+        transcript.validate_and_append_point(b"Y_max", &self.fee_max_proof.Y_max_proof)?;
         transcript
-            .validate_and_append_point(b"Y_delta_real", &self.fee_equality_proof.Y_delta_real)?;
+            .validate_and_append_point(b"Y_delta_real", &self.fee_equality_proof.Y_delta)?;
         transcript.validate_and_append_point(
             b"Y_delta_claimed",
             &self.fee_equality_proof.Y_delta_claimed,
@@ -198,14 +244,14 @@ impl FeeProof {
 
         let Y_max = self
             .fee_max_proof
-            .Y_max
+            .Y_max_proof
             .decompress()
             .ok_or(FeeProofError::Format)?;
-        let z_max = self.fee_max_proof.z_max;
+        let z_max = self.fee_max_proof.z_max_proof;
 
         let Y_delta_real = self
             .fee_equality_proof
-            .Y_delta_real
+            .Y_delta
             .decompress()
             .ok_or(FeeProofError::Format)?;
         let Y_delta_claimed = self
@@ -214,11 +260,11 @@ impl FeeProof {
             .decompress()
             .ok_or(FeeProofError::Format)?;
         let z_x = self.fee_equality_proof.z_x;
-        let z_delta_real = self.fee_equality_proof.z_delta_real;
+        let z_delta_real = self.fee_equality_proof.z_delta;
         let z_delta_claimed = self.fee_equality_proof.z_delta_claimed;
 
         let c = transcript.challenge_scalar(b"c");
-        let c_max = self.fee_max_proof.c_max;
+        let c_max = self.fee_max_proof.c_max_proof;
         let c_equality = c - c_max;
 
         let w = transcript.challenge_scalar(b"w");
@@ -263,22 +309,55 @@ impl FeeProof {
     }
 }
 
+/// TODO: mention copy
 #[allow(non_snake_case)]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct FeeMaxProof {
-    pub Y_max: CompressedRistretto,
-    pub z_max: Scalar,
-    pub c_max: Scalar,
+    pub Y_max_proof: CompressedRistretto,
+    pub z_max_proof: Scalar,
+    pub c_max_proof: Scalar,
 }
 
+impl ConditionallySelectable for FeeMaxProof {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Self {
+            Y_max_proof: conditional_select_ristretto(&a.Y_max_proof, &b.Y_max_proof, choice),
+            z_max_proof: Scalar::conditional_select(&a.z_max_proof, &b.z_max_proof, choice),
+            c_max_proof: Scalar::conditional_select(&a.c_max_proof, &b.c_max_proof, choice),
+        }
+    }
+}
+
+fn conditional_select_ristretto(a: &CompressedRistretto, b: &CompressedRistretto,
+                                           choice: Choice) -> CompressedRistretto {
+    let mut bytes = [0u8; 32];
+    for i in 0..32 {
+        bytes[i] = u8::conditional_select(&a.as_bytes()[i], &b.as_bytes()[i], choice);
+    }
+    CompressedRistretto(bytes)
+}
+
+/// TODO: mention copy
 #[allow(non_snake_case)]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct FeeEqualityProof {
-    pub Y_delta_real: CompressedRistretto,
+    pub Y_delta: CompressedRistretto,
     pub Y_delta_claimed: CompressedRistretto,
     pub z_x: Scalar,
-    pub z_delta_real: Scalar,
+    pub z_delta: Scalar,
     pub z_delta_claimed: Scalar,
+}
+
+impl ConditionallySelectable for FeeEqualityProof {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Self {
+            Y_delta: conditional_select_ristretto(&a.Y_delta, &b.Y_delta, choice),
+            Y_delta_claimed: conditional_select_ristretto(&a.Y_delta_claimed, &b.Y_delta, choice),
+            z_x: Scalar::conditional_select(&a.z_x, &b.z_x, choice),
+            z_delta: Scalar::conditional_select(&a.z_delta, &b.z_delta, choice),
+            z_delta_claimed: Scalar::conditional_select(&a.z_delta_claimed, &b.z_delta_claimed, choice),
+        }
+    }
 }
 
 #[cfg(test)]
