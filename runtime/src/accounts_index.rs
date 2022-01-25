@@ -612,6 +612,25 @@ impl RollingBitField {
         self.max
     }
 
+    pub fn get_all_less_than(&self, max_slot: Slot) -> Vec<u64> {
+        let mut all = Vec::with_capacity(self.count);
+        self.excess.iter().for_each(|slot| {
+            if slot < &max_slot {
+                all.push(*slot)
+            }
+        });
+        for key in self.min..self.max {
+            if key >= max_slot {
+                break;
+            }
+
+            if self.contains_assume_in_range(&key) {
+                all.push(key);
+            }
+        }
+        all
+    }
+
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| all.push(*slot));
@@ -1919,14 +1938,24 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.roots_tracker.read().unwrap().max_root
     }
 
+    pub fn remove_old_roots(&self, newest_slot: Slot, keep: HashSet<Slot>) {
+        let w_roots_tracker = self.roots_tracker.read().unwrap();
+        let mut roots = w_roots_tracker.roots.get_all_less_than(newest_slot);
+        roots.retain(|root| keep.contains(root));
+        error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}", newest_slot, roots.len(), keep.len());
+        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        roots.into_iter().for_each(|root| {w_roots_tracker.roots.remove(&root);});
+    }
+
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
+    /// return true if slot was a root
     pub fn clean_dead_slot(&self, slot: Slot, stats: &mut AccountsIndexRootsStats) -> bool {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
         let removed_from_previous_uncleaned_roots =
             w_roots_tracker.previous_uncleaned_roots.remove(&slot);
-        if !w_roots_tracker.roots.remove(&slot) {
+        if !w_roots_tracker.roots.contains(&slot) {
             if removed_from_unclean_roots {
                 error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
                 inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);

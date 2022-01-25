@@ -6513,6 +6513,24 @@ if false {
 
         error!("hash: {:?}, slot: {}", result, storages.range().end);
 
+        if let Some(db) = maybe_db {
+            let range = storages.range();
+            let max_root = range.end;
+            let width = slots_per_epoch.unwrap() + 100; // a buffer
+            if max_root > width {
+                let min_root = max_root - width;
+                let mut valid_slots = HashSet::default();
+
+                for slot in range.start..min_root {
+                    if storages.contains(slot) {
+                        valid_slots.insert(slot); // there was a storage for this root, so it counts as a root
+                    }
+                }
+
+                db.accounts_index.remove_old_roots(min_root, valid_slots);
+            }
+        }
+
         result
     }
 
