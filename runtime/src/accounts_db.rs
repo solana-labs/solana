@@ -6246,15 +6246,13 @@ if false {
             expected_rent_collection_slot_max_epoch = expected_rent_collection_slot_max_epoch.saturating_sub(slots_per_epoch);
         }
         let mut use_stored = true;
-        /*
-        can't rely on 'is_ancient'
+        // todo think about: can't rely on 'is_ancient'
         if !is_ancient && storage_slot >= expected_rent_collection_slot_max_epoch {
             // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
             // we have not collected rent yet in this epoch for this pubkey
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
-        */
 
         let expected_slot_start = expected_rent_collection_slot_max_epoch;
         let find = storage.find_valid_slot(expected_slot_start);
