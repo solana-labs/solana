@@ -40,6 +40,7 @@ pub struct TpuSockets {
     pub transaction_forwards: Vec<UdpSocket>,
     pub vote: Vec<UdpSocket>,
     pub broadcast: Vec<UdpSocket>,
+    pub transactions_quic: UdpSocket,
 }
 
 pub struct Tpu {
@@ -49,6 +50,7 @@ pub struct Tpu {
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
+    tpu_quic_t: thread::JoinHandle<()>,
 }
 
 impl Tpu {
@@ -81,6 +83,7 @@ impl Tpu {
             transaction_forwards: tpu_forwards_sockets,
             vote: tpu_vote_sockets,
             broadcast: broadcast_sockets,
+            transactions_quic: transactions_quic_sockets,
         } = sockets;
 
         let (packet_sender, packet_receiver) = unbounded();
@@ -96,6 +99,10 @@ impl Tpu {
             tpu_coalesce_ms,
         );
         let (verified_sender, verified_receiver) = unbounded();
+
+        let tpu_quic_t =
+            solana_streamer::quic::spawn_server(transactions_quic_sockets, packet_sender, exit.clone())
+                .unwrap();
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::default();
@@ -160,6 +167,7 @@ impl Tpu {
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
+            tpu_quic_t,
         }
     }
 
@@ -171,11 +179,13 @@ impl Tpu {
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
         ];
+        self.tpu_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
         }
         let _ = broadcast_result?;
+        warn!("exiting tpu");
         Ok(())
     }
 }

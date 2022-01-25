@@ -31,11 +31,33 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            RwLock,
+            Arc, RwLock,
         },
         time::{Duration, Instant},
     },
 };
+
+struct SkipServerVerification;
+
+impl SkipServerVerification {
+    fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+impl rustls::client::ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
 
 struct ClientOptimizer {
     cur_index: AtomicUsize,
@@ -213,7 +235,52 @@ impl ThinClient {
         tries: usize,
         pending_confirmations: usize,
     ) -> TransportResult<Signature> {
-        for x in 0..tries {
+        use bytes::Bytes;
+        use futures::executor::block_on;
+        use quinn::{ClientConfig, EndpointConfig};
+
+        //let handle = tokio::runtime::Handle::current();
+        let handle = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _guard = handle.enter();
+
+        let mut crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_no_client_auth();
+        crypto.alpn_protocols = vec![b"hq-29".to_vec()];
+
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            self.transactions_socket.try_clone()?,
+        )?
+        .0;
+        endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
+
+        let mut quic_addr = *self.tpu_addr();
+        quic_addr.set_port(quic_addr.port() + 1);
+        let transaction2 = transaction.clone();
+        handle.spawn_blocking(move || {
+            let connecting = endpoint.connect(quic_addr, "connect").unwrap();
+            let conn = block_on(connecting).unwrap();
+
+            let mut buf = vec![0; serialized_size(&transaction2).unwrap() as usize];
+            let mut wr = std::io::Cursor::new(&mut buf[..]);
+            serialize_into(&mut wr, &transaction2)
+                .expect("serialize Transaction in pub fn transfer_signed");
+
+            warn!("sending stuff.");
+            if let Err(e) = conn.connection.send_datagram(Bytes::copy_from_slice(&buf)) {
+                warn!("error {:?}", e);
+            }
+        });
+
+        return Ok(transaction.signatures[0]);
+
+        /*for x in 0..tries {
             let now = Instant::now();
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
@@ -253,7 +320,7 @@ impl ThinClient {
             io::ErrorKind::Other,
             format!("retry_transfer failed in {} retries", tries),
         )
-        .into())
+        .into())*/
     }
 
     pub fn poll_get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {

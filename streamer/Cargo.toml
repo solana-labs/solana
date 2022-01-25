@@ -21,6 +21,13 @@ libc = "0.2.112"
 nix = "0.23.1"
 solana-perf = { path = "../perf", version = "=1.10.0" }
 
+#quiche = "0.10.0"
+futures-util = "0.3.19"
+quinn = "0.8.0"
+rcgen = "0.8.14"
+tokio = { version = "1", features = ["full"] }
+rustls = "0.20.2"
+
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.10.0" }
 
