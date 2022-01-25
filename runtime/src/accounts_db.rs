@@ -6246,6 +6246,7 @@ if false {
             expected_rent_collection_slot_max_epoch = expected_rent_collection_slot_max_epoch.saturating_sub(slots_per_epoch);
         }
         let mut use_stored = true;
+        /*
         // todo think about: can't rely on 'is_ancient'
         if !is_ancient && storage_slot >= expected_rent_collection_slot_max_epoch {
             // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
@@ -6253,6 +6254,7 @@ if false {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
+        */
 
         let expected_slot_start = expected_rent_collection_slot_max_epoch;
         let find = storage.find_valid_slot(expected_slot_start);
@@ -6295,7 +6297,7 @@ if false {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
-        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}",
+        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
         pubkey,
         loaded_account.loaded_hash(),
         storage_slot,
@@ -6306,6 +6308,7 @@ if false {
         loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey),
         use_stored,
         slots_per_epoch,
+        storage_slot % slots_per_epoch,
     );
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
