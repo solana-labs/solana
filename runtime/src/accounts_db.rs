@@ -6295,7 +6295,7 @@ if false {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
-        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}",
+        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}",
         pubkey,
         loaded_account.loaded_hash(),
         storage_slot,
@@ -6305,6 +6305,7 @@ if false {
         partition_from_pubkey,
         loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey),
         use_stored,
+        slots_per_epoch,
     );
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
