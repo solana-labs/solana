@@ -6218,15 +6218,19 @@ if false {
         rehash: &AtomicUsize,
         force_rehash: bool,
         maybe_db: &Option<&AccountsDb>,
-        max_slot_in_storages: Slot,
+        max_slot_in_storages_exclusive: Slot,
         find_next_slot: impl Fn(Slot) -> Option<Slot>,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         assert!(slots_per_epoch.is_some());
         let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
 
+        assert!(max_slot_in_storages_exclusive > 0);
+        let max_slot_in_storages = max_slot_in_storages_exclusive.saturating_sub(1);
+        assert_eq!(find_next_slot(max_slot_in_storages), Some(max_slot_in_storages));
+
         let mut is_ancient = false;
-        if storage_slot + slots_per_epoch < max_slot_in_storages {
+        if storage_slot + slots_per_epoch <= max_slot_in_storages {
             is_ancient = true; // has to be treated like ancient since we are older than an epoch
         }
 /*
