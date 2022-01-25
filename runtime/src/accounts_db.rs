@@ -3217,7 +3217,7 @@ if false {
                 }
 
                 if created_this_slot {
-                    error!("rewrites from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().take(10_000).map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
+                    error!("rewrites from same slot as ancient: {}, {:?}", slot, accounts_this_append_vec.iter().take(10_000).map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                 }
 
                 let mut ids = vec![writer.1.append_vec_id()];
