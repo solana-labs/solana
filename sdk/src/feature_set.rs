@@ -291,6 +291,10 @@ pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
 
+pub mod spl_associated_token_account_v1_0_4 {
+    solana_sdk::declare_id!("FaTa4SpiaSNH44PGC4z8bnGVTkSRYaWvrBs3KTu8XQQq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -358,6 +362,7 @@ lazy_static! {
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
+        (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
