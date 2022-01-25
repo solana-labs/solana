@@ -6299,7 +6299,7 @@ if false {
         }
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
-        if num % 10_000_000 == 0 {
+        if num % /*10_000_00*/0 == 0 {
             error!("rehashed: {}", num);
         }
         // recompute based on rent collection/rewrite slot
@@ -6326,7 +6326,7 @@ if false {
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
-        check_hash = false;
+        //check_hash = false;
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
