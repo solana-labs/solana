@@ -1168,7 +1168,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             let maybe_last_epoch_credits = vote_state.epoch_credits.last();
             match maybe_last_epoch_credits {
                 None => false,
-                Some(last_epoch_credits) => (last_epoch_credits.1 - last_epoch_credits.2) > 0,
+                Some((epoch_credits, previous_epoch_credits)) => epoch_credits.saturating_sub(previous_epoch_credits) > 0,
             }
         }
     };
