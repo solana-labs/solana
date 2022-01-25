@@ -1706,7 +1706,7 @@ mod tests {
         serde_json::{json, Value},
         solana_client::{
             blockhash_query,
-            mock_sender::SIGNATURE,
+            mock_sender_for_cli::SIGNATURE,
             rpc_request::RpcRequest,
             rpc_response::{Response, RpcResponseContext},
         },

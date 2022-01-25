@@ -1,7 +1,7 @@
 //! A transport for RPC calls.
-
 use {
     crate::{client_error::Result, rpc_request::RpcRequest},
+    async_trait::async_trait,
     std::time::Duration,
 };
 
@@ -26,10 +26,14 @@ pub struct RpcTransportStats {
 /// It is typically implemented by [`HttpSender`] in production, and
 /// [`MockSender`] in unit tests.
 ///
-/// [`RpcClient`]: crate::rpc_client::RpcClient
 /// [`HttpSender`]: crate::http_sender::HttpSender
 /// [`MockSender`]: crate::mock_sender::MockSender
-pub trait RpcSender {
-    fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value>;
+#[async_trait]
+pub(crate) trait RpcSender {
+    async fn send(
+        &self,
+        request: RpcRequest,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value>;
     fn get_transport_stats(&self) -> RpcTransportStats;
 }
