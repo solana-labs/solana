@@ -25,6 +25,7 @@ pub mod execute_cost_table;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod hashed_transaction;
+pub mod inline_spl_associated_token_account;
 pub mod inline_spl_token;
 pub mod instruction_recorder;
 pub mod loader_utils;

@@ -285,6 +285,10 @@ pub mod evict_invalid_stakes_cache_entries {
     solana_sdk::declare_id!("EMX9Q7TVFAmQ9V1CggAkhMzhXSg8ECp7fHrWQX2G1chf");
 }
 
+pub mod spl_associated_token_account_v1_0_4 {
+    solana_sdk::declare_id!("FaTa4SpiaSNH44PGC4z8bnGVTkSRYaWvrBs3KTu8XQQq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -356,6 +360,7 @@ lazy_static! {
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
+        (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
