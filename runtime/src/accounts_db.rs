@@ -6393,6 +6393,8 @@ if false {
             roots
         };
 
+        // todo - snapshots will be missing the roots that we eliminated because they only had 'rewrites', which we are no longer rewriting. As a result, the rehash slots will be off.
+
         let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
             cache_hash_data,
             accounts_cache_and_ancestors,

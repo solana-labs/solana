@@ -16,6 +16,7 @@ impl Exit {
     }
 
     pub fn exit(&mut self) {
+        panic!("exiting");
         self.exited = true;
         for exit in self.exits.drain(..) {
             exit();
