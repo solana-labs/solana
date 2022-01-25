@@ -1957,7 +1957,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let removed_from_previous_uncleaned_roots =
             w_roots_tracker.previous_uncleaned_roots.remove(&slot);
             let length = 432_000;
-            let max = w_roots_tracker.max();
+            let max = w_roots_tracker.max_root();
             if max > length {
                 if slot > max - length {
                     let contains = w_roots_tracker.roots.contains(&slot);
