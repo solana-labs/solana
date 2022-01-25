@@ -3167,6 +3167,12 @@ if false {
                     error!("ancient_append_vec: we have {} storages: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}", all_storages.len(), slot, capacity, size, size.saturating_sub(capacity));
                 }
                 i += 1;
+                let (stored_accounts, num_stores, original_bytes) =
+                    self.get_unique_accounts_from_storages(all_storages.iter());
+                if stored_accounts.is_empty() {
+                    error!("ancient_append_vec: skipping slot because there are no accounts to write: {}", slot);
+                    continue; // skipping empty slot
+                }
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
@@ -3180,8 +3186,6 @@ if false {
                     created_this_slot = true;
                     current_storage = Some((slot, shrunken_store));
                 }
-                let (stored_accounts, num_stores, original_bytes) =
-                    self.get_unique_accounts_from_storages(all_storages.iter());
                 let writer = current_storage.as_ref().unwrap();
                 let mut available_bytes = writer.1.accounts.remaining_bytes();
                 let mut hashes_this_append_vec = Vec::default();
