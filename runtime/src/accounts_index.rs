@@ -1942,6 +1942,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let w_roots_tracker = self.roots_tracker.read().unwrap();
         let mut roots = w_roots_tracker.roots.get_all_less_than(newest_slot);
         roots.retain(|root| keep.contains(root));
+        drop(w_roots_tracker);
         error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}", newest_slot, roots.len(), keep.len());
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         roots.into_iter().for_each(|root| {w_roots_tracker.roots.remove(&root);});
