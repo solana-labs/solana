@@ -22,8 +22,8 @@ use {
         fs::File,
         io::{Read, Seek, SeekFrom},
         path::Path,
+        time::Instant,
     },
-    time::Instant,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -296,7 +296,7 @@ native machine code before execting it in the virtual machine.",
     let duration = Instant::now() - start_time;
     println!("Result: {:?}", result);
     println!("Instruction Count: {}", vm.get_total_instruction_count());
-    println!("Execution time: {} us", duration.whole_microseconds());
+    println!("Execution time: {} us", duration.as_micros());
     if matches.is_present("trace") {
         println!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
