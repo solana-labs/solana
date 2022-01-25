@@ -6226,7 +6226,7 @@ if false {
         let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
 
         let mut is_ancient = false;
-        if storage_slot + slots_per_epoch <= max_slot_in_storages {
+        if storage_slot + slots_per_epoch < max_slot_in_storages {
             is_ancient = true; // has to be treated like ancient since we are older than an epoch
         }
 /*
