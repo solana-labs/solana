@@ -40,6 +40,7 @@ struct SetRootTimings {
     prune_remove_ms: i64,
 }
 
+#[derive(Debug)]
 pub struct BankForks {
     banks: HashMap<Slot, Arc<Bank>>,
     descendants: HashMap<Slot, HashSet<Slot>>,

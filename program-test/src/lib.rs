@@ -442,6 +442,7 @@ fn setup_fees(bank: Bank) -> Bank {
     bank
 }
 
+#[derive(Debug)]
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, AccountSharedData)>,
     builtins: Vec<Builtin>,
@@ -942,6 +943,7 @@ impl ProgramTestBanksClientExt for BanksClient {
     }
 }
 
+#[derive(Debug)]
 struct DroppableTask<T>(Arc<AtomicBool>, JoinHandle<T>);
 
 impl<T> Drop for DroppableTask<T> {
@@ -950,6 +952,7 @@ impl<T> Drop for DroppableTask<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct ProgramTestContext {
     pub banks_client: BanksClient,
     pub last_blockhash: Hash,

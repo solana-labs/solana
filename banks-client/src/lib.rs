@@ -37,7 +37,7 @@ mod error;
 // This exists only for backward compatibility
 pub trait BanksClientExt {}
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BanksClient {
     inner: TarpcClient,
 }
