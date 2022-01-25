@@ -200,7 +200,7 @@ pub enum PohLeaderStatus {
 pub struct LeaderTickHeights {
     pub first_tick_height: u64,
     pub first_tick_reached_at: Option<Instant>,
-    pub target_tick_reached_at: Option<Instant>,
+    pub target_tick_including_grace_ticks_reached_at: Option<Instant>,
     pub last_tick_height: u64,
     pub grace_ticks: u64,
 }
@@ -210,14 +210,14 @@ impl LeaderTickHeights {
         Self {
             first_tick_height,
             first_tick_reached_at: None,
-            target_tick_reached_at: None,
+            target_tick_including_grace_ticks_reached_at: None,
             last_tick_height,
             grace_ticks,
         }
     }
 
     // Returns the tick heights for when a validator next has its leader slots
-    fn compute_next_tick_heights(
+    fn compute_next_leader_tick_heights(
         next_leader_slots: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
         current_tick_height: u64,
@@ -238,20 +238,21 @@ impl LeaderTickHeights {
     }
 
     fn record_time_if_reached(&mut self, current_tick_height: u64) {
-        let now = Instant::now();
         let next_tick_height = current_tick_height.saturating_add(1);
         if !self.first_tick_reached() && next_tick_height >= self.first_tick_height {
-            self.first_tick_reached_at = Some(now);
+            self.first_tick_reached_at = Some(Instant::now());
         }
-        if !self.target_tick_reached() && next_tick_height >= self.target_first_tick_height() {
-            self.target_tick_reached_at = Some(now);
+        if !self.target_tick_reached()
+            && next_tick_height >= self.target_tick_height_including_grace_ticks()
+        {
+            self.target_tick_including_grace_ticks_reached_at = Some(Instant::now());
         }
     }
 
     // The tick height when the leader will start producing a block built from a block produced by
     // the previous leader in the leader schedule. This tick height includes grace ticks to give
     // some extra time for the previous leader's block to be propagated.
-    fn target_first_tick_height(&self) -> u64 {
+    fn target_tick_height_including_grace_ticks(&self) -> u64 {
         self.first_tick_height.saturating_add(self.grace_ticks)
     }
 
@@ -260,7 +261,7 @@ impl LeaderTickHeights {
     }
 
     fn target_tick_reached(&self) -> bool {
-        self.target_tick_reached_at.is_some()
+        self.target_tick_including_grace_ticks_reached_at.is_some()
     }
 }
 
@@ -307,7 +308,7 @@ impl PohRecorder {
                 GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
-            self.leader_tick_heights = LeaderTickHeights::compute_next_tick_heights(
+            self.leader_tick_heights = LeaderTickHeights::compute_next_leader_tick_heights(
                 next_leader_slot,
                 self.ticks_per_slot,
                 self.tick_height,
@@ -475,47 +476,51 @@ impl PohRecorder {
         self.start_bank = reset_bank;
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
-        self.leader_tick_heights = LeaderTickHeights::compute_next_tick_heights(
+        self.leader_tick_heights = LeaderTickHeights::compute_next_leader_tick_heights(
             next_leader_slots,
             self.ticks_per_slot,
             self.tick_height,
         );
     }
 
-    // Report how much time has elapsed before leader ticks being reached and the bank getting set
+    // Report how much time has elapsed between leader ticks being reached and the bank getting set
     // to track the delay between a leader being able to produce block and the bank getting created.
-    fn report_leader_delay_metrics(&self, current_leader_slot: Slot) {
+    fn report_leader_delay_metrics(&self, new_leader_slot: Slot) {
         if let Some(leader_tick_heights) = self.leader_tick_heights.as_ref() {
-            let first_leader_slot =
+            let scheduled_leader_slot =
                 self.slot_for_tick_height(leader_tick_heights.first_tick_height);
-            if current_leader_slot == first_leader_slot {
-                if let Some(first_tick_reached_at) =
-                    leader_tick_heights.first_tick_reached_at.as_ref()
-                {
-                    datapoint_info!(
-                        "poh-recorder-set-bank-stats",
-                        ("slot", current_leader_slot, i64),
-                        (
-                            "leader_first_tick_elapsed_us",
-                            first_tick_reached_at.elapsed().as_micros(),
-                            i64
-                        ),
-                    );
-                }
-
-                if let Some(target_tick_reached_at) =
-                    leader_tick_heights.target_tick_reached_at.as_ref()
-                {
-                    datapoint_info!(
-                        "poh-recorder-set-bank-stats",
-                        ("slot", current_leader_slot, i64),
-                        (
-                            "leader_target_tick_elapsed_us",
-                            target_tick_reached_at.elapsed().as_micros(),
-                            i64
-                        ),
-                    );
-                }
+            if new_leader_slot == scheduled_leader_slot {
+                let first_tick_elapsed = leader_tick_heights
+                    .first_tick_reached_at
+                    .as_ref()
+                    .map(Instant::elapsed)
+                    .unwrap_or_default();
+                let target_tick_elapsed = leader_tick_heights
+                    .target_tick_including_grace_ticks_reached_at
+                    .as_ref()
+                    .map(Instant::elapsed)
+                    .unwrap_or_default();
+                datapoint_info!(
+                    "poh-recorder-set-bank-stats",
+                    ("slot", new_leader_slot, i64),
+                    ("tick_height", self.tick_height(), i64),
+                    (
+                        "first_tick_height",
+                        leader_tick_heights.first_tick_height,
+                        i64
+                    ),
+                    ("first_tick_elapsed_us", first_tick_elapsed.as_micros(), i64),
+                    (
+                        "target_tick_height_including_grace_ticks",
+                        leader_tick_heights.target_tick_height_including_grace_ticks(),
+                        i64
+                    ),
+                    (
+                        "target_tick_including_grace_ticks_elapsed_us",
+                        target_tick_elapsed.as_micros(),
+                        i64
+                    ),
+                );
             }
         }
     }
@@ -770,7 +775,7 @@ impl PohRecorder {
         );
         let (sender, receiver) = unbounded();
         let (record_sender, record_receiver) = unbounded();
-        let leader_tick_heights = LeaderTickHeights::compute_next_tick_heights(
+        let leader_tick_heights = LeaderTickHeights::compute_next_leader_tick_heights(
             next_leader_slot,
             ticks_per_slot,
             tick_height,
@@ -1691,7 +1696,7 @@ mod tests {
                     .leader_tick_heights
                     .as_ref()
                     .unwrap()
-                    .target_first_tick_height()
+                    .target_tick_height_including_grace_ticks()
             );
         }
 
@@ -2029,49 +2034,49 @@ mod tests {
     #[test]
     fn test_compute_leader_tick_heights() {
         assert_eq!(
-            LeaderTickHeights::compute_next_tick_heights(None, 0, 0),
+            LeaderTickHeights::compute_next_leader_tick_heights(None, 0, 0),
             None
         );
 
         assert_eq!(
-            LeaderTickHeights::compute_next_tick_heights(Some((4, 4)), 8, 0),
+            LeaderTickHeights::compute_next_leader_tick_heights(Some((4, 4)), 8, 0),
             Some(LeaderTickHeights {
                 first_tick_height: 33,
                 first_tick_reached_at: None,
-                target_tick_reached_at: None,
+                target_tick_including_grace_ticks_reached_at: None,
                 last_tick_height: 40,
                 grace_ticks: 4
             })
         );
 
         assert_eq!(
-            LeaderTickHeights::compute_next_tick_heights(Some((4, 7)), 8, 0),
+            LeaderTickHeights::compute_next_leader_tick_heights(Some((4, 7)), 8, 0),
             Some(LeaderTickHeights {
                 first_tick_height: 33,
                 first_tick_reached_at: None,
-                target_tick_reached_at: None,
+                target_tick_including_grace_ticks_reached_at: None,
                 last_tick_height: 64,
                 grace_ticks: 2 * 8,
             })
         );
 
         assert_eq!(
-            LeaderTickHeights::compute_next_tick_heights(Some((6, 7)), 8, 0),
+            LeaderTickHeights::compute_next_leader_tick_heights(Some((6, 7)), 8, 0),
             Some(LeaderTickHeights {
                 first_tick_height: 49,
                 first_tick_reached_at: None,
-                target_tick_reached_at: None,
+                target_tick_including_grace_ticks_reached_at: None,
                 last_tick_height: 64,
                 grace_ticks: 8,
             })
         );
 
         assert_eq!(
-            LeaderTickHeights::compute_next_tick_heights(Some((6, 7)), 4, 0),
+            LeaderTickHeights::compute_next_leader_tick_heights(Some((6, 7)), 4, 0),
             Some(LeaderTickHeights {
                 first_tick_height: 25,
                 first_tick_reached_at: None,
-                target_tick_reached_at: None,
+                target_tick_including_grace_ticks_reached_at: None,
                 last_tick_height: 32,
                 grace_ticks: 4,
             })
