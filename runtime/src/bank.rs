@@ -4210,12 +4210,14 @@ impl Bank {
                 rent_for_sysvars,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
+            use std::str::FromStr;
+            let interesting =         pubkey == Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();            
             total_rent += rent;
             // only store accounts where we collected rent
             // because of this, we are not doing this:
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
-            if rent != 0 || !first {//} || self.slot() >= 116979356 {
+            if rent != 0 || !interesting {//|| !first {//} || self.slot() >= 116979356 {
                 collected.push(pubkey);
                 if !just_rewrites {
                     self.store_account(&pubkey, &account);
