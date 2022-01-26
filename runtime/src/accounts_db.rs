@@ -6276,7 +6276,7 @@ if false {
         
         // todo think about: can't rely on 'is_ancient'
         if !is_ancient { //} /* !is_ancient && */ storage_slot >= expected_rent_collection_slot_max_epoch {
-            if partition_index_from_max_slot == storage_slot % slots_per_epoch {
+            if partition_from_pubkey == storage_slot % slots_per_epoch {
                 let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
                 error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
                 pubkey,
@@ -6332,7 +6332,7 @@ if false {
             use_stored = true;
         }
         let mut log = true;
-        if partition_index_from_max_slot == storage_slot % slots_per_epoch {
+        if partition_from_pubkey == storage_slot % slots_per_epoch {
             let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
             log = false;
             error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
