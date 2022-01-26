@@ -538,7 +538,7 @@ impl Validator {
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
         let mut block_commitment_cache = BlockCommitmentCache::default();
-        block_commitment_cache.initialize_slots(bank.slot());
+        block_commitment_cache.initialize_slots(bank.slot(), bank_forks.read().unwrap().root());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =

@@ -1800,13 +1800,10 @@ fn test_validator_saves_tower() {
     let file_tower_storage = FileTowerStorage::new(ledger_path.clone());
 
     // Wait for some votes to be generated
-    let mut last_replayed_root;
     loop {
         if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::processed()) {
             trace!("current slot: {}", slot);
             if slot > 2 {
-                // this will be the root next time a validator starts
-                last_replayed_root = slot;
                 break;
             }
         }
@@ -1818,35 +1815,31 @@ fn test_validator_saves_tower() {
     let tower1 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower1: {:?}", tower1);
     assert_eq!(tower1.root(), 0);
+    assert!(tower1.last_voted_slot().is_some());
 
     // Restart the validator and wait for a new root
     cluster.restart_node(&validator_id, validator_info, SocketAddrSpace::Unspecified);
     let validator_client = cluster.get_validator_client(&validator_id).unwrap();
 
-    // Wait for the first root
-    loop {
+    // Wait for the first new root
+    let last_replayed_root = loop {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
         if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
             trace!("current root: {}", root);
-            if root > last_replayed_root + 1 {
-                last_replayed_root = root;
-                break;
+            if root > 0 {
+                break root;
             }
         }
         sleep(Duration::from_millis(50));
-    }
+    };
 
     // Stop validator, and check saved tower
-    let recent_slot = validator_client
-        .get_slot_with_commitment(CommitmentConfig::processed())
-        .unwrap();
     let validator_info = cluster.exit_node(&validator_id);
     let tower2 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower2: {:?}", tower2);
     assert_eq!(tower2.root(), last_replayed_root);
-    last_replayed_root = recent_slot;
 
     // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
     // without having to wait for that snapshot to be generated in this test
@@ -1858,7 +1851,7 @@ fn test_validator_saves_tower() {
     let validator_client = cluster.get_validator_client(&validator_id).unwrap();
 
     // Wait for a new root, demonstrating the validator was able to make progress from the older `tower1`
-    loop {
+    let new_root = loop {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
@@ -1869,17 +1862,18 @@ fn test_validator_saves_tower() {
                 last_replayed_root
             );
             if root > last_replayed_root {
-                break;
+                break root;
             }
         }
         sleep(Duration::from_millis(50));
-    }
+    };
 
     // Check the new root is reflected in the saved tower state
     let mut validator_info = cluster.exit_node(&validator_id);
     let tower3 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower3: {:?}", tower3);
-    assert!(tower3.root() > last_replayed_root);
+    let tower3_root = tower3.root();
+    assert!(tower3_root >= new_root);
 
     // Remove the tower file entirely and allow the validator to start without a tower.  It will
     // rebuild tower from its vote account contents
@@ -1889,26 +1883,25 @@ fn test_validator_saves_tower() {
     cluster.restart_node(&validator_id, validator_info, SocketAddrSpace::Unspecified);
     let validator_client = cluster.get_validator_client(&validator_id).unwrap();
 
-    // Wait for a couple more slots to pass so another vote occurs
-    let current_slot = validator_client
-        .get_slot_with_commitment(CommitmentConfig::processed())
-        .unwrap();
-    loop {
-        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::processed()) {
-            trace!("current_slot: {}, slot: {}", current_slot, slot);
-            if slot > current_slot + 1 {
-                break;
+    // Wait for another new root
+    let new_root = loop {
+        #[allow(deprecated)]
+        // This test depends on knowing the immediate root, without any delay from the commitment
+        // service, so the deprecated CommitmentConfig::root() is retained
+        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+            trace!("current root: {}, last tower root: {}", root, tower3_root);
+            if root > tower3_root {
+                break root;
             }
         }
         sleep(Duration::from_millis(50));
-    }
+    };
 
     cluster.close_preserve_ledgers();
 
     let tower4 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower4: {:?}", tower4);
-    // should tower4 advance 1 slot compared to tower3????
-    assert_eq!(tower4.root(), tower3.root() + 1);
+    assert!(tower4.root() >= new_root);
 }
 
 fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
