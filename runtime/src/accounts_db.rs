@@ -5763,7 +5763,7 @@ if false {
                                             }
 
                                             sum += balance as u128;
-                                            let interesting =         pubkey == &Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+                                            let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
 
                                             if interesting {
                                                 error!("{}, {}, {}", loaded_hash, balance, pubkey);
@@ -5803,9 +5803,11 @@ if false {
         let total_lamports = *total_lamports.lock().unwrap();
 
         let mut hash_time = Measure::start("hash");
+        /*
         hashes.iter().flatten().for_each(|hash| {
             error!("h:{}",hash);
         });
+        */
 
         let (accumulated_hash, hash_total) = AccountsHash::calculate_hash(hashes);
         hash_time.stop();
@@ -6265,7 +6267,7 @@ if false {
             }
         }
         */
-        let interesting =         pubkey == &Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+        let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
 
         // todo: if we are ancient, then we should assume we need to recompute
         // if we are not ancient, we can calculate based on distance of this slot from max
@@ -6331,7 +6333,7 @@ if false {
         }
 
         /*
-        if pubkey == &Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap() {
+        if pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap() {
         }
         */
         assert!(!force_rehash);
@@ -6466,7 +6468,7 @@ if false {
                     find_next_slot,
                 );
 
-                let interesting =         pubkey == &Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+                let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
 
                 let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
                 if interesting {

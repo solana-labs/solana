@@ -4211,7 +4211,7 @@ impl Bank {
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             use std::str::FromStr;
-            let interesting =         pubkey == Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();            
+            let interesting =         pubkey == Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();            
             total_rent += rent;
             // only store accounts where we collected rent
             // because of this, we are not doing this:

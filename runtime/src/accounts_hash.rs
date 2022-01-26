@@ -681,7 +681,7 @@ impl AccountsHash {
                     item.lamports as u128 + overall_sum as u128,
                 );
                 use std::str::FromStr;
-                                let interesting =         item.pubkey == Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+                                let interesting =         item.pubkey == Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
                 if interesting {
                     error!("{}, {}, {}", item.hash, item.lamports, item.pubkey);
                 }
@@ -773,10 +773,11 @@ impl AccountsHash {
 
             hash_total -= left_over_hashes; // this is enough to cause the hashes at the end of the data set to be ignored
         }
-
+/*
         hashes.iter().flatten().take(hash_total).for_each(|hash| {
             error!("h:{}",hash);
         });
+        */
 
         // if we have raw hashes to process and
         //   we are not the last pass (we already modded against target_fanout) OR
