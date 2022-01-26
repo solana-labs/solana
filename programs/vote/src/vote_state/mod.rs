@@ -1465,7 +1465,7 @@ mod tests {
         // let mut epoch = 0;
         let mut current_epoch_credits = 0;
         let mut previous_epoch_credits = 0;
-        for (epoch, credits) in credits_to_append.into_iter().enumerate() {
+        for (epoch, credits) in credits_to_append.iter().enumerate() {
             current_epoch_credits += credits;
             vote_state
                 .epoch_credits
