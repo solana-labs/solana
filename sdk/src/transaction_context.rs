@@ -418,6 +418,30 @@ impl InstructionContext {
         )
     }
 
+    /// Returns whether an account is a signer
+    pub fn is_signer(&self, index_in_instruction: usize) -> Result<bool, InstructionError> {
+        Ok(if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                .get(index_in_instruction.saturating_sub(self.program_accounts.len()))
+                .ok_or(InstructionError::MissingAccount)?
+                .is_signer
+        })
+    }
+
+    /// Returns whether an account is writable
+    pub fn is_writable(&self, index_in_instruction: usize) -> Result<bool, InstructionError> {
+        Ok(if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                .get(index_in_instruction.saturating_sub(self.program_accounts.len()))
+                .ok_or(InstructionError::MissingAccount)?
+                .is_writable
+        })
+    }
+
     /// Calculates the set of all keys of signer accounts in this Instruction
     pub fn get_signers(&self, transaction_context: &TransactionContext) -> HashSet<Pubkey> {
         let mut result = HashSet::new();
@@ -429,28 +453,6 @@ impl InstructionContext {
             }
         }
         result
-    }
-
-    /// Returns whether an account is a signer
-    pub fn is_signer(&self, index_in_instruction: usize) -> bool {
-        if index_in_instruction < self.program_accounts.len() {
-            false
-        } else {
-            self.instruction_accounts
-                [index_in_instruction.saturating_sub(self.program_accounts.len())]
-            .is_signer
-        }
-    }
-
-    /// Returns whether an account is writable
-    pub fn is_writable(&self, index_in_instruction: usize) -> bool {
-        if index_in_instruction < self.program_accounts.len() {
-            false
-        } else {
-            self.instruction_accounts
-                [index_in_instruction.saturating_sub(self.program_accounts.len())]
-            .is_writable
-        }
     }
 }
 
@@ -614,25 +616,15 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is a signer (instruction wide)
     pub fn is_signer(&self) -> bool {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            false
-        } else {
-            self.instruction_context.instruction_accounts[self
-                .index_in_instruction
-                .saturating_sub(self.instruction_context.program_accounts.len())]
-            .is_signer
-        }
+        self.instruction_context
+            .is_signer(self.index_in_instruction)
+            .unwrap_or_default()
     }
 
     /// Returns whether this account is writable (instruction wide)
     pub fn is_writable(&self) -> bool {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            false
-        } else {
-            self.instruction_context.instruction_accounts[self
-                .index_in_instruction
-                .saturating_sub(self.instruction_context.program_accounts.len())]
-            .is_writable
-        }
+        self.instruction_context
+            .is_writable(self.index_in_instruction)
+            .unwrap_or_default()
     }
 }
