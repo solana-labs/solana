@@ -305,6 +305,7 @@ pub mod vote_withdraw_authority_may_change_authorized_voter {
 
 pub mod spl_associated_token_account_v1_0_4 {
     solana_sdk::declare_id!("FaTa4SpiaSNH44PGC4z8bnGVTkSRYaWvrBs3KTu8XQQq");
+}
 
 pub mod reject_vote_account_close_unless_zero_credit_epoch {
     solana_sdk::declare_id!("ALBk3EWdeAg2WAGf6GPDUf1nynyNqCdEVmgouG7rpuCj");
