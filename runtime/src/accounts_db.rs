@@ -6315,12 +6315,31 @@ if false {
             // we have an account we wrote in this epoch already, so we collected rent then, so we would not have rewritten it again later in this same slot
             use_stored = true;
         }
+        let mut log = true;
+        if partition_index_from_max_slot == storage_slot % slots_per_epoch {
+            let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
+            log = false;
+            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
+            pubkey,
+            loaded_account.loaded_hash(),
+            storage_slot,
+            max_slot_in_storages,
+            expected_rent_collection_slot_max_epoch,
+            max_slot_in_storages - storage_slot,
+            partition_index_from_max_slot,
+            partition_from_pubkey,
+            recalc_hash,
+            use_stored,
+            slots_per_epoch,
+            storage_slot % slots_per_epoch,
+        );
+            }
         if use_stored && !force_rehash {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
         let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
-        if recalc_hash != loaded_account.loaded_hash() {
+        if recalc_hash != loaded_account.loaded_hash() && log {
         error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
         pubkey,
         loaded_account.loaded_hash(),
