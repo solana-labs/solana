@@ -3124,10 +3124,12 @@ impl Bank {
         }
     }
 
-    /// Tell the bank which Entry IDs exist on the ledger. This function
-    /// assumes subsequent calls correspond to later entries, and will boot
-    /// the oldest ones once its internal cache is full. Once boot, the
-    /// bank will reject transactions using that `hash`.
+    /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
+    /// correspond to later entries, and will boot the oldest ones once its internal cache is full.
+    /// Once boot, the bank will reject transactions using that `hash`.
+    ///
+    /// This is NOT thread safe because if tick height is updated by two different threads, the
+    /// block boundary condition could be missed.
     pub fn register_tick(&self, hash: &Hash) {
         assert!(
             !self.freeze_started(),
@@ -3135,11 +3137,15 @@ impl Bank {
         );
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
-        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
+            // Only acquire the write lock for the blockhash queue on block boundaries because
+            // readers can starve this write lock acquisition and ticks would be slowed down too
+            // much if the write lock is acquired for each tick.
+            let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
             w_blockhash_queue.register_hash(hash, self.fee_rate_governor.lamports_per_signature);
             self.update_recent_blockhashes_locked(&w_blockhash_queue);
         }
+
         // ReplayStage will start computing the accounts delta hash when it
         // detects the tick height has reached the boundary, so the system
         // needs to guarantee all account updates for the slot have been
