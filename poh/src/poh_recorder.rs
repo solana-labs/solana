@@ -407,9 +407,10 @@ impl PohRecorder {
         }
     }
 
-    // This can happen if the validator just switched forks and is the next leader on that fork.
-    // When switching forks, validators reset poh to the latest frozen bank so there is no need to
-    // wait for grace ticks.
+    // This usually happens when a leader has just finished one of their slots and needs to
+    // immediately start the next slot. It can also happen if the validator just switched forks and
+    // is the next leader on that fork.  When switching forks, validators reset poh to the latest
+    // frozen bank so there is no need to wait for grace ticks.
     fn was_reset_to_run_immediately(&self, leader_first_tick_height: u64) -> bool {
         self.start_tick_height == leader_first_tick_height
     }
