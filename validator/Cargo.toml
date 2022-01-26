@@ -27,7 +27,7 @@ log = "0.4.14"
 num_cpus = "1.13.1"
 rand = "0.7.0"
 serde = "1.0.134"
-serde_json = "1.0.75"
+serde_json = "1.0.78"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.10.0" }
 solana-client = { path = "../client", version = "=1.10.0" }
