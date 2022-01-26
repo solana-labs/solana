@@ -1452,7 +1452,7 @@ mod tests {
     }
 
     fn create_test_account_with_epoch_credits(
-        credits_to_append: &Vec<u64>,
+        credits_to_append: &[u64],
     ) -> (Pubkey, RefCell<AccountSharedData>) {
         let (vote_pubkey, vote_account) = create_test_account();
         let vote_account_space = vote_account.borrow().data().len();
@@ -1466,11 +1466,11 @@ mod tests {
         let mut current_epoch_credits = 0;
         let mut previous_epoch_credits = 0;
         for credits in credits_to_append {
-            current_epoch_credits = current_epoch_credits + credits;
+            current_epoch_credits += credits;
             vote_state
                 .epoch_credits
                 .push((epoch, current_epoch_credits, previous_epoch_credits));
-            epoch = epoch + 1;
+            epoch += 1;
             previous_epoch_credits = current_epoch_credits;
         }
 
