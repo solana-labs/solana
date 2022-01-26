@@ -407,6 +407,13 @@ impl PohRecorder {
         }
     }
 
+    // This can happen if the validator just switched forks and is the next leader on that fork.
+    // When switching forks, validators reset poh to the latest frozen bank so there is no need to
+    // wait for grace ticks.
+    fn was_reset_to_run_immediately(&self, leader_first_tick_height: u64) -> bool {
+        self.start_tick_height == leader_first_tick_height
+    }
+
     fn reached_leader_tick(&self) -> bool {
         let leader_tick_heights = match self.leader_tick_heights.as_ref() {
             Some(leader_tick_heights) => leader_tick_heights,
@@ -416,7 +423,7 @@ impl PohRecorder {
         // We've approached target_tick_height OR poh was reset to run immediately
         // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
         leader_tick_heights.target_tick_reached()
-            || self.start_tick_height == leader_tick_heights.first_tick_height
+            || self.was_reset_to_run_immediately(leader_tick_heights.first_tick_height)
             || (leader_tick_heights.first_tick_reached() && {
                 let next_tick_height = self.tick_height.saturating_add(1);
                 let next_slot = self.slot_for_tick_height(next_tick_height);
@@ -519,6 +526,21 @@ impl PohRecorder {
                         "target_tick_including_grace_ticks_elapsed_us",
                         target_tick_elapsed.as_micros(),
                         i64
+                    ),
+                    (
+                        "was_reset_to_run_immediately",
+                        self.was_reset_to_run_immediately(leader_tick_heights.first_tick_height),
+                        bool
+                    ),
+                    (
+                        "prev_slot_was_mine",
+                        self.prev_slot_was_mine(new_leader_slot),
+                        bool
+                    ),
+                    (
+                        "is_same_fork_as_previous_leader",
+                        self.is_same_fork_as_previous_leader(new_leader_slot),
+                        bool
                     ),
                 );
             }
