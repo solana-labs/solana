@@ -4227,6 +4227,7 @@ impl Bank {
                 out.push((pubkey, account.lamports()));
                 let hash =
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                error!("rehashed in rent collection: {}, {} {}", pubkey, self.slot(), hash);
                 self.rewrites.insert(pubkey, hash); // this would have been rewritten, except we're not going to do so
             }
             rent_debits.insert(&pubkey, rent, account.lamports());
