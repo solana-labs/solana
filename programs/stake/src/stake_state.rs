@@ -5677,41 +5677,6 @@ mod tests {
     }
 
     #[test]
-    fn test_meta_rewrite_rent_exempt_reserve() {
-        let right_data_len = std::mem::size_of::<StakeState>() as u64;
-        let rent = Rent::default();
-        let expected_rent_exempt_reserve = rent.minimum_balance(right_data_len as usize);
-
-        let test_cases = [
-            (
-                right_data_len + 100,
-                Some((
-                    rent.minimum_balance(right_data_len as usize + 100),
-                    expected_rent_exempt_reserve,
-                )),
-            ), // large data_len, too small rent exempt
-            (right_data_len, None), // correct
-            (
-                right_data_len - 100,
-                Some((
-                    rent.minimum_balance(right_data_len as usize - 100),
-                    expected_rent_exempt_reserve,
-                )),
-            ), // small data_len, too large rent exempt
-        ];
-        for (data_len, expected_rewrite) in &test_cases {
-            let rent_exempt_reserve = rent.minimum_balance(*data_len as usize);
-            let mut meta = Meta {
-                rent_exempt_reserve,
-                ..Meta::default()
-            };
-            let actual_rewrite = meta.rewrite_rent_exempt_reserve(&rent, right_data_len as usize);
-            assert_eq!(actual_rewrite, *expected_rewrite);
-            assert_eq!(meta.rent_exempt_reserve, expected_rent_exempt_reserve);
-        }
-    }
-
-    #[test]
     fn test_calculate_lamports_per_byte_year() {
         let rent = Rent::default();
         let data_len = 200u64;

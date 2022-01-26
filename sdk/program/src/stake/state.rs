@@ -280,24 +280,6 @@ impl Meta {
         Ok(())
     }
 
-    pub fn rewrite_rent_exempt_reserve(
-        &mut self,
-        rent: &Rent,
-        data_len: usize,
-    ) -> Option<(u64, u64)> {
-        let corrected_rent_exempt_reserve = rent.minimum_balance(data_len);
-        if corrected_rent_exempt_reserve != self.rent_exempt_reserve {
-            // We forcibly update rent_excempt_reserve even
-            // if rent_exempt_reserve > account_balance, hoping user might restore
-            // rent_exempt status by depositing.
-            let (old, new) = (self.rent_exempt_reserve, corrected_rent_exempt_reserve);
-            self.rent_exempt_reserve = corrected_rent_exempt_reserve;
-            Some((old, new))
-        } else {
-            None
-        }
-    }
-
     pub fn auto(authorized: &Pubkey) -> Self {
         Self {
             authorized: Authorized::auto(authorized),
