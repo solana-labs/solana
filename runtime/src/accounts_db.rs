@@ -5806,6 +5806,7 @@ if false {
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
             ("collect", collect.as_us(), i64),
+            ("max_root", max_root, i64),
         );
         Ok((accumulated_hash, total_lamports))
     }
