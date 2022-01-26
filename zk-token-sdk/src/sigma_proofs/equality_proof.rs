@@ -89,7 +89,6 @@ impl EqualityProof {
         }
     }
 
-    /// TODO:
     pub fn verify(
         self,
         elgamal_pubkey: &ElGamalPubkey,
