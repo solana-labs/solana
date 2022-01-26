@@ -10,8 +10,16 @@ use {
     },
     inflector::Inflector,
     serde_json::Value,
+<<<<<<< HEAD
     solana_account_decoder::parse_token::spl_token_id,
     solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, stake, system_program},
+=======
+    solana_account_decoder::parse_token::spl_token_ids,
+    solana_sdk::{
+        instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey, stake,
+        system_program,
+    },
+>>>>>>> 86d465c53 (Prepare RPC subsystem for multiple SPL Token program ids)
     std::{
         collections::HashMap,
         str::{from_utf8, Utf8Error},
@@ -27,7 +35,6 @@ lazy_static! {
     static ref MEMO_V3_PROGRAM_ID: Pubkey = spl_memo_id_v3();
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
-    static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id();
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
@@ -37,7 +44,9 @@ lazy_static! {
         );
         m.insert(*MEMO_V1_PROGRAM_ID, ParsableProgram::SplMemo);
         m.insert(*MEMO_V3_PROGRAM_ID, ParsableProgram::SplMemo);
-        m.insert(*TOKEN_PROGRAM_ID, ParsableProgram::SplToken);
+        for spl_token_id in spl_token_ids() {
+            m.insert(spl_token_id, ParsableProgram::SplToken);
+        }
         m.insert(*BPF_LOADER_PROGRAM_ID, ParsableProgram::BpfLoader);
         m.insert(
             *BPF_UPGRADEABLE_LOADER_PROGRAM_ID,
