@@ -6276,7 +6276,23 @@ if false {
         
         // todo think about: can't rely on 'is_ancient'
         if !is_ancient { //} /* !is_ancient && */ storage_slot >= expected_rent_collection_slot_max_epoch {
-            // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
+            if partition_index_from_max_slot == storage_slot % slots_per_epoch {
+                let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
+                error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
+                pubkey,
+                loaded_account.loaded_hash(),
+                storage_slot,
+                max_slot_in_storages,
+                expected_rent_collection_slot_max_epoch,
+                max_slot_in_storages - storage_slot,
+                partition_index_from_max_slot,
+                partition_from_pubkey,
+                recalc_hash,
+                use_stored,
+                slots_per_epoch,
+                storage_slot % slots_per_epoch,
+            );}
+                // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
             // we have not collected rent yet in this epoch for this pubkey
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
