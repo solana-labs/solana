@@ -4193,6 +4193,8 @@ impl Bank {
         let rent_for_sysvars = self.rent_for_sysvars();
         let mut total_rent = 0;
         let mut rent_debits = RentDebits::default();
+        let mut out = Vec::default();
+        let mut collected = Vec::default();
         for (pubkey, mut account) in accounts {
             let found = Self::partition_from_pubkey(&pubkey, partition.2);        
             assert!(found <= partition.1, "{}, {}, {:?}", pubkey, found, partition);
@@ -4209,16 +4211,19 @@ impl Bank {
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
             if rent != 0 {//} || self.slot() >= 116979356 {
+                collected.push(pubkey);
                 if !just_rewrites {
                     self.store_account(&pubkey, &account);
                 }
             } else {
+                out.push((pubkey, account.lamports()));
                 let hash =
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 self.rewrites.insert(pubkey, hash); // this would have been rewritten, except we're not going to do so
             }
             rent_debits.insert(&pubkey, rent, account.lamports());
         }
+        error!("collect_rent_in_partition: ancient_append_vec: {} {:?}, collected: {:?}", self.slot(), out, collected);
         if !just_rewrites {
             self.collected_rent.fetch_add(total_rent, Relaxed);
             self.rewards
