@@ -5703,6 +5703,7 @@ if false {
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
+        let rehash = AtomicUsize::default();
         let get_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
@@ -5739,7 +5740,6 @@ if false {
                                                 self.accounts_index.get_next_root(slot)
                                             };
                                             let slots_per_epoch = Some(432_000);
-                                            let rehash = AtomicUsize::default();
                                             let loaded_hash = Self::maybe_rehash_rewrites(
                                                 &loaded_account,
                                                 pubkey,
@@ -5807,6 +5807,7 @@ if false {
             ("hash_total", hash_total, i64),
             ("collect", collect.as_us(), i64),
             ("max_root", max_root, i64),
+            ("rehashed", rehash.load(Ordering::Relaxed), i64),
         );
         Ok((accumulated_hash, total_lamports))
     }
