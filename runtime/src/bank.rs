@@ -86,6 +86,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::ExecuteTimings,
     },
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -163,9 +164,22 @@ use {
 mod sysvar_cache;
 mod transaction_account_state_info;
 
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("bank_tx_{}", ix))
+                    .build()
+                    .unwrap()));
+
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
+
+pub struct ExecutionResultWithTimingAndError {
+    result: TransactionExecutionResult,
+    timings: ExecuteTimings,
+    error_counters: ErrorCounters,
+    signature_count: u64,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RentDebit {
@@ -3730,6 +3744,77 @@ impl Bank {
         })
     }
 
+    pub fn execute_transaction(
+        &self,
+        accs: &mut TransactionLoadResult,
+        tx: &SanitizedTransaction,
+        enable_cpi_recording: bool,
+        enable_log_recording: bool,
+    ) -> ExecutionResultWithTimingAndError {
+        match accs {
+            (Err(e), _nonce) => ExecutionResultWithTimingAndError {
+                result: TransactionExecutionResult::NotExecuted(e.clone()),
+                timings: ExecuteTimings::default(),
+                error_counters: ErrorCounters::default(),
+                signature_count: 0,
+            },
+            (Ok(loaded_transaction), nonce) => {
+                let mut feature_set_clone_time = Measure::start("feature_set_clone");
+                let feature_set = self.feature_set.clone();
+                feature_set_clone_time.stop();
+                let mut timings = ExecuteTimings::default();
+                let mut error_counters = ErrorCounters::default();
+                saturating_add_assign!(
+                    timings.execute_accessories.feature_set_clone_us,
+                    feature_set_clone_time.as_us()
+                );
+
+                let signature_count = u64::from(tx.message().header().num_required_signatures);
+
+                let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
+                if feature_set.is_active(&tx_wide_compute_cap::id()) {
+                    let mut compute_budget_process_transaction_time =
+                        Measure::start("compute_budget_process_transaction_time");
+                    let process_transaction_result =
+                        compute_budget.process_transaction(tx, feature_set);
+                    compute_budget_process_transaction_time.stop();
+                    saturating_add_assign!(
+                        timings
+                            .execute_accessories
+                            .compute_budget_process_transaction_us,
+                        compute_budget_process_transaction_time.as_us()
+                    );
+                    if let Err(err) = process_transaction_result {
+                        return ExecutionResultWithTimingAndError {
+                            result: TransactionExecutionResult::NotExecuted(err),
+                            timings: ExecuteTimings::default(),
+                            error_counters: ErrorCounters::default(),
+                            signature_count,
+                        };
+                    }
+                }
+
+                let durable_nonce_fee = nonce.as_ref().map(DurableNonceFee::from);
+
+                ExecutionResultWithTimingAndError {
+                    result: self.execute_loaded_transaction(
+                        tx,
+                        loaded_transaction,
+                        compute_budget,
+                        durable_nonce_fee,
+                        enable_cpi_recording,
+                        enable_log_recording,
+                        &mut timings,
+                        &mut error_counters,
+                    ),
+                    timings,
+                    error_counters,
+                    signature_count,
+                }
+            }
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3791,86 +3876,38 @@ impl Bank {
 
         let mut execution_time = Measure::start("execution_time");
 
-        struct ExecutionResultWithTimingAndError {
-            result: TransactionExecutionResult,
-            timings: ExecuteTimings,
-            error_counters: ErrorCounters,
-            signature_count: u64,
-        }
-
-        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
-
         let execution_results_with_timing_and_error: Vec<ExecutionResultWithTimingAndError> =
-            thread_pool.install(|| {
-                loaded_txs
-                    .par_iter_mut()
-                    .zip(sanitized_txs.par_iter())
-                    .map(|(accs, tx)| match accs {
-                        (Err(e), _nonce) => ExecutionResultWithTimingAndError {
-                            result: TransactionExecutionResult::NotExecuted(e.clone()),
-                            timings: ExecuteTimings::default(),
-                            error_counters: ErrorCounters::default(),
-                            signature_count: 0,
-                        },
-                        (Ok(loaded_transaction), nonce) => {
-                            let mut feature_set_clone_time = Measure::start("feature_set_clone");
-                            let feature_set = self.feature_set.clone();
-                            feature_set_clone_time.stop();
-                            let mut timings = ExecuteTimings::default();
-                            let mut error_counters = ErrorCounters::default();
-                            saturating_add_assign!(
-                                timings.execute_accessories.feature_set_clone_us,
-                                feature_set_clone_time.as_us()
-                            );
-
-                            let signature_count =
-                                u64::from(tx.message().header().num_required_signatures);
-
-                            let mut compute_budget =
-                                self.compute_budget.unwrap_or_else(ComputeBudget::new);
-                            if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                                let mut compute_budget_process_transaction_time =
-                                    Measure::start("compute_budget_process_transaction_time");
-                                let process_transaction_result =
-                                    compute_budget.process_transaction(tx, feature_set);
-                                compute_budget_process_transaction_time.stop();
-                                saturating_add_assign!(
-                                    timings
-                                        .execute_accessories
-                                        .compute_budget_process_transaction_us,
-                                    compute_budget_process_transaction_time.as_us()
-                                );
-                                if let Err(err) = process_transaction_result {
-                                    return ExecutionResultWithTimingAndError {
-                                        result: TransactionExecutionResult::NotExecuted(err),
-                                        timings: ExecuteTimings::default(),
-                                        error_counters: ErrorCounters::default(),
-                                        signature_count,
-                                    };
-                                }
-                            }
-
-                            let durable_nonce_fee = nonce.as_ref().map(DurableNonceFee::from);
-
-                            ExecutionResultWithTimingAndError {
-                                result: self.execute_loaded_transaction(
+            if loaded_txs.len() >= get_thread_count() {
+                PAR_THREAD_POOL.with(|thread_pool| {
+                    thread_pool.borrow().install(|| {
+                        loaded_txs
+                            .par_iter_mut()
+                            .zip(sanitized_txs.par_iter())
+                            .map(|(accs, tx)| {
+                                self.execute_transaction(
+                                    accs,
                                     tx,
-                                    loaded_transaction,
-                                    compute_budget,
-                                    durable_nonce_fee,
                                     enable_cpi_recording,
                                     enable_log_recording,
-                                    &mut timings,
-                                    &mut error_counters,
-                                ),
-                                timings,
-                                error_counters,
-                                signature_count,
-                            }
-                        }
+                                )
+                            })
+                            .collect()
+                    })
+                })
+            } else {
+                loaded_txs
+                    .iter_mut()
+                    .zip(sanitized_txs.iter())
+                    .map(|(accs, tx)| {
+                        self.execute_transaction(
+                            accs,
+                            tx,
+                            enable_cpi_recording,
+                            enable_log_recording,
+                        )
                     })
                     .collect()
-            });
+            };
 
         execution_time.stop();
 
