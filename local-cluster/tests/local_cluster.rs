@@ -1815,6 +1815,7 @@ fn test_validator_saves_tower() {
     let tower1 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower1: {:?}", tower1);
     assert_eq!(tower1.root(), 0);
+    assert!(tower1.last_voted_slot().is_some());
 
     // Restart the validator and wait for a new root
     cluster.restart_node(&validator_id, validator_info, SocketAddrSpace::Unspecified);
