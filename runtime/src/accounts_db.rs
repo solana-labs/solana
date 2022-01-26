@@ -5763,7 +5763,12 @@ if false {
                                             }
 
                                             sum += balance as u128;
-                                            Some(loaded_hash)
+                                            let interesting =         pubkey == &Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+
+                                            if interesting {
+                                                error!("{}, {}, {}", loaded_hash, balance, pubkey);
+                                            }
+                                                                        Some(loaded_hash)
                                         },
                                     )
                                 } else {
@@ -6457,7 +6462,12 @@ if false {
                     find_next_slot,
                 );
 
+                let interesting =         pubkey == &Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+
                 let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
+                if interesting {
+                    error!("{}, {}, {}", hash, balance, pubkey);
+                }
 
                 if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
                     let computed_hash = Self::maybe_rehash_rewrites(

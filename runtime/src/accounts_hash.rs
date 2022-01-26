@@ -680,6 +680,12 @@ impl AccountsHash {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
                 );
+                use std::str::FromStr;
+                                let interesting =         item.pubkey == Pubkey::from_str("2cxyZF46oqLPoN8BE3TBB7pzZtScQtWJLadp7wAsxvaS").unwrap();
+                if interesting {
+                    error!("{}, {}, {}", item.hash, item.lamports, item.pubkey);
+                }
+
                 hashes.push(&item.hash);
             }
             if !duplicate_pubkey_indexes.is_empty() {
