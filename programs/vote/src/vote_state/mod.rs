@@ -1467,9 +1467,11 @@ mod tests {
         let mut previous_epoch_credits = 0;
         for (epoch, credits) in credits_to_append.iter().enumerate() {
             current_epoch_credits += credits;
-            vote_state
-                .epoch_credits
-                .push((u64::try_from(epoch).unwrap(), current_epoch_credits, previous_epoch_credits));
+            vote_state.epoch_credits.push((
+                u64::try_from(epoch).unwrap(),
+                current_epoch_credits,
+                previous_epoch_credits,
+            ));
             // epoch += 1;
             previous_epoch_credits = current_epoch_credits;
         }
