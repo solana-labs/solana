@@ -5748,7 +5748,7 @@ if false {
                                                 &rehash,
                                                 false,
                                                 &Some(self),
-                                                max_root,
+                                                max_root + 1, // this wants an 'exclusive' number
                                                 find_next_slot,
                                             );
                                             let balance = loaded_account.lamports();
