@@ -1116,6 +1116,18 @@ fn test_program_bpf_invoke_sanity() {
             &[],
         );
 
+        do_invoke_failure_test_local(
+            TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER,
+            TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
+            &[invoked_program_id.clone()],
+        );
+
+        do_invoke_failure_test_local(
+            TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE,
+            TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
+            &[invoked_program_id.clone()],
+        );
+
         // Check resulting state
 
         assert_eq!(43, bank.get_balance(&derived_key1));
