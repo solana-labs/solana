@@ -262,14 +262,9 @@ impl PohService {
                         record.mixin,
                         std::mem::take(&mut record.transactions),
                     );
-                    let send_record_result_time = Measure::this(
-                        |_| {
-                            let _ = record.sender.send(res); // what do we do on failure here? Ignore for now.
-                        },
-                        (),
-                        "SendRecordResult",
-                    )
-                    .1;
+                    // what do we do on failure here? Ignore for now.
+                    let (_send_res, send_record_result_time) =
+                        Measure::this(|_| record.sender.send(res), (), "SendRecordResult");
                     timing.total_send_record_result_us += send_record_result_time.as_us();
                     timing.num_hashes += 1; // note: may have also ticked inside record
 
