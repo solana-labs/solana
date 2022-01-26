@@ -113,7 +113,9 @@ impl Iterator for RistrettoIterator {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT as G};
+    use {
+        super::*, curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT as G, std::time::Instant,
+    };
 
     #[test]
     #[allow(non_snake_case)]
@@ -147,23 +149,17 @@ mod tests {
         };
 
         // Very informal measurements for now
-        let start_precomputation = time::precise_time_s();
+        let start_precomputation = Instant::now();
         let precomputed_hashmap = decode_u32_precomputation(G);
-        let end_precomputation = time::precise_time_s();
+        let precomputation_secs = start_precomputation.elapsed().as_secs_f64();
 
-        let start_online = time::precise_time_s();
+        let start_online = Instant::now();
         let computed_amount = instance.decode_u32_online(&precomputed_hashmap).unwrap();
-        let end_online = time::precise_time_s();
+        let online_secs = start_online.elapsed().as_secs_f64();
 
         assert_eq!(amount, computed_amount);
 
-        println!(
-            "16/16 Split precomputation: {:?} sec",
-            end_precomputation - start_precomputation
-        );
-        println!(
-            "16/16 Split online computation: {:?} sec",
-            end_online - start_online
-        );
+        println!("16/16 Split precomputation: {:?} sec", precomputation_secs);
+        println!("16/16 Split online computation: {:?} sec", online_secs);
     }
 }

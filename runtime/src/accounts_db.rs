@@ -4247,7 +4247,7 @@ impl AccountsDb {
         // `add_root()` should be called first
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
         let non_roots = slots
-            // Only safe to check when there are  duplciate versions of a slot
+            // Only safe to check when there are duplicate versions of a slot
             // because ReplayStage will not make new roots before dumping the
             // duplicate slots first. Thus we will not be in a case where we
             // root slot `S`, then try to dump some other version of slot `S`, the

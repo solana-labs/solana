@@ -116,8 +116,8 @@ pub fn verify(
             SIGNATURE_SERIALIZED_SIZE,
         )?;
 
-        let signature = ed25519_dalek::Signature::from_bytes(signature)
-            .map_err(|_| PrecompileError::InvalidSignature)?;
+        let signature =
+            Signature::from_bytes(signature).map_err(|_| PrecompileError::InvalidSignature)?;
 
         // Parse out pubkey
         let pubkey = get_data_slice(
