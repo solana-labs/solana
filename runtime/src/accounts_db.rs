@@ -5764,9 +5764,13 @@ if false {
 
                                             sum += balance as u128;
                                             let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+                                            let ih = Hash::from_str("8yYZ9Pvrq5DCNU9FM1W13WggTiuMpMYsapu6wUZJbVaw").unwrap();
 
                                             if interesting {
-                                                error!("{}, {}, {}", loaded_hash, balance, pubkey);
+                                                error!("hash: {}, lamports: {}, pubkey: {}", loaded_hash, balance, pubkey);
+                                            }
+                                            if ih == loaded_hash {
+                                                error!("hash: {}, lamports: {}, pubkey: {}", loaded_hash, balance, pubkey);
                                             }
                                                                         Some(loaded_hash)
                                         },
@@ -5808,6 +5812,7 @@ if false {
             error!("h:{}",hash);
         });
         */
+
 
         let (accumulated_hash, hash_total) = AccountsHash::calculate_hash(hashes);
         hash_time.stop();
