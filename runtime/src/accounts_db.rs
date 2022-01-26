@@ -6548,6 +6548,7 @@ if false {
                 let hash = AccountsHash {
                     filler_account_suffix: filler_account_suffix.cloned(),
                 };
+                stats.rehash = rehash.load(Ordering::Relaxed);
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
@@ -6559,7 +6560,6 @@ if false {
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
-            stats.rehash = rehash.load(Ordering::Relaxed);
 
             Ok(final_result)
         };

@@ -4186,11 +4186,12 @@ impl Bank {
             .accounts
             .hold_range_in_memory(&subrange, true, thread_pool);
 
-        let accounts = self
+        let mut accounts = self
             .rc
             .accounts
             .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
         let account_count = accounts.len();
+        accounts.sort_by(|(a, _),(b, _)| a.cmp(&b));
 
         // parallelize?
         let rent_for_sysvars = self.rent_for_sysvars();
@@ -4198,6 +4199,7 @@ impl Bank {
         let mut rent_debits = RentDebits::default();
         let mut out = Vec::default();
         let mut collected = Vec::default();
+        let mut first = true;
         for (pubkey, mut account) in accounts {
             let found = Self::partition_from_pubkey(&pubkey, partition.2);        
             assert!(found <= partition.1, "{}, {}, {:?}", pubkey, found, partition);
@@ -4213,7 +4215,8 @@ impl Bank {
             // because of this, we are not doing this:
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
-            if rent != 0 {//} || self.slot() >= 116979356 {
+            if rent != 0 || !first {//} || self.slot() >= 116979356 {
+                first = true;
                 collected.push(pubkey);
                 if !just_rewrites {
                     self.store_account(&pubkey, &account);
