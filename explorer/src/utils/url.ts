@@ -30,3 +30,62 @@ export function pickClusterParams(
     search: newParams.toString(),
   };
 }
+interface URIStrategy {
+  id: string,
+  test: (uri: string) => boolean,
+  transform: (uri: string) => Promise<any> | string
+}
+ 
+const uriProtocolStrategies: URIStrategy[] = [
+  {
+    id: 'ipfs',
+    test: (uri: string) => uri.indexOf("ipfs://") > -1,
+    transform: (uri: string) => {
+      return uri.replace("ipfs://", "https://ipfs.io/ipfs/");
+    },
+  },
+  {
+    id: 'ar',
+    test: (uri: string) => uri.indexOf("ar://") > -1,
+    transform: async (uri: string) => {
+      try {
+        let arUrl = uri.replace("ar://", "https://arweave.net/");
+        const data = await fetch(arUrl).then(res => res.json())
+        if(!data.image) return uri 
+        return data.image
+      } catch (e) {
+       throw new Error('Invalid Arweave URI')
+      }
+    }
+  },
+  {
+    id: 'http',
+    test: (uri: string) => uri.indexOf("http://") > -1,
+    transform : (uri: string) => uri,
+  },
+  {
+    id: 'https',
+    test: (uri: string) => uri.indexOf("https://") > -1,
+    transform : (uri: string) => uri
+  }
+]
+
+function getUriStrategy(uri: string, strategies: URIStrategy[]) {
+  return strategies.reduce((acc: URIStrategy | null, strategy: URIStrategy, index) => {
+    if (acc == null) {
+      return strategy.test(uri) ? strategy : acc;
+    } else {
+      return acc;
+    }
+  }, null);
+}
+
+export async function getDecentralizedURI(uri: string): Promise<string> {
+
+  const strategy: URIStrategy | null = await getUriStrategy(uri, uriProtocolStrategies);
+    
+  if(!strategy) return uri
+
+  const _out = strategy.transform(uri)
+  return _out || uri
+}

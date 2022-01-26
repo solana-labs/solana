@@ -10,6 +10,7 @@ import {
 import ContentLoader from "react-content-loader";
 import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
 import { getLast } from "utils";
+import { getDecentralizedURI } from "utils/url";
 
 const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
 
@@ -311,47 +312,50 @@ export const useCachedImage = (uri: string) => {
   );
 
   useEffect(() => {
-    if (!uri) {
-      return;
-    }
+    getOrSetCachedBlob()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri, setCachedBlob, fetchStatus, setFetchStatus]);
+
+
+  async function getOrSetCachedBlob() {
+    if (!uri) return
 
     if (fetchStatus === ArtFetchStatus.FetchFailed) {
       setCachedBlob(uri);
       return;
     }
-
-    const result = cachedImages.get(uri);
+    const parsedURI: string | boolean | void = await getDecentralizedURI(uri).catch(console.error)
+    if(!parsedURI) return
+    const result = cachedImages.get(parsedURI);
     if (result) {
       setCachedBlob(result);
       return;
     }
 
     if (fetchStatus === ArtFetchStatus.ReadyToFetch) {
-      (async () => {
-        setFetchStatus(ArtFetchStatus.Fetching);
-        let response: Response;
+      setFetchStatus(ArtFetchStatus.Fetching);
+      let response: Response;
+      try {
+        response = await fetch(parsedURI, { cache: "force-cache" });
+      } catch {
         try {
-          response = await fetch(uri, { cache: "force-cache" });
+          response = await fetch(parsedURI, { cache: "reload" });
         } catch {
-          try {
-            response = await fetch(uri, { cache: "reload" });
-          } catch {
-            if (uri?.startsWith("http")) {
-              setCachedBlob(uri);
-            }
-            setFetchStatus(ArtFetchStatus.FetchFailed);
-            return;
+          if (parsedURI?.startsWith("http")) {
+            setCachedBlob(parsedURI);
           }
+          setFetchStatus(ArtFetchStatus.FetchFailed);
+          return;
         }
+      }
 
-        const blob = await response.blob();
-        const blobURI = URL.createObjectURL(blob);
-        cachedImages.set(uri, blobURI);
-        setCachedBlob(blobURI);
-        setFetchStatus(ArtFetchStatus.FetchSucceeded);
-      })();
+      const blob = await response.blob();
+      const blobURI = URL.createObjectURL(blob);
+      cachedImages.set(parsedURI, blobURI);
+      setCachedBlob(blobURI);
+      setFetchStatus(ArtFetchStatus.FetchSucceeded);
     }
-  }, [uri, setCachedBlob, fetchStatus, setFetchStatus]);
+  }
 
   return { cachedBlob };
 };
