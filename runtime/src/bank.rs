@@ -2712,6 +2712,9 @@ impl Bank {
             .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
+        // verify hash after every root gets made
+        self.update_accounts_hash_with_index_option(false, true, Some(self.epoch_schedule().slots_per_epoch), false);
+
         SquashTiming {
             squash_accounts_ms: squash_accounts_time.as_ms(),
             squash_accounts_index_ms: total_index_us / 1000,
