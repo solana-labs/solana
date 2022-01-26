@@ -6776,6 +6776,9 @@ if false {
             let key: &Pubkey = key;
             rewrites.remove(key);
         });
+        if !rewrites.is_empty() {
+error!("rewrites: {:?}, slot: {}", rewrites, slot)
+        }
         hashes.extend(rewrites.into_iter());
 
         let ret = AccountsHash::accumulate_account_hashes(hashes);
