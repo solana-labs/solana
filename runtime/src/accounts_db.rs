@@ -5678,9 +5678,10 @@ if false {
         &self,
         max_root: Slot,
         ancestors: &Ancestors,
-        check_hash: bool,
+        mut check_hash: bool,
         //slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        check_hash = false;
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
         let keys: Vec<_> = self
@@ -6303,17 +6304,6 @@ if false {
 
         /*
         if pubkey == &Pubkey::from_str("71XcyZxXp4hWYfE9Xuafnp8R4vqNHSoT1jhynuQ3yGYx").unwrap() {
-            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}",
-            pubkey,
-            loaded_account.loaded_hash(),
-            storage_slot,
-            max_slot_in_storages,
-            expected_rent_collection_slot_max_epoch,
-            partition_index_from_max_slot,
-            partition_from_pubkey,
-            loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey),
-            use_stored,
-        );
         }
         */
         assert!(!force_rehash);
@@ -6373,7 +6363,7 @@ if false {
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         assert!(slots_per_epoch.is_some());
-        //check_hash = false;
+        check_hash = false;
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
