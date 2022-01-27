@@ -1552,18 +1552,18 @@ describe('Connection', () => {
 
     // Find a block that has a transaction, usually Block 1
     let slot = 0;
-    let confirmedTransaction: string | undefined;
-    while (!confirmedTransaction) {
+    let transaction: string | undefined;
+    while (!transaction) {
       slot++;
       const block = await connection.getBlock(slot);
       if (block && block.transactions.length > 0) {
-        confirmedTransaction = block.transactions[0].transaction.signatures[0];
+        transaction = block.transactions[0].transaction.signatures[0];
       }
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedTransaction',
-      params: [confirmedTransaction],
+      method: 'getTransaction',
+      params: [transaction],
       value: {
         slot,
         transaction: {
@@ -1604,7 +1604,7 @@ describe('Connection', () => {
       },
     });
 
-    const result = await connection.getTransaction(confirmedTransaction);
+    const result = await connection.getTransaction(transaction);
 
     if (!result) {
       expect(result).to.be.ok;
@@ -1612,7 +1612,7 @@ describe('Connection', () => {
     }
 
     const resultSignature = result.transaction.signatures[0];
-    expect(resultSignature).to.eq(confirmedTransaction);
+    expect(resultSignature).to.eq(transaction);
 
     const newAddress = Keypair.generate().publicKey;
     const recentSignature = await helpers.airdrop({
@@ -1622,7 +1622,7 @@ describe('Connection', () => {
     });
 
     await mockRpcResponse({
-      method: 'getConfirmedTransaction',
+      method: 'getTransaction',
       params: [recentSignature],
       value: null,
     });

@@ -504,8 +504,15 @@ export type TokenBalance = {
 
 /**
  * Metadata for a parsed confirmed transaction on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0. Please use {@link ParsedTransactionMeta} instead.
  */
-export type ParsedConfirmedTransactionMeta = {
+export type ParsedConfirmedTransactionMeta = ParsedTransactionMeta;
+
+/**
+ * Metadata for a parsed transaction on the ledger
+ */
+export type ParsedTransactionMeta = {
   /** The fee charged for processing the transaction */
   fee: number;
   /** An array of cross program invoked parsed instructions */
@@ -644,14 +651,21 @@ export type ParsedTransaction = {
 
 /**
  * A parsed and confirmed transaction on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0. Please use {@link ParsedTransactionWithMeta} instead.
  */
-export type ParsedConfirmedTransaction = {
+export type ParsedConfirmedTransaction = ParsedTransactionWithMeta;
+
+/**
+ * A parsed transaction on the ledger with meta
+ */
+export type ParsedTransactionWithMeta = {
   /** The slot during which the transaction was processed */
   slot: number;
   /** The details of the transaction */
   transaction: ParsedTransaction;
   /** Metadata produced from the transaction */
-  meta: ParsedConfirmedTransactionMeta | null;
+  meta: ParsedTransactionMeta | null;
   /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
 };
@@ -1540,9 +1554,9 @@ const GetConfirmedBlockSignaturesRpcResult = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "getConfirmedTransaction" message
+ * Expected JSON RPC response for the "getTransaction" message
  */
-const GetConfirmedTransactionRpcResult = jsonRpcResult(
+const GetTransactionRpcResult = jsonRpcResult(
   nullable(
     pick({
       slot: number(),
@@ -1554,9 +1568,9 @@ const GetConfirmedTransactionRpcResult = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "getConfirmedTransaction" message
+ * Expected parsed JSON RPC response for the "getTransaction" message
  */
-const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
+const GetParsedTransactionRpcResult = jsonRpcResult(
   nullable(
     pick({
       slot: number(),
@@ -3120,7 +3134,7 @@ export class Connection {
   }
 
   /**
-   * Fetch a processed transaction from the cluster.
+   * Fetch a confirmed or finalized transaction from the cluster.
    */
   async getTransaction(
     signature: string,
@@ -3130,12 +3144,10 @@ export class Connection {
       [signature],
       opts && opts.commitment,
     );
-    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
-    const res = create(unsafeRes, GetConfirmedTransactionRpcResult);
+    const unsafeRes = await this._rpcRequest('getTransaction', args);
+    const res = create(unsafeRes, GetTransactionRpcResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed transaction: ' + res.error.message,
-      );
+      throw new Error('failed to get transaction: ' + res.error.message);
     }
 
     const result = res.result;
@@ -3148,6 +3160,57 @@ export class Connection {
         message: new Message(result.transaction.message),
       },
     };
+  }
+
+  /**
+   * Fetch parsed transaction details for a confirmed or finalized transaction
+   */
+  async getParsedTransaction(
+    signature: TransactionSignature,
+    commitment?: Finality,
+  ): Promise<ParsedConfirmedTransaction | null> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [signature],
+      commitment,
+      'jsonParsed',
+    );
+    const unsafeRes = await this._rpcRequest('getTransaction', args);
+    const res = create(unsafeRes, GetParsedTransactionRpcResult);
+    if ('error' in res) {
+      throw new Error('failed to get transaction: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
+   * Fetch parsed transaction details for a batch of confirmed transactions
+   */
+  async getParsedTransactions(
+    signatures: TransactionSignature[],
+    commitment?: Finality,
+  ): Promise<(ParsedConfirmedTransaction | null)[]> {
+    const batch = signatures.map(signature => {
+      const args = this._buildArgsAtLeastConfirmed(
+        [signature],
+        commitment,
+        'jsonParsed',
+      );
+      return {
+        methodName: 'getTransaction',
+        args,
+      };
+    });
+
+    const unsafeRes = await this._rpcBatchRequest(batch);
+    const res = unsafeRes.map((unsafeRes: any) => {
+      const res = create(unsafeRes, GetParsedTransactionRpcResult);
+      if ('error' in res) {
+        throw new Error('failed to get transactions: ' + res.error.message);
+      }
+      return res.result;
+    });
+
+    return res;
   }
 
   /**
@@ -3229,14 +3292,25 @@ export class Connection {
 
   /**
    * Fetch a transaction details for a confirmed transaction
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getTransaction} instead.
    */
   async getConfirmedTransaction(
     signature: TransactionSignature,
     commitment?: Finality,
   ): Promise<ConfirmedTransaction | null> {
-    const result = await this.getTransaction(signature, {commitment});
+    const args = this._buildArgsAtLeastConfirmed([signature], commitment);
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
+    const res = create(unsafeRes, GetTransactionRpcResult);
+    if ('error' in res) {
+      throw new Error('failed to get transaction: ' + res.error.message);
+    }
+
+    const result = res.result;
     if (!result) return result;
-    const {message, signatures} = result.transaction;
+
+    const message = new Message(result.transaction.message);
+    const signatures = result.transaction.signatures;
     return {
       ...result,
       transaction: Transaction.populate(message, signatures),
@@ -3245,6 +3319,8 @@ export class Connection {
 
   /**
    * Fetch parsed transaction details for a confirmed transaction
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getParsedTransaction} instead.
    */
   async getParsedConfirmedTransaction(
     signature: TransactionSignature,
@@ -3256,7 +3332,7 @@ export class Connection {
       'jsonParsed',
     );
     const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
-    const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult);
+    const res = create(unsafeRes, GetParsedTransactionRpcResult);
     if ('error' in res) {
       throw new Error(
         'failed to get confirmed transaction: ' + res.error.message,
@@ -3267,6 +3343,8 @@ export class Connection {
 
   /**
    * Fetch parsed transaction details for a batch of confirmed transactions
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getParsedTransactions} instead.
    */
   async getParsedConfirmedTransactions(
     signatures: TransactionSignature[],
@@ -3286,7 +3364,7 @@ export class Connection {
 
     const unsafeRes = await this._rpcBatchRequest(batch);
     const res = unsafeRes.map((unsafeRes: any) => {
-      const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult);
+      const res = create(unsafeRes, GetParsedTransactionRpcResult);
       if ('error' in res) {
         throw new Error(
           'failed to get confirmed transactions: ' + res.error.message,
