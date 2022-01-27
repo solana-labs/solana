@@ -83,6 +83,13 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
+struct ProcessTransactionsResult {
+    chunk_start: usize,
+    committed_transactions_count: usize,
+    retryable_tx_indexes: Vec<usize>,
+    total_transactions_count: usize,
+}
+
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
     last_report: AtomicInterval,
@@ -517,19 +524,25 @@ impl BankingStage {
                         bank_creation_time,
                     }) = bank_start
                     {
-                        let (processed, verified_txs_len, new_unprocessed_indexes) =
-                            Self::process_packets_transactions(
-                                &working_bank,
-                                &bank_creation_time,
-                                recorder,
-                                packet_batch,
-                                original_unprocessed_indexes.to_owned(),
-                                transaction_status_sender.clone(),
-                                gossip_vote_sender,
-                                banking_stage_stats,
-                                qos_service,
-                            );
-                        if processed < verified_txs_len
+                        let process_transactions_result = Self::process_packets_transactions(
+                            &working_bank,
+                            &bank_creation_time,
+                            recorder,
+                            packet_batch,
+                            original_unprocessed_indexes.to_owned(),
+                            transaction_status_sender.clone(),
+                            gossip_vote_sender,
+                            banking_stage_stats,
+                            qos_service,
+                        );
+                        let ProcessTransactionsResult {
+                            chunk_start,
+                            committed_transactions_count,
+                            retryable_tx_indexes,
+                            total_transactions_count,
+                        } = process_transactions_result;
+
+                        if chunk_start < total_transactions_count
                             || !Bank::should_bank_still_be_processing_txs(
                                 &bank_creation_time,
                                 max_tx_ingestion_ns,
@@ -540,15 +553,15 @@ impl BankingStage {
                                 working_bank,
                             ));
                         }
-                        new_tx_count += processed;
+                        new_tx_count += committed_transactions_count;
 
                         // Out of the buffered packets just retried, collect any still unprocessed
                         // transactions in this batch for forwarding
-                        rebuffered_packet_count += new_unprocessed_indexes.len();
+                        rebuffered_packet_count += retryable_tx_indexes.len();
                         let has_more_unprocessed_transactions =
                             Self::update_buffered_packets_with_new_unprocessed(
                                 original_unprocessed_indexes,
-                                new_unprocessed_indexes,
+                                retryable_tx_indexes,
                             );
                         if let Some(test_fn) = &test_fn {
                             test_fn();
@@ -1111,10 +1124,10 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
-    ) -> (usize, Vec<usize>) {
+    ) -> ProcessTransactionsResult {
         let mut chunk_start = 0;
-        let mut unprocessed_txs = vec![];
-
+        let mut retryable_tx_indexes = vec![];
+        let mut committed_transactions_count: usize = 0;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
@@ -1131,9 +1144,14 @@ impl BankingStage {
             );
             trace!("process_transactions result: {:?}", result);
 
+            if let Ok(newly_committed_tx_count) = result {
+                committed_transactions_count =
+                    committed_transactions_count.saturating_add(newly_committed_tx_count);
+            }
+
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
-            unprocessed_txs.extend_from_slice(&retryable_txs_in_chunk);
+            retryable_tx_indexes.extend_from_slice(&retryable_txs_in_chunk);
 
             // If `bank_creation_time` is None, it's a test so ignore the option so
             // allow processing
@@ -1149,7 +1167,7 @@ impl BankingStage {
                     // process_and_record_transactions has returned all retryable errors in
                     // transactions[chunk_start..chunk_end], so we just need to push the remaining
                     // transactions into the unprocessed queue.
-                    unprocessed_txs.extend(chunk_end..transactions.len());
+                    retryable_tx_indexes.extend(chunk_end..transactions.len());
                     break;
                 }
                 _ => (),
@@ -1158,7 +1176,12 @@ impl BankingStage {
             chunk_start = chunk_end;
         }
 
-        (chunk_start, unprocessed_txs)
+        ProcessTransactionsResult {
+            chunk_start,
+            committed_transactions_count,
+            retryable_tx_indexes,
+            total_transactions_count: transactions.len(),
+        }
     }
 
     // This function creates a filter of transaction results with Ok() for every pending
@@ -1281,7 +1304,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
-    ) -> (usize, usize, Vec<usize>) {
+    ) -> ProcessTransactionsResult {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             packet_batch,
@@ -1293,10 +1316,8 @@ impl BankingStage {
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
 
-        let tx_len = transactions.len();
-
         let mut process_tx_time = Measure::start("process_tx_time");
-        let (processed, unprocessed_tx_indexes) = Self::process_transactions(
+        let mut process_transactions_result = Self::process_transactions(
             bank,
             bank_creation_time,
             &transactions,
@@ -1306,24 +1327,30 @@ impl BankingStage {
             qos_service,
         );
         process_tx_time.stop();
-        let unprocessed_tx_count = unprocessed_tx_indexes.len();
+
+        let ProcessTransactionsResult {
+            ref retryable_tx_indexes,
+            ref total_transactions_count,
+            ..
+        } = process_transactions_result;
+
         inc_new_counter_info!(
-            "banking_stage-unprocessed_transactions",
-            unprocessed_tx_count
+            "banking_stage-retryable_transactions",
+            retryable_tx_indexes.len()
         );
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
-        let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
+        let filtered_retryable_tx_indexes = Self::filter_pending_packets_from_pending_txs(
             bank,
             &transactions,
             &transaction_to_packet_indexes,
-            &unprocessed_tx_indexes,
+            retryable_tx_indexes,
         );
         filter_pending_packets_time.stop();
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
-            unprocessed_tx_count.saturating_sub(filtered_unprocessed_packet_indexes.len())
+            total_transactions_count.saturating_sub(filtered_retryable_tx_indexes.len())
         );
 
         banking_stage_stats
@@ -1336,7 +1363,8 @@ impl BankingStage {
             .filter_pending_packets_elapsed
             .fetch_add(filter_pending_packets_time.as_us(), Ordering::Relaxed);
 
-        (processed, tx_len, filtered_unprocessed_packet_indexes)
+        process_transactions_result.retryable_tx_indexes = filtered_retryable_tx_indexes;
+        process_transactions_result
     }
 
     fn filter_unprocessed_packets(
@@ -2486,22 +2514,26 @@ mod tests {
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
-            let (processed_transactions_count, mut retryable_txs) =
-                BankingStage::process_transactions(
-                    &bank,
-                    &Instant::now(),
-                    &transactions,
-                    &recorder,
-                    None,
-                    &gossip_vote_sender,
-                    &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
-                );
+            let process_transactions_result = BankingStage::process_transactions(
+                &bank,
+                &Instant::now(),
+                &transactions,
+                &recorder,
+                None,
+                &gossip_vote_sender,
+                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+            );
 
-            assert_eq!(processed_transactions_count, 0,);
+            let ProcessTransactionsResult {
+                chunk_start,
+                mut retryable_tx_indexes,
+                ..
+            } = process_transactions_result;
+            assert_eq!(chunk_start, 0);
 
-            retryable_txs.sort_unstable();
+            retryable_tx_indexes.sort_unstable();
             let expected: Vec<usize> = (0..transactions.len()).collect();
-            assert_eq!(retryable_txs, expected);
+            assert_eq!(retryable_tx_indexes, expected);
 
             recorder.is_exited.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
