@@ -27,10 +27,10 @@ use {
 #[derive(Clone)]
 pub struct FeeSigmaProof {
     /// Proof that the committed fee amount equals the maximum fee bound
-    pub fee_max_proof: FeeMaxProof,
+    fee_max_proof: FeeMaxProof,
 
     /// Proof that the "real" delta value is equal to the "claimed" delta value
-    pub fee_equality_proof: FeeEqualityProof,
+    fee_equality_proof: FeeEqualityProof,
 }
 
 #[allow(non_snake_case, dead_code)]
@@ -216,8 +216,7 @@ impl FeeSigmaProof {
         let Y_delta =
             RistrettoPoint::multiscalar_mul(vec![y_x, y_delta], vec![&(*G), &(*H)]).compress();
         let Y_claimed =
-            RistrettoPoint::multiscalar_mul(vec![y_x, y_claimed], vec![&(*G), &(*H)])
-                .compress();
+            RistrettoPoint::multiscalar_mul(vec![y_x, y_claimed], vec![&(*G), &(*H)]).compress();
 
         transcript.append_point(b"Y_max_proof", &Y_max_proof);
         transcript.append_point(b"Y_delta", &Y_delta);
@@ -270,10 +269,7 @@ impl FeeSigmaProof {
 
         transcript.validate_and_append_point(b"Y_max_proof", &self.fee_max_proof.Y_max_proof)?;
         transcript.validate_and_append_point(b"Y_delta", &self.fee_equality_proof.Y_delta)?;
-        transcript.validate_and_append_point(
-            b"Y_claimed",
-            &self.fee_equality_proof.Y_claimed,
-        )?;
+        transcript.validate_and_append_point(b"Y_claimed", &self.fee_equality_proof.Y_claimed)?;
 
         let Y_max = self
             .fee_max_proof
@@ -348,9 +344,9 @@ impl FeeSigmaProof {
 #[allow(non_snake_case)]
 #[derive(Clone, Copy)]
 pub struct FeeMaxProof {
-    pub Y_max_proof: CompressedRistretto,
-    pub z_max_proof: Scalar,
-    pub c_max_proof: Scalar,
+    Y_max_proof: CompressedRistretto,
+    z_max_proof: Scalar,
+    c_max_proof: Scalar,
 }
 
 impl ConditionallySelectable for FeeMaxProof {
@@ -370,33 +366,26 @@ impl ConditionallySelectable for FeeMaxProof {
 #[allow(non_snake_case)]
 #[derive(Clone, Copy)]
 pub struct FeeEqualityProof {
-    pub Y_delta: CompressedRistretto,
-    pub Y_claimed: CompressedRistretto,
-    pub z_x: Scalar,
-    pub z_delta: Scalar,
-    pub z_claimed: Scalar,
+    Y_delta: CompressedRistretto,
+    Y_claimed: CompressedRistretto,
+    z_x: Scalar,
+    z_delta: Scalar,
+    z_claimed: Scalar,
 }
 
 impl ConditionallySelectable for FeeEqualityProof {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         Self {
             Y_delta: conditional_select_ristretto(&a.Y_delta, &b.Y_delta, choice),
-            Y_claimed: conditional_select_ristretto(
-                &a.Y_claimed,
-                &b.Y_claimed,
-                choice,
-            ),
+            Y_claimed: conditional_select_ristretto(&a.Y_claimed, &b.Y_claimed, choice),
             z_x: Scalar::conditional_select(&a.z_x, &b.z_x, choice),
             z_delta: Scalar::conditional_select(&a.z_delta, &b.z_delta, choice),
-            z_claimed: Scalar::conditional_select(
-                &a.z_claimed,
-                &b.z_claimed,
-                choice,
-            ),
+            z_claimed: Scalar::conditional_select(&a.z_claimed, &b.z_claimed, choice),
         }
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 fn conditional_select_ristretto(
     a: &CompressedRistretto,
     b: &CompressedRistretto,
@@ -447,10 +436,10 @@ mod test {
 
         assert!(proof
             .verify(
-                max_fee,
                 &commitment_fee,
                 &commitment_delta,
                 &commitment_claimed,
+                max_fee,
                 &mut transcript_verifier,
             )
             .is_ok());

@@ -75,6 +75,16 @@ pub struct ValidityProof(pub [u8; 160]);
 unsafe impl Zeroable for ValidityProof {}
 unsafe impl Pod for ValidityProof {}
 
+/// Serialization of aggregated validity proofs
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct AggregatedValidityProof(pub [u8; 160]);
+
+// `AggregatedValidityProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for AggregatedValidityProof {}
+unsafe impl Pod for AggregatedValidityProof {}
+
 /// Serialization of zero balance proofs
 #[derive(Clone, Copy)]
 #[repr(transparent)]

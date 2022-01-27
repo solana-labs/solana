@@ -158,16 +158,16 @@ impl ValidityProof {
                 &ww_negated,         // -ww
             ],
             vec![
-                &(*H),      // H
-                &(*G),      // G
-                &C,         // C
-                &Y_0,       // Y_0
-                P_dest,     // P_dest
-                &D_dest,    // D_dest
-                &Y_1,       // Y_1
-                P_auditor,  // P_auditor
-                &D_auditor, // D_auditor
-                &Y_2,       // Y_2
+                &(*H),     // H
+                &(*G),     // G
+                C,         // C
+                &Y_0,      // Y_0
+                P_dest,    // P_dest
+                D_dest,    // D_dest
+                &Y_1,      // Y_1
+                P_auditor, // P_auditor
+                D_auditor, // D_auditor
+                &Y_2,      // Y_2
             ],
         );
 
@@ -230,8 +230,8 @@ impl AggregatedValidityProof {
     /// The function simples aggregates the input openings and invokes the standard ciphertext
     /// validity proof constructor.
     pub fn new<T: Into<Scalar>>(
-        (amount_lo, amount_hi): (T, T),
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (amount_lo, amount_hi): (T, T),
         (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
         transcript: &mut Transcript,
     ) -> Self {
@@ -257,8 +257,8 @@ impl AggregatedValidityProof {
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     pub fn verify(
         self,
-        (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
         (handle_lo_dest, handle_hi_dest): (&DecryptHandle, &DecryptHandle),
         (handle_lo_auditor, handle_hi_auditor): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
@@ -284,7 +284,7 @@ impl AggregatedValidityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
-        ValidityProof::from_bytes(bytes).map(|proof| Self(proof))
+        ValidityProof::from_bytes(bytes).map(Self)
     }
 }
 
@@ -465,16 +465,16 @@ mod test {
         let mut transcript_verifier = Transcript::new(b"Test");
 
         let proof = AggregatedValidityProof::new(
-            (amount_lo, amount_hi),
             (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (amount_lo, amount_hi),
             (&open_lo, &open_hi),
             &mut transcript_prover,
         );
 
         assert!(proof
             .verify(
-                (&commitment_lo, &commitment_hi),
                 (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&commitment_lo, &commitment_hi),
                 (&handle_lo_dest, &handle_hi_dest),
                 (&handle_lo_auditor, &handle_hi_auditor),
                 &mut transcript_verifier,

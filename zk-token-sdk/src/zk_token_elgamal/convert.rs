@@ -23,7 +23,9 @@ mod target_arch {
             errors::ProofError,
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                equality_proof::EqualityProof, errors::*, validity_proof::ValidityProof,
+                equality_proof::EqualityProof,
+                errors::*,
+                validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
         },
@@ -168,6 +170,20 @@ mod target_arch {
         type Error = ValidityProofError;
 
         fn try_from(pod: pod::ValidityProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
+    impl From<AggregatedValidityProof> for pod::AggregatedValidityProof {
+        fn from(proof: AggregatedValidityProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::AggregatedValidityProof> for AggregatedValidityProof {
+        type Error = ValidityProofError;
+
+        fn try_from(pod: pod::AggregatedValidityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
