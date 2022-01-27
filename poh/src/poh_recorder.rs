@@ -551,7 +551,7 @@ impl PohRecorder {
                 (poh_entry, target_time)
             },
             (),
-            "TickLockContention",
+            "tick_lock_contention",
         );
         self.tick_lock_contention_us += tick_lock_contention_time.as_us();
 
@@ -576,7 +576,7 @@ impl PohRecorder {
             ));
 
             let (_flush_res, flush_cache_and_tick_time) =
-                Measure::this(|_| self.flush_cache(true), (), "FlushCacheAndTick");
+                Measure::this(|_| self.flush_cache(true), (), "flush_cache_and_tick");
             self.flush_cache_tick_us += flush_cache_and_tick_time.as_us();
 
             let sleep_time = Measure::this(
@@ -590,7 +590,7 @@ impl PohRecorder {
                     }
                 },
                 (),
-                "PohSleep",
+                "poh_sleep",
             )
             .1;
             self.total_sleep_us += sleep_time.as_us();
@@ -641,12 +641,12 @@ impl PohRecorder {
         assert!(!transactions.is_empty(), "No transactions provided");
 
         let ((), report_metrics_time) =
-            Measure::this(|_| self.report_metrics(bank_slot), (), "ReportMetrics");
+            Measure::this(|_| self.report_metrics(bank_slot), (), "report_metrics");
         self.report_metrics_us += report_metrics_time.as_us();
 
         loop {
             let (flush_cache_res, flush_cache_time) =
-                Measure::this(|_| self.flush_cache(false), (), "FlushCache");
+                Measure::this(|_| self.flush_cache(false), (), "flush_cache");
             self.flush_cache_no_tick_us += flush_cache_time.as_us();
             flush_cache_res?;
 
@@ -659,11 +659,11 @@ impl PohRecorder {
             }
 
             let (mut poh_lock, poh_lock_time) =
-                Measure::this(|_| self.poh.lock().unwrap(), (), "PohLock");
+                Measure::this(|_| self.poh.lock().unwrap(), (), "poh_lock");
             self.record_lock_contention_us += poh_lock_time.as_us();
 
             let (record_mixin_res, record_mixin_time) =
-                Measure::this(|_| poh_lock.record(mixin), (), "RecordMixin");
+                Measure::this(|_| poh_lock.record(mixin), (), "record_mixin");
             self.record_us += record_mixin_time.as_us();
 
             drop(poh_lock);
@@ -680,7 +680,7 @@ impl PohRecorder {
                         self.sender.send((bank_clone, (entry, self.tick_height)))
                     },
                     (),
-                    "SendPohEntry",
+                    "send_poh_entry",
                 );
                 self.send_entry_us += send_entry_time.as_us();
                 return Ok(send_entry_res?);
