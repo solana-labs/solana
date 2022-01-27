@@ -1577,6 +1577,12 @@ impl<T: IndexValue> AccountsIndex<T> {
             Some(locked_entry) => {
                 drop(read_lock);
                 let slot_list = locked_entry.slot_list();
+                use std::str::FromStr;
+                let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+                if interesting {
+                    error!("searching: {:?}", slot_list);
+                }
+
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
                     Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
@@ -1953,9 +1959,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         let mut roots = w_roots_tracker.roots.get_all_less_than(newest_slot);
         roots.retain(|root| keep.contains(root));
         drop(w_roots_tracker);
-        error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}", newest_slot, roots.len(), keep.len());
-        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        roots.into_iter().for_each(|root| {w_roots_tracker.roots.remove(&root);});
+        if !roots.is_empty() {
+            error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}, {:?}", newest_slot, roots.len(), keep.len(), roots);
+            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+            roots.into_iter().for_each(|root| {w_roots_tracker.roots.remove(&root);});
+        }
     }
 
     /// Remove the slot when the storage for the slot is freed
