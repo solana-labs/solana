@@ -6435,7 +6435,7 @@ if false {
             RentResult::CollectRent((next_epoch, rent_due)) => {
                 if next_epoch > rent_epoch {
                     // fascinating corners of reality with exempt accounts
-                    assert_eq!(rent_due, 0, "pubkey: {}, this epoch: {}, rent epoch: {}, next epoch: {}, rent_due: {}", pubkey, rent_collector.epoch, rent_epoch, next_epoch, rent_due);
+                    assert_eq!(rent_due, 0, "pubkey: {}, this epoch: {}, rent epoch: {}, next epoch: {}, rent_due: {}, slot: {}", pubkey, rent_collector.epoch, rent_epoch, next_epoch, rent_due, storage_slot);
                 }
                 rent_epoch = next_epoch;
             }

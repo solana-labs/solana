@@ -115,7 +115,8 @@ impl RentCollector {
 
             if exempt || rent_due != 0 {
                 if account.lamports() > rent_due {
-                    RentResult::CollectRent((
+                    RentResult::CollectRent(
+                        {let result = (
                         self.epoch
                             + if exempt {
                                 // Rent isn't collected for the next epoch
@@ -126,7 +127,11 @@ impl RentCollector {
                                 1
                             },
                         rent_due,
-                    ))
+                    );
+                    use log::*;
+                    error!("collecting rent: {}, next epoch: {}, rent_due: {}", address, result.0, result.1);
+                    result
+                });
                 } else {
                     RentResult::CollectRemainingLamports
                 }
