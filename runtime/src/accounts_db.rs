@@ -5833,7 +5833,7 @@ if false {
                                 }
                             } else {
                                 if interesting {
-                                    error!("searcH=NOT FOUND: {}, {:?}", pubkey, search);
+                                    error!("searcH=NOT FOUND: {}", pubkey);
                                 }
                                 None
                             }
