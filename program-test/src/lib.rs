@@ -428,8 +428,14 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
     bank.commit_transactions(
         &[],     // transactions
         &mut [], // loaded accounts
+<<<<<<< HEAD
         &[],     // transaction execution results
         0,       // tx count
+=======
+        vec![],  // transaction execution results
+        0,       // executed tx count
+        0,       // executed with failure output tx count
+>>>>>>> 8b959503b0... Return actual committed transactions from process_transactions()
         1,       // signature count
         &mut ExecuteTimings::default(),
     );
