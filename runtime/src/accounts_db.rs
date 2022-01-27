@@ -6433,8 +6433,8 @@ if false {
         match rent_result
         {
             RentResult::CollectRent((next_epoch, rent_due)) => {
+                assert_eq!(rent_due, 0, "pubkey: {}, this epoch: {}, rent epoch: {}, next epoch: {}, rent_due: {}", pubkey, rent_collector.epoch, rent_epoch, next_epoch, rent_due);
                 rent_epoch = next_epoch;
-                assert_eq!(rent_due, 0);
             }
             // nothing to do for these
             RentResult::LeaveAloneNoRent => {},
