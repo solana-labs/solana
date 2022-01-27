@@ -108,6 +108,7 @@ pub fn verify_signatures(data: &[u8], instruction_datas: &[&[u8]]) -> Result<(),
     let expected_data_size = num_signatures
         .saturating_mul(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
         .saturating_add(SIGNATURE_OFFSETS_START);
+    // We do not check or use the byte at data[1]
     if data.len() < expected_data_size {
         return Err(Ed25519Error::InvalidInstructionDataSize);
     }
