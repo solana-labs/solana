@@ -5808,7 +5808,7 @@ if false {
                                             let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
                                             let ih = Hash::from_str("8yYZ9Pvrq5DCNU9FM1W13WggTiuMpMYsapu6wUZJbVaw").unwrap();
                                             if slot == 114612876 {
-                                                intersting = true;
+                                                interesting = true;
                                             }
                                             if interesting {
                                                 error!("hash: {}, lamports: {}, pubkey: {}", loaded_hash, balance, pubkey);
@@ -5849,8 +5849,9 @@ if false {
 
         scan.stop();
         let total_lamports = *total_lamports.lock().unwrap();
-/*
         let mut hash_time = Measure::start("hash");
+
+        /*
         hashes.iter().flatten().for_each(|hash| {
             error!("h2:{}",hash);
         });
