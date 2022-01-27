@@ -29,6 +29,8 @@ static const uint8_t TEST_EXECUTABLE_LAMPORTS = 16;
 static const uint8_t TEST_CALL_PRECOMPILE = 17;
 static const uint8_t ADD_LAMPORTS = 18;
 static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 19;
+static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 20;
+static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 21;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -609,6 +611,42 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_log("Test setting return data too long");
     // The actual buffer doesn't matter, just pass null
     sol_set_return_data(NULL, 1027);
+    break;
+  }
+  case TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER: {
+    sol_log("Test duplicate privilege escalation signer");
+    SolAccountMeta arguments[] = {
+        {accounts[DERIVED_KEY3_INDEX].key, false, false},
+        {accounts[DERIVED_KEY3_INDEX].key, false, false},
+        {accounts[DERIVED_KEY3_INDEX].key, false, false}};
+    uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_assert(SUCCESS ==
+               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+
+    // Signer privilege escalation will always fail the whole transaction
+    instruction.accounts[1].is_signer = true;
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    break;
+  }
+  case TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE: {
+    sol_log("Test duplicate privilege escalation writable");
+    SolAccountMeta arguments[] = {
+        {accounts[DERIVED_KEY3_INDEX].key, false, false},
+        {accounts[DERIVED_KEY3_INDEX].key, false, false},
+        {accounts[DERIVED_KEY3_INDEX].key, false, false}};
+    uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_assert(SUCCESS ==
+               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+
+    // Writable privilege escalation will always fail the whole transaction
+    instruction.accounts[1].is_writable = true;
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
 
