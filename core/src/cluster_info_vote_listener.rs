@@ -684,7 +684,7 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(&vote);
+            subscriptions.notify_vote(*vote_pubkey, &vote);
             let _ = verified_vote_sender.send((*vote_pubkey, vote.slots));
         }
     }
