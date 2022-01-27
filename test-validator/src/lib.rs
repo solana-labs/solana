@@ -14,7 +14,7 @@ use {
     },
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_net_utils::PortRange,
-    solana_rpc::rpc::JsonRpcConfig,
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, snapshot_config::SnapshotConfig,
@@ -91,6 +91,7 @@ pub struct TestValidatorGenesis {
     tower_storage: Option<Arc<dyn TowerStorage>>,
     pub rent: Rent,
     rpc_config: JsonRpcConfig,
+    pubsub_config: PubSubConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
     no_bpf_jit: bool,
@@ -146,6 +147,11 @@ impl TestValidatorGenesis {
 
     pub fn rpc_config(&mut self, rpc_config: JsonRpcConfig) -> &mut Self {
         self.rpc_config = rpc_config;
+        self
+    }
+
+    pub fn pubsub_config(&mut self, pubsub_config: PubSubConfig) -> &mut Self {
+        self.pubsub_config = pubsub_config;
         self
     }
 
@@ -606,6 +612,7 @@ impl TestValidator {
                 ),
             )),
             rpc_config: config.rpc_config.clone(),
+            pubsub_config: config.pubsub_config.clone(),
             accounts_hash_interval_slots: 100,
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
