@@ -93,7 +93,7 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
-    Vote(VoteTransaction),
+    Vote((Pubkey, VoteTransaction)),
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -677,8 +677,8 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
-    pub fn notify_vote(&self, vote: VoteTransaction) {
-        self.enqueue_notification(NotificationEntry::Vote(vote));
+    pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: VoteTransaction) {
+        self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote)));
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
@@ -760,8 +760,9 @@ impl RpcSubscriptions {
                         // These notifications are only triggered by votes observed on gossip,
                         // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                         // in VoteState's from bank states built in ReplayStage.
-                        NotificationEntry::Vote(ref vote_info) => {
+                        NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
                             let rpc_vote = RpcVote {
+                                vote_pubkey: vote_pubkey.to_string(),
                                 slots: vote_info.slots(),
                                 hash: bs58::encode(vote_info.hash()).into_string(),
                                 timestamp: vote_info.timestamp(),
