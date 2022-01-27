@@ -20,3 +20,32 @@ jobs:
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
           working-directory: ./explorer
           scope: ${{ secrets.TEAM_ID }}
+     
+      - name: vercel url
+        run : |
+              touch vercelfile.txt
+              vercel --token ${{secrets.VERCEL_TOKEN}} ls solana > vercelfile.txt
+              echo "first line"
+              touch vercelfile1.txt
+              head -n 2 vercelfile.txt > vercelfile1.txt
+              touch vercelfile2.txt
+              tail -n 1 vercelfile1.txt > vercelfile2.txt
+              filtered_url=$(cut -f8 -d" " vercelfile2.txt)
+              touch .env.preview1
+              echo "$filtered_url" > .env.preview1
+              echo "filtered_url is: $filtered_url" 
+
+
+      - name: Run tests
+        uses: mathiasvr/command-output@v1
+        id: tests2
+        with:
+          run: |
+               echo "$(cat .env.preview1)"
+      
+      - name: Slack Notification1
+        uses: rtCamp/action-slack-notify@master
+        env:
+         SLACK_MESSAGE: ${{ steps.tests2.outputs.stdout }}
+         SLACK_TITLE: Vercel "Explorer" Preview Deployment Link
+         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
