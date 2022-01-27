@@ -5756,12 +5756,13 @@ if false {
                             }
                             let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
                             let search = self.accounts_index.get(pubkey, Some(ancestors), Some(max_root));
-                            if interesting {
-                                error!("searcH: {}, {:?}", pubkey, search);
-                            }
                             if let AccountIndexGetResult::Found(lock, index) =
                                 search
                             {
+                                if interesting {
+                                    error!("searcH=found: {}, {:?}", pubkey, search);
+                                }
+    
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
                                     // Because we're keeping the `lock' here, there is no need
@@ -5831,6 +5832,9 @@ if false {
                                     None
                                 }
                             } else {
+                                if interesting {
+                                    error!("searcH=NOT FOUND: {}, {:?}", pubkey, search);
+                                }
                                 None
                             }
                         })
@@ -6964,8 +6968,8 @@ error!("rewrites: {:?}, slot: {}", rewrites, slot)
                     let old_slot = pubkey_account.2;
                     use std::str::FromStr;
                     let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
-                    if &interesting == pubkey {
-                        error!("account update: {}, {}, {}, {:?}", pubkey, new_slot, old_slot, pubkey_account.1);
+                    if interesting {
+                        error!("account update: {}, {}, {}, {:?}", pubkey, new_slot, old_slot, pubkey_account.1.lamports());
                     }
                     
                     self.accounts_index.upsert(
