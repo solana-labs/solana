@@ -5849,11 +5849,9 @@ if false {
         let total_lamports = *total_lamports.lock().unwrap();
 
         let mut hash_time = Measure::start("hash");
-        /*
         hashes.iter().flatten().for_each(|hash| {
-            error!("h:{}",hash);
+            error!("h2:{}",hash);
         });
-        */
 
 
         let (accumulated_hash, hash_total) = AccountsHash::calculate_hash(hashes);
