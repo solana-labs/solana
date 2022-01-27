@@ -6399,35 +6399,6 @@ if false {
         */
         assert!(!force_rehash);
 
-        let partition_storage_slot = epoch_schedule.get_epoch_and_slot_index(storage_slot).1;
-        if !use_stored && partition_storage_slot < partition_from_pubkey {
-            // we have an account we wrote in this epoch already, so we collected rent then, so we would not have rewritten it again later in this same slot
-            use_stored = true;
-        }
-        let mut log = true;
-        if interesting { //storage_slot == 114612876 { //partition_from_pubkey == storage_slot % slots_per_epoch {
-            let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
-    
-            log = false;
-            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}, rent_epoch: {}",
-            pubkey,
-            loaded_account.loaded_hash(),
-            storage_slot,
-            max_slot_in_storages,
-            expected_rent_collection_slot_max_epoch,
-            max_slot_in_storages - storage_slot,
-            partition_index_from_max_slot,
-            partition_from_pubkey,
-            recalc_hash,
-            use_stored,
-            epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
-            loaded_account.take_account2().rent_epoch(),
-        );
-            }
-        if use_stored && !force_rehash {
-            // we can use the previously calculated hash
-            return loaded_account.loaded_hash();
-        }
         let rent_for_sys_vars = true; // todo
         let rent_result = rent_collector.calculate_rent_result(pubkey, loaded_account, rent_for_sys_vars,
             filler_account_suffix);
@@ -6443,6 +6414,36 @@ if false {
             RentResult::CollectRemainingLamports => {}
         }
 
+        let partition_storage_slot = epoch_schedule.get_epoch_and_slot_index(storage_slot).1;
+        if !use_stored && partition_storage_slot < partition_from_pubkey {
+            // we have an account we wrote in this epoch already, so we collected rent then, so we would not have rewritten it again later in this same slot
+            use_stored = true;
+        }
+        let mut log = true;
+        if interesting { //storage_slot == 114612876 { //partition_from_pubkey == storage_slot % slots_per_epoch {
+            let recalc_hash =
+            crate::accounts_db::AccountsDb::hash_account_with_rent_epoch(expected_rent_collection_slot_max_epoch, loaded_account, &pubkey, rent_epoch);
+        
+            log = false;
+            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}, rent_epoch: {}",
+            pubkey,
+            loaded_account.loaded_hash(),
+            storage_slot,
+            max_slot_in_storages,
+            expected_rent_collection_slot_max_epoch,
+            max_slot_in_storages - storage_slot,
+            partition_index_from_max_slot,
+            partition_from_pubkey,
+            recalc_hash,
+            use_stored,
+            epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
+            rent_epoch,
+        );
+            }
+        if use_stored && !force_rehash {
+            // we can use the previously calculated hash
+            return loaded_account.loaded_hash();
+        }
         let recalc_hash =
         crate::accounts_db::AccountsDb::hash_account_with_rent_epoch(expected_rent_collection_slot_max_epoch, loaded_account, &pubkey, rent_epoch);
         if recalc_hash != loaded_account.loaded_hash() && log {
