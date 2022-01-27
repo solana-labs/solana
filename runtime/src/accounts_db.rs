@@ -548,6 +548,16 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
+    pub fn take_account2(&self) -> AccountSharedData {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
+            LoadedAccount::Cached(cached_account) => match cached_account {
+                Cow::Owned(cached_account) => cached_account.account.clone(),
+                Cow::Borrowed(cached_account) => cached_account.account.clone(),
+            },
+        }
+    }
+
     pub fn is_cached(&self) -> bool {
         match self {
             LoadedAccount::Stored(_) => false,
@@ -6294,8 +6304,13 @@ if false {
         
         // todo think about: can't rely on 'is_ancient'
         if !is_ancient { //} /* !is_ancient && */ storage_slot >= expected_rent_collection_slot_max_epoch {
-            if interesting { //storage_slot == 115044876 || storage_slot ==  {//partition_from_pubkey == storage_slot % slots_per_epoch {
+            if false && interesting { //storage_slot == 115044876 || storage_slot ==  {//partition_from_pubkey == storage_slot % slots_per_epoch {
                 let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
+                /*
+                let hash =
+                crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                */
+
                 error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
                 pubkey,
                 loaded_account.loaded_hash(),
@@ -6351,8 +6366,11 @@ if false {
         let mut log = true;
         if interesting { //storage_slot == 114612876 { //partition_from_pubkey == storage_slot % slots_per_epoch {
             let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
+            let hash2 =
+            crate::accounts_db::AccountsDb::hash_account(expected_rent_collection_slot_max_epoch, &loaded_account.take_account2(), &pubkey);
+    
             log = false;
-            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
+            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}, rent_epoch: {}, hash other way: {}",
             pubkey,
             loaded_account.loaded_hash(),
             storage_slot,
@@ -6364,6 +6382,8 @@ if false {
             recalc_hash,
             use_stored,
             epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
+            loaded_account.take_account2().rent_epoch(),
+            hash2,
         );
             }
         if use_stored && !force_rehash {
