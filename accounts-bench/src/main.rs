@@ -114,6 +114,7 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
+            /*
             let results = accounts.accounts_db.update_accounts_hash(0, &ancestors);
             time.stop();
             let mut time_store = Measure::start("hash using store");
@@ -140,7 +141,7 @@ fn main() {
             );
             create_test_accounts(&accounts, &mut pubkeys, 1, 0);
             elapsed[x] = time.as_us();
-            elapsed_store[x] = time_store.as_us();
+            elapsed_store[x] = time_store.as_us();*/
         }
     }
 

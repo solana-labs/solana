@@ -126,7 +126,7 @@ impl AccountsHashVerifier {
         thread_pool: Option<&ThreadPool>,
         ledger_path: &Path,
     ) {
-        let mut measure_hash = Measure::start("hash");
+        let mut measure_hash = Measure::start("hash");/*
         if let Some(expected_hash) = accounts_package.hash_for_testing {
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
             let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
@@ -145,7 +145,7 @@ impl AccountsHashVerifier {
 
             assert_eq!(accounts_package.expected_capitalization, lamports);
             assert_eq!(expected_hash, hash);
-        };
+        };*/
         measure_hash.stop();
         datapoint_info!(
             "accounts_hash_verifier",
