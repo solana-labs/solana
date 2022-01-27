@@ -6347,7 +6347,7 @@ if false {
         
         // todo think about: can't rely on 'is_ancient'
         if !is_ancient { //} /* !is_ancient && */ storage_slot >= expected_rent_collection_slot_max_epoch {
-            if false && interesting { //storage_slot == 115044876 || storage_slot ==  {//partition_from_pubkey == storage_slot % slots_per_epoch {
+            if interesting { //storage_slot == 115044876 || storage_slot ==  {//partition_from_pubkey == storage_slot % slots_per_epoch {
                 let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
                 /*
                 let hash =
