@@ -113,3 +113,10 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.9
+
+commands_restrictions:
+  # The author of copied PRs is the Mergify user.
+  # Restrict `copy` access to Core Contributors
+  copy:
+    conditions:
+    - author=@core-contributors
