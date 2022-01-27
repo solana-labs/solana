@@ -1,6 +1,6 @@
 import { getDecentralizedURI } from "../utils/url";
 import fetch from 'jest-fetch-mock';
-import { act, renderHook } from '@testing-library/react-hooks'
+import { renderHook } from '@testing-library/react-hooks'
 import { useCachedImage } from "../components/common/hooks/useCachedImage";
 
 describe('Tests the utility functions and hook for decentralized uri transformations', () => {
@@ -76,6 +76,5 @@ describe('Tests the utility functions and hook for decentralized uri transformat
 
     await waitForNextUpdate()
     expect(result.current.cachedBlob).toBe(endURI)
-
   })
 })
