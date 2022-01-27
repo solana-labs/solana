@@ -5968,6 +5968,8 @@ if false {
         let chunks = 2 + (width as Slot / MAX_ITEMS_PER_CHUNK);
         let range = snapshot_storages.range();
         let slot0 = range.start;
+        //error!("range scanning: {}, {}, has cache: {}
+
         let first_boundary =
             ((slot0 + MAX_ITEMS_PER_CHUNK) / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK;
         (0..chunks)
@@ -5988,8 +5990,12 @@ if false {
                     (start, end)
                 };
                 end = std::cmp::min(end, range.end);
+
                 if start == end {
-                    return after_func(retval);
+                    if end == 115044876 || end + 1 == 115044876 || end == 115044876 - 1 {
+                        error!("not scanning: {}, {}", start, end);
+                    }
+                        return after_func(retval);
                 }
 
                 let mut file_name = String::default();
@@ -6051,6 +6057,7 @@ if false {
                             )
                             .is_ok()
                         {
+                            panic!("not caching now");
                             return retval;
                         }
 
