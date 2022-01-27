@@ -4493,6 +4493,7 @@ impl Bank {
         let (current_epoch, current_slot_index) = self.get_epoch_and_slot_index(self.slot());
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
+        error!("variable_cycle_partitions: slot: {}, current_slot_index: {}", self.slot(), current_slot_index);
 
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
