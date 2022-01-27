@@ -628,9 +628,13 @@ impl TransactionExecutionResult {
 
 pub struct LoadAndExecuteTransactionsOutput {
     pub loaded_transactions: Vec<TransactionLoadResult>,
+    // Vector of results indicating whether a transaction was executed or could not
+    // be executed. Note executed transactions can still have failed!
     pub execution_results: Vec<TransactionExecutionResult>,
-    pub retryable_transactions: Vec<usize>,
-    pub executed_transactions_count: u64,
+    pub retryable_transaction_indexes: Vec<usize>,
+    // Total number of transactions that were executed
+    // Note executed transactions can still have failed!
+    pub executed_transactions_count: usize,
     pub signature_count: u64,
 }
 
@@ -3954,7 +3958,7 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = ErrorCounters::default();
 
-        let retryable_transactions: Vec<_> = batch
+        let retryable_transaction_indexes: Vec<_> = batch
             .lock_results()
             .iter()
             .enumerate()
@@ -4059,7 +4063,7 @@ impl Bank {
         timings.load_us = timings.load_us.saturating_add(load_time.as_us());
         timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
 
-        let mut executed_transactions_count: u64 = 0;
+        let mut executed_transactions_count: usize = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
@@ -4149,14 +4153,14 @@ impl Bank {
             debug!(
                 "{} errors of {} txs",
                 *err_count,
-                *err_count as u64 + executed_transactions_count
+                *err_count + executed_transactions_count
             );
         }
         Self::update_error_counters(&error_counters);
         LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             execution_results,
-            retryable_transactions,
+            retryable_transaction_indexes,
             executed_transactions_count,
             signature_count,
         }
@@ -5134,7 +5138,7 @@ impl Bank {
             batch.sanitized_transactions(),
             &mut loaded_transactions,
             execution_results,
-            executed_transactions_count,
+            executed_transactions_count as u64,
             signature_count,
             timings,
         );

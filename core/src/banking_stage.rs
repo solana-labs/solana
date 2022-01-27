@@ -86,11 +86,56 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
-struct ProcessTransactionsResult {
+struct ProcessTransactionsSummary {
+    // We process the transactions slice in chunks. This is the first index in the transactions
+    // slice of the *latest* such chunk of transactions that we tried to execute.
     chunk_start: usize,
+
+    // Total number of transactions that were passed as candidates for execution
+    // These transactions can result in three cases after attempting execution:
+    // 1) Did not execute due to some fatal error like too old, or duplicate signature.
+    // 2) Were executed and committed, captured by `committed_transactions_count` below.
+    // 3) Were executed and failed commit, captured by `failed_commit_count` below.
+    transactions_attempted_execution_count: usize,
+
+    // Total number of transactions that made it into the block
     committed_transactions_count: usize,
+
+    // All transactions that were executed but then failed record because the
+    // slot ended
+    #[allow(dead_code)]
+    failed_commit_count: usize,
+
+    // Indexes of transactions in the transactions slice that
+    // failed, but are retryable
     retryable_tx_indexes: Vec<usize>,
-    total_transactions_count: usize,
+
+    // The number of transactions filtered out by the cost model
+    #[allow(dead_code)]
+    cost_model_limit_transactions_count: usize,
+}
+
+pub struct ProcessTransactionBatchOutput {
+    // The number of transactions filtered out by the cost model
+    cost_model_limit_transactions_count: usize,
+    execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
+}
+
+pub struct ExecuteAndCommitTransactionsOutput {
+    // Total number of transactions that were passed as candidates for execution
+    transactions_attempted_execution_count: usize,
+    // The number of transactions of the `transactions_attempted_execution_count` that were
+    // executed. See comment in `ProcessTransactionsSummary.transactions_attempted_execution_count`
+    // for possible outcomes of execution.
+    executed_transactions_count: usize,
+    // Transactions that either were not executed, or were executed and failed to be committed due
+    // to the block ending.
+    retryable_transaction_indexes: Vec<usize>,
+    // A result that indicates whether transactions were succesfully
+    // committed into the Poh stream. If so, the result tells us
+    // how many such transactions were committed
+    commit_transactions_result: Result<(), PohRecorderError>,
+    execute_timings: ExecuteTimings,
 }
 
 #[derive(Debug, Default)]
@@ -527,7 +572,7 @@ impl BankingStage {
                         bank_creation_time,
                     }) = bank_start
                     {
-                        let process_transactions_result = Self::process_packets_transactions(
+                        let process_transactions_summary = Self::process_packets_transactions(
                             &working_bank,
                             &bank_creation_time,
                             recorder,
@@ -538,14 +583,16 @@ impl BankingStage {
                             banking_stage_stats,
                             qos_service,
                         );
-                        let ProcessTransactionsResult {
+                        let ProcessTransactionsSummary {
                             chunk_start,
+                            transactions_attempted_execution_count,
                             committed_transactions_count,
                             retryable_tx_indexes,
-                            total_transactions_count,
-                        } = process_transactions_result;
+                            ..
+                        } = process_transactions_summary;
 
-                        if chunk_start < total_transactions_count
+                        if chunk_start < transactions_attempted_execution_count
+                            // TODO adding timing metrics here from when bank was added to now
                             || !Bank::should_bank_still_be_processing_txs(
                                 &bank_creation_time,
                                 max_tx_ingestion_ns,
@@ -898,13 +945,13 @@ impl BankingStage {
         (Ok(num_to_commit), vec![])
     }
 
-    fn process_and_record_transactions_locked(
+    fn execute_and_commit_transactions_locked(
         bank: &Arc<Bank>,
         poh: &TransactionRecorder,
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-    ) -> (Result<usize, PohRecorderError>, Vec<usize>, ExecuteTimings) {
+    ) -> ExecuteAndCommitTransactionsOutput {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
@@ -925,14 +972,7 @@ impl BankingStage {
         };
 
         let mut execute_timings = ExecuteTimings::default();
-        let LoadAndExecuteTransactionsOutput {
-            mut loaded_transactions,
-            execution_results,
-            mut retryable_transactions,
-            executed_transactions_count,
-            signature_count,
-            ..
-        } = bank.load_and_execute_transactions(
+        let load_and_execute_transactions_output = bank.load_and_execute_transactions(
             batch,
             MAX_PROCESSING_AGE,
             transaction_status_sender.is_some(),
@@ -941,38 +981,58 @@ impl BankingStage {
         );
         load_execute_time.stop();
 
+        let LoadAndExecuteTransactionsOutput {
+            mut loaded_transactions,
+            execution_results,
+            mut retryable_transaction_indexes,
+            executed_transactions_count,
+            signature_count,
+            ..
+        } = load_and_execute_transactions_output;
+
         let freeze_lock = bank.freeze_lock();
 
         let mut record_time = Measure::start("record_time");
-        let (num_to_commit, retryable_record_txs) = Self::record_transactions(
-            bank.slot(),
-            batch.sanitized_transactions(),
-            &execution_results,
-            poh,
-        );
+        let (commit_transactions_result, retryable_record_transaction_indexes) =
+            Self::record_transactions(
+                bank.slot(),
+                batch.sanitized_transactions(),
+                &execution_results,
+                poh,
+            );
         inc_new_counter_info!(
             "banking_stage-record_transactions_num_to_commit",
-            *num_to_commit.as_ref().unwrap_or(&0)
+            *commit_transactions_result.as_ref().unwrap_or(&0)
         );
         inc_new_counter_info!(
             "banking_stage-record_transactions_retryable_record_txs",
-            retryable_record_txs.len()
+            retryable_record_transaction_indexes.len()
         );
-        retryable_transactions.extend(retryable_record_txs);
-        if num_to_commit.is_err() {
-            return (num_to_commit, retryable_transactions, execute_timings);
+        retryable_transaction_indexes.extend(retryable_record_transaction_indexes);
+        let transactions_attempted_execution_count = execution_results.len();
+        if let Err(e) = commit_transactions_result {
+            return ExecuteAndCommitTransactionsOutput {
+                transactions_attempted_execution_count,
+                executed_transactions_count,
+                retryable_transaction_indexes,
+                commit_transactions_result: Err(e),
+                execute_timings,
+            };
         }
         record_time.stop();
 
         let mut commit_time = Measure::start("commit_time");
         let sanitized_txs = batch.sanitized_transactions();
-        let num_to_commit = num_to_commit.unwrap();
-        if num_to_commit != 0 {
+        let committed_transaction_count = commit_transactions_result.unwrap();
+        // Note: `committed_transaction_count` should equal `executed_transactions_count`, since
+        // every executed transaction should have been recorded into the Poh stream if the record
+        // was successful (there's no partial records).
+        if committed_transaction_count != 0 {
             let tx_results = bank.commit_transactions(
                 sanitized_txs,
                 &mut loaded_transactions,
                 execution_results,
-                executed_transactions_count,
+                executed_transactions_count as u64,
                 signature_count,
                 &mut execute_timings,
             );
@@ -1006,11 +1066,17 @@ impl BankingStage {
         );
 
         debug!(
-            "process_and_record_transactions_locked: {:?}",
+            "execute_and_commit_transactions_locked: {:?}",
             execute_timings
         );
 
-        (Ok(num_to_commit), retryable_transactions, execute_timings)
+        ExecuteAndCommitTransactionsOutput {
+            transactions_attempted_execution_count,
+            executed_transactions_count,
+            retryable_transaction_indexes,
+            commit_transactions_result: Ok(()),
+            execute_timings,
+        }
     }
 
     pub fn process_and_record_transactions(
@@ -1021,11 +1087,13 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
-    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
+    ) -> ProcessTransactionBatchOutput {
         let tx_costs = qos_service.compute_transaction_costs(txs.iter());
 
-        let transactions_qos_results =
+        let (transactions_qos_results, num_included) =
             qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
+
+        let cost_model_limit_transactions_count = txs.len().saturating_sub(num_included);
 
         qos_service.accumulate_estimated_transaction_costs(
             &Self::accumulate_batched_transaction_costs(
@@ -1045,22 +1113,32 @@ impl BankingStage {
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
         // and WouldExceedMaxAccountDataCostLimit
-        let (result, mut retryable_txs, execute_timings) =
-            Self::process_and_record_transactions_locked(
+
+        let mut execute_and_commit_transactions_output =
+            Self::execute_and_commit_transactions_locked(
                 bank,
                 poh,
                 &batch,
                 transaction_status_sender,
                 gossip_vote_sender,
             );
-        retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
+
+        let ExecuteAndCommitTransactionsOutput {
+            ref mut retryable_transaction_indexes,
+            ref execute_timings,
+            ..
+        } = execute_and_commit_transactions_output;
+
+        retryable_transaction_indexes
+            .iter_mut()
+            .for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
         // Once the accounts are new transactions can enter the pipeline to process them
         drop(batch);
         unlock_time.stop();
 
-        let (cu, us) = Self::accumulate_execute_units_and_time(&execute_timings);
+        let (cu, us) = Self::accumulate_execute_units_and_time(execute_timings);
         qos_service.accumulate_actual_execute_cu(cu);
         qos_service.accumulate_actual_execute_time(us);
 
@@ -1075,7 +1153,10 @@ impl BankingStage {
             txs.len(),
         );
 
-        (result, retryable_txs)
+        ProcessTransactionBatchOutput {
+            cost_model_limit_transactions_count,
+            execute_and_commit_transactions_output,
+        }
     }
 
     // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
@@ -1133,16 +1214,27 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
-    ) -> ProcessTransactionsResult {
+    ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
-        let mut retryable_tx_indexes = vec![];
-        let mut committed_transactions_count: usize = 0;
+        let mut all_retryable_tx_indexes = vec![];
+        // All the transactions that attempted execution.
+        // These transactions can result in three cases after attempting execution:
+        // 1) Did not execute due to some fatal error like too old, or duplicate signature.
+        // 2) Were executed and committed, captured by `total_committed_transactions_count` below.
+        // 3) Were executed and failed commit, captured by `total_failed_commit_count` below.
+        let mut total_transactions_attempted_execution_count: usize = 0;
+        // All transactions that were executed and committed
+        let mut total_committed_transactions_count: usize = 0;
+        // All transactions that were executed but then failed record because the
+        // slot ended
+        let mut total_failed_commit_count: usize = 0;
+        let mut total_cost_model_limit_transactions_count: usize = 0;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
                 chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
             );
-            let (result, retryable_txs_in_chunk) = Self::process_and_record_transactions(
+            let process_transaction_batch_output = Self::process_and_record_transactions(
                 bank,
                 &transactions[chunk_start..chunk_end],
                 poh,
@@ -1151,22 +1243,51 @@ impl BankingStage {
                 gossip_vote_sender,
                 qos_service,
             );
-            trace!("process_transactions result: {:?}", result);
 
-            if let Ok(newly_committed_tx_count) = result {
-                committed_transactions_count =
-                    committed_transactions_count.saturating_add(newly_committed_tx_count);
+            let ProcessTransactionBatchOutput {
+                cost_model_limit_transactions_count: new_cost_model_limit_transactions_count,
+                execute_and_commit_transactions_output,
+            } = process_transaction_batch_output;
+            total_cost_model_limit_transactions_count = total_cost_model_limit_transactions_count
+                .saturating_add(new_cost_model_limit_transactions_count);
+
+            let ExecuteAndCommitTransactionsOutput {
+                transactions_attempted_execution_count: new_transactions_attempted_execution_count,
+                executed_transactions_count: new_executed_transactions_count,
+                retryable_transaction_indexes: new_retryable_transaction_indexes,
+                commit_transactions_result: new_commit_transactions_result,
+                ..
+            } = execute_and_commit_transactions_output;
+
+            total_transactions_attempted_execution_count =
+                total_transactions_attempted_execution_count
+                    .saturating_add(new_transactions_attempted_execution_count);
+
+            trace!(
+                "process_transactions result: {:?}",
+                new_commit_transactions_result
+            );
+
+            if new_commit_transactions_result.is_ok() {
+                total_committed_transactions_count = total_committed_transactions_count
+                    .saturating_add(new_executed_transactions_count);
+            } else {
+                total_failed_commit_count =
+                    total_failed_commit_count.saturating_add(new_executed_transactions_count);
             }
 
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
-            retryable_tx_indexes.extend_from_slice(&retryable_txs_in_chunk);
+            all_retryable_tx_indexes.extend_from_slice(&new_retryable_transaction_indexes);
 
             // If `bank_creation_time` is None, it's a test so ignore the option so
             // allow processing
             let should_bank_still_be_processing_txs =
                 Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
-            match (result, should_bank_still_be_processing_txs) {
+            match (
+                new_commit_transactions_result,
+                should_bank_still_be_processing_txs,
+            ) {
                 (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
                     info!(
                         "process transactions: max height reached slot: {} height: {}",
@@ -1176,7 +1297,7 @@ impl BankingStage {
                     // process_and_record_transactions has returned all retryable errors in
                     // transactions[chunk_start..chunk_end], so we just need to push the remaining
                     // transactions into the unprocessed queue.
-                    retryable_tx_indexes.extend(chunk_end..transactions.len());
+                    all_retryable_tx_indexes.extend(chunk_end..transactions.len());
                     break;
                 }
                 _ => (),
@@ -1185,11 +1306,13 @@ impl BankingStage {
             chunk_start = chunk_end;
         }
 
-        ProcessTransactionsResult {
+        ProcessTransactionsSummary {
             chunk_start,
-            committed_transactions_count,
-            retryable_tx_indexes,
-            total_transactions_count: transactions.len(),
+            transactions_attempted_execution_count: total_transactions_attempted_execution_count,
+            committed_transactions_count: total_committed_transactions_count,
+            failed_commit_count: total_failed_commit_count,
+            retryable_tx_indexes: all_retryable_tx_indexes,
+            cost_model_limit_transactions_count: total_cost_model_limit_transactions_count,
         }
     }
 
@@ -1313,7 +1436,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
-    ) -> ProcessTransactionsResult {
+    ) -> ProcessTransactionsSummary {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             packet_batch,
@@ -1326,7 +1449,8 @@ impl BankingStage {
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
 
         let mut process_tx_time = Measure::start("process_tx_time");
-        let mut process_transactions_result = Self::process_transactions(
+
+        let mut process_transactions_summary = Self::process_transactions(
             bank,
             bank_creation_time,
             &transactions,
@@ -1337,11 +1461,11 @@ impl BankingStage {
         );
         process_tx_time.stop();
 
-        let ProcessTransactionsResult {
+        let ProcessTransactionsSummary {
+            transactions_attempted_execution_count,
             ref retryable_tx_indexes,
-            ref total_transactions_count,
             ..
-        } = process_transactions_result;
+        } = process_transactions_summary;
 
         inc_new_counter_info!(
             "banking_stage-retryable_transactions",
@@ -1359,8 +1483,11 @@ impl BankingStage {
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
-            total_transactions_count.saturating_sub(filtered_retryable_tx_indexes.len())
+            transactions_attempted_execution_count
+                .saturating_sub(filtered_retryable_tx_indexes.len())
         );
+
+        process_transactions_summary.retryable_tx_indexes = filtered_retryable_tx_indexes;
 
         banking_stage_stats
             .packet_conversion_elapsed
@@ -1372,8 +1499,7 @@ impl BankingStage {
             .filter_pending_packets_elapsed
             .fetch_add(filter_pending_packets_time.as_us(), Ordering::Relaxed);
 
-        process_transactions_result.retryable_tx_indexes = filtered_retryable_tx_indexes;
-        process_transactions_result
+        process_transactions_summary
     }
 
     fn filter_unprocessed_packets(
@@ -2294,7 +2420,8 @@ mod tests {
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
             )
-            .0
+            .execute_and_commit_transactions_output
+            .commit_transactions_result
             .unwrap();
 
             // Tick up to max tick height
@@ -2336,7 +2463,8 @@ mod tests {
                     &gossip_vote_sender,
                     &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 )
-                .0,
+                .execute_and_commit_transactions_output
+                .commit_transactions_result,
                 Err(PohRecorderError::MaxHeightReached)
             );
 
@@ -2415,7 +2543,7 @@ mod tests {
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
-            let (result, unprocessed) = BankingStage::process_and_record_transactions(
+            let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
                 &recorder,
@@ -2432,8 +2560,17 @@ mod tests {
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
 
-            assert!(result.is_ok());
-            assert_eq!(unprocessed.len(), 1);
+            assert!(process_transactions_batch_output
+                .execute_and_commit_transactions_output
+                .commit_transactions_result
+                .is_ok());
+            assert_eq!(
+                process_transactions_batch_output
+                    .execute_and_commit_transactions_output
+                    .retryable_transaction_indexes
+                    .len(),
+                1
+            );
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }
@@ -2523,7 +2660,7 @@ mod tests {
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
-            let process_transactions_result = BankingStage::process_transactions(
+            let process_transactions_summary = BankingStage::process_transactions(
                 &bank,
                 &Instant::now(),
                 &transactions,
@@ -2533,11 +2670,11 @@ mod tests {
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
             );
 
-            let ProcessTransactionsResult {
+            let ProcessTransactionsSummary {
                 chunk_start,
                 mut retryable_tx_indexes,
                 ..
-            } = process_transactions_result;
+            } = process_transactions_summary;
             assert_eq!(chunk_start, 0);
 
             retryable_tx_indexes.sort_unstable();
