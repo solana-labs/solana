@@ -374,7 +374,13 @@ impl AccountsHash {
                             data_len = data.len();
                             data_index = 0;
                         }
-                        hasher.hash(data[data_index].borrow().as_ref());
+                        use std::str::FromStr;
+                        let h = data[data_index].borrow();
+
+                        if h == &Hash::from_str("8yYZ9Pvrq5DCNU9FM1W13WggTiuMpMYsapu6wUZJbVaw").unwrap() {
+                            error!("found hash: {}", h);
+                        }
+                        hasher.hash(h.as_ref());
                         data_index += 1;
                     }
                 } else {
