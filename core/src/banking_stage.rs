@@ -2,7 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use {
-    crate::qos_service::QosService,
+    crate::{leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker, qos_service::QosService},
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
     itertools::Itertools,
@@ -101,28 +101,23 @@ struct ProcessTransactionsSummary {
 
     // Total number of transactions that were passed as candidates for execution. See description
     // of struct above for possible outcomes for these transactions
-    #[allow(dead_code)]
     transactions_attempted_execution_count: usize,
 
     // Total number of transactions that made it into the block
-    #[allow(dead_code)]
     committed_transactions_count: usize,
 
     // Total number of transactions that made it into the block where the transactions
     // output from execution was success/no error.
-    #[allow(dead_code)]
     committed_transactions_with_successful_result_count: usize,
 
     // All transactions that were executed but then failed record because the
     // slot ended
-    #[allow(dead_code)]
     failed_commit_count: usize,
 
     // Indexes of transactions in the transactions slice that were not committed but are retryable
     retryable_transaction_indexes: Vec<usize>,
 
     // The number of transactions filtered out by the cost model
-    #[allow(dead_code)]
     cost_model_throttled_transactions_count: usize,
 }
 
@@ -171,7 +166,6 @@ pub struct BankingStageStats {
     receive_and_buffer_packets_elapsed: AtomicU64,
     handle_retryable_packets_elapsed: AtomicU64,
     filter_pending_packets_elapsed: AtomicU64,
-    pub(crate) packet_duplicate_check_elapsed: AtomicU64,
     packet_conversion_elapsed: AtomicU64,
     unprocessed_packet_conversion_elapsed: AtomicU64,
     transaction_processing_elapsed: AtomicU64,
@@ -215,7 +209,6 @@ impl BankingStageStats {
                 .handle_retryable_packets_elapsed
                 .load(Ordering::Relaxed)
             + self.filter_pending_packets_elapsed.load(Ordering::Relaxed)
-            + self.packet_duplicate_check_elapsed.load(Ordering::Relaxed)
             + self.packet_conversion_elapsed.load(Ordering::Relaxed)
             + self
                 .unprocessed_packet_conversion_elapsed
@@ -304,12 +297,6 @@ impl BankingStageStats {
                 (
                     "filter_pending_packets_elapsed",
                     self.filter_pending_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "packet_duplicate_check_elapsed",
-                    self.packet_duplicate_check_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -476,22 +463,28 @@ impl BankingStage {
 
     fn filter_valid_packets_for_forwarding<'a>(
         packet_batches: impl Iterator<Item = &'a PacketBatchAndOffsets>,
-    ) -> Vec<&'a Packet> {
-        packet_batches
-            .filter(|(_batch, _indexes, forwarded)| !forwarded)
-            .flat_map(|(batch, valid_indexes, _forwarded)| {
-                valid_indexes.iter().map(move |x| &batch.packets[*x])
-            })
-            .collect()
+    ) -> (Vec<&'a Packet>, usize) {
+        let mut total_packets: usize = 0;
+        (
+            packet_batches
+                .filter(|(_batch, _indexes, forwarded)| !forwarded)
+                .flat_map(|(batch, valid_indexes, _forwarded)| {
+                    total_packets = total_packets.saturating_add(valid_indexes.len());
+                    valid_indexes.iter().map(move |x| &batch.packets[*x])
+                })
+                .collect(),
+            total_packets,
+        )
     }
 
+    /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
+    /// the number of successfully forwarded packets if transmissions was successful
     fn forward_buffered_packets(
         socket: &std::net::UdpSocket,
         tpu_forwards: &std::net::SocketAddr,
-        buffered_packet_batches: &UnprocessedPacketBatches,
+        packets: Vec<&Packet>,
         data_budget: &DataBudget,
-    ) -> std::io::Result<()> {
-        let packets = Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
+    ) -> std::io::Result<usize> {
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
@@ -522,7 +515,7 @@ impl BankingStage {
             }
         }
 
-        Ok(())
+        Ok(packet_vec.len())
     }
 
     // Returns whether the given `PacketBatch` has any more remaining unprocessed
@@ -551,6 +544,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         let mut rebuffered_packet_count = 0;
         let mut consumed_buffered_packets_count = 0;
@@ -566,7 +560,10 @@ impl BankingStage {
                 if let Some((next_leader, bank)) = &reached_end_of_slot {
                     // We've hit the end of this slot, no need to perform more processing,
                     // just filter the remaining packets for the invalid (e.g. too old) ones
-                    let new_unprocessed_indexes = Self::filter_unprocessed_packets(
+
+                    // We've hit the end of the slot, no need to update the `slot_metrics_tracker`
+                    // since that only tracks intra-leader-slot metrics
+                    let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
                         bank,
                         packet_batch,
                         original_unprocessed_indexes,
@@ -719,6 +716,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
         data_budget: &DataBudget,
         qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> BufferedPacketsDecision {
         let bank_start;
         let (
@@ -760,6 +758,7 @@ impl BankingStage {
                     banking_stage_stats,
                     recorder,
                     qos_service,
+                    slot_metrics_tracker,
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -771,6 +770,7 @@ impl BankingStage {
                     socket,
                     false,
                     data_budget,
+                    slot_metrics_tracker,
                 );
             }
             BufferedPacketsDecision::ForwardAndHold => {
@@ -782,10 +782,16 @@ impl BankingStage {
                     socket,
                     true,
                     data_budget,
+                    slot_metrics_tracker,
                 );
             }
             _ => (),
         }
+
+        // Check if we need to start new metrics for a new leader slot, or
+        // report metrics for a completed leader slot. Check after the `decision`
+        // above is executed to include forwarding in the metrics
+        slot_metrics_tracker.update_on_leader_slot_boundary(&bank_start);
         decision
     }
 
@@ -797,6 +803,7 @@ impl BankingStage {
         socket: &UdpSocket,
         hold: bool,
         data_budget: &DataBudget,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         let addr = match forward_option {
             ForwardOption::NotForward => {
@@ -814,13 +821,30 @@ impl BankingStage {
             Some(addr) => addr,
             None => return,
         };
-        let _ = Self::forward_buffered_packets(socket, &addr, buffered_packet_batches, data_budget);
+
+        let (forwardable_packets, total_unprocessed_packets_in_buffer) =
+            Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
+        slot_metrics_tracker
+            .increment_forwardable_packet_candidates_count(forwardable_packets.len() as u64);
+        if let Ok(sucessful_forwarded_packets_count) =
+            Self::forward_buffered_packets(socket, &addr, forwardable_packets, data_budget)
+        {
+            slot_metrics_tracker.increment_successful_forwarded_packets_count(
+                sucessful_forwarded_packets_count as u64,
+            );
+        } else {
+            slot_metrics_tracker.increment_packet_batch_forward_failure_count(1);
+        }
+
         if hold {
             buffered_packet_batches.retain(|(_, index, _)| !index.is_empty());
             for (_, _, forwarded) in buffered_packet_batches.iter_mut() {
                 *forwarded = true;
             }
         } else {
+            slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
+                total_unprocessed_packets_in_buffer as u64,
+            );
             buffered_packet_batches.clear();
         }
     }
@@ -844,6 +868,7 @@ impl BankingStage {
         let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
         let qos_service = QosService::new(cost_model, id);
+        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         loop {
             let my_pubkey = cluster_info.id();
             while !buffered_packet_batches.is_empty() {
@@ -860,6 +885,7 @@ impl BankingStage {
                     &recorder,
                     data_budget,
                     &qos_service,
+                    &mut slot_metrics_tracker,
                 );
                 if matches!(decision, BufferedPacketsDecision::Hold)
                     || matches!(decision, BufferedPacketsDecision::ForwardAndHold)
@@ -888,6 +914,7 @@ impl BankingStage {
                 batch_limit,
                 &mut buffered_packet_batches,
                 &mut banking_stage_stats,
+                &mut slot_metrics_tracker,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1312,6 +1339,7 @@ impl BankingStage {
 
             // If `bank_creation_time` is None, it's a test so ignore the option so
             // allow processing
+            // TODO adding timing metrics here from when bank was added to now
             let should_bank_still_be_processing_txs =
                 Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
             match (
@@ -1429,6 +1457,7 @@ impl BankingStage {
         transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
+        slot_metrics_tracker: Option<&mut LeaderSlotMetricsTracker>,
     ) -> Vec<usize> {
         let filter =
             Self::prepare_filter_for_pending_transactions(transactions.len(), pending_indexes);
@@ -1455,7 +1484,17 @@ impl BankingStage {
             &mut error_counters,
         );
 
-        Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
+        let output =
+            Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes);
+
+        let total_buffered_packets_filtered = filter.len().saturating_sub(output.len());
+
+        if let Some(slot_metrics_tracker) = slot_metrics_tracker {
+            slot_metrics_tracker
+                .increment_buffered_packets_filtered_count(total_buffered_packets_filtered as u64);
+        }
+
+        output
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1469,6 +1508,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> ProcessTransactionsSummary {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
@@ -1491,13 +1531,46 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             qos_service,
+            slot_metrics_tracker,
         );
         process_tx_time.stop();
 
+        // Indexes of transactions in the transactions slice that
+        // failed, but are retryable
         let ProcessTransactionsSummary {
+            transactions_attempted_execution_count,
+            committed_transactions_count,
+            failed_commit_count,
             ref retryable_transaction_indexes,
+            cost_model_limit_transactions_count,
             ..
         } = process_transactions_summary;
+
+        slot_metrics_tracker.increment_attempted_transactions_execution_count(
+            transactions_attempted_execution_count as u64,
+        );
+
+        slot_metrics_tracker
+            .increment_committed_transactions_count(committed_transactions_count as u64);
+
+        slot_metrics_tracker
+            .increment_executed_transactions_failed_record_count(failed_commit_count as u64);
+
+        slot_metrics_tracker
+            .increment_retryable_errored_transaction_count(retryable_transaction_indexes.len() as u64);
+
+        slot_metrics_tracker.increment_nonretryable_errored_transaction_count(
+            transactions_attempted_execution_count
+                .saturating_sub(committed_transactions_count)
+                .saturating_sub(retryable_transaction_indexes.len()) as u64,
+        );
+
+        slot_metrics_tracker.increment_cost_model_limit_transactions_count(
+            cost_model_limit_transactions_count as u64,
+        );
+
+        let retryable_tx_count = retryable_transaction_indexes.len();
+        inc_new_counter_info!("banking_stage-unprocessed_transactions", retryable_tx_count);
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
         let filtered_retryable_tx_indexes = Self::filter_pending_packets_from_pending_txs(
@@ -1505,6 +1578,7 @@ impl BankingStage {
             &transactions,
             &transaction_to_packet_indexes,
             retryable_transaction_indexes,
+            Some(slot_metrics_tracker),
         );
         filter_pending_packets_time.stop();
 
@@ -1530,7 +1604,7 @@ impl BankingStage {
         process_transactions_summary
     }
 
-    fn filter_unprocessed_packets(
+    fn filter_unprocessed_packets_at_end_of_slot(
         bank: &Arc<Bank>,
         packet_batch: &PacketBatch,
         transaction_indexes: &[usize],
@@ -1564,6 +1638,7 @@ impl BankingStage {
             &transactions,
             &transaction_to_packet_indexes,
             &unprocessed_tx_indexes,
+            None,
         );
 
         inc_new_counter_info!(
@@ -1600,6 +1675,7 @@ impl BankingStage {
         batch_limit: usize,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         banking_stage_stats: &mut BankingStageStats,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
         let packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1622,6 +1698,15 @@ impl BankingStage {
         let mut newly_buffered_packets_count = 0;
         for packet_batch in packet_batch_iter {
             let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
+            // Track all the packets incoming from sigverify, both valid and invalid
+            slot_metrics_tracker.increment_total_new_valid_packets(packet_indexes.len() as u64);
+            slot_metrics_tracker.increment_newly_failed_sigverify_count(
+                packet_batch
+                    .packets
+                    .len()
+                    .saturating_sub(packet_indexes.len()) as u64,
+            );
+
             Self::push_unprocessed(
                 buffered_packet_batches,
                 packet_batch,
@@ -1631,6 +1716,7 @@ impl BankingStage {
                 &mut newly_buffered_packets_count,
                 batch_limit,
                 banking_stage_stats,
+                slot_metrics_tracker,
             );
         }
         proc_start.stop();
@@ -1681,12 +1767,16 @@ impl BankingStage {
         newly_buffered_packets_count: &mut usize,
         batch_limit: usize,
         banking_stage_stats: &mut BankingStageStats,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
             if unprocessed_packet_batches.len() >= batch_limit {
                 *dropped_packet_batches_count += 1;
                 if let Some(dropped_batch) = unprocessed_packet_batches.pop_front() {
                     *dropped_packets_count += dropped_batch.1.len();
+                    slot_metrics_tracker.increment_exceeded_buffer_limit_dropped_packets_count(
+                        dropped_batch.1.len() as u64,
+                    );
                 }
             }
             let _ = banking_stage_stats
@@ -1694,6 +1784,8 @@ impl BankingStage {
                 .increment(packet_indexes.len() as u64);
 
             *newly_buffered_packets_count += packet_indexes.len();
+            slot_metrics_tracker
+                .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
             unprocessed_packet_batches.push_back((packet_batch, packet_indexes, false));
         }
     }
