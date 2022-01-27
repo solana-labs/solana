@@ -5679,7 +5679,7 @@ if false {
         max_root: Slot,
         ancestors: &Ancestors,
         mut check_hash: bool,
-        //slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         check_hash = false;
         use BankHashVerificationError::*;
@@ -5744,7 +5744,7 @@ if false {
                                                 &loaded_account,
                                                 pubkey,
                                                 *slot,
-                                                slots_per_epoch,
+                                                epoch_schedule,
                                                 &rehash,
                                                 false,
                                                 &Some(self),
@@ -6091,11 +6091,11 @@ if false {
         ancestors: &Ancestors,
         check_hash: bool,
         can_cached_slot_be_unflushed: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
         is_startup: bool,
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        assert!(slots_per_epoch.is_some());
+        assert!(epoch_schedule.is_some());
         //use_index = false;
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
@@ -6116,7 +6116,7 @@ if false {
                 Some(slot),
             );
 
-            self.mark_old_slots_as_dirty(&storages, slots_per_epoch);
+            self.mark_old_slots_as_dirty(&storages, Some(epoch_schedule.unwrap().slots_per_epoch));
             sort_time.stop();
 
             let timings = HashStats {
@@ -6143,11 +6143,11 @@ if false {
                     None
                 },
                 self.num_hash_scan_passes,
-                slots_per_epoch,
+                epoch_schedule,
                 maybe_db,
             )
         } else {
-            self.calculate_accounts_hash(slot, ancestors, check_hash)
+            self.calculate_accounts_hash(slot, ancestors, check_hash, epoch_schedule)
         }
     }
 
@@ -6161,10 +6161,10 @@ if false {
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
         check_hash: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        assert!(slots_per_epoch.is_some());
+        assert!(epoch_schedule.is_some());
         let stat_ = self.active_stats.get_state(ActiveStatItem::Hash);
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
@@ -6172,7 +6172,7 @@ if false {
             ancestors,
             check_hash,
             can_cached_slot_be_unflushed,
-            slots_per_epoch,
+            epoch_schedule,
             is_startup,
             &Some(self),
         )?;
@@ -6184,7 +6184,7 @@ if false {
                 ancestors,
                 check_hash,
                 can_cached_slot_be_unflushed,
-                slots_per_epoch,
+                epoch_schedule,
                 is_startup,
                 &Some(self),
             )?;
@@ -6205,10 +6205,10 @@ if false {
         ancestors: &Ancestors,
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
         is_startup: bool,
     ) -> (Hash, u64) {
-        assert!(slots_per_epoch.is_some());
+        assert!(epoch_schedule.is_some());
         let check_hash = false;
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
@@ -6219,7 +6219,7 @@ if false {
                 expected_capitalization,
                 can_cached_slot_be_unflushed,
                 check_hash,
-                slots_per_epoch,
+                epoch_schedule,
                 is_startup,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
@@ -6233,7 +6233,7 @@ if false {
         loaded_account: &LoadedAccount,
         pubkey: &Pubkey,
         storage_slot: Slot,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
         rehash: &AtomicUsize,
         force_rehash: bool,
         maybe_db: &Option<&AccountsDb>,
@@ -6241,8 +6241,9 @@ if false {
         find_next_slot: impl Fn(Slot) -> Option<Slot>,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        assert!(slots_per_epoch.is_some());
-        let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
+        assert!(epoch_schedule.is_some());
+        let epoch_schedule = epoch_schedule.unwrap();
+        let slots_per_epoch = epoch_schedule.slots_per_epoch;
 
         assert!(max_slot_in_storages_exclusive > 0);
         let max_slot_in_storages = max_slot_in_storages_exclusive.saturating_sub(1);
@@ -6278,7 +6279,7 @@ if false {
         // if we are not ancient, we can calculate based on distance of this slot from max
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
-        let partition_index_from_max_slot = max_slot_in_storages % slots_per_epoch;
+        let (_, partition_index_from_max_slot) = epoch_schedule.get_epoch_and_slot_index(max_slot_in_storages);
         if max_slot_in_storages >= slots_per_epoch && storage_slot <= max_slot_in_storages - slots_per_epoch {
             // this storage_slot is ancient and we know we have to recompute
         }
@@ -6295,7 +6296,7 @@ if false {
         if !is_ancient { //} /* !is_ancient && */ storage_slot >= expected_rent_collection_slot_max_epoch {
             if interesting { //storage_slot == 115044876 || storage_slot ==  {//partition_from_pubkey == storage_slot % slots_per_epoch {
                 let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
-                error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
+                error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
                 pubkey,
                 loaded_account.loaded_hash(),
                 storage_slot,
@@ -6306,8 +6307,7 @@ if false {
                 partition_from_pubkey,
                 recalc_hash,
                 use_stored,
-                slots_per_epoch,
-                storage_slot % slots_per_epoch,
+                epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
             );}
                 // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
             // we have not collected rent yet in this epoch for this pubkey
@@ -6343,7 +6343,7 @@ if false {
         */
         assert!(!force_rehash);
 
-        let partition_storage_slot = storage_slot % slots_per_epoch;
+        let partition_storage_slot = epoch_schedule.get_epoch_and_slot_index(storage_slot).1;
         if !use_stored && partition_storage_slot < partition_from_pubkey {
             // we have an account we wrote in this epoch already, so we collected rent then, so we would not have rewritten it again later in this same slot
             use_stored = true;
@@ -6352,7 +6352,7 @@ if false {
         if interesting { //storage_slot == 114612876 { //partition_from_pubkey == storage_slot % slots_per_epoch {
             let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
             log = false;
-            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
+            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
             pubkey,
             loaded_account.loaded_hash(),
             storage_slot,
@@ -6363,8 +6363,7 @@ if false {
             partition_from_pubkey,
             recalc_hash,
             use_stored,
-            slots_per_epoch,
-            storage_slot % slots_per_epoch,
+            epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
         );
             }
         if use_stored && !force_rehash {
@@ -6373,7 +6372,7 @@ if false {
         }
         let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
         if recalc_hash != loaded_account.loaded_hash() && log {
-        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, slots per epoch: {}, storage_slot_partition: {}",
+        error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
         pubkey,
         loaded_account.loaded_hash(),
         storage_slot,
@@ -6384,8 +6383,7 @@ if false {
         partition_from_pubkey,
         recalc_hash,
         use_stored,
-        slots_per_epoch,
-        storage_slot % slots_per_epoch,
+        epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
     );
 
 }
@@ -6412,11 +6410,11 @@ if false {
             &AccountInfoAccountsIndex,
         )>,
         filler_account_suffix: Option<&Pubkey>,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
         rehash: &AtomicUsize,
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
-        assert!(slots_per_epoch.is_some());
+        assert!(epoch_schedule.is_some());
         check_hash = false;
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -6465,7 +6463,7 @@ if false {
                     &loaded_account,
                     pubkey,
                     slot,
-                    slots_per_epoch,
+                    epoch_schedule,
                     rehash,
                     false,
                     maybe_db,
@@ -6485,7 +6483,7 @@ if false {
                         &loaded_account,
                         pubkey,
                         slot,
-                        slots_per_epoch,
+                        epoch_schedule,
                         &rehash,
                         false,//true,
                         maybe_db,
@@ -6567,10 +6565,10 @@ if false {
         )>,
         filler_account_suffix: Option<&Pubkey>,
         num_hash_scan_passes: Option<usize>,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        assert!(slots_per_epoch.is_some());
+        assert!(epoch_schedule.is_some());
 
         
         let rehash = AtomicUsize::default();
@@ -6596,7 +6594,7 @@ if false {
                     check_hash,
                     accounts_cache_and_ancestors,
                     filler_account_suffix,
-                    slots_per_epoch,
+                    epoch_schedule,
                     &rehash,
                     maybe_db,
                 )?;
@@ -6632,7 +6630,7 @@ if false {
         if let Some(db) = maybe_db {
             let range = storages.range();
             let max_root = range.end;
-            let width = slots_per_epoch.unwrap() + 100; // a buffer
+            let width = epoch_schedule.unwrap().slots_per_epoch + 100; // a buffer
             if max_root > width {
                 let min_root = max_root - width;
                 let mut valid_slots = HashSet::default();
@@ -6657,7 +6655,7 @@ if false {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -6674,7 +6672,7 @@ if false {
                 None,
                 can_cached_slot_be_unflushed,
                 check_hash,
-                slots_per_epoch,
+                epoch_schedule,
                 is_startup,
             )?;
 

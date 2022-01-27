@@ -2713,7 +2713,7 @@ impl Bank {
         squash_cache_time.stop();
 
         // verify hash after every root gets made
-        self.update_accounts_hash_with_index_option(false, true, Some(self.epoch_schedule().slots_per_epoch), false);
+        self.update_accounts_hash_with_index_option(false, true, false);
 
         SquashTiming {
             squash_accounts_ms: squash_accounts_time.as_ms(),
@@ -5344,7 +5344,7 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
-            Some(self.epoch_schedule().slots_per_epoch)
+            Some(self.epoch_schedule())
         )
     }
 
@@ -5416,7 +5416,7 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
-            slots_per_epoch,
+            Some(self.epoch_schedule()),
         )
     }
 
@@ -5456,10 +5456,8 @@ impl Bank {
         &self,
         use_index: bool,
         mut debug_verify: bool,
-        slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> Hash {
-        assert!(slots_per_epoch.is_some());
         let (hash, total_lamports) = self
             .rc
             .accounts
@@ -5471,7 +5469,7 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
-                slots_per_epoch,
+                Some(self.epoch_schedule()),
                 is_startup,
             );
         if total_lamports != self.capitalization() {
@@ -5496,7 +5494,7 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
-                        slots_per_epoch,
+                        Some(self.epoch_schedule()),
                         is_startup,
                     );
             }
@@ -5512,7 +5510,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, Some(self.epoch_schedule().slots_per_epoch), false)
+        self.update_accounts_hash_with_index_option(true, false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash

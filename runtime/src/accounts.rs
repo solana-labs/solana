@@ -1,3 +1,4 @@
+use solana_sdk::sysvar::epoch_schedule::EpochSchedule;
 use {
     crate::{
         accounts_db::{
@@ -675,7 +676,7 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
     ) -> u64 {
         let use_index = false;
         let is_startup = false; // there may be conditions where this is called at startup.
@@ -687,7 +688,7 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
-                slots_per_epoch,
+                epoch_schedule,
                 is_startup,
             )
             .1
@@ -701,14 +702,14 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
             slot,
             ancestors,
             total_lamports,
             test_hash_calculation,
-            slots_per_epoch,
+            epoch_schedule,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
