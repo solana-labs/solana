@@ -63,9 +63,9 @@ impl HttpSender {
 }
 
 #[derive(Deserialize, Debug)]
-struct RpcErrorObject {
-    code: i64,
-    message: String,
+pub(crate) struct RpcErrorObject {
+    pub code: i64,
+    pub message: String,
 }
 
 struct StatsUpdater<'a> {
