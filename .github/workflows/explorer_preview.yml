@@ -24,7 +24,7 @@ jobs:
       - name: vercel url
         run : |
               touch vercelfile.txt
-              vercel --token ${{secrets.VERCEL_TOKEN}}  --scope ${{ secrets.TEAM_ID }} ls explorer > vercelfile.txt
+              vercel --token ${{secrets.VERCEL_TOKEN}}  --scope Solana ls explorer > vercelfile.txt
               echo "first line"
               touch vercelfile1.txt
               head -n 2 vercelfile.txt > vercelfile1.txt
