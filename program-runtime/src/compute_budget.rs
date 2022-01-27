@@ -93,7 +93,7 @@ impl ComputeBudget {
             zk_token_elgamal_op_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
-            mem_op_base_cost: 15,
+            mem_op_base_cost: 10,
         }
     }
 
