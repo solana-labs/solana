@@ -1,4 +1,12 @@
-//! TODO: usage
+//! The ciphertext validity sigma proof system.
+//!
+//! The ciphertext validity proof is defined with respect to a Pedersen commitment and two
+//! decryption handles. The proof certifies that a given Pedersen commitment can be decrypted using
+//! ElGamal private keys that are associated with each of the two decryption handles. To generate
+//! the proof, a prover must provide the Pedersen opening associated with the commitment.
+//!
+//! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
+//! zero-knowledge.
 
 #[cfg(not(target_arch = "bpf"))]
 use {
@@ -21,27 +29,41 @@ use {
     merlin::Transcript,
 };
 
-/// TODO
+/// The ciphertext validity proof.
+///
+/// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct ValidityProof {
-    pub Y_0: CompressedRistretto,
-    pub Y_1: CompressedRistretto,
-    pub Y_2: CompressedRistretto,
-    pub z_r: Scalar,
-    pub z_x: Scalar,
+    Y_0: CompressedRistretto,
+    Y_1: CompressedRistretto,
+    Y_2: CompressedRistretto,
+    z_r: Scalar,
+    z_x: Scalar,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl ValidityProof {
-    /// TODO: mention that public inputs are not hashed and that they should be hashed by the caller
+    /// The ciphertext validity proof constructor.
     ///
-    /// TODO: mention that this is randomized
-    /// TODO: standardize parameter order
+    /// The function does *not* hash the public keys, commitment, or decryption handles into the
+    /// transcript. For security, the caller (the main protocol) should hash these public
+    /// components prior to invoking this constructor.
+    ///
+    /// This function is randomized. It uses `OsRng` internally to generate random scalars.
+    ///
+    /// Note that the proof constructor does not take the actual Pedersen commitment or decryption
+    /// handles as input; it only takes the associated Pedersen opening instead.
+    ///
+    /// * `(pubkey_dest, pubkey_auditor)` - The ElGamal public keys associated with the decryption
+    /// handles
+    /// * `amount` - The committed message in the commitment
+    /// * `opening` - The opening associated with the Pedersen commitment
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new<T: Into<Scalar>>(
-        message: T,
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        amount: T,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
@@ -49,7 +71,7 @@ impl ValidityProof {
         let P_dest = pubkey_dest.get_point();
         let P_auditor = pubkey_auditor.get_point();
 
-        let x = message.into();
+        let x = amount.into();
         let r = opening.get_scalar();
 
         // generate random masking factors that also serves as nonces
@@ -84,7 +106,13 @@ impl ValidityProof {
         }
     }
 
-    /// TODO:
+    /// The ciphertext validity proof verifier.
+    ///
+    /// * `commitment` - The Pedersen commitment
+    /// * `(pubkey_dest, pubkey_auditor)` - The ElGamal pubkeys associated with the decryption
+    /// handles
+    /// * `(handle_dest, handle_audtior)` - The decryption handles
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         commitment: &PedersenCommitment,
@@ -181,6 +209,15 @@ impl ValidityProof {
     }
 }
 
+/// Aggregated ciphertext validity proof.
+///
+/// An aggregated ciphertext validity proof certifies the validity of two instances of a standard
+/// ciphertext validity proof. An instance of a standard validity proof consist of one ciphertext
+/// and two decryption handles `(commitment, handle_dest, handle_auditor)`. An instance of an
+/// aggregated ciphertext validity proof is a pair `(commitment_0, handle_dest_0,
+/// handle_auditor_0)` and `(commitment_1, handle_dest_1, handle_auditor_1)`. The proof certifies
+/// the analogous decryptable properties for each one of these pair of commitment and decryption
+/// handles.
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct AggregatedValidityProof(ValidityProof);
@@ -188,6 +225,10 @@ pub struct AggregatedValidityProof(ValidityProof);
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl AggregatedValidityProof {
+    /// Aggregated ciphertext validity proof constructor.
+    ///
+    /// The function simples aggregates the input openings and invokes the standard ciphertext
+    /// validity proof constructor.
     pub fn new<T: Into<Scalar>>(
         (amount_lo, amount_hi): (T, T),
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
@@ -197,16 +238,17 @@ impl AggregatedValidityProof {
         let t = transcript.challenge_scalar(b"t");
 
         let aggregated_message = amount_lo.into() + amount_hi.into() * t;
-        let aggregated_opening = opening_lo + opening_hi * t;
+        let aggregated_opening = opening_lo + &(opening_hi * &t);
 
         AggregatedValidityProof(ValidityProof::new(
-            aggregated_message,
             (pubkey_dest, pubkey_auditor),
-            &aggregated_opening, // TODO: double check opening copy
+            aggregated_message,
+            &aggregated_opening,
             transcript,
         ))
     }
 
+    /// Aggregated ciphertext validity proof verifier.
     pub fn verify(
         self,
         (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
@@ -260,8 +302,8 @@ mod test {
         let mut transcript_verifier = Transcript::new(b"Test");
 
         let proof = ValidityProof::new(
-            amount,
             (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            amount,
             &opening,
             &mut transcript_prover,
         );

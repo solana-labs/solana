@@ -295,7 +295,6 @@ impl FeeProof {
     }
 }
 
-/// TODO: mention copy
 #[allow(non_snake_case)]
 #[derive(Clone, Copy)]
 pub struct FeeMaxProof {
@@ -326,7 +325,6 @@ fn conditional_select_ristretto(
     CompressedRistretto(bytes)
 }
 
-/// TODO: mention copy
 #[allow(non_snake_case)]
 #[derive(Clone, Copy)]
 pub struct FeeEqualityProof {
@@ -439,14 +437,6 @@ mod test {
             max_fee,
             &mut transcript_prover,
         );
-
-        // let proof = FeeProof::create_proof_fee_below_max(
-        //     &commitment_fee,
-        //     (delta, &opening_delta),
-        //     &opening_delta_claimed,
-        //     max_fee,
-        //     &mut transcript_prover,
-        // );
 
         assert!(proof
             .verify(

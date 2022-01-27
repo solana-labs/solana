@@ -1,4 +1,11 @@
-//! TODO: usage
+//! The zero-balance sigma proof system.
+//!
+//! A zero-balance proof is defined with respect to a twisted ElGamal ciphertext. The proof
+//! certifies that a given ciphertext encrypts the message 0 (`Scalar::zero()`). To generate the
+//! proof, a prover must provide the decryption key for the ciphertext.
+//!
+//! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
+//! zero-knowledge.
 
 #[cfg(not(target_arch = "bpf"))]
 use {
@@ -21,7 +28,9 @@ use {
     merlin::Transcript,
 };
 
-/// TODO
+/// Zero-balance proof.
+///
+/// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct ZeroBalanceProof {
@@ -33,16 +42,29 @@ pub struct ZeroBalanceProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl ZeroBalanceProof {
-    /// TODO: mention that public inputs are not hashed and that they should be hashed by the caller
+    /// Zero-balance proof constructor.
+    ///
+    /// The function does *not* hash the public key and ciphertext into the transcript. For
+    /// security, the caller (the main protocol) should hash these public components prior to
+    /// invoking this constructor.
+    ///
+    /// This function is randomized. It uses `OsRng` internally to generate random scalars.
+    /// 
+    /// Note that the proof constructor does not take the actual ElGamal ciphertext as input; it
+    /// uses the ElGamal private key instead to generate the proof.
+    ///
+    /// * `elgamal_keypair` - The ElGamal keypair associated with the ciphertext to be proved
+    /// * `ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
         elgamal_keypair: &ElGamalKeypair,
-        elgamal_ciphertext: &ElGamalCiphertext,
+        ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.public.get_point();
         let s = elgamal_keypair.secret.get_scalar();
-        let D = elgamal_ciphertext.handle.get_point();
+        let D = ciphertext.handle.get_point();
 
         // generate a random masking factor that also serves as a nonce
         let mut y = Scalar::random(&mut OsRng);
@@ -65,17 +87,21 @@ impl ZeroBalanceProof {
         Self { Y_P, Y_D, z }
     }
 
-    /// TODO:
+    /// Zero-balance proof verifier.
+    ///
+    /// * `elgamal_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
+    /// * `ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         elgamal_pubkey: &ElGamalPubkey,
-        elgamal_ciphertext: &ElGamalCiphertext,
+        ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ZeroBalanceProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
-        let C = elgamal_ciphertext.commitment.get_point();
-        let D = elgamal_ciphertext.handle.get_point();
+        let C = ciphertext.commitment.get_point();
+        let D = ciphertext.handle.get_point();
 
         // record Y in transcript and receive challenge scalars
         transcript.validate_and_append_point(b"Y_P", &self.Y_P)?;
@@ -146,7 +172,6 @@ mod test {
         pedersen::{Pedersen, PedersenOpening},
     };
 
-    // TODO: edge cases
     #[test]
     fn test_zero_balance_proof() {
         let source_keypair = ElGamalKeypair::new_rand();

@@ -1,4 +1,12 @@
-//! TODO: usage
+//! The equality sigma proof system.
+//!
+//! An equality proof is defined with respect to two cryptographic objects: a twisted ElGamal
+//! ciphertext and a Pedersen commitment. The proof certifies that a given ciphertext and
+//! commitment pair encrypts/encodes the same message. To generate the proof, a prover must provide
+//! the decryption key for the ciphertext and the Pedersen opening for the commitment.
+//!
+//! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
+//! zero-knowledge.
 
 #[cfg(not(target_arch = "bpf"))]
 use {
@@ -21,26 +29,43 @@ use {
     merlin::Transcript,
 };
 
-/// TODO
+/// Equality proof.
+///
+/// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct EqualityProof {
-    pub Y_0: CompressedRistretto,
-    pub Y_1: CompressedRistretto,
-    pub Y_2: CompressedRistretto,
-    pub z_s: Scalar,
-    pub z_x: Scalar,
-    pub z_r: Scalar,
+    Y_0: CompressedRistretto,
+    Y_1: CompressedRistretto,
+    Y_2: CompressedRistretto,
+    z_s: Scalar,
+    z_x: Scalar,
+    z_r: Scalar,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl EqualityProof {
-    /// TODO: mention that public inputs are not hashed and that they should be hashed by the caller
+    /// Equality proof constructor.
+    ///
+    /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
+    /// For security, the caller (the main protocol) should hash these public components prior to
+    /// invoking this constructor.
+    ///
+    /// This function is randomized. It uses `OsRng` internally to generate random scalars.
+    ///
+    /// Note that the proof constructor does not take the actual Pedersen commitment as input; it
+    /// takes the associated Pedersen opening instead.
+    ///
+    /// * `elgamal_keypair` - The ElGamal keypair associated with the ciphertext to be proved
+    /// * `ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `amount` - The message associated with the ElGamal ciphertext and Pedersen commitment
+    /// * `opening` - The opening associated with the main Pedersen commitment to be proved
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
         elgamal_keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
-        message: u64,
+        amount: u64,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
@@ -49,7 +74,7 @@ impl EqualityProof {
         let D_EG = ciphertext.handle.get_point();
 
         let s = elgamal_keypair.secret.get_scalar();
-        let x = Scalar::from(message);
+        let x = Scalar::from(amount);
         let r = opening.get_scalar();
 
         // generate random masking factors that also serves as nonces
@@ -61,7 +86,7 @@ impl EqualityProof {
         let Y_1 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_EG]).compress();
         let Y_2 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_r], vec![&(*G), &(*H)]).compress();
 
-        // record masking factors in transcript
+        // record masking factors in the transcript
         transcript.append_point(b"Y_0", &Y_0);
         transcript.append_point(b"Y_1", &Y_1);
         transcript.append_point(b"Y_2", &Y_2);
@@ -89,6 +114,12 @@ impl EqualityProof {
         }
     }
 
+    /// Equality proof verifier.
+    ///
+    /// * `elgamal_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
+    /// * `ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `commitment` - The main Pedersen commitment to be proved
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         elgamal_pubkey: &ElGamalPubkey,
@@ -194,7 +225,6 @@ mod test {
     use super::*;
     use crate::encryption::pedersen::Pedersen;
 
-    // TODO: edge cases
     #[test]
     fn test_equality_proof() {
         // success case
