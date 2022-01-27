@@ -15,7 +15,7 @@ crossbeam-channel = "0.5"
 json5 = "0.4.1"
 libloading = "0.7.3"
 log = "0.4.11"
-serde_json = "1.0.75"
+serde_json = "1.0.78"
 solana-accountsdb-plugin-interface = { path = "../accountsdb-plugin-interface", version = "=1.10.0" }
 solana-measure = { path = "../measure", version = "=1.10.0" }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
