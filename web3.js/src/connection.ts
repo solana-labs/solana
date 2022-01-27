@@ -734,9 +734,9 @@ export type ConfirmedBlock = {
 };
 
 /**
- * A ConfirmedBlock on the ledger with signatures only
+ * A Block on the ledger with signatures only
  */
-export type ConfirmedBlockSignatures = {
+export type BlockSignatures = {
   /** Blockhash of this block */
   blockhash: Blockhash;
   /** Blockhash of this block's parent */
@@ -1509,7 +1509,40 @@ const ParsedConfirmedTransactionMetaResult = pick({
 });
 
 /**
+ * Expected JSON RPC response for the "getBlock" message
+ */
+const GetBlockRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      transactions: array(
+        pick({
+          transaction: ConfirmedTransactionResult,
+          meta: nullable(ConfirmedTransactionMetaResult),
+        }),
+      ),
+      rewards: optional(
+        array(
+          pick({
+            pubkey: string(),
+            lamports: number(),
+            postBalance: nullable(number()),
+            rewardType: nullable(string()),
+          }),
+        ),
+      ),
+      blockTime: nullable(number()),
+      blockHeight: nullable(number()),
+    }),
+  ),
+);
+
+/**
  * Expected JSON RPC response for the "getConfirmedBlock" message
+ *
+ * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetBlockRpcResult} instead.
  */
 const GetConfirmedBlockRpcResult = jsonRpcResult(
   nullable(
@@ -1539,9 +1572,9 @@ const GetConfirmedBlockRpcResult = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "getConfirmedBlockSignatures" message
+ * Expected JSON RPC response for the "getBlock" message
  */
-const GetConfirmedBlockSignaturesRpcResult = jsonRpcResult(
+const GetBlockSignaturesRpcResult = jsonRpcResult(
   nullable(
     pick({
       blockhash: string(),
@@ -3108,8 +3141,8 @@ export class Connection {
       [slot],
       opts && opts.commitment,
     );
-    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
-    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
+    const unsafeRes = await this._rpcRequest('getBlock', args);
+    const res = create(unsafeRes, GetBlockRpcResult);
 
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
@@ -3223,14 +3256,36 @@ export class Connection {
     slot: number,
     commitment?: Finality,
   ): Promise<ConfirmedBlock> {
-    const result = await this.getBlock(slot, {commitment});
+    const args = this._buildArgsAtLeastConfirmed([slot], commitment);
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
+    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
+
+    if ('error' in res) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
+    }
+
+    const result = res.result;
     if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
     }
 
-    return {
+    const block = {
       ...result,
       transactions: result.transactions.map(({transaction, meta}) => {
+        const message = new Message(transaction.message);
+        return {
+          meta,
+          transaction: {
+            ...transaction,
+            message,
+          },
+        };
+      }),
+    };
+
+    return {
+      ...block,
+      transactions: block.transactions.map(({transaction, meta}) => {
         return {
           meta,
           transaction: Transaction.populate(
@@ -3254,7 +3309,7 @@ export class Connection {
       endSlot !== undefined ? [startSlot, endSlot] : [startSlot],
       commitment,
     );
-    const unsafeRes = await this._rpcRequest('getConfirmedBlocks', args);
+    const unsafeRes = await this._rpcRequest('getBlocks', args);
     const res = create(unsafeRes, jsonRpcResult(array(number())));
     if ('error' in res) {
       throw new Error('failed to get blocks: ' + res.error.message);
@@ -3263,12 +3318,42 @@ export class Connection {
   }
 
   /**
+   * Fetch a list of Signatures from the cluster for a block, excluding rewards
+   */
+  async getBlockSignatures(
+    slot: number,
+    commitment?: Finality,
+  ): Promise<BlockSignatures> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [slot],
+      commitment,
+      undefined,
+      {
+        transactionDetails: 'signatures',
+        rewards: false,
+      },
+    );
+    const unsafeRes = await this._rpcRequest('getBlock', args);
+    const res = create(unsafeRes, GetBlockSignaturesRpcResult);
+    if ('error' in res) {
+      throw new Error('failed to get block: ' + res.error.message);
+    }
+    const result = res.result;
+    if (!result) {
+      throw new Error('Block ' + slot + ' not found');
+    }
+    return result;
+  }
+
+  /**
    * Fetch a list of Signatures from the cluster for a confirmed block, excluding rewards
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getBlockSignatures} instead.
    */
   async getConfirmedBlockSignatures(
     slot: number,
     commitment?: Finality,
-  ): Promise<ConfirmedBlockSignatures> {
+  ): Promise<BlockSignatures> {
     const args = this._buildArgsAtLeastConfirmed(
       [slot],
       commitment,
@@ -3279,7 +3364,7 @@ export class Connection {
       },
     );
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
-    const res = create(unsafeRes, GetConfirmedBlockSignaturesRpcResult);
+    const res = create(unsafeRes, GetBlockSignaturesRpcResult);
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
     }
