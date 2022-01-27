@@ -249,6 +249,12 @@ impl AggregatedValidityProof {
     }
 
     /// Aggregated ciphertext validity proof verifier.
+    ///
+    /// The function does *not* hash the public keys, commitment, or decryption handles into the
+    /// transcript. For security, the caller (the main protocol) should hash these public
+    /// components prior to invoking this constructor.
+    ///
+    /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     pub fn verify(
         self,
         (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
@@ -288,7 +294,127 @@ mod test {
     use crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen};
 
     #[test]
-    fn test_validity_proof() {
+    fn test_validity_proof_correctness() {
+        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
+        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+
+        let amount: u64 = 55;
+        let (commitment, opening) = Pedersen::new(amount);
+
+        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
+        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = ValidityProof::new(
+            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            amount,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment,
+                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&handle_dest, &handle_auditor),
+                &mut transcript_verifier,
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn test_validity_proof_edge_cases() {
+        // if destination public key zeroed, then the proof should always reject
+        let elgamal_pubkey_dest = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+
+        let amount: u64 = 55;
+        let (commitment, opening) = Pedersen::new(amount);
+
+        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
+        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = ValidityProof::new(
+            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            amount,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment,
+                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&handle_dest, &handle_auditor),
+                &mut transcript_verifier,
+            )
+            .is_err());
+
+        // if auditor public key zeroed, then the proof should always reject
+        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
+        let elgamal_pubkey_auditor = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+
+        let amount: u64 = 55;
+        let (commitment, opening) = Pedersen::new(amount);
+
+        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
+        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = ValidityProof::new(
+            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            amount,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment,
+                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&handle_dest, &handle_auditor),
+                &mut transcript_verifier,
+            )
+            .is_err());
+
+        // all zeroed ciphertext should still be valid
+        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
+        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+
+        let amount: u64 = 0;
+        let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
+        let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
+
+        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
+        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = ValidityProof::new(
+            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            amount,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment,
+                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&handle_dest, &handle_auditor),
+                &mut transcript_verifier,
+            )
+            .is_ok());
+
+        // decryption handles can be zero as long as the Pedersen commitment is valid
         let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
         let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
 
