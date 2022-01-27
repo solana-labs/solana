@@ -16,6 +16,7 @@
     "@solana/web3.js": "^1.31.0",
     "@testing-library/jest-dom": "^5.16.1",
     "@testing-library/react": "^12.1.2",
+    "@testing-library/react-hooks": "^7.0.2",
     "@testing-library/user-event": "^13.5.0",
     "@types/bn.js": "^5.1.0",
     "@types/bs58": "^4.0.1",
@@ -76,5 +77,11 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@babel/preset-typescript": "^7.16.7",
+    "jest": "^27.4.7",
+    "jest-environment-jsdom": "^27.4.6",
+    "ts-jest": "^27.1.3"
   }
 }

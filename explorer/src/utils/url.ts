@@ -50,11 +50,11 @@ const uriProtocolStrategies: URIStrategy[] = [
     transform: async (uri: string) => {
       try {
         let arUrl = uri.replace("ar://", "https://arweave.net/");
-        const data = await fetch(arUrl).then(res => res.json())
-        if(!data.image) return uri 
+        const data = await fetch(arUrl).then(res => res.json()).catch(console.error)
+        if(!data.image) return uri
         return data.image
       } catch (e) {
-       throw new Error('Invalid Arweave URI')
+       return uri
       }
     }
   },

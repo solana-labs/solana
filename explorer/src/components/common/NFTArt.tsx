@@ -10,7 +10,7 @@ import {
 import ContentLoader from "react-content-loader";
 import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
 import { getLast } from "utils";
-import { getDecentralizedURI } from "utils/url";
+import { useCachedImage } from "./hooks/useCachedImage";
 
 const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
 
@@ -295,67 +295,4 @@ export const ArtContent = ({
       {content}
     </div>
   );
-};
-
-enum ArtFetchStatus {
-  ReadyToFetch,
-  Fetching,
-  FetchFailed,
-  FetchSucceeded,
-}
-
-const cachedImages = new Map<string, string>();
-export const useCachedImage = (uri: string) => {
-  const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
-  const [fetchStatus, setFetchStatus] = useState<ArtFetchStatus>(
-    ArtFetchStatus.ReadyToFetch
-  );
-
-  useEffect(() => {
-    getOrSetCachedBlob()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri, setCachedBlob, fetchStatus, setFetchStatus]);
-
-
-  async function getOrSetCachedBlob() {
-    if (!uri) return
-
-    if (fetchStatus === ArtFetchStatus.FetchFailed) {
-      setCachedBlob(uri);
-      return;
-    }
-    const parsedURI: string | boolean | void = await getDecentralizedURI(uri).catch(console.error)
-    if(!parsedURI) return
-    const result = cachedImages.get(parsedURI);
-    if (result) {
-      setCachedBlob(result);
-      return;
-    }
-
-    if (fetchStatus === ArtFetchStatus.ReadyToFetch) {
-      setFetchStatus(ArtFetchStatus.Fetching);
-      let response: Response;
-      try {
-        response = await fetch(parsedURI, { cache: "force-cache" });
-      } catch {
-        try {
-          response = await fetch(parsedURI, { cache: "reload" });
-        } catch {
-          if (parsedURI?.startsWith("http")) {
-            setCachedBlob(parsedURI);
-          }
-          setFetchStatus(ArtFetchStatus.FetchFailed);
-          return;
-        }
-      }
-
-      const blob = await response.blob();
-      const blobURI = URL.createObjectURL(blob);
-      cachedImages.set(parsedURI, blobURI);
-      setCachedBlob(blobURI);
-      setFetchStatus(ArtFetchStatus.FetchSucceeded);
-    }
-  }
-
-  return { cachedBlob };
 };
