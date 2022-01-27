@@ -131,7 +131,7 @@ impl RentCollector {
                     use log::*;
                     error!("collecting rent: {}, next epoch: {}, rent_due: {}", address, result.0, result.1);
                     result
-                });
+                })
                 } else {
                     RentResult::CollectRemainingLamports
                 }
