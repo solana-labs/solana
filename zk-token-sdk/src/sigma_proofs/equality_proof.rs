@@ -223,10 +223,10 @@ impl EqualityProof {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::pedersen::Pedersen;
+    use crate::encryption::{elgamal::ElGamalSecretKey, pedersen::Pedersen};
 
     #[test]
-    fn test_equality_proof() {
+    fn test_equality_proof_correctness() {
         // success case
         let elgamal_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
@@ -281,5 +281,127 @@ mod test {
                 &mut transcript_verifier
             )
             .is_err());
+    }
+
+    #[test]
+    fn test_equality_proof_edge_cases() {
+        // if ElGamal public key zero (public key is invalid), then the proof should always reject
+        let public = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+        let secret = ElGamalSecretKey::new_rand();
+
+        let elgamal_keypair = ElGamalKeypair {
+            public,
+            secret
+        };
+
+        let message: u64 = 55;
+        let ciphertext = elgamal_keypair.public.encrypt(message);
+        let (commitment, opening) = Pedersen::new(message);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = EqualityProof::new(
+            &elgamal_keypair,
+            &ciphertext,
+            message,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &elgamal_keypair.public,
+                &ciphertext,
+                &commitment,
+                &mut transcript_verifier
+            )
+            .is_err());
+
+        // if ciphertext is all-zero (valid commitment of 0) and commitment is also all-zero, then
+        // the proof should still accept
+        let elgamal_keypair = ElGamalKeypair::new_rand();
+
+        let message: u64 = 0;
+        let ciphertext = ElGamalCiphertext::from_bytes(&[0u8; 64]).unwrap();
+        let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
+        let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = EqualityProof::new(
+            &elgamal_keypair,
+            &ciphertext,
+            message,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &elgamal_keypair.public,
+                &ciphertext,
+                &commitment,
+                &mut transcript_verifier
+            )
+            .is_ok());
+
+        // if commitment is all-zero and the ciphertext is a correct encryption of 0, then the
+        // proof should still accept
+        let elgamal_keypair = ElGamalKeypair::new_rand();
+
+        let message: u64 = 0;
+        let ciphertext = elgamal_keypair.public.encrypt(message);
+        let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
+        let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = EqualityProof::new(
+            &elgamal_keypair,
+            &ciphertext,
+            message,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &elgamal_keypair.public,
+                &ciphertext,
+                &commitment,
+                &mut transcript_verifier
+            )
+            .is_ok());
+
+        // if ciphertext is all zero and commitment correctly encodes 0, then the proof should
+        // still accept
+        let elgamal_keypair = ElGamalKeypair::new_rand();
+
+        let message: u64 = 0;
+        let ciphertext = ElGamalCiphertext::from_bytes(&[0u8; 64]).unwrap();
+        let (commitment, opening) = Pedersen::new(message);
+
+        let mut transcript_prover = Transcript::new(b"Test");
+        let mut transcript_verifier = Transcript::new(b"Test");
+
+        let proof = EqualityProof::new(
+            &elgamal_keypair,
+            &ciphertext,
+            message,
+            &opening,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &elgamal_keypair.public,
+                &ciphertext,
+                &commitment,
+                &mut transcript_verifier
+            )
+            .is_ok());
     }
 }
