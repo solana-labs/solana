@@ -3,7 +3,7 @@
 extern crate test;
 
 use {
-    solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::{create_account_for_test, Account, AccountSharedData},
         clock::{Clock, Slot},
@@ -148,10 +148,6 @@ fn do_bench_process_vote_instruction(bencher: &mut Bencher, feature: Option<Pubk
         })
         .collect::<Vec<_>>();
 
-    let mut sysvar_cache = SysvarCache::default();
-    sysvar_cache.set_clock(clock);
-    sysvar_cache.set_slot_hashes(slot_hashes);
-
     bencher.iter(|| {
         let mut transaction_context = TransactionContext::new(
             vec![
@@ -174,12 +170,8 @@ fn do_bench_process_vote_instruction(bencher: &mut Bencher, feature: Option<Pubk
             1,
         );
 
-        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-            &mut transaction_context,
-            &sysvar_cache,
-            feature_set.clone(),
-        );
-
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        invoke_context.feature_set = feature_set.clone();
         invoke_context
             .push(&instruction_accounts, &program_indices, &[])
             .unwrap();
