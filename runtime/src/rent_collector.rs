@@ -29,6 +29,15 @@ impl Default for RentCollector {
     }
 }
 
+/// when rent is collected for this account, this is the action to apply to the account
+pub enum RentResult {
+    /// maybe collect rent later, leave account alone
+    LeaveAloneNoRent,
+    /// collect rent
+    /// value is (new rent epoch, lamports of rent_due)
+    CollectRent((Epoch, u64)),
+}
+
 impl RentCollector {
     pub fn new(
         epoch: Epoch,
@@ -85,14 +94,43 @@ impl RentCollector {
         account: &mut AccountSharedData,
         filler_account_suffix: Option<&Pubkey>,
     ) -> CollectedInfo {
+        match self.calculate_rent_result(address, account, filler_account_suffix) {
+            RentResult::LeaveAloneNoRent => CollectedInfo::default(),
+            RentResult::CollectRent((next_epoch, rent_due)) => {
+                account.set_rent_epoch(next_epoch);
+
+                let begin_lamports = account.lamports();
+                account.saturating_sub_lamports(rent_due);
+                let end_lamports = account.lamports();
+                let mut account_data_len_reclaimed = 0;
+                if end_lamports == 0 {
+                    account_data_len_reclaimed = account.data().len() as u64;
+                    *account = AccountSharedData::default();
+                }
+                CollectedInfo {
+                    rent_amount: begin_lamports - end_lamports,
+                    account_data_len_reclaimed,
+                }
+            }
+        }
+    }
+
+    /// determine what should happen to collect rent from this account
+    #[must_use]
+    pub fn calculate_rent_result(
+        &self,
+        address: &Pubkey,
+        account: &impl ReadableAccount,
+        filler_account_suffix: Option<&Pubkey>,
+    ) -> RentResult {
         if self.can_skip_rent_collection(address, account, filler_account_suffix) {
-            return CollectedInfo::default();
+            return RentResult::LeaveAloneNoRent;
         }
 
         let rent_due = self.get_rent_due(account);
         if let RentDue::Paying(0) = rent_due {
             // maybe collect rent later, leave account alone
-            return CollectedInfo::default();
+            return RentResult::LeaveAloneNoRent;
         }
 
         let epoch_increment = match rent_due {
@@ -102,22 +140,7 @@ impl RentCollector {
             // Rent is collected for next epoch
             RentDue::Paying(_) => 1,
         };
-        account.set_rent_epoch(self.epoch + epoch_increment);
-
-        let begin_lamports = account.lamports();
-        account.saturating_sub_lamports(rent_due.lamports());
-        let end_lamports = account.lamports();
-
-        let mut account_data_len_reclaimed = 0;
-        if end_lamports == 0 {
-            account_data_len_reclaimed = account.data().len() as u64;
-            *account = AccountSharedData::default();
-        }
-
-        CollectedInfo {
-            rent_amount: begin_lamports - end_lamports,
-            account_data_len_reclaimed,
-        }
+        RentResult::CollectRent((self.epoch + epoch_increment, rent_due.lamports()))
     }
 
     #[must_use = "add to Bank::collected_rent"]
@@ -135,7 +158,7 @@ impl RentCollector {
     fn can_skip_rent_collection(
         &self,
         address: &Pubkey,
-        account: &mut AccountSharedData,
+        account: &impl ReadableAccount,
         filler_account_suffix: Option<&Pubkey>,
     ) -> bool {
         !self.should_collect_rent(address, account)
