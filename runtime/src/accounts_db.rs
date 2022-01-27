@@ -40,7 +40,7 @@ use {
         contains::Contains,
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
-        rent_collector::RentCollector,
+        rent_collector::{RentCollector, RentResult},
         sorted_storages::SortedStorages,
     },
     blake3::traits::digest::Digest,
@@ -470,20 +470,27 @@ impl<'a> LoadedAccountAccessor<'a> {
     }
 }
 
-pub enum LoadedAccount<'a> {
-    Stored(StoredAccountMeta<'a>),
-    Cached(Cow<'a, CachedAccount>),
-}
+impl<'a> ReadableAccount for LoadedAccount<'a> {
+    fn lamports(&self) -> u64 {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
+            LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
+        }
+    }
 
-impl<'a> LoadedAccount<'a> {
-    pub fn owner(&self) -> &Pubkey {
+    fn data(&self) -> &[u8] {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.data,
+            LoadedAccount::Cached(cached_account) => cached_account.account.data(),
+        }
+    }
+    fn owner(&self) -> &Pubkey {
         match self {
             LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
             LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
         }
     }
-
-    pub fn executable(&self) -> bool {
+    fn executable(&self) -> bool {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
                 stored_account_meta.account_meta.executable
@@ -491,7 +498,24 @@ impl<'a> LoadedAccount<'a> {
             LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
         }
     }
+    fn rent_epoch(&self) -> Epoch {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.account_meta.rent_epoch
+            }
+            LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
+        }
+    }
+}
 
+
+
+pub enum LoadedAccount<'a> {
+    Stored(StoredAccountMeta<'a>),
+    Cached(Cow<'a, CachedAccount>),
+}
+
+impl<'a> LoadedAccount<'a> {
     pub fn loaded_hash(&self) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
@@ -528,13 +552,6 @@ impl<'a> LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.stored_size,
             LoadedAccount::Cached(_) => CACHE_VIRTUAL_STORED_SIZE as usize,
-        }
-    }
-
-    pub fn lamports(&self) -> u64 {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
-            LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
         }
     }
 
@@ -4834,6 +4851,18 @@ if false {
         )
     }
 
+    pub fn hash_account_with_rent_epoch<T: ReadableAccount>(slot: Slot, account: &T, pubkey: &Pubkey, rent_epoch: Epoch) -> Hash {
+        Self::hash_account_data(
+            slot,
+            account.lamports(),
+            account.owner(),
+            account.executable(),
+            rent_epoch,
+            account.data(),
+            pubkey,
+        )
+    }
+
     fn hash_account_data(
         slot: Slot,
         lamports: u64,
@@ -5690,6 +5719,7 @@ if false {
         ancestors: &Ancestors,
         mut check_hash: bool,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         check_hash = false;
         use BankHashVerificationError::*;
@@ -5755,11 +5785,13 @@ if false {
                                                 pubkey,
                                                 *slot,
                                                 epoch_schedule,
+                                                rent_collector,
                                                 &rehash,
                                                 false,
                                                 &Some(self),
                                                 max_root + 1, // this wants an 'exclusive' number
                                                 find_next_slot,
+                                                self.filler_account_suffix.as_ref(),
                                             );
                                             let balance = loaded_account.lamports();
                                             if false && check_hash && !self.is_filler_account(pubkey) { // cannot compute hash if we are not doing rewrites
@@ -5844,17 +5876,18 @@ if false {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors, epoch_schedule: Option<&EpochSchedule>, rent_collector: &RentCollector) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
-            true, false, slot, ancestors, None, false, None, false,
+            true, false, slot, ancestors, None, false, epoch_schedule, rent_collector, false,
         )
     }
-
+/*
     pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
             true, true, slot, ancestors, None, false, None, false,
         )
     }
+    */
 
     fn scan_multiple_account_storages_one_slot<F, B>(
         storages: &[Arc<AccountStorageEntry>],
@@ -6102,6 +6135,7 @@ if false {
         check_hash: bool,
         can_cached_slot_be_unflushed: bool,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
         is_startup: bool,
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
@@ -6154,10 +6188,11 @@ if false {
                 },
                 self.num_hash_scan_passes,
                 epoch_schedule,
+                rent_collector,
                 maybe_db,
             )
         } else {
-            self.calculate_accounts_hash(slot, ancestors, check_hash, epoch_schedule)
+            self.calculate_accounts_hash(slot, ancestors, check_hash, epoch_schedule, rent_collector)
         }
     }
 
@@ -6172,6 +6207,7 @@ if false {
         can_cached_slot_be_unflushed: bool,
         check_hash: bool,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(epoch_schedule.is_some());
@@ -6183,6 +6219,7 @@ if false {
             check_hash,
             can_cached_slot_be_unflushed,
             epoch_schedule,
+            rent_collector,
             is_startup,
             &Some(self),
         )?;
@@ -6195,6 +6232,7 @@ if false {
                 check_hash,
                 can_cached_slot_be_unflushed,
                 epoch_schedule,
+                rent_collector,
                 is_startup,
                 &Some(self),
             )?;
@@ -6216,6 +6254,7 @@ if false {
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
         is_startup: bool,
     ) -> (Hash, u64) {
         assert!(epoch_schedule.is_some());
@@ -6230,6 +6269,7 @@ if false {
                 can_cached_slot_be_unflushed,
                 check_hash,
                 epoch_schedule,
+                rent_collector,
                 is_startup,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
@@ -6244,13 +6284,14 @@ if false {
         pubkey: &Pubkey,
         storage_slot: Slot,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
         rehash: &AtomicUsize,
         force_rehash: bool,
         maybe_db: &Option<&AccountsDb>,
         max_slot_in_storages_exclusive: Slot,
         find_next_slot: impl Fn(Slot) -> Option<Slot>,
+        filler_account_suffix: Option<&Pubkey>,
     ) -> Hash {
-        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         assert!(epoch_schedule.is_some());
         let epoch_schedule = epoch_schedule.unwrap();
         let slots_per_epoch = epoch_schedule.slots_per_epoch;
@@ -6366,11 +6407,9 @@ if false {
         let mut log = true;
         if interesting { //storage_slot == 114612876 { //partition_from_pubkey == storage_slot % slots_per_epoch {
             let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
-            let hash2 =
-            crate::accounts_db::AccountsDb::hash_account(expected_rent_collection_slot_max_epoch, &loaded_account.take_account2(), &pubkey);
     
             log = false;
-            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}, rent_epoch: {}, hash other way: {}",
+            error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}, rent_epoch: {}",
             pubkey,
             loaded_account.loaded_hash(),
             storage_slot,
@@ -6383,14 +6422,29 @@ if false {
             use_stored,
             epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
             loaded_account.take_account2().rent_epoch(),
-            hash2,
         );
             }
         if use_stored && !force_rehash {
             // we can use the previously calculated hash
             return loaded_account.loaded_hash();
         }
-        let recalc_hash = loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey);
+        let rent_for_sys_vars = true; // todo
+        let rent_result = rent_collector.calculate_rent_result(pubkey, loaded_account, rent_for_sys_vars,
+            filler_account_suffix);
+        let mut rent_epoch = loaded_account.rent_epoch();
+        match rent_result
+        {
+            RentResult::CollectRent((next_epoch, rent_due)) => {
+                rent_epoch = next_epoch;
+                assert_eq!(rent_due, 0);
+            }
+            // nothing to do for these
+            RentResult::LeaveAloneNoRent => {},
+            RentResult::CollectRemainingLamports => {}
+        }
+
+        let recalc_hash =
+        crate::accounts_db::AccountsDb::hash_account_with_rent_epoch(expected_rent_collection_slot_max_epoch, loaded_account, &pubkey, rent_epoch);
         if recalc_hash != loaded_account.loaded_hash() && log {
         error!("maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
         pubkey,
@@ -6431,6 +6485,7 @@ if false {
         )>,
         filler_account_suffix: Option<&Pubkey>,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
         rehash: &AtomicUsize,
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
@@ -6484,11 +6539,13 @@ if false {
                     pubkey,
                     slot,
                     epoch_schedule,
+                    rent_collector,
                     rehash,
                     false,
                     maybe_db,
                     storage.range().end,
                     find_next_slot,
+                    filler_account_suffix,
                 );
 
                 let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
@@ -6504,11 +6561,13 @@ if false {
                         pubkey,
                         slot,
                         epoch_schedule,
+                        rent_collector,
                         &rehash,
                         false,//true,
                         maybe_db,
                         storage.range().end,
                         find_next_slot,
+                        filler_account_suffix,
                     );
                     if computed_hash != source_item.hash {
                         info!(
@@ -6586,6 +6645,7 @@ if false {
         filler_account_suffix: Option<&Pubkey>,
         num_hash_scan_passes: Option<usize>,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
         maybe_db: &Option<&AccountsDb>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         assert!(epoch_schedule.is_some());
@@ -6615,6 +6675,7 @@ if false {
                     accounts_cache_and_ancestors,
                     filler_account_suffix,
                     epoch_schedule,
+                    rent_collector,
                     &rehash,
                     maybe_db,
                 )?;
@@ -6676,6 +6737,7 @@ if false {
         total_lamports: u64,
         test_hash_calculation: bool,
         epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &RentCollector,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -6693,6 +6755,7 @@ if false {
                 can_cached_slot_be_unflushed,
                 check_hash,
                 epoch_schedule,
+                rent_collector,
                 is_startup,
             )?;
 

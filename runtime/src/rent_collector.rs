@@ -30,6 +30,17 @@ impl Default for RentCollector {
     }
 }
 
+/// when rent is collected for this account, this is the action to apply to the account
+pub enum RentResult {
+    /// maybe collect rent later, leave account alone
+    LeaveAloneNoRent,
+    /// collect rent
+    /// value is (new rent epoch, lamports of rent_due)
+    CollectRent((Epoch, u64)),
+    /// rent is >= remaining lamports, so collect all
+    CollectRemainingLamports,
+}
+
 impl RentCollector {
     pub fn new(
         epoch: Epoch,
@@ -82,6 +93,50 @@ impl RentCollector {
             .due(account.lamports(), account.data().len(), years_elapsed)
     }
 
+    /// determine what should happen to collect rent from this account
+    #[must_use]
+    pub fn calculate_rent_result(
+        &self,
+        address: &Pubkey,
+        account: &impl ReadableAccount,
+        rent_for_sysvars: bool,
+        filler_account_suffix: Option<&Pubkey>,
+    ) -> RentResult {
+        if !self.should_collect_rent(address, account, rent_for_sysvars)
+            || account.rent_epoch() > self.epoch
+            || crate::accounts_db::AccountsDb::is_filler_account_helper(
+                address,
+                filler_account_suffix,
+            )
+        {
+            RentResult::LeaveAloneNoRent
+        } else {
+            let (rent_due, exempt) = self.get_rent_due(account);
+
+            if exempt || rent_due != 0 {
+                if account.lamports() > rent_due {
+                    RentResult::CollectRent((
+                        self.epoch
+                            + if exempt {
+                                // Rent isn't collected for the next epoch
+                                // Make sure to check exempt status later in current epoch again
+                                0
+                            } else {
+                                // Rent is collected for next epoch
+                                1
+                            },
+                        rent_due,
+                    ))
+                } else {
+                    RentResult::CollectRemainingLamports
+                }
+            } else {
+                // maybe collect rent later, leave account alone
+                RentResult::LeaveAloneNoRent
+            }
+        }
+    }
+
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     // This is NOT thread safe at some level. If we try to collect from the same account in parallel, we may collect twice.
@@ -93,40 +148,18 @@ impl RentCollector {
         rent_for_sysvars: bool,
         filler_account_suffix: Option<&Pubkey>,
     ) -> u64 {
-        if !self.should_collect_rent(address, account, rent_for_sysvars)
-            || account.rent_epoch() > self.epoch
-            || crate::accounts_db::AccountsDb::is_filler_account_helper(
-                address,
-                filler_account_suffix,
-            )
+        match self.calculate_rent_result(address, account, rent_for_sysvars, filler_account_suffix)
         {
-            0
-        } else {
-            let (rent_due, exempt) = self.get_rent_due(account);
-
-            if exempt || rent_due != 0 {
-                if account.lamports() > rent_due {
-                    account.set_rent_epoch(
-                        self.epoch
-                            + if exempt {
-                                // Rent isn't collected for the next epoch
-                                // Make sure to check exempt status later in current epoch again
-                                0
-                            } else {
-                                // Rent is collected for next epoch
-                                1
-                            },
-                    );
-                    let _ = account.checked_sub_lamports(rent_due); // will not fail. We check above.
-                    rent_due
-                } else {
-                    let rent_charged = account.lamports();
-                    *account = AccountSharedData::default();
-                    rent_charged
-                }
-            } else {
-                // maybe collect rent later, leave account alone
-                0
+            RentResult::LeaveAloneNoRent => 0,
+            RentResult::CollectRent((next_epoch, rent_due)) => {
+                account.set_rent_epoch(next_epoch);
+                let _ = account.checked_sub_lamports(rent_due); // will not fail. We check in calculate_rent_result.
+                rent_due
+            }
+            RentResult::CollectRemainingLamports => {
+                let rent_charged = account.lamports();
+                *account = AccountSharedData::default();
+                rent_charged
             }
         }
     }

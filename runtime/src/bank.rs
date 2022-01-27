@@ -4195,6 +4195,7 @@ impl Bank {
 
         // parallelize?
         let rent_for_sysvars = self.rent_for_sysvars();
+        assert!(rent_for_sysvars);
         let mut total_rent = 0;
         let mut rent_debits = RentDebits::default();
         let mut out = Vec::default();
@@ -5344,7 +5345,8 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
-            Some(self.epoch_schedule())
+            Some(self.epoch_schedule()),
+            &self.rent_collector,
         )
     }
 
@@ -5417,6 +5419,7 @@ impl Bank {
             can_cached_slot_be_unflushed,
             debug_verify,
             Some(self.epoch_schedule()),
+            &self.rent_collector,
         )
     }
 
@@ -5470,6 +5473,7 @@ impl Bank {
                 Some(self.capitalization()),
                 false,
                 Some(self.epoch_schedule()),
+                &self.rent_collector,
                 is_startup,
             );
         if total_lamports != self.capitalization() {
@@ -5495,6 +5499,7 @@ impl Bank {
                         Some(self.capitalization()),
                         false,
                         Some(self.epoch_schedule()),
+                        &self.rent_collector,
                         is_startup,
                     );
             }
