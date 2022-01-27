@@ -5760,7 +5760,7 @@ if false {
                                 search
                             {
                                 if interesting {
-                                    error!("searcH=found: {}, {:?}", pubkey, search);
+                                    error!("searcH=found: {}", pubkey);
                                 }
     
                                 let (slot, account_info) = &lock.slot_list()[index];
