@@ -1152,6 +1152,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: Option<&Rent>,
     reject_vote_account_close_feature_active: bool,
+    clock: &Clock,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
@@ -1162,12 +1163,16 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         .lamports()?
         .checked_sub(lamports)
         .ok_or(InstructionError::InsufficientFunds)?;
-    let received_credits_previous_epoch = match vote_state.epoch_credits.len() {
-        0..=1 => false,
-        _ => {
-            let (_epoch, epoch_credits, previous_epoch_credits) =
-                vote_state.epoch_credits[vote_state.epoch_credits.len() - 2];
-            epoch_credits.saturating_sub(previous_epoch_credits) > 0
+
+    let received_credits_previous_epoch = if vote_state.epoch_credits.is_empty() {
+        false
+    } else {
+        let maybe_last_epoch_with_credits = vote_state.epoch_credits.last();
+        match maybe_last_epoch_with_credits {
+            None => false,
+            Some(last_epoch_with_credits) => {
+                clock.epoch.saturating_sub(last_epoch_with_credits.0) < 2
+            }
         }
     };
 
@@ -2270,8 +2275,13 @@ mod tests {
     #[test]
     fn test_vote_state_withdraw() {
         let (vote_pubkey, vote_account) = create_test_account();
-        let with_zero_credit_epoch: Vec<u64> = vec![2, 0, 3];
-        let without_zero_credit_epoch: Vec<u64> = vec![2, 1, 3];
+        let credits_through_epoch_1: Vec<u64> = vec![2, 1];
+        let credits_through_epoch_2: Vec<u64> = vec![2, 1, 3];
+
+        let clock_epoch_3 = &Clock {
+            epoch: 3,
+            ..Clock::default()
+        };
 
         // unsigned request
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
@@ -2287,6 +2297,7 @@ mod tests {
             &signers,
             None,
             false,
+            &Clock::default(),
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -2305,6 +2316,7 @@ mod tests {
             &signers,
             None,
             false,
+            &Clock::default(),
         );
         assert_eq!(res, Err(InstructionError::InsufficientFunds));
 
@@ -2312,7 +2324,7 @@ mod tests {
         // without 0 credit epoch, before ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&without_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2336,6 +2348,7 @@ mod tests {
                 &signers,
                 None,
                 false,
+                clock_epoch_3,
             );
             assert_eq!(res, Ok(()));
         }
@@ -2344,7 +2357,7 @@ mod tests {
         // with 0 credit epoch, before ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&with_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2368,6 +2381,7 @@ mod tests {
                 &signers,
                 None,
                 false,
+                clock_epoch_3,
             );
             assert_eq!(res, Ok(()));
         }
@@ -2376,7 +2390,7 @@ mod tests {
         // without 0 credit epoch, after ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&without_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2400,6 +2414,7 @@ mod tests {
                 &signers,
                 None,
                 true,
+                clock_epoch_3,
             );
             assert_eq!(res, Ok(()));
         }
@@ -2408,7 +2423,7 @@ mod tests {
         // with 0 credit epoch, after ALBk3EWd activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&with_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2432,6 +2447,7 @@ mod tests {
                 &signers,
                 None,
                 true,
+                clock_epoch_3,
             );
             assert_eq!(res, Ok(()));
         }
@@ -2440,7 +2456,7 @@ mod tests {
         // with 0 credit epoch, before ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&with_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2464,6 +2480,7 @@ mod tests {
                 &signers,
                 Some(&rent_sysvar),
                 false,
+                clock_epoch_3,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2472,7 +2489,7 @@ mod tests {
         // without 0 credit epoch, before ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&without_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2496,6 +2513,7 @@ mod tests {
                 &signers,
                 Some(&rent_sysvar),
                 false,
+                clock_epoch_3,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2504,7 +2522,7 @@ mod tests {
         // with 0 credit epoch, after ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&with_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2528,6 +2546,7 @@ mod tests {
                 &signers,
                 Some(&rent_sysvar),
                 true,
+                clock_epoch_3,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2536,7 +2555,7 @@ mod tests {
         // without 0 credit epoch, after ALBk3EWd feature activation
         {
             let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&without_zero_credit_epoch);
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
             let keyed_accounts = &[KeyedAccount::new(
                 &vote_pubkey,
                 true,
@@ -2560,6 +2579,7 @@ mod tests {
                 &signers,
                 Some(&rent_sysvar),
                 true,
+                clock_epoch_3,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2584,6 +2604,7 @@ mod tests {
                 &signers,
                 Some(&rent_sysvar),
                 false,
+                &Clock::default(),
             );
             assert_eq!(res, Ok(()));
             assert_eq!(
@@ -2598,7 +2619,7 @@ mod tests {
         {
             let rent_sysvar = Rent::default();
             for rent_sysvar in [None, Some(&rent_sysvar)] {
-                for credits in [&with_zero_credit_epoch, &without_zero_credit_epoch] {
+                for credits in [&credits_through_epoch_1, &credits_through_epoch_2] {
                     let to_account = RefCell::new(AccountSharedData::default());
                     let (vote_pubkey, vote_account) =
                         create_test_account_with_epoch_credits(credits);
@@ -2612,6 +2633,7 @@ mod tests {
                         &signers,
                         rent_sysvar,
                         false,
+                        clock_epoch_3,
                     );
                     assert_eq!(res, Ok(()));
                     assert_eq!(vote_account.borrow().lamports(), 0);
@@ -2631,7 +2653,7 @@ mod tests {
                 let to_account = RefCell::new(AccountSharedData::default());
                 // let (vote_pubkey, vote_account) = create_test_account();
                 let (vote_pubkey, vote_account) =
-                    create_test_account_with_epoch_credits(&with_zero_credit_epoch);
+                    create_test_account_with_epoch_credits(&credits_through_epoch_1);
                 let lamports = vote_account.borrow().lamports();
                 let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
                 let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
@@ -2642,6 +2664,7 @@ mod tests {
                     &signers,
                     rent_sysvar,
                     true,
+                    clock_epoch_3,
                 );
                 assert_eq!(res, Ok(()));
                 assert_eq!(vote_account.borrow().lamports(), 0);
@@ -2660,7 +2683,7 @@ mod tests {
                 let to_account = RefCell::new(AccountSharedData::default());
                 // let (vote_pubkey, vote_account) = create_test_account();
                 let (vote_pubkey, vote_account) =
-                    create_test_account_with_epoch_credits(&without_zero_credit_epoch);
+                    create_test_account_with_epoch_credits(&credits_through_epoch_2);
                 let lamports = vote_account.borrow().lamports();
                 let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
                 let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
@@ -2671,6 +2694,7 @@ mod tests {
                     &signers,
                     rent_sysvar,
                     true,
+                    clock_epoch_3,
                 );
                 assert_eq!(res, Err(InstructionError::ActiveVoteAccountClose));
                 assert_eq!(vote_account.borrow().lamports(), lamports);
@@ -2711,6 +2735,7 @@ mod tests {
             &signers,
             None,
             false,
+            &Clock::default(),
         );
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports(), 0);
