@@ -683,7 +683,7 @@ impl AccountsHash {
                 use std::str::FromStr;
                                 let interesting =         item.pubkey == Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
                 if interesting {
-                    error!("{}, {}, {}", item.hash, item.lamports, item.pubkey);
+                    error!("de_dup found this: {}, {}, {}", item.hash, item.lamports, item.pubkey);
                 }
 
                 hashes.push(&item.hash);
@@ -693,7 +693,7 @@ impl AccountsHash {
                 // reverse this list because get_item can remove first_items[*i] when *i is exhausted
                 //  and that would mess up subsequent *i values
                 duplicate_pubkey_indexes.iter().rev().for_each(|i| {
-                    Self::get_item(
+                    let dup = Self::get_item(
                         *i,
                         pubkey_bin,
                         &mut first_items,
@@ -701,6 +701,12 @@ impl AccountsHash {
                         &mut indexes,
                         &mut first_item_to_pubkey_division,
                     );
+                    use std::str::FromStr;
+                    let interesting =         dup.pubkey == Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+    if interesting {
+        error!("ignoring duplicates: {}, {}, {}", dup.hash, dup.lamports, dup.pubkey);
+    }
+
                 });
                 duplicate_pubkey_indexes.clear();
             }
