@@ -16,7 +16,7 @@ bincode = "1.3.3"
 bs58 = "0.4.0"
 clap = "2.33.0"
 crossbeam-channel = "0.5"
-futures-util = { version = "0.3.19", optional = true }
+futures-util = "0.3.19"
 indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 log = "0.4.14"
@@ -37,8 +37,8 @@ solana-version = { path = "../version", version = "=1.10.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.0" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0.1.8", optional = true }
-tokio-tungstenite = { version = "0.16.0", features = ["rustls-tls-webpki-roots"], optional = true }
+tokio-stream = "0.1.8"
+tokio-tungstenite = { version = "0.16.0", features = ["rustls-tls-webpki-roots"] }
 tungstenite = { version = "0.16.0", features = ["rustls-tls-webpki-roots"] }
 url = "2.2.2"
 
@@ -49,7 +49,3 @@ solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
-
-[features]
-default = ["async"]
-async = ["futures-util", "tokio-stream", "tokio-tungstenite"]

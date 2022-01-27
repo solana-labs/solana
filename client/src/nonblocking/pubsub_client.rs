@@ -48,13 +48,16 @@ pub enum PubsubClientError {
 
     #[error("unable to connect to server")]
     ConnectionError(tokio_tungstenite::tungstenite::Error),
+
     #[error("websocket error")]
     WsError(#[from] tokio_tungstenite::tungstenite::Error),
+
     #[error("connection closed")]
     ConnectionClosed,
 
     #[error("json parse error")]
     JsonParseError(#[from] serde_json::error::Error),
+
     #[error("subscribe failed: {reason}")]
     SubscribeFailed {
         reason: &'static str,
@@ -75,7 +78,7 @@ pub struct PubsubClient {
 }
 
 impl PubsubClient {
-    pub async fn connect(url: &str) -> PubsubClientResult<Self> {
+    pub async fn new(url: &str) -> PubsubClientResult<Self> {
         let url = Url::parse(url)?;
         let (ws, _response) = connect_async(url)
             .await

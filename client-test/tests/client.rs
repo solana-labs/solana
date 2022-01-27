@@ -1,7 +1,9 @@
 use {
+    futures_util::StreamExt,
     serde_json::{json, Value},
     serial_test::serial,
     solana_client::{
+        nonblocking,
         pubsub_client::PubsubClient,
         rpc_client::RpcClient,
         rpc_config::{
@@ -518,8 +520,6 @@ fn test_slot_subscription() {
 #[tokio::test]
 #[serial]
 async fn test_slot_subscription_async() {
-    use {futures_util::StreamExt, solana_client::pubsub_client_async::PubsubClient};
-
     let sync_service = Arc::new(AtomicU64::new(0));
     let sync_client = Arc::clone(&sync_service);
     fn wait_until(atomic: &Arc<AtomicU64>, value: u64) {
@@ -569,7 +569,9 @@ async fn test_slot_subscription_async() {
 
     wait_until(&sync_client, 1);
     let url = format!("ws://0.0.0.0:{}/", pubsub_addr.port());
-    let pubsub_client = PubsubClient::connect(&url).await.unwrap();
+    let pubsub_client = nonblocking::pubsub_client::PubsubClient::new(&url)
+        .await
+        .unwrap();
     let (mut notifications, unsubscribe) = pubsub_client.slot_subscribe().await.unwrap();
     sync_client.store(2, Ordering::Relaxed);
 
