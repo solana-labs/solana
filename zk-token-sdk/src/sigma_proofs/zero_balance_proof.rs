@@ -5,7 +5,7 @@
 //! proof, a prover must provide the decryption key for the ciphertext.
 //!
 //! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
-//! zero-knowledge.
+//! zero-knowledge in the random oracle model.
 
 #[cfg(not(target_arch = "bpf"))]
 use {

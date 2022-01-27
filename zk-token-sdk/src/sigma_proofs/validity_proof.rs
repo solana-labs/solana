@@ -6,7 +6,7 @@
 //! the proof, a prover must provide the Pedersen opening associated with the commitment.
 //!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
-//! zero-knowledge.
+//! zero-knowledge in the random oracle model.
 
 #[cfg(not(target_arch = "bpf"))]
 use {
