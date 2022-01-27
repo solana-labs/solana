@@ -5754,8 +5754,13 @@ if false {
                             if self.is_filler_account(pubkey) {
                                 return None;
                             }
+                            let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+                            let search = self.accounts_index.get(pubkey, Some(ancestors), Some(max_root));
+                            if interesting {
+                                error!("searcH: {}, {:?}", pubkey, search);
+                            }
                             if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, Some(ancestors), Some(max_root))
+                                search
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
@@ -5805,7 +5810,6 @@ if false {
                                             }
 
                                             sum += balance as u128;
-                                            let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
                                             let ih = Hash::from_str("8yYZ9Pvrq5DCNU9FM1W13WggTiuMpMYsapu6wUZJbVaw").unwrap();
                                             if slot == &114612876 {//} || slot == &115044876 {
                                                 interesting = true;
@@ -5820,6 +5824,10 @@ if false {
                                         },
                                     )
                                 } else {
+                                    if interesting {
+                                    error!("zero!: {}", pubkey);
+                                    }
+
                                     None
                                 }
                             } else {
@@ -6954,6 +6962,12 @@ error!("rewrites: {:?}, slot: {}", rewrites, slot)
                 for (info, pubkey_account) in infos_chunk.iter().zip(accounts_chunk.iter()) {
                     let pubkey = pubkey_account.0;
                     let old_slot = pubkey_account.2;
+                    use std::str::FromStr;
+                    let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+                    if &interesting == pubkey {
+                        error!("account update: {}, {}, {}, {:?}", pubkey, new_slot, old_slot, pubkey_account.1);
+                    }
+                    
                     self.accounts_index.upsert(
                         new_slot,
                         old_slot,
