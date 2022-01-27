@@ -773,9 +773,11 @@ impl AccountsHash {
 
             hash_total -= left_over_hashes; // this is enough to cause the hashes at the end of the data set to be ignored
         }
+        /*
         hashes.iter().flatten().take(hash_total).for_each(|hash| {
             error!("h1:{}",hash);
         });
+        */
 
         // if we have raw hashes to process and
         //   we are not the last pass (we already modded against target_fanout) OR

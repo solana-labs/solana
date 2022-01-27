@@ -5805,14 +5805,16 @@ if false {
                                             }
 
                                             sum += balance as u128;
-                                            let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+                                            let mut interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
                                             let ih = Hash::from_str("8yYZ9Pvrq5DCNU9FM1W13WggTiuMpMYsapu6wUZJbVaw").unwrap();
-
+                                            if slot == 114612876 {
+                                                intersting = true;
+                                            }
                                             if interesting {
                                                 error!("hash: {}, lamports: {}, pubkey: {}", loaded_hash, balance, pubkey);
                                             }
                                             if ih == loaded_hash {
-                                                error!("hash: {}, lamports: {}, pubkey: {}", loaded_hash, balance, pubkey);
+                                                //error!("hash: {}, lamports: {}, pubkey: {}", loaded_hash, balance, pubkey);
                                             }
                                                                         Some(loaded_hash)
                                         },
@@ -5847,11 +5849,12 @@ if false {
 
         scan.stop();
         let total_lamports = *total_lamports.lock().unwrap();
-
+/*
         let mut hash_time = Measure::start("hash");
         hashes.iter().flatten().for_each(|hash| {
             error!("h2:{}",hash);
         });
+        */
 
 
         let (accumulated_hash, hash_total) = AccountsHash::calculate_hash(hashes);
@@ -6322,7 +6325,7 @@ if false {
             }
         }
         */
-        let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap();
+        let interesting =         pubkey == &Pubkey::from_str("2cy1guFAaqDZztT7vrsc8Q5u9aAHN8oBxDbSyUdBKpW3").unwrap() || storage_slot == 114612876;
 
         // todo: if we are ancient, then we should assume we need to recompute
         // if we are not ancient, we can calculate based on distance of this slot from max
