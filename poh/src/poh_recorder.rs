@@ -24,11 +24,7 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
-<<<<<<< HEAD
-        timing, transaction::Transaction,
-=======
-        transaction::VersionedTransaction,
->>>>>>> 115b48880 (Improve poh recorder metrics (#22730))
+        transaction::Transaction,
     },
     std::{
         cmp,
@@ -628,8 +624,9 @@ impl PohRecorder {
                 return Err(PohRecorderError::MaxHeightReached);
             }
 
+            let poh = &self.poh;
             let (mut poh_lock, poh_lock_time) =
-                Measure::this(|_| self.poh.lock().unwrap(), (), "PohLock");
+                Measure::this(|_| poh.lock().unwrap(), (), "PohLock");
             self.record_lock_contention_us += poh_lock_time.as_us();
 
             let (record_mixin_res, record_mixin_time) =
