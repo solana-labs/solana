@@ -1616,6 +1616,8 @@ const GetParsedTransactionRpcResult = jsonRpcResult(
 
 /**
  * Expected JSON RPC response for the "getRecentBlockhash" message
+ *
+ * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetLatestBlockhashRpcResult} instead.
  */
 const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
   pick({
@@ -1623,6 +1625,16 @@ const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
     feeCalculator: pick({
       lamportsPerSignature: number(),
     }),
+  }),
+);
+
+/**
+ * Expected JSON RPC response for the "getLatestBlockhash" message
+ */
+const GetLatestBlockhashRpcResult = jsonRpcResultAndContext(
+  pick({
+    blockhash: string(),
+    lastValidBlockHeight: number(),
   }),
 );
 
@@ -3009,6 +3021,8 @@ export class Connection {
   /**
    * Fetch a recent blockhash from the cluster, return with context
    * @return {Promise<RpcResponseAndContext<{blockhash: Blockhash, feeCalculator: FeeCalculator}>>}
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getLatestBlockhash} instead.
    */
   async getRecentBlockhashAndContext(
     commitment?: Commitment,
@@ -3048,6 +3062,8 @@ export class Connection {
 
   /**
    * Fetch the fee calculator for a recent blockhash from the cluster, return with context
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getFeeForMessage} instead.
    */
   async getFeeCalculatorForBlockhash(
     blockhash: Blockhash,
@@ -3094,6 +3110,8 @@ export class Connection {
   /**
    * Fetch a recent blockhash from the cluster
    * @return {Promise<{blockhash: Blockhash, feeCalculator: FeeCalculator}>}
+   *
+   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getLatestBlockhash} instead.
    */
   async getRecentBlockhash(
     commitment?: Commitment,
@@ -3104,6 +3122,39 @@ export class Connection {
     } catch (e) {
       throw new Error('failed to get recent blockhash: ' + e);
     }
+  }
+
+  /**
+   * Fetch the latest blockhash from the cluster
+   * @return {Promise<{blockhash: Blockhash, lastValidBlockHeight: number}>}
+   */
+  async getLatestBlockhash(
+    commitment?: Commitment,
+  ): Promise<{blockhash: Blockhash; lastValidBlockHeight: number}> {
+    try {
+      const res = await this.getLatestBlockhashAndContext(commitment);
+      return res.value;
+    } catch (e) {
+      throw new Error('failed to get recent blockhash: ' + e);
+    }
+  }
+
+  /**
+   * Fetch the latest blockhash from the cluster
+   * @return {Promise<{blockhash: Blockhash, lastValidBlockHeight: number}>}
+   */
+  async getLatestBlockhashAndContext(
+    commitment?: Commitment,
+  ): Promise<
+    RpcResponseAndContext<{blockhash: Blockhash; lastValidBlockHeight: number}>
+  > {
+    const args = this._buildArgs([], commitment);
+    const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
+    const res = create(unsafeRes, GetLatestBlockhashRpcResult);
+    if ('error' in res) {
+      throw new Error('failed to get latest blockhash: ' + res.error.message);
+    }
+    return res.result;
   }
 
   /**

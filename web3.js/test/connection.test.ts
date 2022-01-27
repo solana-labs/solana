@@ -2260,6 +2260,18 @@ describe('Connection', () => {
     }
   });
 
+  it('get latest blockhash', async () => {
+    const commitments: Commitment[] = ['processed', 'confirmed', 'finalized'];
+    for (const commitment of commitments) {
+      const {blockhash, lastValidBlockHeight} = await helpers.latestBlockhash({
+        connection,
+        commitment,
+      });
+      expect(bs58.decode(blockhash)).to.have.length(32);
+      expect(lastValidBlockHeight).to.be.at.least(0);
+    }
+  });
+
   it('get fee calculator', async () => {
     const {blockhash} = await helpers.recentBlockhash({connection});
     await mockRpcResponse({
@@ -2287,7 +2299,7 @@ describe('Connection', () => {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.recentBlockhash({connection});
+    const {blockhash} = await helpers.latestBlockhash({connection});
 
     const transaction = new Transaction({
       feePayer: accountFrom.publicKey,
@@ -2977,7 +2989,7 @@ describe('Connection', () => {
       });
 
       const recentBlockhash = await (
-        await helpers.recentBlockhash({connection})
+        await helpers.latestBlockhash({connection})
       ).blockhash;
       const message = new Message({
         accountKeys: [
