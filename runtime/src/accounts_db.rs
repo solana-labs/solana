@@ -6434,8 +6434,9 @@ if false {
         {
             RentResult::CollectRent((next_epoch, rent_due)) => {
                 if next_epoch > rent_epoch {
-                    // fascinating corners of reality with exempt accounts
-                    assert_eq!(rent_due, 0, "pubkey: {}, this epoch: {}, rent epoch: {}, next epoch: {}, rent_due: {}, slot: {}", pubkey, rent_collector.epoch, rent_epoch, next_epoch, rent_due, storage_slot);
+                    if rent_due != 0 {
+                        use_stored = true; // this is an account in an ancient append vec that would have had rent collected, so just use the hash we have since there must be a newer version of this account already in a newer slot
+                    }
                 }
                 rent_epoch = next_epoch;
             }

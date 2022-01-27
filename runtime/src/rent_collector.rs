@@ -128,8 +128,8 @@ impl RentCollector {
                             },
                         rent_due,
                     );
-                    use log::*;
-                    error!("collecting rent: {}, next epoch: {}, current epoch: {}, rent_due: {}", address, result.0, self.epoch, result.1);
+                    //use log::*;
+                    //error!("collecting rent: {}, next epoch: {}, current epoch: {}, rent_due: {}", address, result.0, self.epoch, result.1);
                     result
                 })
                 } else {
