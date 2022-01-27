@@ -21,10 +21,11 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
     },
+    solana_measure::measure::Measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
-        timing, transaction::VersionedTransaction,
+        transaction::VersionedTransaction,
     },
     std::{
         cmp,
@@ -217,12 +218,11 @@ pub struct PohRecorder {
     record_lock_contention_us: u64,
     flush_cache_no_tick_us: u64,
     flush_cache_tick_us: u64,
-    prepare_send_us: u64,
-    send_us: u64,
+    send_entry_us: u64,
     tick_lock_contention_us: u64,
-    tick_overhead_us: u64,
     total_sleep_us: u64,
     record_us: u64,
+    report_metrics_us: u64,
     ticks_from_record: u64,
     last_metric: Instant,
     record_sender: Sender<Record>,
@@ -539,20 +539,22 @@ impl PohRecorder {
     }
 
     pub fn tick(&mut self) {
-        let now = Instant::now();
-        let (poh_entry, target_time) = {
-            let mut poh_l = self.poh.lock().unwrap();
-            let poh_entry = poh_l.tick();
-            let target_time = if poh_entry.is_some() {
-                Some(poh_l.target_poh_time(self.target_ns_per_tick))
-            } else {
-                None
-            };
+        let ((poh_entry, target_time), tick_lock_contention_time) = Measure::this(
+            |_| {
+                let mut poh_l = self.poh.lock().unwrap();
+                let poh_entry = poh_l.tick();
+                let target_time = if poh_entry.is_some() {
+                    Some(poh_l.target_poh_time(self.target_ns_per_tick))
+                } else {
+                    None
+                };
+                (poh_entry, target_time)
+            },
+            (),
+            "TickLockContention",
+        );
+        self.tick_lock_contention_us += tick_lock_contention_time.as_us();
 
-            (poh_entry, target_time)
-        };
-        self.tick_lock_contention_us += timing::duration_as_us(&now.elapsed());
-        let now = Instant::now();
         if let Some(poh_entry) = poh_entry {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
@@ -561,30 +563,37 @@ impl PohRecorder {
                 .leader_first_tick_height_including_grace_ticks
                 .is_none()
             {
-                self.tick_overhead_us += timing::duration_as_us(&now.elapsed());
                 return;
             }
 
-            let entry = Entry {
-                num_hashes: poh_entry.num_hashes,
-                hash: poh_entry.hash,
-                transactions: vec![],
-            };
-            self.tick_overhead_us += timing::duration_as_us(&now.elapsed());
+            self.tick_cache.push((
+                Entry {
+                    num_hashes: poh_entry.num_hashes,
+                    hash: poh_entry.hash,
+                    transactions: vec![],
+                },
+                self.tick_height,
+            ));
 
-            let now = Instant::now();
-            self.tick_cache.push((entry, self.tick_height));
-            let _ = self.flush_cache(true);
-            self.flush_cache_tick_us += timing::duration_as_us(&now.elapsed());
-            let target_time = target_time.unwrap();
-            // sleep is not accurate enough to get a predictable time.
-            // Kernel can not schedule the thread for a while.
-            let started_waiting = Instant::now();
-            while Instant::now() < target_time {
-                // TODO: a caller could possibly desire to reset or record while we're spinning here
-                std::hint::spin_loop();
-            }
-            self.total_sleep_us += started_waiting.elapsed().as_nanos() as u64 / 1000;
+            let (_flush_res, flush_cache_and_tick_time) =
+                Measure::this(|_| self.flush_cache(true), (), "FlushCacheAndTick");
+            self.flush_cache_tick_us += flush_cache_and_tick_time.as_us();
+
+            let sleep_time = Measure::this(
+                |_| {
+                    let target_time = target_time.unwrap();
+                    // sleep is not accurate enough to get a predictable time.
+                    // Kernel can not schedule the thread for a while.
+                    while Instant::now() < target_time {
+                        // TODO: a caller could possibly desire to reset or record while we're spinning here
+                        std::hint::spin_loop();
+                    }
+                },
+                (),
+                "PohSleep",
+            )
+            .1;
+            self.total_sleep_us += sleep_time.as_us();
         }
     }
 
@@ -597,28 +606,26 @@ impl PohRecorder {
                 ("record_us", self.record_us, i64),
                 ("flush_cache_no_tick_us", self.flush_cache_no_tick_us, i64),
                 ("flush_cache_tick_us", self.flush_cache_tick_us, i64),
-                ("prepare_send_us", self.prepare_send_us, i64),
-                ("send_us", self.send_us, i64),
+                ("send_entry_us", self.send_entry_us, i64),
                 ("ticks_from_record", self.ticks_from_record, i64),
                 ("total_sleep_us", self.total_sleep_us, i64),
-                ("tick_overhead", self.tick_overhead_us, i64),
                 (
-                    "record_lock_contention",
+                    "record_lock_contention_us",
                     self.record_lock_contention_us,
                     i64
                 ),
+                ("report_metrics_us", self.report_metrics_us, i64),
             );
 
             self.tick_lock_contention_us = 0;
             self.record_us = 0;
-            self.tick_overhead_us = 0;
             self.total_sleep_us = 0;
             self.record_lock_contention_us = 0;
             self.flush_cache_no_tick_us = 0;
             self.flush_cache_tick_us = 0;
-            self.prepare_send_us = 0;
-            self.send_us = 0;
+            self.send_entry_us = 0;
             self.ticks_from_record = 0;
+            self.report_metrics_us = 0;
             self.last_metric = Instant::now();
         }
     }
@@ -632,11 +639,16 @@ impl PohRecorder {
         // Entries without transactions are used to track real-time passing in the ledger and
         // cannot be generated by `record()`
         assert!(!transactions.is_empty(), "No transactions provided");
-        self.report_metrics(bank_slot);
+
+        let ((), report_metrics_time) =
+            Measure::this(|_| self.report_metrics(bank_slot), (), "ReportMetrics");
+        self.report_metrics_us += report_metrics_time.as_us();
+
         loop {
-            let now = Instant::now();
-            self.flush_cache(false)?;
-            self.flush_cache_no_tick_us += timing::duration_as_us(&now.elapsed());
+            let (flush_cache_res, flush_cache_time) =
+                Measure::this(|_| self.flush_cache(false), (), "FlushCache");
+            self.flush_cache_no_tick_us += flush_cache_time.as_us();
+            flush_cache_res?;
 
             let working_bank = self
                 .working_bank
@@ -646,30 +658,34 @@ impl PohRecorder {
                 return Err(PohRecorderError::MaxHeightReached);
             }
 
-            {
-                let now = Instant::now();
-                let mut poh_lock = self.poh.lock().unwrap();
+            let (mut poh_lock, poh_lock_time) =
+                Measure::this(|_| self.poh.lock().unwrap(), (), "PohLock");
+            self.record_lock_contention_us += poh_lock_time.as_us();
 
-                self.record_lock_contention_us += timing::duration_as_us(&now.elapsed());
-                let now = Instant::now();
-                let res = poh_lock.record(mixin);
-                drop(poh_lock);
-                self.record_us += timing::duration_as_us(&now.elapsed());
-                let now = Instant::now();
-                if let Some(poh_entry) = res {
-                    let entry = Entry {
-                        num_hashes: poh_entry.num_hashes,
-                        hash: poh_entry.hash,
-                        transactions,
-                    };
-                    let bank_clone = working_bank.bank.clone();
-                    self.prepare_send_us += timing::duration_as_us(&now.elapsed());
-                    let now = Instant::now();
-                    self.sender.send((bank_clone, (entry, self.tick_height)))?;
-                    self.send_us += timing::duration_as_us(&now.elapsed());
-                    return Ok(());
-                }
+            let (record_mixin_res, record_mixin_time) =
+                Measure::this(|_| poh_lock.record(mixin), (), "RecordMixin");
+            self.record_us += record_mixin_time.as_us();
+
+            drop(poh_lock);
+
+            if let Some(poh_entry) = record_mixin_res {
+                let (send_entry_res, send_entry_time) = Measure::this(
+                    |_| {
+                        let entry = Entry {
+                            num_hashes: poh_entry.num_hashes,
+                            hash: poh_entry.hash,
+                            transactions,
+                        };
+                        let bank_clone = working_bank.bank.clone();
+                        self.sender.send((bank_clone, (entry, self.tick_height)))
+                    },
+                    (),
+                    "SendPohEntry",
+                );
+                self.send_entry_us += send_entry_time.as_us();
+                return Ok(send_entry_res?);
             }
+
             // record() might fail if the next PoH hash needs to be a tick.  But that's ok, tick()
             // and re-record()
             self.ticks_from_record += 1;
@@ -729,11 +745,10 @@ impl PohRecorder {
                 record_lock_contention_us: 0,
                 flush_cache_tick_us: 0,
                 flush_cache_no_tick_us: 0,
-                prepare_send_us: 0,
-                send_us: 0,
+                send_entry_us: 0,
                 tick_lock_contention_us: 0,
                 record_us: 0,
-                tick_overhead_us: 0,
+                report_metrics_us: 0,
                 total_sleep_us: 0,
                 ticks_from_record: 0,
                 last_metric: Instant::now(),

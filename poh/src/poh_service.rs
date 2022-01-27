@@ -43,6 +43,7 @@ struct PohTiming {
     total_tick_time_ns: u64,
     last_metric: Instant,
     total_record_time_us: u64,
+    total_send_record_result_us: u64,
 }
 
 impl PohTiming {
@@ -56,6 +57,7 @@ impl PohTiming {
             total_tick_time_ns: 0,
             last_metric: Instant::now(),
             total_record_time_us: 0,
+            total_send_record_result_us: 0,
         }
     }
     fn report(&mut self, ticks_per_slot: u64) {
@@ -72,6 +74,11 @@ impl PohTiming {
                 ("total_lock_time_us", self.total_lock_time_ns / 1000, i64),
                 ("total_hash_time_us", self.total_hash_time_ns / 1000, i64),
                 ("total_record_time_us", self.total_record_time_us, i64),
+                (
+                    "total_send_record_result_us",
+                    self.total_send_record_result_us,
+                    i64
+                ),
             );
             self.total_sleep_us = 0;
             self.num_ticks = 0;
@@ -81,6 +88,7 @@ impl PohTiming {
             self.total_hash_time_ns = 0;
             self.last_metric = Instant::now();
             self.total_record_time_us = 0;
+            self.total_send_record_result_us = 0;
         }
     }
 }
@@ -254,7 +262,10 @@ impl PohService {
                         record.mixin,
                         std::mem::take(&mut record.transactions),
                     );
-                    let _ = record.sender.send(res); // what do we do on failure here? Ignore for now.
+                    // what do we do on failure here? Ignore for now.
+                    let (_send_res, send_record_result_time) =
+                        Measure::this(|_| record.sender.send(res), (), "SendRecordResult");
+                    timing.total_send_record_result_us += send_record_result_time.as_us();
                     timing.num_hashes += 1; // note: may have also ticked inside record
 
                     let new_record_result = record_receiver.try_recv();
