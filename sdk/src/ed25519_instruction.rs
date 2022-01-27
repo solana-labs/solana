@@ -94,6 +94,7 @@ pub fn verify(
     let expected_data_size = num_signatures
         .saturating_mul(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
         .saturating_add(SIGNATURE_OFFSETS_START);
+    // We do not check or use the byte at data[1]
     if data.len() < expected_data_size {
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
@@ -359,7 +360,14 @@ pub mod test {
 
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
-        let index = thread_rng().gen_range(0, instruction.data.len());
+        let index = loop {
+            let index = thread_rng().gen_range(0, instruction.data.len());
+            // byte 1 is not used, so this would not cause the verify to fail
+            if index != 1 {
+                break index;
+            }
+        };
+
         instruction.data[index] = instruction.data[index].wrapping_add(12);
         let tx = Transaction::new_signed_with_payer(
             &[instruction],
