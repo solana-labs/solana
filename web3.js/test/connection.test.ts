@@ -1501,9 +1501,10 @@ describe('Connection', () => {
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [1],
       value: {
+        blockHeight: 0,
         blockTime: 1614281964,
         blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
@@ -1552,18 +1553,18 @@ describe('Connection', () => {
 
     // Find a block that has a transaction, usually Block 1
     let slot = 0;
-    let confirmedTransaction: string | undefined;
-    while (!confirmedTransaction) {
+    let transaction: string | undefined;
+    while (!transaction) {
       slot++;
       const block = await connection.getBlock(slot);
       if (block && block.transactions.length > 0) {
-        confirmedTransaction = block.transactions[0].transaction.signatures[0];
+        transaction = block.transactions[0].transaction.signatures[0];
       }
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedTransaction',
-      params: [confirmedTransaction],
+      method: 'getTransaction',
+      params: [transaction],
       value: {
         slot,
         transaction: {
@@ -1604,7 +1605,7 @@ describe('Connection', () => {
       },
     });
 
-    const result = await connection.getTransaction(confirmedTransaction);
+    const result = await connection.getTransaction(transaction);
 
     if (!result) {
       expect(result).to.be.ok;
@@ -1612,7 +1613,7 @@ describe('Connection', () => {
     }
 
     const resultSignature = result.transaction.signatures[0];
-    expect(resultSignature).to.eq(confirmedTransaction);
+    expect(resultSignature).to.eq(transaction);
 
     const newAddress = Keypair.generate().publicKey;
     const recentSignature = await helpers.airdrop({
@@ -1622,7 +1623,7 @@ describe('Connection', () => {
     });
 
     await mockRpcResponse({
-      method: 'getConfirmedTransaction',
+      method: 'getTransaction',
       params: [recentSignature],
       value: null,
     });
@@ -1896,9 +1897,10 @@ describe('Connection', () => {
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [0],
       value: {
+        blockHeight: 0,
         blockTime: 1614281964,
         blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
@@ -1921,9 +1923,10 @@ describe('Connection', () => {
     expect(block0.parentSlot).to.eq(0);
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [1],
       value: {
+        blockHeight: 0,
         blockTime: 1614281964,
         blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
@@ -1985,7 +1988,7 @@ describe('Connection', () => {
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [Number.MAX_SAFE_INTEGER],
       error: {
         message: `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
@@ -2109,7 +2112,7 @@ describe('Connection', () => {
 
   it('get blocks between two slots', async () => {
     await mockRpcResponse({
-      method: 'getConfirmedBlocks',
+      method: 'getBlocks',
       params: [0, 10],
       value: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     });
@@ -2129,7 +2132,7 @@ describe('Connection', () => {
 
   it('get blocks from starting slot', async () => {
     await mockRpcResponse({
-      method: 'getConfirmedBlocks',
+      method: 'getBlocks',
       params: [0],
       value: [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -2155,7 +2158,7 @@ describe('Connection', () => {
     expect(blocks).to.contain(latestSlot);
   });
 
-  it('get confirmed block signatures', async () => {
+  it('get block signatures', async () => {
     await mockRpcResponse({
       method: 'getSlot',
       params: [],
@@ -2167,7 +2170,7 @@ describe('Connection', () => {
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [
         0,
         {
@@ -2176,6 +2179,7 @@ describe('Connection', () => {
         },
       ],
       value: {
+        blockHeight: 0,
         blockTime: 1614281964,
         blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
@@ -2185,7 +2189,7 @@ describe('Connection', () => {
     });
 
     // Block 0 never has any transactions in test validator
-    const block0 = await connection.getConfirmedBlockSignatures(0);
+    const block0 = await connection.getBlockSignatures(0);
     const blockhash0 = block0.blockhash;
     expect(block0.signatures).to.have.length(0);
     expect(blockhash0).not.to.be.null;
@@ -2194,7 +2198,7 @@ describe('Connection', () => {
     expect(block0).to.not.have.property('rewards');
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [
         1,
         {
@@ -2203,6 +2207,7 @@ describe('Connection', () => {
         },
       ],
       value: {
+        blockHeight: 1,
         blockTime: 1614281964,
         blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
@@ -2217,7 +2222,7 @@ describe('Connection', () => {
     // Find a block that has a transaction, usually Block 1
     let x = 1;
     while (x < 10) {
-      const block1 = await connection.getConfirmedBlockSignatures(x);
+      const block1 = await connection.getBlockSignatures(x);
       if (block1.signatures.length >= 1) {
         expect(block1.previousBlockhash).to.eq(blockhash0);
         expect(block1.blockhash).not.to.be.null;
@@ -2230,14 +2235,14 @@ describe('Connection', () => {
     }
 
     await mockRpcResponse({
-      method: 'getConfirmedBlock',
+      method: 'getBlock',
       params: [Number.MAX_SAFE_INTEGER],
       error: {
         message: `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
       },
     });
     await expect(
-      connection.getConfirmedBlockSignatures(Number.MAX_SAFE_INTEGER),
+      connection.getBlockSignatures(Number.MAX_SAFE_INTEGER),
     ).to.be.rejectedWith(
       `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
     );
@@ -2252,6 +2257,18 @@ describe('Connection', () => {
       });
       expect(bs58.decode(blockhash)).to.have.length(32);
       expect(feeCalculator.lamportsPerSignature).to.be.at.least(0);
+    }
+  });
+
+  it('get latest blockhash', async () => {
+    const commitments: Commitment[] = ['processed', 'confirmed', 'finalized'];
+    for (const commitment of commitments) {
+      const {blockhash, lastValidBlockHeight} = await helpers.latestBlockhash({
+        connection,
+        commitment,
+      });
+      expect(bs58.decode(blockhash)).to.have.length(32);
+      expect(lastValidBlockHeight).to.be.at.least(0);
     }
   });
 
@@ -2282,7 +2299,7 @@ describe('Connection', () => {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.recentBlockhash({connection});
+    const {blockhash} = await helpers.latestBlockhash({connection});
 
     const transaction = new Transaction({
       feePayer: accountFrom.publicKey,
@@ -2972,7 +2989,7 @@ describe('Connection', () => {
       });
 
       const recentBlockhash = await (
-        await helpers.recentBlockhash({connection})
+        await helpers.latestBlockhash({connection})
       ).blockhash;
       const message = new Message({
         accountKeys: [
