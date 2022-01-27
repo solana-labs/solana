@@ -22,7 +22,10 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         accounts_db::ErrorCounters,
-        bank::{Bank, TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult},
+        bank::{
+            Bank, LoadAndExecuteTransactionsOutput, TransactionBalancesSet, TransactionCheckResult,
+            TransactionExecutionResult,
+        },
         bank_utils,
         cost_model::{CostModel, TransactionCost},
         transaction_batch::TransactionBatch,
@@ -922,14 +925,20 @@ impl BankingStage {
         };
 
         let mut execute_timings = ExecuteTimings::default();
-        let (mut loaded_accounts, execution_results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(
-                batch,
-                MAX_PROCESSING_AGE,
-                transaction_status_sender.is_some(),
-                transaction_status_sender.is_some(),
-                &mut execute_timings,
-            );
+        let LoadAndExecuteTransactionsOutput {
+            mut loaded_transactions,
+            execution_results,
+            mut retryable_transactions,
+            executed_transactions_count,
+            signature_count,
+            ..
+        } = bank.load_and_execute_transactions(
+            batch,
+            MAX_PROCESSING_AGE,
+            transaction_status_sender.is_some(),
+            transaction_status_sender.is_some(),
+            &mut execute_timings,
+        );
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
@@ -949,9 +958,9 @@ impl BankingStage {
             "banking_stage-record_transactions_retryable_record_txs",
             retryable_record_txs.len()
         );
-        retryable_txs.extend(retryable_record_txs);
+        retryable_transactions.extend(retryable_record_txs);
         if num_to_commit.is_err() {
-            return (num_to_commit, retryable_txs, execute_timings);
+            return (num_to_commit, retryable_transactions, execute_timings);
         }
         record_time.stop();
 
@@ -961,9 +970,9 @@ impl BankingStage {
         if num_to_commit != 0 {
             let tx_results = bank.commit_transactions(
                 sanitized_txs,
-                &mut loaded_accounts,
+                &mut loaded_transactions,
                 execution_results,
-                tx_count,
+                executed_transactions_count,
                 signature_count,
                 &mut execute_timings,
             );
@@ -1001,7 +1010,7 @@ impl BankingStage {
             execute_timings
         );
 
-        (Ok(num_to_commit), retryable_txs, execute_timings)
+        (Ok(num_to_commit), retryable_transactions, execute_timings)
     }
 
     pub fn process_and_record_transactions(

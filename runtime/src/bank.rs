@@ -626,6 +626,14 @@ impl TransactionExecutionResult {
     }
 }
 
+pub struct LoadAndExecuteTransactionsOutput {
+    pub loaded_transactions: Vec<TransactionLoadResult>,
+    pub execution_results: Vec<TransactionExecutionResult>,
+    pub retryable_transactions: Vec<usize>,
+    pub executed_transactions_count: u64,
+    pub signature_count: u64,
+}
+
 #[derive(Debug, Clone)]
 pub enum DurableNonceFee {
     Valid(u64),
@@ -3455,13 +3463,11 @@ impl Bank {
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
-        let (
+        let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             mut execution_results,
-            _retryable_transactions,
-            _transaction_count,
-            _signature_count,
-        ) = self.load_and_execute_transactions(
+            ..
+        } = self.load_and_execute_transactions(
             &batch,
             // After simulation, transactions will need to be forwarded to the leader
             // for processing. During forwarding, the transaction could expire if the
@@ -3942,19 +3948,13 @@ impl Bank {
         enable_cpi_recording: bool,
         enable_log_recording: bool,
         timings: &mut ExecuteTimings,
-    ) -> (
-        Vec<TransactionLoadResult>,
-        Vec<TransactionExecutionResult>,
-        Vec<usize>,
-        u64,
-        u64,
-    ) {
+    ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = ErrorCounters::default();
 
-        let retryable_txs: Vec<_> = batch
+        let retryable_transactions: Vec<_> = batch
             .lock_results()
             .iter()
             .enumerate()
@@ -3982,7 +3982,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_txs = self.rc.accounts.load_accounts(
+        let mut loaded_transactions = self.rc.accounts.load_accounts(
             &self.ancestors,
             sanitized_txs,
             check_results,
@@ -3996,7 +3996,7 @@ impl Bank {
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 
-        let execution_results: Vec<TransactionExecutionResult> = loaded_txs
+        let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
             .iter_mut()
             .zip(sanitized_txs.iter())
             .map(|(accs, tx)| match accs {
@@ -4059,7 +4059,7 @@ impl Bank {
         timings.load_us = timings.load_us.saturating_add(load_time.as_us());
         timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
 
-        let mut tx_count: u64 = 0;
+        let mut executed_transactions_count: u64 = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
@@ -4135,7 +4135,7 @@ impl Bank {
 
             match execution_result.flattened_result() {
                 Ok(()) => {
-                    tx_count += 1;
+                    executed_transactions_count += 1;
                 }
                 Err(err) => {
                     if *err_count == 0 {
@@ -4149,17 +4149,17 @@ impl Bank {
             debug!(
                 "{} errors of {} txs",
                 *err_count,
-                *err_count as u64 + tx_count
+                *err_count as u64 + executed_transactions_count
             );
         }
         Self::update_error_counters(&error_counters);
-        (
-            loaded_txs,
+        LoadAndExecuteTransactionsOutput {
+            loaded_transactions,
             execution_results,
-            retryable_txs,
-            tx_count,
+            retryable_transactions,
+            executed_transactions_count,
             signature_count,
-        )
+        }
     }
 
     /// Load the accounts data len
@@ -4265,7 +4265,7 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
-        tx_count: u64,
+        executed_transactions_count: u64,
         signature_count: u64,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
@@ -4274,15 +4274,18 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        self.increment_transaction_count(tx_count);
+        self.increment_transaction_count(executed_transactions_count);
         self.increment_signature_count(signature_count);
 
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
+        inc_new_counter_info!(
+            "bank-process_transactions-txs",
+            executed_transactions_count as usize
+        );
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
         if !sanitized_txs.is_empty() {
             let processed_tx_count = sanitized_txs.len() as u64;
-            let failed_tx_count = processed_tx_count.saturating_sub(tx_count);
+            let failed_tx_count = processed_tx_count.saturating_sub(executed_transactions_count);
             self.transaction_error_count
                 .fetch_add(failed_tx_count, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
@@ -5113,20 +5116,25 @@ impl Bank {
             vec![]
         };
 
-        let (mut loaded_txs, execution_results, _, tx_count, signature_count) = self
-            .load_and_execute_transactions(
-                batch,
-                max_age,
-                enable_cpi_recording,
-                enable_log_recording,
-                timings,
-            );
+        let LoadAndExecuteTransactionsOutput {
+            mut loaded_transactions,
+            execution_results,
+            executed_transactions_count,
+            signature_count,
+            ..
+        } = self.load_and_execute_transactions(
+            batch,
+            max_age,
+            enable_cpi_recording,
+            enable_log_recording,
+            timings,
+        );
 
         let results = self.commit_transactions(
             batch.sanitized_transactions(),
-            &mut loaded_txs,
+            &mut loaded_transactions,
             execution_results,
-            tx_count,
+            executed_transactions_count,
             signature_count,
             timings,
         );
