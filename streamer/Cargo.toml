@@ -27,6 +27,9 @@ quinn = "0.8.0"
 rcgen = "0.8.14"
 tokio = { version = "1", features = ["full"] }
 rustls = "0.20.2"
+ring = "0.16.20"
+pkcs8 = { version = "0.8.0", features = ["alloc"] }
+pem = "1.0.2"
 
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.10.0" }

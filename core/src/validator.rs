@@ -532,7 +532,7 @@ impl Validator {
         }
 
         let mut cluster_info =
-            ClusterInfo::new(node.info.clone(), identity_keypair, socket_addr_space);
+            ClusterInfo::new(node.info.clone(), identity_keypair.clone(), socket_addr_space);
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
@@ -899,6 +899,7 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &identity_keypair,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

@@ -26,6 +26,7 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
+    solana_sdk::signature::Keypair,
     std::{
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
@@ -77,6 +78,7 @@ impl Tpu {
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
+        keypair: &Keypair,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -101,8 +103,13 @@ impl Tpu {
         let (verified_sender, verified_receiver) = unbounded();
 
         let tpu_quic_t =
-            solana_streamer::quic::spawn_server(transactions_quic_sockets, packet_sender, exit.clone())
-                .unwrap();
+            solana_streamer::quic::spawn_server(
+                transactions_quic_sockets,
+                keypair,
+                cluster_info.my_contact_info().tpu.ip(),
+                packet_sender,
+                exit.clone()
+            ).unwrap();
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::default();
