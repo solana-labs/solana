@@ -472,22 +472,6 @@ pub enum LoadedAccount<'a> {
 }
 
 impl<'a> LoadedAccount<'a> {
-    pub fn owner(&self) -> &Pubkey {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
-            LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
-        }
-    }
-
-    pub fn executable(&self) -> bool {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.executable
-            }
-            LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
-        }
-    }
-
     pub fn loaded_hash(&self) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
@@ -527,13 +511,6 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn lamports(&self) -> u64 {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
-            LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
-        }
-    }
-
     pub fn take_account(self) -> AccountSharedData {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
@@ -548,6 +525,44 @@ impl<'a> LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(_) => false,
             LoadedAccount::Cached(_) => true,
+        }
+    }
+}
+
+impl<'a> ReadableAccount for LoadedAccount<'a> {
+    fn lamports(&self) -> u64 {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
+            LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
+        }
+    }
+
+    fn data(&self) -> &[u8] {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data,
+            LoadedAccount::Cached(cached_account) => cached_account.account.data(),
+        }
+    }
+    fn owner(&self) -> &Pubkey {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
+            LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
+        }
+    }
+    fn executable(&self) -> bool {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.account_meta.executable
+            }
+            LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
+        }
+    }
+    fn rent_epoch(&self) -> Epoch {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.account_meta.rent_epoch
+            }
+            LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
         }
     }
 }
@@ -7081,6 +7096,7 @@ impl AccountsDb {
     }
 
     /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
+    /// Note this should only be used when ALL entries in the accounts index are roots.
     fn pubkeys_to_duplicate_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
         let mut accounts_data_len_from_duplicates = 0;
         pubkeys.iter().for_each(|pubkey| {
@@ -7105,8 +7121,7 @@ impl AccountsDb {
                             maybe_storage_entry.map(|entry| (entry, account_info.offset())),
                         );
                         let loaded_account = accessor.check_and_get_loaded_account();
-                        let account = loaded_account.take_account();
-                        accounts_data_len_from_duplicates += account.data().len();
+                        accounts_data_len_from_duplicates += loaded_account.data().len();
                     });
             }
         });
