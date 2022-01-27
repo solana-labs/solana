@@ -6058,8 +6058,15 @@ if false {
                     }
                 }
 
-                for slot in start..end {
-
+                if end == 115044876 || end + 1 == 115044876 || end == 115044876 - 1 {
+                    error!("scanning: {}, {}", start, end);
+                }
+            for slot in start..end {
+                    let mut interesting = false;
+                    if slot == 115044876 || slot + 1 == 115044876 || slot == 115044876 - 1 {
+                        interesting = true;
+                    }
+    
                     let sub_storages = snapshot_storages.get(slot);
                     let valid_slot = sub_storages.is_some();
                     if let Some((cache, ancestors, accounts_index)) = accounts_cache_and_ancestors {
@@ -6069,6 +6076,9 @@ if false {
                                 || accounts_index.is_root(slot)
                             {
                                 let keys = slot_cache.get_all_pubkeys();
+                                if interesting {
+                                    error!("keys in slot: {}, {}", slot, keys.len());
+                                }
                                 for key in keys {
                                     if let Some(cached_account) = slot_cache.get_cloned(&key) {
                                         let mut accessor = LoadedAccountAccessor::Cached(Some(
@@ -6082,6 +6092,9 @@ if false {
                             else {
                                 error!("not using cache for slot: {}", slot);
                             }
+                        }
+                        else if interesting {
+                            error!("nothing related to slot: {}", slot);
                         }
                     }
 
