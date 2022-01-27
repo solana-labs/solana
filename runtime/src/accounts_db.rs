@@ -5336,8 +5336,7 @@ impl AccountsDb {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
-                    for slot in start..end {
-                        let sub_storages = snapshot_storages.get(slot);
+                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                         bin_range.start.hash(&mut hasher);
                         bin_range.end.hash(&mut hasher);
                         if let Some(sub_storages) = sub_storages {
@@ -5395,8 +5394,7 @@ impl AccountsDb {
                     }
                 }
 
-                for slot in start..end {
-                    let sub_storages = snapshot_storages.get(slot);
+                for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                     let valid_slot = sub_storages.is_some();
                     if let Some((cache, ancestors, accounts_index)) = accounts_cache_and_ancestors {
                         if let Some(slot_cache) = cache.slot_cache(slot) {
@@ -5452,8 +5450,8 @@ impl AccountsDb {
             let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
             let sub = slots_per_epoch + acceptable_straggler_slot_count;
             let in_epoch_range_start = max.saturating_sub(sub);
-            for slot in storages.range().start..in_epoch_range_start {
-                if let Some(storages) = storages.get(slot) {
+            for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
+                if let Some(storages) = storages {
                     storages.iter().for_each(|store| {
                         self.dirty_stores
                             .insert((slot, store.append_vec_id()), store.clone());
