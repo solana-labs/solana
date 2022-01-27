@@ -12,7 +12,7 @@ use {
     solana_client::rpc_client::RpcClient,
     solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
-    solana_rpc::rpc::JsonRpcConfig,
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
@@ -154,6 +154,12 @@ fn main() {
                 .default_value(&default_rpc_port)
                 .validator(solana_validator::port_validator)
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_enable_vote_subscription")
+                .long("rpc-pubsub-enable-vote-subscription")
+                .takes_value(false)
+                .help("Enable the unstable RPC PubSub `voteSubscribe` subscription"),
         )
         .arg(
             Arg::with_name("bpf_program")
@@ -404,6 +410,7 @@ fn main() {
         });
 
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
+    let enable_vote_subscription = matches.is_present("rpc_pubsub_enable_vote_subscription");
     let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
     let ticks_per_slot = value_t!(matches, "ticks_per_slot", u64).ok();
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
@@ -611,6 +618,10 @@ fn main() {
             enable_cpi_and_log_storage: true,
             faucet_addr,
             ..JsonRpcConfig::default()
+        })
+        .pubsub_config(PubSubConfig {
+            enable_vote_subscription,
+            ..PubSubConfig::default()
         })
         .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
