@@ -1708,18 +1708,22 @@ impl Bank {
                     datapoint_info!(
                         "bank-new_from_parent-new_epoch_timings",
                         ("epoch", new.epoch(), i64),
-                        ("block_height", new.block_height, i64),
-                        ("parent_slot_height", parent.slot(), i64),
-                        ("thread_pool_creation", thread_pool_time.as_us(), i64),
+                        ("slot", slot, i64),
+                        ("parent_slot", parent.slot(), i64),
+                        ("thread_pool_creation_us", thread_pool_time.as_us(), i64),
                         (
                             "apply_feature_activations",
                             apply_feature_activations_time.as_us(),
                             i64
                         ),
-                        ("activate_epoch", activate_epoch_time.as_us(), i64),
-                        ("update_epoch_stakes", update_epoch_stakes_time.as_us(), i64),
+                        ("activate_epoch_Us", activate_epoch_time.as_us(), i64),
                         (
-                            "update_rewards_with_thread_pool",
+                            "update_epoch_stakes_us",
+                            update_epoch_stakes_time.as_us(),
+                            i64
+                        ),
+                        (
+                            "update_rewards_with_thread_pool_us",
                             update_rewards_with_thread_pool_time.as_us(),
                             i64
                         ),
@@ -1758,36 +1762,36 @@ impl Bank {
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
             ("block_height", new.block_height, i64),
-            ("parent_slot_height", parent.slot(), i64),
-            ("bank_rc_creation", bank_rc_time.as_us(), i64),
-            ("total_elapsed", time.as_us(), i64),
-            ("status_cache_rc", status_cache_rc_time.as_us(), i64),
-            ("fee_components", fee_components_time.as_us(), i64),
-            ("blockhash_queue", blockhash_queue_time.as_us(), i64),
-            ("stakes_cache", stakes_cache_time.as_us(), i64),
-            ("epoch_stakes_time", epoch_stakes_time.as_us(), i64),
-            ("builtin_programs", builtin_programs_time.as_us(), i64),
+            ("parent_slot", parent.slot(), i64),
+            ("bank_rc_creation_us", bank_rc_time.as_us(), i64),
+            ("total_elapsed_us", time.as_us(), i64),
+            ("status_cache_rc_us", status_cache_rc_time.as_us(), i64),
+            ("fee_components_us", fee_components_time.as_us(), i64),
+            ("blockhash_queue_us", blockhash_queue_time.as_us(), i64),
+            ("stakes_cache_us", stakes_cache_time.as_us(), i64),
+            ("epoch_stakes_time_us", epoch_stakes_time.as_us(), i64),
+            ("builtin_programs_us", builtin_programs_time.as_us(), i64),
             (
-                "rewards_pool_pubkeys",
+                "rewards_pool_pubkeys_us",
                 rewards_pool_pubkeys_time.as_us(),
                 i64
             ),
-            ("cached_executors", cached_executors_time.as_us(), i64),
+            ("cached_executors_us", cached_executors_time.as_us(), i64),
             (
-                "transaction_debug_keys",
+                "transaction_debug_keys_us",
                 transaction_debug_keys_time.as_us(),
                 i64
             ),
             (
-                "transaction_log_collector_config",
+                "transaction_log_collector_config_us",
                 transaction_log_collector_config_time.as_us(),
                 i64
             ),
-            ("feature_set", feature_set_time.as_us(), i64),
-            ("ancestors", ancestors_time.as_us(), i64),
-            ("update_epoch", update_epoch_time.as_us(), i64),
-            ("update_sysvars", update_sysvars_time.as_us(), i64),
-            ("fill_sysvar_cache", fill_sysvar_cache_time.as_us(), i64),
+            ("feature_set_us", feature_set_time.as_us(), i64),
+            ("ancestors_us", ancestors_time.as_us(), i64),
+            ("update_epoch_us", update_epoch_time.as_us(), i64),
+            ("update_sysvars_us", update_sysvars_time.as_us(), i64),
+            ("fill_sysvar_cache_us", fill_sysvar_cache_time.as_us(), i64),
         );
 
         parent
