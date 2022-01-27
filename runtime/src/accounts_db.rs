@@ -6354,7 +6354,7 @@ if false {
                 crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 */
 
-                error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}",
+                error!("early maybe_rehash: {}, loaded_hash: {}, storage_slot: {}, max_slot_in_storages: {}, expected_rent_collection_slot_max_epoch: {}, storage_slot_distance_from_max: {}, partition_index_from_max_slot: {}, partition_from_pubkey: {}, calculated hash: {}, use_stored: {}, storage_slot_partition: {}, rent_epoch: {}",
                 pubkey,
                 loaded_account.loaded_hash(),
                 storage_slot,
@@ -6366,6 +6366,7 @@ if false {
                 recalc_hash,
                 use_stored,
                 epoch_schedule.get_epoch_and_slot_index(storage_slot).1,
+                loaded_account.rent_epoch(),
             );}
                 // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
             // we have not collected rent yet in this epoch for this pubkey
