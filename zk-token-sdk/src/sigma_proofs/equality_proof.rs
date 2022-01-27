@@ -289,10 +289,7 @@ mod test {
         let public = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
         let secret = ElGamalSecretKey::new_rand();
 
-        let elgamal_keypair = ElGamalKeypair {
-            public,
-            secret
-        };
+        let elgamal_keypair = ElGamalKeypair { public, secret };
 
         let message: u64 = 55;
         let ciphertext = elgamal_keypair.public.encrypt(message);

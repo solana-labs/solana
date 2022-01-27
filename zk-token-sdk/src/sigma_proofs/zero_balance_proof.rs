@@ -49,7 +49,7 @@ impl ZeroBalanceProof {
     /// invoking this constructor.
     ///
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
-    /// 
+    ///
     /// Note that the proof constructor does not take the actual ElGamal ciphertext as input; it
     /// uses the ElGamal private key instead to generate the proof.
     ///
@@ -168,12 +168,12 @@ impl ZeroBalanceProof {
 mod test {
     use super::*;
     use crate::encryption::{
-        elgamal::{DecryptHandle, ElGamalKeypair},
-        pedersen::{Pedersen, PedersenOpening},
+        elgamal::{DecryptHandle, ElGamalKeypair, ElGamalSecretKey},
+        pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
     };
 
     #[test]
-    fn test_zero_balance_proof() {
+    fn test_zero_balance_proof_correctness() {
         let source_keypair = ElGamalKeypair::new_rand();
 
         let mut transcript_prover = Transcript::new(b"test");
@@ -202,51 +202,89 @@ mod test {
                 &mut transcript_verifier
             )
             .is_err());
+    }
 
-        // // edge case: all zero ciphertext - such ciphertext should always be a valid encryption of 0
-        let zeroed_ct = ElGamalCiphertext::default();
-        let proof = ZeroBalanceProof::new(&source_keypair, &zeroed_ct, &mut transcript_prover);
-        assert!(proof
-            .verify(&source_keypair.public, &zeroed_ct, &mut transcript_verifier)
-            .is_ok());
+    #[test]
+    fn test_zero_balance_proof_edge_cases() {
+        let source_keypair = ElGamalKeypair::new_rand();
 
-        // edge cases: only C or D is zero - such ciphertext is always invalid
-        let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
-        let handle = elgamal_ciphertext.handle;
+        let mut transcript_prover = Transcript::new(b"test");
+        let mut transcript_verifier = Transcript::new(b"test");
 
-        let zeroed_comm_ciphertext = ElGamalCiphertext {
-            commitment: zeroed_comm,
-            handle,
-        };
+        // all zero ciphertext should always be a valid encryption of 0
+        let ciphertext = ElGamalCiphertext::from_bytes(&[0u8; 64]).unwrap();
 
-        let proof = ZeroBalanceProof::new(
-            &source_keypair,
-            &zeroed_comm_ciphertext,
-            &mut transcript_prover,
-        );
+        let proof = ZeroBalanceProof::new(&source_keypair, &ciphertext, &mut transcript_prover);
+
         assert!(proof
             .verify(
                 &source_keypair.public,
-                &zeroed_comm_ciphertext,
+                &ciphertext,
+                &mut transcript_verifier
+            )
+            .is_ok());
+
+        // if only either commitment or handle is zero, the ciphertext is always invalid and proof
+        // verification should always reject
+        let mut transcript_prover = Transcript::new(b"test");
+        let mut transcript_verifier = Transcript::new(b"test");
+
+        let zeroed_commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
+        let handle = source_keypair
+            .public
+            .decrypt_handle(&PedersenOpening::new_rand());
+
+        let ciphertext = ElGamalCiphertext {
+            commitment: zeroed_commitment,
+            handle,
+        };
+
+        let proof = ZeroBalanceProof::new(&source_keypair, &ciphertext, &mut transcript_prover);
+
+        assert!(proof
+            .verify(
+                &source_keypair.public,
+                &ciphertext,
                 &mut transcript_verifier
             )
             .is_err());
 
-        let (zero_comm, _) = Pedersen::new(0_u64);
-        let zeroed_handle_ciphertext = ElGamalCiphertext {
-            commitment: zero_comm,
-            handle: DecryptHandle::default(),
+        let mut transcript_prover = Transcript::new(b"test");
+        let mut transcript_verifier = Transcript::new(b"test");
+
+        let (zeroed_commitment, _) = Pedersen::new(0_u64);
+        let ciphertext = ElGamalCiphertext {
+            commitment: zeroed_commitment,
+            handle: DecryptHandle::from_bytes(&[0u8; 32]).unwrap(),
         };
 
-        let proof = ZeroBalanceProof::new(
-            &source_keypair,
-            &zeroed_handle_ciphertext,
-            &mut transcript_prover,
-        );
+        let proof = ZeroBalanceProof::new(&source_keypair, &ciphertext, &mut transcript_prover);
+
         assert!(proof
             .verify(
                 &source_keypair.public,
-                &zeroed_handle_ciphertext,
+                &ciphertext,
+                &mut transcript_verifier
+            )
+            .is_err());
+
+        // if public key is always zero, then the proof should always reject
+        let mut transcript_prover = Transcript::new(b"test");
+        let mut transcript_verifier = Transcript::new(b"test");
+
+        let public = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+        let secret = ElGamalSecretKey::new_rand();
+
+        let elgamal_keypair = ElGamalKeypair { public, secret };
+
+        let ciphertext = elgamal_keypair.public.encrypt(0_u64);
+
+        let proof = ZeroBalanceProof::new(&source_keypair, &ciphertext, &mut transcript_prover);
+
+        assert!(proof
+            .verify(
+                &source_keypair.public,
+                &ciphertext,
                 &mut transcript_verifier
             )
             .is_err());
