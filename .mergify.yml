@@ -65,6 +65,7 @@ pull_request_rules:
       backport:
         ignore_conflicts: true
         branches:
+<<<<<<< HEAD
           - v1.5
   - name: v1.6 backport
     conditions:
@@ -82,3 +83,13 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.7
+=======
+          - v1.9
+
+commands_restrictions:
+  # The author of copied PRs is the Mergify user.
+  # Restrict `copy` access to Core Contributors
+  copy:
+    conditions:
+    - author=@core-contributors
+>>>>>>> c0638439b (Restrict the Mergify copy command to core contributors)
