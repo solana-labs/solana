@@ -35,10 +35,24 @@ jobs:
               tail -n 1 vercelfile1.txt > vercelfile2.txt
               echo "3 line"
               cat vercelfile2.txt
-              filtered_url=$(cut -f8 -d" " vercelfile2.txt)
+              filtered_url9=$(cut -f9 -d" " vercelfile2.txt)
+              filtered_url8=$(cut -f8 -d" " vercelfile2.txt)
+              filtered_url7=$(cut -f7 -d" " vercelfile2.txt)
+              filtered_url6=$(cut -f6 -d" " vercelfile2.txt)
+              filtered_url5=$(cut -f5 -d" " vercelfile2.txt)
+              filtered_url4=$(cut -f4 -d" " vercelfile2.txt)
+              filtered_url3=$(cut -f3 -d" " vercelfile2.txt)
+              filtered_url2=$(cut -f2 -d" " vercelfile2.txt)
+              echo "filtered_url9 is: $filtered_url" 
+              echo "filtered_url8 is: $filtered_url" 
+              echo "filtered_url7 is: $filtered_url" 
+              echo "filtered_url6 is: $filtered_url" 
+              echo "filtered_url5 is: $filtered_url" 
+              echo "filtered_url4 is: $filtered_url" 
+              echo "filtered_url3 is: $filtered_url" 
+              echo "filtered_url2 is: $filtered_url" 
               touch .env.preview1
-              echo "$filtered_url" > .env.preview1
-              echo "filtered_url is: $filtered_url" 
+              echo "$filtered_url8" > .env.preview1 
 
 
       - name: Run tests
