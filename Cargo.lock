@@ -4752,6 +4752,7 @@ dependencies = [
 name = "solana-client-test"
 version = "1.10.0"
 dependencies = [
+ "futures-util",
  "serde_json",
  "serial_test",
  "solana-client",
