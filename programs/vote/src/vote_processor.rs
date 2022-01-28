@@ -27,7 +27,6 @@ use {
 mod get_sysvar_with_keyed_account_check {
     use super::*;
 
-    // This might work
     pub fn clock(
         keyed_account: &KeyedAccount,
         invoke_context: &InvokeContext,
@@ -154,22 +153,23 @@ pub fn process_instruction(
             } else {
                 None
             };
-            let reject_vote_account_close_feature_active = invoke_context
-                .feature_set
-                .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id());
 
-            let clock = &from_keyed_account::<Clock>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 1,
-            )?)?;
+            let clock_if_feature_active = if invoke_context
+                .feature_set
+                .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
+            {
+                Some(invoke_context.get_sysvar_cache().get_clock()?)
+            } else {
+                None
+            };
+
             vote_state::withdraw(
                 me,
                 lamports,
                 to,
                 &signers,
                 rent_sysvar.as_deref(),
-                reject_vote_account_close_feature_active,
-                clock,
+                clock_if_feature_active.as_deref(),
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {

@@ -1151,8 +1151,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     to_account: &KeyedAccount,
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: Option<&Rent>,
-    reject_vote_account_close_feature_active: bool,
-    clock: &Clock,
+    clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
@@ -1164,20 +1163,24 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         .checked_sub(lamports)
         .ok_or(InstructionError::InsufficientFunds)?;
 
-    let received_credits_previous_epoch = if vote_state.epoch_credits.is_empty() {
-        false
-    } else {
-        let maybe_last_epoch_with_credits = vote_state.epoch_credits.last();
-        match maybe_last_epoch_with_credits {
-            None => false,
-            Some(last_epoch_with_credits) => {
-                clock.epoch.saturating_sub(last_epoch_with_credits.0) < 2
-            }
-        }
-    };
-
     if remaining_balance == 0 {
-        if reject_vote_account_close_feature_active && received_credits_previous_epoch {
+        let reject_active_vote_account_close = match clock {
+            None => false,
+            Some(clock) => {
+                if vote_state.epoch_credits.is_empty() {
+                    false
+                } else {
+                    let (last_epoch_with_credits, _, _) = vote_state.epoch_credits.last().unwrap();
+                    let current_epoch = clock.epoch;
+                    // if current_epoch - last_epoch_with_credits < 2 then the validator has received credits
+                    // either in the current epoch or the previous epoch. If it's >= 2 then it has been at least
+                    // one full epoch since the validator has received credits.
+                    current_epoch.saturating_sub(*last_epoch_with_credits) < 2
+                }
+            }
+        };
+
+        if reject_active_vote_account_close {
             return Err(InstructionError::ActiveVoteAccountClose);
         } else {
             // Deinitialize upon zero-balance
@@ -2296,8 +2299,7 @@ mod tests {
             ),
             &signers,
             None,
-            false,
-            &Clock::default(),
+            None,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -2315,8 +2317,7 @@ mod tests {
             ),
             &signers,
             None,
-            false,
-            &Clock::default(),
+            Some(&Clock::default()),
         );
         assert_eq!(res, Err(InstructionError::InsufficientFunds));
 
@@ -2347,8 +2348,7 @@ mod tests {
                 ),
                 &signers,
                 None,
-                false,
-                clock_epoch_3,
+                None,
             );
             assert_eq!(res, Ok(()));
         }
@@ -2380,8 +2380,7 @@ mod tests {
                 ),
                 &signers,
                 None,
-                false,
-                clock_epoch_3,
+                None,
             );
             assert_eq!(res, Ok(()));
         }
@@ -2413,8 +2412,7 @@ mod tests {
                 ),
                 &signers,
                 None,
-                true,
-                clock_epoch_3,
+                Some(clock_epoch_3),
             );
             assert_eq!(res, Ok(()));
         }
@@ -2446,8 +2444,7 @@ mod tests {
                 ),
                 &signers,
                 None,
-                true,
-                clock_epoch_3,
+                Some(clock_epoch_3),
             );
             assert_eq!(res, Ok(()));
         }
@@ -2479,8 +2476,7 @@ mod tests {
                 ),
                 &signers,
                 Some(&rent_sysvar),
-                false,
-                clock_epoch_3,
+                None,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2512,8 +2508,7 @@ mod tests {
                 ),
                 &signers,
                 Some(&rent_sysvar),
-                false,
-                clock_epoch_3,
+                None,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2545,8 +2540,7 @@ mod tests {
                 ),
                 &signers,
                 Some(&rent_sysvar),
-                true,
-                clock_epoch_3,
+                Some(clock_epoch_3),
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2578,8 +2572,7 @@ mod tests {
                 ),
                 &signers,
                 Some(&rent_sysvar),
-                true,
-                clock_epoch_3,
+                Some(clock_epoch_3),
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2603,8 +2596,7 @@ mod tests {
                 &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                 &signers,
                 Some(&rent_sysvar),
-                false,
-                &Clock::default(),
+                Some(&Clock::default()),
             );
             assert_eq!(res, Ok(()));
             assert_eq!(
@@ -2632,8 +2624,7 @@ mod tests {
                         &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                         &signers,
                         rent_sysvar,
-                        false,
-                        clock_epoch_3,
+                        None,
                     );
                     assert_eq!(res, Ok(()));
                     assert_eq!(vote_account.borrow().lamports(), 0);
@@ -2663,8 +2654,7 @@ mod tests {
                     &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                     &signers,
                     rent_sysvar,
-                    true,
-                    clock_epoch_3,
+                    Some(clock_epoch_3),
                 );
                 assert_eq!(res, Ok(()));
                 assert_eq!(vote_account.borrow().lamports(), 0);
@@ -2693,8 +2683,7 @@ mod tests {
                     &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                     &signers,
                     rent_sysvar,
-                    true,
-                    clock_epoch_3,
+                    Some(clock_epoch_3),
                 );
                 assert_eq!(res, Err(InstructionError::ActiveVoteAccountClose));
                 assert_eq!(vote_account.borrow().lamports(), lamports);
@@ -2734,8 +2723,7 @@ mod tests {
             withdrawer_keyed_account,
             &signers,
             None,
-            false,
-            &Clock::default(),
+            None,
         );
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports(), 0);
