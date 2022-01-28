@@ -23,42 +23,68 @@ use {
     std::convert::TryInto,
 };
 
+/// Constant for 2^32
+const TWO_32: u64 = 4294967296;
+
+#[derive(Clone)]
+#[repr(C)]
+struct ElGamalGroupEncryption {
+    pub commitment: PedersenCommitment,
+    pub source: DecryptHandle,
+    pub dest: DecryptHandle,
+    pub auditor: DecryptHandle,
+}
+
+impl ElGamalGroupEncryption {
+    fn new(
+        amount: u32,
+        transfer_pubkeys: &TransferPubkeys,
+    ) -> (ElGamalGroupEncryption, PedersenOpening) {
+        let (commitment, opening) = Pedersen::new(amount);
+        let group_encryption = ElGamalGroupEncryption {
+            commitment,
+            source: transfer_pubkeys.source.decrypt_handle(&opening),
+            dest: transfer_pubkeys.dest.decrypt_handle(&opening),
+            auditor: transfer_pubkeys.auditor.decrypt_handle(&opening),
+        };
+
+        (group_encryption, opening)
+    }
+}
+
+/// Split u64 number into two u32 numbers
+#[cfg(not(target_arch = "bpf"))]
+pub fn split_u64_into_u32(amount: u64) -> (u32, u32) {
+    let lo = amount as u32;
+    let hi = (amount >> 32) as u32;
+
+    (lo, hi)
+}
+
+fn combine_u32_ciphertexts(
+    ciphertext_lo: &ElGamalCiphertext,
+    ciphertext_hi: &ElGamalCiphertext,
+) -> ElGamalCiphertext {
+    ciphertext_lo + &(ciphertext_hi * &Scalar::from(TWO_32))
+}
+
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
-    /// The encrypted transfer amount
-    pub encrypted_transfer_amount: EncryptedTransferAmount,
+    /// Group encryption of the low 32 bits of the transfer amount
+    pub ciphertext_lo: pod::ElGamalGroupEncryption,
+
+    /// Group encryption of the high 32 bits of the transfer amount
+    pub ciphertext_hi: pod::ElGamalGroupEncryption,
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_public_keys: TransferPubkeys, // 128 bytes
+    pub transfer_public_keys: pod::TransferPubkeys,
 
     /// The final spendable ciphertext after the transfer
-    pub new_spendable_ct: pod::ElGamalCiphertext, // 64 bytes
+    pub new_spendable_ct: pod::ElGamalCiphertext,
 
-    // pub fee: EncryptedTransferFee,
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
-}
-
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub struct FeeParameters {
-    /// Fee rate expressed as basis points of the transfer amount, i.e. increments of 0.01%
-    pub fee_rate_basis_points: u16,
-    /// Maximum fee assessed on transfers, expressed as an amount of tokens
-    pub maximum_fee: u64,
-}
-
-#[allow(dead_code)]
-fn calculate_fee(transfer_amount: u64, fee_parameters: FeeParameters) -> u64 {
-    // TODO: temporary way to calculate fees for now. Should account for overflows/compiler
-    // optimizations
-    let fee = (transfer_amount * (fee_parameters.fee_rate_basis_points as u64)) / 10000;
-    if fee % 10000 > 0 {
-        fee + 1
-    } else {
-        fee
-    }
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -72,92 +98,60 @@ impl TransferData {
         spendable_balance: u64,
 
         // available balance in the source account as ElGamalCiphertext
-        spendable_balance_ciphertext: ElGamalCiphertext,
+        spendable_balance_ciphertext: &ElGamalCiphertext,
 
         // source account ElGamal keypair
-        source_keypair: &ElGamalKeypair,
+        keypair_source: &ElGamalKeypair,
 
         // destination account ElGamal pubkey
-        dest_pk: ElGamalPubkey,
+        pubkey_dest: &ElGamalPubkey,
 
         // auditor ElGamal pubkey
-        auditor_pk: ElGamalPubkey,
-        // // fee collector ElGamal pubkey
-        // fee_collector_pk: ElGamalPubkey,
-
-        // // fee rate and cap value
-        // fee_parameters: FeeParameters,
+        pubkey_auditor: &ElGamalPubkey,
     ) -> Self {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
-        let (comm_lo, open_lo) = Pedersen::new(amount_lo);
-        let (comm_hi, open_hi) = Pedersen::new(amount_hi);
-
-        let handle_source_lo = source_keypair.public.decrypt_handle(&open_lo);
-        let handle_dest_lo = dest_pk.decrypt_handle(&open_lo);
-        let handle_auditor_lo = auditor_pk.decrypt_handle(&open_lo);
-
-        let handle_source_hi = source_keypair.public.decrypt_handle(&open_hi);
-        let handle_dest_hi = dest_pk.decrypt_handle(&open_hi);
-        let handle_auditor_hi = auditor_pk.decrypt_handle(&open_hi);
-
-        // organize transfer amount commitments and decrypt handles
-        let decrypt_handles_lo = TransferDecryptHandles {
-            source: handle_source_lo.into(),
-            dest: handle_dest_lo.into(),
-            auditor: handle_auditor_lo.into(),
+        // encrypt transfer amount
+        let transfer_pubkeys = TransferPubkeys {
+            source: &keypair_source.public,
+            dest: pubkey_dest,
+            auditor: pubkey_auditor,
         };
 
-        let decrypt_handles_hi = TransferDecryptHandles {
-            source: handle_source_hi.into(),
-            dest: handle_dest_hi.into(),
-            auditor: handle_auditor_hi.into(),
-        };
-
-        let encrypted_transfer_amount = EncryptedTransferAmount {
-            amount_comm_lo: comm_lo.into(),
-            amount_comm_hi: comm_hi.into(),
-            decrypt_handles_lo,
-            decrypt_handles_hi,
-        };
-
-        // group public keys for transfer
-        let transfer_public_keys = TransferPubkeys {
-            source_pk: source_keypair.public.into(),
-            dest_pk: dest_pk.into(),
-            auditor_pk: auditor_pk.into(),
-        };
+        let (ciphertext_lo, opening_lo) = ElGamalGroupEncryption::new(amount_lo, &transfer_pubkeys);
+        let (ciphertext_hi, opening_hi) = ElGamalGroupEncryption::new(amount_hi, &transfer_pubkeys);
 
         // subtract transfer amount from the spendable ciphertext
-        let spendable_comm = spendable_balance_ciphertext.commitment;
-        let spendable_handle = spendable_balance_ciphertext.handle;
-
         let new_spendable_balance = spendable_balance - transfer_amount;
-        let new_spendable_comm = spendable_comm - combine_u32_comms(comm_lo, comm_hi);
-        let new_spendable_handle =
-            spendable_handle - combine_u32_handles(handle_source_lo, handle_source_hi);
 
-        let new_spendable_ct = ElGamalCiphertext {
-            commitment: new_spendable_comm,
-            handle: new_spendable_handle,
+        let transfer_amount_lo_source = ElGamalCiphertext {
+            commitment: ciphertext_lo.commitment,
+            handle: ciphertext_lo.source,
         };
+
+        let transfer_amount_hi_source = ElGamalCiphertext {
+            commitment: ciphertext_hi.commitment,
+            handle: ciphertext_hi.source,
+        };
+
+        let new_spendable_ciphertext = &spendable_balance_ciphertext
+            - &combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
 
         // range_proof and validity_proof should be generated together
         let proof = TransferProof::new(
-            source_keypair,
-            &dest_pk,
-            &auditor_pk,
-            (amount_lo as u64, amount_hi as u64),
-            (&open_lo, &open_hi),
-            new_spendable_balance,
-            &new_spendable_ct,
+            (amount_lo, amount_hi),
+            keypair_source,
+            (&pubkey_dest, &pubkey_auditor),
+            (&ciphertext_lo, &opening_lo),
+            (&ciphertext_hi, &opening_hi),
+            (new_spendable_balance, &new_spendable_ciphertext),
         );
 
         Self {
             encrypted_transfer_amount,
             new_spendable_ct: new_spendable_ct.into(),
-            transfer_public_keys,
+            transfer_pubkeys,
             proof,
         }
     }
@@ -257,63 +251,83 @@ pub struct TransferProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl TransferProof {
-    fn transcript_new() -> Transcript {
-        Transcript::new(b"TransferProof")
+    fn transcript_new(
+    ) -> Transcript {
+        let mut transcript = Transcript::new(b"transfer-proof");
+        transcript
+    }
+
+    fn transcript_append_pubkeys(
+        label: &'static [u8],
+        pubkey_source: &pod::ElGamalPubkey,
+        pubkey_dest: &pod::ElGamalPubkey,
+        pubkey_auditor: &pod::ElGamalPubkey,
+        transcript: &mut Transcript,
+    ) {
+        transcript.append_message(b"dom-sep", label);
+        transcript.append_pubkey(b"pubkey-source", &pubkey_source);
+        transcript.append_pubkey(b"pubkey-dest", &pubkey_dest);
+        transcript.append_pubkey(b"pubkey-auditor", &pubkey_auditor);
+    }
+
+    fn transcript_append_ciphertext(
+        label: &'static [u8],
+        commitment: &pod::PedersenCommitment,
+        handle_source: &pod::DecryptHandle,
+        handle_dest: &pod::DecryptHandle,
+        handle_auditor: &pod::DecryptHandle,
+        transcript: &mut Transcript,
+    ) {
+        transcript.append_message(b"dom-sep", label);
+        transcript.append_commitment(b"comm-amount", commitment);
+        transcript.append_handle(b"handle-source", handle_source);
+        transcript.append_handle(b"handle-dest", handle_dest);
+        transcript.append_handle(b"handle-auditor", handle_auditor);
     }
 
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::many_single_char_names)]
     pub fn new(
-        source_keypair: &ElGamalKeypair,
-        dest_pk: &ElGamalPubkey,
-        auditor_pk: &ElGamalPubkey,
-        transfer_amt: (u64, u64),
-        openings: (&PedersenOpening, &PedersenOpening),
-        source_new_balance: u64,
-        source_new_balance_ct: &ElGamalCiphertext,
+        (transfer_amount_lo, transfer_amount_hi): (u32, u32),
+        keypair_source: &ElGamalKeypair,
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (ciphertext_lo, opening_lo): (&ElGamalGroupEncryption, &PedersenOpening),
+        (ciphertext_hi, opening_hi): (&ElGamalGroupEncryption, &PedersenOpening),
+        (source_new_balance, source_new_balance_ciphertext): (u64, &ElGamalCiphertext),
     ) -> Self {
-        let mut transcript = Self::transcript_new();
-
-        // add a domain separator to record the start of the protocol
-        transcript.transfer_proof_domain_sep();
+        let mut transcript = Self::transcript_new(
+            &keypair_source.public,
+            pubkey_dest,
+            pubkey_auditor,
+            ciphertext_lo,
+            ciphertext_hi,
+        );
 
         // generate a Pedersen commitment for the remaining balance in source
-        let (source_commitment, source_open) = Pedersen::new(source_new_balance);
-
-        // extract the relevant scalar and Ristretto points from the inputs
-        let P_EG = source_keypair.public.get_point();
-        let C_EG = source_new_balance_ct.commitment.get_point();
-        let D_EG = source_new_balance_ct.handle.get_point();
-        let C_Ped = source_commitment.get_point();
-
-        // append all current state to the transcript
-        transcript.append_point(b"P_EG", &P_EG.compress());
-        transcript.append_point(b"C_EG", &C_EG.compress());
-        transcript.append_point(b"D_EG", &D_EG.compress());
-        transcript.append_point(b"C_Ped", &C_Ped.compress());
+        let (source_commitment, source_opening) = Pedersen::new(source_new_balance);
 
         // generate equality_proof
         let equality_proof = EqualityProof::new(
-            source_keypair,
-            source_new_balance_ct,
+            keypair_source,
+            source_new_balance_ciphertext,
             source_new_balance,
-            &source_open,
+            &source_opening,
             &mut transcript,
         );
 
         // generate ciphertext validity proof
         let validity_proof = AggregatedValidityProof::new(
-            (dest_pk, auditor_pk),
-            transfer_amt,
-            openings,
+            (pubkey_dest, pubkey_auditor),
+            (transfer_amount_lo, transfer_amount_hi),
+            (opening_lo, opening_hi),
             &mut transcript,
         );
 
         // generate the range proof
         let range_proof = RangeProof::new(
-            vec![source_new_balance, transfer_amt.0, transfer_amt.1],
+            vec![source_new_balance, transfer_amount_lo, transfer_amount_hi],
             vec![64, 32, 32],
-            vec![&source_open, openings.0, openings.1],
+            vec![&source_opening, opening_lo, opening_hi],
             &mut transcript,
         );
 
@@ -401,12 +415,22 @@ impl TransferProof {
 }
 
 /// The ElGamal public keys needed for a transfer
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone)]
 #[repr(C)]
-pub struct TransferPubkeys {
-    pub source_pk: pod::ElGamalPubkey,  // 32 bytes
-    pub dest_pk: pod::ElGamalPubkey,    // 32 bytes
-    pub auditor_pk: pod::ElGamalPubkey, // 32 bytes
+struct TransferPubkeys<'pk> {
+    pub source: &'pk ElGamalPubkey,
+    pub dest: &'pk ElGamalPubkey,
+    pub auditor: &'pk ElGamalPubkey,
+}
+
+impl<'pk> TransferPubkeys<'pk> {
+    fn to_bytes(&self) -> [u8; 96] {
+        let mut bytes = [0u8; 92];
+        bytes[..32].copy_from_slice(&self.source.to_bytes());
+        bytes[32..64].copy_from_slice(&self.dest.to_bytes());
+        bytes[64..96].copy_from_slice(&self.auditor.to_bytes());
+        bytes
+    }
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -450,19 +474,6 @@ pub struct EncryptedTransferFee {
     pub decrypt_handle_fee_collector: pod::DecryptHandle,
 }
 
-/// Split u64 number into two u32 numbers
-#[cfg(not(target_arch = "bpf"))]
-pub fn split_u64_into_u32(amt: u64) -> (u32, u32) {
-    let lo = amt as u32;
-    let hi = (amt >> 32) as u32;
-
-    (lo, hi)
-}
-
-/// Constant for 2^32
-#[cfg(not(target_arch = "bpf"))]
-const TWO_32: u64 = 4294967296;
-
 #[cfg(not(target_arch = "bpf"))]
 pub fn combine_u32_comms(
     comm_lo: PedersenCommitment,
@@ -475,11 +486,6 @@ pub fn combine_u32_comms(
 pub fn combine_u32_handles(handle_lo: DecryptHandle, handle_hi: DecryptHandle) -> DecryptHandle {
     handle_lo + handle_hi * Scalar::from(TWO_32)
 }
-
-/*
-pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertext) -> ElGamalCiphertext {
-    ct_lo + ct_hi * Scalar::from(TWO_32)
-}*/
 
 #[cfg(test)]
 mod test {

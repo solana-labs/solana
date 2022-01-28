@@ -1,5 +1,8 @@
 use {
-    crate::errors::TranscriptError,
+    crate::{
+        zk_token_elgamal::pod,
+        errors::TranscriptError,
+    },
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar, traits::IsIdentity},
     merlin::Transcript,
 };
@@ -33,6 +36,18 @@ pub trait TranscriptProtocol {
 
     /// Append a `point` with the given `label`.
     fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto);
+
+    /// Append an ElGamal pubkey with the given `label`.
+    fn append_pubkey(&mut self, label: &'static [u8], point: &pod::ElGamalPubkey);
+
+    /// Append an ElGamal ciphertext with the given `label`.
+    fn append_ciphertext(&mut self, label: &'static [u8], point: &pod::ElGamalCiphertext);
+
+    /// Append a Pedersen commitment with the given `label`.
+    fn append_commitment(&mut self, label: &'static [u8], point: &pod::PedersenCommitment);
+
+    /// Append an ElGamal decryption handle with the given `label`.
+    fn append_handle(&mut self, label: &'static [u8], point: &pod::DecryptHandle);
 
     /// Check that a point is not the identity, then append it to the
     /// transcript.  Otherwise, return an error.
@@ -104,5 +119,21 @@ impl TranscriptProtocol for Transcript {
         self.challenge_bytes(label, &mut buf);
 
         Scalar::from_bytes_mod_order_wide(&buf)
+    }
+
+    fn append_pubkey(&mut self, label: &'static [u8], pubkey: &pod::ElGamalPubkey) {
+        self.append_message(label, &pubkey.0);
+    }
+
+    fn append_ciphertext(&mut self, label: &'static [u8], ciphertext: &pod::ElGamalCiphertext) {
+        self.append_message(label, &ciphertext.0);
+    }
+
+    fn append_commitment(&mut self, label: &'static [u8], commitment: &pod::PedersenCommitment) {
+        self.append_message(label, &commitment.0);
+    }
+
+    fn append_handle(&mut self, label: &'static [u8], handle: &pod::DecryptHandle) {
+        self.append_message(label, &handle.0);
     }
 }
