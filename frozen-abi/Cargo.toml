@@ -13,7 +13,7 @@ edition = "2021"
 bs58 = "0.4.0"
 bv = { version = "0.11.1", features = ["serde"] }
 log = "0.4.14"
-serde = "1.0.134"
+serde = "1.0.136"
 serde_derive = "1.0.103"
 sha2 = "0.10.1"
 solana-frozen-abi-macro = { path = "macro", version = "=1.10.0" }

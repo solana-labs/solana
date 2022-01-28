@@ -15,7 +15,7 @@ bytemuck = "1.7.3"
 log = "0.4.14"
 num-derive = "0.3"
 num-traits = "0.2"
-serde = { version = "1.0.134", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.0" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.10.0" }
