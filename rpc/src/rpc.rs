@@ -400,7 +400,8 @@ impl JsonRpcRequestProcessor {
                 self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
-        let accounts = if program_id == &spl_token_id() && encoding == UiAccountEncoding::JsonParsed {
+        let accounts = if program_id == &spl_token_id() && encoding == UiAccountEncoding::JsonParsed
+        {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
             keyed_accounts
