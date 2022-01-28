@@ -264,7 +264,7 @@ impl PohService {
                     );
                     // what do we do on failure here? Ignore for now.
                     let (_send_res, send_record_result_time) =
-                        Measure::this(|_| record.sender.send(res), (), "SendRecordResult");
+                        Measure::this(|_| record.sender.send(res), (), "send_record_result");
                     timing.total_send_record_result_us += send_record_result_time.as_us();
                     timing.num_hashes += 1; // note: may have also ticked inside record
 
