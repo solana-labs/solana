@@ -413,7 +413,7 @@ impl JsonRpcRequestProcessor {
                 })
                 .collect::<Result<Vec<_>>>()?
         };
-        Ok(result).map(|result| match with_context {
+        Ok(match with_context {
             true => OptionalContext::Context(new_response(&bank, result)),
             false => OptionalContext::NoContext(result),
         })
