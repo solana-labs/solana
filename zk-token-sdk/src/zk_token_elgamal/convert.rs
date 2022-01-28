@@ -28,6 +28,7 @@ mod target_arch {
                 validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
+            instruction::transfer::{ElGamalGroupEncryption, TransferPubkeys},
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,

@@ -136,3 +136,24 @@ impl Default for AeCiphertext {
         Self::zeroed()
     }
 }
+
+/// Serialization of group encryption used in the transfer instruction
+//  TODO: refactor this code into the instruction mod
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct TransferPubkeys(pub [u8; 96]);
+
+// `ElGamalGroupEncryption` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for TransferPubkeys {}
+unsafe impl Pod for TransferPubkeys {}
+
+/// Serialization of group encryption used in the transfer instruction
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct ElGamalGroupEncryption(pub [u8; 128]);
+
+// `ElGamalGroupEncryption` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for ElGamalGroupEncryption {}
+unsafe impl Pod for ElGamalGroupEncryption {}
