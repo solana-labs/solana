@@ -1957,7 +1957,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub fn remove_old_roots(&self, newest_slot: Slot, keep: HashSet<Slot>) {
         let w_roots_tracker = self.roots_tracker.read().unwrap();
         let mut roots = w_roots_tracker.roots.get_all_less_than(newest_slot);
-        roots.retain(|root| keep.contains(root));
+        roots.retain(|root| !keep.contains(root));
         drop(w_roots_tracker);
         if !roots.is_empty() {
             error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}, {:?}, keep: {:?}", newest_slot, roots.len(), keep.len(), roots, keep);
