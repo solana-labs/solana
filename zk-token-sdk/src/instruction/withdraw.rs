@@ -185,7 +185,7 @@ impl WithdrawProof {
         //
         // TODO: double compressing here - consider modifying range proof input type to `PedersenCommitment`
         range_proof.verify(
-            vec![&commitment.get_point().compress()],
+            vec![&commitment],
             vec![64_usize],
             &mut transcript,
         )?;

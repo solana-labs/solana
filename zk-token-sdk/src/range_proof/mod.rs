@@ -427,10 +427,6 @@ mod tests {
             &mut transcript_create,
         );
 
-        let comm_1_point = comm_1.get_point().compress();
-        let comm_2_point = comm_2.get_point().compress();
-        let comm_3_point = comm_3.get_point().compress();
-
         assert!(proof
             .verify(
                 vec![&comm_1, &comm_2, &comm_3],

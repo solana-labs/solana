@@ -28,7 +28,7 @@ const TWO_32: u64 = 4294967296;
 
 #[derive(Clone)]
 #[repr(C)]
-pub(crate) struct ElGamalGroupEncryption {
+pub struct ElGamalGroupEncryption {
     pub commitment: PedersenCommitment,
     pub source: DecryptHandle,
     pub dest: DecryptHandle,
@@ -49,7 +49,8 @@ impl ElGamalGroupEncryption {
         let bytes = array_ref![bytes, 0, 128];
         let (commitment, source, dest, auditor) = array_refs![bytes, 32, 32, 32, 32];
 
-        let commitment = PedersenCommitment::from_bytes(commitment).ok_or(ProofError::Verification)?;
+        let commitment =
+            PedersenCommitment::from_bytes(commitment).ok_or(ProofError::Verification)?;
         let source = DecryptHandle::from_bytes(source).ok_or(ProofError::Verification)?;
         let dest = DecryptHandle::from_bytes(dest).ok_or(ProofError::Verification)?;
         let auditor = DecryptHandle::from_bytes(auditor).ok_or(ProofError::Verification)?;
@@ -169,7 +170,7 @@ impl TransferData {
         // generate transcript and append all public inputs
         let mut transcript = TransferProof::transcript_new();
 
-        let pod_transfer_pubkeys = pod::TransferPubkeys(transfer_pubkeys.to_bytes());
+        let pod_transfer_pubkeys: pod::TransferPubkeys = transfer_pubkeys.into();
         TransferProof::transcript_append_pubkeys(
             b"transfer-pubkeys",
             &pod_transfer_pubkeys,
@@ -194,8 +195,8 @@ impl TransferData {
             (amount_lo, amount_hi),
             keypair_source,
             (&pubkey_dest, &pubkey_auditor),
-            (&ciphertext_lo, &opening_lo),
-            (&ciphertext_hi, &opening_hi),
+            &opening_lo,
+            &opening_hi,
             (new_spendable_balance, &new_spendable_ciphertext),
             &mut transcript,
         );
@@ -275,13 +276,13 @@ impl Verifiable for TransferData {
         );
 
         TransferProof::transcript_append_ciphertext(
-            b"transfer-ciphertext_lo",
+            b"transfer-ciphertext-lo",
             &self.ciphertext_lo,
             &mut transcript,
         );
 
         TransferProof::transcript_append_ciphertext(
-            b"transfer-ciphertext_hi",
+            b"transfer-ciphertext-hi",
             &self.ciphertext_hi,
             &mut transcript,
         );
@@ -322,7 +323,7 @@ pub struct TransferProof {
 #[cfg(not(target_arch = "bpf"))]
 impl TransferProof {
     fn transcript_new() -> Transcript {
-        let mut transcript = Transcript::new(b"transfer-proof");
+        let transcript = Transcript::new(b"transfer-proof");
         transcript
     }
 
@@ -348,8 +349,8 @@ impl TransferProof {
         (transfer_amount_lo, transfer_amount_hi): (u32, u32),
         keypair_source: &ElGamalKeypair,
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
-        (ciphertext_lo, opening_lo): (&ElGamalGroupEncryption, &PedersenOpening),
-        (ciphertext_hi, opening_hi): (&ElGamalGroupEncryption, &PedersenOpening),
+        opening_lo: &PedersenOpening,
+        opening_hi: &PedersenOpening,
         (source_new_balance, source_new_balance_ciphertext): (u64, &ElGamalCiphertext),
         transcript: &mut Transcript,
     ) -> Self {
@@ -362,7 +363,7 @@ impl TransferProof {
             source_new_balance_ciphertext,
             source_new_balance,
             &source_opening,
-            &mut transcript,
+            transcript,
         );
 
         // generate ciphertext validity proof
@@ -370,7 +371,7 @@ impl TransferProof {
             (pubkey_dest, pubkey_auditor),
             (transfer_amount_lo, transfer_amount_hi),
             (opening_lo, opening_hi),
-            &mut transcript,
+            transcript,
         );
 
         // generate the range proof
@@ -382,7 +383,7 @@ impl TransferProof {
             ],
             vec![64, 32, 32],
             vec![&source_opening, opening_lo, opening_hi],
-            &mut transcript,
+            transcript,
         );
 
         Self {
@@ -406,22 +407,6 @@ impl TransferProof {
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
-        // extract the relevant scalar and Ristretto points from the inputs
-
-        // let source_pk: ElGamalPubkey = transfer_public_keys.source_pk.try_into()?;
-        // let new_spendable_ct: ElGamalCiphertext = (*new_spendable_ct).try_into()?;
-
-        // let P_EG = source_pk.get_point();
-        // let C_EG = new_spendable_ct.commitment.get_point();
-        // let D_EG = new_spendable_ct.handle.get_point();
-        // let C_Ped = commitment.get_point();
-
-        // // append all current state to the transcript
-        // transcript.append_point(b"P_EG", &P_EG.compress());
-        // transcript.append_point(b"C_EG", &C_EG.compress());
-        // transcript.append_point(b"D_EG", &D_EG.compress());
-        // transcript.append_point(b"C_Ped", &C_Ped.compress());
-
         // verify equality proof
         //
         // TODO: we can also consider verifying equality and range proof in a batch
@@ -429,7 +414,7 @@ impl TransferProof {
             &transfer_pubkeys.source,
             &new_spendable_ciphertext,
             &commitment,
-            &mut transcript,
+            transcript,
         )?;
 
         // verify validity proof
@@ -438,7 +423,7 @@ impl TransferProof {
             (&ciphertext_lo.commitment, &ciphertext_hi.commitment),
             (&ciphertext_lo.dest, &ciphertext_hi.dest),
             (&ciphertext_lo.auditor, &ciphertext_hi.auditor),
-            &mut transcript,
+            transcript,
         )?;
 
         // verify range proof
@@ -450,7 +435,7 @@ impl TransferProof {
                 &ciphertext_hi.commitment,
             ],
             vec![64_usize, 32_usize, 32_usize],
-            &mut transcript,
+            transcript,
         )?;
 
         Ok(())
@@ -460,7 +445,7 @@ impl TransferProof {
 /// The ElGamal public keys needed for a transfer
 #[derive(Clone)]
 #[repr(C)]
-pub(crate) struct TransferPubkeys {
+pub struct TransferPubkeys {
     pub source: ElGamalPubkey,
     pub dest: ElGamalPubkey,
     pub auditor: ElGamalPubkey,
@@ -488,6 +473,7 @@ impl TransferPubkeys {
             dest,
             auditor,
         })
+    }
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -525,10 +511,10 @@ mod test {
         let transfer_data = TransferData::new(
             transfer_amount,
             spendable_balance,
-            spendable_ct,
+            &spendable_ct,
             &source_keypair,
-            dest_pk,
-            auditor_pk,
+            &dest_pk,
+            &auditor_pk,
         );
 
         assert!(transfer_data.verify().is_ok());
@@ -560,10 +546,10 @@ mod test {
         let transfer_data = TransferData::new(
             transfer_amount,
             spendable_balance,
-            spendable_ct,
+            &spendable_ct,
             &source_keypair,
-            dest_pk,
-            auditor_pk,
+            &dest_pk,
+            &auditor_pk,
         );
 
         assert_eq!(

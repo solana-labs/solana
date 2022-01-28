@@ -318,7 +318,7 @@ mod tests {
 
         assert!(proof_deserialized
             .verify(
-                vec![&comm.get_point().compress()],
+                vec![&comm],
                 vec![64],
                 &mut transcript_verify
             )
@@ -346,16 +346,12 @@ mod tests {
             &mut transcript_create,
         );
 
-        let comm_1_point = comm_1.get_point().compress();
-        let comm_2_point = comm_2.get_point().compress();
-        let comm_3_point = comm_3.get_point().compress();
-
         let proof_serialized: pod::RangeProof128 = proof.try_into().unwrap();
         let proof_deserialized: RangeProof = proof_serialized.try_into().unwrap();
 
         assert!(proof_deserialized
             .verify(
-                vec![&comm_1_point, &comm_2_point, &comm_3_point],
+                vec![&comm_1, &comm_2, &comm_3],
                 vec![64, 32, 32],
                 &mut transcript_verify,
             )
