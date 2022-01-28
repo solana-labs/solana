@@ -1960,7 +1960,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         roots.retain(|root| keep.contains(root));
         drop(w_roots_tracker);
         if !roots.is_empty() {
-            error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}, {:?}", newest_slot, roots.len(), keep.len(), roots);
+            error!("ancient_append_vec: removing really old roots. newest_slot: {}, # roots to delete: {}, ancient to keep: {}, {:?}, keep: {:?}", newest_slot, roots.len(), keep.len(), roots, keep);
             let mut w_roots_tracker = self.roots_tracker.write().unwrap();
             roots.into_iter().for_each(|root| {w_roots_tracker.roots.remove(&root);});
         }

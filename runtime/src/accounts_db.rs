@@ -6755,7 +6755,7 @@ if false {
         if let Some(db) = maybe_db {
             let range = storages.range();
             let max_root = range.end;
-            let width = epoch_schedule.unwrap().slots_per_epoch + 100; // a buffer
+            let width = epoch_schedule.unwrap().slots_per_epoch + 10; // a buffer
             if max_root > width {
                 let min_root = max_root - width;
                 let mut valid_slots = HashSet::default();
