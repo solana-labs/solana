@@ -1116,6 +1116,18 @@ fn test_program_bpf_invoke_sanity() {
             &[],
         );
 
+        do_invoke_failure_test_local(
+            TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER,
+            TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
+            &[invoked_program_id.clone()],
+        );
+
+        do_invoke_failure_test_local(
+            TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE,
+            TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
+            &[invoked_program_id.clone()],
+        );
+
         // Check resulting state
 
         assert_eq!(43, bank.get_balance(&derived_key1));
@@ -1422,7 +1434,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_noop", 481),
             ("solana_bpf_rust_param_passing", 146),
             ("solana_bpf_rust_rand", 488),
-            ("solana_bpf_rust_sanity", 9126),
+            ("solana_bpf_rust_sanity", 9128),
             ("solana_bpf_rust_secp256k1_recover", 25889),
             ("solana_bpf_rust_sha", 30692),
         ]);

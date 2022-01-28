@@ -18,7 +18,7 @@ impl DataPoint {
 
     pub fn add_field_str(&mut self, name: &'static str, value: &str) -> &mut Self {
         self.fields
-            .push((name, format!("\"{}\"", value.replace("\"", "\\\""))));
+            .push((name, format!("\"{}\"", value.replace('\"', "\\\""))));
         self
     }
 
@@ -151,7 +151,7 @@ macro_rules! datapoint_trace {
 mod test {
     #[test]
     fn test_datapoint() {
-        datapoint_debug!("name", ("field name", "test".to_string(), String));
+        datapoint_debug!("name", ("field name", "test", String));
         datapoint_info!("name", ("field name", 12.34_f64, f64));
         datapoint_trace!("name", ("field name", true, bool));
         datapoint_warn!("name", ("field name", 1, i64));
@@ -180,7 +180,7 @@ mod test {
         let point = create_datapoint!(
             @point "name",
             ("i64", 1, i64),
-            ("String", "string space string".to_string(), String),
+            ("String", "string space string", String),
             ("f64", 12.34_f64, f64),
             ("bool", true, bool)
         );

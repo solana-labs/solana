@@ -1,8 +1,8 @@
 use super::pod;
 pub use target_arch::*;
 
-impl From<(pod::PedersenCommitment, pod::PedersenDecryptHandle)> for pod::ElGamalCiphertext {
-    fn from((comm, decrypt_handle): (pod::PedersenCommitment, pod::PedersenDecryptHandle)) -> Self {
+impl From<(pod::PedersenCommitment, pod::DecryptHandle)> for pod::ElGamalCiphertext {
+    fn from((comm, decrypt_handle): (pod::PedersenCommitment, pod::DecryptHandle)) -> Self {
         let mut buf = [0_u8; 64];
         buf[..32].copy_from_slice(&comm.0);
         buf[32..].copy_from_slice(&decrypt_handle.0);
@@ -17,13 +17,15 @@ mod target_arch {
         crate::{
             encryption::{
                 auth_encryption::AeCiphertext,
-                elgamal::{ElGamalCiphertext, ElGamalPubkey},
-                pedersen::{PedersenCommitment, PedersenDecryptHandle},
+                elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
+                pedersen::PedersenCommitment,
             },
             errors::ProofError,
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                equality_proof::EqualityProof, errors::*, validity_proof::ValidityProof,
+                equality_proof::EqualityProof,
+                errors::*,
+                validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
         },
@@ -107,25 +109,25 @@ mod target_arch {
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl From<PedersenDecryptHandle> for pod::PedersenDecryptHandle {
-        fn from(handle: PedersenDecryptHandle) -> Self {
+    impl From<DecryptHandle> for pod::DecryptHandle {
+        fn from(handle: DecryptHandle) -> Self {
             Self(handle.to_bytes())
         }
     }
 
     // For proof verification, interpret pod::PedersenDecHandle as CompressedRistretto
     #[cfg(not(target_arch = "bpf"))]
-    impl From<pod::PedersenDecryptHandle> for CompressedRistretto {
-        fn from(pod: pod::PedersenDecryptHandle) -> Self {
+    impl From<pod::DecryptHandle> for CompressedRistretto {
+        fn from(pod: pod::DecryptHandle) -> Self {
             Self(pod.0)
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl TryFrom<pod::PedersenDecryptHandle> for PedersenDecryptHandle {
+    impl TryFrom<pod::DecryptHandle> for DecryptHandle {
         type Error = ProofError;
 
-        fn try_from(pod: pod::PedersenDecryptHandle) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::DecryptHandle) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0).ok_or(ProofError::InconsistentCTData)
         }
     }
@@ -168,6 +170,20 @@ mod target_arch {
         type Error = ValidityProofError;
 
         fn try_from(pod: pod::ValidityProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
+    impl From<AggregatedValidityProof> for pod::AggregatedValidityProof {
+        fn from(proof: AggregatedValidityProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::AggregatedValidityProof> for AggregatedValidityProof {
+        type Error = ValidityProofError;
+
+        fn try_from(pod: pod::AggregatedValidityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

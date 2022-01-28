@@ -698,33 +698,6 @@ impl<'a> InvokeContext<'a> {
                         );
                         InstructionError::MissingAccount
                     })?;
-                let borrowed_account = instruction_context
-                    .try_borrow_account(self.transaction_context, index_in_caller)?;
-
-                // Readonly in caller cannot become writable in callee
-                if account_meta.is_writable && !borrowed_account.is_writable() {
-                    ic_msg!(
-                        self,
-                        "{}'s writable privilege escalated",
-                        borrowed_account.get_key(),
-                    );
-                    return Err(InstructionError::PrivilegeEscalation);
-                }
-
-                // To be signed in the callee,
-                // it must be either signed in the caller or by the program
-                if account_meta.is_signer
-                    && !(borrowed_account.is_signer()
-                        || signers.contains(borrowed_account.get_key()))
-                {
-                    ic_msg!(
-                        self,
-                        "{}'s signer privilege escalated",
-                        borrowed_account.get_key()
-                    );
-                    return Err(InstructionError::PrivilegeEscalation);
-                }
-
                 duplicate_indicies.push(deduplicated_instruction_accounts.len());
                 deduplicated_instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
@@ -732,6 +705,35 @@ impl<'a> InvokeContext<'a> {
                     is_signer: account_meta.is_signer,
                     is_writable: account_meta.is_writable,
                 });
+            }
+        }
+        for instruction_account in deduplicated_instruction_accounts.iter() {
+            let borrowed_account = instruction_context.try_borrow_account(
+                self.transaction_context,
+                instruction_account.index_in_caller,
+            )?;
+
+            // Readonly in caller cannot become writable in callee
+            if instruction_account.is_writable && !borrowed_account.is_writable() {
+                ic_msg!(
+                    self,
+                    "{}'s writable privilege escalated",
+                    borrowed_account.get_key(),
+                );
+                return Err(InstructionError::PrivilegeEscalation);
+            }
+
+            // To be signed in the callee,
+            // it must be either signed in the caller or by the program
+            if instruction_account.is_signer
+                && !(borrowed_account.is_signer() || signers.contains(borrowed_account.get_key()))
+            {
+                ic_msg!(
+                    self,
+                    "{}'s signer privilege escalated",
+                    borrowed_account.get_key()
+                );
+                return Err(InstructionError::PrivilegeEscalation);
             }
         }
         let instruction_accounts: Vec<InstructionAccount> = duplicate_indicies

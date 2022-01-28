@@ -19,7 +19,13 @@ impl fmt::Debug for ElGamalCiphertext {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+impl Default for ElGamalCiphertext {
+    fn default() -> Self {
+        Self::zeroed()
+    }
+}
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
 
@@ -29,7 +35,7 @@ impl fmt::Debug for ElGamalPubkey {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
@@ -39,11 +45,11 @@ impl fmt::Debug for PedersenCommitment {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct PedersenDecryptHandle(pub [u8; 32]);
+pub struct DecryptHandle(pub [u8; 32]);
 
-impl fmt::Debug for PedersenDecryptHandle {
+impl fmt::Debug for DecryptHandle {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }
@@ -68,6 +74,16 @@ pub struct ValidityProof(pub [u8; 160]);
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
 unsafe impl Zeroable for ValidityProof {}
 unsafe impl Pod for ValidityProof {}
+
+/// Serialization of aggregated validity proofs
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct AggregatedValidityProof(pub [u8; 160]);
+
+// `AggregatedValidityProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for AggregatedValidityProof {}
+unsafe impl Pod for AggregatedValidityProof {}
 
 /// Serialization of zero balance proofs
 #[derive(Clone, Copy)]
@@ -112,5 +128,11 @@ unsafe impl Pod for AeCiphertext {}
 impl fmt::Debug for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl Default for AeCiphertext {
+    fn default() -> Self {
+        Self::zeroed()
     }
 }

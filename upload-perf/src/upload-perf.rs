@@ -61,7 +61,7 @@ fn main() {
                 let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
 
                 if last_commit.is_none() {
-                    last_commit = get_last_metrics(&"commit".to_string(), &db, &name, branch).ok();
+                    last_commit = get_last_metrics("commit", &db, &name, branch).ok();
                 }
 
                 let median: i64 = v["median"].to_string().parse().unwrap();
@@ -79,9 +79,9 @@ fn main() {
                 */
 
                 let last_median =
-                    get_last_metrics(&"median".to_string(), &db, &name, branch).unwrap_or_default();
-                let last_deviation = get_last_metrics(&"deviation".to_string(), &db, &name, branch)
-                    .unwrap_or_default();
+                    get_last_metrics("median", &db, &name, branch).unwrap_or_default();
+                let last_deviation =
+                    get_last_metrics("deviation", &db, &name, branch).unwrap_or_default();
 
                 results.insert(name, (median, deviation, last_median, last_deviation));
             }

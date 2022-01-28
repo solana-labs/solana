@@ -83,7 +83,6 @@ pub enum CliCommand {
         filter: RpcTransactionLogsFilter,
     },
     Ping {
-        lamports: u64,
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
@@ -973,7 +972,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::LiveSlots => process_live_slots(config),
         CliCommand::Logs { filter } => process_logs(config, filter),
         CliCommand::Ping {
-            lamports,
             interval,
             count,
             timeout,
@@ -982,7 +980,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_ping(
             &rpc_client,
             config,
-            *lamports,
             interval,
             count,
             timeout,
@@ -1709,7 +1706,7 @@ mod tests {
         serde_json::{json, Value},
         solana_client::{
             blockhash_query,
-            mock_sender::SIGNATURE,
+            mock_sender_for_cli::SIGNATURE,
             rpc_request::RpcRequest,
             rpc_response::{Response, RpcResponseContext},
         },

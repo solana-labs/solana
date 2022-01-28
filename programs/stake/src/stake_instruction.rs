@@ -123,9 +123,6 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::DelegateStake => {
-            let can_reverse_deactivation = invoke_context
-                .feature_set
-                .is_active(&feature_set::stake_program_v4::id());
             let vote = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
 
             me.delegate(
@@ -143,7 +140,6 @@ pub fn process_instruction(
                     first_instruction_account + 4,
                 )?)?,
                 &signers,
-                can_reverse_deactivation,
             )
         }
         StakeInstruction::Split(lamports) => {
@@ -154,9 +150,6 @@ pub fn process_instruction(
         StakeInstruction::Merge => {
             let source_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let can_merge_expired_lockups = invoke_context
-                .feature_set
-                .is_active(&feature_set::stake_program_v4::id());
             me.merge(
                 invoke_context,
                 source_stake,
@@ -169,7 +162,6 @@ pub fn process_instruction(
                     first_instruction_account + 3,
                 )?)?,
                 &signers,
-                can_merge_expired_lockups,
             )
         }
         StakeInstruction::Withdraw(lamports) => {
@@ -187,9 +179,6 @@ pub fn process_instruction(
                 )?)?,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 5).ok(),
-                invoke_context
-                    .feature_set
-                    .is_active(&feature_set::stake_program_v4::id()),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
@@ -200,15 +189,8 @@ pub fn process_instruction(
             &signers,
         ),
         StakeInstruction::SetLockup(lockup) => {
-            let clock = if invoke_context
-                .feature_set
-                .is_active(&feature_set::stake_program_v4::id())
-            {
-                Some(invoke_context.get_sysvar_cache().get_clock()?)
-            } else {
-                None
-            };
-            me.set_lockup(&lockup, &signers, clock.as_deref())
+            let clock = invoke_context.get_sysvar_cache().get_clock()?;
+            me.set_lockup(&lockup, &signers, &clock)
         }
         StakeInstruction::InitializeChecked => {
             if invoke_context
@@ -326,8 +308,8 @@ pub fn process_instruction(
                     epoch: lockup_checked.epoch,
                     custodian,
                 };
-                let clock = Some(invoke_context.get_sysvar_cache().get_clock()?);
-                me.set_lockup(&lockup, &signers, clock.as_deref())
+                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                me.set_lockup(&lockup, &signers, &clock)
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }

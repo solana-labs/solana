@@ -297,7 +297,11 @@ impl ClusterInfoVoteListener {
         let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
-        sigverify::ed25519_verify_cpu(&mut packet_batches, /*reject_non_vote=*/ false);
+        sigverify::ed25519_verify_cpu(
+            &mut packet_batches,
+            /*reject_non_vote=*/ false,
+            votes.len(),
+        );
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch_schedule = root_bank.epoch_schedule();
         votes
@@ -684,7 +688,7 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(vote);
+            subscriptions.notify_vote(*vote_pubkey, vote);
             let _ = verified_vote_sender.send((*vote_pubkey, vote_slots));
         }
     }

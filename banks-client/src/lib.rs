@@ -5,9 +5,9 @@
 //! but they are undocumented, may change over time, and are generally more
 //! cumbersome to use.
 
+pub use crate::error::BanksClientError;
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use {
-    crate::error::BanksClientError,
     borsh::BorshDeserialize,
     futures::{future::join_all, Future, FutureExt, TryFutureExt},
     solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResultWithSimulation},
