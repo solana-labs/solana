@@ -15,7 +15,7 @@ use {
         errors::ProofError,
         instruction::{Role, Verifiable},
         range_proof::RangeProof,
-        sigma_proofs::{equality_proof::EqualityProof, validity_proof::ValidityProof},
+        sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
         transcript::TranscriptProtocol,
     },
     curve25519_dalek::scalar::Scalar,
@@ -248,7 +248,7 @@ pub struct TransferProof {
     pub equality_proof: pod::EqualityProof,
 
     /// Associated ciphertext validity proof
-    pub validity_proof: pod::ValidityProof,
+    pub validity_proof: pod::AggregatedValidityProof,
 
     // Associated range proof
     pub range_proof: pod::RangeProof128,
@@ -292,9 +292,6 @@ impl TransferProof {
         transcript.append_point(b"D_EG", &D_EG.compress());
         transcript.append_point(b"C_Ped", &C_Ped.compress());
 
-        // let c = transcript.challenge_scalar(b"c");
-        // println!("{:?}", c);
-
         // generate equality_proof
         let equality_proof = EqualityProof::new(
             source_keypair,
@@ -305,8 +302,12 @@ impl TransferProof {
         );
 
         // generate ciphertext validity proof
-        let validity_proof =
-            ValidityProof::new(dest_pk, auditor_pk, transfer_amt, openings, &mut transcript);
+        let validity_proof = AggregatedValidityProof::new(
+            (dest_pk, auditor_pk),
+            transfer_amt,
+            openings,
+            &mut transcript,
+        );
 
         // generate the range proof
         let range_proof = RangeProof::new(
@@ -336,7 +337,7 @@ impl TransferProof {
 
         let commitment: PedersenCommitment = self.source_commitment.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
-        let validity_proof: ValidityProof = self.validity_proof.try_into()?;
+        let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // add a domain separator to record the start of the protocol
@@ -376,9 +377,8 @@ impl TransferProof {
         let handle_hi_auditor: DecryptHandle = decryption_handles_hi.auditor.try_into()?;
 
         // TODO: validity proof
-        validity_proof.verify(
-            &dest_elgamal_pubkey,
-            &auditor_elgamal_pubkey,
+        aggregated_validity_proof.verify(
+            (&dest_elgamal_pubkey, &auditor_elgamal_pubkey),
             (&amount_comm_lo, &amount_comm_hi),
             (&handle_lo_dest, &handle_hi_dest),
             (&handle_lo_auditor, &handle_hi_auditor),
