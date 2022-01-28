@@ -261,6 +261,20 @@ mod target_arch {
             Self::from_bytes(&pod.0)
         }
     }
+
+    impl From<ElGamalGroupEncryption> for pod::ElGamalGroupEncryption {
+        fn from(proof: ElGamalGroupEncryption) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::ElGamalGroupEncryption> for ElGamalGroupEncryption {
+        type Error = ProofError;
+
+        fn try_from(pod: pod::ElGamalGroupEncryption) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
 }
 
 #[cfg(target_arch = "bpf")]

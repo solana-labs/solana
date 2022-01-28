@@ -18,6 +18,7 @@ use {
         sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
         transcript::TranscriptProtocol,
     },
+    arrayref::{array_ref, array_refs},
     curve25519_dalek::scalar::Scalar,
     merlin::Transcript,
     std::convert::TryInto,
@@ -36,13 +37,30 @@ pub(crate) struct ElGamalGroupEncryption {
 }
 
 impl ElGamalGroupEncryption {
-    fn to_bytes(&self) -> [u8; 128] {
+    pub fn to_bytes(&self) -> [u8; 128] {
         let mut bytes = [0u8; 128];
         bytes[..32].copy_from_slice(&self.commitment.to_bytes());
         bytes[32..64].copy_from_slice(&self.source.to_bytes());
         bytes[64..96].copy_from_slice(&self.dest.to_bytes());
         bytes[96..128].copy_from_slice(&self.auditor.to_bytes());
         bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
+        let bytes = array_ref![bytes, 0, 128];
+        let (commitment, source, dest, auditor) = array_refs![bytes, 32, 32, 32, 32];
+
+        let commitment = PedersenCommitment::from_bytes(commitment).ok_or(ProofError::Verification)?;
+        let source = DecryptHandle::from_bytes(source).ok_or(ProofError::Verification)?;
+        let dest = DecryptHandle::from_bytes(dest).ok_or(ProofError::Verification)?;
+        let auditor = DecryptHandle::from_bytes(auditor).ok_or(ProofError::Verification)?;
+
+        Ok(Self {
+            commitment,
+            source,
+            dest,
+            auditor,
+        })
     }
 }
 
@@ -188,37 +206,33 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comm_lo: PedersenCommitment =
-            self.encrypted_transfer_amount.amount_comm_lo.try_into()?;
+        let ciphertext_lo: ElGamalGroupEncryption = self.ciphertext_lo.try_into()?;
 
-        let decryption_handle_lo = match role {
-            Role::Source => self.encrypted_transfer_amount.decrypt_handles_lo.source,
-            Role::Dest => self.encrypted_transfer_amount.decrypt_handles_lo.dest,
-            Role::Auditor => self.encrypted_transfer_amount.decrypt_handles_lo.auditor,
-        }
-        .try_into()?;
+        let handle_lo = match role {
+            Role::Source => ciphertext_lo.source,
+            Role::Dest => ciphertext_lo.dest,
+            Role::Auditor => ciphertext_lo.auditor,
+        };
 
         Ok(ElGamalCiphertext {
-            commitment: transfer_comm_lo,
-            handle: decryption_handle_lo,
+            commitment: ciphertext_lo.commitment,
+            handle: handle_lo,
         })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comm_hi: PedersenCommitment =
-            self.encrypted_transfer_amount.amount_comm_hi.try_into()?;
+        let ciphertext_hi: ElGamalGroupEncryption = self.ciphertext_hi.try_into()?;
 
-        let decryption_handle_hi = match role {
-            Role::Source => self.encrypted_transfer_amount.decrypt_handles_hi.source,
-            Role::Dest => self.encrypted_transfer_amount.decrypt_handles_hi.dest,
-            Role::Auditor => self.encrypted_transfer_amount.decrypt_handles_hi.auditor,
-        }
-        .try_into()?;
+        let handle_hi = match role {
+            Role::Source => ciphertext_hi.source,
+            Role::Dest => ciphertext_hi.dest,
+            Role::Auditor => ciphertext_hi.auditor,
+        };
 
         Ok(ElGamalCiphertext {
-            commitment: transfer_comm_hi,
-            handle: decryption_handle_hi,
+            commitment: ciphertext_hi.commitment,
+            handle: handle_hi,
         })
     }
 
