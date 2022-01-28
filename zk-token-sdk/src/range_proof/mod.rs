@@ -1,6 +1,6 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
-    crate::encryption::pedersen::{Pedersen, PedersenOpening},
+    crate::encryption::pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
     subtle::{Choice, ConditionallySelectable},
@@ -220,7 +220,7 @@ impl RangeProof {
     #[allow(clippy::many_single_char_names)]
     pub fn verify(
         &self,
-        comms: Vec<&CompressedRistretto>,
+        comms: Vec<&PedersenCommitment>,
         bit_lengths: Vec<usize>,
         transcript: &mut Transcript,
     ) -> Result<(), RangeProofError> {
@@ -308,7 +308,7 @@ impl RangeProof {
                 .chain(self.ipp_proof.R_vec.iter().map(|R| R.decompress()))
                 .chain(bp_gens.G(nm).map(|&x| Some(x)))
                 .chain(bp_gens.H(nm).map(|&x| Some(x)))
-                .chain(comms.iter().map(|V| V.decompress())),
+                .chain(comms.iter().map(|V| Some(*V.get_point()))),
         )
         .ok_or(RangeProofError::MultiscalarMul)?;
 
@@ -404,7 +404,7 @@ mod tests {
 
         assert!(proof
             .verify(
-                vec![&comm.get_point().compress()],
+                vec![&comm],
                 vec![32],
                 &mut transcript_verify
             )
@@ -433,7 +433,7 @@ mod tests {
 
         assert!(proof
             .verify(
-                vec![&comm_1_point, &comm_2_point, &comm_3_point],
+                vec![&comm_1, &comm_2, &comm_3],
                 vec![64, 32, 32],
                 &mut transcript_verify,
             )

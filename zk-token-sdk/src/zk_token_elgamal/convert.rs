@@ -262,6 +262,20 @@ mod target_arch {
         }
     }
 
+    impl From<TransferPubkeys> for pod::TransferPubkeys {
+        fn from(keys: TransferPubkeys) -> Self {
+            Self(keys.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::TransferPubkeys> for TransferPubkeys {
+        type Error = ProofError;
+
+        fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
     impl From<ElGamalGroupEncryption> for pod::ElGamalGroupEncryption {
         fn from(proof: ElGamalGroupEncryption) -> Self {
             Self(proof.to_bytes())

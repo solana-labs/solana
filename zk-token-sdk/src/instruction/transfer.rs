@@ -16,7 +16,6 @@ use {
         instruction::{Role, Verifiable},
         range_proof::RangeProof,
         sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
-        transcript::TranscriptProtocol,
     },
     arrayref::{array_ref, array_refs},
     curve25519_dalek::scalar::Scalar,
@@ -110,7 +109,7 @@ pub struct TransferData {
     pub transfer_pubkeys: pod::TransferPubkeys,
 
     /// The final spendable ciphertext after the transfer
-    pub new_spendable_ct: pod::ElGamalCiphertext,
+    pub new_spendable_ciphertext: pod::ElGamalCiphertext,
 
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
@@ -143,9 +142,9 @@ impl TransferData {
 
         // encrypt transfer amount
         let transfer_pubkeys = TransferPubkeys {
-            source: &keypair_source.public,
-            dest: pubkey_dest,
-            auditor: pubkey_auditor,
+            source: keypair_source.public,
+            dest: *pubkey_dest,
+            auditor: *pubkey_auditor,
         };
 
         let (ciphertext_lo, opening_lo) = ElGamalGroupEncryption::new(amount_lo, &transfer_pubkeys);
@@ -167,21 +166,27 @@ impl TransferData {
         let new_spendable_ciphertext = spendable_balance_ciphertext
             - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
 
-        // generate transfer proof
+        // generate transcript and append all public inputs
         let mut transcript = TransferProof::transcript_new();
-        let pod_transfer_pubkeys = TransferProof::transcript_append_pubkeys(
+
+        let pod_transfer_pubkeys = pod::TransferPubkeys(transfer_pubkeys.to_bytes());
+        TransferProof::transcript_append_pubkeys(
             b"transfer-pubkeys",
-            &transfer_pubkeys,
+            &pod_transfer_pubkeys,
             &mut transcript,
         );
-        let pod_transfer_ciphertext_lo = TransferProof::transcript_append_ciphertext(
+
+        let pod_ciphertext_lo: pod::ElGamalGroupEncryption = ciphertext_lo.into();
+        TransferProof::transcript_append_ciphertext(
             b"transfer-ciphertext-lo",
-            &ciphertext_lo,
+            &pod_ciphertext_lo,
             &mut transcript,
         );
-        let pod_transfer_ciphertext_hi = TransferProof::transcript_append_ciphertext(
+
+        let pod_ciphertext_hi: pod::ElGamalGroupEncryption = ciphertext_hi.into();
+        TransferProof::transcript_append_ciphertext(
             b"transfer-ciphertext-hi",
-            &ciphertext_hi,
+            &pod_ciphertext_hi,
             &mut transcript,
         );
 
@@ -196,10 +201,10 @@ impl TransferData {
         );
 
         Self {
-            ciphertext_lo: pod_transfer_ciphertext_lo,
-            ciphertext_hi: pod_transfer_ciphertext_hi,
+            ciphertext_lo: pod_ciphertext_lo,
+            ciphertext_hi: pod_ciphertext_hi,
             transfer_pubkeys: pod_transfer_pubkeys,
-            new_spendable_ct: new_spendable_ciphertext.into(),
+            new_spendable_ciphertext: new_spendable_ciphertext.into(),
             proof,
         }
     }
@@ -260,17 +265,38 @@ impl TransferData {
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for TransferData {
     fn verify(&self) -> Result<(), ProofError> {
-        let transfer_commitments = TransferCommitments {
-            lo: self.encrypted_transfer_amount.amount_comm_lo,
-            hi: self.encrypted_transfer_amount.amount_comm_hi,
-        };
+        // generate transcript and append all public inputs
+        let mut transcript = TransferProof::transcript_new();
+
+        TransferProof::transcript_append_pubkeys(
+            b"transfer-pubkeys",
+            &self.transfer_pubkeys,
+            &mut transcript,
+        );
+
+        TransferProof::transcript_append_ciphertext(
+            b"transfer-ciphertext_lo",
+            &self.ciphertext_lo,
+            &mut transcript,
+        );
+
+        TransferProof::transcript_append_ciphertext(
+            b"transfer-ciphertext_hi",
+            &self.ciphertext_hi,
+            &mut transcript,
+        );
+
+        let ciphertext_lo = self.ciphertext_lo.try_into()?;
+        let ciphertext_hi = self.ciphertext_hi.try_into()?;
+        let transfer_pubkeys = self.transfer_pubkeys.try_into()?;
+        let new_spendable_ciphertext = self.new_spendable_ciphertext.try_into()?;
 
         self.proof.verify(
-            &transfer_commitments,
-            &self.encrypted_transfer_amount.decrypt_handles_lo,
-            &self.encrypted_transfer_amount.decrypt_handles_hi,
-            &self.new_spendable_ct,
-            &self.transfer_public_keys,
+            &ciphertext_lo,
+            &ciphertext_hi,
+            &transfer_pubkeys,
+            &new_spendable_ciphertext,
+            &mut transcript,
         )
     }
 }
@@ -302,28 +328,20 @@ impl TransferProof {
 
     fn transcript_append_pubkeys(
         label: &'static [u8],
-        transfer_pubkeys: &TransferPubkeys,
+        transfer_pubkeys: &pod::TransferPubkeys,
         transcript: &mut Transcript,
-    ) -> pod::TransferPubkeys {
-        let transfer_pubkeys_bytes = transfer_pubkeys.to_bytes();
-
+    ) {
         transcript.append_message(b"dom-sep", label);
-        transcript.append_message(b"transfer-pubkeys", &transfer_pubkeys_bytes);
-
-        pod::TransferPubkeys(transfer_pubkeys_bytes)
+        transcript.append_message(b"transfer-pubkeys", &transfer_pubkeys.0);
     }
 
     fn transcript_append_ciphertext(
         label: &'static [u8],
-        ciphertext: &ElGamalGroupEncryption,
+        ciphertext: &pod::ElGamalGroupEncryption,
         transcript: &mut Transcript,
-    ) -> pod::ElGamalGroupEncryption {
-        let ciphertext_bytes = ciphertext.to_bytes();
-
+    ) {
         transcript.append_message(b"dom-sep", label);
-        transcript.append_message(b"amount-ciphertext-lo", &ciphertext_bytes);
-
-        pod::ElGamalGroupEncryption(ciphertext_bytes)
+        transcript.append_message(b"ciphertext-lo", &ciphertext.0);
     }
 
     pub fn new(
@@ -377,70 +395,59 @@ impl TransferProof {
 
     pub fn verify(
         self,
-        amount_comms: &TransferCommitments,
-        decryption_handles_lo: &TransferDecryptHandles,
-        decryption_handles_hi: &TransferDecryptHandles,
-        new_spendable_ct: &pod::ElGamalCiphertext,
-        transfer_public_keys: &TransferPubkeys,
+        ciphertext_lo: &ElGamalGroupEncryption,
+        ciphertext_hi: &ElGamalGroupEncryption,
+        transfer_pubkeys: &TransferPubkeys,
+        new_spendable_ciphertext: &ElGamalCiphertext,
+        transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        let mut transcript = Self::transcript_new();
-
         let commitment: PedersenCommitment = self.source_commitment.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
-        // add a domain separator to record the start of the protocol
-        transcript.transfer_proof_domain_sep();
-
         // extract the relevant scalar and Ristretto points from the inputs
-        let source_pk: ElGamalPubkey = transfer_public_keys.source_pk.try_into()?;
-        let new_spendable_ct: ElGamalCiphertext = (*new_spendable_ct).try_into()?;
 
-        let P_EG = source_pk.get_point();
-        let C_EG = new_spendable_ct.commitment.get_point();
-        let D_EG = new_spendable_ct.handle.get_point();
-        let C_Ped = commitment.get_point();
+        // let source_pk: ElGamalPubkey = transfer_public_keys.source_pk.try_into()?;
+        // let new_spendable_ct: ElGamalCiphertext = (*new_spendable_ct).try_into()?;
 
-        // append all current state to the transcript
-        transcript.append_point(b"P_EG", &P_EG.compress());
-        transcript.append_point(b"C_EG", &C_EG.compress());
-        transcript.append_point(b"D_EG", &D_EG.compress());
-        transcript.append_point(b"C_Ped", &C_Ped.compress());
+        // let P_EG = source_pk.get_point();
+        // let C_EG = new_spendable_ct.commitment.get_point();
+        // let D_EG = new_spendable_ct.handle.get_point();
+        // let C_Ped = commitment.get_point();
+
+        // // append all current state to the transcript
+        // transcript.append_point(b"P_EG", &P_EG.compress());
+        // transcript.append_point(b"C_EG", &C_EG.compress());
+        // transcript.append_point(b"D_EG", &D_EG.compress());
+        // transcript.append_point(b"C_Ped", &C_Ped.compress());
 
         // verify equality proof
         //
         // TODO: we can also consider verifying equality and range proof in a batch
-        equality_proof.verify(&source_pk, &new_spendable_ct, &commitment, &mut transcript)?;
+        equality_proof.verify(
+            &transfer_pubkeys.source,
+            &new_spendable_ciphertext,
+            &commitment,
+            &mut transcript,
+        )?;
 
-        // TODO: record destination and auditor public keys to transcript
-        let dest_elgamal_pubkey: ElGamalPubkey = transfer_public_keys.dest_pk.try_into()?;
-        let auditor_elgamal_pubkey: ElGamalPubkey = transfer_public_keys.auditor_pk.try_into()?;
-
-        let amount_comm_lo: PedersenCommitment = amount_comms.lo.try_into()?;
-        let amount_comm_hi: PedersenCommitment = amount_comms.hi.try_into()?;
-
-        let handle_lo_dest: DecryptHandle = decryption_handles_lo.dest.try_into()?;
-        let handle_hi_dest: DecryptHandle = decryption_handles_hi.dest.try_into()?;
-
-        let handle_lo_auditor: DecryptHandle = decryption_handles_lo.auditor.try_into()?;
-        let handle_hi_auditor: DecryptHandle = decryption_handles_hi.auditor.try_into()?;
-
-        // TODO: validity proof
+        // verify validity proof
         aggregated_validity_proof.verify(
-            (&dest_elgamal_pubkey, &auditor_elgamal_pubkey),
-            (&amount_comm_lo, &amount_comm_hi),
-            (&handle_lo_dest, &handle_hi_dest),
-            (&handle_lo_auditor, &handle_hi_auditor),
+            (&transfer_pubkeys.dest, &transfer_pubkeys.auditor),
+            (&ciphertext_lo.commitment, &ciphertext_hi.commitment),
+            (&ciphertext_lo.dest, &ciphertext_hi.dest),
+            (&ciphertext_lo.auditor, &ciphertext_hi.auditor),
             &mut transcript,
         )?;
 
         // verify range proof
+        let source_commitment = self.source_commitment.try_into()?;
         range_proof.verify(
             vec![
-                &self.source_commitment.into(),
-                &amount_comms.lo.into(),
-                &amount_comms.hi.into(),
+                &source_commitment,
+                &ciphertext_lo.commitment,
+                &ciphertext_hi.commitment,
             ],
             vec![64_usize, 32_usize, 32_usize],
             &mut transcript,
@@ -453,61 +460,34 @@ impl TransferProof {
 /// The ElGamal public keys needed for a transfer
 #[derive(Clone)]
 #[repr(C)]
-pub(crate) struct TransferPubkeys<'pk> {
-    pub source: &'pk ElGamalPubkey,
-    pub dest: &'pk ElGamalPubkey,
-    pub auditor: &'pk ElGamalPubkey,
+pub(crate) struct TransferPubkeys {
+    pub source: ElGamalPubkey,
+    pub dest: ElGamalPubkey,
+    pub auditor: ElGamalPubkey,
 }
 
-impl<'pk> TransferPubkeys<'pk> {
-    fn to_bytes(&self) -> [u8; 96] {
+impl TransferPubkeys {
+    pub fn to_bytes(&self) -> [u8; 96] {
         let mut bytes = [0u8; 96];
         bytes[..32].copy_from_slice(&self.source.to_bytes());
         bytes[32..64].copy_from_slice(&self.dest.to_bytes());
         bytes[64..96].copy_from_slice(&self.auditor.to_bytes());
         bytes
     }
-}
 
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct EncryptedTransferAmount {
-    pub amount_comm_lo: pod::PedersenCommitment,
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
+        let bytes = array_ref![bytes, 0, 96];
+        let (source, dest, auditor) = array_refs![bytes, 32, 32, 32];
 
-    pub amount_comm_hi: pod::PedersenCommitment,
+        let source = ElGamalPubkey::from_bytes(source).ok_or(ProofError::Verification)?;
+        let dest = ElGamalPubkey::from_bytes(dest).ok_or(ProofError::Verification)?;
+        let auditor = ElGamalPubkey::from_bytes(auditor).ok_or(ProofError::Verification)?;
 
-    /// The decryption handles that allow decryption of the lo-bits of the transfer amount
-    pub decrypt_handles_lo: TransferDecryptHandles,
-
-    /// The decryption handles that allow decryption of the hi-bits of the transfer amount
-    pub decrypt_handles_hi: TransferDecryptHandles,
-}
-
-/// The decryption handles needed for a transfer
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct TransferDecryptHandles {
-    pub source: pod::DecryptHandle,  // 32 bytes
-    pub dest: pod::DecryptHandle,    // 32 bytes
-    pub auditor: pod::DecryptHandle, // 32 bytes
-}
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct TransferCommitments {
-    pub lo: pod::PedersenCommitment,
-    pub hi: pod::PedersenCommitment,
-}
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct EncryptedTransferFee {
-    /// The transfer fee commitment
-    pub fee_comm: pod::PedersenCommitment,
-    /// The decryption handle for destination ElGamal pubkey
-    pub decrypt_handle_dest: pod::DecryptHandle,
-    /// The decryption handle for fee collector ElGamal pubkey
-    pub decrypt_handle_fee_collector: pod::DecryptHandle,
+        Ok(Self {
+            source,
+            dest,
+            auditor,
+        })
 }
 
 #[cfg(not(target_arch = "bpf"))]
