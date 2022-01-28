@@ -2491,24 +2491,35 @@ export class Connection {
    */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
-    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
+    commitment?: Commitment,
+  ): Promise<(AccountInfo<Buffer> | null)[]> {
+    const keys = publicKeys.map(key => key.toBase58());
+    const unsafeRes = await this.getMultipleAccountsInfoCore(keys, commitment);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
+    );
+    if ('error' in res) {
+      throw new Error(
+        'failed to get info for accounts ' + keys + ': ' + res.error.message,
+      );
+    }
+    return res.result.value;
+  }
+
+  /**
+   * Fetch all the parsed account info for multiple accounts specified by an array of public keys
+   * Falls back to Buffer because if "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64"
+   */
+  async getMultipleParsedAccountsInfo(
+    publicKeys: PublicKey[],
+    commitment?: Commitment,
   ): Promise<(AccountInfo<Buffer | ParsedAccountData> | null)[]> {
     const keys = publicKeys.map(key => key.toBase58());
-
-    let commitment;
-    let encoding: 'base64' | 'jsonParsed' = 'base64';
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-        encoding = 'base64';
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding || 'base64';
-      }
-    }
-
-    const args = this._buildArgs([keys], commitment, encoding);
-    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+    const unsafeRes = await this.getMultipleAccountsInfoCore(keys, {
+      commitment,
+      encoding: 'jsonParsed',
+    });
     const res = create(
       unsafeRes,
       jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
@@ -2519,6 +2530,26 @@ export class Connection {
       );
     }
     return res.result.value;
+  }
+
+  private async getMultipleAccountsInfoCore(
+    keys: string[],
+    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
+  ) {
+    let commitment;
+    let encoding: GetMultipleAccountsConfig['encoding'] = 'base64';
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+        encoding = 'base64';
+      } else {
+        commitment = configOrCommitment.commitment;
+        encoding = configOrCommitment.encoding || 'base64';
+      }
+    }
+    const args = this._buildArgs([keys], commitment, encoding);
+    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+    return unsafeRes;
   }
 
   /**

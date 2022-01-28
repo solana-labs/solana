@@ -255,6 +255,78 @@ describe('Connection', () => {
     expect(res).to.eql(expectedValue);
   });
 
+  it('get parsed multiple accounts info', async () => {
+    const account1 = Keypair.generate();
+    const account2 = Keypair.generate();
+
+    {
+      await helpers.airdrop({
+        connection,
+        address: account1.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      // How to query something different?
+      await helpers.airdrop({
+        connection,
+        address: account2.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+    }
+
+    const value = [
+      {
+        owner: '11111111111111111111111111111111',
+        lamports: LAMPORTS_PER_SOL,
+        data: ['', 'base64'],
+        executable: false,
+        rentEpoch: 0,
+      },
+      {
+        owner: '11111111111111111111111111111111',
+        lamports: LAMPORTS_PER_SOL,
+        data: {parsed: {info: {isNative: false}}, program: 'spl-token', space: 165},
+        executable: false,
+        rentEpoch: 0,
+      },
+    ];
+
+    await mockRpcResponse({
+      method: 'getMultipleAccounts',
+      params: [
+        [account1.publicKey.toBase58(), account2.publicKey.toBase58()],
+        {encoding: 'jsonParsed'},
+      ],
+      value: value,
+      withContext: true,
+    });
+
+    const res = await connection.getMultipleParsedAccountsInfo(
+      [account1.publicKey, account2.publicKey],
+      'confirmed',
+    );
+
+    const expectedFirstParsedAccountInfo = {
+      owner: new PublicKey('11111111111111111111111111111111'),
+      lamports: LAMPORTS_PER_SOL,
+      data: Buffer.from([]),
+      executable: false,
+      rentEpoch: 0,
+    };
+    const expectedSecondParsedAccountInfo = {
+      owner: new PublicKey('11111111111111111111111111111111'),
+      lamports: LAMPORTS_PER_SOL,
+      data: {parsed: {info: {isNative: false}}, program: 'spl-token', space: 165},
+      executable: false,
+      rentEpoch: 0,
+    };
+    expect(res[0]).to.eql(expectedFirstParsedAccountInfo);
+
+    if (mockServer) {
+      expect(res[1]).to.eql(expectedSecondParsedAccountInfo);
+    }
+  });
+
   it('get program accounts', async () => {
     const account0 = Keypair.generate();
     const account1 = Keypair.generate();
