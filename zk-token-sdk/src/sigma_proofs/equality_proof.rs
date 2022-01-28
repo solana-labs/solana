@@ -69,6 +69,8 @@ impl EqualityProof {
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
+        transcript.equality_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the inputs
         let P_EG = elgamal_keypair.public.get_point();
         let D_EG = ciphertext.handle.get_point();
@@ -127,6 +129,8 @@ impl EqualityProof {
         commitment: &PedersenCommitment,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
+        transcript.equality_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the inputs
         let P_EG = elgamal_pubkey.get_point();
         let C_EG = ciphertext.commitment.get_point();
