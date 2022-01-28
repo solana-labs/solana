@@ -51,7 +51,7 @@ pub enum ProgramError {
     IllegalOwner,
     #[error("Requested account data allocation exceeded the accounts data budget")]
     AccountsDataBudgetExceeded,
-    #[error("Cannot close vote account unless it received 0 credits in the most recent epoch")]
+    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
     ActiveVoteAccountClose,
 }
 
