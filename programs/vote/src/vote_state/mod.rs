@@ -1470,7 +1470,6 @@ mod tests {
 
         vote_state.epoch_credits = Vec::new();
 
-        // let mut epoch = 0;
         let mut current_epoch_credits = 0;
         let mut previous_epoch_credits = 0;
         for (epoch, credits) in credits_to_append.iter().enumerate() {
@@ -1480,7 +1479,6 @@ mod tests {
                 current_epoch_credits,
                 previous_epoch_credits,
             ));
-            // epoch += 1;
             previous_epoch_credits = current_epoch_credits;
         }
 
