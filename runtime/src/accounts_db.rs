@@ -6918,7 +6918,7 @@ if false {
             rewrites.remove(key);
         });
         if !rewrites.is_empty() {
-error!("rewrites: {:?}, slot: {}", rewrites, slot)
+error!("rewrites: {:?}, slot: {}", rewrites.len(), slot)
         }
         hashes.extend(rewrites.into_iter());
 

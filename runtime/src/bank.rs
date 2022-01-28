@@ -4232,12 +4232,12 @@ impl Bank {
                 out.push((pubkey, account.lamports()));
                 let hash =
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
-                error!("rehashed in rent collection: {}, {} {}, partition: {:?}, rent_epoch: {}", pubkey, self.slot(), hash, (partition.0, partition.1, partition.2), account.rent_epoch());
+                //error!("rehashed in rent collection: {}, {} {}, partition: {:?}, rent_epoch: {}", pubkey, self.slot(), hash, (partition.0, partition.1, partition.2), account.rent_epoch());
                 self.rewrites.insert(pubkey, hash); // this would have been rewritten, except we're not going to do so
             }
             rent_debits.insert(&pubkey, rent, account.lamports());
         }
-        error!("collect_rent_in_partition: ancient_append_vec: {} {:?}, collected: {:?}", self.slot(), out, collected);
+        //error!("collect_rent_in_partition: ancient_append_vec: {} {:?}, collected: {:?}", self.slot(), out, collected);
         if !just_rewrites {
             self.collected_rent.fetch_add(total_rent, Relaxed);
             self.rewards
