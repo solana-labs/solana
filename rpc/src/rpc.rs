@@ -1800,17 +1800,13 @@ impl JsonRpcRequestProcessor {
         } else {
             keyed_accounts
                 .into_iter()
-                .map(|(pubkey, account)| RpcKeyedAccount {
-                    pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(
-                        &pubkey,
-                        &account,
-                        encoding,
-                        None,
-                        data_slice_config,
-                    ),
+                .map(|(pubkey, account)| {
+                    Ok(RpcKeyedAccount {
+                        pubkey: pubkey.to_string(),
+                        account: encode_account(&account, &pubkey, encoding, data_slice_config)?,
+                    })
                 })
-                .collect()
+                .collect::<Result<Vec<_>>>()?
         };
         Ok(new_response(&bank, accounts))
     }
@@ -1857,17 +1853,13 @@ impl JsonRpcRequestProcessor {
         } else {
             keyed_accounts
                 .into_iter()
-                .map(|(pubkey, account)| RpcKeyedAccount {
-                    pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(
-                        &pubkey,
-                        &account,
-                        encoding,
-                        None,
-                        data_slice_config,
-                    ),
+                .map(|(pubkey, account)| {
+                    Ok(RpcKeyedAccount {
+                        pubkey: pubkey.to_string(),
+                        account: encode_account(&account, &pubkey, encoding, data_slice_config)?,
+                    })
                 })
-                .collect()
+                .collect::<Result<Vec<_>>>()?
         };
         Ok(new_response(&bank, accounts))
     }
@@ -3617,25 +3609,22 @@ pub mod rpc_full {
                 if result.is_err() {
                     Some(vec![None; config_accounts.addresses.len()])
                 } else {
-                    let mut accounts = vec![];
-                    for address_str in config_accounts.addresses {
-                        let address = verify_pubkey(&address_str)?;
-                        accounts.push(
-                            post_simulation_accounts
-                                .iter()
-                                .find(|(key, _account)| key == &address)
-                                .map(|(pubkey, account)| {
-                                    UiAccount::encode(
-                                        pubkey,
-                                        account,
-                                        accounts_encoding,
-                                        None,
-                                        None,
-                                    )
-                                }),
-                        );
-                    }
-                    Some(accounts)
+                    Some(
+                        config_accounts
+                            .addresses
+                            .iter()
+                            .map(|address_str| {
+                                let address = verify_pubkey(address_str)?;
+                                post_simulation_accounts
+                                    .iter()
+                                    .find(|(key, _account)| key == &address)
+                                    .map(|(pubkey, account)| {
+                                        encode_account(account, pubkey, accounts_encoding, None)
+                                    })
+                                    .transpose()
+                            })
+                            .collect::<Result<Vec<_>>>()?,
+                    )
                 }
             } else {
                 None
