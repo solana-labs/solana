@@ -34,7 +34,7 @@ ouroboros = "0.13.0"
 rand = "0.7.0"
 rayon = "1.5.1"
 regex = "1.5.4"
-serde = { version = "1.0.134", features = ["rc"] }
+serde = { version = "1.0.136", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.10.0" }

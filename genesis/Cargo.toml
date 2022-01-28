@@ -12,7 +12,7 @@ documentation = "https://docs.rs/solana-genesis"
 [dependencies]
 base64 = "0.12.3"
 clap = "2.33.1"
-serde = "1.0.134"
+serde = "1.0.136"
 serde_json = "1.0.78"
 serde_yaml = "0.8.23"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }
