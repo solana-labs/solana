@@ -24,7 +24,7 @@ num-traits = "0.2"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.1"
-serde = "1.0.133"
+serde = "1.0.136"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }
@@ -39,6 +39,7 @@ solana-metrics = { path = "../metrics", version = "=1.10.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.10.0" }
 solana-perf = { path = "../perf", version = "=1.10.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.0" }
+solana-bloom = { path = "../bloom", version = "=1.10.0" }
 solana-runtime = { path = "../runtime", version = "=1.10.0" }
 solana-streamer = { path = "../streamer", version = "=1.10.0" }
 solana-sdk = { path = "../sdk", version = "=1.10.0" }

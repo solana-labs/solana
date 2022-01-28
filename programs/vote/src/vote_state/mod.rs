@@ -1,7 +1,7 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use {
-    crate::{authorized_voters::AuthorizedVoters, id, vote_instruction::VoteError},
+    crate::{authorized_voters::AuthorizedVoters, id, vote_error::VoteError},
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
@@ -10,7 +10,7 @@ use {
         account_utils::State,
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
-        feature_set::{filter_votes_outside_slot_hashes, FeatureSet},
+        feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
         keyed_account::KeyedAccount,
@@ -40,73 +40,6 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
-
-#[derive(Debug, PartialEq)]
-pub enum VoteTransaction {
-    Vote(Vote),
-    VoteStateUpdate(VoteStateUpdate),
-}
-
-impl VoteTransaction {
-    pub fn slots(&self) -> Vec<Slot> {
-        match self {
-            VoteTransaction::Vote(vote) => vote.slots.clone(),
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update
-                .lockouts
-                .iter()
-                .map(|lockout| lockout.slot)
-                .collect(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            VoteTransaction::Vote(vote) => vote.slots.is_empty(),
-            VoteTransaction::VoteStateUpdate(vote_state_update) => {
-                vote_state_update.lockouts.is_empty()
-            }
-        }
-    }
-
-    pub fn hash(&self) -> Hash {
-        match self {
-            VoteTransaction::Vote(vote) => vote.hash,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.hash,
-        }
-    }
-
-    pub fn timestamp(&self) -> Option<UnixTimestamp> {
-        match self {
-            VoteTransaction::Vote(vote) => vote.timestamp,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
-        }
-    }
-
-    pub fn last_voted_slot(&self) -> Option<Slot> {
-        match self {
-            VoteTransaction::Vote(vote) => vote.slots.last().copied(),
-            VoteTransaction::VoteStateUpdate(vote_state_update) => {
-                Some(vote_state_update.lockouts.back()?.slot)
-            }
-        }
-    }
-
-    pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
-        Some((self.last_voted_slot()?, self.hash()))
-    }
-}
-
-impl From<Vote> for VoteTransaction {
-    fn from(vote: Vote) -> Self {
-        VoteTransaction::Vote(vote)
-    }
-}
-
-impl From<VoteStateUpdate> for VoteTransaction {
-    fn from(vote_state_update: VoteStateUpdate) -> Self {
-        VoteTransaction::VoteStateUpdate(vote_state_update)
-    }
-}
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -170,6 +103,24 @@ pub struct VoteStateUpdate {
     pub hash: Hash,
     /// processing timestamp of last slot
     pub timestamp: Option<UnixTimestamp>,
+}
+
+impl From<Vec<(Slot, u32)>> for VoteStateUpdate {
+    fn from(recent_slots: Vec<(Slot, u32)>) -> Self {
+        let lockouts: VecDeque<Lockout> = recent_slots
+            .into_iter()
+            .map(|(slot, confirmation_count)| Lockout {
+                slot,
+                confirmation_count,
+            })
+            .collect();
+        Self {
+            lockouts,
+            root: None,
+            hash: Hash::default(),
+            timestamp: None,
+        }
+    }
 }
 
 impl VoteStateUpdate {
@@ -368,6 +319,13 @@ impl VoteState {
         }
     }
 
+    /// Returns if the vote state contains a slot `candidate_slot`
+    pub fn contains_slot(&self, candidate_slot: Slot) -> bool {
+        self.votes
+            .binary_search_by(|lockout| lockout.slot.cmp(&candidate_slot))
+            .is_ok()
+    }
+
     fn get_max_sized_vote_state() -> VoteState {
         let mut authorized_voters = AuthorizedVoters::default();
         for i in 0..=MAX_LEADER_SCHEDULE_EPOCH_OFFSET {
@@ -383,14 +341,198 @@ impl VoteState {
         }
     }
 
+    fn check_update_vote_state_slots_are_valid(
+        &self,
+        vote_state_update: &mut VoteStateUpdate,
+        slot_hashes: &[(Slot, Hash)],
+    ) -> Result<(), VoteError> {
+        if vote_state_update.lockouts.is_empty() {
+            return Err(VoteError::EmptySlots);
+        }
+
+        // If the vote state update is not new enough, return
+        if let Some(last_vote_slot) = self.votes.back().map(|lockout| lockout.slot) {
+            if vote_state_update.lockouts.back().unwrap().slot <= last_vote_slot {
+                return Err(VoteError::VoteTooOld);
+            }
+        }
+
+        let last_vote_state_update_slot = vote_state_update
+            .lockouts
+            .back()
+            .expect("must be nonempty, checked above")
+            .slot;
+
+        if slot_hashes.is_empty() {
+            return Err(VoteError::SlotsMismatch);
+        }
+        let earliest_slot_hash_in_history = slot_hashes.last().unwrap().0;
+
+        // Check if the proposed vote is too old to be in the SlotHash history
+        if last_vote_state_update_slot < earliest_slot_hash_in_history {
+            // If this is the last slot in the vote update, it must be in SlotHashes,
+            // otherwise we have no way of confirming if the hash matches
+            return Err(VoteError::VoteTooOld);
+        }
+
+        // Check if the proposed root is too old
+        if let Some(new_proposed_root) = vote_state_update.root {
+            // If the root is less than the earliest slot hash in the history such that we
+            // cannot verify whether the slot was actually was on this fork, set the root
+            // to the current vote state root for safety.
+            if earliest_slot_hash_in_history > new_proposed_root {
+                vote_state_update.root = self.root_slot;
+            }
+        }
+
+        // index into the new proposed vote state's slots, starting at the oldest
+        // slot
+        let mut vote_state_update_index = 0;
+
+        // index into the slot_hashes, starting at the oldest known
+        // slot hash
+        let mut slot_hashes_index = slot_hashes.len();
+
+        let mut vote_state_update_indexes_to_filter = vec![];
+
+        // Note:
+        //
+        // 1) `vote_state_update.lockouts` is sorted from oldest/smallest vote to newest/largest
+        // vote, due to the way votes are applied to the vote state (newest votes
+        // pushed to the back).
+        //
+        // 2) Conversely, `slot_hashes` is sorted from newest/largest vote to
+        // the oldest/smallest vote
+        //
+        // Unlike for vote updates, vote state updates here can't only check votes older than the last vote
+        // because have to ensure that every slot is actually part of the history, not just the most
+        // recent ones
+        while vote_state_update_index < vote_state_update.lockouts.len() && slot_hashes_index > 0 {
+            let proposed_vote_slot = vote_state_update.lockouts[vote_state_update_index].slot;
+            if vote_state_update_index > 0
+                && proposed_vote_slot
+                    <= vote_state_update.lockouts[vote_state_update_index - 1].slot
+            {
+                return Err(VoteError::SlotsNotOrdered);
+            }
+            let ancestor_slot = slot_hashes[slot_hashes_index - 1].0;
+
+            // Find if this slot in the proposed vote state exists in the SlotHashes history
+            // to confirm if it was a valid ancestor on this fork
+            match proposed_vote_slot.cmp(&ancestor_slot) {
+                Ordering::Less => {
+                    if slot_hashes_index == slot_hashes.len() {
+                        // The vote slot does not exist in the SlotHashes history because it's too old,
+                        // i.e. older than the oldest slot in the history.
+                        assert!(proposed_vote_slot < earliest_slot_hash_in_history);
+                        if !self.contains_slot(proposed_vote_slot) {
+                            // If the vote slot is both:
+                            // 1) Too old
+                            // 2) Doesn't already exist in vote state
+                            //
+                            // Then filter it out
+                            vote_state_update_indexes_to_filter.push(vote_state_update_index);
+                        }
+                        vote_state_update_index += 1;
+                        continue;
+                    } else {
+                        // If the vote slot is new enough to be in the slot history,
+                        // but is not part of the slot history, then it must belong to another fork,
+                        // which means this vote state update is invalid.
+                        return Err(VoteError::SlotsMismatch);
+                    }
+                }
+                Ordering::Greater => {
+                    // Decrement `slot_hashes_index` to find newer slots in the SlotHashes history
+                    slot_hashes_index -= 1;
+                    continue;
+                }
+                Ordering::Equal => {
+                    // Once the slot in `vote_state_update.lockouts` is found, bump to the next slot
+                    // in `vote_state_update.lockouts` and continue.
+                    vote_state_update_index += 1;
+                    slot_hashes_index -= 1;
+                }
+            }
+        }
+
+        if vote_state_update_index != vote_state_update.lockouts.len() {
+            // The last vote slot in the update did not exist in SlotHashes
+            return Err(VoteError::SlotsMismatch);
+        }
+
+        // This assertion must be true at this point because we can assume by now:
+        // 1) vote_state_update_index == vote_state_update.lockouts.len()
+        // 2) last_vote_state_update_slot >= earliest_slot_hash_in_history
+        // 3) !vote_state_update.lockouts.is_empty()
+        //
+        // 1) implies that during the last iteration of the loop above,
+        // `vote_state_update_index` was equal to `vote_state_update.lockouts.len() - 1`,
+        // and was then incremented to `vote_state_update.lockouts.len()`.
+        // This means in that last loop iteration,
+        // `proposed_vote_slot ==
+        //  vote_state_update.lockouts[vote_state_update.lockouts.len() - 1] ==
+        //  last_vote_state_update_slot`.
+        //
+        // Then we know the last comparison `match proposed_vote_slot.cmp(&ancestor_slot)`
+        // is equivalent to `match last_vote_state_update_slot.cmp(&ancestor_slot)`. The result
+        // of this match to increment `vote_state_update_index` must have been either:
+        //
+        // 1) The Equal case ran, in which case then we know this assertion must be true
+        // 2) The Less case ran, and more specifically the case
+        // `proposed_vote_slot < earliest_slot_hash_in_history` ran, which is equivalent to
+        // `last_vote_state_update_slot < earliest_slot_hash_in_history`, but this is impossible
+        // due to assumption 3) above.
+        assert_eq!(
+            last_vote_state_update_slot,
+            slot_hashes[slot_hashes_index].0
+        );
+
+        if slot_hashes[slot_hashes_index].1 != vote_state_update.hash {
+            // This means the newest vote in the slot has a match that
+            // doesn't match the expected hash for that slot on this
+            // fork
+            warn!(
+                "{} dropped vote {:?} failed to match hash {} {}",
+                self.node_pubkey,
+                vote_state_update,
+                vote_state_update.hash,
+                slot_hashes[slot_hashes_index].1
+            );
+            inc_new_counter_info!("dropped-vote-hash", 1);
+            return Err(VoteError::SlotHashMismatch);
+        }
+
+        // Filter out the irrelevant votes
+        let mut vote_state_update_index = 0;
+        let mut filter_votes_index = 0;
+        vote_state_update.lockouts.retain(|_lockout| {
+            let should_retain = if filter_votes_index == vote_state_update_indexes_to_filter.len() {
+                true
+            } else if vote_state_update_index
+                == vote_state_update_indexes_to_filter[filter_votes_index]
+            {
+                filter_votes_index += 1;
+                false
+            } else {
+                true
+            };
+
+            vote_state_update_index += 1;
+            should_retain
+        });
+
+        Ok(())
+    }
+
     fn check_slots_are_valid(
         &self,
         vote_slots: &[Slot],
         vote_hash: &Hash,
         slot_hashes: &[(Slot, Hash)],
     ) -> Result<(), VoteError> {
-        // index into the vote's slots, sarting at the newest
-        // known slot
+        // index into the vote's slots, starting at the oldest
+        // slot
         let mut i = 0;
 
         // index into the slot_hashes, starting at the oldest known
@@ -401,7 +543,7 @@ impl VoteState {
         //
         // 1) `vote_slots` is sorted from oldest/smallest vote to newest/largest
         // vote, due to the way votes are applied to the vote state (newest votes
-        // pushed to the back), but `slot_hashes` is sorted smallest to largest.
+        // pushed to the back).
         //
         // 2) Conversely, `slot_hashes` is sorted from newest/largest vote to
         // the oldest/smallest vote
@@ -463,7 +605,7 @@ impl VoteState {
         Ok(())
     }
 
-    //`Ensure check_slots_are_valid()` runs on the slots in `new_state`
+    //`Ensure check_update_vote_state_slots_are_valid()` runs on the slots in `new_state`
     // before `process_new_vote_state()` is called
 
     // This function should guarantee the following about `new_state`:
@@ -510,12 +652,6 @@ impl VoteState {
         assert!(!new_state.is_empty());
         if new_state.len() > MAX_LOCKOUT_HISTORY {
             return Err(VoteError::TooManyVotes);
-        }
-
-        // check_slots_are_valid()` ensures we don't process any states
-        // that are older than the current state
-        if !self.votes.is_empty() {
-            assert!(new_state.back().unwrap().slot > self.votes.back().unwrap().slot);
         }
 
         match (new_root, self.root_slot) {
@@ -921,21 +1057,37 @@ pub fn authorize<S: std::hash::BuildHasher>(
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
-    // current authorized signer must say "yay"
     match vote_authorize {
         VoteAuthorize::Voter => {
+            let authorized_withdrawer_signer = if feature_set
+                .is_active(&feature_set::vote_withdraw_authority_may_change_authorized_voter::id())
+            {
+                verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok()
+            } else {
+                false
+            };
+
             vote_state.set_new_authorized_voter(
                 authorized,
                 clock.epoch,
                 clock.leader_schedule_epoch + 1,
-                |epoch_authorized_voter| verify_authorized_signer(&epoch_authorized_voter, signers),
+                |epoch_authorized_voter| {
+                    // current authorized withdrawer or authorized voter must say "yay"
+                    if authorized_withdrawer_signer {
+                        Ok(())
+                    } else {
+                        verify_authorized_signer(&epoch_authorized_voter, signers)
+                    }
+                },
             )?;
         }
         VoteAuthorize::Withdrawer => {
+            // current authorized withdrawer must say "yay"
             verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
             vote_state.authorized_withdrawer = *authorized;
         }
@@ -1098,22 +1250,11 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
-    vote_state_update: VoteStateUpdate,
+    mut vote_state_update: VoteStateUpdate,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
-    {
-        let vote = Vote {
-            slots: vote_state_update
-                .lockouts
-                .iter()
-                .map(|lockout| lockout.slot)
-                .collect(),
-            hash: vote_state_update.hash,
-            timestamp: vote_state_update.timestamp,
-        };
-        vote_state.check_slots_are_valid(&vote.slots, &vote.hash, slot_hashes)?;
-    }
+    vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, slot_hashes)?;
     vote_state.process_new_vote_state(
         vote_state_update.lockouts,
         vote_state_update.root,
@@ -1558,6 +1699,7 @@ mod tests {
                 leader_schedule_epoch: 2,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -1573,6 +1715,7 @@ mod tests {
                 leader_schedule_epoch: 2,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1588,6 +1731,7 @@ mod tests {
                 leader_schedule_epoch: 2,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
 
@@ -1610,6 +1754,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1628,6 +1773,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1648,6 +1794,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1690,6 +1837,39 @@ mod tests {
             &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
+
+        // verify authorized_withdrawer can authorize a new authorized_voter when
+        // `feature_set::vote_withdraw_authority_may_change_authorized_voter` is enabled
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
+        ];
+        let another_authorized_voter_pubkey = solana_sdk::pubkey::new_rand();
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+
+        for (feature_set, expected_res) in [
+            (
+                FeatureSet::default(),
+                Err(InstructionError::MissingRequiredSignature),
+            ),
+            (FeatureSet::all_enabled(), Ok(())),
+        ]
+        .into_iter()
+        {
+            let res = authorize(
+                &keyed_accounts[0],
+                &another_authorized_voter_pubkey,
+                VoteAuthorize::Voter,
+                &signers,
+                &Clock {
+                    epoch: 4,
+                    leader_schedule_epoch: 5,
+                    ..Clock::default()
+                },
+                &feature_set,
+            );
+            assert_eq!(res, expected_res)
+        }
     }
 
     #[test]
@@ -2189,6 +2369,7 @@ mod tests {
             VoteAuthorize::Withdrawer,
             &signers,
             &Clock::default(),
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -3216,6 +3397,482 @@ mod tests {
                 slot: vote_slot,
                 confirmation_count: 1,
             }]
+        );
+    }
+
+    fn build_slot_hashes(slots: Vec<Slot>) -> Vec<(Slot, Hash)> {
+        slots
+            .iter()
+            .rev()
+            .map(|x| (*x, Hash::new_unique()))
+            .collect()
+    }
+
+    fn build_vote_state(vote_slots: Vec<Slot>, slot_hashes: &[(Slot, Hash)]) -> VoteState {
+        let mut vote_state = VoteState::default();
+
+        if !vote_slots.is_empty() {
+            let vote_hash = slot_hashes
+                .iter()
+                .find(|(slot, _hash)| slot == vote_slots.last().unwrap())
+                .unwrap()
+                .1;
+            vote_state
+                .process_vote(&Vote::new(vote_slots, vote_hash), slot_hashes, 0, None)
+                .unwrap();
+        }
+
+        vote_state
+    }
+
+    #[test]
+    fn test_check_update_vote_state_empty() {
+        let empty_slot_hashes = build_slot_hashes(vec![]);
+        let empty_vote_state = build_vote_state(vec![], &empty_slot_hashes);
+
+        // Test with empty vote state update, should return EmptySlots error
+        let mut vote_state_update = VoteStateUpdate::from(vec![]);
+        assert_eq!(
+            empty_vote_state.check_update_vote_state_slots_are_valid(
+                &mut vote_state_update,
+                &empty_slot_hashes
+            ),
+            Err(VoteError::EmptySlots),
+        );
+
+        // Test with non-empty vote state update, should return SlotsMismatch since nothing exists in SlotHashes
+        let mut vote_state_update = VoteStateUpdate::from(vec![(0, 1)]);
+        assert_eq!(
+            empty_vote_state.check_update_vote_state_slots_are_valid(
+                &mut vote_state_update,
+                &empty_slot_hashes
+            ),
+            Err(VoteError::SlotsMismatch),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_too_old() {
+        let slot_hashes = build_slot_hashes(vec![1, 2, 3, 4]);
+        let latest_vote = 4;
+        let vote_state = build_vote_state(vec![1, 2, 3, latest_vote], &slot_hashes);
+
+        // Test with a vote for a slot less than the latest vote in the vote_state,
+        // should return error `VoteTooOld`
+        let mut vote_state_update = VoteStateUpdate::from(vec![(latest_vote, 1)]);
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::VoteTooOld),
+        );
+
+        // Test with a vote state update where the latest slot `X` in the update is
+        // 1) Less than the earliest slot in slot_hashes history, AND
+        // 2) `X` > latest_vote
+        let earliest_slot_in_history = latest_vote + 2;
+        let slot_hashes = build_slot_hashes(vec![earliest_slot_in_history]);
+        let mut vote_state_update = VoteStateUpdate::from(vec![(earliest_slot_in_history - 1, 1)]);
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::VoteTooOld),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_older_than_history_root() {
+        let slot_hashes = build_slot_hashes(vec![1, 2, 3, 4]);
+        let mut vote_state = build_vote_state(vec![1, 2, 3, 4], &slot_hashes);
+
+        // Test with a `vote_state_update` where the root is less than `earliest_slot_in_history`.
+        // Root slot in the `vote_state_update` should be updated to match the root slot in the
+        // current vote state
+        let earliest_slot_in_history = 5;
+        let slot_hashes = build_slot_hashes(vec![earliest_slot_in_history, 6, 7, 8]);
+        let earliest_slot_in_history_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == earliest_slot_in_history)
+            .unwrap()
+            .1;
+        let mut vote_state_update = VoteStateUpdate::from(vec![(earliest_slot_in_history, 1)]);
+        vote_state_update.hash = earliest_slot_in_history_hash;
+        vote_state_update.root = Some(earliest_slot_in_history - 1);
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+        assert!(vote_state.root_slot.is_none());
+        assert_eq!(vote_state_update.root, vote_state.root_slot);
+
+        // Test with a `vote_state_update` where the root is less than `earliest_slot_in_history`.
+        // Root slot in the `vote_state_update` should be updated to match the root slot in the
+        // current vote state
+        vote_state.root_slot = Some(0);
+        let mut vote_state_update = VoteStateUpdate::from(vec![(earliest_slot_in_history, 1)]);
+        vote_state_update.hash = earliest_slot_in_history_hash;
+        vote_state_update.root = Some(earliest_slot_in_history - 1);
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+        assert_eq!(vote_state.root_slot, Some(0));
+        assert_eq!(vote_state_update.root, vote_state.root_slot);
+    }
+
+    #[test]
+    fn test_check_update_vote_state_slots_not_ordered() {
+        let slot_hashes = build_slot_hashes(vec![1, 2, 3, 4]);
+        let vote_state = build_vote_state(vec![1], &slot_hashes);
+
+        // Test with a `vote_state_update` where the slots are out of order
+        let vote_slot = 3;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let mut vote_state_update = VoteStateUpdate::from(vec![(2, 2), (1, 3), (vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::SlotsNotOrdered),
+        );
+
+        // Test with a `vote_state_update` where there are multiples of the same slot
+        let mut vote_state_update = VoteStateUpdate::from(vec![(2, 2), (2, 2), (vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::SlotsNotOrdered),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_older_than_history_slots_filtered() {
+        let slot_hashes = build_slot_hashes(vec![1, 2, 3, 4]);
+        let vote_state = build_vote_state(vec![1, 2, 3, 4], &slot_hashes);
+
+        // Test with a `vote_state_update` where there:
+        // 1) Exists a slot less than `earliest_slot_in_history`
+        // 2) This slot does not exist in the vote state already
+        // This slot should be filtered out
+        let earliest_slot_in_history = 11;
+        let slot_hashes = build_slot_hashes(vec![earliest_slot_in_history, 12, 13, 14]);
+        let vote_slot = 12;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let missing_older_than_history_slot = earliest_slot_in_history - 1;
+        let mut vote_state_update =
+            VoteStateUpdate::from(vec![(missing_older_than_history_slot, 2), (vote_slot, 3)]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+
+        // Check the earlier slot was filtered out
+        assert_eq!(
+            vote_state_update
+                .lockouts
+                .into_iter()
+                .collect::<Vec<Lockout>>(),
+            vec![Lockout {
+                slot: vote_slot,
+                confirmation_count: 3,
+            }]
+        );
+    }
+
+    #[test]
+    fn test_minimum_balance() {
+        let rent = solana_sdk::rent::Rent::default();
+        let minimum_balance = rent.minimum_balance(VoteState::size_of());
+        // golden, may need updating when vote_state grows
+        assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)
+    }
+
+    #[test]
+    fn test_check_update_vote_state_older_than_history_slots_not_filtered() {
+        let slot_hashes = build_slot_hashes(vec![1, 2, 3, 4]);
+        let vote_state = build_vote_state(vec![1, 2, 3, 4], &slot_hashes);
+
+        // Test with a `vote_state_update` where there:
+        // 1) Exists a slot less than `earliest_slot_in_history`
+        // 2) This slot exists in the vote state already
+        // This slot should *NOT* be filtered out
+        let earliest_slot_in_history = 11;
+        let slot_hashes = build_slot_hashes(vec![earliest_slot_in_history, 12, 13, 14]);
+        let vote_slot = 12;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let existing_older_than_history_slot = 4;
+        let mut vote_state_update =
+            VoteStateUpdate::from(vec![(existing_older_than_history_slot, 2), (vote_slot, 3)]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+        // Check the earlier slot was *NOT* filtered out
+        assert_eq!(vote_state_update.lockouts.len(), 2);
+        assert_eq!(
+            vote_state_update
+                .lockouts
+                .into_iter()
+                .collect::<Vec<Lockout>>(),
+            vec![
+                Lockout {
+                    slot: existing_older_than_history_slot,
+                    confirmation_count: 2,
+                },
+                Lockout {
+                    slot: vote_slot,
+                    confirmation_count: 3,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_older_than_history_slots_filtered_and_not_filtered() {
+        let slot_hashes = build_slot_hashes(vec![1, 2, 3, 6]);
+        let vote_state = build_vote_state(vec![1, 2, 3, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where there exists both a slot:
+        // 1) Less than `earliest_slot_in_history`
+        // 2) This slot exists in the vote state already
+        // which should not be filtered
+        //
+        // AND a slot that
+        //
+        // 1) Less than `earliest_slot_in_history`
+        // 2) This slot does not exist in the vote state already
+        // which should be filtered
+        let earliest_slot_in_history = 11;
+        let slot_hashes = build_slot_hashes(vec![earliest_slot_in_history, 12, 13, 14]);
+        let vote_slot = 14;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+
+        let missing_older_than_history_slot = 4;
+        let existing_older_than_history_slot = 6;
+
+        let mut vote_state_update = VoteStateUpdate::from(vec![
+            (missing_older_than_history_slot, 4),
+            (existing_older_than_history_slot, 3),
+            (12, 2),
+            (vote_slot, 1),
+        ]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+        assert_eq!(vote_state_update.lockouts.len(), 3);
+        assert_eq!(
+            vote_state_update
+                .lockouts
+                .into_iter()
+                .collect::<Vec<Lockout>>(),
+            vec![
+                Lockout {
+                    slot: existing_older_than_history_slot,
+                    confirmation_count: 3,
+                },
+                Lockout {
+                    slot: 12,
+                    confirmation_count: 2,
+                },
+                Lockout {
+                    slot: vote_slot,
+                    confirmation_count: 1,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_slot_not_on_fork() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8]);
+        let vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where there:
+        // 1) Exists a slot not in the slot hashes history
+        // 2) The slot is greater than the earliest slot in the history
+        // Thus this slot is not part of the fork and the update should be rejected
+        // with error `SlotsMismatch`
+        let missing_vote_slot = 3;
+
+        // Have to vote for a slot greater than the last vote in the vote state to avoid VoteTooOld
+        // errors
+        let vote_slot = vote_state.votes.back().unwrap().slot + 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let mut vote_state_update =
+            VoteStateUpdate::from(vec![(missing_vote_slot, 2), (vote_slot, 3)]);
+        vote_state_update.hash = vote_slot_hash;
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::SlotsMismatch),
+        );
+
+        // Test where some earlier vote slots exist in the history, but others don't
+        let missing_vote_slot = 7;
+        let mut vote_state_update = VoteStateUpdate::from(vec![
+            (2, 5),
+            (4, 4),
+            (6, 3),
+            (missing_vote_slot, 2),
+            (vote_slot, 1),
+        ]);
+        vote_state_update.hash = vote_slot_hash;
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::SlotsMismatch),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_slot_newer_than_slot_history() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8, 10]);
+        let vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where there:
+        // 1) The last slot in the update is a slot not in the slot hashes history
+        // 2) The slot is greater than the newest slot in the slot history
+        // Thus this slot is not part of the fork and the update should be rejected
+        // with error `SlotsMismatch`
+        let missing_vote_slot = slot_hashes.first().unwrap().0 + 1;
+        let vote_slot_hash = Hash::new_unique();
+        let mut vote_state_update = VoteStateUpdate::from(vec![(8, 2), (missing_vote_slot, 3)]);
+        vote_state_update.hash = vote_slot_hash;
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::SlotsMismatch),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_slot_all_slot_hashes_in_update_ok() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8]);
+        let vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where every slot in the history is
+        // in the update
+
+        // Have to vote for a slot greater than the last vote in the vote state to avoid VoteTooOld
+        // errors
+        let vote_slot = vote_state.votes.back().unwrap().slot + 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let mut vote_state_update =
+            VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+
+        // Nothing in the update should have been filtered out
+        assert_eq!(
+            vote_state_update
+                .lockouts
+                .into_iter()
+                .collect::<Vec<Lockout>>(),
+            vec![
+                Lockout {
+                    slot: 2,
+                    confirmation_count: 4,
+                },
+                Lockout {
+                    slot: 4,
+                    confirmation_count: 3,
+                },
+                Lockout {
+                    slot: 6,
+                    confirmation_count: 2,
+                },
+                Lockout {
+                    slot: vote_slot,
+                    confirmation_count: 1,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_slot_some_slot_hashes_in_update_ok() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8, 10]);
+        let vote_state = build_vote_state(vec![6], &slot_hashes);
+
+        // Test with a `vote_state_update` where every only some slots in the history are
+        // in the update, and others slots in the history are missing.
+
+        // Have to vote for a slot greater than the last vote in the vote state to avoid VoteTooOld
+        // errors
+        let vote_slot = vote_state.votes.back().unwrap().slot + 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let mut vote_state_update = VoteStateUpdate::from(vec![(4, 2), (vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state
+            .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)
+            .unwrap();
+
+        // Nothing in the update should have been filtered out
+        assert_eq!(
+            vote_state_update
+                .lockouts
+                .into_iter()
+                .collect::<Vec<Lockout>>(),
+            vec![
+                Lockout {
+                    slot: 4,
+                    confirmation_count: 2,
+                },
+                Lockout {
+                    slot: vote_slot,
+                    confirmation_count: 1,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_slot_hash_mismatch() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8]);
+        let vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where the hash is mismatched
+
+        // Have to vote for a slot greater than the last vote in the vote state to avoid VoteTooOld
+        // errors
+        let vote_slot = vote_state.votes.back().unwrap().slot + 2;
+        let vote_slot_hash = Hash::new_unique();
+        let mut vote_state_update =
+            VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::SlotHashMismatch),
         );
     }
 }

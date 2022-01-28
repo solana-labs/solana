@@ -327,18 +327,23 @@ impl Blockstore {
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap_or_default();
         for slot in from_slot..to_slot {
             let slot_entries = self.get_any_valid_slot_entries(slot, 0);
-            for transaction in slot_entries
-                .iter()
-                .cloned()
-                .flat_map(|entry| entry.transactions)
-            {
+            let transactions = slot_entries
+                .into_iter()
+                .flat_map(|entry| entry.transactions);
+            for transaction in transactions {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
-                    // TODO: support purging dynamically loaded addresses from versioned transactions
                     for pubkey in transaction.message.into_static_account_keys() {
                         batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
                         batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
+                    }
+                    let meta = self.read_transaction_status((signature, slot))?;
+                    let loaded_addresses =
+                        meta.map(|meta| meta.loaded_addresses).unwrap_or_default();
+                    for address in loaded_addresses.into_ordered_iter() {
+                        batch.delete::<cf::AddressSignatures>((0, address, slot, signature))?;
+                        batch.delete::<cf::AddressSignatures>((1, address, slot, signature))?;
                     }
                 }
             }

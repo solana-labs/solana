@@ -10,7 +10,8 @@ use {
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_program_runtime::{
-        ic_msg, invoke_context::ProcessInstructionWithContext, stable_log, timings::ExecuteTimings,
+        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
+        stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
         bank::Bank,
@@ -23,7 +24,6 @@ use {
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         clock::Slot,
-        compute_budget::ComputeBudget,
         entrypoint::{ProgramResult, SUCCESS},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -354,6 +354,23 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
+    }
+
+    fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+        let (program_id, data) = get_invoke_context().transaction_context.get_return_data();
+        Some((*program_id, data.to_vec()))
+    }
+
+    fn sol_set_return_data(&self, data: &[u8]) {
+        let invoke_context = get_invoke_context();
+        let caller = *invoke_context
+            .transaction_context
+            .get_program_key()
+            .unwrap();
+        invoke_context
+            .transaction_context
+            .set_return_data(caller, data.to_vec())
+            .unwrap();
     }
 }
 

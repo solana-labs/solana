@@ -77,7 +77,7 @@ else
       "$host/query?u=${username}&p=${password}" \
       --data-urlencode "q=$*"
   }
-
+  
   query "DROP DATABASE \"$netBasename\""
   ! $delete || exit 0
   query "CREATE DATABASE \"$netBasename\""

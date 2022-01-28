@@ -10,6 +10,8 @@ import {
   coerce,
   create,
   any,
+  string,
+  tuple,
 } from "superstruct";
 import { ParsedInfo } from "validators";
 import { PublicKeyFromString } from "validators/pubkey";
@@ -28,7 +30,7 @@ export const ProgramAccount = type({
 export type ProgramDataAccountInfo = Infer<typeof ProgramDataAccountInfo>;
 export const ProgramDataAccountInfo = type({
   authority: nullable(PublicKeyFromString),
-  // don't care about data yet
+  data: tuple([string(), literal("base64")]),
   slot: number(),
 });
 

@@ -999,13 +999,12 @@ Get the fee the network will charge for a particular Message
 
 #### Parameters:
 
-- `blockhash: <string>` - The blockhash of this block, as base-58 encoded string
 - `message: <string>` - Base-64 encoded Message
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
 
 #### Results:
 
-- `<u64>` - Fee corresponding to the message at the specified blockhash
+- `<u64 | null>` - Fee corresponding to the message at the specified blockhash
 
 #### Example:
 
@@ -1017,7 +1016,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   "jsonrpc":"2.0",
   "method":"getFeeForMessage",
   "params":[
-    "FxVKTksYShgKjnFG3RQUEo2AEesDb4ZHGY3NGJ7KHd7F","AQABAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAQAA",
+    "AQABAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAQAA",
     {
       "commitment":"processed"
     }
@@ -3192,7 +3191,7 @@ Before submitting, the following preflight checks are performed:
    preflight commitment to avoid confusing behavior.
 
 The returned signature is the first signature in the transaction, which
-is used to identify the transaction ([transaction id](../../terminology.md#transanction-id)).
+is used to identify the transaction ([transaction id](../../terminology.md#transaction-id)).
 This identifier can be easily extracted from the transaction data before
 submission.
 
@@ -3208,7 +3207,7 @@ submission.
 
 #### Results:
 
-- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transanction-id))
+- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transaction-id))
 
 #### Example:
 

@@ -10,7 +10,6 @@ use {
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
-        packet_deduper::PacketDeduper,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
     },
@@ -141,7 +140,6 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
-            PacketDeduper::default(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

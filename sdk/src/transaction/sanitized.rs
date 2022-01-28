@@ -61,6 +61,7 @@ impl SanitizedTransaction {
         };
 
         let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
+            // TODO: Move to `vote_parser` runtime module
             let mut ix_iter = message.program_instructions_iter();
             ix_iter.next().map(|(program_id, _ix)| program_id) == Some(&crate::vote::program::id())
         });
@@ -174,6 +175,14 @@ impl SanitizedTransaction {
         }
 
         account_locks
+    }
+
+    /// Return the list of addresses loaded from on-chain address lookup tables
+    pub fn get_loaded_addresses(&self) -> LoadedAddresses {
+        match &self.message {
+            SanitizedMessage::Legacy(_) => LoadedAddresses::default(),
+            SanitizedMessage::V0(message) => message.loaded_addresses.clone(),
+        }
     }
 
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account

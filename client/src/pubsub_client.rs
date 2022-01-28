@@ -305,7 +305,7 @@ impl PubsubClient {
 
         let result = PubsubClientSubscription {
             message_type: PhantomData,
-            operation: "blocks",
+            operation: "block",
             socket,
             subscription_id,
             t_cleanup: Some(t_cleanup),
@@ -615,5 +615,5 @@ impl PubsubClient {
 
 #[cfg(test)]
 mod tests {
-    // see core/tests/client.rs#test_slot_subscription()
+    // see client-test/test/client.rs
 }

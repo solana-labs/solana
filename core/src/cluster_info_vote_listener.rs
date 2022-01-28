@@ -25,8 +25,13 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-        bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-        epoch_stakes::EpochStakes, vote_sender_types::ReplayVoteReceiver,
+        bank::Bank,
+        bank_forks::BankForks,
+        commitment::VOTE_THRESHOLD_SIZE,
+        epoch_stakes::EpochStakes,
+        vote_parser::{self, ParsedVote},
+        vote_sender_types::ReplayVoteReceiver,
+        vote_transaction::VoteTransaction,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -35,10 +40,6 @@ use {
         signature::Signature,
         slot_hashes,
         transaction::Transaction,
-    },
-    solana_vote_program::{
-        vote_state::VoteTransaction,
-        vote_transaction::{self, ParsedVote},
     },
     std::{
         collections::{HashMap, HashSet},
@@ -296,7 +297,11 @@ impl ClusterInfoVoteListener {
         let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
-        sigverify::ed25519_verify_cpu(&mut packet_batches, /*reject_non_vote=*/ false);
+        sigverify::ed25519_verify_cpu(
+            &mut packet_batches,
+            /*reject_non_vote=*/ false,
+            votes.len(),
+        );
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch_schedule = root_bank.epoch_schedule();
         votes
@@ -308,7 +313,7 @@ impl ClusterInfoVoteListener {
                 !packet_batch.packets[0].meta.discard()
             })
             .filter_map(|(tx, packet_batch)| {
-                let (vote_account_key, vote, _) = vote_transaction::parse_vote_transaction(&tx)?;
+                let (vote_account_key, vote, _) = vote_parser::parse_vote_transaction(&tx)?;
                 let slot = vote.last_voted_slot()?;
                 let epoch = epoch_schedule.get_epoch(slot);
                 let authorized_voter = root_bank
@@ -683,7 +688,7 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(vote);
+            subscriptions.notify_vote(*vote_pubkey, vote);
             let _ = verified_vote_sender.send((*vote_pubkey, vote_slots));
         }
     }
@@ -705,7 +710,7 @@ impl ClusterInfoVoteListener {
         // Process votes from gossip and ReplayStage
         let votes = gossip_vote_txs
             .iter()
-            .filter_map(vote_transaction::parse_vote_transaction)
+            .filter_map(vote_parser::parse_vote_transaction)
             .zip(repeat(/*is_gossip:*/ true))
             .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
         for ((vote_pubkey, vote, _), is_gossip) in votes {
@@ -823,7 +828,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
         },
-        solana_vote_program::vote_state::Vote,
+        solana_vote_program::{vote_state::Vote, vote_transaction},
         std::{
             collections::BTreeSet,
             iter::repeat_with,

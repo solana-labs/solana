@@ -131,6 +131,10 @@ pub enum TransactionError {
         "Transaction leaves an account with data with a lower balance than rent-exempt minimum"
     )]
     InvalidRentPayingAccount,
+
+    /// Transaction would exceed max Vote Cost Limit
+    #[error("Transaction would exceed max Vote Cost Limit")]
+    WouldExceedMaxVoteCostLimit,
 }
 
 impl From<SanitizeError> for TransactionError {

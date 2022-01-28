@@ -10,7 +10,8 @@ documentation = "https://docs.rs/solana-client-test"
 edition = "2021"
 
 [dependencies]
-serde_json = "1.0.74"
+futures-util = "0.3.19"
+serde_json = "1.0.78"
 serial_test = "0.5.1"
 solana-client = { path = "../client", version = "=1.10.0" }
 solana-ledger = { path = "../ledger", version = "=1.10.0" }
@@ -27,6 +28,7 @@ solana-test-validator = { path = "../test-validator", version = "=1.10.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.0" }
 solana-version = { path = "../version", version = "=1.10.0" }
 systemstat = "0.1.10"
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.10.0" }

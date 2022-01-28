@@ -141,7 +141,7 @@ impl TransactionStatusService {
                                 })
                                 .collect(),
                         );
-
+                        let loaded_addresses = transaction.get_loaded_addresses();
                         let transaction_status_meta = TransactionStatusMeta {
                             status,
                             fee,
@@ -152,6 +152,7 @@ impl TransactionStatusService {
                             pre_token_balances,
                             post_token_balances,
                             rewards,
+                            loaded_addresses,
                         };
 
                         if let Some(transaction_notifier) = transaction_notifier.as_ref() {

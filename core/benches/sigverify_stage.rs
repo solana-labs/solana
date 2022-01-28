@@ -1,4 +1,5 @@
 #![feature(test)]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate solana_core;
 extern crate test;
@@ -19,8 +20,7 @@ use {
     test::Bencher,
 };
 
-#[bench]
-fn bench_packet_discard(bencher: &mut Bencher) {
+fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     solana_logger::setup();
     let len = 30 * 1000;
     let chunk_size = 1024;
@@ -29,7 +29,7 @@ fn bench_packet_discard(bencher: &mut Bencher) {
 
     let mut total = 0;
 
-    let ips: Vec<_> = (0..10_000)
+    let ips: Vec<_> = (0..num_ips)
         .into_iter()
         .map(|_| {
             let mut addr = [0u16; 8];
@@ -49,11 +49,63 @@ fn bench_packet_discard(bencher: &mut Bencher) {
 
     bencher.iter(move || {
         SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for p in batch.packets.iter_mut() {
+                if !p.meta.discard() {
+                    num_packets += 1;
+                }
                 p.meta.set_discard(false);
             }
         }
+        assert_eq!(num_packets, 10_000);
+    });
+}
+
+#[bench]
+fn bench_packet_discard_many_senders(bencher: &mut Bencher) {
+    run_bench_packet_discard(1000, bencher);
+}
+
+#[bench]
+fn bench_packet_discard_single_sender(bencher: &mut Bencher) {
+    run_bench_packet_discard(1, bencher);
+}
+
+#[bench]
+fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
+    const SIZE: usize = 30 * 1000;
+    const CHUNK_SIZE: usize = 1024;
+    fn new_rand_addr<R: Rng>(rng: &mut R) -> std::net::IpAddr {
+        let mut addr = [0u16; 8];
+        rng.fill(&mut addr);
+        std::net::IpAddr::from(addr)
+    }
+    let mut rng = thread_rng();
+    let mut batches = to_packet_batches(&vec![test_tx(); SIZE], CHUNK_SIZE);
+    let spam_addr = new_rand_addr(&mut rng);
+    for batch in batches.iter_mut() {
+        for packet in batch.packets.iter_mut() {
+            // One spam address, ~1000 unique addresses.
+            packet.meta.addr = if rng.gen_ratio(1, 30) {
+                new_rand_addr(&mut rng)
+            } else {
+                spam_addr
+            }
+        }
+    }
+    bencher.iter(move || {
+        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        let mut num_packets = 0;
+        for batch in batches.iter_mut() {
+            for packet in batch.packets.iter_mut() {
+                if !packet.meta.discard() {
+                    num_packets += 1;
+                }
+                packet.meta.set_discard(false);
+            }
+        }
+        assert_eq!(num_packets, 10_000);
     });
 }
 

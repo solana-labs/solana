@@ -101,7 +101,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         }
     }
     fn pos(&self, key: &T, k: u64) -> u64 {
-        key.hash_at_index(k) % self.bits.len()
+        key.hash_at_index(k).wrapping_rem(self.bits.len())
     }
     pub fn clear(&mut self) {
         self.bits = BitVec::new_fill(false, self.bits.len());
@@ -111,7 +111,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         for k in &self.keys {
             let pos = self.pos(key, *k);
             if !self.bits.get(pos) {
-                self.num_bits_set += 1;
+                self.num_bits_set = self.num_bits_set.saturating_add(1);
                 self.bits.set(pos, true);
             }
         }
@@ -164,21 +164,26 @@ impl<T: BloomHashIndex> From<Bloom<T>> for AtomicBloom<T> {
 
 impl<T: BloomHashIndex> AtomicBloom<T> {
     fn pos(&self, key: &T, hash_index: u64) -> (usize, u64) {
-        let pos = key.hash_at_index(hash_index) % self.num_bits;
+        let pos = key.hash_at_index(hash_index).wrapping_rem(self.num_bits);
         // Divide by 64 to figure out which of the
         // AtomicU64 bit chunks we need to modify.
-        let index = pos >> 6;
+        let index = pos.wrapping_shr(6);
         // (pos & 63) is equivalent to mod 64 so that we can find
         // the index of the bit within the AtomicU64 to modify.
-        let mask = 1u64 << (pos & 63);
+        let mask = 1u64.wrapping_shl(u32::try_from(pos & 63).unwrap());
         (index as usize, mask)
     }
 
-    pub fn add(&self, key: &T) {
+    /// Adds an item to the bloom filter and returns true if the item
+    /// was not in the filter before.
+    pub fn add(&self, key: &T) -> bool {
+        let mut added = false;
         for k in &self.keys {
             let (index, mask) = self.pos(key, *k);
-            self.bits[index].fetch_or(mask, Ordering::Relaxed);
+            let prev_val = self.bits[index].fetch_or(mask, Ordering::Relaxed);
+            added = added || prev_val & mask == 0u64;
         }
+        added
     }
 
     pub fn contains(&self, key: &T) -> bool {
@@ -187,6 +192,12 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
             let bit = self.bits[index].load(Ordering::Relaxed) & mask;
             bit != 0u64
         })
+    }
+
+    pub fn clear_for_tests(&mut self) {
+        self.bits.iter().for_each(|bit| {
+            bit.store(0u64, Ordering::Relaxed);
+        });
     }
 
     // Only for tests and simulations.
@@ -320,7 +331,9 @@ mod test {
         assert_eq!(bloom.keys.len(), 3);
         assert_eq!(bloom.num_bits, 6168);
         assert_eq!(bloom.bits.len(), 97);
-        hash_values.par_iter().for_each(|v| bloom.add(v));
+        hash_values.par_iter().for_each(|v| {
+            bloom.add(v);
+        });
         let bloom: Bloom<Hash> = bloom.into();
         assert_eq!(bloom.keys.len(), 3);
         assert_eq!(bloom.bits.len(), 6168);
@@ -362,7 +375,9 @@ mod test {
         }
         // Round trip, re-inserting the same hash values.
         let bloom: AtomicBloom<_> = bloom.into();
-        hash_values.par_iter().for_each(|v| bloom.add(v));
+        hash_values.par_iter().for_each(|v| {
+            bloom.add(v);
+        });
         for hash_value in &hash_values {
             assert!(bloom.contains(hash_value));
         }
@@ -380,7 +395,9 @@ mod test {
         let bloom: AtomicBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
-        more_hash_values.par_iter().for_each(|v| bloom.add(v));
+        more_hash_values.par_iter().for_each(|v| {
+            bloom.add(v);
+        });
         for hash_value in &hash_values {
             assert!(bloom.contains(hash_value));
         }

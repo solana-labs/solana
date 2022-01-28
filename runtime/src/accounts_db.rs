@@ -33,6 +33,7 @@ use {
             ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         cache_hash_data::CacheHashData,
@@ -471,22 +472,6 @@ pub enum LoadedAccount<'a> {
 }
 
 impl<'a> LoadedAccount<'a> {
-    pub fn owner(&self) -> &Pubkey {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
-            LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
-        }
-    }
-
-    pub fn executable(&self) -> bool {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.executable
-            }
-            LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
-        }
-    }
-
     pub fn loaded_hash(&self) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
@@ -526,13 +511,6 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn lamports(&self) -> u64 {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
-            LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
-        }
-    }
-
     pub fn take_account(self) -> AccountSharedData {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
@@ -547,6 +525,44 @@ impl<'a> LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(_) => false,
             LoadedAccount::Cached(_) => true,
+        }
+    }
+}
+
+impl<'a> ReadableAccount for LoadedAccount<'a> {
+    fn lamports(&self) -> u64 {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
+            LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
+        }
+    }
+
+    fn data(&self) -> &[u8] {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data,
+            LoadedAccount::Cached(cached_account) => cached_account.account.data(),
+        }
+    }
+    fn owner(&self) -> &Pubkey {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
+            LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
+        }
+    }
+    fn executable(&self) -> bool {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.account_meta.executable
+            }
+            LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
+        }
+    }
+    fn rent_epoch(&self) -> Epoch {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.account_meta.rent_epoch
+            }
+            LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
         }
     }
 }
@@ -1061,6 +1077,8 @@ pub struct AccountsDb {
     filler_account_count: usize,
     pub filler_account_suffix: Option<Pubkey>,
 
+    active_stats: ActiveStats,
+
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage
     // lower passes = faster total time, higher dynamic memory usage
@@ -1555,6 +1573,7 @@ impl AccountsDb {
         Self::bins_per_pass(num_hash_scan_passes);
 
         AccountsDb {
+            active_stats: ActiveStats::default(),
             accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
@@ -2061,6 +2080,8 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
+        let _guard = self.active_stats.activate(ActiveStatItem::Clean);
+
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
 
@@ -3011,6 +3032,8 @@ impl AccountsDb {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
+        let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
+
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let (shrink_slots, shrink_slots_next_batch) = {
@@ -3057,6 +3080,7 @@ impl AccountsDb {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
+        let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
         if is_startup && self.caching_enabled {
@@ -3609,7 +3633,7 @@ impl AccountsDb {
                 // cleaned yet. That means this must be rpc access and not replay/banking at the
                 // very least. Note that purge shouldn't occur even for RPC as caller must hold all
                 // of ancestor slots..
-                assert!(load_hint == LoadHint::Unspecified);
+                assert_eq!(load_hint, LoadHint::Unspecified);
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
@@ -4198,16 +4222,15 @@ impl AccountsDb {
             .fetch_add(scan_storages_elasped.as_us(), Ordering::Relaxed);
 
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
-        let reclaims;
-        match scan_result {
+        let reclaims = match scan_result {
             ScanStorageResult::Cached(_) => {
                 panic!("Should not see cached keys in this `else` branch, since we checked this slot did not exist in the cache above");
             }
             ScanStorageResult::Stored(stored_keys) => {
                 // Purge this slot from the accounts index
-                reclaims = self.purge_keys_exact(stored_keys.lock().unwrap().iter());
+                self.purge_keys_exact(stored_keys.lock().unwrap().iter())
             }
-        }
+        };
         purge_accounts_index_elapsed.stop();
         purge_stats
             .purge_accounts_index_elapsed
@@ -4239,7 +4262,7 @@ impl AccountsDb {
         // `add_root()` should be called first
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
         let non_roots = slots
-            // Only safe to check when there are  duplciate versions of a slot
+            // Only safe to check when there are duplicate versions of a slot
             // because ReplayStage will not make new roots before dumping the
             // duplicate slots first. Thus we will not be in a case where we
             // root slot `S`, then try to dump some other version of slot `S`, the
@@ -4553,6 +4576,8 @@ impl AccountsDb {
         let mut flush_roots_elapsed = Measure::start("flush_roots_elapsed");
         let mut account_bytes_saved = 0;
         let mut num_accounts_saved = 0;
+
+        let _guard = self.active_stats.activate(ActiveStatItem::Flush);
 
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
@@ -5093,12 +5118,11 @@ impl AccountsDb {
             .accounts_index
             .account_maps
             .iter()
-            .map(|map| {
+            .flat_map(|map| {
                 let mut keys = map.read().unwrap().keys();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })
-            .flatten()
             .collect();
         collect.stop();
 
@@ -5327,8 +5351,7 @@ impl AccountsDb {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
-                    for slot in start..end {
-                        let sub_storages = snapshot_storages.get(slot);
+                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                         bin_range.start.hash(&mut hasher);
                         bin_range.end.hash(&mut hasher);
                         if let Some(sub_storages) = sub_storages {
@@ -5386,8 +5409,7 @@ impl AccountsDb {
                     }
                 }
 
-                for slot in start..end {
-                    let sub_storages = snapshot_storages.get(slot);
+                for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                     let valid_slot = sub_storages.is_some();
                     if let Some((cache, ancestors, accounts_index)) = accounts_cache_and_ancestors {
                         if let Some(slot_cache) = cache.slot_cache(slot) {
@@ -5443,8 +5465,8 @@ impl AccountsDb {
             let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
             let sub = slots_per_epoch + acceptable_straggler_slot_count;
             let in_epoch_range_start = max.saturating_sub(sub);
-            for slot in storages.range().start..in_epoch_range_start {
-                if let Some(storages) = storages.get(slot) {
+            for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
+                if let Some(storages) = storages {
                     storages.iter().for_each(|store| {
                         self.dirty_stores
                             .insert((slot, store.append_vec_id()), store.clone());
@@ -5529,6 +5551,7 @@ impl AccountsDb {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
             slot,
@@ -6708,7 +6731,7 @@ impl AccountsDb {
                     accounts_data_len += stored_account.data().len() as u64;
                 }
 
-                if !rent_collector.should_collect_rent(&pubkey, &stored_account, false)
+                if !rent_collector.should_collect_rent(&pubkey, &stored_account)
                     || rent_collector.get_rent_due(&stored_account).is_exempt()
                 {
                     num_accounts_rent_exempt += 1;
@@ -7073,6 +7096,7 @@ impl AccountsDb {
     }
 
     /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
+    /// Note this should only be used when ALL entries in the accounts index are roots.
     fn pubkeys_to_duplicate_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
         let mut accounts_data_len_from_duplicates = 0;
         pubkeys.iter().for_each(|pubkey| {
@@ -7097,8 +7121,7 @@ impl AccountsDb {
                             maybe_storage_entry.map(|entry| (entry, account_info.offset())),
                         );
                         let loaded_account = accessor.check_and_get_loaded_account();
-                        let account = loaded_account.take_account();
-                        accounts_data_len_from_duplicates += account.data().len();
+                        accounts_data_len_from_duplicates += loaded_account.data().len();
                     });
             }
         });

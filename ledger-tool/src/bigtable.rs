@@ -73,7 +73,10 @@ async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn st
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
-    let block = bigtable.get_confirmed_block(slot).await?;
+    let versioned_block = bigtable.get_confirmed_block(slot).await?;
+    let block = versioned_block
+        .into_legacy_block()
+        .ok_or_else(|| "Failed to read versioned transaction in block".to_string())?;
 
     let cli_block = CliBlock {
         encoded_confirmed_block: block.encode(UiTransactionEncoding::Base64),
@@ -153,7 +156,11 @@ async fn confirm(
     let mut get_transaction_error = None;
     if verbose {
         match bigtable.get_confirmed_transaction(signature).await {
-            Ok(Some(confirmed_transaction)) => {
+            Ok(Some(versioned_confirmed_tx)) => {
+                let confirmed_transaction = versioned_confirmed_tx
+                    .into_legacy_confirmed_transaction()
+                    .ok_or_else(|| "Failed to read versioned transaction in block".to_string())?;
+
                 transaction = Some(CliTransaction {
                     transaction: confirmed_transaction
                         .transaction
@@ -260,7 +267,10 @@ pub async fn transaction_history(
                             println!("  Unable to get confirmed transaction details: {}", err);
                             break;
                         }
-                        Ok(block) => {
+                        Ok(versioned_block) => {
+                            let block = versioned_block.into_legacy_block().ok_or_else(|| {
+                                "Failed to read versioned transaction in block".to_string()
+                            })?;
                             loaded_block = Some((result.slot, block));
                         }
                     }

@@ -109,14 +109,14 @@ mod test {
     use {
         super::*,
         crate::encryption::{
-            elgamal::ElGamalKeypair,
-            pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening},
+            elgamal::{DecryptHandle, ElGamalKeypair},
+            pedersen::{Pedersen, PedersenOpening},
         },
     };
 
     #[test]
     fn test_close_account_correctness() {
-        let source_keypair = ElGamalKeypair::default();
+        let source_keypair = ElGamalKeypair::new_rand();
 
         // general case: encryption of 0
         let balance = source_keypair.public.encrypt(0_u64);
@@ -135,11 +135,11 @@ mod test {
 
         // edge cases: only C or D is zero - such ciphertext is always invalid
         let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
-        let handle = balance.decrypt_handle;
+        let handle = balance.handle;
 
         let zeroed_comm_ciphertext = ElGamalCiphertext {
-            message_comm: zeroed_comm,
-            decrypt_handle: handle,
+            commitment: zeroed_comm,
+            handle,
         };
 
         let proof = CloseAccountProof::new(&source_keypair, &zeroed_comm_ciphertext);
@@ -148,8 +148,8 @@ mod test {
             .is_err());
 
         let zeroed_handle_ciphertext = ElGamalCiphertext {
-            message_comm: balance.message_comm,
-            decrypt_handle: PedersenDecryptHandle::default(),
+            commitment: balance.commitment,
+            handle: DecryptHandle::default(),
         };
 
         let proof = CloseAccountProof::new(&source_keypair, &zeroed_handle_ciphertext);

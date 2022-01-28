@@ -87,7 +87,7 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
         None
     }
-    fn sol_set_return_data(&mut self, _data: &[u8]) {}
+    fn sol_set_return_data(&self, _data: &[u8]) {}
     fn sol_log_data(&self, fields: &[&[u8]]) {
         println!("data: {}", fields.iter().map(base64::encode).join(" "));
     }
@@ -170,7 +170,7 @@ pub(crate) fn sol_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
 }
 
 pub(crate) fn sol_set_return_data(data: &[u8]) {
-    SYSCALL_STUBS.write().unwrap().sol_set_return_data(data)
+    SYSCALL_STUBS.read().unwrap().sol_set_return_data(data)
 }
 
 pub(crate) fn sol_log_data(data: &[&[u8]]) {

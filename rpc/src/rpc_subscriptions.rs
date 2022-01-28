@@ -30,6 +30,7 @@ use {
         bank::{Bank, TransactionLogInfo},
         bank_forks::BankForks,
         commitment::{BlockCommitmentCache, CommitmentSlots},
+        vote_transaction::VoteTransaction,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -40,7 +41,6 @@ use {
         transaction,
     },
     solana_transaction_status::ConfirmedBlock,
-    solana_vote_program::vote_state::VoteTransaction,
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
@@ -93,7 +93,7 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
-    Vote(VoteTransaction),
+    Vote((Pubkey, VoteTransaction)),
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -677,8 +677,8 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
-    pub fn notify_vote(&self, vote: VoteTransaction) {
-        self.enqueue_notification(NotificationEntry::Vote(vote));
+    pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: VoteTransaction) {
+        self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote)));
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
@@ -760,8 +760,9 @@ impl RpcSubscriptions {
                         // These notifications are only triggered by votes observed on gossip,
                         // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                         // in VoteState's from bank states built in ReplayStage.
-                        NotificationEntry::Vote(ref vote_info) => {
+                        NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
                             let rpc_vote = RpcVote {
+                                vote_pubkey: vote_pubkey.to_string(),
                                 slots: vote_info.slots(),
                                 hash: bs58::encode(vote_info.hash()).into_string(),
                                 timestamp: vote_info.timestamp(),
@@ -957,7 +958,20 @@ impl RpcSubscriptions {
                                 if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
                                     break;
                                 }
-                                match blockstore.get_complete_block(s, false) {
+
+                                let block_result = blockstore
+                                    .get_complete_block(s, false)
+                                    .map_err(|e| {
+                                        error!("get_complete_block error: {}", e);
+                                        RpcBlockUpdateError::BlockStoreError
+                                    })
+                                    .and_then(|versioned_block| {
+                                        versioned_block.into_legacy_block().ok_or(
+                                            RpcBlockUpdateError::UnsupportedTransactionVersion,
+                                        )
+                                    });
+
+                                match block_result {
                                     Ok(block) => {
                                         if let Some(res) = filter_block_result_txs(block, s, params)
                                         {
@@ -975,17 +989,16 @@ impl RpcSubscriptions {
                                             *w_last_unnotified_slot = s + 1;
                                         }
                                     }
-                                    Err(e) => {
+                                    Err(err) => {
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
-                                        error!("get_complete_block error: {}", e);
                                         notifier.notify(
                                             Response {
                                                 context: RpcResponseContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
                                                     block: None,
-                                                    err: Some(RpcBlockUpdateError::BlockStoreError),
+                                                    err: Some(err),
                                                 },
                                             },
                                             subscription,
@@ -1085,7 +1098,7 @@ impl RpcSubscriptions {
             inc_new_counter_info!("rpc-subscription-notify-bank-or-gossip", total_notified);
             datapoint_info!(
                 "rpc_subscriptions",
-                ("source", source.to_string(), String),
+                ("source", source, String),
                 (
                     "num_account_subscriptions",
                     num_accounts_found.load(Ordering::Relaxed),
@@ -1398,8 +1411,9 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
-        let block = blockstore.get_complete_block(slot, false).unwrap();
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+        let legacy_block = versioned_block.into_legacy_block().unwrap();
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1497,14 +1511,16 @@ pub(crate) mod tests {
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
         // make sure it filtered out the other keypairs
-        let mut block = blockstore.get_complete_block(slot, false).unwrap();
-        block.transactions.retain(|tx| {
-            tx.transaction
+        let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+        let mut legacy_block = versioned_block.into_legacy_block().unwrap();
+        legacy_block.transactions.retain(|tx_with_meta| {
+            tx_with_meta
+                .transaction
                 .message
                 .account_keys
                 .contains(&keypair1.pubkey())
         });
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1594,8 +1610,9 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
-        let block = blockstore.get_complete_block(slot, false).unwrap();
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+        let legacy_block = versioned_block.into_legacy_block().unwrap();
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),

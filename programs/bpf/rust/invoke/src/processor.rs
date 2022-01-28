@@ -426,7 +426,6 @@ fn process_instruction(
 
             // Writable privilege escalation will always fail the whole transaction
             invoked_instruction.accounts[0].is_writable = true;
-
             invoke(&invoked_instruction, accounts)?;
         }
         TEST_PPROGRAM_NOT_EXECUTABLE => {
@@ -637,6 +636,40 @@ fn process_instruction(
         }
         TEST_RETURN_DATA_TOO_LARGE => {
             set_return_data(&[1u8; 1028]);
+        }
+        TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER => {
+            msg!("Test duplicate privilege escalation signer");
+            let mut invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                ],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
+            );
+            invoke(&invoked_instruction, accounts)?;
+
+            // Signer privilege escalation will always fail the whole transaction
+            invoked_instruction.accounts[1].is_signer = true;
+            invoke(&invoked_instruction, accounts)?;
+        }
+        TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE => {
+            msg!("Test duplicate privilege escalation writable");
+            let mut invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                ],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
+            );
+            invoke(&invoked_instruction, accounts)?;
+
+            // Writable privilege escalation will always fail the whole transaction
+            invoked_instruction.accounts[1].is_writable = true;
+            invoke(&invoked_instruction, accounts)?;
         }
         _ => panic!(),
     }
