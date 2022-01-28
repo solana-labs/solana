@@ -2712,6 +2712,7 @@ impl Bank {
             .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
+        if false // useful debug option that way slows things down
         {
             // verify hash after every root gets made
             self.force_flush_accounts_cache();
