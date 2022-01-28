@@ -113,7 +113,7 @@ const MAX_RPC_EPOCH_CREDITS_HISTORY: usize = 5;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
-    Response { context, value }
+    RpcResponse { context, value }
 }
 
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
@@ -742,7 +742,7 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(config.commitment);
 
         if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
-            Ok(Response {
+            Ok(RpcResponse {
                 context: RpcResponseContext { slot },
                 value: accounts,
             })
