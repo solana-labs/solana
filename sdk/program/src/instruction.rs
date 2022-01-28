@@ -254,7 +254,7 @@ pub enum InstructionError {
     AccountsDataBudgetExceeded,
 
     /// Active vote account close
-    #[error("Cannot close vote account unless it received 0 credits in the most recent epoch")]
+    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
     ActiveVoteAccountClose,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
