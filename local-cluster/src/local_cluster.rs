@@ -122,7 +122,7 @@ impl LocalCluster {
             node_stakes: stakes,
             cluster_lamports,
             validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default(),
+                &ValidatorConfig::default_for_test(),
                 num_nodes,
             ),
             ..ClusterConfig::default()

@@ -228,6 +228,14 @@ impl Default for ValidatorConfig {
     }
 }
 
+impl ValidatorConfig {
+    pub fn default_for_test() -> Self {
+        let mut config = Self::default();
+        config.rpc_config.full_api = true;
+        config
+    }
+}
+
 // `ValidatorStartProgress` contains status information that is surfaced to the node operator over
 // the admin RPC channel to help them to follow the general progress of node startup without
 // having to watch log messages.
@@ -650,7 +658,7 @@ impl Validator {
                     leader_schedule_cache.clone(),
                     max_complete_transaction_status_slot,
                 )),
-                if config.rpc_config.minimal_api {
+                if !config.rpc_config.full_api {
                     None
                 } else {
                     let (trigger, pubsub_service) = PubSubService::new(
@@ -1765,7 +1773,7 @@ mod tests {
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
             rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
@@ -1847,7 +1855,7 @@ mod tests {
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
                     rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-                    ..ValidatorConfig::default()
+                    ..ValidatorConfig::default_for_test()
                 };
                 Validator::new(
                     validator_node,
@@ -1890,7 +1898,7 @@ mod tests {
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut config = ValidatorConfig::default();
+        let mut config = ValidatorConfig::default_for_test();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
 

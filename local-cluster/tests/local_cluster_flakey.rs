@@ -129,7 +129,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // below only for slots <= `next_slot_on_a`, validator A will not know how it's last vote chains
     // to the otehr forks, and may violate switching proofs on restart.
     let mut validator_configs =
-        make_identical_validator_configs(&ValidatorConfig::default(), node_stakes.len());
+        make_identical_validator_configs(&ValidatorConfig::default_for_test(), node_stakes.len());
 
     validator_configs[0].voting_disabled = true;
     validator_configs[2].voting_disabled = true;

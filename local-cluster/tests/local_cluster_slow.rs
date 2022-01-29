@@ -844,7 +844,10 @@ fn test_listener_startup() {
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         num_listeners: 3,
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), 1),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default_for_test(),
+            1,
+        ),
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
