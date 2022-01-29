@@ -665,7 +665,7 @@ pub mod test {
     fn test_transaction_dos() {
         solana_logger::setup();
 
-        let validator_config = ValidatorConfig::default();
+        let validator_config = ValidatorConfig::default_for_test();
         let num_nodes = 1;
         let mut config = ClusterConfig {
             cluster_lamports: 10_000_000,
