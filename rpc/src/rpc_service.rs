@@ -363,7 +363,7 @@ impl JsonRpcService {
                 (None, None)
             };
 
-        let minimal_api = config.minimal_api;
+        let full_api = config.full_api;
         let obsolete_v1_7_api = config.obsolete_v1_7_api;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
@@ -407,7 +407,7 @@ impl JsonRpcService {
                 let mut io = MetaIoHandler::default();
 
                 io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
-                if !minimal_api {
+                if full_api {
                     io.extend_with(rpc_full::FullImpl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_7::DeprecatedV1_7Impl.to_delegate());
                 }
