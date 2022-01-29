@@ -633,8 +633,10 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub execution_results: Vec<TransactionExecutionResult>,
     pub retryable_transaction_indexes: Vec<usize>,
     // Total number of transactions that were executed
-    // Note executed transactions can still have failed!
     pub executed_transactions_count: usize,
+    // Total number of the executed transactions that returned success/not
+    // an error.
+    pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
 }
 
@@ -4064,6 +4066,7 @@ impl Bank {
         timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
 
         let mut executed_transactions_count: usize = 0;
+        let mut executed_with_successful_result_count: usize = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
@@ -4137,9 +4140,13 @@ impl Bank {
                 }
             }
 
+            if execution_result.was_executed() {
+                executed_transactions_count += 1;
+            }
+
             match execution_result.flattened_result() {
                 Ok(()) => {
-                    executed_transactions_count += 1;
+                    executed_with_successful_result_count += 1;
                 }
                 Err(err) => {
                     if *err_count == 0 {
@@ -4153,7 +4160,7 @@ impl Bank {
             debug!(
                 "{} errors of {} txs",
                 *err_count,
-                *err_count + executed_transactions_count
+                *err_count + executed_with_successful_result_count
             );
         }
         Self::update_error_counters(&error_counters);
@@ -4162,6 +4169,7 @@ impl Bank {
             execution_results,
             retryable_transaction_indexes,
             executed_transactions_count,
+            executed_with_successful_result_count,
             signature_count,
         }
     }
@@ -4269,7 +4277,7 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
-        executed_transactions_count: u64,
+        executed_with_successful_result_count: u64,
         signature_count: u64,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
@@ -4278,18 +4286,19 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        self.increment_transaction_count(executed_transactions_count);
+        self.increment_transaction_count(executed_with_successful_result_count);
         self.increment_signature_count(signature_count);
 
         inc_new_counter_info!(
             "bank-process_transactions-txs",
-            executed_transactions_count as usize
+            executed_with_successful_result_count as usize
         );
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
         if !sanitized_txs.is_empty() {
             let processed_tx_count = sanitized_txs.len() as u64;
-            let failed_tx_count = processed_tx_count.saturating_sub(executed_transactions_count);
+            let failed_tx_count =
+                processed_tx_count.saturating_sub(executed_with_successful_result_count);
             self.transaction_error_count
                 .fetch_add(failed_tx_count, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
@@ -5123,7 +5132,7 @@ impl Bank {
         let LoadAndExecuteTransactionsOutput {
             mut loaded_transactions,
             execution_results,
-            executed_transactions_count,
+            executed_with_successful_result_count,
             signature_count,
             ..
         } = self.load_and_execute_transactions(
@@ -5138,7 +5147,7 @@ impl Bank {
             batch.sanitized_transactions(),
             &mut loaded_transactions,
             execution_results,
-            executed_transactions_count as u64,
+            executed_with_successful_result_count as u64,
             signature_count,
             timings,
         );

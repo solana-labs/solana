@@ -101,6 +101,11 @@ struct ProcessTransactionsSummary {
     // Total number of transactions that made it into the block
     committed_transactions_count: usize,
 
+    // Total number of transactions that made it into the block where the transactions
+    // output from execution was success/no error.
+    #[allow(dead_code)]
+    committed_transactions_with_successful_result_count: usize,
+
     // All transactions that were executed but then failed record because the
     // slot ended
     #[allow(dead_code)]
@@ -128,6 +133,9 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // executed. See comment in `ProcessTransactionsSummary::transactions_attempted_execution_count`
     // for possible outcomes of execution.
     executed_transactions_count: usize,
+    // Total number of the executed transactions that returned success/not
+    // an error.
+    executed_with_successful_result_count: usize,
     // Transactions that either were not executed, or were executed and failed to be committed due
     // to the block ending.
     retryable_transaction_indexes: Vec<usize>,
@@ -986,6 +994,7 @@ impl BankingStage {
             execution_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
+            executed_with_successful_result_count,
             signature_count,
             ..
         } = load_and_execute_transactions_output;
@@ -1014,6 +1023,7 @@ impl BankingStage {
             return ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count,
                 executed_transactions_count,
+                executed_with_successful_result_count,
                 retryable_transaction_indexes,
                 commit_transactions_result: Err(e),
                 execute_timings,
@@ -1032,7 +1042,7 @@ impl BankingStage {
                 sanitized_txs,
                 &mut loaded_transactions,
                 execution_results,
-                executed_transactions_count as u64,
+                executed_with_successful_result_count as u64,
                 signature_count,
                 &mut execute_timings,
             );
@@ -1073,6 +1083,7 @@ impl BankingStage {
         ExecuteAndCommitTransactionsOutput {
             transactions_attempted_execution_count,
             executed_transactions_count,
+            executed_with_successful_result_count,
             retryable_transaction_indexes,
             commit_transactions_result: Ok(()),
             execute_timings,
@@ -1225,6 +1236,7 @@ impl BankingStage {
         let mut total_transactions_attempted_execution_count: usize = 0;
         // All transactions that were executed and committed
         let mut total_committed_transactions_count: usize = 0;
+        let mut total_committed_transactions_with_successful_result_count: usize = 0;
         // All transactions that were executed but then failed record because the
         // slot ended
         let mut total_failed_commit_count: usize = 0;
@@ -1254,6 +1266,7 @@ impl BankingStage {
             let ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count: new_transactions_attempted_execution_count,
                 executed_transactions_count: new_executed_transactions_count,
+                executed_with_successful_result_count: new_executed_with_successful_result_count,
                 retryable_transaction_indexes: new_retryable_transaction_indexes,
                 commit_transactions_result: new_commit_transactions_result,
                 ..
@@ -1271,6 +1284,9 @@ impl BankingStage {
             if new_commit_transactions_result.is_ok() {
                 total_committed_transactions_count = total_committed_transactions_count
                     .saturating_add(new_executed_transactions_count);
+                total_committed_transactions_with_successful_result_count =
+                    total_committed_transactions_with_successful_result_count
+                        .saturating_add(new_executed_with_successful_result_count);
             } else {
                 total_failed_commit_count =
                     total_failed_commit_count.saturating_add(new_executed_transactions_count);
@@ -1310,6 +1326,8 @@ impl BankingStage {
             chunk_start,
             transactions_attempted_execution_count: total_transactions_attempted_execution_count,
             committed_transactions_count: total_committed_transactions_count,
+            committed_transactions_with_successful_result_count:
+                total_committed_transactions_with_successful_result_count,
             failed_commit_count: total_failed_commit_count,
             retryable_transaction_indexes: all_retryable_tx_indexes,
             cost_model_limit_transactions_count: total_cost_model_limit_transactions_count,
@@ -2424,12 +2442,14 @@ mod tests {
             let ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count,
                 executed_transactions_count,
+                executed_with_successful_result_count,
                 commit_transactions_result,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
 
             assert_eq!(transactions_attempted_execution_count, 1);
             assert_eq!(executed_transactions_count, 1);
+            assert_eq!(executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
 
             // Tick up to max tick height
@@ -2474,6 +2494,7 @@ mod tests {
             let ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count,
                 executed_transactions_count,
+                executed_with_successful_result_count,
                 retryable_transaction_indexes,
                 commit_transactions_result,
                 ..
@@ -2481,6 +2502,7 @@ mod tests {
             assert_eq!(transactions_attempted_execution_count, 1);
             // Transactions was still executed, just wasn't committed, so should be counted here.
             assert_eq!(executed_transactions_count, 1);
+            assert_eq!(executed_with_successful_result_count, 1);
             assert_eq!(retryable_transaction_indexes, vec![0]);
             assert_matches!(
                 commit_transactions_result,
@@ -2694,12 +2716,14 @@ mod tests {
                 chunk_start,
                 transactions_attempted_execution_count,
                 committed_transactions_count,
+                committed_transactions_with_successful_result_count,
                 failed_commit_count,
                 mut retryable_transaction_indexes,
                 ..
             } = process_transactions_summary;
             assert_eq!(chunk_start, 0);
             assert_eq!(transactions_attempted_execution_count, 1);
+            assert_eq!(committed_transactions_with_successful_result_count, 1);
             assert_eq!(failed_commit_count, 1);
             // MaxHeightReached error does not commit, should be zero here
             assert_eq!(committed_transactions_count, 0);
@@ -2802,6 +2826,7 @@ mod tests {
             chunk_start,
             transactions_attempted_execution_count,
             committed_transactions_count,
+            committed_transactions_with_successful_result_count,
             failed_commit_count,
             retryable_transaction_indexes,
             ..
@@ -2813,6 +2838,7 @@ mod tests {
         // Both transactions should have been committed, even though one was an error,
         // because InstructionErrors are committed
         assert_eq!(committed_transactions_count, 2);
+        assert_eq!(committed_transactions_with_successful_result_count, 1);
         assert_eq!(failed_commit_count, 0);
         assert_eq!(
             retryable_transaction_indexes.len(),
@@ -2854,6 +2880,7 @@ mod tests {
             chunk_start,
             transactions_attempted_execution_count,
             committed_transactions_count,
+            committed_transactions_with_successful_result_count,
             failed_commit_count,
             retryable_transaction_indexes,
             ..
@@ -2863,6 +2890,7 @@ mod tests {
         assert_eq!(chunk_start, transactions_count);
         assert_eq!(transactions_attempted_execution_count, transactions_count);
         assert_eq!(committed_transactions_count, 2);
+        assert_eq!(committed_transactions_with_successful_result_count, 2);
         assert_eq!(failed_commit_count, 0,);
         println!("retryable txs: {:?}", retryable_transaction_indexes);
         assert_eq!(
