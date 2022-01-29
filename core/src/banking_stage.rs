@@ -652,12 +652,6 @@ impl BankingStage {
         banking_stage_stats
             .consume_buffered_packets_elapsed
             .fetch_add(proc_start.as_us(), Ordering::Relaxed);
-        banking_stage_stats
-            .rebuffered_packets_count
-            .fetch_add(rebuffered_packet_count, Ordering::Relaxed);
-        banking_stage_stats
-            .consumed_buffered_packets_count
-            .fetch_add(new_tx_count, Ordering::Relaxed);
     }
 
     fn consume_or_forward_packets(
@@ -1485,11 +1479,6 @@ impl BankingStage {
             ..
         } = process_transactions_summary;
 
-        inc_new_counter_info!(
-            "banking_stage-retryable_transactions",
-            retryable_transaction_indexes.len()
-        );
-
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
         let filtered_retryable_tx_indexes = Self::filter_pending_packets_from_pending_txs(
             bank,
@@ -1499,14 +1488,19 @@ impl BankingStage {
         );
         filter_pending_packets_time.stop();
 
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            transactions_attempted_execution_count
-                .saturating_sub(filtered_retryable_tx_indexes.len())
-        );
+        // Increment packet-based metrics
+        banking_stage_stats
+            .rebuffered_packets_count
+            .fetch_add(filtered_retryable_tx_indexes.len(), Ordering::Relaxed);
+        banking_stage_stats
+            .consumed_buffered_packets_count
+            .fetch_add(
+                transactions_attempted_execution_count
+                    .saturating_sub(filtered_retryable_tx_indexes.len()),
+                Ordering::Relaxed,
+            );
 
-        process_transactions_summary.retryable_transaction_indexes = filtered_retryable_tx_indexes;
-
+        // Increment timing-based metrics
         banking_stage_stats
             .packet_conversion_elapsed
             .fetch_add(packet_conversion_time.as_us(), Ordering::Relaxed);
@@ -1517,6 +1511,7 @@ impl BankingStage {
             .filter_pending_packets_elapsed
             .fetch_add(filter_pending_packets_time.as_us(), Ordering::Relaxed);
 
+        process_transactions_summary.retryable_transaction_indexes = filtered_retryable_tx_indexes;
         process_transactions_summary
     }
 
