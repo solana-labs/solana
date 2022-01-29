@@ -15,6 +15,8 @@ import { useCluster } from "providers/cluster";
 import { ErrorCard } from "components/common/ErrorCard";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 import { Downloadable } from "components/common/Downloadable";
+import { VerifiedBadge } from "components/common/VerifiedBadge";
+import { InfoTooltip } from "components/common/InfoTooltip";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -123,6 +125,17 @@ export function UpgradeableProgramSection({
           </td>
         </tr>
         <tr>
+          <td>
+            <LastVerifiedBuildLabel />
+          </td>
+          <td className="text-lg-end">
+            <VerifiedBadge
+              programAddress={account.pubkey}
+              programDeploySlot={programData.slot}
+            />
+          </td>
+        </tr>
+        <tr>
           <td>Last Deployed Slot</td>
           <td className="text-lg-end">
             <Slot slot={programData.slot} link />
@@ -138,6 +151,22 @@ export function UpgradeableProgramSection({
         )}
       </TableCardBody>
     </div>
+  );
+}
+
+function LastVerifiedBuildLabel() {
+  return (
+    <InfoTooltip text="Anchor service verifying programs deployed on-chain against published source code. Click to learn more.">
+      <a
+        href={
+          "https://project-serum.github.io/anchor/getting-started/verification.html#building"
+        }
+        target="_blank"
+        rel="noreferrer"
+      >
+        Verifiable Build Status
+      </a>
+    </InfoTooltip>
   );
 }
 
