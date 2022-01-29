@@ -1693,6 +1693,28 @@ pub fn process_show_stakes(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching stake accounts...");
 
+    let vote_account = match vote_account_pubkeys {
+        Some(pubkey) => {
+            let vote_accounts = rpc_client.get_vote_accounts()?;
+            let pubkey_str = pubkey[0].to_string();
+            vote_accounts
+                .current
+                .iter()
+                .chain(vote_accounts.delinquent.iter())
+                .find(|v| v.node_pubkey.eq(&pubkey_str) || v.vote_pubkey.eq(&pubkey_str))
+                .map(|acc| acc.vote_pubkey.to_string())
+        }
+        None => None,
+    };
+
+    if vote_account.is_none() && vote_account_pubkeys.is_some() {
+        return Err(format!(
+            "Failed to retrieve stake accounts for pubkey: {:?}.",
+            vote_account_pubkeys.unwrap()
+        )
+        .into());
+    }
+
     let mut program_accounts_config = RpcProgramAccountsConfig {
         account_config: RpcAccountInfoConfig {
             encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
@@ -1701,28 +1723,24 @@ pub fn process_show_stakes(
         ..RpcProgramAccountsConfig::default()
     };
 
-    if let Some(vote_account_pubkeys) = vote_account_pubkeys {
-        // Use server-side filtering if only one vote account is provided
-        if vote_account_pubkeys.len() == 1 {
-            program_accounts_config.filters = Some(vec![
-                // Filter by `StakeState::Stake(_, _)`
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 0,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                        bs58::encode([2, 0, 0, 0]).into_string(),
-                    ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                }),
-                // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 124,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                        vote_account_pubkeys[0].to_string(),
-                    ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                }),
-            ]);
-        }
+    let vote_pubkey = vote_account.unwrap_or_default();
+    if !vote_pubkey.is_empty() {
+        program_accounts_config.filters = Some(vec![
+            // Filter by `StakeState::Stake(_, _)`
+            rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                offset: 0,
+                bytes: rpc_filter::MemcmpEncodedBytes::Base58(
+                    bs58::encode([2, 0, 0, 0]).into_string(),
+                ),
+                encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+            }),
+            // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
+            rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                offset: 124,
+                bytes: rpc_filter::MemcmpEncodedBytes::Base58(vote_pubkey.clone()),
+                encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+            }),
+        ]);
     }
     let all_stake_accounts = rpc_client
         .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
@@ -1757,9 +1775,7 @@ pub fn process_show_stakes(
                 }
                 StakeState::Stake(_, stake) => {
                     if vote_account_pubkeys.is_none()
-                        || vote_account_pubkeys
-                            .unwrap()
-                            .contains(&stake.delegation.voter_pubkey)
+                        || vote_pubkey.eq(&stake.delegation.voter_pubkey.to_string())
                     {
                         stake_accounts.push(CliKeyedStakeState {
                             stake_pubkey: stake_pubkey.to_string(),
