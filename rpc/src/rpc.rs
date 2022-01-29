@@ -2077,6 +2077,104 @@ impl JsonRpcRequestProcessor {
     }
 }
 
+#[derive(Debug, Default)]
+struct RpcFilterMemcmp {
+    offset: usize,
+    bytes: Vec<u8>,
+}
+
+impl RpcFilterMemcmp {
+    fn new(offset: usize, bytes: Vec<u8>) -> Self {
+        Self { offset, bytes }
+    }
+
+    fn min_size(&self) -> usize {
+        self.offset + self.bytes.len()
+    }
+
+    fn merge(vec: &mut Vec<Self>) -> std::result::Result<(), ()> {
+        vec.sort_by_key(|f| f.offset);
+
+        let mut i = 0;
+        while i < vec.len() {
+            let mut j = i + 1;
+            while j < vec.len() {
+                // Intersection, need check and optionally merge
+                if vec[i].min_size() >= vec[j].offset {
+                    // Check
+                    let from = vec[i].offset.max(vec[j].offset);
+                    let to = vec[i].min_size().min(vec[j].min_size());
+                    if vec[i].bytes[from - vec[i].offset..to - vec[i].offset]
+                        != vec[j].bytes[from - vec[j].offset..to - vec[j].offset]
+                    {
+                        return Err(());
+                    }
+
+                    // Optional merge
+                    if vec[i].min_size() < vec[j].min_size() {
+                        let slice = &vec[j].bytes[to - vec[j].offset..];
+                        vec[i].bytes.extend_from_slice(slice);
+                        vec.remove(j);
+                        continue;
+                    }
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct RpcFilters {
+    data_size: Option<usize>,
+    min_size: Option<usize>, // RpcFilterMemcmp::min_size
+    memcmp: Vec<RpcFilterMemcmp>,
+}
+
+impl RpcFilters {
+    fn new(filters: Vec<RpcFilterType>) -> Result<Self> {
+        let mut rpc_filter = Self::default();
+
+        for filter in filters {
+            let filter = filter
+                .verify()
+                .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))?;
+            match filter {
+                RpcFilterType::DataSize(size) => {
+                    if rpc_filter.data_size.is_none() {
+                        rpc_filter.data_size = Some(size);
+                    } else {
+                        rpc_filter.data_size_invalid = true;
+                    }
+                }
+                RpcFilterType::Memcmp(memcmp) => {
+                    rpc_filter.memcmp.push(RpcFilterMemcmp::new(
+                        memcmp.offset,
+                        match memcmp.bytes {
+                            MemcmpEncodedBytes::Bytes(bytes) => bytes,
+                            _ => unreachable!("invalid verify function"),
+                        },
+                    ));
+                }
+            }
+        }
+
+        RpcFilterMemcmp::merge(&mut rpc_filter.memcmp).map_err(|e| {
+            Error::invalid_params("Invalid RpcFilterType::Memcmp filters conjunction")
+        })?;
+        rpc_filter.min_size = rpc_filter.memcmp.iter().map(|f| f.min_size()).max();
+
+        Ok(rpc_filter)
+    }
+
+    fn contains(&self) -> bool {
+        todo!()
+    }
+}
+
 fn optimize_filters(filters: &mut Vec<RpcFilterType>) {
     filters.iter_mut().for_each(|filter_type| {
         if let RpcFilterType::Memcmp(compare) = filter_type {

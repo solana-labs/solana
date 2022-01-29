@@ -13,9 +13,9 @@ pub enum RpcFilterType {
 }
 
 impl RpcFilterType {
-    pub fn verify(&self) -> Result<(), RpcFilterError> {
-        match self {
-            RpcFilterType::DataSize(_) => Ok(()),
+    pub fn verify(self) -> Result<Self, RpcFilterError> {
+        match &self {
+            RpcFilterType::DataSize(_) => Ok(self),
             RpcFilterType::Memcmp(compare) => {
                 let encoding = compare.encoding.as_ref().unwrap_or(&MemcmpEncoding::Binary);
                 match encoding {
@@ -33,7 +33,10 @@ impl RpcFilterType {
                                 if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::Base58DataTooLarge)
                                 } else {
-                                    Ok(())
+                                    Ok(RpcFilterType::Memcmp(Memcmp::new_bytes(
+                                        compare.offset,
+                                        bytes,
+                                    )))
                                 }
                             }
                             Base58(bytes) => {
@@ -44,7 +47,10 @@ impl RpcFilterType {
                                 if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::DataTooLarge)
                                 } else {
-                                    Ok(())
+                                    Ok(RpcFilterType::Memcmp(Memcmp::new_bytes(
+                                        compare.offset,
+                                        bytes,
+                                    )))
                                 }
                             }
                             Base64(bytes) => {
@@ -55,14 +61,18 @@ impl RpcFilterType {
                                 if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::DataTooLarge)
                                 } else {
-                                    Ok(())
+                                    Ok(RpcFilterType::Memcmp(Memcmp::new_bytes(
+                                        compare.offset,
+                                        bytes,
+                                    )))
                                 }
                             }
                             Bytes(bytes) => {
                                 if bytes.len() > MAX_DATA_SIZE {
-                                    return Err(RpcFilterError::DataTooLarge);
+                                    Err(RpcFilterError::DataTooLarge);
+                                } else {
+                                    Ok(self)
                                 }
-                                Ok(())
                             }
                         }
                     }
@@ -124,6 +134,14 @@ pub struct Memcmp {
 }
 
 impl Memcmp {
+    fn new_bytes(offset: usize, bytes: Vec<u8>) -> Self {
+        Self {
+            offset,
+            bytes: MemcmpEncodedBytes::Bytes(bytes),
+            encoding: None,
+        }
+    }
+
     pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
