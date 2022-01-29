@@ -41,10 +41,7 @@ impl CloseAccountData {
         let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
-        let mut transcript = CloseAccountProof::transcript_new(
-            &pod_pubkey,
-            &pod_ciphertext,
-        );
+        let mut transcript = CloseAccountProof::transcript_new(&pod_pubkey, &pod_ciphertext);
 
         let proof = CloseAccountProof::new(keypair, ciphertext, &mut transcript);
 
@@ -59,10 +56,7 @@ impl CloseAccountData {
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for CloseAccountData {
     fn verify(&self) -> Result<(), ProofError> {
-        let mut transcript = CloseAccountProof::transcript_new(
-            &self.pubkey,
-            &self.ciphertext,
-        );
+        let mut transcript = CloseAccountProof::transcript_new(&self.pubkey, &self.ciphertext);
 
         let pubkey = self.pubkey.try_into()?;
         let ciphertext = self.ciphertext.try_into()?;

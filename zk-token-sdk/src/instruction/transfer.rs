@@ -13,29 +13,42 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{Role, Verifiable},
+        instruction::{TWO_32, combine_u32_ciphertexts, split_u64_into_u32, Role, Verifiable},
         range_proof::RangeProof,
         sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
     },
     arrayref::{array_ref, array_refs},
-    curve25519_dalek::scalar::Scalar,
     merlin::Transcript,
     std::convert::TryInto,
 };
 
-/// Constant for 2^32
-const TWO_32: u64 = 4294967296;
-
 #[derive(Clone)]
 #[repr(C)]
-pub struct ElGamalGroupEncryption {
+pub struct TransferAmountEncryption {
     pub commitment: PedersenCommitment,
     pub source: DecryptHandle,
     pub dest: DecryptHandle,
     pub auditor: DecryptHandle,
 }
 
-impl ElGamalGroupEncryption {
+impl TransferAmountEncryption {
+    pub fn new(
+        amount: u32,
+        pubkey_source: &ElGamalPubkey,
+        pubkey_dest: &ElGamalPubkey,
+        pubkey_auditor: &ElGamalPubkey,
+    ) -> (Self, PedersenOpening) {
+        let (commitment, opening) = Pedersen::new(amount);
+        let transfer_amount_encryption = Self {
+            commitment,
+            source: pubkey_source.decrypt_handle(&opening),
+            dest: pubkey_dest.decrypt_handle(&opening),
+            auditor: pubkey_auditor.decrypt_handle(&opening),
+        };
+
+        (transfer_amount_encryption, opening)
+    }
+
     pub fn to_bytes(&self) -> [u8; 128] {
         let mut bytes = [0u8; 128];
         bytes[..32].copy_from_slice(&self.commitment.to_bytes());
@@ -64,47 +77,14 @@ impl ElGamalGroupEncryption {
     }
 }
 
-impl ElGamalGroupEncryption {
-    fn new(
-        amount: u32,
-        transfer_pubkeys: &TransferPubkeys,
-    ) -> (ElGamalGroupEncryption, PedersenOpening) {
-        let (commitment, opening) = Pedersen::new(amount);
-        let group_encryption = ElGamalGroupEncryption {
-            commitment,
-            source: transfer_pubkeys.source.decrypt_handle(&opening),
-            dest: transfer_pubkeys.dest.decrypt_handle(&opening),
-            auditor: transfer_pubkeys.auditor.decrypt_handle(&opening),
-        };
-
-        (group_encryption, opening)
-    }
-}
-
-/// Split u64 number into two u32 numbers
-#[cfg(not(target_arch = "bpf"))]
-pub fn split_u64_into_u32(amount: u64) -> (u32, u32) {
-    let lo = amount as u32;
-    let hi = (amount >> 32) as u32;
-
-    (lo, hi)
-}
-
-fn combine_u32_ciphertexts(
-    ciphertext_lo: &ElGamalCiphertext,
-    ciphertext_hi: &ElGamalCiphertext,
-) -> ElGamalCiphertext {
-    ciphertext_lo + &(ciphertext_hi * &Scalar::from(TWO_32))
-}
-
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
     /// Group encryption of the low 32 bits of the transfer amount
-    pub ciphertext_lo: pod::ElGamalGroupEncryption,
+    pub ciphertext_lo: pod::TransferAmountEncryption,
 
     /// Group encryption of the high 32 bits of the transfer amount
-    pub ciphertext_hi: pod::ElGamalGroupEncryption,
+    pub ciphertext_hi: pod::TransferAmountEncryption,
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
     pub transfer_pubkeys: pod::TransferPubkeys,
@@ -120,36 +100,18 @@ pub struct TransferData {
 impl TransferData {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        // amount of the transfer
         transfer_amount: u64,
-
-        // available balance in the source account as u64
-        spendable_balance: u64,
-
-        // available balance in the source account as ElGamalCiphertext
-        spendable_balance_ciphertext: &ElGamalCiphertext,
-
-        // source account ElGamal keypair
+        (spendable_balance, spendable_balance_ciphertext): (u64, &ElGamalCiphertext),
         keypair_source: &ElGamalKeypair,
-
-        // destination account ElGamal pubkey
-        pubkey_dest: &ElGamalPubkey,
-
-        // auditor ElGamal pubkey
-        pubkey_auditor: &ElGamalPubkey,
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Self {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
-        // encrypt transfer amount
-        let transfer_pubkeys = TransferPubkeys {
-            source: keypair_source.public,
-            dest: *pubkey_dest,
-            auditor: *pubkey_auditor,
-        };
-
-        let (ciphertext_lo, opening_lo) = ElGamalGroupEncryption::new(amount_lo, &transfer_pubkeys);
-        let (ciphertext_hi, opening_hi) = ElGamalGroupEncryption::new(amount_hi, &transfer_pubkeys);
+        let (ciphertext_lo, opening_lo) =
+            TransferAmountEncryption::new(amount_lo, &keypair_source.public, pubkey_dest, pubkey_auditor);
+        let (ciphertext_hi, opening_hi) =
+            TransferAmountEncryption::new(amount_hi, &keypair_source.public, pubkey_dest, pubkey_auditor);
 
         // subtract transfer amount from the spendable ciphertext
         let new_spendable_balance = spendable_balance - transfer_amount;
@@ -168,9 +130,9 @@ impl TransferData {
             - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
 
         // generate transcript and append all public inputs
-        let pod_transfer_pubkeys: pod::TransferPubkeys = transfer_pubkeys.into();
-        let pod_ciphertext_lo: pod::ElGamalGroupEncryption = ciphertext_lo.into();
-        let pod_ciphertext_hi: pod::ElGamalGroupEncryption = ciphertext_hi.into();
+        let pod_transfer_pubkeys = pod::TransferPubkeys::new(&keypair_source.public, pubkey_dest, pubkey_auditor);
+        let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.into();
+        let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
 
         let mut transcript = TransferProof::transcript_new(
             &pod_transfer_pubkeys,
@@ -199,7 +161,7 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_lo: ElGamalGroupEncryption = self.ciphertext_lo.try_into()?;
+        let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
             Role::Source => ciphertext_lo.source,
@@ -215,7 +177,7 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_hi: ElGamalGroupEncryption = self.ciphertext_hi.try_into()?;
+        let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
             Role::Source => ciphertext_hi.source,
@@ -297,8 +259,8 @@ pub struct TransferProof {
 impl TransferProof {
     fn transcript_new(
         transfer_pubkeys: &pod::TransferPubkeys,
-        ciphertext_lo: &pod::ElGamalGroupEncryption,
-        ciphertext_hi: &pod::ElGamalGroupEncryption,
+        ciphertext_lo: &pod::TransferAmountEncryption,
+        ciphertext_hi: &pod::TransferAmountEncryption,
     ) -> Transcript {
         let mut transcript = Transcript::new(b"transfer-proof");
 
@@ -360,8 +322,8 @@ impl TransferProof {
 
     pub fn verify(
         self,
-        ciphertext_lo: &ElGamalGroupEncryption,
-        ciphertext_hi: &ElGamalGroupEncryption,
+        ciphertext_lo: &TransferAmountEncryption,
+        ciphertext_hi: &TransferAmountEncryption,
         transfer_pubkeys: &TransferPubkeys,
         new_spendable_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
@@ -416,6 +378,7 @@ pub struct TransferPubkeys {
 }
 
 impl TransferPubkeys {
+    // TODO: use constructor instead
     pub fn to_bytes(&self) -> [u8; 96] {
         let mut bytes = [0u8; 96];
         bytes[..32].copy_from_slice(&self.source.to_bytes());
@@ -440,17 +403,14 @@ impl TransferPubkeys {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_comms(
-    comm_lo: PedersenCommitment,
-    comm_hi: PedersenCommitment,
-) -> PedersenCommitment {
-    comm_lo + comm_hi * Scalar::from(TWO_32)
-}
-
-#[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_handles(handle_lo: DecryptHandle, handle_hi: DecryptHandle) -> DecryptHandle {
-    handle_lo + handle_hi * Scalar::from(TWO_32)
+impl pod::TransferPubkeys {
+    pub fn new(source: &ElGamalPubkey, dest: &ElGamalPubkey, auditor: &ElGamalPubkey) -> Self {
+        let mut bytes = [0u8; 96];
+        bytes[..32].copy_from_slice(&source.to_bytes());
+        bytes[32..64].copy_from_slice(&dest.to_bytes());
+        bytes[64..96].copy_from_slice(&auditor.to_bytes());
+        Self(bytes)
+    }
 }
 
 #[cfg(test)]
@@ -466,7 +426,7 @@ mod test {
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
-        let spendable_ct = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 55;
@@ -474,11 +434,9 @@ mod test {
         // create transfer data
         let transfer_data = TransferData::new(
             transfer_amount,
-            spendable_balance,
-            &spendable_ct,
+            (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            &dest_pk,
-            &auditor_pk,
+            (&dest_pk, &auditor_pk),
         );
 
         assert!(transfer_data.verify().is_ok());
@@ -501,7 +459,7 @@ mod test {
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
-        let spendable_ct = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 55;
@@ -509,11 +467,9 @@ mod test {
         // create transfer data
         let transfer_data = TransferData::new(
             transfer_amount,
-            spendable_balance,
-            &spendable_ct,
+            (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            &dest_pk,
-            &auditor_pk,
+            (&dest_pk, &auditor_pk),
         );
 
         assert_eq!(

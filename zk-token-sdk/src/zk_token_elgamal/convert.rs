@@ -28,7 +28,7 @@ mod target_arch {
                 validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
-            instruction::transfer::{ElGamalGroupEncryption, TransferPubkeys},
+            instruction::transfer::{TransferAmountEncryption, TransferPubkeys},
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -276,16 +276,16 @@ mod target_arch {
         }
     }
 
-    impl From<ElGamalGroupEncryption> for pod::ElGamalGroupEncryption {
-        fn from(proof: ElGamalGroupEncryption) -> Self {
+    impl From<TransferAmountEncryption> for pod::TransferAmountEncryption {
+        fn from(proof: TransferAmountEncryption) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::ElGamalGroupEncryption> for ElGamalGroupEncryption {
+    impl TryFrom<pod::TransferAmountEncryption> for TransferAmountEncryption {
         type Error = ProofError;
 
-        fn try_from(pod: pod::ElGamalGroupEncryption) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

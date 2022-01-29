@@ -59,10 +59,7 @@ impl WithdrawData {
 
         let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
         let pod_final_ciphertext: pod::ElGamalCiphertext = final_ciphertext.into();
-        let mut transcript = WithdrawProof::transcript_new(
-            &pod_pubkey,
-            &pod_final_ciphertext,
-        );
+        let mut transcript = WithdrawProof::transcript_new(&pod_pubkey, &pod_final_ciphertext);
         let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
         Self {
@@ -76,14 +73,12 @@ impl WithdrawData {
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for WithdrawData {
     fn verify(&self) -> Result<(), ProofError> {
-        let mut transcript = WithdrawProof::transcript_new(
-            &self.pubkey,
-            &self.final_ciphertext,
-        );
+        let mut transcript = WithdrawProof::transcript_new(&self.pubkey, &self.final_ciphertext);
 
         let elgamal_pubkey = self.pubkey.try_into()?;
         let final_balance_ciphertext = self.final_ciphertext.try_into()?;
-        self.proof.verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
+        self.proof
+            .verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
     }
 }
 
@@ -136,12 +131,8 @@ impl WithdrawProof {
             transcript,
         );
 
-        let range_proof = RangeProof::new(
-            vec![final_balance],
-            vec![64],
-            vec![&opening],
-            transcript,
-        );
+        let range_proof =
+            RangeProof::new(vec![final_balance], vec![64], vec![&opening], transcript);
 
         WithdrawProof {
             commitment: commitment.into(),
@@ -168,11 +159,7 @@ impl WithdrawProof {
         // verify range proof
         //
         // TODO: double compressing here - consider modifying range proof input type to `PedersenCommitment`
-        range_proof.verify(
-            vec![&commitment],
-            vec![64_usize],
-            transcript,
-        )?;
+        range_proof.verify(vec![&commitment], vec![64_usize], transcript)?;
 
         Ok(())
     }
