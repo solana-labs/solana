@@ -1734,7 +1734,7 @@ mod tests {
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
         solana_perf::packet::{to_packet_batches, PacketFlags},
@@ -1792,10 +1792,10 @@ mod tests {
         let (verified_sender, verified_receiver) = unbounded();
         let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open(ledger_path.path())
                     .expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
@@ -1821,7 +1821,7 @@ mod tests {
             banking_stage.join().unwrap();
             poh_service.join().unwrap();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
@@ -1836,10 +1836,10 @@ mod tests {
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open(ledger_path.path())
                     .expect("Expected to be able to open database ledger"),
             );
             let poh_config = PohConfig {
@@ -1882,7 +1882,7 @@ mod tests {
             assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
             banking_stage.join().unwrap();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     pub fn convert_from_old_verified(
@@ -1910,10 +1910,10 @@ mod tests {
         let (verified_sender, verified_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
         let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open(ledger_path.path())
                     .expect("Expected to be able to open database ledger"),
             );
             let poh_config = PohConfig {
@@ -2015,7 +2015,7 @@ mod tests {
 
             drop(entry_receiver);
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
@@ -2057,7 +2057,7 @@ mod tests {
 
         let (vote_sender, vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -2065,7 +2065,7 @@ mod tests {
                 // start a banking_stage to eat verified receiver
                 let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
                 let blockstore = Arc::new(
-                    Blockstore::open(&ledger_path)
+                    Blockstore::open(ledger_path.path())
                         .expect("Expected to be able to open database ledger"),
                 );
                 let poh_config = PohConfig {
@@ -2121,7 +2121,7 @@ mod tests {
             // the account balance below zero before the credit is added.
             assert_eq!(bank.get_balance(&alice.pubkey()), 2);
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
@@ -2140,9 +2140,9 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 // TODO use record_receiver
@@ -2218,7 +2218,7 @@ mod tests {
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
@@ -2387,9 +2387,9 @@ mod tests {
             genesis_config.hash(),
         )]);
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -2496,7 +2496,7 @@ mod tests {
 
             assert_eq!(bank.get_balance(&pubkey), 1);
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     fn simulate_poh(
@@ -2537,9 +2537,9 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
         ]);
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -2592,7 +2592,7 @@ mod tests {
             assert_eq!(retryable_transaction_indexes, vec![1],);
             assert!(commit_transactions_result.is_ok());
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
@@ -2655,9 +2655,9 @@ mod tests {
             genesis_config.hash(),
         )]);
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -2712,11 +2712,115 @@ mod tests {
             let _ = poh_simulator.join();
         }
 
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
+    fn execute_transactions_with_dummy_poh_service(
+        bank: Arc<Bank>,
+        transactions: Vec<Transaction>,
+    ) -> ProcessTransactionsSummary {
+        let transactions = sanitize_transactions(transactions);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
+        let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.clone(),
+            Some((4, 4)),
+            bank.ticks_per_slot(),
+            &Pubkey::new_unique(),
+            &Arc::new(blockstore),
+            &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+            &Arc::new(PohConfig::default()),
+            Arc::new(AtomicBool::default()),
+        );
+        let recorder = poh_recorder.recorder();
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+        poh_recorder.lock().unwrap().set_bank(&bank);
+
+        let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
+
+        let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+        let process_transactions_summary = BankingStage::process_transactions(
+            &bank,
+            &Instant::now(),
+            &transactions,
+            &recorder,
+            None,
+            &gossip_vote_sender,
+            &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+        );
+
+        poh_recorder
+            .lock()
+            .unwrap()
+            .is_exited
+            .store(true, Ordering::Relaxed);
+        let _ = poh_simulator.join();
+
+        process_transactions_summary
     }
 
     #[test]
-    fn test_process_transactions_output_summary() {
+    fn test_process_transactions_instruction_error() {
+        solana_logger::setup();
+        let lamports = 10_000;
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(lamports);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+
+        // Transfer more than the balance of the mint keypair, should cause a
+        // InstructionError::InsufficientFunds that is then committed. Needs to be
+        // MAX_NUM_TRANSACTIONS_PER_BATCH at least so it doesn't conflict on account locks
+        // with the below transaction
+        let mut transactions = vec![
+            system_transaction::transfer(
+                &mint_keypair,
+                &Pubkey::new_unique(),
+                lamports + 1,
+                genesis_config.hash(),
+            );
+            MAX_NUM_TRANSACTIONS_PER_BATCH
+        ];
+
+        // Make one transaction that will succeed.
+        transactions.push(system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_unique(),
+            1,
+            genesis_config.hash(),
+        ));
+
+        let transactions_count = transactions.len();
+        let ProcessTransactionsSummary {
+            chunk_start,
+            transactions_attempted_execution_count,
+            committed_transactions_count,
+            failed_commit_count,
+            retryable_transaction_indexes,
+            ..
+        } = execute_transactions_with_dummy_poh_service(bank, transactions);
+
+        // All the transactions should have been replayed, but only 1 committed
+        assert_eq!(chunk_start, transactions_count);
+        assert_eq!(transactions_attempted_execution_count, transactions_count);
+        // Both transactions should have been committed, even though one was an error,
+        // because InstructionErrors are committed
+        assert_eq!(committed_transactions_count, 2);
+        assert_eq!(failed_commit_count, 0);
+        assert_eq!(
+            retryable_transaction_indexes.len(),
+            transactions_count - committed_transactions_count
+        );
+    }
+    #[test]
+    fn test_process_transactions_account_in_use() {
         solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
@@ -2745,71 +2849,26 @@ mod tests {
             genesis_config.hash(),
         ));
 
-        let transactions = sanitize_transactions(transactions);
+        let transactions_count = transactions.len();
+        let ProcessTransactionsSummary {
+            chunk_start,
+            transactions_attempted_execution_count,
+            committed_transactions_count,
+            failed_commit_count,
+            retryable_transaction_indexes,
+            ..
+        } = execute_transactions_with_dummy_poh_service(bank, transactions);
 
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&ledger_path)
-                .expect("Expected to be able to open database ledger");
-            let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.clone(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &Pubkey::new_unique(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-                Arc::new(AtomicBool::default()),
-            );
-            let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-
-            poh_recorder.lock().unwrap().set_bank(&bank);
-
-            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
-
-            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
-
-            let process_transactions_summary = BankingStage::process_transactions(
-                &bank,
-                &Instant::now(),
-                &transactions,
-                &recorder,
-                None,
-                &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
-            );
-
-            poh_recorder
-                .lock()
-                .unwrap()
-                .is_exited
-                .store(true, Ordering::Relaxed);
-            let _ = poh_simulator.join();
-
-            let ProcessTransactionsSummary {
-                chunk_start,
-                transactions_attempted_execution_count,
-                committed_transactions_count,
-                failed_commit_count,
-                retryable_transaction_indexes,
-                ..
-            } = process_transactions_summary;
-
-            // All the transactions should have been replayed, but only 2 committed (first and last)
-            assert_eq!(chunk_start, transactions.len());
-            assert_eq!(transactions_attempted_execution_count, transactions.len());
-            assert_eq!(committed_transactions_count, 2);
-            assert_eq!(failed_commit_count, 0,);
-            println!("retryable txs: {:?}", retryable_transaction_indexes);
-            assert_eq!(
-                retryable_transaction_indexes.len(),
-                transactions.len() - committed_transactions_count
-            );
-        }
-        Blockstore::destroy(&ledger_path).unwrap();
+        // All the transactions should have been replayed, but only 2 committed (first and last)
+        assert_eq!(chunk_start, transactions_count);
+        assert_eq!(transactions_attempted_execution_count, transactions_count);
+        assert_eq!(committed_transactions_count, 2);
+        assert_eq!(failed_commit_count, 0,);
+        println!("retryable txs: {:?}", retryable_transaction_indexes);
+        assert_eq!(
+            retryable_transaction_indexes.len(),
+            transactions_count - committed_transactions_count
+        );
     }
 
     #[test]
@@ -2858,9 +2917,9 @@ mod tests {
         bank.transfer(rent_exempt_amount, &mint_keypair, &keypair1.pubkey())
             .unwrap();
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
             let blockstore = Arc::new(blockstore);
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
@@ -2943,7 +3002,7 @@ mod tests {
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     fn generate_new_address_lookup_table(
@@ -3023,9 +3082,9 @@ mod tests {
         // todo: check if sig fees are needed
         bank.transfer(1, &mint_keypair, &keypair.pubkey()).unwrap();
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open(ledger_path.path())
                 .expect("Expected to be able to open database ledger");
             let blockstore = Arc::new(blockstore);
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
@@ -3102,7 +3161,7 @@ mod tests {
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[allow(clippy::type_complexity)]
@@ -3162,10 +3221,10 @@ mod tests {
 
     #[test]
     fn test_consume_buffered_packets() {
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
-                setup_conflicting_transactions(&ledger_path);
+                setup_conflicting_transactions(ledger_path.path());
             let recorder = poh_recorder.lock().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let mut packet_batches = to_packet_batches(&transactions, num_conflicting_transactions);
@@ -3233,15 +3292,15 @@ mod tests {
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
     fn test_consume_buffered_packets_interrupted() {
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
-                setup_conflicting_transactions(&ledger_path);
+                setup_conflicting_transactions(ledger_path.path());
             let num_conflicting_transactions = transactions.len();
             let packet_batches = to_packet_batches(&transactions, 1);
             assert_eq!(packet_batches.len(), num_conflicting_transactions);
@@ -3325,7 +3384,7 @@ mod tests {
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
@@ -3343,10 +3402,10 @@ mod tests {
         } = &genesis_config_info;
 
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(genesis_config));
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open(ledger_path.path())
                     .expect("Expected to be able to open database ledger"),
             );
             let poh_config = PohConfig {
@@ -3396,7 +3455,7 @@ mod tests {
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
@@ -3426,10 +3485,10 @@ mod tests {
             ..
         } = &genesis_config_info;
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(genesis_config));
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open(ledger_path.path())
                     .expect("Expected to be able to open database ledger"),
             );
             let poh_config = PohConfig {
@@ -3509,7 +3568,7 @@ mod tests {
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
         }
-        Blockstore::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
     #[test]
