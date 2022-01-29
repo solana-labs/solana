@@ -168,27 +168,14 @@ impl TransferData {
             - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
 
         // generate transcript and append all public inputs
-        let mut transcript = TransferProof::transcript_new();
-
         let pod_transfer_pubkeys: pod::TransferPubkeys = transfer_pubkeys.into();
-        TransferProof::transcript_append_pubkeys(
-            b"transfer-pubkeys",
-            &pod_transfer_pubkeys,
-            &mut transcript,
-        );
-
         let pod_ciphertext_lo: pod::ElGamalGroupEncryption = ciphertext_lo.into();
-        TransferProof::transcript_append_ciphertext(
-            b"transfer-ciphertext-lo",
-            &pod_ciphertext_lo,
-            &mut transcript,
-        );
-
         let pod_ciphertext_hi: pod::ElGamalGroupEncryption = ciphertext_hi.into();
-        TransferProof::transcript_append_ciphertext(
-            b"transfer-ciphertext-hi",
+
+        let mut transcript = TransferProof::transcript_new(
+            &pod_transfer_pubkeys,
+            &pod_ciphertext_lo,
             &pod_ciphertext_hi,
-            &mut transcript,
         );
 
         let proof = TransferProof::new(
@@ -267,24 +254,10 @@ impl TransferData {
 impl Verifiable for TransferData {
     fn verify(&self) -> Result<(), ProofError> {
         // generate transcript and append all public inputs
-        let mut transcript = TransferProof::transcript_new();
-
-        TransferProof::transcript_append_pubkeys(
-            b"transfer-pubkeys",
+        let mut transcript = TransferProof::transcript_new(
             &self.transfer_pubkeys,
-            &mut transcript,
-        );
-
-        TransferProof::transcript_append_ciphertext(
-            b"transfer-ciphertext-lo",
             &self.ciphertext_lo,
-            &mut transcript,
-        );
-
-        TransferProof::transcript_append_ciphertext(
-            b"transfer-ciphertext-hi",
             &self.ciphertext_hi,
-            &mut transcript,
         );
 
         let ciphertext_lo = self.ciphertext_lo.try_into()?;
@@ -322,27 +295,18 @@ pub struct TransferProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl TransferProof {
-    fn transcript_new() -> Transcript {
-        let transcript = Transcript::new(b"transfer-proof");
-        transcript
-    }
-
-    fn transcript_append_pubkeys(
-        label: &'static [u8],
+    fn transcript_new(
         transfer_pubkeys: &pod::TransferPubkeys,
-        transcript: &mut Transcript,
-    ) {
-        transcript.append_message(b"dom-sep", label);
-        transcript.append_message(b"transfer-pubkeys", &transfer_pubkeys.0);
-    }
+        ciphertext_lo: &pod::ElGamalGroupEncryption,
+        ciphertext_hi: &pod::ElGamalGroupEncryption,
+    ) -> Transcript {
+        let mut transcript = Transcript::new(b"transfer-proof");
 
-    fn transcript_append_ciphertext(
-        label: &'static [u8],
-        ciphertext: &pod::ElGamalGroupEncryption,
-        transcript: &mut Transcript,
-    ) {
-        transcript.append_message(b"dom-sep", label);
-        transcript.append_message(b"ciphertext-lo", &ciphertext.0);
+        transcript.append_message(b"transfer-pubkeys", &transfer_pubkeys.0);
+        transcript.append_message(b"ciphertext-lo", &ciphertext_lo.0);
+        transcript.append_message(b"ciphertext-hi", &ciphertext_hi.0);
+
+        transcript
     }
 
     pub fn new(

@@ -23,6 +23,7 @@ use {
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
+        traits::Identity,
     },
     serde::{Deserialize, Serialize},
     solana_sdk::{
@@ -49,7 +50,7 @@ use {
 };
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
-struct ElGamal;
+pub struct ElGamal;
 impl ElGamal {
     /// Generates an ElGamal keypair.
     ///
@@ -103,6 +104,19 @@ impl ElGamal {
 
         ElGamalCiphertext { commitment, handle }
     }
+
+    /// On input a message, the function returns a twisted ElGamal ciphertext where the associated
+    /// Pedersen opening is always zero. Since the opening is zero, any twisted ElGamal ciphertext
+    /// of this form is a valid ciphertext under any ElGamal public key.
+    pub fn encode<T: Into<Scalar>>(
+        amount: T,
+    ) -> ElGamalCiphertext {
+        let commitment = PedersenCommitment(&amount.into() * &(*G));
+        let handle = DecryptHandle(RistrettoPoint::identity());
+
+        ElGamalCiphertext { commitment, handle }
+    }
+
 
     /// On input a secret key and a ciphertext, the function returns the decrypted message.
     ///

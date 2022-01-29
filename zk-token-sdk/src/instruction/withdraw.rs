@@ -6,8 +6,8 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-            pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+            elgamal::{ElGamal, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
+            pedersen::{Pedersen, PedersenCommitment},
         },
         errors::ProofError,
         instruction::Verifiable,
@@ -30,11 +30,11 @@ use {
 #[repr(C)]
 pub struct WithdrawData {
     /// The source account ElGamal pubkey
-    pub elgamal_pubkey: pod::ElGamalPubkey, // 32 bytes
+    pub pubkey: pod::ElGamalPubkey, // 32 bytes
 
     /// The source account available balance *after* the withdraw (encrypted by
     /// `source_pk`
-    pub final_balance_ct: pod::ElGamalCiphertext, // 64 bytes
+    pub final_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 
     /// Range proof
     pub proof: WithdrawProof, // 736 bytes
@@ -44,9 +44,9 @@ impl WithdrawData {
     #[cfg(not(target_arch = "bpf"))]
     pub fn new(
         amount: u64,
-        source_keypair: &ElGamalKeypair,
+        keypair: &ElGamalKeypair,
         current_balance: u64,
-        current_balance_ct: ElGamalCiphertext,
+        current_ciphertext: &ElGamalCiphertext,
     ) -> Self {
         // subtract withdraw amount from current balance
         //
@@ -55,16 +55,19 @@ impl WithdrawData {
 
         // encode withdraw amount as an ElGamal ciphertext and subtract it from
         // current source balance
-        let amount_encoded = source_keypair
-            .public
-            .encrypt_with(amount, &PedersenOpening::default());
-        let final_balance_ct = current_balance_ct - amount_encoded;
+        let final_ciphertext = current_ciphertext - &ElGamal::encode(amount);
 
-        let proof = WithdrawProof::new(source_keypair, final_balance, &final_balance_ct);
+        let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
+        let pod_final_ciphertext: pod::ElGamalCiphertext = final_ciphertext.into();
+        let mut transcript = WithdrawProof::transcript_new(
+            &pod_pubkey,
+            &pod_final_ciphertext,
+        );
+        let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
         Self {
-            elgamal_pubkey: source_keypair.public.into(),
-            final_balance_ct: final_balance_ct.into(),
+            pubkey: pod_pubkey,
+            final_ciphertext: pod_final_ciphertext,
             proof,
         }
     }
@@ -73,9 +76,14 @@ impl WithdrawData {
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for WithdrawData {
     fn verify(&self) -> Result<(), ProofError> {
-        let elgamal_pubkey = self.elgamal_pubkey.try_into()?;
-        let final_balance_ct = self.final_balance_ct.try_into()?;
-        self.proof.verify(&elgamal_pubkey, &final_balance_ct)
+        let mut transcript = WithdrawProof::transcript_new(
+            &self.pubkey,
+            &self.final_ciphertext,
+        );
+
+        let elgamal_pubkey = self.pubkey.try_into()?;
+        let final_balance_ciphertext = self.final_ciphertext.try_into()?;
+        self.proof.verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
     }
 }
 
@@ -98,49 +106,41 @@ pub struct WithdrawProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl WithdrawProof {
-    fn transcript_new() -> Transcript {
-        Transcript::new(b"WithdrawProof")
+    fn transcript_new(
+        pubkey: &pod::ElGamalPubkey,
+        ciphertext: &pod::ElGamalCiphertext,
+    ) -> Transcript {
+        let mut transcript = Transcript::new(b"WithdrawProof");
+
+        transcript.append_pubkey(b"pubkey", pubkey);
+        transcript.append_ciphertext(b"ciphertext", ciphertext);
+
+        transcript
     }
 
     pub fn new(
-        source_keypair: &ElGamalKeypair,
+        keypair: &ElGamalKeypair,
         final_balance: u64,
-        final_balance_ct: &ElGamalCiphertext,
+        final_ciphertext: &ElGamalCiphertext,
+        transcript: &mut Transcript,
     ) -> Self {
-        let mut transcript = Self::transcript_new();
-
-        // add a domain separator to record the start of the protocol
-        transcript.withdraw_proof_domain_sep();
-
         // generate a Pedersen commitment for `final_balance`
         let (commitment, opening) = Pedersen::new(final_balance);
 
-        // extract the relevant scalar and Ristretto points from the inputs
-        let P_EG = source_keypair.public.get_point();
-        let C_EG = final_balance_ct.commitment.get_point();
-        let D_EG = final_balance_ct.handle.get_point();
-        let C_Ped = commitment.get_point();
-
-        // append all current state to the transcript
-        transcript.append_point(b"P_EG", &P_EG.compress());
-        transcript.append_point(b"C_EG", &C_EG.compress());
-        transcript.append_point(b"D_EG", &D_EG.compress());
-        transcript.append_point(b"C_Ped", &C_Ped.compress());
-
         // generate equality_proof
         let equality_proof = EqualityProof::new(
-            source_keypair,
-            final_balance_ct,
+            keypair,
+            final_ciphertext,
             final_balance,
             &opening,
-            &mut transcript,
+            transcript,
         );
 
         let range_proof = RangeProof::new(
             vec![final_balance],
             vec![64],
             vec![&opening],
-            &mut transcript,
+            transcript,
         );
 
         WithdrawProof {
@@ -152,34 +152,18 @@ impl WithdrawProof {
 
     pub fn verify(
         &self,
-        source_pk: &ElGamalPubkey,
-        final_balance_ct: &ElGamalCiphertext,
+        pubkey: &ElGamalPubkey,
+        final_ciphertext: &ElGamalCiphertext,
+        transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        let mut transcript = Self::transcript_new();
-
         let commitment: PedersenCommitment = self.commitment.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
-        // add a domain separator to record the start of the protocol
-        transcript.withdraw_proof_domain_sep();
-
-        // extract the relevant scalar and Ristretto points from the inputs
-        let P_EG = source_pk.get_point();
-        let C_EG = final_balance_ct.commitment.get_point();
-        let D_EG = final_balance_ct.handle.get_point();
-        let C_Ped = commitment.get_point();
-
-        // append all current state to the transcript
-        transcript.append_point(b"P_EG", &P_EG.compress());
-        transcript.append_point(b"C_EG", &C_EG.compress());
-        transcript.append_point(b"D_EG", &D_EG.compress());
-        transcript.append_point(b"C_Ped", &C_Ped.compress());
-
         // verify equality proof
         //
         // TODO: we can also consider verifying equality and range proof in a batch
-        equality_proof.verify(source_pk, final_balance_ct, &commitment, &mut transcript)?;
+        equality_proof.verify(pubkey, final_ciphertext, &commitment, transcript)?;
 
         // verify range proof
         //
@@ -187,7 +171,7 @@ impl WithdrawProof {
         range_proof.verify(
             vec![&commitment],
             vec![64_usize],
-            &mut transcript,
+            transcript,
         )?;
 
         Ok(())
@@ -201,18 +185,18 @@ mod test {
     #[test]
     fn test_withdraw_correctness() {
         // generate and verify proof for the proper setting
-        let elgamal_keypair = ElGamalKeypair::new_rand();
+        let keypair = ElGamalKeypair::new_rand();
 
         let current_balance: u64 = 77;
-        let current_balance_ct = elgamal_keypair.public.encrypt(current_balance);
+        let current_ciphertext = keypair.public.encrypt(current_balance);
 
         let withdraw_amount: u64 = 55;
 
         let data = WithdrawData::new(
             withdraw_amount,
-            &elgamal_keypair,
+            &keypair,
             current_balance,
-            current_balance_ct,
+            &current_ciphertext,
         );
         assert!(data.verify().is_ok());
 
@@ -220,9 +204,9 @@ mod test {
         let wrong_balance: u64 = 99;
         let data = WithdrawData::new(
             withdraw_amount,
-            &elgamal_keypair,
+            &keypair,
             wrong_balance,
-            current_balance_ct,
+            &current_ciphertext,
         );
         assert!(data.verify().is_err());
     }
