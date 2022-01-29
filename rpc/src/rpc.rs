@@ -149,7 +149,7 @@ pub struct JsonRpcConfig {
     pub rpc_threads: usize,
     pub rpc_niceness_adj: i8,
     pub rpc_bigtable_timeout: Option<Duration>,
-    pub minimal_api: bool,
+    pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
 }
