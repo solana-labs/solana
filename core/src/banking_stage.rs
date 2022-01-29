@@ -2718,10 +2718,10 @@ mod tests {
             } = process_transactions_summary;
             assert_eq!(chunk_start, 0);
             assert_eq!(transactions_attempted_execution_count, 1);
-            assert_eq!(committed_transactions_with_successful_result_count, 1);
             assert_eq!(failed_commit_count, 1);
             // MaxHeightReached error does not commit, should be zero here
             assert_eq!(committed_transactions_count, 0);
+            assert_eq!(committed_transactions_with_successful_result_count, 0);
 
             retryable_transaction_indexes.sort_unstable();
             let expected: Vec<usize> = (0..transactions.len()).collect();
@@ -2836,8 +2836,8 @@ mod tests {
         assert_eq!(committed_transactions_with_successful_result_count, 1);
         assert_eq!(failed_commit_count, 0);
         assert_eq!(
-            retryable_transaction_indexes.len(),
-            transactions_count - committed_transactions_count
+            retryable_transaction_indexes,
+            (1..transactions_count - 1).collect::<Vec<usize>>()
         );
     }
     #[test]
@@ -2887,10 +2887,11 @@ mod tests {
         assert_eq!(committed_transactions_count, 2);
         assert_eq!(committed_transactions_with_successful_result_count, 2);
         assert_eq!(failed_commit_count, 0,);
-        println!("retryable txs: {:?}", retryable_transaction_indexes);
+
+        // Everything except first and last index of the transactions failed and are last retryable
         assert_eq!(
-            retryable_transaction_indexes.len(),
-            transactions_count - committed_transactions_count
+            retryable_transaction_indexes,
+            (1..transactions_count - 1).collect::<Vec<usize>>()
         );
     }
 
