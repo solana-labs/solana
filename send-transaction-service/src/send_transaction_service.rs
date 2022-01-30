@@ -138,15 +138,12 @@ impl SendTransactionService {
         Builder::new()
             .name("send-tx-sv2".to_string())
             .spawn(move || {
-                const MIN_CLIENT_RETRY_MS: u64 = 400;
+                //if retry_rate_ms is high the expecation is that clients do their own retry logic and may spam the node
+                //faster then once very 400ms.
+                //if retry_rate_ms is low this stops retries from going faster then once every 400ms.
+                const MAX_DEDUPER_AGE: Duration = Duration::from_millis(400);
                 const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
-                //if retry_rate_ms is set high, the expecation is that clients do their own retry logic
-                //this sets the maximum retry rate per transaction to 2.5x per second, or once every 400ms
-                let deduper_age = Duration::from_millis(core::cmp::min(
-                    MIN_CLIENT_RETRY_MS,
-                    config.retry_rate_ms,
-                ));
-                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, deduper_age);
+                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
                     match receiver
