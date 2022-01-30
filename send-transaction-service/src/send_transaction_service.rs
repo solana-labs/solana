@@ -438,6 +438,7 @@ mod test {
                 None,
             ),
         );
+        let deduper = Deduper::new(1_000_000, Duration::from_millis(0));
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
@@ -446,6 +447,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -475,6 +477,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -504,6 +507,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -533,6 +537,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -563,6 +568,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -603,6 +609,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -621,6 +628,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -693,6 +701,7 @@ mod test {
                 None,
             ),
         );
+        let deduper = Deduper::new(1_000_000, Duration::from_millis(0));
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
@@ -701,6 +710,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -729,6 +739,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -759,6 +770,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -787,6 +799,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -816,6 +829,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -845,6 +859,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -875,6 +890,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -900,6 +916,7 @@ mod test {
             &mut transactions,
             &None,
             &config,
+            &deduper,
         );
         assert_eq!(transactions.len(), 0);
         assert_eq!(
