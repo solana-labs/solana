@@ -40,6 +40,7 @@ import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
+import { IdlBasedAccount } from "components/account/IdlBasedAccount";
 
 const IDENTICON_WIDTH = 64;
 
@@ -295,6 +296,14 @@ function InfoSection({ account }: { account: Account }) {
   } else if (data && data.program === "config") {
     return (
       <ConfigAccountSection account={account} configAccount={data.parsed} />
+    );
+  } else if (data && data.program === "idl-based") {
+    return (
+      <IdlBasedAccount
+        account={account}
+        accountType={data.type}
+        idlBasedAccount={data.parsed}
+      />
     );
   } else {
     return <UnknownAccountCard account={account} />;

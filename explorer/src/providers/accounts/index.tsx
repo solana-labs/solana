@@ -28,6 +28,13 @@ import {
 import { RewardsProvider } from "./rewards";
 import { programs, MetadataJson } from "@metaplex/js";
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";
+import {
+  decodeIdlAccount,
+  idlAddress,
+} from "@project-serum/anchor/dist/cjs/idl";
+import { utf8 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import { inflate } from "pako";
+import { AccountsCoder } from "@project-serum/anchor";
 export { useAccountHistory } from "./history";
 
 const Metadata = programs.metadata.Metadata;
@@ -76,6 +83,12 @@ export type ConfigProgramData = {
   parsed: ConfigAccount;
 };
 
+export type IdlBasedProgramData = {
+  program: "idl-based";
+  type: string;
+  parsed: any;
+};
+
 export type ProgramData =
   | UpgradeableLoaderAccountData
   | StakeProgramData
@@ -83,7 +96,8 @@ export type ProgramData =
   | VoteProgramData
   | NonceProgramData
   | SysvarProgramData
-  | ConfigProgramData;
+  | ConfigProgramData
+  | IdlBasedProgramData;
 
 export interface Details {
   executable: boolean;
@@ -281,6 +295,35 @@ async function fetchAccountInfo(
           }
         } catch (error) {
           reportError(error, { url, address: pubkey.toBase58() });
+        }
+      } else {
+        // try to get IDL for owner program
+        const idlAddr = await idlAddress(result.owner);
+        const idlAccountInfo = await connection.getAccountInfo(idlAddr);
+
+        if (idlAccountInfo) {
+          // Chop off account discriminator.
+          let idlAccount = decodeIdlAccount(idlAccountInfo.data.slice(8));
+          const inflatedIdl = inflate(idlAccount.data);
+          const idl = JSON.parse(utf8.decode(inflatedIdl));
+          console.log(idl);
+
+          if (idl.accounts && idl.accounts.length > 0) {
+            const coder = new AccountsCoder(idl);
+            const accountType = idl.accounts.find((accountType: any) =>
+              (result.data as Buffer)
+                .slice(0, 8)
+                .equals(AccountsCoder.accountDiscriminator(accountType.name))
+            );
+            if (accountType) {
+              const parsed = coder.decode(accountType.name, result.data);
+              data = {
+                program: "idl-based",
+                type: accountType.name,
+                parsed,
+              };
+            }
+          }
         }
       }
 
