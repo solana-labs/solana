@@ -464,13 +464,9 @@ impl Deduper {
         }
     }
 
-    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
-        // If this packet was already marked as discard, drop it
-        if packet.meta.discard() {
-            return 0;
-        }
+    pub fn dedup_buffer(&self, buf: &[u8]) -> u64 {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(&packet.data[0..packet.meta.size]);
+        hasher.write(buf);
         let hash = hasher.finish();
         let len = self.filter.len();
         let pos = (usize::try_from(hash).unwrap()).wrapping_rem(len);
@@ -482,10 +478,21 @@ impl Deduper {
             self.filter[pos].store(hash, Ordering::Relaxed);
         }
         if hash == prev & hash {
-            packet.meta.set_discard(true);
             return 1;
         }
         0
+    }
+
+    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
+        // If this packet was already marked as discard, drop it
+        if packet.meta.discard() {
+            return 0;
+        }
+        let rv = self.dedup_buffer(&packet.data[0..packet.meta.size]);
+        if rv > 0 {
+            packet.meta.set_discard(true);
+        }
+        rv
     }
 
     pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {

@@ -3,6 +3,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
+    solana_perf::sigverify::Deduper,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature},
     std::{
@@ -136,70 +137,85 @@ impl SendTransactionService {
 
         Builder::new()
             .name("send-tx-sv2".to_string())
-            .spawn(move || loop {
-                match receiver.recv_timeout(Duration::from_millis(1000.min(config.retry_rate_ms))) {
-                    Err(RecvTimeoutError::Disconnected) => break,
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Ok(transaction_info) => {
-                        inc_new_counter_info!("send_transaction_service-recv-tx", 1);
-                        let addresses = leader_info.as_ref().map(|leader_info| {
-                            leader_info.get_leader_tpus(config.leader_forward_count)
-                        });
-                        let addresses = addresses
-                            .map(|address_list| {
-                                if address_list.is_empty() {
-                                    vec![&tpu_address]
-                                } else {
-                                    address_list
-                                }
-                            })
-                            .unwrap_or_else(|| vec![&tpu_address]);
-                        for address in addresses {
-                            Self::send_transaction(
+            .spawn(move || {
+                const MIN_CLIENT_RETRY_MS: u64 = 400;
+                const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
+                //if retry_rate_ms is set high, the expecation is that clients do their own retry logic
+                //this sets the maximum retry rate per transaction to 2.5x per second, or once every 400ms
+                let deduper_age =
+                    Duration::from_millis(std::min(MIN_CLIENT_RETRY_MS, config.retry_rate_ms));
+                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, deduper_age);
+                loop {
+                    deduper.reset();
+                    match receiver
+                        .recv_timeout(Duration::from_millis(1000.min(config.retry_rate_ms)))
+                    {
+                        Err(RecvTimeoutError::Disconnected) => break,
+                        Err(RecvTimeoutError::Timeout) => {}
+                        Ok(transaction_info) => {
+                            inc_new_counter_info!("send_transaction_service-recv-tx", 1);
+                            let addresses = leader_info.as_ref().map(|leader_info| {
+                                leader_info.get_leader_tpus(config.leader_forward_count)
+                            });
+                            let addresses = addresses
+                                .map(|address_list| {
+                                    if address_list.is_empty() {
+                                        vec![&tpu_address]
+                                    } else {
+                                        address_list
+                                    }
+                                })
+                                .unwrap_or_else(|| vec![&tpu_address]);
+                            let mut dedup_fail = 0;
+                            for address in addresses {
+                                dedup_fail += Self::send_transaction(
+                                    &send_socket,
+                                    address,
+                                    &transaction_info.wire_transaction,
+                                    deduper,
+                                );
+                            }
+                            inc_new_counter_info!("send_transaction_service-dupicate", dedup_fail);
+                            if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
+                                inc_new_counter_info!("send_transaction_service-insert-tx", 1);
+                                transactions.insert(transaction_info.signature, transaction_info);
+                            } else {
+                                datapoint_warn!("send_transaction_service-queue-overflow");
+                            }
+                        }
+                    }
+
+                    if last_status_check.elapsed().as_millis() as u64 >= config.retry_rate_ms {
+                        if !transactions.is_empty() {
+                            datapoint_info!(
+                                "send_transaction_service-queue-size",
+                                ("len", transactions.len(), i64)
+                            );
+                            let (root_bank, working_bank) = {
+                                let bank_forks = bank_forks.read().unwrap();
+                                (
+                                    bank_forks.root_bank().clone(),
+                                    bank_forks.working_bank().clone(),
+                                )
+                            };
+
+                            let _result = Self::process_transactions(
+                                &working_bank,
+                                &root_bank,
                                 &send_socket,
-                                address,
-                                &transaction_info.wire_transaction,
+                                &tpu_address,
+                                &mut transactions,
+                                &leader_info,
+                                &config,
                             );
                         }
-                        if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
-                            inc_new_counter_info!("send_transaction_service-insert-tx", 1);
-                            transactions.insert(transaction_info.signature, transaction_info);
-                        } else {
-                            datapoint_warn!("send_transaction_service-queue-overflow");
+                        last_status_check = Instant::now();
+                        if last_leader_refresh.elapsed().as_millis() > 1000 {
+                            if let Some(leader_info) = leader_info.as_mut() {
+                                leader_info.refresh_recent_peers();
+                            }
+                            last_leader_refresh = Instant::now();
                         }
-                    }
-                }
-
-                if last_status_check.elapsed().as_millis() as u64 >= config.retry_rate_ms {
-                    if !transactions.is_empty() {
-                        datapoint_info!(
-                            "send_transaction_service-queue-size",
-                            ("len", transactions.len(), i64)
-                        );
-                        let (root_bank, working_bank) = {
-                            let bank_forks = bank_forks.read().unwrap();
-                            (
-                                bank_forks.root_bank().clone(),
-                                bank_forks.working_bank().clone(),
-                            )
-                        };
-
-                        let _result = Self::process_transactions(
-                            &working_bank,
-                            &root_bank,
-                            &send_socket,
-                            &tpu_address,
-                            &mut transactions,
-                            &leader_info,
-                            &config,
-                        );
-                    }
-                    last_status_check = Instant::now();
-                    if last_leader_refresh.elapsed().as_millis() > 1000 {
-                        if let Some(leader_info) = leader_info.as_mut() {
-                            leader_info.refresh_recent_peers();
-                        }
-                        last_leader_refresh = Instant::now();
                     }
                 }
             })
@@ -214,6 +230,7 @@ impl SendTransactionService {
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: &Option<T>,
         config: &Config,
+        deduper: &Deduper,
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
 
@@ -279,13 +296,16 @@ impl SendTransactionService {
                             }
                         })
                         .unwrap_or_else(|| vec![tpu_address]);
+                    let mut dedup_fail = 0;
                     for address in addresses {
-                        Self::send_transaction(
+                        dedup_fail += Self::send_transaction(
                             send_socket,
                             address,
                             &transaction_info.wire_transaction,
+                            deduper,
                         );
                     }
+                    inc_new_counter_info!("send_transaction_service-dupicate", dedup_fail);
                     true
                 }
                 Some((_slot, status)) => {
@@ -309,10 +329,16 @@ impl SendTransactionService {
         send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
         wire_transaction: &[u8],
-    ) {
+        deduper: &Deduper,
+    ) -> u64 {
+        let dedup_fail = deduper.dedup_buffer(wire_transaction);
+        if dedup_fail > 0 {
+            return dedup_fail;
+        }
         if let Err(err) = send_socket.send_to(wire_transaction, tpu_address) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
+        0
     }
 
     pub fn join(self) -> thread::Result<()> {
