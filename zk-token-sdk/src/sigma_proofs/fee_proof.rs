@@ -74,10 +74,14 @@ impl FeeSigmaProof {
             &mut transcript_fee_below_max,
         );
 
-        let above_max = u64::ct_gt(&max_fee, &fee_amount);
+        let below_max = u64::ct_gt(&max_fee, &fee_amount);
+
+        println!("fee amount: {}", fee_amount);
+        println!("max fee: {}", max_fee);
+        println!("below max: {:?}", below_max);
 
         // conditionally assign transcript; transcript is not conditionally selectable
-        if bool::from(above_max) {
+        if bool::from(below_max) {
             *transcript = transcript_fee_above_max;
         } else {
             *transcript = transcript_fee_below_max;
@@ -87,12 +91,12 @@ impl FeeSigmaProof {
             fee_max_proof: FeeMaxProof::conditional_select(
                 &proof_fee_above_max.fee_max_proof,
                 &proof_fee_below_max.fee_max_proof,
-                above_max,
+                below_max,
             ),
             fee_equality_proof: FeeEqualityProof::conditional_select(
                 &proof_fee_above_max.fee_equality_proof,
                 &proof_fee_below_max.fee_equality_proof,
-                above_max,
+                below_max,
             ),
         }
     }
@@ -228,6 +232,8 @@ impl FeeSigmaProof {
 
         transcript.challenge_scalar(b"w");
 
+        println!("{:?}", c);
+
         let z_x = c_equality * x + y_x;
         let z_delta = c_equality * r_delta + y_delta;
         let z_claimed = c_equality * r_claimed + y_claimed;
@@ -296,6 +302,8 @@ impl FeeSigmaProof {
         let c = transcript.challenge_scalar(b"c");
         let c_max_proof = self.fee_max_proof.c_max_proof;
         let c_equality = c - c_max_proof;
+
+        println!("{:?}", c);
 
         let w = transcript.challenge_scalar(b"w");
         let ww = w * w;

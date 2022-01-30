@@ -150,7 +150,7 @@ impl WithdrawProof {
         final_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        transcript.append_commitment(b"commitmetn", &self.commitment);
+        transcript.append_commitment(b"commitment", &self.commitment);
 
         let commitment: PedersenCommitment = self.commitment.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;

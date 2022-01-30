@@ -122,7 +122,7 @@ impl TransferData {
         );
 
         // subtract transfer amount from the spendable ciphertext
-        let new_spendable_balance = spendable_balance - transfer_amount;
+        let new_spendable_balance = spendable_balance - transfer_amount; // TODO: account for underflow
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
@@ -335,7 +335,7 @@ impl TransferProof {
     }
 
     pub fn verify(
-        self,
+        &self,
         ciphertext_lo: &TransferAmountEncryption,
         ciphertext_hi: &TransferAmountEncryption,
         transfer_pubkeys: &TransferPubkeys,
