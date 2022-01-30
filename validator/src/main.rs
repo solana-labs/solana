@@ -26,7 +26,10 @@ use {
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
-        validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
+        validator::{
+            cleanup_accounts_paths, is_snapshot_config_valid, Validator, ValidatorConfig,
+            ValidatorStartProgress,
+        },
     },
     solana_gossip::{
         cluster_info::{Node, VALIDATOR_PORT_RANGE},
@@ -2309,6 +2312,7 @@ pub fn main() {
             })
             .collect()
     });
+    cleanup_accounts_paths(&validator_config, &start_progress);
 
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =

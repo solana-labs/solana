@@ -386,20 +386,6 @@ impl Validator {
             }
         }
 
-        info!("Cleaning accounts paths..");
-        *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
-        let mut start = Measure::start("clean_accounts_paths");
-        for accounts_path in &config.account_paths {
-            cleanup_accounts_path(accounts_path);
-        }
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            for accounts_path in shrink_paths {
-                cleanup_accounts_path(accounts_path);
-            }
-        }
-        start.stop();
-        info!("done. {}", start);
-
         let exit = Arc::new(AtomicBool::new(false));
         {
             let exit = exit.clone();
@@ -1715,6 +1701,25 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
             account_path, e
         );
     }
+}
+
+pub fn cleanup_accounts_paths(
+    config: &ValidatorConfig,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+) {
+    info!("Cleaning accounts paths..");
+    *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
+    let mut start = Measure::start("clean_accounts_paths");
+    for accounts_path in &config.account_paths {
+        cleanup_accounts_path(accounts_path);
+    }
+    if let Some(ref shrink_paths) = config.account_shrink_paths {
+        for accounts_path in shrink_paths {
+            cleanup_accounts_path(accounts_path);
+        }
+    }
+    start.stop();
+    info!("done. {}", start);
 }
 
 pub fn is_snapshot_config_valid(
