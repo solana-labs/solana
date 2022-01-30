@@ -5860,6 +5860,7 @@ dependencies = [
  "log 0.4.14",
  "solana-logger 1.10.0",
  "solana-metrics",
+ "solana-perf",
  "solana-runtime",
  "solana-sdk",
 ]

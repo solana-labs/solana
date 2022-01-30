@@ -142,8 +142,10 @@ impl SendTransactionService {
                 const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
                 //if retry_rate_ms is set high, the expecation is that clients do their own retry logic
                 //this sets the maximum retry rate per transaction to 2.5x per second, or once every 400ms
-                let deduper_age =
-                    Duration::from_millis(std::min(MIN_CLIENT_RETRY_MS, config.retry_rate_ms));
+                let deduper_age = Duration::from_millis(core::cmp::min(
+                    MIN_CLIENT_RETRY_MS,
+                    config.retry_rate_ms,
+                ));
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, deduper_age);
                 loop {
                     deduper.reset();
@@ -172,10 +174,13 @@ impl SendTransactionService {
                                     &send_socket,
                                     address,
                                     &transaction_info.wire_transaction,
-                                    deduper,
+                                    &deduper,
                                 );
                             }
-                            inc_new_counter_info!("send_transaction_service-dupicate", dedup_fail);
+                            inc_new_counter_info!(
+                                "send_transaction_service-dupicate",
+                                usize::try_from(dedup_fail).unwrap()
+                            );
                             if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
                                 inc_new_counter_info!("send_transaction_service-insert-tx", 1);
                                 transactions.insert(transaction_info.signature, transaction_info);
@@ -207,6 +212,7 @@ impl SendTransactionService {
                                 &mut transactions,
                                 &leader_info,
                                 &config,
+                                &deduper,
                             );
                         }
                         last_status_check = Instant::now();
@@ -305,7 +311,10 @@ impl SendTransactionService {
                             deduper,
                         );
                     }
-                    inc_new_counter_info!("send_transaction_service-dupicate", dedup_fail);
+                    inc_new_counter_info!(
+                        "send_transaction_service-dupicate",
+                        usize::try_from(dedup_fail).unwrap()
+                    );
                     true
                 }
                 Some((_slot, status)) => {
