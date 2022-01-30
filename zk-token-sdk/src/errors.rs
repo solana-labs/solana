@@ -41,8 +41,8 @@ impl From<EqualityProofError> for ProofError {
     }
 }
 
-impl From<FeeProofError> for ProofError {
-    fn from(_err: FeeProofError) -> Self {
+impl From<FeeSigmaProofError> for ProofError {
+    fn from(_err: FeeSigmaProofError) -> Self {
         Self::FeeProof
     }
 }

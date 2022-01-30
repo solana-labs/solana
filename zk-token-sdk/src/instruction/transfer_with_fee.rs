@@ -269,7 +269,7 @@ impl TransferWithFeeProof {
             transcript,
         );
 
-        let ciphertext_fee_validityProof = ValidityProof::new(
+        let ciphertext_fee_validity_proof = ValidityProof::new(
             (pubkey_dest, pubkey_auditor),
             fee_amount,
             opening_fee,
@@ -300,10 +300,12 @@ impl TransferWithFeeProof {
         );
 
         Self {
-            delta_claimed_commitment: delta_claimed_comm.into(),
+            commitment_new_source: commitment_new_source.into(),
+            equality_proof: equality_proof.into(),
+            ciphertext_amount_validity_proof: ciphertext_amount_validity_proof.into(),
             fee_sigma_proof: fee_sigma_proof.into(),
-            fee_validity_proof: validity_proof.into(),
-            fee_range_proof: range_proof,
+            ciphertext_fee_validity_proof: ciphertext_fee_validity_proof.into(),
+            range_proof: range_proof.try_into().expect("range proof: length error"),
         }
     }
 
@@ -471,6 +473,25 @@ pub struct FeeParameters {
     pub fee_rate_basis_points: u16,
     /// Maximum fee assessed on transfers, expressed as an amount of tokens
     pub maximum_fee: u64,
+}
+impl FeeParameters {
+    pub fn to_bytes(&self) -> [u8; 10] {
+        let mut bytes = [0u8; 10];
+        bytes[..2].copy_from_slice(&self.fee_rate_basis_points.to_le_bytes());
+        bytes[2..10].copy_from_slice(&self.maximum_fee.to_le_bytes());
+
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let bytes = array_ref![bytes, 0, 10];
+        let (fee_rate_basis_points, maximum_fee) = array_refs![bytes, 2, 8];
+
+        Self {
+            fee_rate_basis_points: u16::from_le_bytes(*fee_rate_basis_points),
+            maximum_fee: u64::from_le_bytes(*maximum_fee),
+        }
+    }
 }
 
 fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> (u64, u64) {

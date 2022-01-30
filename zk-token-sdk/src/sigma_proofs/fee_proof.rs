@@ -8,7 +8,8 @@ use {
     rand::rngs::OsRng,
 };
 use {
-    crate::{sigma_proofs::errors::FeeProofError, transcript::TranscriptProtocol},
+    crate::{sigma_proofs::errors::FeeSigmaProofError, transcript::TranscriptProtocol},
+    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -259,7 +260,7 @@ impl FeeSigmaProof {
         commitment_claimed: &PedersenCommitment,
         max_fee: u64,
         transcript: &mut Transcript,
-    ) -> Result<(), FeeProofError> {
+    ) -> Result<(), FeeSigmaProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let m = Scalar::from(max_fee);
 
@@ -275,19 +276,19 @@ impl FeeSigmaProof {
             .fee_max_proof
             .Y_max_proof
             .decompress()
-            .ok_or(FeeProofError::Format)?;
+            .ok_or(FeeSigmaProofError::Format)?;
         let z_max = self.fee_max_proof.z_max_proof;
 
         let Y_delta_real = self
             .fee_equality_proof
             .Y_delta
             .decompress()
-            .ok_or(FeeProofError::Format)?;
+            .ok_or(FeeSigmaProofError::Format)?;
         let Y_claimed = self
             .fee_equality_proof
             .Y_claimed
             .decompress()
-            .ok_or(FeeProofError::Format)?;
+            .ok_or(FeeSigmaProofError::Format)?;
         let z_x = self.fee_equality_proof.z_x;
         let z_delta_real = self.fee_equality_proof.z_delta;
         let z_claimed = self.fee_equality_proof.z_claimed;
@@ -333,8 +334,42 @@ impl FeeSigmaProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(FeeProofError::AlgebraicRelation)
+            Err(FeeSigmaProofError::AlgebraicRelation)
         }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 256] {
+        let mut buf = [0_u8; 256];
+        buf[..32].copy_from_slice(self.fee_max_proof.Y_max_proof.as_bytes());
+        buf[32..64].copy_from_slice(self.fee_max_proof.z_max_proof.as_bytes());
+        buf[64..96].copy_from_slice(self.fee_max_proof.c_max_proof.as_bytes());
+        buf[96..128].copy_from_slice(self.fee_equality_proof.Y_delta.as_bytes());
+        buf[128..160].copy_from_slice(self.fee_equality_proof.Y_claimed.as_bytes());
+        buf[160..192].copy_from_slice(self.fee_equality_proof.z_x.as_bytes());
+        buf[192..224].copy_from_slice(self.fee_equality_proof.z_delta.as_bytes());
+        buf[224..256].copy_from_slice(self.fee_equality_proof.z_claimed.as_bytes());
+        buf
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
+        let bytes = array_ref![bytes, 0, 256];
+        let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) = 
+            array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
+
+        let Y_max_proof = CompressedRistretto::from_slice(Y_max_proof);
+        let z_max_proof = Scalar::from_canonical_bytes(*z_max_proof).ok_or(FeeSigmaProofError::Format)?;
+        let c_max_proof = Scalar::from_canonical_bytes(*c_max_proof).ok_or(FeeSigmaProofError::Format)?;
+
+        let Y_delta = CompressedRistretto::from_slice(Y_delta);
+        let Y_claimed = CompressedRistretto::from_slice(Y_claimed);
+        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(FeeSigmaProofError::Format)?;
+        let z_delta = Scalar::from_canonical_bytes(*z_delta).ok_or(FeeSigmaProofError::Format)?;
+        let z_claimed = Scalar::from_canonical_bytes(*z_claimed).ok_or(FeeSigmaProofError::Format)?;
+
+        Ok(Self {
+            fee_max_proof: FeeMaxProof { Y_max_proof, z_max_proof, c_max_proof },
+            fee_equality_proof: FeeEqualityProof { Y_delta, Y_claimed, z_x, z_delta, z_claimed },
+        })
     }
 }
 

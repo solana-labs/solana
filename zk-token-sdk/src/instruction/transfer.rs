@@ -237,7 +237,7 @@ impl Verifiable for TransferData {
         let ciphertext_lo = self.ciphertext_lo.try_into()?;
         let ciphertext_hi = self.ciphertext_hi.try_into()?;
         let transfer_pubkeys = self.transfer_pubkeys.try_into()?;
-        let new_spendable_ciphertext = self.new_spendable_ciphertext.try_into()?;
+        let new_spendable_ciphertext = self.ciphertext_new_source.try_into()?;
 
         self.proof.verify(
             &ciphertext_lo,
@@ -328,9 +328,9 @@ impl TransferProof {
 
         Self {
             commitment_new_source: commitment_new_source.into(),
-            equality_proof: equality_proof.try_into().expect("equality proof"),
-            validity_proof: validity_proof.try_into().expect("validity proof"),
-            range_proof: range_proof.try_into().expect("range proof"),
+            equality_proof: equality_proof.into(),
+            validity_proof: validity_proof.into(),
+            range_proof: range_proof.try_into().expect("range proof: length error"),
         }
     }
 

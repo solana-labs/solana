@@ -25,12 +25,13 @@ mod target_arch {
             sigma_proofs::{
                 equality_proof::EqualityProof,
                 errors::*,
+                fee_proof::FeeSigmaProof,
                 validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
-                transfer_with_fee::{TransferWithFeePubkeys, FeeEncryption},
+                transfer_with_fee::{TransferWithFeePubkeys, FeeEncryption, FeeParameters},
             }
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
@@ -206,6 +207,21 @@ mod target_arch {
         }
     }
 
+    impl From<FeeSigmaProof> for pod::FeeSigmaProof {
+        fn from(proof: FeeSigmaProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::FeeSigmaProof> for FeeSigmaProof {
+        type Error = FeeSigmaProofError;
+
+        fn try_from(pod: pod::FeeSigmaProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
+
     impl TryFrom<RangeProof> for pod::RangeProof64 {
         type Error = RangeProofError;
 
@@ -325,8 +341,8 @@ mod target_arch {
     }
 
     impl From<TransferAmountEncryption> for pod::TransferAmountEncryption {
-        fn from(proof: TransferAmountEncryption) -> Self {
-            Self(proof.to_bytes())
+        fn from(ciphertext: TransferAmountEncryption) -> Self {
+            Self(ciphertext.to_bytes())
         }
     }
 
@@ -339,8 +355,8 @@ mod target_arch {
     }
 
     impl From<FeeEncryption> for pod::FeeEncryption {
-        fn from(proof: FeeEncryption) -> Self {
-            Self(proof.to_bytes())
+        fn from(ciphertext: FeeEncryption) -> Self {
+            Self(ciphertext.to_bytes())
         }
     }
 
@@ -352,6 +368,17 @@ mod target_arch {
         }
     }
 
+    impl From<FeeParameters> for pod::FeeParameters {
+        fn from(parameters: FeeParameters) -> Self {
+            Self(parameters.to_bytes())
+        }
+    }
+
+    impl From<pod::FeeParameters> for FeeParameters {
+        fn from(pod: pod::FeeParameters) -> Self {
+            Self::from_bytes(&pod.0)
+        }
+    }
 }
 
 #[cfg(target_arch = "bpf")]

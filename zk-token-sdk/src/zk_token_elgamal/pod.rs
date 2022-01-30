@@ -95,6 +95,11 @@ pub struct ZeroBalanceProof(pub [u8; 96]);
 unsafe impl Zeroable for ZeroBalanceProof {}
 unsafe impl Pod for ZeroBalanceProof {}
 
+/// Serialization of fee sigma proof
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct FeeSigmaProof(pub [u8; 256]);
+
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -170,3 +175,10 @@ pub struct FeeEncryption(pub [u8; 96]);
 
 unsafe impl Zeroable for FeeEncryption {}
 unsafe impl Pod for FeeEncryption {}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct FeeParameters(pub [u8; 10]);
+
+unsafe impl Zeroable for FeeParameters {}
+unsafe impl Pod for FeeParameters {}
