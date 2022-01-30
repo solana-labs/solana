@@ -4272,12 +4272,17 @@ impl Bank {
         results
     }
 
+    /// `executed_transactions_count` is the number of transactions out of `sanitized_txs`
+    /// that was executed. Of those, `executed_transactions_count`,
+    /// `executed_with_failure_result_count` is the number of executed transactions that returned
+    /// a failure result.
     pub fn commit_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
-        executed_with_successful_result_count: u64,
+        committed_transactions_count: u64,
+        committed_with_failure_result_count: u64,
         signature_count: u64,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
@@ -4286,28 +4291,26 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        self.increment_transaction_count(executed_with_successful_result_count);
+        self.increment_transaction_count(committed_transactions_count);
         self.increment_signature_count(signature_count);
 
         inc_new_counter_info!(
             "bank-process_transactions-txs",
-            executed_with_successful_result_count as usize
+            committed_transactions_count as usize
         );
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
-        if !sanitized_txs.is_empty() {
-            let processed_tx_count = sanitized_txs.len() as u64;
-            let failed_tx_count =
-                processed_tx_count.saturating_sub(executed_with_successful_result_count);
+        if committed_with_failure_result_count > 0 {
             self.transaction_error_count
-                .fetch_add(failed_tx_count, Relaxed);
-            self.transaction_entries_count.fetch_add(1, Relaxed);
-            self.transactions_per_entry_max
-                .fetch_max(processed_tx_count, Relaxed);
+                .fetch_add(committed_with_failure_result_count, Relaxed);
         }
 
+        // Should be equivalent to checking `executed_transactions_count > 0`
         if execution_results.iter().any(|result| result.was_executed()) {
             self.is_delta.store(true, Relaxed);
+            self.transaction_entries_count.fetch_add(1, Relaxed);
+            self.transactions_per_entry_max
+                .fetch_max(committed_transactions_count, Relaxed);
         }
 
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
@@ -5132,6 +5135,7 @@ impl Bank {
         let LoadAndExecuteTransactionsOutput {
             mut loaded_transactions,
             execution_results,
+            executed_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             ..
@@ -5147,7 +5151,9 @@ impl Bank {
             batch.sanitized_transactions(),
             &mut loaded_transactions,
             execution_results,
-            executed_with_successful_result_count as u64,
+            executed_transactions_count as u64,
+            executed_transactions_count.saturating_sub(executed_with_successful_result_count)
+                as u64,
             signature_count,
             timings,
         );

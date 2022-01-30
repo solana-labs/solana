@@ -1036,7 +1036,9 @@ impl BankingStage {
                 sanitized_txs,
                 &mut loaded_transactions,
                 execution_results,
-                executed_with_successful_result_count as u64,
+                executed_transactions_count as u64,
+                executed_transactions_count.saturating_sub(executed_with_successful_result_count)
+                    as u64,
                 signature_count,
                 &mut execute_timings,
             );
