@@ -463,170 +463,170 @@ mod without_incremental_snapshots {
             let rpc_client = RpcClient::new_socket(rpc_contact_info.rpc);
 
             let result = match rpc_client.get_version() {
-            Ok(rpc_version) => {
-                info!("RPC node version: {}", rpc_version.solana_core);
-                Ok(())
-            }
-            Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
-        }
-        .and_then(|_| {
-            let genesis_config = download_then_check_genesis_hash(
-                &rpc_contact_info.rpc,
-                ledger_path,
-                validator_config.expected_genesis_hash,
-                bootstrap_config.max_genesis_archive_unpacked_size,
-                bootstrap_config.no_genesis_fetch,
-                use_progress_bar,
-            );
-
-            if let Ok(genesis_config) = genesis_config {
-                let genesis_hash = genesis_config.hash();
-                if validator_config.expected_genesis_hash.is_none() {
-                    info!("Expected genesis hash set to {}", genesis_hash);
-                    validator_config.expected_genesis_hash = Some(genesis_hash);
+                Ok(rpc_version) => {
+                    info!("RPC node version: {}", rpc_version.solana_core);
+                    Ok(())
                 }
+                Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
             }
+            .and_then(|_| {
+                let genesis_config = download_then_check_genesis_hash(
+                    &rpc_contact_info.rpc,
+                    ledger_path,
+                    validator_config.expected_genesis_hash,
+                    bootstrap_config.max_genesis_archive_unpacked_size,
+                    bootstrap_config.no_genesis_fetch,
+                    use_progress_bar,
+                );
 
-            if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
-                // Sanity check that the RPC node is using the expected genesis hash before
-                // downloading a snapshot from it
-                let rpc_genesis_hash = rpc_client
-                    .get_genesis_hash()
-                    .map_err(|err| format!("Failed to get genesis hash: {}", err))?;
-
-                if expected_genesis_hash != rpc_genesis_hash {
-                    return Err(format!(
-                        "Genesis hash mismatch: expected {} but RPC node genesis hash is {}",
-                        expected_genesis_hash, rpc_genesis_hash
-                    ));
-                }
-            }
-
-            if let Some(snapshot_hash) = snapshot_hash {
-                let use_local_snapshot = match get_highest_local_snapshot_hash(snapshot_archives_dir) {
-                    None => {
-                        info!("Downloading snapshot for slot {} since there is not a local snapshot", snapshot_hash.0);
-                        false
+                if let Ok(genesis_config) = genesis_config {
+                    let genesis_hash = genesis_config.hash();
+                    if validator_config.expected_genesis_hash.is_none() {
+                        info!("Expected genesis hash set to {}", genesis_hash);
+                        validator_config.expected_genesis_hash = Some(genesis_hash);
                     }
-                    Some((highest_local_snapshot_slot, _hash)) => {
-                        if highest_local_snapshot_slot
-                            > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)
-                        {
-                            info!(
-                                "Reusing local snapshot at slot {} instead \
-                                   of downloading a snapshot for slot {}",
-                                highest_local_snapshot_slot, snapshot_hash.0
-                            );
-                            true
-                        } else {
-                            info!(
-                                "Local snapshot from slot {} is too old. \
-                                  Downloading a newer snapshot for slot {}",
-                                highest_local_snapshot_slot, snapshot_hash.0
-                            );
+                }
+
+                if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
+                    // Sanity check that the RPC node is using the expected genesis hash before
+                    // downloading a snapshot from it
+                    let rpc_genesis_hash = rpc_client
+                        .get_genesis_hash()
+                        .map_err(|err| format!("Failed to get genesis hash: {}", err))?;
+
+                    if expected_genesis_hash != rpc_genesis_hash {
+                        return Err(format!(
+                            "Genesis hash mismatch: expected {} but RPC node genesis hash is {}",
+                            expected_genesis_hash, rpc_genesis_hash
+                        ));
+                    }
+                }
+
+                if let Some(snapshot_hash) = snapshot_hash {
+                    let use_local_snapshot = match get_highest_local_snapshot_hash(snapshot_archives_dir) {
+                        None => {
+                            info!("Downloading snapshot for slot {} since there is not a local snapshot", snapshot_hash.0);
                             false
                         }
-                    }
-                };
-
-                if use_local_snapshot {
-                    Ok(())
-                } else {
-                    rpc_client
-                        .get_slot_with_commitment(CommitmentConfig::finalized())
-                        .map_err(|err| format!("Failed to get RPC node slot: {}", err))
-                        .and_then(|slot| {
-                            *start_progress.write().unwrap() =
-                                ValidatorStartProgress::DownloadingSnapshot {
-                                    slot: snapshot_hash.0,
-                                    rpc_addr: rpc_contact_info.rpc,
-                                };
-                            info!("RPC node root slot: {}", slot);
-                            let (cluster_info, gossip_exit_flag, gossip_service) =
-                                gossip.take().unwrap();
-                            cluster_info.save_contact_info();
-                            gossip_exit_flag.store(true, Ordering::Relaxed);
-                            let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain) = if let Some(snapshot_config) =
-                                validator_config.snapshot_config.as_ref()
+                        Some((highest_local_snapshot_slot, _hash)) => {
+                            if highest_local_snapshot_slot
+                                > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)
                             {
-                                (snapshot_config.maximum_full_snapshot_archives_to_retain, snapshot_config.maximum_incremental_snapshot_archives_to_retain)
+                                info!(
+                                    "Reusing local snapshot at slot {} instead \
+                                       of downloading a snapshot for slot {}",
+                                    highest_local_snapshot_slot, snapshot_hash.0
+                                );
+                                true
                             } else {
-                                (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN)
-                            };
-                            let ret = download_snapshot_archive(
-                                &rpc_contact_info.rpc,
-                                snapshot_archives_dir,
-                                snapshot_hash,
-                                SnapshotType::FullSnapshot,
-                                maximum_full_snapshot_archives_to_retain,
-                                maximum_incremental_snapshot_archives_to_retain,
-                                use_progress_bar,
-                                &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
-                                    debug!("Download progress: {:?}", download_progress);
+                                info!(
+                                    "Local snapshot from slot {} is too old. \
+                                      Downloading a newer snapshot for slot {}",
+                                    highest_local_snapshot_slot, snapshot_hash.0
+                                );
+                                false
+                            }
+                        }
+                    };
 
-                                    if download_progress.last_throughput <  minimal_snapshot_download_speed
-                                       && download_progress.notification_count <= 1
-                                       && download_progress.percentage_done <= 2_f32
-                                       && download_progress.estimated_remaining_time > 60_f32
-                                       && download_abort_count < maximum_snapshot_download_abort {
-                                        if let Some(ref known_validators) = validator_config.known_validators {
-                                            if known_validators.contains(&rpc_contact_info.id)
-                                               && known_validators.len() == 1
-                                               && bootstrap_config.only_known_rpc {
-                                                warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
-                                                      and try a different node as it is the only known validator and the --only-known-rpc flag \
-                                                      is set. \
-                                                      Abort count: {}, Progress detail: {:?}",
-                                                      download_progress.last_throughput, minimal_snapshot_download_speed,
-                                                      download_abort_count, download_progress);
-                                                return true; // Do not abort download from the one-and-only known validator
+                    if use_local_snapshot {
+                        Ok(())
+                    } else {
+                        rpc_client
+                            .get_slot_with_commitment(CommitmentConfig::finalized())
+                            .map_err(|err| format!("Failed to get RPC node slot: {}", err))
+                            .and_then(|slot| {
+                                *start_progress.write().unwrap() =
+                                    ValidatorStartProgress::DownloadingSnapshot {
+                                        slot: snapshot_hash.0,
+                                        rpc_addr: rpc_contact_info.rpc,
+                                    };
+                                info!("RPC node root slot: {}", slot);
+                                let (cluster_info, gossip_exit_flag, gossip_service) =
+                                    gossip.take().unwrap();
+                                cluster_info.save_contact_info();
+                                gossip_exit_flag.store(true, Ordering::Relaxed);
+                                let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain) = if let Some(snapshot_config) =
+                                    validator_config.snapshot_config.as_ref()
+                                {
+                                    (snapshot_config.maximum_full_snapshot_archives_to_retain, snapshot_config.maximum_incremental_snapshot_archives_to_retain)
+                                } else {
+                                    (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN)
+                                };
+                                let ret = download_snapshot_archive(
+                                    &rpc_contact_info.rpc,
+                                    snapshot_archives_dir,
+                                    snapshot_hash,
+                                    SnapshotType::FullSnapshot,
+                                    maximum_full_snapshot_archives_to_retain,
+                                    maximum_incremental_snapshot_archives_to_retain,
+                                    use_progress_bar,
+                                    &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
+                                        debug!("Download progress: {:?}", download_progress);
+
+                                        if download_progress.last_throughput <  minimal_snapshot_download_speed
+                                           && download_progress.notification_count <= 1
+                                           && download_progress.percentage_done <= 2_f32
+                                           && download_progress.estimated_remaining_time > 60_f32
+                                           && download_abort_count < maximum_snapshot_download_abort {
+                                            if let Some(ref known_validators) = validator_config.known_validators {
+                                                if known_validators.contains(&rpc_contact_info.id)
+                                                   && known_validators.len() == 1
+                                                   && bootstrap_config.only_known_rpc {
+                                                    warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
+                                                          and try a different node as it is the only known validator and the --only-known-rpc flag \
+                                                          is set. \
+                                                          Abort count: {}, Progress detail: {:?}",
+                                                          download_progress.last_throughput, minimal_snapshot_download_speed,
+                                                          download_abort_count, download_progress);
+                                                    return true; // Do not abort download from the one-and-only known validator
+                                                }
                                             }
+                                            warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
+                                                   and try a different node. Abort count: {}, Progress detail: {:?}",
+                                                   download_progress.last_throughput, minimal_snapshot_download_speed,
+                                                   download_abort_count, download_progress);
+                                            download_abort_count += 1;
+                                            false
+                                        } else {
+                                            true
                                         }
-                                        warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
-                                               and try a different node. Abort count: {}, Progress detail: {:?}",
-                                               download_progress.last_throughput, minimal_snapshot_download_speed,
-                                               download_abort_count, download_progress);
-                                        download_abort_count += 1;
-                                        false
-                                    } else {
-                                        true
-                                    }
-                                })),
-                            );
+                                    })),
+                                );
 
-                            gossip_service.join().unwrap();
-                            ret
-                        })
+                                gossip_service.join().unwrap();
+                                ret
+                            })
+                    }
+                } else {
+                    Ok(())
                 }
-            } else {
-                Ok(())
-            }
-        })
-        .map(|_| {
-            if !validator_config.voting_disabled && !bootstrap_config.no_check_vote_account {
-                check_vote_account(
-                    &rpc_client,
-                    &identity_keypair.pubkey(),
-                    vote_account,
-                    &authorized_voter_keypairs
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .map(|k| k.pubkey())
-                        .collect::<Vec<_>>(),
-                )
-                .unwrap_or_else(|err| {
-                    // Consider failures here to be more likely due to user error (eg,
-                    // incorrect `solana-validator` command-line arguments) rather than the
-                    // RPC node failing.
-                    //
-                    // Power users can always use the `--no-check-vote-account` option to
-                    // bypass this check entirely
-                    error!("{}", err);
-                    exit(1);
-                });
-            }
-        });
+            })
+            .map(|_| {
+                if !validator_config.voting_disabled && !bootstrap_config.no_check_vote_account {
+                    check_vote_account(
+                        &rpc_client,
+                        &identity_keypair.pubkey(),
+                        vote_account,
+                        &authorized_voter_keypairs
+                            .read()
+                            .unwrap()
+                            .iter()
+                            .map(|k| k.pubkey())
+                            .collect::<Vec<_>>(),
+                    )
+                    .unwrap_or_else(|err| {
+                        // Consider failures here to be more likely due to user error (eg,
+                        // incorrect `solana-validator` command-line arguments) rather than the
+                        // RPC node failing.
+                        //
+                        // Power users can always use the `--no-check-vote-account` option to
+                        // bypass this check entirely
+                        error!("{}", err);
+                        exit(1);
+                    });
+                }
+            });
 
             if result.is_ok() {
                 break;
