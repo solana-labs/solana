@@ -99,6 +99,7 @@ struct ProcessTransactionsSummary {
     transactions_attempted_execution_count: usize,
 
     // Total number of transactions that made it into the block
+    #[allow(dead_code)]
     committed_transactions_count: usize,
 
     // Total number of transactions that made it into the block where the transactions
@@ -548,7 +549,7 @@ impl BankingStage {
         qos_service: &QosService,
     ) {
         let mut rebuffered_packet_count = 0;
-        let mut new_tx_count = 0;
+        let mut consumed_buffered_packets_count = 0;
         let buffered_packet_batches_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
@@ -594,7 +595,6 @@ impl BankingStage {
                         let ProcessTransactionsSummary {
                             chunk_start,
                             transactions_attempted_execution_count,
-                            committed_transactions_count,
                             retryable_transaction_indexes,
                             ..
                         } = process_transactions_summary;
@@ -611,7 +611,16 @@ impl BankingStage {
                                 working_bank,
                             ));
                         }
-                        new_tx_count += committed_transactions_count;
+
+                        // The difference between all transactions passed to execution and the ones that
+                        // are retryable were the ones that were either:
+                        // 1) Committed into the block
+                        // 2) Dropped without being committed because they had some fatal error (too old,
+                        // duplicate signature, etc.)
+                        //
+                        // Note: This assumes that every packet deserializes into one transaction!
+                        consumed_buffered_packets_count += transactions_attempted_execution_count
+                            .saturating_sub(retryable_transaction_indexes.len());
 
                         // Out of the buffered packets just retried, collect any still unprocessed
                         // transactions in this batch for forwarding
@@ -626,7 +635,6 @@ impl BankingStage {
                         }
                         has_more_unprocessed_transactions
                     } else {
-                        rebuffered_packet_count += original_unprocessed_indexes.len();
                         // `original_unprocessed_indexes` must have remaining packets to process
                         // if not yet processed.
                         assert!(Self::packet_has_more_unprocessed_transactions(
@@ -645,13 +653,19 @@ impl BankingStage {
             timestamp(),
             buffered_packet_batches_len,
             proc_start.as_ms(),
-            new_tx_count,
-            (new_tx_count as f32) / (proc_start.as_s())
+            consumed_buffered_packets_count,
+            (consumed_buffered_packets_count as f32) / (proc_start.as_s())
         );
 
         banking_stage_stats
             .consume_buffered_packets_elapsed
             .fetch_add(proc_start.as_us(), Ordering::Relaxed);
+        banking_stage_stats
+            .rebuffered_packets_count
+            .fetch_add(rebuffered_packet_count, Ordering::Relaxed);
+        banking_stage_stats
+            .consumed_buffered_packets_count
+            .fetch_add(consumed_buffered_packets_count, Ordering::Relaxed);
     }
 
     fn consume_or_forward_packets(
@@ -1476,7 +1490,6 @@ impl BankingStage {
         process_tx_time.stop();
 
         let ProcessTransactionsSummary {
-            transactions_attempted_execution_count,
             ref retryable_transaction_indexes,
             ..
         } = process_transactions_summary;
@@ -1489,18 +1502,6 @@ impl BankingStage {
             retryable_transaction_indexes,
         );
         filter_pending_packets_time.stop();
-
-        // Increment packet-based metrics
-        banking_stage_stats
-            .rebuffered_packets_count
-            .fetch_add(filtered_retryable_tx_indexes.len(), Ordering::Relaxed);
-        banking_stage_stats
-            .consumed_buffered_packets_count
-            .fetch_add(
-                transactions_attempted_execution_count
-                    .saturating_sub(filtered_retryable_tx_indexes.len()),
-                Ordering::Relaxed,
-            );
 
         // Increment timing-based metrics
         banking_stage_stats
