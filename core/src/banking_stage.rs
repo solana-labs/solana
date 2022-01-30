@@ -86,16 +86,22 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
+/// A summary of what happened to transactions passed to the execution pipeline.
+/// Transactions can
+/// 1) Did not even make it to execution due to being filtered out by things like AccountInUse
+/// lock conflictss or CostModel compute limits. These types of errors are retryable and
+/// counted in `Self::retryable_transaction_indexes`.
+/// 2) Did not execute due to some fatal error like too old, or duplicate signature. These
+/// will be dropped from the transactions queue and not counted in `Self::retryable_transaction_indexes`
+/// 3) Were executed and committed, captured by `committed_transactions_count` below.
+/// 4) Were executed and failed commit, captured by `failed_commit_count` below.
 struct ProcessTransactionsSummary {
     // We process the transactions slice in chunks. This is the first index in the transactions
     // slice of the *latest* such chunk of transactions that we tried to execute.
     chunk_start: usize,
 
-    // Total number of transactions that were passed as candidates for execution
-    // These transactions can result in three cases after attempting execution:
-    // 1) Did not execute due to some fatal error like too old, or duplicate signature.
-    // 2) Were executed and committed, captured by `committed_transactions_count` below.
-    // 3) Were executed and failed commit, captured by `failed_commit_count` below.
+    // Total number of transactions that were passed as candidates for execution. See description
+    // of struct above for possible outcomes for these transactions
     transactions_attempted_execution_count: usize,
 
     // Total number of transactions that made it into the block
@@ -112,8 +118,7 @@ struct ProcessTransactionsSummary {
     #[allow(dead_code)]
     failed_commit_count: usize,
 
-    // Indexes of transactions in the transactions slice that
-    // failed, but are retryable
+    // Indexes of transactions in the transactions slice that were not committed but are retryable
     retryable_transaction_indexes: Vec<usize>,
 
     // The number of transactions filtered out by the cost model
@@ -130,8 +135,7 @@ pub struct ProcessTransactionBatchOutput {
 pub struct ExecuteAndCommitTransactionsOutput {
     // Total number of transactions that were passed as candidates for execution
     transactions_attempted_execution_count: usize,
-    // The number of transactions of the `transactions_attempted_execution_count` that were
-    // executed. See comment in `ProcessTransactionsSummary::transactions_attempted_execution_count`
+    // The number of transactions of that were executed. See description of in `ProcessTransactionsSummary`
     // for possible outcomes of execution.
     executed_transactions_count: usize,
     // Total number of the executed transactions that returned success/not
@@ -140,7 +144,7 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // Transactions that either were not executed, or were executed and failed to be committed due
     // to the block ending.
     retryable_transaction_indexes: Vec<usize>,
-    // A result that indicates whether transactions were succesfully
+    // A result that indicates whether transactions were successfully
     // committed into the Poh stream. If so, the result tells us
     // how many such transactions were committed
     commit_transactions_result: Result<(), PohRecorderError>,
@@ -1238,14 +1242,12 @@ impl BankingStage {
     ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
         let mut all_retryable_tx_indexes = vec![];
-        // All the transactions that attempted execution.
-        // These transactions can result in three cases after attempting execution:
-        // 1) Did not execute due to some fatal error like too old, or duplicate signature.
-        // 2) Were executed and committed, captured by `total_committed_transactions_count` below.
-        // 3) Were executed and failed commit, captured by `total_failed_commit_count` below.
+        // All the transactions that attempted execution. See description of
+        // struct ProcessTransactionsSummary above for possible outcomes.
         let mut total_transactions_attempted_execution_count: usize = 0;
         // All transactions that were executed and committed
         let mut total_committed_transactions_count: usize = 0;
+        // All transactions that were executed and committed with a successful result
         let mut total_committed_transactions_with_successful_result_count: usize = 0;
         // All transactions that were executed but then failed record because the
         // slot ended
