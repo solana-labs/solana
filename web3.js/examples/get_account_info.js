@@ -19,7 +19,7 @@ import * as web3 from '@solana/web3.js';
 
   // get account info
   // account data is bytecode that needs to be deserialized
-  // serialization and deserialization is program specic
+  // serialization and deserialization is program specific
   let account = await connection.getAccountInfo(wallet.publicKey);
   console.log(account);
 })();
