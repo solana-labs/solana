@@ -107,9 +107,14 @@ pub struct TestValidatorGenesis {
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
+    inactivate_feature_list: Option<Vec<Pubkey>>,
 }
 
 impl TestValidatorGenesis {
+    pub fn inactivate_features(&mut self, inactivate_list: Vec<Pubkey>) -> &mut Self {
+        self.inactivate_feature_list = Some(inactivate_list);
+        self
+    }
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
         self
@@ -509,6 +514,16 @@ impl TestValidator {
 
         if let Some(ticks_per_slot) = config.ticks_per_slot {
             genesis_config.ticks_per_slot = ticks_per_slot;
+        }
+        println!("Gen Feature Map");
+        match &config.inactivate_feature_list {
+            Some(invalidate_list) => {
+                for i in invalidate_list {
+                    println!("Removing {:?}", genesis_config.accounts.get(&i).unwrap());
+                    genesis_config.accounts.remove(&i);
+                }
+            }
+            None => {}
         }
 
         let ledger_path = match &config.ledger_path {
