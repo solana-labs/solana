@@ -121,6 +121,9 @@ impl WithdrawProof {
     ) -> Self {
         // generate a Pedersen commitment for `final_balance`
         let (commitment, opening) = Pedersen::new(final_balance);
+        let pod_commitment: pod::PedersenCommitment = commitment.into();
+
+        transcript.append_commitment(b"commitment", &pod_commitment);
 
         // generate equality_proof
         let equality_proof = EqualityProof::new(
@@ -135,7 +138,7 @@ impl WithdrawProof {
             RangeProof::new(vec![final_balance], vec![64], vec![&opening], transcript);
 
         WithdrawProof {
-            commitment: commitment.into(),
+            commitment: pod_commitment,
             equality_proof: equality_proof.try_into().expect("equality proof"),
             range_proof: range_proof.try_into().expect("range proof"),
         }
@@ -147,6 +150,8 @@ impl WithdrawProof {
         final_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
+        transcript.append_commitment(b"commitmetn", &self.commitment);
+
         let commitment: PedersenCommitment = self.commitment.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;

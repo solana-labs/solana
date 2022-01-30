@@ -13,7 +13,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{TWO_32, combine_u32_ciphertexts, split_u64_into_u32, Role, Verifiable},
+        instruction::{combine_u32_ciphertexts, split_u64_into_u32, Role, Verifiable, TWO_32},
         range_proof::RangeProof,
         sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
     },
@@ -90,7 +90,7 @@ pub struct TransferData {
     pub transfer_pubkeys: pod::TransferPubkeys,
 
     /// The final spendable ciphertext after the transfer
-    pub new_spendable_ciphertext: pod::ElGamalCiphertext,
+    pub ciphertext_new_source: pod::ElGamalCiphertext,
 
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
@@ -101,17 +101,25 @@ impl TransferData {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         transfer_amount: u64,
-        (spendable_balance, spendable_balance_ciphertext): (u64, &ElGamalCiphertext),
+        (spendable_balance, ciphertext_old_source): (u64, &ElGamalCiphertext),
         keypair_source: &ElGamalKeypair,
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Self {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
-        let (ciphertext_lo, opening_lo) =
-            TransferAmountEncryption::new(amount_lo, &keypair_source.public, pubkey_dest, pubkey_auditor);
-        let (ciphertext_hi, opening_hi) =
-            TransferAmountEncryption::new(amount_hi, &keypair_source.public, pubkey_dest, pubkey_auditor);
+        let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
+            amount_lo,
+            &keypair_source.public,
+            pubkey_dest,
+            pubkey_auditor,
+        );
+        let (ciphertext_hi, opening_hi) = TransferAmountEncryption::new(
+            amount_hi,
+            &keypair_source.public,
+            pubkey_dest,
+            pubkey_auditor,
+        );
 
         // subtract transfer amount from the spendable ciphertext
         let new_spendable_balance = spendable_balance - transfer_amount;
@@ -126,18 +134,21 @@ impl TransferData {
             handle: ciphertext_hi.source,
         };
 
-        let new_spendable_ciphertext = spendable_balance_ciphertext
+        let ciphertext_new_source = ciphertext_old_source
             - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
 
         // generate transcript and append all public inputs
-        let pod_transfer_pubkeys = pod::TransferPubkeys::new(&keypair_source.public, pubkey_dest, pubkey_auditor);
+        let pod_transfer_pubkeys =
+            pod::TransferPubkeys::new(&keypair_source.public, pubkey_dest, pubkey_auditor);
         let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.into();
         let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
+        let pod_ciphertext_new_source: pod::ElGamalCiphertext = ciphertext_new_source.into();
 
         let mut transcript = TransferProof::transcript_new(
             &pod_transfer_pubkeys,
             &pod_ciphertext_lo,
             &pod_ciphertext_hi,
+            &pod_ciphertext_new_source,
         );
 
         let proof = TransferProof::new(
@@ -146,7 +157,7 @@ impl TransferData {
             (&pubkey_dest, &pubkey_auditor),
             &opening_lo,
             &opening_hi,
-            (new_spendable_balance, &new_spendable_ciphertext),
+            (new_spendable_balance, &ciphertext_new_source),
             &mut transcript,
         );
 
@@ -154,7 +165,7 @@ impl TransferData {
             ciphertext_lo: pod_ciphertext_lo,
             ciphertext_hi: pod_ciphertext_hi,
             transfer_pubkeys: pod_transfer_pubkeys,
-            new_spendable_ciphertext: new_spendable_ciphertext.into(),
+            ciphertext_new_source: pod_ciphertext_new_source,
             proof,
         }
     }
@@ -220,6 +231,7 @@ impl Verifiable for TransferData {
             &self.transfer_pubkeys,
             &self.ciphertext_lo,
             &self.ciphertext_hi,
+            &self.ciphertext_new_source,
         );
 
         let ciphertext_lo = self.ciphertext_lo.try_into()?;
@@ -242,7 +254,7 @@ impl Verifiable for TransferData {
 #[repr(C)]
 pub struct TransferProof {
     /// New Pedersen commitment for the remaining balance in source
-    pub source_commitment: pod::PedersenCommitment,
+    pub commitment_new_source: pod::PedersenCommitment,
 
     /// Associated equality proof
     pub equality_proof: pod::EqualityProof,
@@ -261,12 +273,14 @@ impl TransferProof {
         transfer_pubkeys: &pod::TransferPubkeys,
         ciphertext_lo: &pod::TransferAmountEncryption,
         ciphertext_hi: &pod::TransferAmountEncryption,
+        ciphertext_new_source: &pod::ElGamalCiphertext,
     ) -> Transcript {
         let mut transcript = Transcript::new(b"transfer-proof");
 
         transcript.append_message(b"transfer-pubkeys", &transfer_pubkeys.0);
         transcript.append_message(b"ciphertext-lo", &ciphertext_lo.0);
         transcript.append_message(b"ciphertext-hi", &ciphertext_hi.0);
+        transcript.append_message(b"ciphertext-new-source", &ciphertext_new_source.0);
 
         transcript
     }
@@ -277,18 +291,18 @@ impl TransferProof {
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
         opening_lo: &PedersenOpening,
         opening_hi: &PedersenOpening,
-        (source_new_balance, source_new_balance_ciphertext): (u64, &ElGamalCiphertext),
+        (source_new_balance, ciphertext_new_source): (u64, &ElGamalCiphertext),
         transcript: &mut Transcript,
     ) -> Self {
         // generate a Pedersen commitment for the remaining balance in source
-        let (source_commitment, source_opening) = Pedersen::new(source_new_balance);
+        let (commitment_new_source, opening_source) = Pedersen::new(source_new_balance);
 
         // generate equality_proof
         let equality_proof = EqualityProof::new(
             keypair_source,
-            source_new_balance_ciphertext,
+            ciphertext_new_source,
             source_new_balance,
-            &source_opening,
+            &opening_source,
             transcript,
         );
 
@@ -308,12 +322,12 @@ impl TransferProof {
                 transfer_amount_hi as u64,
             ],
             vec![64, 32, 32],
-            vec![&source_opening, opening_lo, opening_hi],
+            vec![&opening_source, opening_lo, opening_hi],
             transcript,
         );
 
         Self {
-            source_commitment: source_commitment.into(),
+            commitment_new_source: commitment_new_source.into(),
             equality_proof: equality_proof.try_into().expect("equality proof"),
             validity_proof: validity_proof.try_into().expect("validity proof"),
             range_proof: range_proof.try_into().expect("range proof"),
@@ -328,7 +342,7 @@ impl TransferProof {
         new_spendable_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        let commitment: PedersenCommitment = self.source_commitment.try_into()?;
+        let commitment: PedersenCommitment = self.commitment_new_source.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
@@ -353,10 +367,10 @@ impl TransferProof {
         )?;
 
         // verify range proof
-        let source_commitment = self.source_commitment.try_into()?;
+        let commitment_new_source = self.commitment_new_source.try_into()?;
         range_proof.verify(
             vec![
-                &source_commitment,
+                &commitment_new_source,
                 &ciphertext_lo.commitment,
                 &ciphertext_hi.commitment,
             ],

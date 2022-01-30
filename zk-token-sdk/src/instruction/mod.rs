@@ -5,7 +5,13 @@ pub mod withdraw;
 
 #[cfg(not(target_arch = "bpf"))]
 use {
-    crate::{encryption::{elgamal::ElGamalCiphertext, pedersen::PedersenCommitment}, errors::ProofError},
+    crate::{
+        encryption::{
+            elgamal::ElGamalCiphertext,
+            pedersen::{PedersenCommitment, PedersenOpening},
+        },
+        errors::ProofError,
+    },
     curve25519_dalek::scalar::Scalar,
 };
 pub use {close_account::CloseAccountData, transfer::TransferData, withdraw::WithdrawData};
@@ -50,7 +56,10 @@ pub fn combine_u32_commitments(
     comm_lo + comm_hi * &Scalar::from(TWO_32)
 }
 
-// #[cfg(not(target_arch = "bpf"))]
-// pub fn combine_u32_handles(handle_lo: DecryptHandle, handle_hi: DecryptHandle) -> DecryptHandle {
-//     handle_lo + handle_hi * Scalar::from(TWO_32)
-// }
+#[cfg(not(target_arch = "bpf"))]
+pub fn combine_u32_openings(
+    opening_lo: &PedersenOpening,
+    opening_hi: &PedersenOpening,
+) -> PedersenOpening {
+    opening_lo + opening_hi * &Scalar::from(TWO_32)
+}
