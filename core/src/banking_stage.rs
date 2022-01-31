@@ -67,6 +67,12 @@ use {
     },
 };
 
+#[derive(Clone, Debug, Default)]
+struct PacketLocator {
+    batch_index: usize,
+    packet_index: usize,
+}
+
 /// (packets, valid_indexes, forwarded)
 /// Batch of packets with a list of which are valid and if this batch has been forwarded.
 type PacketBatchAndOffsets = (PacketBatch, Vec<usize>, bool);
@@ -482,9 +488,9 @@ impl BankingStage {
     fn get_stakes_and_locators(
         buffered_packet_batches: &UnprocessedPacketBatches,
         packet_sender_info: &mut Option<PacketSenderInfo>,
-    ) -> (Vec<u64>, Vec<(usize, usize)>) {
+    ) -> (Vec<u64>, Vec<PacketLocator>) {
         let mut stakes = Vec::<u64>::new();
-        let mut locators = Vec::<(usize, usize)>::new();
+        let mut locators = Vec::<PacketLocator>::new();
 
         buffered_packet_batches.iter().enumerate().for_each(
             |(batch_index, buffered_packet_batch_and_offsets)| {
@@ -495,7 +501,10 @@ impl BankingStage {
                     .for_each(|packet_index| {
                         let p = &packet_batch.packets[*packet_index];
                         stakes.push(p.meta.weight);
-                        locators.push((batch_index, *packet_index));
+                        locators.push(PacketLocator {
+                            batch_index,
+                            packet_index: *packet_index,
+                        });
 
                         if let Some(packet_sender_info) = packet_sender_info {
                             let ip = p.meta.addr;
@@ -517,42 +526,26 @@ impl BankingStage {
         (stakes, locators)
     }
 
+    #[allow(clippy::needless_collect)]
     fn weighted_shuffle(
         stakes: &[u64],
-        locators: &[(usize, usize)],
+        locators: &[PacketLocator],
         packet_sender_info: &mut Option<PacketSenderInfo>,
     ) -> Vec<(usize, Vec<usize>)> {
         let need_to_shuffle_sender_ips = packet_sender_info.is_some();
         let mut shuffled_packet_senders_ip = Vec::<IpAddr>::new();
 
         let mut rng = rand::thread_rng();
-        let mut shuffled_locators: Vec<(usize, usize)> = WeightedShuffle::new(&mut rng, stakes)
+        let shuffled_locators: Vec<PacketLocator> = WeightedShuffle::new(&mut rng, stakes)
             .unwrap()
             .map(|i| {
                 if need_to_shuffle_sender_ips {
                     let packet_sender_info = packet_sender_info.as_ref().unwrap();
                     shuffled_packet_senders_ip.push(packet_sender_info.packet_senders_ip[i]);
                 }
-                locators[i]
+                locators[i].clone()
             })
             .collect();
-        // append zero weight packets to the end
-        let zero_staked_packets_locators: Vec<(usize, usize)> = stakes
-            .iter()
-            .enumerate()
-            .filter_map(|(i, stake)| {
-                if *stake == 0 {
-                    if need_to_shuffle_sender_ips {
-                        let packet_sender_info = packet_sender_info.as_ref().unwrap();
-                        shuffled_packet_senders_ip.push(packet_sender_info.packet_senders_ip[i]);
-                    }
-                    Some(locators[i])
-                } else {
-                    None
-                }
-            })
-            .collect();
-        shuffled_locators.extend(zero_staked_packets_locators);
         if let Some(packet_sender_info) = packet_sender_info {
             packet_sender_info.packet_senders_ip = shuffled_packet_senders_ip;
         }
@@ -560,7 +553,12 @@ impl BankingStage {
         // coalesce neighboring same batch locators into one entry
         shuffled_locators
             .into_iter()
-            .map(|(batch_index, packet_index)| (batch_index, vec![packet_index]))
+            .map(|packet_locator| {
+                (
+                    packet_locator.batch_index,
+                    vec![packet_locator.packet_index],
+                )
+            })
             .coalesce(|mut x, y| {
                 if x.0 == y.0 {
                     x.1.extend(y.1.iter());
@@ -3141,7 +3139,6 @@ mod tests {
                 assert_eq!(single_packet_batch.packets.len(), 1);
             }
             let mut buffered_packet_batches: UnprocessedPacketBatches = packet_batches
-                .clone()
                 .into_iter()
                 .map(|single_packets| (single_packets, vec![0], false))
                 .collect();
@@ -3156,7 +3153,8 @@ mod tests {
             // When the poh recorder has a bank, it should process all non conflicting buffered packets.
             // Because each conflicting transaction is in it's own `Packet` within a `PacketBatch`, then
             // each iteration of this loop will process one element of the batch per iteration of the
-            // loop.
+            // loop. Notice packets are shuffled by weight, so they may not processed in receiving
+            // order.
             let interrupted_iteration = 1;
             poh_recorder.lock().unwrap().set_bank(&bank);
             let poh_recorder_ = poh_recorder.clone();
@@ -3179,22 +3177,12 @@ mod tests {
                         &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                     );
 
-                    // Check everything is correct. All indexes after `interrupted_iteration`
-                    // should still be unprocessed
+                    // Check `interrupted_iteration`+1 batches have been processed, but
+                    // they may be processed in different order due to weight shuffling.
                     assert_eq!(
                         buffered_packet_batches.len(),
-                        packet_batches[interrupted_iteration + 1..].len()
+                        num_conflicting_transactions - interrupted_iteration - 1
                     );
-                    for ((remaining_unprocessed_packet, _, _forwarded), original_packet) in
-                        buffered_packet_batches
-                            .iter()
-                            .zip(&packet_batches[interrupted_iteration + 1..])
-                    {
-                        assert_eq!(
-                            remaining_unprocessed_packet.packets[0],
-                            original_packet.packets[0]
-                        );
-                    }
                 })
                 .unwrap();
 
@@ -3753,9 +3741,9 @@ mod tests {
         locators
             .into_iter()
             .enumerate()
-            .for_each(|(index, (batch_index, packet_index))| {
-                assert_eq!(batch_index, (index / batch_size));
-                assert_eq!(packet_index, (index % batch_size));
+            .for_each(|(index, locator)| {
+                assert_eq!(locator.batch_index, (index / batch_size));
+                assert_eq!(locator.packet_index, (index % batch_size));
             });
 
         // verify the sender info are collected correctly
