@@ -515,11 +515,11 @@ impl TestValidator {
         if let Some(ticks_per_slot) = config.ticks_per_slot {
             genesis_config.ticks_per_slot = ticks_per_slot;
         }
-        println!("Gen Feature Map");
+
+        // Remove inactives
         match &config.inactivate_feature_list {
             Some(invalidate_list) => {
                 for i in invalidate_list {
-                    println!("Removing {:?}", genesis_config.accounts.get(&i).unwrap());
                     genesis_config.accounts.remove(&i);
                 }
             }
