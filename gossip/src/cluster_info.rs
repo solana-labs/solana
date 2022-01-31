@@ -2010,7 +2010,7 @@ impl ClusterInfo {
             return packet_batch;
         }
         let mut rng = rand::thread_rng();
-        let shuffle = WeightedShuffle::new(&mut rng, &scores).unwrap();
+        let shuffle = WeightedShuffle::new(&scores).unwrap().shuffle(&mut rng);
         let mut total_bytes = 0;
         let mut sent = 0;
         for (addr, response) in shuffle.map(|i| &responses[i]) {
