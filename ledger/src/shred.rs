@@ -78,16 +78,10 @@ use {
         signature::{Keypair, Signature, Signer},
     },
     std::{
-<<<<<<< HEAD
         convert::{TryFrom, TryInto},
         mem::size_of,
         ops::Deref,
         sync::Arc,
-=======
-        cell::RefCell,
-        convert::{TryFrom, TryInto},
-        mem::size_of,
->>>>>>> dd338b6c9 (changes Shred::parent return type to Option<Slot> (#21370))
     },
     thiserror::Error,
 };
