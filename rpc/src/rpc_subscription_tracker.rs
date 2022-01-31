@@ -140,6 +140,7 @@ pub struct BlockSubscriptionParams {
     pub kind: BlockSubscriptionKind,
     pub transaction_details: TransactionDetails,
     pub show_rewards: bool,
+    pub show_votes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

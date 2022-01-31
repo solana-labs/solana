@@ -28,6 +28,7 @@ pub struct RpcConfirmedBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub transaction_details: Option<TransactionDetails>,
     pub rewards: Option<bool>,
+    pub votes: Option<bool>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }
@@ -70,6 +71,7 @@ impl From<RpcConfirmedBlockConfig> for RpcBlockConfig {
             encoding: config.encoding,
             transaction_details: config.transaction_details,
             rewards: config.rewards,
+            votes: config.votes,
             commitment: config.commitment,
         }
     }

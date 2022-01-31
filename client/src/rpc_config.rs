@@ -197,6 +197,7 @@ pub struct RpcBlockSubscribeConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub transaction_details: Option<TransactionDetails>,
     pub show_rewards: Option<bool>,
+    pub show_votes: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -246,6 +247,7 @@ pub struct RpcBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub transaction_details: Option<TransactionDetails>,
     pub rewards: Option<bool>,
+    pub votes: Option<bool>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }

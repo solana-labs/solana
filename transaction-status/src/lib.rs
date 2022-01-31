@@ -22,6 +22,7 @@ use {
         parse_instruction::{parse, ParsedInstruction},
     },
     solana_account_decoder::parse_token::UiTokenAmount,
+    solana_runtime::vote_parser,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
@@ -30,7 +31,9 @@ use {
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
-        transaction::{Result, Transaction, TransactionError, VersionedTransaction},
+        transaction::{
+            Result, SanitizedTransaction, Transaction, TransactionError, VersionedTransaction,
+        },
     },
     std::fmt,
 };
@@ -469,11 +472,27 @@ impl ConfirmedBlock {
         encoding: UiTransactionEncoding,
         transaction_details: TransactionDetails,
         show_rewards: bool,
+        show_votes: bool,
     ) -> UiConfirmedBlock {
+        let transactions_filtered = if show_votes {
+            self.transactions
+        } else {
+            self.transactions
+                .into_iter()
+                .filter(|tx_with_meta| {
+                    match SanitizedTransaction::try_from_legacy_transaction(
+                        tx_with_meta.transaction.clone(),
+                    ) {
+                        Ok(sanitized_tx) => !vote_parser::is_simple_vote_transaction(&sanitized_tx),
+                        Err(_) => true,
+                    }
+                })
+                .collect()
+        };
         let (transactions, signatures) = match transaction_details {
             TransactionDetails::Full => (
                 Some(
-                    self.transactions
+                    transactions_filtered
                         .into_iter()
                         .map(|tx_with_meta| tx_with_meta.encode(encoding))
                         .collect(),
@@ -483,7 +502,7 @@ impl ConfirmedBlock {
             TransactionDetails::Signatures => (
                 None,
                 Some(
-                    self.transactions
+                    transactions_filtered
                         .into_iter()
                         .map(|tx| tx.transaction.signatures[0].to_string())
                         .collect(),

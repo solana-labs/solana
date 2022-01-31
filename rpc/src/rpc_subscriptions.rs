@@ -305,6 +305,7 @@ fn filter_block_result_txs(
         params.encoding,
         params.transaction_details,
         params.show_rewards,
+        params.show_votes,
     );
 
     // If last_modified_slot < last_notified_slot, then the last notif was for a fork.

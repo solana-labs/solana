@@ -989,6 +989,7 @@ impl JsonRpcRequestProcessor {
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
             let transaction_details = config.transaction_details.unwrap_or_default();
             let show_rewards = config.rewards.unwrap_or(true);
+            let show_votes = config.votes.unwrap_or(true);
             let commitment = config.commitment.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
 
@@ -1007,8 +1008,12 @@ impl JsonRpcRequestProcessor {
                     let confirmed_block = versioned_block
                         .into_legacy_block()
                         .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-                    let mut confirmed_block =
-                        confirmed_block.configure(encoding, transaction_details, show_rewards);
+                    let mut confirmed_block = confirmed_block.configure(
+                        encoding,
+                        transaction_details,
+                        show_rewards,
+                        show_votes,
+                    );
                     if slot == 0 {
                         confirmed_block.block_time = Some(self.genesis_creation_time());
                         confirmed_block.block_height = Some(0);
@@ -1056,6 +1061,7 @@ impl JsonRpcRequestProcessor {
                                 encoding,
                                 transaction_details,
                                 show_rewards,
+                                show_votes,
                             ))
                         })
                         .transpose();
