@@ -76,15 +76,11 @@ impl FeeSigmaProof {
 
         let below_max = u64::ct_gt(&max_fee, &fee_amount);
 
-        println!("fee amount: {}", fee_amount);
-        println!("max fee: {}", max_fee);
-        println!("below max: {:?}", below_max);
-
         // conditionally assign transcript; transcript is not conditionally selectable
         if bool::from(below_max) {
-            *transcript = transcript_fee_above_max;
-        } else {
             *transcript = transcript_fee_below_max;
+        } else {
+            *transcript = transcript_fee_above_max;
         }
 
         Self {
@@ -232,8 +228,6 @@ impl FeeSigmaProof {
 
         transcript.challenge_scalar(b"w");
 
-        println!("{:?}", c);
-
         let z_x = c_equality * x + y_x;
         let z_delta = c_equality * r_delta + y_delta;
         let z_claimed = c_equality * r_claimed + y_claimed;
@@ -302,8 +296,6 @@ impl FeeSigmaProof {
         let c = transcript.challenge_scalar(b"c");
         let c_max_proof = self.fee_max_proof.c_max_proof;
         let c_equality = c - c_max_proof;
-
-        println!("{:?}", c);
 
         let w = transcript.challenge_scalar(b"w");
         let ww = w * w;
@@ -512,6 +504,48 @@ mod test {
             commitment_delta.get_point() - opening_delta.get_scalar() * &(*H),
             commitment_claimed.get_point() - opening_claimed.get_scalar() * &(*H)
         );
+
+        let mut transcript_prover = Transcript::new(b"test");
+        let mut transcript_verifier = Transcript::new(b"test");
+
+        let proof = FeeSigmaProof::new(
+            (amount_fee, &commitment_fee, &opening_fee),
+            (delta, &commitment_delta, &opening_delta),
+            (&commitment_claimed, &opening_claimed),
+            max_fee,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment_fee,
+                &commitment_delta,
+                &commitment_claimed,
+                max_fee,
+                &mut transcript_verifier,
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn test_fee_delta_is_zero() {
+        let transfer_amount: u64 = 100;
+        let max_fee: u64 = 3;
+
+        let rate_fee: u16 = 100; // 1.00%
+        let amount_fee: u64 = 1;
+        let delta: u64 = 0; // 1*10000 - 100*100
+
+        let (commitment_transfer, opening_transfer) = Pedersen::new(transfer_amount);
+        let (commitment_fee, opening_fee) = Pedersen::new(amount_fee);
+
+        let scalar_rate = Scalar::from(rate_fee);
+        let commitment_delta =
+            &(&commitment_fee * &Scalar::from(10000_u64)) - &(&commitment_transfer * &scalar_rate);
+        let opening_delta =
+            &(&opening_fee * &Scalar::from(10000_u64)) - &(&opening_transfer * &scalar_rate);
+
+        let (commitment_claimed, opening_claimed) = Pedersen::new(delta);
 
         let mut transcript_prover = Transcript::new(b"test");
         let mut transcript_verifier = Transcript::new(b"test");

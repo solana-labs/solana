@@ -62,7 +62,7 @@ impl ValidityProof {
     /// * `opening` - The opening associated with the Pedersen commitment
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new<T: Into<Scalar>>(
-        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey), // TODO: rename pubkey_auditor
         amount: T,
         opening: &PedersenOpening,
         transcript: &mut Transcript,

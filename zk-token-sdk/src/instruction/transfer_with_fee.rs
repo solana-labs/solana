@@ -106,9 +106,10 @@ impl TransferWithFeeData {
         let (fee_amount, delta_fee) =
             calculate_fee(transfer_amount, fee_parameters.fee_rate_basis_points);
 
-        let above_max = u64::ct_gt(&fee_parameters.maximum_fee, &fee_amount);
+        let below_max = u64::ct_gt(&fee_parameters.maximum_fee, &fee_amount);
         let fee_to_encrypt =
-            u64::conditional_select(&fee_amount, &fee_parameters.maximum_fee, above_max);
+            u64::conditional_select(&fee_parameters.maximum_fee, &fee_amount, below_max);
+            // u64::conditional_select(&fee_amount, &fee_parameters.maximum_fee, below_max);
 
         let (ciphertext_fee, opening_fee) =
             FeeEncryption::new(fee_to_encrypt, pubkey_dest, pubkey_fee_collector);
@@ -373,48 +374,28 @@ impl TransferWithFeeProof {
             transcript
         )?;
 
-        // ciphertext_fee_validity_proof.verify(
-        //     &ciphertext_fee.commitment,
-        //     (&transfer_with_fee_pubkeys.dest, &transfer_with_fee_pubkeys.fee_collector),
-        //     (&ciphertext_fee.dest, &ciphertext_fee.fee_collector),
-        //     transcript,
-        // )?;
+        ciphertext_fee_validity_proof.verify(
+            &ciphertext_fee.commitment,
+            (&transfer_with_fee_pubkeys.dest, &transfer_with_fee_pubkeys.fee_collector),
+            (&ciphertext_fee.dest, &ciphertext_fee.fee_collector),
+            transcript,
+        )?;
 
-        // // compute delta commitments
-        // let fee_rate_scalar = Scalar::from(fee_parameters.fee_rate_basis_points);
-        // let delta_commitment =
-        //     transfer_amount_commitment * fee_rate_scalar - fee_commitment * Scalar::from(10000_u64);
-        // let delta_claimed_commitment = self.delta_claimed_commitment.try_into()?;
+        // TODO: use constants here
+        let comm_10000 = Pedersen::with(10000_u64, &PedersenOpening::default());
+        let commitment_claimed_negated = &comm_10000 - &commitment_claimed;
 
-        // let fee_sigma_proof: FeeSigmaProof = self.fee_sigma_proof.try_into()?;
-        // fee_sigma_proof.verify(
-        //     fee_parameters.maximum_fee,
-        //     &fee_commitment,
-        //     &delta_commitment,
-        //     &delta_claimed_commitment,
-        //     &mut transcript,
-        // )?;
-
-        // let validity_proof: ValidityProof = self.fee_validity_proof.try_into()?;
-        // validity_proof.verify(
-        //     fee_commitment,
-        //     (pubkey_dest, pubkey_fee_collector),
-        //     (decrypt_handle_dest, decrypt_handle_fee_collector),
-        //     &mut transcript,
-        // )?;
-
-        // let comm_10000 = Pedersen::with(10000_u64, &PedersenOpening::default());
-        // let delta_claimed_negated_opening_range_proof = comm_10000 - delta_claimed_commitment;
-
-        // let range_proof: RangeProof = self.fee_range_proof.clone();
-        // range_proof.verify(
-        //     vec![
-        //         &delta_claimed_commitment,
-        //         &delta_claimed_negated_opening_range_proof,
-        //     ],
-        //     vec![16, 16],
-        //     &mut transcript,
-        // )?;
+        range_proof.verify(
+            vec![
+                &commitment_new_source,
+                &ciphertext_lo.commitment,
+                &ciphertext_hi.commitment,
+                &commitment_claimed,
+                &commitment_claimed_negated,
+            ],
+            vec![64, 32, 32, 64, 64],
+            transcript,
+        )?;
 
         Ok(())
     }
@@ -574,6 +555,7 @@ fn compute_delta_commitment_and_opening(
 ) -> (PedersenCommitment, PedersenOpening) {
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
+    // TODO: use constants here
     let commitment_delta = commitment_fee * Scalar::from(10000_u64)
         - &(&combine_u32_commitments(&commitment_lo, &commitment_hi) * &fee_rate_scalar);
 
@@ -591,6 +573,7 @@ fn compute_delta_commitment(
 ) -> PedersenCommitment {
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
+    // TODO: use constants here
     let commitment_delta = commitment_fee * Scalar::from(10000_u64)
         - &(&combine_u32_commitments(&commitment_lo, &commitment_hi) * &fee_rate_scalar);
 
