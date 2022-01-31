@@ -623,7 +623,8 @@ impl BankingStage {
                         // duplicate signature, etc.)
                         //
                         // Note: This assumes that every packet deserializes into one transaction!
-                        consumed_buffered_packets_count += transactions_attempted_execution_count
+                        consumed_buffered_packets_count += original_unprocessed_indexes
+                            .len()
                             .saturating_sub(retryable_transaction_indexes.len());
 
                         // Out of the buffered packets just retried, collect any still unprocessed
