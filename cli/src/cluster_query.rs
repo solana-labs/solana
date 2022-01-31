@@ -1365,13 +1365,8 @@ pub fn process_ping(
     let mut confirmed_count = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
-<<<<<<< HEAD
     let (mut blockhash, mut fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut blockhash_transaction_count = 0;
-=======
-    let mut blockhash = rpc_client.get_latest_blockhash()?;
     let mut lamports = 0;
->>>>>>> 90689585e (Update ping to transfer to self, with rotating amount (#22657))
     let mut blockhash_acquired = Instant::now();
     if let Some(fixed_blockhash) = fixed_blockhash {
         let blockhash_origin = if *fixed_blockhash != Hash::default() {
@@ -1391,12 +1386,8 @@ pub fn process_ping(
             // Fetch a new blockhash every minute
             let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
             blockhash = new_blockhash;
-<<<<<<< HEAD
             fee_calculator = new_fee_calculator;
-            blockhash_transaction_count = 0;
-=======
             lamports = 0;
->>>>>>> 90689585e (Update ping to transfer to self, with rotating amount (#22657))
             blockhash_acquired = Instant::now();
         }
 
