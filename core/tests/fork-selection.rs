@@ -7,7 +7,7 @@
 //!     /// * num_partitions - 1 to 100 partitions
 //!     /// * fail_rate - 0 to 1.0 rate of packet receive failure
 //!     /// * delay_count - number of forks to observe before voting
-//!     /// * parasite_rate - number of parasite nodes that vote opposite the greedy choice
+//!     /// * parasite_rate - percentage of parasite nodes that vote opposite the greedy choice
 //!     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
 //! ```
 //! Modify the test function
@@ -497,7 +497,7 @@ fn test_no_partitions() {
 /// * num_partitions - 1 to 100 partitions
 /// * fail_rate - 0 to 1.0 rate of packet receive failure
 /// * delay_count - number of forks to observe before voting
-/// * parasite_rate - number of parasite nodes that vote opposite the greedy choice
+/// * parasite_rate - percentage of parasite nodes that vote opposite the greedy choice
 fn test_with_partitions(
     num_partitions: usize,
     fail_rate: f64,
