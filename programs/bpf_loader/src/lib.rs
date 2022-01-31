@@ -23,6 +23,7 @@ use {
         invoke_context::{ComputeMeter, Executor, InvokeContext},
         log_collector::LogCollector,
         stable_log,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
@@ -38,7 +39,6 @@ use {
         account_utils::State,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Clock,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_len, do_support_realloc, reduce_required_deploy_balance,
@@ -47,13 +47,12 @@ use {
             start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
         },
         instruction::{AccountMeta, InstructionError},
-        keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         program_error::ACCOUNTS_DATA_BUDGET_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        rent::Rent,
         saturating_add_assign,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     },
@@ -460,14 +459,14 @@ fn process_loader_upgradeable_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?;
-            let rent = from_keyed_account::<Rent>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 4,
-            )?)?;
-            let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 5,
-            )?)?;
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
+                invoke_context,
+            )?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 5)?,
+                invoke_context,
+            )?;
             let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 7)?;
             let upgrade_authority_address = Some(*authority.unsigned_key());
             let upgrade_authority_signer = authority.signer_key().is_none();
@@ -614,14 +613,14 @@ fn process_loader_upgradeable_instruction(
             let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
-            let rent = from_keyed_account::<Rent>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 4,
-            )?)?;
-            let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 5,
-            )?)?;
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
+                invoke_context,
+            )?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 5)?,
+                invoke_context,
+            )?;
             let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 6)?;
 
             // Verify Program account
@@ -2588,7 +2587,7 @@ mod tests {
         let mut elf_new = Vec::new();
         file.read_to_end(&mut elf_new).unwrap();
         assert_ne!(elf_orig.len(), elf_new.len());
-        let slot = 42;
+        const SLOT: u64 = 42;
         let buffer_address = Pubkey::new_unique();
         let upgrade_authority_address = Pubkey::new_unique();
 
@@ -2596,7 +2595,6 @@ mod tests {
             buffer_address: &Pubkey,
             buffer_authority: &Pubkey,
             upgrade_authority_address: &Pubkey,
-            slot: u64,
             elf_orig: &[u8],
             elf_new: &[u8],
         ) -> (Vec<(Pubkey, AccountSharedData)>, Vec<AccountMeta>) {
@@ -2631,7 +2629,7 @@ mod tests {
             );
             programdata_account
                 .set_state(&UpgradeableLoaderState::ProgramData {
-                    slot,
+                    slot: SLOT,
                     upgrade_authority_address: Some(*upgrade_authority_address),
                 })
                 .unwrap();
@@ -2649,7 +2647,7 @@ mod tests {
             let spill_account = AccountSharedData::new(0, 0, &Pubkey::new_unique());
             let rent_account = create_account_for_test(&rent);
             let clock_account = create_account_for_test(&Clock {
-                slot,
+                slot: SLOT,
                 ..Clock::default()
             });
             let upgrade_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
@@ -2725,7 +2723,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2740,7 +2737,7 @@ mod tests {
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
-                slot,
+                slot: SLOT,
                 upgrade_authority_address: Some(upgrade_authority_address)
             }
         );
@@ -2758,14 +2755,13 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
         transaction_accounts[0]
             .1
             .set_state(&UpgradeableLoaderState::ProgramData {
-                slot,
+                slot: SLOT,
                 upgrade_authority_address: None,
             })
             .unwrap();
@@ -2780,7 +2776,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2798,7 +2793,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2814,7 +2808,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2830,7 +2823,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2846,7 +2838,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2862,7 +2853,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2881,7 +2871,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2899,7 +2888,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2918,7 +2906,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2944,7 +2931,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2966,7 +2952,6 @@ mod tests {
             &buffer_address,
             &buffer_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2981,7 +2966,6 @@ mod tests {
             &buffer_address,
             &buffer_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -3002,14 +2986,13 @@ mod tests {
             &buffer_address,
             &buffer_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
         transaction_accounts[0]
             .1
             .set_state(&UpgradeableLoaderState::ProgramData {
-                slot,
+                slot: SLOT,
                 upgrade_authority_address: None,
             })
             .unwrap();
