@@ -96,9 +96,9 @@ const MIN_THREADS_BANKING: u32 = 1;
 /// 3) Were executed and committed, captured by `committed_transactions_count` below.
 /// 4) Were executed and failed commit, captured by `failed_commit_count` below.
 struct ProcessTransactionsSummary {
-    // We process the transactions slice in chunks. This is the first index in the transactions
-    // slice of the *latest* such chunk of transactions that we tried to execute.
-    chunk_start: usize,
+    // Returns true if we hit the end of the block/max PoH height for the block before
+    // processing all the transactions in the batch.
+    reached_max_poh_height: bool,
 
     // Total number of transactions that were passed as candidates for execution. See description
     // of struct above for possible outcomes for these transactions
@@ -597,13 +597,13 @@ impl BankingStage {
                             qos_service,
                         );
                         let ProcessTransactionsSummary {
-                            chunk_start,
+                            reached_max_poh_height,
                             transactions_attempted_execution_count,
                             retryable_transaction_indexes,
                             ..
                         } = process_transactions_summary;
 
-                        if chunk_start < transactions_attempted_execution_count
+                        if reached_max_poh_height
                             // TODO adding timing metrics here from when bank was added to now
                             || !Bank::should_bank_still_be_processing_txs(
                                 &bank_creation_time,
@@ -1253,6 +1253,7 @@ impl BankingStage {
         // slot ended
         let mut total_failed_commit_count: usize = 0;
         let mut total_cost_model_limit_transactions_count: usize = 0;
+        let mut reached_max_poh_height = false;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
@@ -1326,6 +1327,7 @@ impl BankingStage {
                     // transactions[chunk_start..chunk_end], so we just need to push the remaining
                     // transactions into the unprocessed queue.
                     all_retryable_tx_indexes.extend(chunk_end..transactions.len());
+                    reached_max_poh_height = true;
                     break;
                 }
                 _ => (),
@@ -1335,7 +1337,7 @@ impl BankingStage {
         }
 
         ProcessTransactionsSummary {
-            chunk_start,
+            reached_max_poh_height,
             transactions_attempted_execution_count: total_transactions_attempted_execution_count,
             committed_transactions_count: total_committed_transactions_count,
             committed_transactions_with_successful_result_count:
@@ -2713,7 +2715,7 @@ mod tests {
             );
 
             let ProcessTransactionsSummary {
-                chunk_start,
+                reached_max_poh_height,
                 transactions_attempted_execution_count,
                 committed_transactions_count,
                 committed_transactions_with_successful_result_count,
@@ -2721,7 +2723,7 @@ mod tests {
                 mut retryable_transaction_indexes,
                 ..
             } = process_transactions_summary;
-            assert_eq!(chunk_start, 0);
+            assert!(reached_max_poh_height);
             assert_eq!(transactions_attempted_execution_count, 1);
             assert_eq!(failed_commit_count, 1);
             // MaxHeightReached error does not commit, should be zero here
@@ -2823,7 +2825,7 @@ mod tests {
 
         let transactions_count = transactions.len();
         let ProcessTransactionsSummary {
-            chunk_start,
+            reached_max_poh_height,
             transactions_attempted_execution_count,
             committed_transactions_count,
             committed_transactions_with_successful_result_count,
@@ -2833,7 +2835,7 @@ mod tests {
         } = execute_transactions_with_dummy_poh_service(bank, transactions);
 
         // All the transactions should have been replayed, but only 1 committed
-        assert_eq!(chunk_start, transactions_count);
+        assert!(!reached_max_poh_height);
         assert_eq!(transactions_attempted_execution_count, transactions_count);
         // Both transactions should have been committed, even though one was an error,
         // because InstructionErrors are committed
@@ -2877,7 +2879,7 @@ mod tests {
 
         let transactions_count = transactions.len();
         let ProcessTransactionsSummary {
-            chunk_start,
+            reached_max_poh_height,
             transactions_attempted_execution_count,
             committed_transactions_count,
             committed_transactions_with_successful_result_count,
@@ -2887,7 +2889,7 @@ mod tests {
         } = execute_transactions_with_dummy_poh_service(bank, transactions);
 
         // All the transactions should have been replayed, but only 2 committed (first and last)
-        assert_eq!(chunk_start, transactions_count);
+        assert!(!reached_max_poh_height);
         assert_eq!(transactions_attempted_execution_count, transactions_count);
         assert_eq!(committed_transactions_count, 2);
         assert_eq!(committed_transactions_with_successful_result_count, 2);
