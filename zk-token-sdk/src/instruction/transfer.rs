@@ -123,7 +123,9 @@ impl TransferData {
         );
 
         // subtract transfer amount from the spendable ciphertext
-        let new_spendable_balance = spendable_balance.checked_sub(transfer_amount).ok_or(ProofError::Generation)?;
+        let new_spendable_balance = spendable_balance
+            .checked_sub(transfer_amount)
+            .ok_or(ProofError::Generation)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
@@ -155,7 +157,7 @@ impl TransferData {
         let proof = TransferProof::new(
             (amount_lo, amount_hi),
             keypair_source,
-            (&pubkey_dest, &pubkey_auditor),
+            (pubkey_dest, pubkey_auditor),
             &opening_lo,
             &opening_hi,
             (new_spendable_balance, &ciphertext_new_source),
@@ -358,7 +360,7 @@ impl TransferProof {
         // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(
             &transfer_pubkeys.source,
-            &new_spendable_ciphertext,
+            new_spendable_ciphertext,
             &commitment,
             transcript,
         )?;
@@ -457,7 +459,8 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(transfer_data.verify().is_ok());
     }
@@ -490,7 +493,8 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(
             transfer_data

@@ -353,22 +353,35 @@ impl FeeSigmaProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
         let bytes = array_ref![bytes, 0, 256];
-        let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) = 
+        let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) =
             array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
 
         let Y_max_proof = CompressedRistretto::from_slice(Y_max_proof);
-        let z_max_proof = Scalar::from_canonical_bytes(*z_max_proof).ok_or(FeeSigmaProofError::Format)?;
-        let c_max_proof = Scalar::from_canonical_bytes(*c_max_proof).ok_or(FeeSigmaProofError::Format)?;
+        let z_max_proof =
+            Scalar::from_canonical_bytes(*z_max_proof).ok_or(FeeSigmaProofError::Format)?;
+        let c_max_proof =
+            Scalar::from_canonical_bytes(*c_max_proof).ok_or(FeeSigmaProofError::Format)?;
 
         let Y_delta = CompressedRistretto::from_slice(Y_delta);
         let Y_claimed = CompressedRistretto::from_slice(Y_claimed);
         let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(FeeSigmaProofError::Format)?;
         let z_delta = Scalar::from_canonical_bytes(*z_delta).ok_or(FeeSigmaProofError::Format)?;
-        let z_claimed = Scalar::from_canonical_bytes(*z_claimed).ok_or(FeeSigmaProofError::Format)?;
+        let z_claimed =
+            Scalar::from_canonical_bytes(*z_claimed).ok_or(FeeSigmaProofError::Format)?;
 
         Ok(Self {
-            fee_max_proof: FeeMaxProof { Y_max_proof, z_max_proof, c_max_proof },
-            fee_equality_proof: FeeEqualityProof { Y_delta, Y_claimed, z_x, z_delta, z_claimed },
+            fee_max_proof: FeeMaxProof {
+                Y_max_proof,
+                z_max_proof,
+                c_max_proof,
+            },
+            fee_equality_proof: FeeEqualityProof {
+                Y_delta,
+                Y_claimed,
+                z_x,
+                z_delta,
+                z_claimed,
+            },
         })
     }
 }

@@ -403,11 +403,7 @@ mod tests {
         let proof = RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create);
 
         assert!(proof
-            .verify(
-                vec![&comm],
-                vec![32],
-                &mut transcript_verify
-            )
+            .verify(vec![&comm], vec![32], &mut transcript_verify)
             .is_ok());
     }
 

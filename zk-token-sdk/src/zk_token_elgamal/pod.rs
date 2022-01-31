@@ -130,7 +130,6 @@ pub struct RangeProof256(pub [u8; 800]);
 unsafe impl Zeroable for RangeProof256 {}
 unsafe impl Pod for RangeProof256 {}
 
-
 /// Serialization for AeCiphertext
 #[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]

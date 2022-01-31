@@ -51,7 +51,9 @@ impl WithdrawData {
         // subtract withdraw amount from current balance
         //
         // errors if current_balance < amount
-        let final_balance = current_balance.checked_sub(amount).ok_or(ProofError::Generation)?;
+        let final_balance = current_balance
+            .checked_sub(amount)
+            .ok_or(ProofError::Generation)?;
 
         // encode withdraw amount as an ElGamal ciphertext and subtract it from
         // current source balance
@@ -189,7 +191,8 @@ mod test {
             &keypair,
             current_balance,
             &current_ciphertext,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(data.verify().is_ok());
 
         // generate and verify proof with wrong balance
@@ -199,7 +202,8 @@ mod test {
             &keypair,
             wrong_balance,
             &current_ciphertext,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(data.verify().is_err());
     }
 }

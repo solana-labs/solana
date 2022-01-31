@@ -37,7 +37,10 @@ pub struct CloseAccountData {
 
 #[cfg(not(target_arch = "bpf"))]
 impl CloseAccountData {
-    pub fn new(keypair: &ElGamalKeypair, ciphertext: &ElGamalCiphertext) -> Result<Self, ProofError> {
+    pub fn new(
+        keypair: &ElGamalKeypair,
+        ciphertext: &ElGamalCiphertext,
+    ) -> Result<Self, ProofError> {
         let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
@@ -82,8 +85,8 @@ impl CloseAccountProof {
     ) -> Transcript {
         let mut transcript = Transcript::new(b"CloseAccountProof");
 
-        transcript.append_pubkey(b"pubkey", &pubkey);
-        transcript.append_ciphertext(b"ciphertext", &ciphertext);
+        transcript.append_pubkey(b"pubkey", pubkey);
+        transcript.append_ciphertext(b"ciphertext", ciphertext);
 
         transcript
     }

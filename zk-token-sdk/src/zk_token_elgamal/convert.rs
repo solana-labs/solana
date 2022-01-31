@@ -21,6 +21,10 @@ mod target_arch {
                 pedersen::PedersenCommitment,
             },
             errors::ProofError,
+            instruction::{
+                transfer::{TransferAmountEncryption, TransferPubkeys},
+                transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
+            },
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
                 equality_proof::EqualityProof,
@@ -29,10 +33,6 @@ mod target_arch {
                 validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
-            instruction::{
-                transfer::{TransferAmountEncryption, TransferPubkeys},
-                transfer_with_fee::{TransferWithFeePubkeys, FeeEncryption, FeeParameters},
-            }
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -221,7 +221,6 @@ mod target_arch {
         }
     }
 
-
     impl TryFrom<RangeProof> for pod::RangeProof64 {
         type Error = RangeProofError;
 
@@ -310,7 +309,6 @@ mod target_arch {
             Self::from_bytes(&pod.0)
         }
     }
-
 
     impl From<TransferPubkeys> for pod::TransferPubkeys {
         fn from(keys: TransferPubkeys) -> Self {
@@ -407,11 +405,7 @@ mod tests {
         let proof_deserialized: RangeProof = proof_serialized.try_into().unwrap();
 
         assert!(proof_deserialized
-            .verify(
-                vec![&comm],
-                vec![64],
-                &mut transcript_verify
-            )
+            .verify(vec![&comm], vec![64], &mut transcript_verify)
             .is_ok());
 
         // should fail to serialize to pod::RangeProof128

@@ -1,8 +1,5 @@
 use {
-    crate::{
-        zk_token_elgamal::pod,
-        errors::TranscriptError,
-    },
+    crate::{errors::TranscriptError, zk_token_elgamal::pod},
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar, traits::IsIdentity},
     merlin::Transcript,
 };
@@ -151,21 +148,17 @@ impl TranscriptProtocol for Transcript {
 
     fn zero_balance_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"zero-balance-proof")
-
     }
 
     fn validity_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"validity-proof")
-
     }
 
     fn aggregated_validity_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"aggregated-validity-proof")
-
     }
 
     fn fee_sigma_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"fee-sigma-proof")
-
     }
 }

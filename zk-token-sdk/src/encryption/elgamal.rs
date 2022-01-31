@@ -108,15 +108,12 @@ impl ElGamal {
     /// On input a message, the function returns a twisted ElGamal ciphertext where the associated
     /// Pedersen opening is always zero. Since the opening is zero, any twisted ElGamal ciphertext
     /// of this form is a valid ciphertext under any ElGamal public key.
-    pub fn encode<T: Into<Scalar>>(
-        amount: T,
-    ) -> ElGamalCiphertext {
+    pub fn encode<T: Into<Scalar>>(amount: T) -> ElGamalCiphertext {
         let commitment = Pedersen::encode(amount);
         let handle = DecryptHandle(RistrettoPoint::identity());
 
         ElGamalCiphertext { commitment, handle }
     }
-
 
     /// On input a secret key and a ciphertext, the function returns the decrypted message.
     ///
