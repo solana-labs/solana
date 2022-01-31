@@ -1379,7 +1379,7 @@ pub(crate) mod tests {
             encoding: Some(UiTransactionEncoding::Json),
             transaction_details: Some(TransactionDetails::Signatures),
             show_rewards: None,
-            show_votes: None
+            show_votes: None,
         };
         let params = BlockSubscriptionParams {
             kind: BlockSubscriptionKind::All,
@@ -1387,7 +1387,7 @@ pub(crate) mod tests {
             encoding: config.encoding.unwrap(),
             transaction_details: config.transaction_details.unwrap(),
             show_rewards: config.show_rewards.unwrap_or_default(),
-            show_votes: config.show_votes.unwrap_or_default()
+            show_votes: config.show_votes.unwrap_or_default(),
         };
         let sub_id = rpc.block_subscribe(filter, Some(config)).unwrap();
 
@@ -1416,7 +1416,8 @@ pub(crate) mod tests {
 
         let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
         let legacy_block = versioned_block.into_legacy_block().unwrap();
-        let block = legacy_block.configure(params.encoding, params.transaction_details, false, true);
+        let block =
+            legacy_block.configure(params.encoding, params.transaction_details, false, true);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1481,7 +1482,7 @@ pub(crate) mod tests {
             encoding: Some(UiTransactionEncoding::Json),
             transaction_details: Some(TransactionDetails::Signatures),
             show_rewards: None,
-            show_votes: None
+            show_votes: None,
         };
         let params = BlockSubscriptionParams {
             kind: BlockSubscriptionKind::MentionsAccountOrProgram(keypair1.pubkey()),
@@ -1489,7 +1490,7 @@ pub(crate) mod tests {
             encoding: config.encoding.unwrap(),
             transaction_details: config.transaction_details.unwrap(),
             show_rewards: config.show_rewards.unwrap_or_default(),
-            show_votes: config.show_votes.unwrap_or_default()
+            show_votes: config.show_votes.unwrap_or_default(),
         };
         let sub_id = rpc.block_subscribe(filter, Some(config)).unwrap();
 
@@ -1525,7 +1526,8 @@ pub(crate) mod tests {
                 .account_keys
                 .contains(&keypair1.pubkey())
         });
-        let block = legacy_block.configure(params.encoding, params.transaction_details, false, true);
+        let block =
+            legacy_block.configure(params.encoding, params.transaction_details, false, true);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1578,7 +1580,7 @@ pub(crate) mod tests {
             encoding: Some(UiTransactionEncoding::Json),
             transaction_details: Some(TransactionDetails::Signatures),
             show_rewards: None,
-            show_votes: None
+            show_votes: None,
         };
         let params = BlockSubscriptionParams {
             kind: BlockSubscriptionKind::All,
@@ -1619,7 +1621,8 @@ pub(crate) mod tests {
 
         let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
         let legacy_block = versioned_block.into_legacy_block().unwrap();
-        let block = legacy_block.configure(params.encoding, params.transaction_details, false, false);
+        let block =
+            legacy_block.configure(params.encoding, params.transaction_details, false, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),

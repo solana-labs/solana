@@ -267,7 +267,7 @@ fn test_block_subscription() {
             encoding: Some(UiTransactionEncoding::Json),
             transaction_details: Some(TransactionDetails::Signatures),
             show_rewards: None,
-            show_votes: None
+            show_votes: None,
         }),
     )
     .unwrap();
@@ -284,7 +284,7 @@ fn test_block_subscription() {
                 UiTransactionEncoding::Json,
                 TransactionDetails::Signatures,
                 false,
-                true
+                true,
             );
             let expected = RpcBlockUpdate {
                 slot,
@@ -295,7 +295,7 @@ fn test_block_subscription() {
                 UiTransactionEncoding::Json,
                 TransactionDetails::Signatures,
                 false,
-                true
+                true,
             );
             assert_eq!(actual.value.slot, expected.slot);
             assert!(block.eq(&actual.value.block.unwrap()));
