@@ -78,24 +78,24 @@ jobs:
     #    - sudo apt-get install libssl-dev libudev-dev
 
     # docs pull request
-    - name: "explorer"
-      if: type = pull_request AND branch = master
+#     - name: "explorer"
+#       if: type = pull_request AND branch = master
 
-      language: node_js
-      node_js:
-        - "lts/*"
+#       language: node_js
+#       node_js:
+#         - "lts/*"
 
-      cache:
-        directories:
-          - ~/.npm
+#       cache:
+#         directories:
+#           - ~/.npm
 
-      before_install:
-        - .travis/affects.sh explorer/ .travis || travis_terminate 0
-        - cd explorer
+#       before_install:
+#         - .travis/affects.sh explorer/ .travis || travis_terminate 0
+#         - cd explorer
 
-      script:
-        - npm run build
-        - npm run format
+#       script:
+#         - npm run build
+#         - npm run format
     - name: "docs"
       if: type IN (push, pull_request) OR tag IS present
       language: node_js
