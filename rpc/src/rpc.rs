@@ -6717,6 +6717,7 @@ pub mod tests {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::Signatures),
                 rewards: Some(false),
+                votes: Some(true),
                 commitment: None,
             })
         );
@@ -6738,6 +6739,7 @@ pub mod tests {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::None),
                 rewards: Some(true),
+                votes: Some(false),
                 commitment: None,
             })
         );
