@@ -16,6 +16,7 @@ use {
         instruction::{combine_u32_ciphertexts, split_u64_into_u32, Role, Verifiable, TWO_32},
         range_proof::RangeProof,
         sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
+        transcript::TranscriptProtocol,
     },
     arrayref::{array_ref, array_refs},
     merlin::Transcript,
@@ -297,6 +298,9 @@ impl TransferProof {
         // generate a Pedersen commitment for the remaining balance in source
         let (commitment_new_source, opening_source) = Pedersen::new(source_new_balance);
 
+        let pod_commitment_new_source: pod::PedersenCommitment = commitment_new_source.into();
+        transcript.append_commitment(b"commitment-new-source", &pod_commitment_new_source);
+
         // generate equality_proof
         let equality_proof = EqualityProof::new(
             keypair_source,
@@ -327,7 +331,7 @@ impl TransferProof {
         );
 
         Self {
-            commitment_new_source: commitment_new_source.into(),
+            commitment_new_source: pod_commitment_new_source,
             equality_proof: equality_proof.into(),
             validity_proof: validity_proof.into(),
             range_proof: range_proof.try_into().expect("range proof: length error"),
@@ -342,6 +346,8 @@ impl TransferProof {
         new_spendable_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
+        transcript.append_commitment(b"commitment-new-source", &self.commitment_new_source);
+
         let commitment: PedersenCommitment = self.commitment_new_source.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;

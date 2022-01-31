@@ -16,8 +16,8 @@ use {
         instruction::{
             combine_u32_ciphertexts, combine_u32_commitments, combine_u32_openings,
             split_u64_into_u32,
-            transfer::{TransferAmountEncryption, TransferPubkeys},
-            Role, Verifiable,
+            transfer::TransferAmountEncryption,
+            Role, Verifiable, TWO_32,
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -31,7 +31,7 @@ use {
     curve25519_dalek::scalar::Scalar,
     merlin::Transcript,
     std::convert::TryInto,
-    subtle::{Choice, ConditionallySelectable, ConstantTimeGreater},
+    subtle::{ConditionallySelectable, ConstantTimeGreater},
 };
 
 // #[derive(Clone, Copy, Pod, Zeroable)]
@@ -156,6 +156,58 @@ impl TransferWithFeeData {
             proof,
         }
     }
+
+    /// Extracts the lo ciphertexts associated with a transfer-with-fee data
+    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
+        let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
+
+        let handle_lo = match role {
+            Role::Source => ciphertext_lo.source,
+            Role::Dest => ciphertext_lo.dest,
+            Role::Auditor => ciphertext_lo.auditor,
+        };
+
+        Ok(ElGamalCiphertext {
+            commitment: ciphertext_lo.commitment,
+            handle: handle_lo,
+        })
+    }
+
+    /// Extracts the lo ciphertexts associated with a transfer-with-fee data
+    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
+        let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
+
+        let handle_hi = match role {
+            Role::Source => ciphertext_hi.source,
+            Role::Dest => ciphertext_hi.dest,
+            Role::Auditor => ciphertext_hi.auditor,
+        };
+
+        Ok(ElGamalCiphertext {
+            commitment: ciphertext_hi.commitment,
+            handle: handle_hi,
+        })
+    }
+
+    /// Decrypts transfer amount from transfer-with-fee data
+    ///
+    /// TODO: This function should run in constant time. Use `subtle::Choice` for the if statement
+    /// and make sure that the function does not terminate prematurely due to errors
+    ///
+    /// TODO: Define specific error type for decryption error
+    pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+        let ciphertext_lo = self.ciphertext_lo(role)?;
+        let ciphertext_hi = self.ciphertext_hi(role)?;
+
+        let amount_lo = ciphertext_lo.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
+        let amount_hi = ciphertext_hi.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
+
+        if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
+            Ok((amount_lo as u64) + (TWO_32 * amount_hi as u64))
+        } else {
+            Err(ProofError::Verification)
+        }
+    }
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -241,6 +293,13 @@ impl TransferWithFeeProof {
 
         // generate a Pedersen commitment for the remaining balance in source
         let (commitment_new_source, opening_source) = Pedersen::new(source_new_balance);
+        let (commitment_claimed, opening_claimed) = Pedersen::new(delta_fee);
+
+        let pod_commitment_new_source: pod::PedersenCommitment = commitment_new_source.into();
+        let pod_commitment_claimed: pod::PedersenCommitment = commitment_claimed.into();
+
+        transcript.append_commitment(b"commitment-new-source", &pod_commitment_new_source);
+        transcript.append_commitment(b"commitment-claimed", &pod_commitment_claimed);
 
         // generate equality_proof
         let equality_proof = EqualityProof::new(
@@ -265,8 +324,6 @@ impl TransferWithFeeProof {
             (&ciphertext_fee.commitment, opening_fee),
             fee_parameters.fee_rate_basis_points,
         );
-
-        let (commitment_claimed, opening_claimed) = Pedersen::new(delta_fee);
 
         let fee_sigma_proof = FeeSigmaProof::new(
             (fee_amount, &ciphertext_fee.commitment, opening_fee),
@@ -307,8 +364,8 @@ impl TransferWithFeeProof {
         );
 
         Self {
-            commitment_new_source: commitment_new_source.into(),
-            commitment_claimed: commitment_claimed.into(),
+            commitment_new_source: pod_commitment_new_source,
+            commitment_claimed: pod_commitment_claimed,
             equality_proof: equality_proof.into(),
             ciphertext_amount_validity_proof: ciphertext_amount_validity_proof.into(),
             fee_sigma_proof: fee_sigma_proof.into(),
@@ -328,7 +385,8 @@ impl TransferWithFeeProof {
         fee_parameters: FeeParameters,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        // TODO: add public inputs associated with proof struct
+        transcript.append_commitment(b"commitment-new-source", &self.commitment_new_source);
+        transcript.append_commitment(b"commitment-claimed", &self.commitment_claimed);
 
         let commitment_new_source: PedersenCommitment = self.commitment_new_source.try_into()?;
         let commitment_claimed: PedersenCommitment = self.commitment_claimed.try_into()?;
