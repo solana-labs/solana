@@ -4291,7 +4291,9 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        self.increment_transaction_count(committed_transactions_count);
+        self.increment_transaction_count(
+            committed_transactions_count.saturating_sub(committed_with_failure_result_count),
+        );
         self.increment_signature_count(signature_count);
 
         inc_new_counter_info!(
