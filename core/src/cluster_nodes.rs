@@ -410,23 +410,11 @@ fn enable_turbine_peers_shuffle_patch(shred_slot: Slot, root_bank: &Bank) -> boo
 // Unstaked nodes will always appear at the very end.
 fn shuffle_nodes<'a, R: Rng>(rng: &mut R, nodes: &[&'a Node]) -> Vec<&'a Node> {
     // Nodes are sorted by (stake, pubkey) in descending order.
-    let stakes: Vec<u64> = nodes
-        .iter()
-        .map(|node| node.stake)
-        .take_while(|stake| *stake > 0)
-        .collect();
-    let num_staked = stakes.len();
-    let mut out: Vec<_> = WeightedShuffle::new(rng, &stakes)
+    let stakes: Vec<u64> = nodes.iter().map(|node| node.stake).collect();
+    WeightedShuffle::new(rng, &stakes)
         .unwrap()
         .map(|i| nodes[i])
-        .collect();
-    let weights = vec![1; nodes.len() - num_staked];
-    out.extend(
-        WeightedShuffle::new(rng, &weights)
-            .unwrap()
-            .map(|i| nodes[i + num_staked]),
-    );
-    out
+        .collect()
 }
 
 impl<T> ClusterNodesCache<T> {
