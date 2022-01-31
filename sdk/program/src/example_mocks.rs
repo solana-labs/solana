@@ -11,6 +11,7 @@
 //! appear to import from that crate.
 
 #![doc(hidden)]
+#![allow(clippy::new_without_default)]
 
 pub mod solana_client {
     pub mod client_error {
