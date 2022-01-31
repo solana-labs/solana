@@ -232,35 +232,30 @@ impl<'a> InvokeContext<'a> {
         }
     }
 
-    pub fn new_mock_with_sysvars_and_features(
-        transaction_context: &'a mut TransactionContext,
-        sysvar_cache: &'a SysvarCache,
-        feature_set: Arc<FeatureSet>,
-    ) -> Self {
-        Self::new(
-            transaction_context,
-            Rent::default(),
-            &[],
-            Cow::Borrowed(sysvar_cache),
-            Some(LogCollector::new_ref()),
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(Executors::default())),
-            feature_set,
-            Hash::default(),
-            0,
-            0,
-        )
-    }
-
     pub fn new_mock(
         transaction_context: &'a mut TransactionContext,
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.fill_missing_entries(|pubkey| {
+            (0..transaction_context.get_number_of_accounts()).find_map(|index| {
+                if transaction_context.get_key_of_account_at_index(index) == pubkey {
+                    Some(
+                        transaction_context
+                            .get_account_at_index(index)
+                            .borrow()
+                            .clone(),
+                    )
+                } else {
+                    None
+                }
+            })
+        });
         Self::new(
             transaction_context,
             Rent::default(),
             builtin_programs,
-            Cow::Owned(SysvarCache::default()),
+            Cow::Owned(sysvar_cache),
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
@@ -1072,14 +1067,13 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     callback(&mut invoke_context)
 }
 
-pub fn mock_process_instruction_with_sysvars(
+pub fn mock_process_instruction(
     loader_id: &Pubkey,
     mut program_indices: Vec<usize>,
     instruction_data: &[u8],
     transaction_accounts: Vec<TransactionAccount>,
     instruction_accounts: Vec<AccountMeta>,
     expected_result: Result<(), InstructionError>,
-    sysvar_cache: &SysvarCache,
     process_instruction: ProcessInstructionWithContext,
 ) -> Vec<AccountSharedData> {
     program_indices.insert(0, transaction_accounts.len());
@@ -1095,7 +1089,6 @@ pub fn mock_process_instruction_with_sysvars(
         1,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-    invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
     let result = invoke_context
         .push(
             &preparation.instruction_accounts,
@@ -1108,27 +1101,6 @@ pub fn mock_process_instruction_with_sysvars(
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
-}
-
-pub fn mock_process_instruction(
-    loader_id: &Pubkey,
-    program_indices: Vec<usize>,
-    instruction_data: &[u8],
-    transaction_accounts: Vec<TransactionAccount>,
-    instruction_accounts: Vec<AccountMeta>,
-    expected_result: Result<(), InstructionError>,
-    process_instruction: ProcessInstructionWithContext,
-) -> Vec<AccountSharedData> {
-    mock_process_instruction_with_sysvars(
-        loader_id,
-        program_indices,
-        instruction_data,
-        transaction_accounts,
-        instruction_accounts,
-        expected_result,
-        &SysvarCache::default(),
-        process_instruction,
-    )
 }
 
 /// Visit each unique instruction account index once

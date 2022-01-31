@@ -504,6 +504,7 @@ impl RollingBitField {
         }
     }
 
+    /// remove key from set, return if item was in the set
     pub fn remove(&mut self, key: &u64) -> bool {
         if key >= &self.min {
             // if asked to remove something bigger than max, then no-op
@@ -1891,6 +1892,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
+    /// return true if slot was a root
     pub fn clean_dead_slot(&self, slot: Slot, stats: &mut AccountsIndexRootsStats) -> bool {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);

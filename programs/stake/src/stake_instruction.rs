@@ -323,10 +323,7 @@ mod tests {
         super::*,
         crate::stake_state::{Meta, StakeState},
         bincode::serialize,
-        solana_program_runtime::{
-            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
-            sysvar_cache::SysvarCache,
-        },
+        solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{self, AccountSharedData},
             instruction::{AccountMeta, Instruction},
@@ -339,7 +336,7 @@ mod tests {
             },
             sysvar::{self, stake_history::StakeHistory},
         },
-        std::str::FromStr,
+        std::{collections::HashSet, str::FromStr},
     };
 
     fn create_default_account() -> AccountSharedData {
@@ -387,31 +384,36 @@ mod tests {
         instruction: &Instruction,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
-        let transaction_accounts = instruction
+        let mut pubkeys: HashSet<Pubkey> = instruction
             .accounts
             .iter()
-            .map(|meta| {
+            .map(|meta| meta.pubkey)
+            .collect();
+        pubkeys.insert(sysvar::clock::id());
+        let transaction_accounts = pubkeys
+            .iter()
+            .map(|pubkey| {
                 (
-                    meta.pubkey,
-                    if sysvar::clock::check_id(&meta.pubkey) {
+                    *pubkey,
+                    if sysvar::clock::check_id(pubkey) {
                         account::create_account_shared_data_for_test(
                             &sysvar::clock::Clock::default(),
                         )
-                    } else if sysvar::rewards::check_id(&meta.pubkey) {
+                    } else if sysvar::rewards::check_id(pubkey) {
                         account::create_account_shared_data_for_test(
                             &sysvar::rewards::Rewards::new(0.0),
                         )
-                    } else if sysvar::stake_history::check_id(&meta.pubkey) {
+                    } else if sysvar::stake_history::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&StakeHistory::default())
-                    } else if stake_config::check_id(&meta.pubkey) {
+                    } else if stake_config::check_id(pubkey) {
                         config::create_account(0, &stake_config::Config::default())
-                    } else if sysvar::rent::check_id(&meta.pubkey) {
+                    } else if sysvar::rent::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Rent::default())
-                    } else if meta.pubkey == invalid_stake_state_pubkey() {
+                    } else if *pubkey == invalid_stake_state_pubkey() {
                         AccountSharedData::new(0, 0, &id())
-                    } else if meta.pubkey == invalid_vote_state_pubkey() {
+                    } else if *pubkey == invalid_vote_state_pubkey() {
                         AccountSharedData::new(0, 0, &solana_vote_program::id())
-                    } else if meta.pubkey == spoofed_stake_state_pubkey() {
+                    } else if *pubkey == spoofed_stake_state_pubkey() {
                         AccountSharedData::new(0, 0, &spoofed_stake_program_id())
                     } else {
                         AccountSharedData::new(0, 0, &id())
@@ -419,17 +421,11 @@ mod tests {
                 )
             })
             .collect();
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(Clock::default());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
+        process_instruction(
             &instruction.data,
             transaction_accounts,
             instruction.accounts.clone(),
             expected_result,
-            &sysvar_cache,
-            super::process_instruction,
         )
     }
 
@@ -1116,7 +1112,7 @@ mod tests {
             vec![
                 (address_with_seed, stake_account),
                 (authorized_owner, authorized_account),
-                (clock_address, clock_account),
+                (clock_address, clock_account.clone()),
                 (withdrawer, new_authorized_account),
             ],
             vec![
@@ -1169,13 +1165,10 @@ mod tests {
         )
         .unwrap();
 
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(Clock::default());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
+        process_instruction(
             &instruction.data,
             vec![
+                (clock_address, clock_account),
                 (stake_address, stake_account),
                 (withdrawer, withdrawer_account),
                 (custodian, custodian_account),
@@ -1198,8 +1191,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            &sysvar_cache,
-            super::process_instruction,
         );
     }
 }
