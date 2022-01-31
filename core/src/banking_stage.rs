@@ -102,6 +102,7 @@ struct ProcessTransactionsSummary {
 
     // Total number of transactions that were passed as candidates for execution. See description
     // of struct above for possible outcomes for these transactions
+    #[allow(dead_code)]
     transactions_attempted_execution_count: usize,
 
     // Total number of transactions that made it into the block
@@ -598,7 +599,6 @@ impl BankingStage {
                         );
                         let ProcessTransactionsSummary {
                             reached_max_poh_height,
-                            transactions_attempted_execution_count,
                             retryable_transaction_indexes,
                             ..
                         } = process_transactions_summary;

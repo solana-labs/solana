@@ -422,7 +422,7 @@ fn setup_fees(bank: Bank) -> Bank {
         &mut [], // loaded accounts
         vec![],  // transaction execution results
         0,       // executed tx count
-        0,       // executed with successful output tx count
+        0,       // executed with failure output tx count
         1,       // signature count
         &mut ExecuteTimings::default(),
     );
