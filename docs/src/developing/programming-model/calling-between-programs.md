@@ -286,7 +286,7 @@ Note that the address generated using `create_program_address` is not guaranteed
 to be a valid program address off the curve. For example, let's assume that the
 seed `"escrow2"` does not generate a valid program address.
 
-To generate a valid program address using `"escrow2` as a seed, use
+To generate a valid program address using `"escrow2"` as a seed, use
 `find_program_address`, iterating through possible bump seeds until a valid
 combination is found. The preceding example becomes:
 
