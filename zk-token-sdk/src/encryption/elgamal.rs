@@ -111,7 +111,7 @@ impl ElGamal {
     pub fn encode<T: Into<Scalar>>(
         amount: T,
     ) -> ElGamalCiphertext {
-        let commitment = PedersenCommitment(&amount.into() * &(*G));
+        let commitment = Pedersen::encode(amount);
         let handle = DecryptHandle(RistrettoPoint::identity());
 
         ElGamalCiphertext { commitment, handle }

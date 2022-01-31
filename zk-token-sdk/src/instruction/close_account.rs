@@ -37,7 +37,7 @@ pub struct CloseAccountData {
 
 #[cfg(not(target_arch = "bpf"))]
 impl CloseAccountData {
-    pub fn new(keypair: &ElGamalKeypair, ciphertext: &ElGamalCiphertext) -> Self {
+    pub fn new(keypair: &ElGamalKeypair, ciphertext: &ElGamalCiphertext) -> Result<Self, ProofError> {
         let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
@@ -45,11 +45,11 @@ impl CloseAccountData {
 
         let proof = CloseAccountProof::new(keypair, ciphertext, &mut transcript);
 
-        CloseAccountData {
+        Ok(CloseAccountData {
             pubkey: pod_pubkey,
             ciphertext: pod_ciphertext,
             proof,
-        }
+        })
     }
 }
 
@@ -123,12 +123,12 @@ mod test {
 
         // general case: encryption of 0
         let ciphertext = keypair.public.encrypt(0_u64);
-        let close_account_data = CloseAccountData::new(&keypair, &ciphertext);
+        let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
         assert!(close_account_data.verify().is_ok());
 
         // general case: encryption of > 0
         let ciphertext = keypair.public.encrypt(1_u64);
-        let close_account_data = CloseAccountData::new(&keypair, &ciphertext);
+        let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
         assert!(close_account_data.verify().is_err());
     }
 }

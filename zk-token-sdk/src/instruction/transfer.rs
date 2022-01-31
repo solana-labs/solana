@@ -105,7 +105,7 @@ impl TransferData {
         (spendable_balance, ciphertext_old_source): (u64, &ElGamalCiphertext),
         keypair_source: &ElGamalKeypair,
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
-    ) -> Self {
+    ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
@@ -123,7 +123,7 @@ impl TransferData {
         );
 
         // subtract transfer amount from the spendable ciphertext
-        let new_spendable_balance = spendable_balance - transfer_amount; // TODO: account for underflow
+        let new_spendable_balance = spendable_balance.checked_sub(transfer_amount).ok_or(ProofError::Generation)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
@@ -162,13 +162,13 @@ impl TransferData {
             &mut transcript,
         );
 
-        Self {
+        Ok(Self {
             ciphertext_lo: pod_ciphertext_lo,
             ciphertext_hi: pod_ciphertext_hi,
             transfer_pubkeys: pod_transfer_pubkeys,
             ciphertext_new_source: pod_ciphertext_new_source,
             proof,
-        }
+        })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
@@ -457,7 +457,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-        );
+        ).unwrap();
 
         assert!(transfer_data.verify().is_ok());
     }
@@ -490,7 +490,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-        );
+        ).unwrap();
 
         assert_eq!(
             transfer_data

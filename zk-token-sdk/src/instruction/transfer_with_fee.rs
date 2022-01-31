@@ -34,6 +34,14 @@ use {
     subtle::{ConditionallySelectable, ConstantTimeGreater},
 };
 
+/// TODO: description
+const FEE_DENOMINATOR: u64 = 10000;
+
+lazy_static::lazy_static! {
+    /// TODO: description
+    pub static ref COMMITMENT_FEE_DENOMINATOR: PedersenCommitment = Pedersen::encode(FEE_DENOMINATOR);
+}
+
 // #[derive(Clone, Copy, Pod, Zeroable)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -69,7 +77,7 @@ impl TransferWithFeeData {
         (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
         fee_parameters: FeeParameters,
         pubkey_fee_collector: &ElGamalPubkey,
-    ) -> Self {
+    ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
@@ -87,7 +95,7 @@ impl TransferWithFeeData {
         );
 
         // subtract transfer amount from the spendable ciphertext
-        let new_spendable_balance = spendable_balance - transfer_amount; // TODO: account for underflow
+        let new_spendable_balance = spendable_balance.checked_sub(transfer_amount).ok_or(ProofError::Generation)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
@@ -146,7 +154,7 @@ impl TransferWithFeeData {
             &mut transcript,
         );
 
-        Self {
+        Ok(Self {
             ciphertext_lo: pod_ciphertext_lo,
             ciphertext_hi: pod_ciphertext_hi,
             transfer_with_fee_pubkeys: pod_transfer_with_fee_pubkeys,
@@ -154,7 +162,7 @@ impl TransferWithFeeData {
             ciphertext_fee: pod_ciphertext_fee,
             fee_parameters: fee_parameters.into(),
             proof,
-        }
+        })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
@@ -347,7 +355,7 @@ impl TransferWithFeeProof {
                 transfer_amount_lo as u64,
                 transfer_amount_hi as u64,
                 delta_fee,
-                10000_u64 - delta_fee,
+                FEE_DENOMINATOR - delta_fee,
             ],
             vec![
                 64, 32, 32, 64, // double check
@@ -439,10 +447,7 @@ impl TransferWithFeeProof {
             transcript,
         )?;
 
-        // TODO: use constants here
-        let comm_10000 = Pedersen::with(10000_u64, &PedersenOpening::default());
-        let commitment_claimed_negated = &comm_10000 - &commitment_claimed;
-
+        let commitment_claimed_negated = &(*COMMITMENT_FEE_DENOMINATOR) - &commitment_claimed;
         range_proof.verify(
             vec![
                 &commitment_new_source,
@@ -592,11 +597,12 @@ impl FeeParameters {
     }
 }
 
+// TODO: double check overflow
 fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> (u64, u64) {
     let fee_scaled = (transfer_amount as u128) * (fee_rate_basis_points as u128);
 
-    let fee = (fee_scaled / 10000) as u64;
-    let rem = (fee_scaled % 10000) as u64;
+    let fee = (fee_scaled / FEE_DENOMINATOR as u128) as u64;
+    let rem = (fee_scaled % FEE_DENOMINATOR as u128) as u64;
 
     if rem == 0 {
         (fee, rem)
@@ -613,12 +619,11 @@ fn compute_delta_commitment_and_opening(
 ) -> (PedersenCommitment, PedersenOpening) {
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
-    // TODO: use constants here
-    let commitment_delta = commitment_fee * Scalar::from(10000_u64)
+    let commitment_delta = commitment_fee * Scalar::from(FEE_DENOMINATOR)
         - &(&combine_u32_commitments(&commitment_lo, &commitment_hi) * &fee_rate_scalar);
 
     let opening_delta =
-        opening_fee * Scalar::from(10000_u64) - &(&combine_u32_openings(&opening_lo, &opening_hi) * &fee_rate_scalar);
+        opening_fee * Scalar::from(FEE_DENOMINATOR) - &(&combine_u32_openings(&opening_lo, &opening_hi) * &fee_rate_scalar);
 
     (commitment_delta, opening_delta)
 }
@@ -631,8 +636,7 @@ fn compute_delta_commitment(
 ) -> PedersenCommitment {
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
-    // TODO: use constants here
-    let commitment_delta = commitment_fee * Scalar::from(10000_u64)
+    let commitment_delta = commitment_fee * Scalar::from(FEE_DENOMINATOR)
         - &(&combine_u32_commitments(&commitment_lo, &commitment_hi) * &fee_rate_scalar);
 
     commitment_delta
@@ -666,7 +670,7 @@ mod test {
             (&pubkey_dest, &pubkey_auditor),
             fee_parameters,
             &pubkey_fee_collector,
-        );
+        ).unwrap();
 
         assert!(fee_data.verify().is_ok());
     }

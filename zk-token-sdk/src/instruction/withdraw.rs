@@ -47,11 +47,11 @@ impl WithdrawData {
         keypair: &ElGamalKeypair,
         current_balance: u64,
         current_ciphertext: &ElGamalCiphertext,
-    ) -> Self {
+    ) -> Result<Self, ProofError> {
         // subtract withdraw amount from current balance
         //
-        // panics if current_balance < amount
-        let final_balance = current_balance - amount;
+        // errors if current_balance < amount
+        let final_balance = current_balance.checked_sub(amount).ok_or(ProofError::Generation)?;
 
         // encode withdraw amount as an ElGamal ciphertext and subtract it from
         // current source balance
@@ -62,11 +62,11 @@ impl WithdrawData {
         let mut transcript = WithdrawProof::transcript_new(&pod_pubkey, &pod_final_ciphertext);
         let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
-        Self {
+        Ok(Self {
             pubkey: pod_pubkey,
             final_ciphertext: pod_final_ciphertext,
             proof,
-        }
+        })
     }
 }
 
@@ -189,7 +189,7 @@ mod test {
             &keypair,
             current_balance,
             &current_ciphertext,
-        );
+        ).unwrap();
         assert!(data.verify().is_ok());
 
         // generate and verify proof with wrong balance
@@ -199,7 +199,7 @@ mod test {
             &keypair,
             wrong_balance,
             &current_ciphertext,
-        );
+        ).unwrap();
         assert!(data.verify().is_err());
     }
 }
