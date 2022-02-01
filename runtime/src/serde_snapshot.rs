@@ -3,7 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            BankHashInfo, IndexGenerationInfo,
+            BankHashInfo, IndexGenerationInfo, SnapshotStorage,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -14,7 +14,6 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
-        serde_snapshot::newer::SerializableStorage,
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -43,19 +42,18 @@ use {
         },
         thread::Builder,
     },
+    storage::SerializableStorage,
 };
 
 mod common;
 mod newer;
+mod storage;
 mod tests;
 mod utils;
 
 // a number of test cases in accounts_db use this
 #[cfg(test)]
-pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
-pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
-#[allow(unused_imports)]
-use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
+pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
