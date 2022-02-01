@@ -307,7 +307,7 @@ fn process_instruction_common(
     if program.executable()? {
         debug_assert_eq!(
             first_instruction_account,
-            1 - (invoke_context.invoke_depth() > 1) as usize,
+            1 - (invoke_context.get_invoke_depth() > 1) as usize,
         );
 
         if !check_loader_id(&program.owner()?) {
@@ -1045,7 +1045,7 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
-        let invoke_depth = invoke_context.invoke_depth();
+        let invoke_depth = invoke_context.get_invoke_depth();
 
         let mut serialize_time = Measure::start("serialize");
         let program_id = *invoke_context.transaction_context.get_program_key()?;

@@ -102,7 +102,11 @@ pub fn builtin_process_instruction(
 
     let log_collector = invoke_context.get_log_collector();
     let program_id = transaction_context.get_program_key()?;
-    stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
+    stable_log::program_invoke(
+        &log_collector,
+        program_id,
+        invoke_context.get_invoke_depth(),
+    );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
     let deduplicated_indices: HashSet<usize> = indices_in_instruction.clone().collect();
@@ -251,7 +255,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         stable_log::program_invoke(
             &log_collector,
             &instruction.program_id,
-            invoke_context.invoke_depth(),
+            invoke_context.get_invoke_depth(),
         );
 
         let signers = signers_seeds

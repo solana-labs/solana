@@ -409,7 +409,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Current depth of the invocation stack
-    pub fn invoke_depth(&self) -> usize {
+    pub fn get_invoke_depth(&self) -> usize {
         self.transaction_context
             .get_instruction_context_stack_height()
     }
