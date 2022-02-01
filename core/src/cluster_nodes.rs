@@ -411,8 +411,9 @@ fn enable_turbine_peers_shuffle_patch(shred_slot: Slot, root_bank: &Bank) -> boo
 fn shuffle_nodes<'a, R: Rng>(rng: &mut R, nodes: &[&'a Node]) -> Vec<&'a Node> {
     // Nodes are sorted by (stake, pubkey) in descending order.
     let stakes: Vec<u64> = nodes.iter().map(|node| node.stake).collect();
-    WeightedShuffle::new(rng, &stakes)
+    WeightedShuffle::new(&stakes)
         .unwrap()
+        .shuffle(rng)
         .map(|i| nodes[i])
         .collect()
 }
