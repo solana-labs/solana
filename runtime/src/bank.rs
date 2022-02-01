@@ -3215,7 +3215,7 @@ impl Bank {
 
         let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
-            mut execution_results,
+            execution_results,
             transaction_log_messages,
             ..
         } = self.load_and_execute_transactions(
@@ -3229,9 +3229,13 @@ impl Bank {
             &mut timings,
         );
 
-        let transaction_result = executed[0].0.clone().map(|_| ());
-        let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
-        let post_transaction_accounts = loaded_txs
+        let transaction_result = execution_results[0].0.clone().map(|_| ());
+        let transaction_log_messages = transaction_log_messages
+            .get(0)
+            .cloned()
+            .flatten()
+            .unwrap_or_default();
+        let post_transaction_accounts = loaded_transactions
             .into_iter()
             .next()
             .unwrap()
@@ -3242,7 +3246,11 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
-        (transaction_result, log_messages, post_transaction_accounts)
+        (
+            transaction_result,
+            transaction_log_messages,
+            post_transaction_accounts,
+        )
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
@@ -3391,15 +3399,15 @@ impl Bank {
             hashed_txs.as_transactions_iter(),
             lock_results.to_vec(),
             max_age,
-            &mut error_counters,
+            error_counters,
         );
-        let cache_results = self.check_status_cache(hashed_txs, age_results, &mut error_counters);
+        let cache_results = self.check_status_cache(hashed_txs, age_results, error_counters);
         if self.upgrade_epoch() {
             // Reject all non-vote transactions
             self.filter_by_vote_transactions(
                 hashed_txs.as_transactions_iter(),
                 cache_results,
-                &mut error_counters,
+                error_counters,
             )
         } else {
             cache_results
@@ -3843,7 +3851,9 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), hashed_tx)) in execution_results.iter().zip(hashed_txs).enumerate() {
+        for (i, ((r, _nonce_rollback), hashed_tx)) in
+            execution_results.iter().zip(hashed_txs).enumerate()
+        {
             let tx = hashed_tx.transaction();
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
@@ -4046,7 +4056,7 @@ impl Bank {
         self.rc.accounts.store_cached(
             self.slot(),
             hashed_txs.as_transactions_iter(),
-            executed,
+            &execution_results,
             loaded_txs,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
@@ -4055,10 +4065,14 @@ impl Bank {
             self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),
         );
-        let rent_debits = self.collect_rent(executed, loaded_txs);
+        let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
-        self.update_stakes_cache(hashed_txs.as_transactions_iter(), executed, loaded_txs);
+        self.update_stakes_cache(
+            hashed_txs.as_transactions_iter(),
+            &execution_results,
+            loaded_txs,
+        );
         update_stakes_cache_time.stop();
 
         // once committed there is no way to unroll
@@ -4070,9 +4084,11 @@ impl Bank {
         );
         timings.store_us += write_time.as_us();
         timings.update_stakes_cache_us += update_stakes_cache_time.as_us();
-        self.update_transaction_statuses(hashed_txs, executed);
-        let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(hashed_txs.as_transactions_iter(), executed);
+        self.update_transaction_statuses(hashed_txs, &execution_results);
+        let fee_collection_results = self.filter_program_errors_and_collect_fee(
+            hashed_txs.as_transactions_iter(),
+            &execution_results,
+        );
 
         TransactionResults {
             fee_collection_results,
@@ -4724,7 +4740,7 @@ impl Bank {
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
             inner_instructions,
-            transaction_logs,
+            transaction_log_messages,
         )
     }
 
