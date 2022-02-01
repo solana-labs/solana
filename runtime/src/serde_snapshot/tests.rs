@@ -1,4 +1,4 @@
-#[cfg(test)]
+#![cfg(test)]
 use {
     super::*,
     crate::{
@@ -23,7 +23,6 @@ use {
     tempfile::TempDir,
 };
 
-#[cfg(test)]
 fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
@@ -43,7 +42,6 @@ fn copy_append_vecs<P: AsRef<Path>>(
     Ok(unpacked_append_vec_map)
 }
 
-#[cfg(test)]
 fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
     for _ in 1..num {
         let idx = thread_rng().gen_range(0, num - 1);
@@ -57,7 +55,6 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
     }
 }
 
-#[cfg(test)]
 fn context_accountsdb_from_stream<'a, C, R>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
@@ -92,7 +89,6 @@ where
     .map(|(accounts_db, _)| accounts_db)
 }
 
-#[cfg(test)]
 fn accountsdb_from_stream<R>(
     serde_style: SerdeStyle,
     stream: &mut BufReader<R>,
@@ -103,7 +99,7 @@ where
     R: Read,
 {
     match serde_style {
-        SerdeStyle::Newer => context_accountsdb_from_stream::<TypeContextFuture, R>(
+        SerdeStyle::Newer => context_accountsdb_from_stream::<newer::Context, R>(
             stream,
             account_paths,
             unpacked_append_vec_map,
@@ -111,7 +107,6 @@ where
     }
 }
 
-#[cfg(test)]
 fn accountsdb_to_stream<W>(
     serde_style: SerdeStyle,
     stream: &mut W,
@@ -125,7 +120,7 @@ where
     match serde_style {
         SerdeStyle::Newer => serialize_into(
             stream,
-            &SerializableAccountsDb::<TypeContextFuture> {
+            &SerializableAccountsDb::<newer::Context> {
                 accounts_db,
                 slot,
                 account_storage_entries,
@@ -135,7 +130,6 @@ where
     }
 }
 
-#[cfg(test)]
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
@@ -184,7 +178,6 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
 }
 
-#[cfg(test)]
 fn test_bank_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (genesis_config, _) = create_genesis_config(500);
@@ -260,7 +253,6 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     assert!(bank2 == dbank);
 }
 
-#[cfg(test)]
 pub(crate) fn reconstruct_accounts_db_via_serialization(
     accounts: &AccountsDb,
     slot: Slot,
@@ -307,20 +299,20 @@ fn test_bank_serialize_newer() {
     test_bank_serialize_style(SerdeStyle::Newer)
 }
 
-#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
     use super::*;
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "EuYcD3JCEWRnQaFHW1CAy2bBqLkakc88iLJtZH6kYeVF")]
+    #[frozen_abi(digest = "4xi75P1M48JwDjxf5k8y43r2w57AjYmgjMB1BmX6hXKK")]
     #[derive(Serialize, AbiExample)]
-    pub struct BankAbiTestWrapperFuture {
-        #[serde(serialize_with = "wrapper_future")]
+    pub struct BankAbiTestWrapperNewer {
+        #[serde(serialize_with = "wrapper_newer")]
         bank: Bank,
     }
 
-    pub fn wrapper_future<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
+    pub fn wrapper_newer<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -333,7 +325,7 @@ mod test_bank_serialize {
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);
 
-        (SerializableBankAndStorage::<future::Context> {
+        (SerializableBankAndStorage::<newer::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),
