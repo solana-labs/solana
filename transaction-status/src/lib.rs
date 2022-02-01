@@ -490,7 +490,7 @@ impl ConfirmedBlock {
                                         }
                                     };
                                 }
-                                _ => {},
+                                _ => {}
                             };
                             Some(tx_encoded)
                         })
