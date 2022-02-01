@@ -640,8 +640,16 @@ impl CompiledInstruction {
         let data = serialize(data).unwrap();
         Self {
             program_id_index: program_ids_index,
-            data,
             accounts,
+            data,
+        }
+    }
+
+    pub fn new_from_raw_parts(program_id_index: u8, data: Vec<u8>, accounts: Vec<u8>) -> Self {
+        Self {
+            program_id_index,
+            accounts,
+            data,
         }
     }
 

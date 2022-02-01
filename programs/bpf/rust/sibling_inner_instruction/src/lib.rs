@@ -11,7 +11,6 @@ use solana_program::{
         TRANSACTION_LEVEL_STACK_HEIGHT,
     },
     msg,
-    program::invoke,
     pubkey::Pubkey,
 };
 

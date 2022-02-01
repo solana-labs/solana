@@ -3034,35 +3034,32 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
         );
 
         let stack_height = invoke_context.get_stack_height();
+        let instruction_trace = invoke_context.get_instruction_trace();
         let instruction_context = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
-            let trace = invoke_context.get_top_level_instruction_trace();
-            trace
+            // pick one of the top-level instructions
+            instruction_trace
                 .len()
-                .checked_sub((index as usize).saturating_add(1).saturating_add(1))
-                .and_then(|index| trace.get(index))
+                .checked_sub(2)
+                .and_then(|result| result.checked_sub(index as usize))
+                .and_then(|index| instruction_trace.get(index))
+                .and_then(|instruction_list| instruction_list.get(0))
         } else {
-            invoke_context
-                .get_inner_instruction_trace()
-                .last()
-                .and_then(|inners| {
-                    let mut current_index = 0;
-                    inners
-                        .iter()
-                        .rev()
-                        .skip(1)
-                        .find(|(this_stack_height, _)| {
-                            if stack_height == *this_stack_height {
-                                if index == current_index {
-                                    return true;
-                                } else {
-                                    current_index += 1;
-                                }
-                            }
-                            false
-                        })
-                        .map(|(_, instruction_context)| instruction_context)
+            // Walk the last list of inner instructions
+            instruction_trace.last().and_then(|inners| {
+                let mut current_index = 0;
+                inners.iter().rev().skip(1).find(|(this_stack_height, _)| {
+                    if stack_height == *this_stack_height {
+                        if index == current_index {
+                            return true;
+                        } else {
+                            current_index += 1;
+                        }
+                    }
+                    false
                 })
-        };
+            })
+        }
+        .map(|(_, instruction_context)| instruction_context);
 
         if let Some(instruction_context) = instruction_context {
             let ProcessedSiblingInstruction {

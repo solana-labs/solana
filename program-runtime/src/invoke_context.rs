@@ -805,9 +805,9 @@ impl<'a> InvokeContext<'a> {
             .transaction_context
             .get_instruction_context_stack_height();
 
-        let is_lowest_invocation_level = stack_height == 0;
+        let is_top_level_instruction = stack_height == 0;
 
-        if !is_lowest_invocation_level {
+        if !is_top_level_instruction {
             // Verify the calling program hasn't misbehaved
             let mut verify_caller_time = Measure::start("verify_caller_time");
             let verify_caller_result = self.verify_and_update(instruction_accounts, true);
@@ -821,7 +821,7 @@ impl<'a> InvokeContext<'a> {
             );
             verify_caller_result?;
 
-            self.transaction_context.record_inner_instruction(
+            self.transaction_context.record_instruction(
                 stack_height.saturating_add(1),
                 InstructionContext::new(program_indices, instruction_accounts, instruction_data),
             );
@@ -843,7 +843,7 @@ impl<'a> InvokeContext<'a> {
                 // Verify the called program has not misbehaved
                 let mut verify_callee_time = Measure::start("verify_callee_time");
                 let result = execution_result.and_then(|_| {
-                    if is_lowest_invocation_level {
+                    if is_top_level_instruction {
                         self.verify(instruction_accounts, program_indices)
                     } else {
                         self.verify_and_update(instruction_accounts, false)
@@ -991,17 +991,12 @@ impl<'a> InvokeContext<'a> {
         &self.sysvar_cache
     }
 
-    /// Get trace of inner instructions
-    pub fn get_inner_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
-        self.transaction_context.get_inner_instruction_trace()
+    /// Get instruction trace
+    pub fn get_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
+        self.transaction_context.get_instruction_trace()
     }
 
-    /// Used by the runtime when a new CPI instruction begins
-    pub fn get_top_level_instruction_trace(&self) -> &[InstructionContext] {
-        self.transaction_context.get_top_level_instruction_trace()
-    }
-
-    // TODO bounds checking required here
+    // Get pubkey of account at index
     pub fn get_key_of_account_at_index(&self, index_in_transaction: usize) -> &Pubkey {
         self.transaction_context
             .get_key_of_account_at_index(index_in_transaction)

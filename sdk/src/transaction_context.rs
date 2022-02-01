@@ -2,7 +2,7 @@
 
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::InstructionError,
+    instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
     lamports::LamportsError,
     pubkey::Pubkey,
 };
@@ -22,10 +22,6 @@ pub struct InstructionAccount {
     pub is_writable: bool,
 }
 
-/// List of (stack height, instruction) for each top-level instruction
-#[derive(Clone, Debug)]
-pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>
-
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
@@ -36,8 +32,7 @@ pub struct TransactionContext {
     instruction_context_capacity: usize,
     instruction_context_stack: Vec<InstructionContext>,
     number_of_instructions_at_transaction_level: usize,
-    top_level_instruction_trace: Vec<InstructionContext>,
-    inner_instruction_trace: Vec<Vec<(usize, InstructionContext)>>,
+    instruction_trace: InstructionTrace,
     return_data: (Pubkey, Vec<u8>),
 }
 
@@ -59,12 +54,7 @@ impl TransactionContext {
             instruction_context_capacity,
             instruction_context_stack: Vec::with_capacity(instruction_context_capacity),
             number_of_instructions_at_transaction_level,
-            top_level_instruction_trace: Vec::with_capacity(
-                number_of_instructions_at_transaction_level,
-            ),
-            inner_instruction_trace: Vec::with_capacity(
-                number_of_instructions_at_transaction_level,
-            ),
+            instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: (Pubkey::default(), Vec::new()),
         }
     }
@@ -85,7 +75,7 @@ impl TransactionContext {
                         .map(|account| account.into_inner()),
                 )
                 .collect(),
-            self.inner_instruction_trace,
+            self.instruction_trace,
         )
     }
 
@@ -175,12 +165,12 @@ impl TransactionContext {
         };
         if self.instruction_context_stack.is_empty() {
             debug_assert!(
-                self.inner_instruction_trace.len()
-                    < self.number_of_instructions_at_transaction_level
+                self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
             );
-            self.inner_instruction_trace.push(Vec::new());
-            self.top_level_instruction_trace
-                .push(instruction_context.clone());
+            self.instruction_trace.push(vec![(
+                TRANSACTION_LEVEL_STACK_HEIGHT,
+                instruction_context.clone(),
+            )]);
         }
 
         self.instruction_context_stack.push(instruction_context);
@@ -226,26 +216,20 @@ impl TransactionContext {
     }
 
     /// Used by the runtime when a new CPI instruction begins
-    pub fn record_inner_instruction(
-        &mut self,
-        stack_height: usize,
-        instruction: InstructionContext,
-    ) {
-        if let Some(records) = self.inner_instruction_trace.last_mut() {
+    pub fn record_instruction(&mut self, stack_height: usize, instruction: InstructionContext) {
+        if let Some(records) = self.instruction_trace.last_mut() {
             records.push((stack_height, instruction));
         }
     }
 
-    /// Returns inner instruction trace
-    pub fn get_inner_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
-        &self.inner_instruction_trace
-    }
-
-    /// Returns the top-level instruction trace
-    pub fn get_top_level_instruction_trace(&self) -> &[InstructionContext] {
-        &self.top_level_instruction_trace
+    /// Returns instruction trace
+    pub fn get_instruction_trace(&self) -> &InstructionTrace {
+        &self.instruction_trace
     }
 }
+
+/// List of (stack height, instruction) for each top-level instruction
+pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
 
 /// Loaded instruction shared between runtime and programs.
 ///
