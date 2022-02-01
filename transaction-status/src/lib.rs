@@ -22,7 +22,6 @@ use {
         parse_instruction::{parse, ParsedInstruction},
     },
     solana_account_decoder::parse_token::UiTokenAmount,
-    solana_runtime::vote_parser,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
@@ -32,7 +31,7 @@ use {
         sanitize::Sanitize,
         signature::Signature,
         transaction::{
-            Result, SanitizedTransaction, Transaction, TransactionError, VersionedTransaction,
+            Result, Transaction, TransactionError, VersionedTransaction,
         },
     },
     std::fmt,
