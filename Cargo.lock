@@ -4503,6 +4503,7 @@ dependencies = [
  "bincode",
  "crossbeam-channel",
  "futures 0.3.19",
+ "log 0.4.14",
  "solana-banks-interface",
  "solana-runtime",
  "solana-sdk",

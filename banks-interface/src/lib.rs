@@ -11,7 +11,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, Transaction, TransactionError, VersionedTransaction},
     },
 };
 
@@ -63,6 +63,10 @@ pub trait Banks {
     ) -> BanksTransactionResultWithSimulation;
     async fn process_transaction_with_commitment_and_context(
         transaction: Transaction,
+        commitment: CommitmentLevel,
+    ) -> Option<transaction::Result<()>>;
+    async fn process_versioned_transaction_with_commitment_and_context(
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>>;
     async fn get_account_with_commitment_and_context(

@@ -20,7 +20,7 @@ use {
         commitment_config::CommitmentLevel,
         message::Message,
         signature::Signature,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, VersionedTransaction},
     },
     tarpc::{
         client::{self, NewClient, RequestDispatch},
@@ -136,6 +136,17 @@ impl BanksClient {
             .map_err(Into::into)
     }
 
+    pub fn process_versioned_transaction_with_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        transaction: VersionedTransaction,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<Option<transaction::Result<()>>, BanksClientError>> + '_ {
+        self.inner
+            .process_versioned_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .map_err(Into::into)
+    }
+
     pub fn get_account_with_commitment_and_context(
         &mut self,
         ctx: Context,
@@ -209,6 +220,24 @@ impl BanksClient {
         let mut ctx = context::current();
         ctx.deadline += Duration::from_secs(50);
         self.process_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .map(|result| match result? {
+                None => Err(BanksClientError::ClientError(
+                    "invalid blockhash or fee-payer",
+                )),
+                Some(transaction_result) => Ok(transaction_result?),
+            })
+    }
+
+    /// Send a transaction and return after the transaction has been rejected or
+    /// reached the given level of commitment.
+    pub fn process_versioned_transaction_with_commitment(
+        &mut self,
+        transaction: VersionedTransaction,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+        let mut ctx = context::current();
+        ctx.deadline += Duration::from_secs(50);
+        self.process_versioned_transaction_with_commitment_and_context(ctx, transaction, commitment)
             .map(|result| match result? {
                 None => Err(BanksClientError::ClientError(
                     "invalid blockhash or fee-payer",
