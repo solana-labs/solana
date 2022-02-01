@@ -519,8 +519,8 @@ impl TestValidator {
         // Remove inactives
         match &config.inactivate_feature_list {
             Some(invalidate_list) => {
-                for i in invalidate_list {
-                    genesis_config.accounts.remove(&i);
+                for invalidate_feature in invalidate_list {
+                    genesis_config.accounts.remove(invalidate_feature);
                 }
             }
             None => {}
