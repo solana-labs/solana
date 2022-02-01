@@ -1508,6 +1508,13 @@ impl BankingStage {
         );
         filter_pending_packets_time.stop();
 
+        inc_new_counter_info!(
+            "banking_stage-dropped_tx_before_forwarding",
+            retryable_transaction_indexes
+                .len()
+                .saturating_sub(filtered_retryable_tx_indexes.len())
+        );
+
         // Increment timing-based metrics
         banking_stage_stats
             .packet_conversion_elapsed
@@ -1551,8 +1558,6 @@ impl BankingStage {
         );
         unprocessed_packet_conversion_time.stop();
 
-        let tx_count = transaction_to_packet_indexes.len();
-
         let unprocessed_tx_indexes = (0..transactions.len()).collect_vec();
         let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
             bank,
@@ -1563,7 +1568,9 @@ impl BankingStage {
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
-            tx_count.saturating_sub(filtered_unprocessed_packet_indexes.len())
+            unprocessed_tx_indexes
+                .len()
+                .saturating_sub(filtered_unprocessed_packet_indexes.len())
         );
         banking_stage_stats
             .unprocessed_packet_conversion_elapsed
