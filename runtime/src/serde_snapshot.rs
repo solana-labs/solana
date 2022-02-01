@@ -14,7 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
-        serde_snapshot::newer::{AppendVecIdSerialized, SerializableStorage},
+        serde_snapshot::newer::SerializableStorage,
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
