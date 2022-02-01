@@ -29,7 +29,10 @@ use {
             sol_log_data_syscall_enabled, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
-        instruction::{AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction},
+        instruction::{
+            AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
+            TRANSACTION_LEVEL_STACK_HEIGHT,
+        },
         keccak, native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -237,7 +240,7 @@ pub fn register_syscalls(
         .is_active(&add_get_processed_sibling_instruction_syscall::id())
     {
         syscall_registry
-            .register_syscall_by_name(b"sol_get_invoke_depth", SyscallGetInvokeDepth::call)?;
+            .register_syscall_by_name(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
     }
 
     Ok(syscall_registry)
@@ -474,11 +477,11 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         }),
     );
 
-    // invoke depth
+    // Get stack height
     bind_feature_gated_syscall_context_object!(
         vm,
         add_get_processed_sibling_instruction_syscall,
-        Box::new(SyscallGetInvokeDepth {
+        Box::new(SyscallGetStackHeight {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -3030,26 +3033,25 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
             result
         );
 
-        let invoke_depth = invoke_context.get_invoke_depth();
-        let instruction_context = if invoke_depth == 1 {
+        let stack_height = invoke_context.get_stack_height();
+        let instruction_context = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
             let trace = invoke_context.get_top_level_instruction_trace();
             trace
                 .len()
                 .checked_sub((index as usize).saturating_add(1).saturating_add(1))
-                .map(|index| trace.get(index))
-                .flatten()
+                .and_then(|index| trace.get(index))
         } else {
             invoke_context
                 .get_inner_instruction_trace()
                 .last()
-                .map(|inners| {
+                .and_then(|inners| {
                     let mut current_index = 0;
                     inners
                         .iter()
                         .rev()
                         .skip(1)
-                        .find(|(stack_depth, _)| {
-                            if invoke_depth == *stack_depth {
+                        .find(|(this_stack_height, _)| {
+                            if stack_height == *this_stack_height {
                                 if index == current_index {
                                     return true;
                                 } else {
@@ -3060,14 +3062,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                         })
                         .map(|(_, instruction_context)| instruction_context)
                 })
-                .flatten()
         };
 
         if let Some(instruction_context) = instruction_context {
             let ProcessedSiblingInstruction {
                 data_len,
                 accounts_len,
-                depth,
             } = question_mark!(
                 translate_type_mut::<ProcessedSiblingInstruction>(
                     memory_mapping,
@@ -3120,7 +3120,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
             }
             *data_len = instruction_context.get_instruction_data().len();
             *accounts_len = instruction_context.get_number_of_instruction_accounts();
-            *depth = invoke_depth;
             *result = Ok(true as u64);
             return;
         }
@@ -3128,10 +3127,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
     }
 }
 
-pub struct SyscallGetInvokeDepth<'a, 'b> {
+pub struct SyscallGetStackHeight<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
 }
-impl<'a, 'b> SyscallObject<BpfError> for SyscallGetInvokeDepth<'a, 'b> {
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetStackHeight<'a, 'b> {
     fn call(
         &mut self,
         _arg1: u64,
@@ -3157,7 +3156,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetInvokeDepth<'a, 'b> {
             result
         );
 
-        *result = Ok(invoke_context.get_invoke_depth() as u64);
+        *result = Ok(invoke_context.get_stack_height() as u64);
     }
 }
 

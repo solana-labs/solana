@@ -3,7 +3,7 @@
 use {
     bytemuck::Pod,
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
-    solana_sdk::instruction::InstructionError,
+    solana_sdk::instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
     solana_zk_token_sdk::zk_token_proof_instruction::*,
     std::result::Result,
 };
@@ -28,7 +28,7 @@ pub fn process_instruction(
     input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    if invoke_context.get_invoke_depth() != 1 {
+    if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {
         // Not supported as an inner instruction
         return Err(InstructionError::UnsupportedProgramId);
     }

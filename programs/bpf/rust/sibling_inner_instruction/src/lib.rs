@@ -6,7 +6,10 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    instruction::{get_invoke_depth, get_processed_sibling_instruction, AccountMeta, Instruction},
+    instruction::{
+        get_processed_sibling_instruction, get_stack_height, AccountMeta, Instruction,
+        TRANSACTION_LEVEL_STACK_HEIGHT,
+    },
     msg,
     program::invoke,
     pubkey::Pubkey,
@@ -48,19 +51,18 @@ fn process_instruction(
         ],
     );
 
-    // TODO shouldn't this be 1?
-    assert_eq!(2, get_invoke_depth());
+    assert_eq!(TRANSACTION_LEVEL_STACK_HEIGHT + 1, get_stack_height());
     assert_eq!(
         get_processed_sibling_instruction(0),
-        Some((2, sibling_instruction0))
+        Some(sibling_instruction0)
     );
     assert_eq!(
         get_processed_sibling_instruction(1),
-        Some((2, sibling_instruction1))
+        Some(sibling_instruction1)
     );
     assert_eq!(
         get_processed_sibling_instruction(2),
-        Some((2, sibling_instruction2))
+        Some(sibling_instruction2)
     );
     assert_eq!(get_processed_sibling_instruction(3), None);
 

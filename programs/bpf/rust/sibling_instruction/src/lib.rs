@@ -6,7 +6,10 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    instruction::{get_invoke_depth, get_processed_sibling_instruction, AccountMeta, Instruction},
+    instruction::{
+        get_processed_sibling_instruction, get_stack_height, AccountMeta, Instruction,
+        TRANSACTION_LEVEL_STACK_HEIGHT,
+    },
     msg,
     program::invoke,
     pubkey::Pubkey,
@@ -65,7 +68,7 @@ fn process_instruction(
 
     // Check sibling instructions
 
-    let instruction1 = Instruction::new_with_bytes(
+    let sibling_instruction1 = Instruction::new_with_bytes(
         *accounts[1].key,
         &[43],
         vec![
@@ -73,7 +76,7 @@ fn process_instruction(
             AccountMeta::new(*accounts[0].key, true),
         ],
     );
-    let instruction0 = Instruction::new_with_bytes(
+    let sibling_instruction0 = Instruction::new_with_bytes(
         *accounts[1].key,
         &[42],
         vec![
@@ -82,15 +85,14 @@ fn process_instruction(
         ],
     );
 
-    // TODO shouldn't this be 0?
-    assert_eq!(1, get_invoke_depth());
+    assert_eq!(TRANSACTION_LEVEL_STACK_HEIGHT, get_stack_height());
     assert_eq!(
         get_processed_sibling_instruction(0),
-        Some((1, instruction0))
+        Some(sibling_instruction0)
     );
     assert_eq!(
         get_processed_sibling_instruction(1),
-        Some((1, instruction1))
+        Some(sibling_instruction1)
     );
     assert_eq!(get_processed_sibling_instruction(2), None);
 

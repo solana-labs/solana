@@ -655,9 +655,10 @@ impl CompiledInstruction {
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ProcessedSiblingInstruction {
+    /// Length of the instruction data
     pub data_len: usize,
+    /// Number of AccountMeta structures
     pub accounts_len: usize,
-    pub depth: usize,
 }
 
 /// Returns a sibling instruction from the processed sibling instruction list.
@@ -670,9 +671,9 @@ pub struct ProcessedSiblingInstruction {
 /// B -> E
 /// B -> F
 ///
-/// Then B's processed sibling instruction list is: [(1, A)]
-/// Then F's processed sibling instruction list is: [(2, E), (2, C)]
-pub fn get_processed_sibling_instruction(index: usize) -> Option<(usize, Instruction)> {
+/// Then B's processed sibling instruction list is: `[A]`
+/// Then F's processed sibling instruction list is: `[E, C]`
+pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
@@ -712,10 +713,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<(usize, Instruc
                 )
             };
 
-            Some((
-                meta.depth,
-                Instruction::new_with_bytes(program_id, &data, accounts),
-            ))
+            Some(Instruction::new_with_bytes(program_id, &data, accounts))
         } else {
             None
         }
@@ -725,21 +723,25 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<(usize, Instruc
     crate::program_stubs::sol_get_processed_sibling_instruction(index)
 }
 
-/// Get the current invocation depth, transaction-level instructions are depth
-/// 0, fist invoked inner instruction is depth 1, etc...
-pub fn get_invoke_depth() -> usize {
+// Stack height when processing transaction-level instructions
+pub const TRANSACTION_LEVEL_STACK_HEIGHT: usize = 1;
+
+/// Get the current stack height, transaction-level instructions are height
+/// TRANSACTION_LEVEL_STACK_HEIGHT, fist invoked inner instruction is height
+/// TRANSACTION_LEVEL_STACK_HEIGHT + 1, etc...
+pub fn get_stack_height() -> usize {
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn sol_get_invoke_depth() -> u64;
+            fn sol_get_stack_height() -> u64;
         }
 
-        unsafe { sol_get_invoke_depth() as usize }
+        unsafe { sol_get_stack_height() as usize }
     }
 
     #[cfg(not(target_arch = "bpf"))]
     {
-        crate::program_stubs::sol_get_invoke_depth() as usize
+        crate::program_stubs::sol_get_stack_height() as usize
     }
 }
 

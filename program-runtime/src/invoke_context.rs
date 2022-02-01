@@ -410,8 +410,9 @@ impl<'a> InvokeContext<'a> {
         self.transaction_context.pop()
     }
 
-    /// Current depth of the invocation stack
-    pub fn get_invoke_depth(&self) -> usize {
+    /// Current height of the invocation stack, top level instructions are height
+    /// `solana_sdk::instruction::TRANSACTION_LEVEL_STACK_HEIGHT`
+    pub fn get_stack_height(&self) -> usize {
         self.transaction_context
             .get_instruction_context_stack_height()
     }
@@ -990,6 +991,7 @@ impl<'a> InvokeContext<'a> {
         &self.sysvar_cache
     }
 
+    /// Get trace of inner instructions
     pub fn get_inner_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
         self.transaction_context.get_inner_instruction_trace()
     }
@@ -1005,6 +1007,7 @@ impl<'a> InvokeContext<'a> {
             .get_key_of_account_at_index(index_in_transaction)
     }
 
+    /// Get an instruction context
     pub fn get_instruction_context_at(&self, level: usize) -> Option<&InstructionContext> {
         self.transaction_context
             .get_instruction_context_at(level)

@@ -3890,7 +3890,9 @@ impl Bank {
         let (accounts, instruction_trace) = transaction_context.deconstruct();
         loaded_transaction.accounts = accounts;
 
-        let inner_instructions = if enable_cpi_recording {
+        // TODO verify
+        let enable_cpi_recording = true;
+        let inner_instructions: Option<Vec<Vec<solana_sdk::instruction::CompiledInstruction>>> = if enable_cpi_recording {
             Some(
                 instruction_trace
                     .iter()
@@ -3917,6 +3919,26 @@ impl Bank {
         } else {
             None
         };
+        println!("trace start");
+        for i in instruction_trace.iter() {
+            if i.is_empty() {
+                println!("trace: []");
+            }
+            for x in i.iter() {
+            println!("trace {:?}", x);
+            }
+        }
+        println!("inner start");
+        if let Some(ref inner) = inner_instructions {
+        for i in inner.iter() {
+            if i.is_empty() {
+                println!("inner: []");
+            }
+            for x in i.iter() {
+            println!("inner {:?}", x);
+            }
+        }
+    }
 
         TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,

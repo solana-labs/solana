@@ -22,6 +22,10 @@ pub struct InstructionAccount {
     pub is_writable: bool,
 }
 
+/// List of (stack height, instruction) for each top-level instruction
+#[derive(Clone, Debug)]
+pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>
+
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
@@ -137,7 +141,8 @@ impl TransactionContext {
         self.instruction_context_capacity
     }
 
-    /// Gets the level of the next InstructionContext
+    /// Gets instruction stack height, top-level instructions are height
+    /// `solana_sdk::instruction::TRANSACTION_LEVEL_STACK_HEIGHT`
     pub fn get_instruction_context_stack_height(&self) -> usize {
         self.instruction_context_stack.len()
     }
