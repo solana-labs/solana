@@ -54,18 +54,28 @@ pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
 /// Maximum number of slots used to build TPU socket fanout set
 pub const MAX_FANOUT_SLOTS: u64 = 100;
 
+#[derive(Clone, Debug)]
+pub enum TpuProtocol {
+    Udp,
+    Quic,
+}
+
 /// Config params for `TpuClient`
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct TpuClientConfig {
     /// The range of upcoming slots to include when determining which
     /// leaders to send transactions to (min: 1, max: `MAX_FANOUT_SLOTS`)
     pub fanout_slots: u64,
+    /// The transport layer protocol used to connect to leader TPU ports
+    pub protocol: TpuProtocol,
 }
 
 impl Default for TpuClientConfig {
     fn default() -> Self {
         Self {
             fanout_slots: DEFAULT_FANOUT_SLOTS,
+            protocol: TpuProtocol::Udp,
         }
     }
 }
@@ -543,6 +553,7 @@ impl LeaderTpuService {
                     slots_in_epoch,
                 ) {
                     Ok(slot_leaders) => {
+                        // TODO(jstarry): Manage list of open connections for upcoming slot leaders
                         let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
                         leader_tpu_cache.first_slot = estimated_current_slot;
                         leader_tpu_cache.leaders = slot_leaders;

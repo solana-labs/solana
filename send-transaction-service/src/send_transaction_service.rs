@@ -2,9 +2,13 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
+    solana_client::quic_client::SkipServerVerification,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{
+        hash::Hash, nonce_account, pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Signature,
+        transport::Result as TransportResult,
+    },
     std::{
         collections::hash_map::{Entry, HashMap},
         net::{SocketAddr, UdpSocket},
@@ -158,11 +162,18 @@ impl SendTransactionService {
                                 })
                                 .unwrap_or_else(|| vec![&tpu_address]);
                             for address in addresses {
-                                Self::send_transaction(
+                                //ryleung todo: what logic if any should be used to decide between
+                                // when to use UDP and when to use Quic?
+                                if let Err(err) = Self::send_transaction_quic(
                                     &send_socket,
                                     address,
                                     &transaction_info.wire_transaction,
-                                );
+                                ) {
+                                    warn!(
+                                        "Failed to send transaction to {}: {:?}",
+                                        tpu_address, err
+                                    );
+                                }
                             }
                             if transactions_len < MAX_TRANSACTION_QUEUE_SIZE {
                                 inc_new_counter_info!("send_transaction_service-insert-tx", 1);
@@ -286,11 +297,13 @@ impl SendTransactionService {
                         })
                         .unwrap_or_else(|| vec![tpu_address]);
                     for address in addresses {
-                        Self::send_transaction(
+                        if let Err(err) = Self::send_transaction_quic(
                             send_socket,
                             address,
                             &transaction_info.wire_transaction,
-                        );
+                        ) {
+                            warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
+                        }
                     }
                     true
                 }
@@ -311,6 +324,7 @@ impl SendTransactionService {
         result
     }
 
+    #[allow(dead_code)]
     fn send_transaction(
         send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
@@ -319,6 +333,61 @@ impl SendTransactionService {
         if let Err(err) = send_socket.send_to(wire_transaction, tpu_address) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
+    }
+
+    fn send_transaction_quic(
+        send_socket: &UdpSocket,
+        tpu_address: &SocketAddr,
+        wire_transaction: &[u8],
+    ) -> TransportResult<()> {
+        use quinn::{ClientConfig, EndpointConfig};
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _guard = rt.enter();
+
+        let crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_no_client_auth();
+        //crypto.alpn_protocols = vec![b"hq-29".to_vec()];
+
+        let mut endpoint =
+            quinn::Endpoint::new(EndpointConfig::default(), None, send_socket.try_clone()?)?.0;
+        endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
+
+        let mut quic_addr = *tpu_address;
+        quic_addr.set_port(quic_addr.port() + QUIC_PORT_OFFSET);
+        trace!("connecting to {:?}", quic_addr);
+        rt.block_on(async {
+            let conn = match endpoint.connect(quic_addr, "localhost").unwrap().await {
+                Ok(c) => c,
+                Err(e) => {
+                    warn!("error {:?}", e);
+                    return;
+                }
+            };
+
+            let mut send = match conn.connection.open_uni().await {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!("open uni error: {:?}", e);
+                    return;
+                }
+            };
+
+            trace!("sending transaction.");
+            if let Err(e) = send.write_all(&wire_transaction).await {
+                warn!("error {:?}", e);
+            }
+            if let Err(e) = send.finish().await {
+                warn!("e {:?}", e);
+            }
+        });
+
+        Ok(())
     }
 
     pub fn join(self) -> thread::Result<()> {

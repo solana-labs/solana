@@ -4890,15 +4890,19 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bs58 0.4.0",
+ "bytes 1.1.0",
  "clap 2.33.3",
  "crossbeam-channel",
+ "futures 0.3.19",
  "futures-util",
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "log 0.4.14",
+ "quinn",
  "rayon",
  "reqwest",
+ "rustls 0.20.2",
  "semver 1.0.5",
  "serde",
  "serde_derive",
@@ -5933,6 +5937,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "tokio",
  "zstd",
 ]
 
@@ -5967,6 +5972,7 @@ dependencies = [
  "num-traits",
  "pbkdf2 0.10.0",
  "qstring",
+ "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version 0.4.0",
@@ -5984,6 +5990,7 @@ dependencies = [
  "solana-sdk-macro 1.10.0",
  "thiserror",
  "tiny-bip39",
+ "tokio",
  "uriparse",
  "wasm-bindgen",
 ]
@@ -6018,10 +6025,17 @@ version = "1.10.0"
 dependencies = [
  "crossbeam-channel",
  "log 0.4.14",
+ "quinn",
+ "rustls 0.20.2",
+ "solana-client",
  "solana-logger 1.10.0",
  "solana-metrics",
  "solana-runtime",
  "solana-sdk",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tungstenite",
 ]
 
 [[package]]
