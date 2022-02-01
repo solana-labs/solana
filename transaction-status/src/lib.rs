@@ -474,27 +474,30 @@ impl ConfirmedBlock {
         show_rewards: bool,
         show_votes: bool,
     ) -> UiConfirmedBlock {
-        let transactions_filtered = if show_votes {
-            self.transactions
-        } else {
-            self.transactions
-                .into_iter()
-                .filter(|tx_with_meta| {
-                    match SanitizedTransaction::try_from_legacy_transaction(
-                        tx_with_meta.transaction.clone(),
-                    ) {
-                        Ok(sanitized_tx) => !vote_parser::is_simple_vote_transaction(&sanitized_tx),
-                        Err(_) => true,
-                    }
-                })
-                .collect()
-        };
         let (transactions, signatures) = match transaction_details {
             TransactionDetails::Full => (
                 Some(
-                    transactions_filtered
+                    self.transactions
                         .into_iter()
-                        .map(|tx_with_meta| tx_with_meta.encode(encoding))
+                        .filter_map(|tx_with_meta| {
+                            let tx_encoded = tx_with_meta.encode(encoding);
+                            match encoding {
+                                UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
+                                    if !show_votes {
+                                        match tx_encoded.transaction {
+                                            EncodedTransaction::Json(ref tx) => {
+                                                if tx.is_simple_parsed_vote_transaction() {
+                                                    return None;
+                                                }
+                                            }
+                                            _ => {}
+                                        };
+                                    };
+                                    Some(tx_encoded)
+                                }
+                                _ => Some(tx_encoded),
+                            }
+                        })
                         .collect(),
                 ),
                 None,
@@ -502,7 +505,7 @@ impl ConfirmedBlock {
             TransactionDetails::Signatures => (
                 None,
                 Some(
-                    transactions_filtered
+                    self.transactions
                         .into_iter()
                         .map(|tx| tx.transaction.signatures[0].to_string())
                         .collect(),
@@ -759,6 +762,34 @@ impl EncodedTransaction {
 pub struct UiTransaction {
     pub signatures: Vec<String>,
     pub message: UiMessage,
+}
+
+impl UiTransaction {
+    fn is_simple_parsed_vote_transaction(&self) -> bool {
+        match &self.message {
+            UiMessage::Parsed(message) => {
+                if !message.instructions.is_empty() {
+                    match &message.instructions[0] {
+                        UiInstruction::Parsed(i) => {
+                            match &i {
+                                UiParsedInstruction::Parsed(instruction) => {
+                                    return instruction.program_id
+                                        == "Vote111111111111111111111111111111111111111";
+                                }
+                                UiParsedInstruction::PartiallyDecoded(instruction) => {
+                                    return instruction.program_id
+                                        == "Vote111111111111111111111111111111111111111";
+                                }
+                            };
+                        }
+                        _ => {}
+                    }
+                };
+            }
+            _ => {}
+        };
+        false
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
