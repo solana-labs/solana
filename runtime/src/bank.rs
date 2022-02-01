@@ -4272,9 +4272,9 @@ impl Bank {
         results
     }
 
-    /// `executed_transactions_count` is the number of transactions out of `sanitized_txs`
-    /// that was executed. Of those, `executed_transactions_count`,
-    /// `executed_with_failure_result_count` is the number of executed transactions that returned
+    /// `committed_transactions_count` is the number of transactions out of `sanitized_txs`
+    /// that was executed. Of those, `committed_transactions_count`,
+    /// `committed_with_failure_result_count` is the number of executed transactions that returned
     /// a failure result.
     pub fn commit_transactions(
         &self,
@@ -4311,7 +4311,7 @@ impl Bank {
                 .fetch_add(committed_with_failure_result_count, Relaxed);
         }
 
-        // Should be equivalent to checking `executed_transactions_count > 0`
+        // Should be equivalent to checking `committed_transactions_count > 0`
         if execution_results.iter().any(|result| result.was_executed()) {
             self.is_delta.store(true, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
