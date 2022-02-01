@@ -5,11 +5,11 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
-        keyed_account::{check_sysvar_keyed_account, KeyedAccount},
+        keyed_account::KeyedAccount,
         pubkey::Pubkey,
         sysvar::{
             clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
-            stake_history::StakeHistory, SysvarId,
+            stake_history::StakeHistory, Sysvar, SysvarId,
         },
     },
     std::sync::Arc,
@@ -180,6 +180,15 @@ impl SysvarCache {
 /// loading them instead of deserializing from account data.
 pub mod get_sysvar_with_account_check {
     use super::*;
+
+    fn check_sysvar_keyed_account<S: Sysvar>(
+        keyed_account: &KeyedAccount,
+    ) -> Result<(), InstructionError> {
+        if !S::check_id(keyed_account.unsigned_key()) {
+            return Err(InstructionError::InvalidArgument);
+        }
+        Ok(())
+    }
 
     pub fn clock(
         keyed_account: &KeyedAccount,
