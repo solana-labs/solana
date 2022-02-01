@@ -7430,7 +7430,7 @@ pub mod tests {
                 "jsonrpc":"2.0",
                 "id":1,
                 "method":"getTokenAccountsByOwner",
-                "params":["{}", {{"programId": "{}"}}]
+                "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
             }}"#,
             owner,
             spl_token_id(),
@@ -7482,7 +7482,7 @@ pub mod tests {
             r#"{{
                 "jsonrpc":"2.0",
                 "id":1,"method":"getTokenAccountsByOwner",
-                "params":["{}", {{"mint": "{}"}}]
+                "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
             }}"#,
             owner, mint,
         );
@@ -7547,7 +7547,7 @@ pub mod tests {
                 "jsonrpc":"2.0",
                 "id":1,
                 "method":"getTokenAccountsByDelegate",
-                "params":["{}", {{"programId": "{}"}}]
+                "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
             }}"#,
             delegate,
             spl_token_id(),
@@ -7565,7 +7565,7 @@ pub mod tests {
                 "jsonrpc":"2.0",
                 "id":1,"method":
                 "getTokenAccountsByDelegate",
-                "params":["{}", {{"mint": "{}"}}]
+                "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
             }}"#,
             delegate, mint,
         );
