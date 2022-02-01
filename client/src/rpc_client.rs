@@ -2033,6 +2033,7 @@ impl RpcClient {
     ///     encoding: Some(UiTransactionEncoding::Base58),
     ///     transaction_details: Some(TransactionDetails::None),
     ///     rewards: Some(true),
+    ///     votes: Some(true),
     ///     commitment: None,
     /// };
     /// let block = rpc_client.get_block_with_config(
