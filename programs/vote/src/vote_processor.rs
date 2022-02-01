@@ -4,53 +4,19 @@ use {
     crate::{id, vote_instruction::VoteInstruction, vote_state},
     log::*,
     solana_metrics::inc_new_counter_info,
-    solana_program_runtime::invoke_context::InvokeContext,
+    solana_program_runtime::{
+        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+    },
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
-        keyed_account::{
-            check_sysvar_keyed_account, from_keyed_account, get_signers, keyed_account_at_index,
-            KeyedAccount,
-        },
+        keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        sysvar::{clock::Clock, rent::Rent, slot_hashes::SlotHashes},
+        sysvar::rent::Rent,
     },
-    std::{collections::HashSet, sync::Arc},
+    std::collections::HashSet,
 };
-
-/// These methods facilitate a transition from fetching sysvars from keyed
-/// accounts to fetching from the sysvar cache without breaking consensus. In
-/// order to keep consistent behavior, they continue to enforce the same checks
-/// as `solana_sdk::keyed_account::from_keyed_account` despite dynamically
-/// loading them instead of deserializing from account data.
-mod get_sysvar_with_keyed_account_check {
-    use super::*;
-
-    pub fn clock(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<Clock>, InstructionError> {
-        check_sysvar_keyed_account::<Clock>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_clock()
-    }
-
-    pub fn rent(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<Rent>, InstructionError> {
-        check_sysvar_keyed_account::<Rent>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_rent()
-    }
-
-    pub fn slot_hashes(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<SlotHashes>, InstructionError> {
-        check_sysvar_keyed_account::<SlotHashes>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_slot_hashes()
-    }
-}
 
 pub fn process_instruction(
     first_instruction_account: usize,
@@ -70,19 +36,19 @@ pub fn process_instruction(
     let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[first_instruction_account..]);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-            let rent = get_sysvar_with_keyed_account_check::rent(
+            let rent = get_sysvar_with_account_check::rent(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
             )?;
             verify_rent_exemption(me, &rent)?;
-            let clock = get_sysvar_with_keyed_account_check::clock(
+            let clock = get_sysvar_with_account_check::clock(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
             vote_state::initialize_account(me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
-            let clock = get_sysvar_with_keyed_account_check::clock(
+            let clock = get_sysvar_with_account_check::clock(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
             )?;
@@ -105,11 +71,11 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
-            let slot_hashes = get_sysvar_with_keyed_account_check::slot_hashes(
+            let slot_hashes = get_sysvar_with_account_check::slot_hashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
             )?;
-            let clock = get_sysvar_with_keyed_account_check::clock(
+            let clock = get_sysvar_with_account_check::clock(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
@@ -164,15 +130,16 @@ pub fn process_instruction(
                     &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
                         .signer_key()
                         .ok_or(InstructionError::MissingRequiredSignature)?;
+                let clock = get_sysvar_with_account_check::clock(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                    invoke_context,
+                )?;
                 vote_state::authorize(
                     me,
                     voter_pubkey,
                     vote_authorize,
                     &signers,
-                    &from_keyed_account::<Clock>(keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account + 1,
-                    )?)?,
+                    &clock,
                     &invoke_context.feature_set,
                 )
             } else {
@@ -206,15 +173,12 @@ mod tests {
             vote_state::{Vote, VoteAuthorize, VoteInit, VoteState, VoteStateUpdate},
         },
         bincode::serialize,
-        solana_program_runtime::{
-            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
-            sysvar_cache::SysvarCache,
-        },
+        solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             hash::Hash,
             instruction::{AccountMeta, Instruction},
-            sysvar,
+            sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
         },
         std::str::FromStr,
     };
@@ -244,19 +208,26 @@ mod tests {
         instruction: &Instruction,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
-        let transaction_accounts: Vec<_> = instruction
+        let mut pubkeys: HashSet<Pubkey> = instruction
             .accounts
             .iter()
-            .map(|meta| {
+            .map(|meta| meta.pubkey)
+            .collect();
+        pubkeys.insert(sysvar::clock::id());
+        pubkeys.insert(sysvar::rent::id());
+        pubkeys.insert(sysvar::slot_hashes::id());
+        let transaction_accounts: Vec<_> = pubkeys
+            .iter()
+            .map(|pubkey| {
                 (
-                    meta.pubkey,
-                    if sysvar::clock::check_id(&meta.pubkey) {
+                    *pubkey,
+                    if sysvar::clock::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Clock::default())
-                    } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
+                    } else if sysvar::slot_hashes::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&SlotHashes::default())
-                    } else if sysvar::rent::check_id(&meta.pubkey) {
+                    } else if sysvar::rent::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Rent::free())
-                    } else if meta.pubkey == invalid_vote_state_pubkey() {
+                    } else if *pubkey == invalid_vote_state_pubkey() {
                         AccountSharedData::from(Account {
                             owner: invalid_vote_state_pubkey(),
                             ..Account::default()
@@ -270,19 +241,11 @@ mod tests {
                 )
             })
             .collect();
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_rent(Rent::free());
-        sysvar_cache.set_clock(Clock::default());
-        sysvar_cache.set_slot_hashes(SlotHashes::default());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
+        process_instruction(
             &instruction.data,
             transaction_accounts,
             instruction.accounts.clone(),
             expected_result,
-            &sysvar_cache,
-            super::process_instruction,
         )
     }
 

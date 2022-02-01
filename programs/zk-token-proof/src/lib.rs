@@ -28,7 +28,7 @@ pub fn process_instruction(
     input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    if invoke_context.invoke_depth() != 1 {
+    if invoke_context.get_invoke_depth() != 1 {
         // Not supported as an inner instruction
         return Err(InstructionError::UnsupportedProgramId);
     }

@@ -20,7 +20,7 @@ fn process_instruction_with_program_logging(
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_log_collector();
     let program_id = invoke_context.transaction_context.get_program_key()?;
-    stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
+    stable_log::program_invoke(&logger, program_id, invoke_context.get_invoke_depth());
 
     let result = process_instruction(first_instruction_account, instruction_data, invoke_context);
 
