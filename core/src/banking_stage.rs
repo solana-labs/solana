@@ -1511,6 +1511,7 @@ impl BankingStage {
         // buffering
         filtered_retryable_tx_indexes.extend(retryable_packet_indexes);
 
+        // Increment timing-based metrics
         banking_stage_stats
             .packet_conversion_elapsed
             .fetch_add(packet_conversion_time.as_us(), Ordering::Relaxed);
