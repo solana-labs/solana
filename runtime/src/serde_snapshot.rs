@@ -14,11 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
-<<<<<<< HEAD
-        serde_snapshot::future::SerializableStorage,
-=======
         serde_snapshot::newer::{AppendVecIdSerialized, SerializableStorage},
->>>>>>> 9c3144e28 (Refactor serde snapshot's "future" to "newer" (#22431))
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
