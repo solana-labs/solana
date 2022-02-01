@@ -17,6 +17,7 @@ use {
 pub use {close_account::CloseAccountData, transfer::TransferData, withdraw::WithdrawData};
 
 /// Constant for 2^32
+#[cfg(not(target_arch = "bpf"))]
 const TWO_32: u64 = 4294967296;
 
 #[cfg(not(target_arch = "bpf"))]
@@ -41,6 +42,7 @@ pub fn split_u64_into_u32(amount: u64) -> (u32, u32) {
     (lo, hi)
 }
 
+#[cfg(not(target_arch = "bpf"))]
 fn combine_u32_ciphertexts(
     ciphertext_lo: &ElGamalCiphertext,
     ciphertext_hi: &ElGamalCiphertext,

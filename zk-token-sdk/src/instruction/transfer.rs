@@ -25,6 +25,7 @@ use {
 
 #[derive(Clone)]
 #[repr(C)]
+#[cfg(not(target_arch = "bpf"))]
 pub struct TransferAmountEncryption {
     pub commitment: PedersenCommitment,
     pub source: DecryptHandle,
@@ -32,6 +33,7 @@ pub struct TransferAmountEncryption {
     pub auditor: DecryptHandle,
 }
 
+#[cfg(not(target_arch = "bpf"))]
 impl TransferAmountEncryption {
     pub fn new(
         amount: u32,
@@ -393,12 +395,14 @@ impl TransferProof {
 /// The ElGamal public keys needed for a transfer
 #[derive(Clone)]
 #[repr(C)]
+#[cfg(not(target_arch = "bpf"))]
 pub struct TransferPubkeys {
     pub source: ElGamalPubkey,
     pub dest: ElGamalPubkey,
     pub auditor: ElGamalPubkey,
 }
 
+#[cfg(not(target_arch = "bpf"))]
 impl TransferPubkeys {
     // TODO: use constructor instead
     pub fn to_bytes(&self) -> [u8; 96] {
@@ -425,6 +429,7 @@ impl TransferPubkeys {
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
 impl pod::TransferPubkeys {
     pub fn new(source: &ElGamalPubkey, dest: &ElGamalPubkey, auditor: &ElGamalPubkey) -> Self {
         let mut bytes = [0u8; 96];

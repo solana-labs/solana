@@ -32,8 +32,10 @@ use {
     subtle::{ConditionallySelectable, ConstantTimeGreater},
 };
 
+#[cfg(not(target_arch = "bpf"))]
 const FEE_DENOMINATOR: u64 = 10000;
 
+#[cfg(not(target_arch = "bpf"))]
 lazy_static::lazy_static! {
     pub static ref COMMITMENT_FEE_DENOMINATOR: PedersenCommitment = Pedersen::encode(FEE_DENOMINATOR);
 }
@@ -470,6 +472,7 @@ impl TransferWithFeeProof {
 /// The ElGamal public keys needed for a transfer with fee
 #[derive(Clone)]
 #[repr(C)]
+#[cfg(not(target_arch = "bpf"))]
 pub struct TransferWithFeePubkeys {
     pub source: ElGamalPubkey,
     pub dest: ElGamalPubkey,
@@ -477,6 +480,7 @@ pub struct TransferWithFeePubkeys {
     pub fee_collector: ElGamalPubkey,
 }
 
+#[cfg(not(target_arch = "bpf"))]
 impl TransferWithFeePubkeys {
     pub fn to_bytes(&self) -> [u8; 128] {
         let mut bytes = [0u8; 128];
@@ -506,6 +510,7 @@ impl TransferWithFeePubkeys {
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
 impl pod::TransferWithFeePubkeys {
     pub fn new(
         source: &ElGamalPubkey,
@@ -524,12 +529,14 @@ impl pod::TransferWithFeePubkeys {
 
 #[derive(Clone)]
 #[repr(C)]
+#[cfg(not(target_arch = "bpf"))]
 pub struct FeeEncryption {
     pub commitment: PedersenCommitment,
     pub dest: DecryptHandle,
     pub fee_collector: DecryptHandle,
 }
 
+#[cfg(not(target_arch = "bpf"))]
 impl FeeEncryption {
     pub fn new(
         amount: u64,
@@ -580,6 +587,8 @@ pub struct FeeParameters {
     /// Maximum fee assessed on transfers, expressed as an amount of tokens
     pub maximum_fee: u64,
 }
+
+#[cfg(not(target_arch = "bpf"))]
 impl FeeParameters {
     pub fn to_bytes(&self) -> [u8; 10] {
         let mut bytes = [0u8; 10];
@@ -600,6 +609,7 @@ impl FeeParameters {
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
 fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> (u64, u64) {
     let fee_scaled = (transfer_amount as u128) * (fee_rate_basis_points as u128);
 
@@ -613,6 +623,7 @@ fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> (u64, u64)
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
 fn compute_delta_commitment_and_opening(
     (commitment_lo, opening_lo): (&PedersenCommitment, &PedersenOpening),
     (commitment_hi, opening_hi): (&PedersenCommitment, &PedersenOpening),
@@ -630,6 +641,7 @@ fn compute_delta_commitment_and_opening(
     (commitment_delta, opening_delta)
 }
 
+#[cfg(not(target_arch = "bpf"))]
 fn compute_delta_commitment(
     commitment_lo: &PedersenCommitment,
     commitment_hi: &PedersenCommitment,
