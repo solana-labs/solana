@@ -5670,82 +5670,7 @@ pub mod tests {
                 coding.clone(),
             );
 
-<<<<<<< HEAD
             // Insert a good coding shred
-=======
-        // Trying to insert a shred with index < position should fail
-        {
-            let mut coding_shred = Shred::new_empty_from_header(
-                shred.clone(),
-                DataShredHeader::default(),
-                coding.clone(),
-            );
-            let index = coding_shred.index() - coding_shred.common_header.fec_set_index - 1;
-            coding_shred.set_index(index as u32);
-
-            assert!(!Blockstore::should_insert_coding_shred(
-                &coding_shred,
-                &last_root
-            ));
-        }
-
-        // Trying to insert shred with num_coding == 0 should fail
-        {
-            let mut coding_shred = Shred::new_empty_from_header(
-                shred.clone(),
-                DataShredHeader::default(),
-                coding.clone(),
-            );
-            coding_shred.coding_header.num_coding_shreds = 0;
-            assert!(!Blockstore::should_insert_coding_shred(
-                &coding_shred,
-                &last_root
-            ));
-        }
-
-        // Trying to insert shred with pos >= num_coding should fail
-        {
-            let mut coding_shred = Shred::new_empty_from_header(
-                shred.clone(),
-                DataShredHeader::default(),
-                coding.clone(),
-            );
-            let num_coding_shreds =
-                coding_shred.common_header.index - coding_shred.common_header.fec_set_index;
-            coding_shred.coding_header.num_coding_shreds = num_coding_shreds as u16;
-            assert!(!Blockstore::should_insert_coding_shred(
-                &coding_shred,
-                &last_root
-            ));
-        }
-
-        // Trying to insert with set_index with num_coding that would imply the last shred
-        // has index > u32::MAX should fail
-        {
-            let mut coding_shred = Shred::new_empty_from_header(
-                shred.clone(),
-                DataShredHeader::default(),
-                coding.clone(),
-            );
-            coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
-            coding_shred.coding_header.num_data_shreds = 2;
-            coding_shred.coding_header.num_coding_shreds = 3;
-            coding_shred.coding_header.position = 1;
-            coding_shred.common_header.index = std::u32::MAX - 1;
-            assert!(!Blockstore::should_insert_coding_shred(
-                &coding_shred,
-                &last_root
-            ));
-
-            coding_shred.coding_header.num_coding_shreds = 2000;
-            assert!(!Blockstore::should_insert_coding_shred(
-                &coding_shred,
-                &last_root
-            ));
-
-            // Decreasing the number of num_coding_shreds will put it within the allowed limit
-            coding_shred.coding_header.num_coding_shreds = 2;
->>>>>>> 8063273d0 (adds more sanity checks to shreds (#21675))
             assert!(Blockstore::should_insert_coding_shred(
                 &coding_shred,
                 &last_root
@@ -5849,6 +5774,7 @@ pub mod tests {
                 ));
 
                 // Decreasing the number of num_coding_shreds will put it within the allowed limit
+                coding_shred.coding_header.num_data_shreds = 2;
                 coding_shred.coding_header.num_coding_shreds = 2;
                 assert!(Blockstore::should_insert_coding_shred(
                     &coding_shred,
