@@ -15,8 +15,9 @@ import { useCluster } from "providers/cluster";
 import { ErrorCard } from "components/common/ErrorCard";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 import { Downloadable } from "components/common/Downloadable";
-import { VerifiedBadge } from "components/common/VerifiedBadge";
+import { CheckingBadge, VerifiedBadge } from "components/common/VerifiedBadge";
 import { InfoTooltip } from "components/common/InfoTooltip";
+import { useVerifiableBuilds } from "utils/program-verification";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -74,6 +75,7 @@ export function UpgradeableProgramSection({
   const refresh = useFetchAccountInfo();
   const { cluster } = useCluster();
   const label = addressLabel(account.pubkey.toBase58(), cluster);
+  const { loading, verifiableBuilds } = useVerifiableBuilds(account.pubkey);
   return (
     <div className="card">
       <div className="card-header">
@@ -129,10 +131,15 @@ export function UpgradeableProgramSection({
             <LastVerifiedBuildLabel />
           </td>
           <td className="text-lg-end">
-            <VerifiedBadge
-              programAddress={account.pubkey}
-              programDeploySlot={programData.slot}
-            />
+            {loading ? (
+              <CheckingBadge />
+            ) : (
+              <>
+                {verifiableBuilds.map((b) => (
+                  <VerifiedBadge verifiableBuild={b} />
+                ))}
+              </>
+            )}
           </td>
         </tr>
         <tr>
@@ -156,16 +163,8 @@ export function UpgradeableProgramSection({
 
 function LastVerifiedBuildLabel() {
   return (
-    <InfoTooltip text="Anchor service verifying programs deployed on-chain against published source code. Click to learn more.">
-      <a
-        href={
-          "https://project-serum.github.io/anchor/getting-started/verification.html#building"
-        }
-        target="_blank"
-        rel="noreferrer"
-      >
-        Verifiable Build Status
-      </a>
+    <InfoTooltip text="Indicates whether the program currently deployed on-chain is verified to match the associated published source code, when it is available.">
+      Verifiable Build Status
     </InfoTooltip>
   );
 }

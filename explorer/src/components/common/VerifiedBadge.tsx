@@ -1,39 +1,38 @@
-import { PublicKey } from "@solana/web3.js";
-import { buildLinkPath, useVerifiedBuild } from "utils/program-verification";
+import { VerifiableBuild } from "utils/program-verification";
 
 export function VerifiedBadge({
-  programAddress,
-  programDeploySlot,
+  verifiableBuild,
 }: {
-  programAddress: PublicKey;
-  programDeploySlot: number;
+  verifiableBuild: VerifiableBuild;
 }) {
-  const { loading, verifiedBuild } = useVerifiedBuild(programAddress);
-  if (loading)
-    return (
-      <h3 className="mb-0">
-        <span className="badge bg-dark rank">Checking</span>
-      </h3>
-    );
-
-  if (verifiedBuild && verifiedBuild.verified_slot === programDeploySlot) {
+  if (verifiableBuild && verifiableBuild.verified_slot) {
     return (
       <h3 className="mb-0">
         <a
           className="c-pointer badge bg-success-soft rank"
-          href={buildLinkPath(verifiedBuild)}
+          href={verifiableBuild.url}
           target="_blank"
           rel="noreferrer"
         >
-          Verified
+          {verifiableBuild.label}: Verified
         </a>
       </h3>
     );
   } else {
     return (
       <h3 className="mb-0">
-        <span className="badge bg-warning-soft rank">Unverified</span>
+        <span className="badge bg-warning-soft rank">
+          {verifiableBuild.label}: Unverified
+        </span>
       </h3>
     );
   }
+}
+
+export function CheckingBadge() {
+  return (
+    <h3 className="mb-0">
+      <span className="badge bg-dark rank">Checking</span>
+    </h3>
+  );
 }
