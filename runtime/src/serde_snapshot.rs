@@ -45,7 +45,6 @@ use {
     storage::SerializableStorage,
 };
 
-mod common;
 mod newer;
 mod storage;
 mod tests;
