@@ -4002,9 +4002,9 @@ impl Bank {
         results
     }
 
-    /// `executed_transactions_count` is the number of transactions out of `sanitized_txs`
-    /// that was executed. Of those, `executed_transactions_count`,
-    /// `executed_with_failure_result_count` is the number of executed transactions that returned
+    /// `committed_transactions_count` is the number of transactions out of `sanitized_txs`
+    /// that was executed. Of those, `committed_transactions_count`,
+    /// `committed_with_failure_result_count` is the number of executed transactions that returned
     /// a failure result.
     pub fn commit_transactions(
         &self,
