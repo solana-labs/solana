@@ -14,10 +14,7 @@ use {
         erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{
-            Result as ShredResult, Shred, ShredType, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-            SHRED_PAYLOAD_SIZE,
-        },
+        shred::{Result as ShredResult, Shred, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
     },
     bincode::deserialize,
     log::*,
@@ -1235,7 +1232,9 @@ impl Blockstore {
             &self.db,
             slot_meta_working_set,
             slot,
-            shred.parent().ok_or(InsertDataShredError::InvalidShred)?,
+            shred
+                .parent()
+                .map_err(|_| InsertDataShredError::InvalidShred)?,
         );
 
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
@@ -1292,16 +1291,7 @@ impl Blockstore {
     }
 
     fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
-        let shred_index = shred.index();
-        let fec_set_index = shred.common_header.fec_set_index;
-        let num_coding_shreds = shred.coding_header.num_coding_shreds as u32;
-        shred.is_code()
-            && shred_index >= fec_set_index
-            && shred_index - fec_set_index < num_coding_shreds
-            && num_coding_shreds != 0
-            && num_coding_shreds <= 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK
-            && num_coding_shreds - 1 <= u32::MAX - fec_set_index
-            && shred.slot() > *last_root.read().unwrap()
+        shred.is_code() && shred.sanitize() && shred.slot() > *last_root.read().unwrap()
     }
 
     fn insert_coding_shred(
@@ -1315,7 +1305,7 @@ impl Blockstore {
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        assert!(shred.is_code() && shred_index >= shred.common_header.fec_set_index as u64);
+        assert!(shred.is_code() && shred.sanitize());
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
@@ -5784,6 +5774,7 @@ pub mod tests {
                 ));
 
                 // Decreasing the number of num_coding_shreds will put it within the allowed limit
+                coding_shred.coding_header.num_data_shreds = 2;
                 coding_shred.coding_header.num_coding_shreds = 2;
                 assert!(Blockstore::should_insert_coding_shred(
                     &coding_shred,
