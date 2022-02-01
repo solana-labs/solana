@@ -30,9 +30,7 @@ use {
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
-        transaction::{
-            Result, Transaction, TransactionError, VersionedTransaction,
-        },
+        transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     std::fmt,
 };
@@ -483,19 +481,18 @@ impl ConfirmedBlock {
                             match encoding {
                                 UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
                                     if !show_votes {
-                                        match tx_encoded.transaction {
-                                            EncodedTransaction::Json(ref tx) => {
-                                                if tx.is_simple_parsed_vote_transaction() {
-                                                    return None;
-                                                }
+                                        if let EncodedTransaction::Json(ref tx) =
+                                            tx_encoded.transaction
+                                        {
+                                            if tx.is_simple_parsed_vote_transaction() {
+                                                return None;
                                             }
-                                            _ => {}
-                                        };
+                                        }
                                     };
-                                    Some(tx_encoded)
                                 }
-                                _ => Some(tx_encoded),
-                            }
+                                _ => {},
+                            };
+                            Some(tx_encoded)
                         })
                         .collect(),
                 ),
@@ -765,27 +762,21 @@ pub struct UiTransaction {
 
 impl UiTransaction {
     fn is_simple_parsed_vote_transaction(&self) -> bool {
-        match &self.message {
-            UiMessage::Parsed(message) => {
-                if !message.instructions.is_empty() {
-                    match &message.instructions[0] {
-                        UiInstruction::Parsed(i) => {
-                            match &i {
-                                UiParsedInstruction::Parsed(instruction) => {
-                                    return instruction.program_id
-                                        == "Vote111111111111111111111111111111111111111";
-                                }
-                                UiParsedInstruction::PartiallyDecoded(instruction) => {
-                                    return instruction.program_id
-                                        == "Vote111111111111111111111111111111111111111";
-                                }
-                            };
+        if let UiMessage::Parsed(message) = &self.message {
+            if !message.instructions.is_empty() {
+                if let UiInstruction::Parsed(i) = &message.instructions[0] {
+                    match &i {
+                        UiParsedInstruction::Parsed(instruction) => {
+                            return instruction.program_id
+                                == "Vote111111111111111111111111111111111111111";
                         }
-                        _ => {}
-                    }
-                };
+                        UiParsedInstruction::PartiallyDecoded(instruction) => {
+                            return instruction.program_id
+                                == "Vote111111111111111111111111111111111111111";
+                        }
+                    };
+                }
             }
-            _ => {}
         };
         false
     }
