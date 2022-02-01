@@ -1,6 +1,11 @@
 #![cfg(feature = "full")]
 
-use {crate::transaction::TransactionError, std::io, thiserror::Error};
+use {
+    crate::transaction::TransactionError,
+    quinn::{ConnectError, WriteError},
+    std::io,
+    thiserror::Error,
+};
 
 #[derive(Debug, Error)]
 pub enum TransportError {
@@ -10,6 +15,12 @@ pub enum TransportError {
     TransactionError(#[from] TransactionError),
     #[error("transport custom error: {0}")]
     Custom(String),
+
+    #[error("transport send error: {0}")]
+    SendError(#[from] WriteError),
+
+    #[error("transport connect error: {0}")]
+    ConnectError(#[from] ConnectError),
 }
 
 impl TransportError {

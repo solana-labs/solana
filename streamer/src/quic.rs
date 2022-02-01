@@ -49,7 +49,7 @@ fn configure_server(
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
-    const MAX_CONCURRENT_UNI_STREAMS: u32 = 1;
+    const MAX_CONCURRENT_UNI_STREAMS: u32 = 4096;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
     config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());

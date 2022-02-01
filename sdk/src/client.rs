@@ -175,6 +175,8 @@ pub trait AsyncClient {
     /// Send a signed transaction, but don't wait to see if the server accepted it.
     fn async_send_transaction(&self, transaction: transaction::Transaction) -> Result<Signature>;
 
+    fn async_send_batch(&self, transactions: Vec<transaction::Transaction>) -> Result<()>;
+
     /// Create a transaction from the given message, and send it to the
     /// server, but don't wait for to see if the server accepted it.
     fn async_send_message<T: Signers>(

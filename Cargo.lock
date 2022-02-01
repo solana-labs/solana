@@ -146,6 +146,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
+name = "async-mutex"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479db852db25d9dbf6204e6cb6253698f175c15726470f78af0d918e99d6156e"
+dependencies = [
+ "event-listener",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1311,6 +1320,12 @@ dependencies = [
  "tonic-build",
  "tower-service",
 ]
+
+[[package]]
+name = "event-listener"
+version = "2.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 
 [[package]]
 name = "fake-simd"
@@ -4543,19 +4558,25 @@ name = "solana-client"
 version = "1.10.1"
 dependencies = [
  "assert_matches",
+ "async-mutex",
  "async-trait",
  "base64 0.13.0",
  "bincode",
  "bs58 0.4.0",
+ "bytes",
  "clap 2.33.3",
  "crossbeam-channel",
+ "futures 0.3.21",
  "futures-util",
  "indicatif",
+ "itertools 0.10.3",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "log",
+ "quinn",
  "rayon",
  "reqwest",
+ "rustls 0.20.4",
  "semver 1.0.6",
  "serde",
  "serde_derive",
@@ -4573,8 +4594,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite",
- "tungstenite",
+ "tokio-tungstenite 0.17.1",
+ "tungstenite 0.17.2",
  "url 2.2.2",
 ]
 
@@ -5598,6 +5619,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "tokio",
  "zstd",
 ]
 
@@ -5632,6 +5654,7 @@ dependencies = [
  "num-traits",
  "pbkdf2 0.10.1",
  "qstring",
+ "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version 0.4.0",
@@ -5649,6 +5672,7 @@ dependencies = [
  "solana-sdk-macro 1.10.1",
  "thiserror",
  "tiny-bip39",
+ "tokio",
  "uriparse",
  "wasm-bindgen",
 ]
@@ -5683,10 +5707,17 @@ version = "1.10.1"
 dependencies = [
  "crossbeam-channel",
  "log",
+ "quinn",
+ "rustls 0.20.4",
+ "solana-client",
  "solana-logger 1.10.1",
  "solana-metrics",
  "solana-runtime",
  "solana-sdk",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.16.1",
+ "tungstenite 0.16.0",
 ]
 
 [[package]]
@@ -6680,6 +6711,22 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e80b39df6afcc12cdf752398ade96a6b9e99c903dfdc36e53ad10b9c366bca72"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls 0.20.4",
+ "tokio",
+ "tokio-rustls 0.23.2",
+ "tungstenite 0.16.0",
+ "webpki 0.22.0",
+ "webpki-roots",
+]
+
+[[package]]
+name = "tokio-tungstenite"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06cda1232a49558c46f8a504d5b93101d42c0bf7f911f12a105ba48168f821ae"
@@ -6689,7 +6736,7 @@ dependencies = [
  "rustls 0.20.4",
  "tokio",
  "tokio-rustls 0.23.2",
- "tungstenite",
+ "tungstenite 0.17.2",
  "webpki 0.22.0",
  "webpki-roots",
 ]
@@ -6873,6 +6920,28 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "tungstenite"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ad3713a14ae247f22a728a0456a545df14acf3867f905adff84be99e23b3ad1"
+dependencies = [
+ "base64 0.13.0",
+ "byteorder",
+ "bytes",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.8.4",
+ "rustls 0.20.4",
+ "sha-1 0.9.8",
+ "thiserror",
+ "url 2.2.2",
+ "utf-8",
+ "webpki 0.22.0",
+ "webpki-roots",
+]
 
 [[package]]
 name = "tungstenite"

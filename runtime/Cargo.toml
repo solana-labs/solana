@@ -57,6 +57,7 @@ tar = "0.4.38"
 tempfile = "3.3.0"
 thiserror = "1.0"
 zstd = "0.10.0"
+tokio = { version = "1", features = ["full"] }
 
 [lib]
 crate-type = ["lib"]

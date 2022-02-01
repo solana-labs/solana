@@ -45,6 +45,11 @@ impl AsyncClient for BankClient {
         Ok(signature)
     }
 
+    fn async_send_batch(&self, _transactions: Vec<Transaction>) -> Result<()> {
+        //todo: implement
+        Ok(())
+    }
+
     fn async_send_message<T: Signers>(
         &self,
         keypairs: &T,

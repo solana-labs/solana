@@ -53,6 +53,8 @@ impl From<TransportError> for ClientErrorKind {
             TransportError::IoError(err) => Self::Io(err),
             TransportError::TransactionError(err) => Self::TransactionError(err),
             TransportError::Custom(err) => Self::Custom(err),
+            TransportError::ConnectError(err) => Self::Custom(format!("ConnectError: {:?}", err)),
+            TransportError::SendError(err) => Self::Custom(format!("SendError: {:?}", err)),
         }
     }
 }
