@@ -64,6 +64,11 @@ pub struct Config {
     /// `solana_sdk::commitment_config::CommitmentLevel::Confirmed`.
     #[serde(default)]
     pub commitment: String,
+    /// A moniker override config
+    ///
+    /// Optional YAML map to override moniker settings to custom set ones
+    #[serde(default)]
+    pub moniker_override: Option<HashMap<String, String>>,
 }
 
 impl Default for Config {
@@ -87,12 +92,15 @@ impl Default for Config {
 
         let commitment = "confirmed".to_string();
 
+        let moniker_override = None;
+
         Self {
             json_rpc_url,
             websocket_url,
             keypair_path,
             address_labels,
             commitment,
+            moniker_override
         }
     }
 }
