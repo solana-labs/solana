@@ -1,15 +1,215 @@
 use crate::{
     hash::Hash,
-    instruction::CompiledInstruction,
+    instruction::{AccountMeta, CompiledInstruction, Instruction},
     message::{MessageHeader, MESSAGE_VERSION_PREFIX},
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
     short_vec,
 };
+use std::collections::BTreeSet;
 
 mod loaded;
 
 pub use loaded::*;
+
+fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
+    keys.iter().position(|k| k == key).unwrap() as u8
+}
+
+fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction {
+    let accounts: Vec<_> = ix
+        .accounts
+        .iter()
+        .map(|account_meta| position(keys, &account_meta.pubkey))
+        .collect();
+
+    CompiledInstruction {
+        program_id_index: position(keys, &ix.program_id),
+        data: ix.data.clone(),
+        accounts,
+    }
+}
+
+fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
+    ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
+}
+
+/// Information about address lookup tables to use
+pub struct AddressLookupTable {
+    pub account_key: Pubkey,
+    pub addresses: Vec<Pubkey>,
+}
+
+/// A helper struct to collect pubkeys referenced by a set of instructions and read-only counts
+#[derive(Debug, PartialEq, Eq)]
+struct InstructionKeys {
+    pub signed_keys: Vec<Pubkey>,
+    pub unsigned_keys: Vec<Pubkey>,
+    pub address_table_keys: Vec<Pubkey>,
+    pub address_table_lookups: Vec<MessageAddressTableLookup>,
+    pub num_readonly_signed_accounts: u8,
+    pub num_readonly_unsigned_accounts: u8,
+}
+
+impl InstructionKeys {
+    fn new(
+        signed_keys: Vec<Pubkey>,
+        unsigned_keys: Vec<Pubkey>,
+        address_table_keys: Vec<Pubkey>,
+        address_table_lookups: Vec<MessageAddressTableLookup>,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
+    ) -> Self {
+        Self {
+            signed_keys,
+            unsigned_keys,
+            address_table_keys,
+            address_table_lookups,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
+        }
+    }
+}
+
+/// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
+/// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
+/// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
+/// including program ids, are placed last in the set. No duplicates and order is preserved.
+fn get_keys(
+    instructions: &[Instruction],
+    payer: Option<&Pubkey>,
+    address_lookup_tables: Option<&[AddressLookupTable]>,
+) -> InstructionKeys {
+    let programs: Vec<_> = get_program_ids(instructions)
+        .iter()
+        .map(|program_id| AccountMeta {
+            pubkey: *program_id,
+            is_signer: false,
+            is_writable: false,
+        })
+        .collect();
+    let mut keys_and_signed: Vec<_> = instructions
+        .iter()
+        .flat_map(|ix| ix.accounts.iter())
+        .collect();
+    keys_and_signed.extend(&programs);
+    keys_and_signed.sort_by(|x, y| {
+        y.is_signer
+            .cmp(&x.is_signer)
+            .then(y.is_writable.cmp(&x.is_writable))
+    });
+
+    let payer_account_meta;
+    if let Some(payer) = payer {
+        payer_account_meta = AccountMeta {
+            pubkey: *payer,
+            is_signer: true,
+            is_writable: true,
+        };
+        keys_and_signed.insert(0, &payer_account_meta);
+    }
+
+    let mut unique_metas: Vec<AccountMeta> = vec![];
+    for account_meta in keys_and_signed {
+        // Promote to writable if a later AccountMeta requires it
+        if let Some(x) = unique_metas
+            .iter_mut()
+            .find(|x| x.pubkey == account_meta.pubkey)
+        {
+            x.is_writable |= account_meta.is_writable;
+            continue;
+        }
+        unique_metas.push(account_meta.clone());
+    }
+
+    let mut signed_keys = vec![];
+    let mut unsigned_keys = vec![];
+    let mut address_table_keys = vec![];
+    let mut address_table_lookups: Vec<MessageAddressTableLookup> = address_lookup_tables
+        .unwrap_or(&vec![])
+        .iter()
+        .map(|table| MessageAddressTableLookup {
+            account_key: table.account_key,
+            writable_indexes: vec![],
+            readonly_indexes: vec![],
+        })
+        .collect();
+    let mut num_readonly_signed_accounts = 0;
+    let mut num_readonly_unsigned_accounts = 0;
+    for account_meta in &unique_metas {
+        if account_meta.is_signer {
+            signed_keys.push(account_meta.pubkey);
+            if !account_meta.is_writable {
+                num_readonly_signed_accounts += 1;
+            }
+        } else {
+            if let Some((table_index, key_index)) =
+                find_first_address_table_pubkey(&account_meta.pubkey, address_lookup_tables)
+            {
+                if account_meta.is_writable {
+                    address_table_lookups[table_index]
+                        .writable_indexes
+                        .push(key_index);
+                } else {
+                    address_table_lookups[table_index]
+                        .readonly_indexes
+                        .push(key_index);
+                }
+                address_table_keys.push(account_meta.pubkey);
+            } else {
+                unsigned_keys.push(account_meta.pubkey);
+                if !account_meta.is_writable {
+                    num_readonly_unsigned_accounts += 1;
+                }
+            }
+        }
+    }
+    InstructionKeys::new(
+        signed_keys,
+        unsigned_keys,
+        address_table_keys,
+        address_table_lookups, // TODO: remove empty ones
+        num_readonly_signed_accounts,
+        num_readonly_unsigned_accounts,
+    )
+}
+
+/// Returns the address table index, and the index of the pubkey in the table
+fn find_first_address_table_pubkey(
+    pubkey: &Pubkey,
+    address_lookup_tables: Option<&[AddressLookupTable]>,
+) -> Option<(usize, u8)> {
+    if address_lookup_tables.is_none() {
+        return None;
+    }
+    address_lookup_tables
+        .unwrap()
+        .iter()
+        .enumerate()
+        .find_map(|(table_index, table)| {
+            table
+                .addresses
+                .iter()
+                .enumerate()
+                .find_map(|(key_index, key)| {
+                    if key == pubkey {
+                        Some((table_index, key_index as u8))
+                    } else {
+                        None
+                    }
+                })
+        })
+}
+
+/// Return program ids referenced by all instructions.  No duplicates and order is preserved.
+fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
+    let mut set = BTreeSet::new();
+    instructions
+        .iter()
+        .map(|ix| ix.program_id)
+        .filter(|&program_id| set.insert(program_id))
+        .collect()
+}
 
 /// Address table lookups describe an on-chain address lookup table to use
 /// for loading more readonly and writable accounts in a single tx.
@@ -117,6 +317,66 @@ impl Sanitize for Message {
 }
 
 impl Message {
+    pub fn new_with_compiled_instructions(
+        num_required_signatures: u8,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
+        account_keys: Vec<Pubkey>,
+        address_table_lookups: Vec<MessageAddressTableLookup>,
+        recent_blockhash: Hash,
+        instructions: Vec<CompiledInstruction>,
+    ) -> Self {
+        Self {
+            header: MessageHeader {
+                num_required_signatures,
+                num_readonly_signed_accounts,
+                num_readonly_unsigned_accounts,
+            },
+            account_keys,
+            address_table_lookups,
+            recent_blockhash,
+            instructions,
+        }
+    }
+
+    pub fn new_with_payer(
+        instructions: &[Instruction],
+        payer: Option<&Pubkey>,
+        address_lookup_tables: Option<&[AddressLookupTable]>,
+    ) -> Self {
+        Self::new_with_blockhash(instructions, payer, address_lookup_tables, &Hash::default())
+    }
+
+    pub fn new_with_blockhash(
+        instructions: &[Instruction],
+        payer: Option<&Pubkey>,
+        address_lookup_tables: Option<&[AddressLookupTable]>,
+        blockhash: &Hash,
+    ) -> Self {
+        let InstructionKeys {
+            mut signed_keys,
+            unsigned_keys,
+            address_table_keys,
+            address_table_lookups,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
+        } = get_keys(instructions, payer, address_lookup_tables);
+        let num_required_signatures = signed_keys.len() as u8;
+        signed_keys.extend(&unsigned_keys);
+        let mut all_keys = signed_keys.clone();
+        all_keys.extend(&address_table_keys);
+        let instructions = compile_instructions(instructions, &all_keys);
+        Self::new_with_compiled_instructions(
+            num_required_signatures,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
+            signed_keys,
+            address_table_lookups,
+            *blockhash,
+            instructions,
+        )
+    }
+
     /// Serialize this message with a version #0 prefix using bincode encoding.
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(&(MESSAGE_VERSION_PREFIX, self)).unwrap()
