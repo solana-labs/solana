@@ -95,6 +95,11 @@ pub struct ZeroBalanceProof(pub [u8; 96]);
 unsafe impl Zeroable for ZeroBalanceProof {}
 unsafe impl Pod for ZeroBalanceProof {}
 
+/// Serialization of fee sigma proof
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct FeeSigmaProof(pub [u8; 256]);
+
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -114,6 +119,16 @@ pub struct RangeProof128(pub [u8; 736]);
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
 unsafe impl Zeroable for RangeProof128 {}
 unsafe impl Pod for RangeProof128 {}
+
+/// Serialization of range proofs for 128-bit numbers (for `TransferRangeProof` instruction)
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct RangeProof256(pub [u8; 800]);
+
+// `PodRangeProof256` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for RangeProof256 {}
+unsafe impl Pod for RangeProof256 {}
 
 /// Serialization for AeCiphertext
 #[derive(Clone, Copy, PartialEq)]
@@ -136,3 +151,33 @@ impl Default for AeCiphertext {
         Self::zeroed()
     }
 }
+
+// TODO: refactor this code into the instruction module
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct TransferPubkeys(pub [u8; 96]);
+
+unsafe impl Zeroable for TransferPubkeys {}
+unsafe impl Pod for TransferPubkeys {}
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct TransferWithFeePubkeys(pub [u8; 128]);
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct TransferAmountEncryption(pub [u8; 128]);
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct FeeEncryption(pub [u8; 96]);
+
+unsafe impl Zeroable for FeeEncryption {}
+unsafe impl Pod for FeeEncryption {}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct FeeParameters(pub [u8; 10]);
+
+unsafe impl Zeroable for FeeParameters {}
+unsafe impl Pod for FeeParameters {}
