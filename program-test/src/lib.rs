@@ -97,8 +97,17 @@ pub fn builtin_process_instruction(
     set_invoke_context(invoke_context);
 
     let log_collector = invoke_context.get_log_collector();
+<<<<<<< HEAD
     let program_id = invoke_context.get_caller()?;
     stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
+=======
+    let program_id = transaction_context.get_program_key()?;
+    stable_log::program_invoke(
+        &log_collector,
+        program_id,
+        invoke_context.get_invoke_depth(),
+    );
+>>>>>>> 551c24da5 (nit: consistent name (#22857))
 
     // Skip the processor account
     let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
@@ -234,6 +243,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
 
+<<<<<<< HEAD
         let caller = *invoke_context.get_caller().expect("get_caller");
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
@@ -241,6 +251,20 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
+=======
+        let caller = *invoke_context
+            .transaction_context
+            .get_program_key()
+            .unwrap();
+
+        stable_log::program_invoke(
+            &log_collector,
+            &instruction.program_id,
+            invoke_context.get_invoke_depth(),
+        );
+
+        let signers = signers_seeds
+>>>>>>> 551c24da5 (nit: consistent name (#22857))
             .iter()
             .enumerate()
             .map(|(i, _)| message.is_writable(i))

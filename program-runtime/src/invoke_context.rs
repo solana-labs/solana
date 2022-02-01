@@ -376,8 +376,14 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Current depth of the invocation stack
+<<<<<<< HEAD
     pub fn invoke_depth(&self) -> usize {
         self.invoke_stack.len()
+=======
+    pub fn get_invoke_depth(&self) -> usize {
+        self.transaction_context
+            .get_instruction_context_stack_height()
+>>>>>>> 551c24da5 (nit: consistent name (#22857))
     }
 
     /// Verify the results of an instruction
