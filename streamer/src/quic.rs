@@ -1,18 +1,9 @@
 use crossbeam_channel::Sender;
 use futures_util::stream::StreamExt;
-use quinn::{Endpoint, Incoming, ServerConfig};
-use pkcs8::{
-    der::Document,
-    AlgorithmIdentifier,
-    ObjectIdentifier
-};
-use rcgen::{
-    CertificateParams,
-    DistinguishedName,
-    DnType,
-    SanType,
-};
 use pem::Pem;
+use pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier};
+use quinn::{Endpoint, Incoming, ServerConfig};
+use rcgen::{CertificateParams, DistinguishedName, DnType, SanType};
 use solana_perf::packet::PacketBatch;
 use solana_sdk::packet::Packet;
 use solana_sdk::signature::Keypair;
@@ -30,13 +21,17 @@ use tokio::runtime::{Builder, Runtime};
 
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
-fn configure_server(identity_keypair: &Keypair, gossip_host: IpAddr) -> Result<(ServerConfig, String), Box<dyn Error>> {
+fn configure_server(
+    identity_keypair: &Keypair,
+    gossip_host: IpAddr,
+) -> Result<(ServerConfig, String), Box<dyn Error>> {
     let (cert_chain, priv_key) = new_cert(identity_keypair, gossip_host)?;
-    let cert_chain_pem_parts: Vec<Pem> = cert_chain.clone()
+    let cert_chain_pem_parts: Vec<Pem> = cert_chain
+        .clone()
         .into_iter()
         .map(|cert| Pem {
             tag: "CERTIFICATE".to_string(),
-            contents: cert.0
+            contents: cert.0,
         })
         .collect();
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
@@ -49,7 +44,10 @@ fn configure_server(identity_keypair: &Keypair, gossip_host: IpAddr) -> Result<(
     Ok((server_config, cert_chain_pem))
 }
 
-fn new_cert(identity_keypair: &Keypair, san: IpAddr) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
+fn new_cert(
+    identity_keypair: &Keypair,
+    san: IpAddr,
+) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
     let cert_params = new_cert_params(identity_keypair, san);
     let cert = rcgen::Certificate::from_params(cert_params)?;
     let cert_der = cert.serialize_der().unwrap();
@@ -79,20 +77,23 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
         private_key: &private_key,
         public_key: None,
     };
-    let key_pkcs8_der = key_pkcs8.to_der()
+    let key_pkcs8_der = key_pkcs8
+        .to_der()
         .expect("Failed to convert keypair to DER")
         .to_der();
 
     // Parse private key into rcgen::KeyPair struct.
-    let keypair = rcgen::KeyPair::from_der(&key_pkcs8_der)
-        .expect("Failed to parse keypair from DER");
+    let keypair =
+        rcgen::KeyPair::from_der(&key_pkcs8_der).expect("Failed to parse keypair from DER");
 
     let mut cert_params: CertificateParams = Default::default();
     cert_params.subject_alt_names = vec![SanType::IpAddress(san)];
     cert_params.alg = &rcgen::PKCS_ED25519;
     cert_params.key_pair = Some(keypair);
     cert_params.distinguished_name = DistinguishedName::new();
-    cert_params.distinguished_name.push(DnType::CommonName, "Solana node");
+    cert_params
+        .distinguished_name
+        .push(DnType::CommonName, "Solana node");
     cert_params
 }
 
@@ -104,7 +105,10 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
 /// - a stream of incoming QUIC connections
 /// - server certificate serialized into DER format
 #[allow(unused)]
-pub fn make_server_endpoint(bind_addr: SocketAddr, keypair: &Keypair) -> Result<(Incoming, String), Box<dyn Error>> {
+pub fn make_server_endpoint(
+    bind_addr: SocketAddr,
+    keypair: &Keypair,
+) -> Result<(Incoming, String), Box<dyn Error>> {
     // TODO(terorie) Bind address is not appropriate for SAN (could be 0.0.0.0)
     let (server_config, server_cert) = configure_server(keypair, bind_addr.ip())?;
     let (_endpoint, incoming) = Endpoint::server(server_config, bind_addr)?;

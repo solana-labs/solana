@@ -102,14 +102,14 @@ impl Tpu {
         );
         let (verified_sender, verified_receiver) = unbounded();
 
-        let tpu_quic_t =
-            solana_streamer::quic::spawn_server(
-                transactions_quic_sockets,
-                keypair,
-                cluster_info.my_contact_info().tpu.ip(),
-                packet_sender,
-                exit.clone()
-            ).unwrap();
+        let tpu_quic_t = solana_streamer::quic::spawn_server(
+            transactions_quic_sockets,
+            keypair,
+            cluster_info.my_contact_info().tpu.ip(),
+            packet_sender,
+            exit.clone(),
+        )
+        .unwrap();
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::default();

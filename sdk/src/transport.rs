@@ -1,5 +1,6 @@
 #![cfg(feature = "full")]
 
+use quinn::{ConnectError, ConnectionError, SendDatagramError};
 use {crate::transaction::TransactionError, std::io, thiserror::Error};
 use quinn::{ConnectionError, SendDatagramError, ConnectError};
 
