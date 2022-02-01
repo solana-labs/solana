@@ -299,13 +299,13 @@ fn calculate_stake_rewards(
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(&SkippedReason::DisabledInflation.into());
         }
-        forced_credits_update_with_skipped_reward |= true;
+        forced_credits_update_with_skipped_reward = true;
     } else if stake.delegation.activation_epoch == rewarded_epoch {
         // not assert!()-ed; but points should be zero
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(&SkippedReason::JustActivated.into());
         }
-        forced_credits_update_with_skipped_reward |= true;
+        forced_credits_update_with_skipped_reward = true;
     }
 
     if forced_credits_update_with_skipped_reward {
