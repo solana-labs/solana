@@ -12,79 +12,10 @@ use {
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
-<<<<<<< HEAD
-// Serializable version of AccountStorageEntry for snapshot format
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct SerializableAccountStorageEntry {
-    id: AppendVecId,
-    accounts_current_len: usize,
-}
-
-pub trait SerializableStorage {
-    fn id(&self) -> AppendVecId;
-    fn current_len(&self) -> usize;
-}
-
-impl SerializableStorage for SerializableAccountStorageEntry {
-    fn id(&self) -> AppendVecId {
-        self.id
-    }
-    fn current_len(&self) -> usize {
-        self.accounts_current_len
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
-
-impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
-    fn from(rhs: &AccountStorageEntry) -> Self {
-        Self {
-            id: rhs.append_vec_id(),
-            accounts_current_len: rhs.accounts.len(),
-        }
-    }
-}
-
-=======
->>>>>>> 2756abce3 (More serde snapshot cleanup (#22449))
 // Deserializable version of Bank which need not be serializable,
 // because it's handled by SerializableVersionedBank.
 // So, sync fields with it!
 #[derive(Clone, Deserialize)]
-<<<<<<< HEAD
-pub(crate) struct DeserializableVersionedBank {
-    pub(crate) blockhash_queue: BlockhashQueue,
-    pub(crate) ancestors: AncestorsForSerialization,
-    pub(crate) hash: Hash,
-    pub(crate) parent_hash: Hash,
-    pub(crate) parent_slot: Slot,
-    pub(crate) hard_forks: HardForks,
-    pub(crate) transaction_count: u64,
-    pub(crate) tick_height: u64,
-    pub(crate) signature_count: u64,
-    pub(crate) capitalization: u64,
-    pub(crate) max_tick_height: u64,
-    pub(crate) hashes_per_tick: Option<u64>,
-    pub(crate) ticks_per_slot: u64,
-    pub(crate) ns_per_slot: u128,
-    pub(crate) genesis_creation_time: UnixTimestamp,
-    pub(crate) slots_per_year: f64,
-    #[allow(dead_code)]
-    pub(crate) unused: u64,
-    pub(crate) slot: Slot,
-    pub(crate) epoch: Epoch,
-    pub(crate) block_height: u64,
-    pub(crate) collector_id: Pubkey,
-    pub(crate) collector_fees: u64,
-    pub(crate) fee_calculator: FeeCalculator,
-    pub(crate) fee_rate_governor: FeeRateGovernor,
-    pub(crate) collected_rent: u64,
-    pub(crate) rent_collector: RentCollector,
-    pub(crate) epoch_schedule: EpochSchedule,
-    pub(crate) inflation: Inflation,
-    pub(crate) stakes: Stakes,
-=======
 struct DeserializableVersionedBank {
     blockhash_queue: BlockhashQueue,
     ancestors: AncestorsForSerialization,
@@ -102,6 +33,7 @@ struct DeserializableVersionedBank {
     ns_per_slot: u128,
     genesis_creation_time: UnixTimestamp,
     slots_per_year: f64,
+    #[allow(dead_code)]
     unused: u64,
     slot: Slot,
     epoch: Epoch,
@@ -115,7 +47,6 @@ struct DeserializableVersionedBank {
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
     stakes: Stakes,
->>>>>>> 2756abce3 (More serde snapshot cleanup (#22449))
     #[allow(dead_code)]
     unused_accounts: UnusedAccounts,
     epoch_stakes: HashMap<Epoch, EpochStakes>,
