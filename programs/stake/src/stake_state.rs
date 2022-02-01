@@ -231,19 +231,21 @@ fn calculate_stake_points_and_credits(
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnRewinded.into());
             }
             // Don't adjust stake.activation_epoch for simplicity:
-            //  - generally back-dating stake.activation_epoch forcibly skews
-            //    the stake history sysvar. And properly handle all the cases
+            //  - generally fast-forwarding stake.activation_epoch forcibly (for
+            //    artifical re-activation with re-warm-up) skews the stake
+            //    history sysvar. And properly handling all the cases
             //    regarding deactivation epoch/warm-up/cool-down without
             //    introducing incentive skew is hard.
             //  - Conceptually, it should be acceptable for the staked SOLs at
-            //    the recreated vote to receive rewards again after rewind even
-            //    if it's kind of sudden. That's because it must have had
-            //    warmed-up to now.
+            //    the recreated vote to receive rewards again immediately after
+            //    rewind even if it looks like instant activation. That's
+            //    because it must have passed the required warmed-up at least
+            //    once in the past already
             //  - Also such a stake account remains to be a part of overall
             //    effective stake calculation even while the vote account is
-            //    missing for (indefinite) time. It should be treated equally
-            //    with no difference regarding to staking with delinquent
-            //    validator.
+            //    missing for (indefinite) time or remains to be pre-remove
+            //    credits score. It should be treated equally to staking with
+            //    delinquent validator with no differenciation.
             return (0, credits_in_vote, true);
         } else {
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
