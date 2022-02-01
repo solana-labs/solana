@@ -100,7 +100,7 @@ impl Default for Config {
             keypair_path,
             address_labels,
             commitment,
-            moniker_override
+            moniker_override,
         }
     }
 }
