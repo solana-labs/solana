@@ -4890,6 +4890,7 @@ dependencies = [
  "solana-client",
  "solana-core",
  "solana-gossip",
+ "solana-local-cluster",
  "solana-logger 1.10.0",
  "solana-net-utils",
  "solana-perf",
