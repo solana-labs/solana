@@ -658,32 +658,6 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
-        // rent fails to deserialize
-        process_instruction(
-            &serialize(&StakeInstruction::Initialize(
-                Authorized::default(),
-                Lockup::default(),
-            ))
-            .unwrap(),
-            vec![
-                (stake_address, stake_account.clone()),
-                (rent_address, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: stake_address,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: rent_address,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-        );
-
         // fails to deserialize stake state
         process_instruction(
             &serialize(&StakeInstruction::Initialize(

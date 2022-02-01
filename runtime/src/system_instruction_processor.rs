@@ -1518,34 +1518,6 @@ mod tests {
     }
 
     #[test]
-    fn test_process_nonce_ix_bad_recent_blockhash_state_fail() {
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
-            vec![
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
-        );
-    }
-
-    #[test]
     fn test_process_nonce_ix_ok() {
         let nonce_address = Pubkey::new_unique();
         let nonce_account = nonce_account::create_account(1_000_000).into_inner();
@@ -1659,83 +1631,6 @@ mod tests {
     }
 
     #[test]
-    fn test_process_withdraw_ix_bad_recent_blockhash_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
-            vec![
-                (nonce_address, create_default_account()),
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
-        );
-    }
-
-    #[test]
-    fn test_process_withdraw_ix_bad_rent_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_recent_blockhashes_account()),
-                (sysvar::rent::id(), create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: sysvar::rent::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
-        );
-    }
-
-    #[test]
     fn test_process_withdraw_ix_ok() {
         let nonce_address = Pubkey::new_unique();
         let nonce_account = nonce_account::create_account(1_000_000).into_inner();
@@ -1801,70 +1696,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
-        );
-    }
-
-    #[test]
-    fn test_process_initialize_bad_recent_blockhash_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (blockhash_id, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
-        );
-    }
-
-    #[test]
-    fn test_process_initialize_ix_bad_rent_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (blockhash_id, create_default_recent_blockhashes_account()),
-                (sysvar::rent::id(), create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: sysvar::rent::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
             super::process_instruction,
         );
     }
