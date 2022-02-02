@@ -228,6 +228,18 @@ impl Default for ValidatorConfig {
     }
 }
 
+<<<<<<< HEAD
+=======
+impl ValidatorConfig {
+    pub fn default_for_test() -> Self {
+        Self {
+            rpc_config: JsonRpcConfig::default_for_test(),
+            ..Self::default()
+        }
+    }
+}
+
+>>>>>>> c62f9839a (test-validator-bin: reinstate full rpc method set)
 // `ValidatorStartProgress` contains status information that is surfaced to the node operator over
 // the admin RPC channel to help them to follow the general progress of node startup without
 // having to watch log messages.
