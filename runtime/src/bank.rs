@@ -3472,12 +3472,18 @@ impl Bank {
 
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
-        &self,
+        self: &Arc<Bank>,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        // Simulation detection countermeasure 1: Create a new child bank for the simulation. This
+        // ensures comparing the slot values between the Clock and SlotHistory sysvars does not
+        // reveal that the program is running in simulation.
+        //
+        // Reference: https://opcodes.fr/en/publications/2022-01/detecting-transaction-simulation/
+        let bank = Bank::new_from_parent(self, &Pubkey::default(), self.slot().saturating_add(1));
+        bank.simulate_transaction_unchecked(transaction)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
