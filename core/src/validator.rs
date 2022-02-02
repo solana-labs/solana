@@ -230,9 +230,10 @@ impl Default for ValidatorConfig {
 
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
-        let mut config = Self::default();
-        config.rpc_config.full_api = true;
-        config
+        Self {
+            rpc_config: JsonRpcConfig::default_for_test(),
+            ..Self::default()
+        }
     }
 }
 
