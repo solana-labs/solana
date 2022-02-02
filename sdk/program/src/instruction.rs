@@ -252,6 +252,10 @@ pub enum InstructionError {
     /// Accounts data budget exceeded
     #[error("Requested account data allocation exceeded the accounts data budget")]
     AccountsDataBudgetExceeded,
+
+    /// Active vote account close
+    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
+    ActiveVoteAccountClose,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }
