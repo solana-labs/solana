@@ -929,19 +929,6 @@ impl Blockstore {
         start.stop();
         metrics.shred_recovery_elapsed += start.as_us();
 
-<<<<<<< HEAD
-        metrics.num_inserted += just_inserted_coding_shreds.len() as u64;
-        for (_, shred) in just_inserted_coding_shreds.into_iter() {
-            self.check_insert_coding_shred(
-                shred,
-                &mut index_working_set,
-                &mut write_batch,
-                &mut index_meta_time,
-            );
-        }
-
-=======
->>>>>>> 38fcfb754 (Persist coding shreds (#21214))
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
         // drop the others
@@ -5565,16 +5552,10 @@ pub mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-    pub fn test_check_cache_coding_shred() {
+    pub fn test_check_insert_coding_shred() {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
-=======
-    pub fn test_check_insert_coding_shred() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
->>>>>>> 38fcfb754 (Persist coding shreds (#21214))
 
             let slot = 1;
             let (shred, coding) = Shredder::new_coding_shred_header(
@@ -5588,15 +5569,16 @@ pub mod tests {
             let coding_shred =
                 Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
-<<<<<<< HEAD
             let mut erasure_metas = HashMap::new();
             let mut index_working_set = HashMap::new();
             let mut just_received_coding_shreds = HashMap::new();
+            let mut write_batch = blockstore.db.batch().unwrap();
             let mut index_meta_time = 0;
-            assert!(blockstore.check_cache_coding_shred(
+            assert!(blockstore.check_insert_coding_shred(
                 coding_shred.clone(),
                 &mut erasure_metas,
                 &mut index_working_set,
+                &mut write_batch,
                 &mut just_received_coding_shreds,
                 &mut index_meta_time,
                 &|_shred| {
@@ -5610,10 +5592,11 @@ pub mod tests {
             // insert again fails on dupe
             use std::sync::atomic::{AtomicUsize, Ordering};
             let counter = AtomicUsize::new(0);
-            assert!(!blockstore.check_cache_coding_shred(
+            assert!(!blockstore.check_insert_coding_shred(
                 coding_shred,
                 &mut erasure_metas,
                 &mut index_working_set,
+                &mut write_batch,
                 &mut just_received_coding_shreds,
                 &mut index_meta_time,
                 &|_shred| {
@@ -5625,46 +5608,6 @@ pub mod tests {
             ));
             assert_eq!(counter.load(Ordering::Relaxed), 1);
         }
-=======
-        let mut erasure_metas = HashMap::new();
-        let mut index_working_set = HashMap::new();
-        let mut just_received_coding_shreds = HashMap::new();
-        let mut write_batch = blockstore.db.batch().unwrap();
-        let mut index_meta_time = 0;
-        assert!(blockstore.check_insert_coding_shred(
-            coding_shred.clone(),
-            &mut erasure_metas,
-            &mut index_working_set,
-            &mut write_batch,
-            &mut just_received_coding_shreds,
-            &mut index_meta_time,
-            &|_shred| {
-                panic!("no dupes");
-            },
-            false,
-            false,
-            &mut BlockstoreInsertionMetrics::default(),
-        ));
-
-        // insert again fails on dupe
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        let counter = AtomicUsize::new(0);
-        assert!(!blockstore.check_insert_coding_shred(
-            coding_shred,
-            &mut erasure_metas,
-            &mut index_working_set,
-            &mut write_batch,
-            &mut just_received_coding_shreds,
-            &mut index_meta_time,
-            &|_shred| {
-                counter.fetch_add(1, Ordering::Relaxed);
-            },
-            false,
-            false,
-            &mut BlockstoreInsertionMetrics::default(),
-        ));
-        assert_eq!(counter.load(Ordering::Relaxed), 1);
->>>>>>> 38fcfb754 (Persist coding shreds (#21214))
     }
 
     #[test]
