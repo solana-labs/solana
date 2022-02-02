@@ -24,7 +24,7 @@ export async function sendAndConfirmTransaction(
   const sendOptions = options && {
     skipPreflight: options.skipPreflight,
     preflightCommitment: options.preflightCommitment || options.commitment,
-    maxRetries: options.maxRetries
+    maxRetries: options.maxRetries,
   };
 
   const signature = await connection.sendTransaction(
