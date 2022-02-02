@@ -207,7 +207,7 @@ fn calculate_stake_points(
         stake_history,
         inflation_point_calc_tracer,
         true, // this is safe because this flag shouldn't affect the first
-              // element of the returned tuple in any way
+              // element (i.e. `points`) of the returned tuple in any way
     )
     .0
 }
@@ -246,11 +246,19 @@ fn calculate_stake_points_and_credits(
             //    missing for (indefinite) time or remains to be pre-remove
             //    credits score. It should be treated equally to staking with
             //    delinquent validator with no differenciation.
+
+            // hint with true to indicate some exceptional credits handling is needed
             return (0, credits_in_vote, true);
         } else {
+            // change the above `else` to `else if credits_in_vote == credits_in_stake`
+            // (and remove the outermost enclosing `if`) when cleaning credits_auto_rewind
+            // after activation
+
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
             }
+            // don't hint the caller and return current value if credits_auto_rewind is off or
+            // credits remain to be unchanged (= delinquent)
             return (0, credits_in_stake, false);
         };
     }
@@ -2581,14 +2589,20 @@ mod tests {
         // credits_observed is auto-rewinded when vote_state credits are assumed to have been
         // recreated
         stake.credits_observed = 1000;
-        // this is old behavior; return pre-recreation (large) vote credits from stake account
+        // this is old behavior; return the pre-recreation (large) credits from stake account
         assert_eq!(
             (0, 1000, false),
             calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), false)
         );
-        // this is new behavior; return post-recreation rewinded vote credits from the vote account
+        // this is new behavior 1; return the post-recreation rewinded credits from the vote account
         assert_eq!(
             (0, 4, true),
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+        );
+        // this is new behavior 2; don't hint when credits both from stake and vote are identical
+        stake.credits_observed = 4;
+        assert_eq!(
+            (0, 4, false),
             calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
         );
 
