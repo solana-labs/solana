@@ -62,11 +62,13 @@ impl ValidityProof {
     /// * `opening` - The opening associated with the Pedersen commitment
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new<T: Into<Scalar>>(
-        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey), // TODO: rename pubkey_auditor
         amount: T,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
+        transcript.validity_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the inputs
         let P_dest = pubkey_dest.get_point();
         let P_auditor = pubkey_auditor.get_point();
@@ -120,6 +122,8 @@ impl ValidityProof {
         (handle_dest, handle_auditor): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
+        transcript.validity_proof_domain_sep();
+
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
@@ -235,6 +239,8 @@ impl AggregatedValidityProof {
         (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
         transcript: &mut Transcript,
     ) -> Self {
+        transcript.aggregated_validity_proof_domain_sep();
+
         let t = transcript.challenge_scalar(b"t");
 
         let aggregated_message = amount_lo.into() + amount_hi.into() * t;
@@ -263,6 +269,8 @@ impl AggregatedValidityProof {
         (handle_lo_auditor, handle_hi_auditor): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
+        transcript.aggregated_validity_proof_domain_sep();
+
         let t = transcript.challenge_scalar(b"t");
 
         let aggregated_commitment = commitment_lo + commitment_hi * t;

@@ -8,7 +8,8 @@ use {
     rand::rngs::OsRng,
 };
 use {
-    crate::{sigma_proofs::errors::FeeProofError, transcript::TranscriptProtocol},
+    crate::{sigma_proofs::errors::FeeSigmaProofError, transcript::TranscriptProtocol},
+    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -73,25 +74,25 @@ impl FeeSigmaProof {
             &mut transcript_fee_below_max,
         );
 
-        let above_max = u64::ct_gt(&max_fee, &fee_amount);
+        let below_max = u64::ct_gt(&max_fee, &fee_amount);
 
         // conditionally assign transcript; transcript is not conditionally selectable
-        if bool::from(above_max) {
-            *transcript = transcript_fee_above_max;
-        } else {
+        if bool::from(below_max) {
             *transcript = transcript_fee_below_max;
+        } else {
+            *transcript = transcript_fee_above_max;
         }
 
         Self {
             fee_max_proof: FeeMaxProof::conditional_select(
                 &proof_fee_above_max.fee_max_proof,
                 &proof_fee_below_max.fee_max_proof,
-                above_max,
+                below_max,
             ),
             fee_equality_proof: FeeEqualityProof::conditional_select(
                 &proof_fee_above_max.fee_equality_proof,
                 &proof_fee_below_max.fee_equality_proof,
-                above_max,
+                below_max,
             ),
         }
     }
@@ -259,7 +260,7 @@ impl FeeSigmaProof {
         commitment_claimed: &PedersenCommitment,
         max_fee: u64,
         transcript: &mut Transcript,
-    ) -> Result<(), FeeProofError> {
+    ) -> Result<(), FeeSigmaProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let m = Scalar::from(max_fee);
 
@@ -275,19 +276,19 @@ impl FeeSigmaProof {
             .fee_max_proof
             .Y_max_proof
             .decompress()
-            .ok_or(FeeProofError::Format)?;
+            .ok_or(FeeSigmaProofError::Format)?;
         let z_max = self.fee_max_proof.z_max_proof;
 
         let Y_delta_real = self
             .fee_equality_proof
             .Y_delta
             .decompress()
-            .ok_or(FeeProofError::Format)?;
+            .ok_or(FeeSigmaProofError::Format)?;
         let Y_claimed = self
             .fee_equality_proof
             .Y_claimed
             .decompress()
-            .ok_or(FeeProofError::Format)?;
+            .ok_or(FeeSigmaProofError::Format)?;
         let z_x = self.fee_equality_proof.z_x;
         let z_delta_real = self.fee_equality_proof.z_delta;
         let z_claimed = self.fee_equality_proof.z_claimed;
@@ -333,8 +334,55 @@ impl FeeSigmaProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(FeeProofError::AlgebraicRelation)
+            Err(FeeSigmaProofError::AlgebraicRelation)
         }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 256] {
+        let mut buf = [0_u8; 256];
+        buf[..32].copy_from_slice(self.fee_max_proof.Y_max_proof.as_bytes());
+        buf[32..64].copy_from_slice(self.fee_max_proof.z_max_proof.as_bytes());
+        buf[64..96].copy_from_slice(self.fee_max_proof.c_max_proof.as_bytes());
+        buf[96..128].copy_from_slice(self.fee_equality_proof.Y_delta.as_bytes());
+        buf[128..160].copy_from_slice(self.fee_equality_proof.Y_claimed.as_bytes());
+        buf[160..192].copy_from_slice(self.fee_equality_proof.z_x.as_bytes());
+        buf[192..224].copy_from_slice(self.fee_equality_proof.z_delta.as_bytes());
+        buf[224..256].copy_from_slice(self.fee_equality_proof.z_claimed.as_bytes());
+        buf
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
+        let bytes = array_ref![bytes, 0, 256];
+        let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) =
+            array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
+
+        let Y_max_proof = CompressedRistretto::from_slice(Y_max_proof);
+        let z_max_proof =
+            Scalar::from_canonical_bytes(*z_max_proof).ok_or(FeeSigmaProofError::Format)?;
+        let c_max_proof =
+            Scalar::from_canonical_bytes(*c_max_proof).ok_or(FeeSigmaProofError::Format)?;
+
+        let Y_delta = CompressedRistretto::from_slice(Y_delta);
+        let Y_claimed = CompressedRistretto::from_slice(Y_claimed);
+        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(FeeSigmaProofError::Format)?;
+        let z_delta = Scalar::from_canonical_bytes(*z_delta).ok_or(FeeSigmaProofError::Format)?;
+        let z_claimed =
+            Scalar::from_canonical_bytes(*z_claimed).ok_or(FeeSigmaProofError::Format)?;
+
+        Ok(Self {
+            fee_max_proof: FeeMaxProof {
+                Y_max_proof,
+                z_max_proof,
+                c_max_proof,
+            },
+            fee_equality_proof: FeeEqualityProof {
+                Y_delta,
+                Y_claimed,
+                z_x,
+                z_delta,
+                z_claimed,
+            },
+        })
     }
 }
 
@@ -469,6 +517,48 @@ mod test {
             commitment_delta.get_point() - opening_delta.get_scalar() * &(*H),
             commitment_claimed.get_point() - opening_claimed.get_scalar() * &(*H)
         );
+
+        let mut transcript_prover = Transcript::new(b"test");
+        let mut transcript_verifier = Transcript::new(b"test");
+
+        let proof = FeeSigmaProof::new(
+            (amount_fee, &commitment_fee, &opening_fee),
+            (delta, &commitment_delta, &opening_delta),
+            (&commitment_claimed, &opening_claimed),
+            max_fee,
+            &mut transcript_prover,
+        );
+
+        assert!(proof
+            .verify(
+                &commitment_fee,
+                &commitment_delta,
+                &commitment_claimed,
+                max_fee,
+                &mut transcript_verifier,
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn test_fee_delta_is_zero() {
+        let transfer_amount: u64 = 100;
+        let max_fee: u64 = 3;
+
+        let rate_fee: u16 = 100; // 1.00%
+        let amount_fee: u64 = 1;
+        let delta: u64 = 0; // 1*10000 - 100*100
+
+        let (commitment_transfer, opening_transfer) = Pedersen::new(transfer_amount);
+        let (commitment_fee, opening_fee) = Pedersen::new(amount_fee);
+
+        let scalar_rate = Scalar::from(rate_fee);
+        let commitment_delta =
+            &(&commitment_fee * &Scalar::from(10000_u64)) - &(&commitment_transfer * &scalar_rate);
+        let opening_delta =
+            &(&opening_fee * &Scalar::from(10000_u64)) - &(&opening_transfer * &scalar_rate);
+
+        let (commitment_claimed, opening_claimed) = Pedersen::new(delta);
 
         let mut transcript_prover = Transcript::new(b"test");
         let mut transcript_verifier = Transcript::new(b"test");

@@ -52,6 +52,13 @@ impl Pedersen {
 
         PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[*G, *H]))
     }
+
+    /// On input a message, the function returns a Pedersen commitment with zero as the opening.
+    ///
+    /// This function is deterministic.
+    pub fn encode<T: Into<Scalar>>(amount: T) -> PedersenCommitment {
+        PedersenCommitment(amount.into() * &(*G))
+    }
 }
 
 /// Pedersen opening type.
