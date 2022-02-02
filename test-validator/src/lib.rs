@@ -107,7 +107,7 @@ pub struct TestValidatorGenesis {
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
-    deactivate_feature_list: HashSet<Pubkey>,
+    deactivate_feature_set: HashSet<Pubkey>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -137,6 +137,7 @@ impl Default for TestValidatorGenesis {
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             accountsdb_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
+            deactivate_feature_set: HashSet::<Pubkey>::default(),
         }
     }
 }
@@ -146,7 +147,7 @@ impl TestValidatorGenesis {
     /// during `initialize_ledger`, if member of the set is not a Feature
     /// it will be silently ignored
     pub fn deactivate_features(&mut self, deactivate_list: &[Pubkey]) -> &mut Self {
-        self.deactivate_feature_list.extend(deactivate_list);
+        self.deactivate_feature_set.extend(deactivate_list);
         self
     }
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
@@ -551,9 +552,17 @@ impl TestValidator {
         }
 
         // Remove features tagged to deactivate
-        for deactivate_feature_pk in &config.deactivate_feature_list {
+        for deactivate_feature_pk in &config.deactivate_feature_set {
             if FEATURE_NAMES.contains_key(deactivate_feature_pk) {
-                genesis_config.accounts.remove(deactivate_feature_pk);
+                match genesis_config.accounts.remove(deactivate_feature_pk) {
+                    Some(_) => info!("Feature for {:?} deactivated", deactivate_feature_pk),
+                    None => warn!(
+                        "{:?} account not found in genesis_config",
+                        deactivate_feature_pk
+                    ),
+                }
+            } else {
+                warn!("{:?} is not a feature public key", deactivate_feature_pk);
             }
         }
 
