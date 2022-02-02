@@ -200,7 +200,11 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
+<<<<<<< HEAD
 #[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
+=======
+#[frozen_abi(digest = "6XkxpmzmKZguLZMS1KmU7N2dAcv8MmNhyobJCwRLkTdi")]
+>>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 pub(crate) type TransactionAccountRefCell = (Pubkey, Rc<RefCell<AccountSharedData>>);
 type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
