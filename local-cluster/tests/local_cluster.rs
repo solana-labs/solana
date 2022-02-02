@@ -615,7 +615,7 @@ fn test_frozen_account_from_genesis() {
         validator_configs: vec![ValidatorConfig {
             // Freeze the validator identity account
             frozen_accounts: vec![validator_identity.pubkey()],
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         }],
         ..ClusterConfig::default()
     };
@@ -2136,7 +2136,7 @@ fn setup_snapshot_validator_config(
         snapshot_config: Some(snapshot_config),
         account_paths: account_storage_paths,
         accounts_hash_interval_slots: snapshot_interval_slots,
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
 
     SnapshotValidatorConfig {

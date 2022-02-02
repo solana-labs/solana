@@ -51,7 +51,7 @@ fn test_exchange_local_cluster() {
             node_stakes: vec![100_000; NUM_NODES],
             cluster_lamports: 100_000_000_000_000,
             validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default(),
+                &ValidatorConfig::default_for_test(),
                 NUM_NODES,
             ),
             native_instruction_processors: [solana_exchange_program!()].to_vec(),
