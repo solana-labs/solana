@@ -199,7 +199,7 @@ pub fn is_url_or_moniker_or_custom<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    if string.to_string() == "c".to_string() {
+    if string.to_string() == *"c" {
         return Ok(());
     }
     is_url_or_moniker(string)
