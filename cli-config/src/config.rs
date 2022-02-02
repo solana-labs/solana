@@ -67,8 +67,8 @@ pub struct Config {
     /// A moniker override config
     ///
     /// Optional YAML map to override moniker settings to custom set ones
-    #[serde(default)]
-    pub moniker_override: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub moniker_override: HashMap<String, String>,
 }
 
 impl Default for Config {
@@ -92,7 +92,7 @@ impl Default for Config {
 
         let commitment = "confirmed".to_string();
 
-        let moniker_override = None;
+        let moniker_override = HashMap::<String, String>::new();
 
         Self {
             json_rpc_url,

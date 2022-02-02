@@ -2,7 +2,7 @@ use {
     clap::{crate_description, crate_name, value_t_or_exit, ArgMatches},
     console::style,
     solana_clap_utils::{
-        input_validators::normalize_to_url_if_moniker,
+        clusters::Clusters,
         keypair::{CliSigners, DefaultSigner},
         DisplayError,
     },
@@ -89,15 +89,9 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                 }
                 ("set", Some(subcommand_matches)) => {
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
-                        let json_rpc_url = normalize_to_url_if_moniker(url);
-                        let empty = &HashMap::<String, String>::new();
-                        config.json_rpc_url = config
-                            .moniker_override
-                            .as_ref()
-                            .unwrap_or(empty)
-                            .get(url)
-                            .unwrap_or(&json_rpc_url)
-                            .to_string();
+                        let cluster = Clusters::get_cluster(url);
+                        config.json_rpc_url =
+                            Clusters::get_rpc_url(&cluster, &config.moniker_override);
                         // Revert to a computed `websocket_url` value when `json_rpc_url` is
                         // changed
                         config.websocket_url = "".to_string();
