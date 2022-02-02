@@ -188,7 +188,7 @@ impl Default for Tower {
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
             vote_state: VoteState::default(),
-            last_vote: VoteTransaction::from(Vote::default()),
+            last_vote: VoteTransaction::from(VoteStateUpdate::default()),
             last_timestamp: BlockTimestamp::default(),
             last_vote_tx_blockhash: Hash::default(),
             stray_restored_slot: Option::default(),
@@ -1243,7 +1243,7 @@ impl Tower {
                 .clone();
             self.initialize_root(root);
             self.initialize_lockouts(|v| v.slot > root);
-            info!(
+            trace!(
                 "Lockouts in tower for {} is initialized using bank {}",
                 self.vote_state.node_pubkey,
                 bank.slot(),

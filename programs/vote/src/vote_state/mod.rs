@@ -473,6 +473,12 @@ impl VoteState {
             // to the current vote state root for safety.
             if earliest_slot_hash_in_history > new_proposed_root {
                 vote_state_update.root = self.root_slot;
+            } else if !slot_hashes
+                // Verify that the root is in slot hashes
+                .iter()
+                .any(|&(slot, _)| slot == new_proposed_root)
+            {
+                return Err(VoteError::RootOnDifferentFork);
             }
         }
 
