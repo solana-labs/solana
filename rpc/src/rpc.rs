@@ -154,6 +154,15 @@ pub struct JsonRpcConfig {
     pub rpc_scan_and_fix_roots: bool,
 }
 
+impl JsonRpcConfig {
+    pub fn default_for_test() -> Self {
+        Self {
+            full_api: true,
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
