@@ -231,6 +231,13 @@ impl TransactionContext {
 /// List of (stack height, instruction) for each top-level instruction
 pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
 
+#[derive(Clone, Debug)]
+pub struct AccountMeta {
+    pub index_in_transaction: usize,
+    pub is_signer: bool,
+    pub is_writable: bool,
+}
+
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
@@ -275,9 +282,15 @@ impl InstructionContext {
         self.instruction_accounts.len()
     }
 
-    /// Get the instruction's accounts
-    pub fn get_instruction_accounts(&self) -> &[InstructionAccount] {
-        &self.instruction_accounts
+    pub fn get_instruction_accounts_metas(&self) -> Vec<AccountMeta> {
+        self.instruction_accounts
+            .iter()
+            .map(|instruction_account| AccountMeta {
+                index_in_transaction: instruction_account.index_in_transaction,
+                is_signer: instruction_account.is_signer,
+                is_writable: instruction_account.is_writable,
+            })
+            .collect()
     }
 
     /// Number of accounts in this Instruction
@@ -394,6 +407,28 @@ impl InstructionContext {
             }
         }
         result
+    }
+
+    /// Returns whether an account is a signer
+    pub fn is_signer(&self, index_in_instruction: usize) -> bool {
+        if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                [index_in_instruction.saturating_sub(self.program_accounts.len())]
+            .is_signer
+        }
+    }
+
+    /// Returns whether an account is writable
+    pub fn is_writable(&self, index_in_instruction: usize) -> bool {
+        if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                [index_in_instruction.saturating_sub(self.program_accounts.len())]
+            .is_writable
+        }
     }
 }
 

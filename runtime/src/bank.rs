@@ -695,11 +695,9 @@ pub fn inner_instructions_list_from_instruction_trace(
                         instruction_context.get_program_id_index() as u8,
                         instruction_context.get_instruction_data().to_vec(),
                         instruction_context
-                            .get_instruction_accounts()
+                            .get_instruction_accounts_metas()
                             .iter()
-                            .map(|instruction_account| {
-                                instruction_account.index_in_transaction as u8
-                            })
+                            .map(|meta| meta.index_in_transaction as u8)
                             .collect(),
                     )
                 })

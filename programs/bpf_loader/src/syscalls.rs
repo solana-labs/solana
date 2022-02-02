@@ -3104,13 +3104,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                     instruction_context.get_program_id(invoke_context.transaction_context);
                 data.clone_from_slice(instruction_context.get_instruction_data());
                 let account_metas = instruction_context
-                    .get_instruction_accounts()
+                    .get_instruction_accounts_metas()
                     .iter()
-                    .map(|instruction_account| AccountMeta {
+                    .map(|meta| AccountMeta {
                         pubkey: *invoke_context
-                            .get_key_of_account_at_index(instruction_account.index_in_transaction),
-                        is_signer: instruction_account.is_signer,
-                        is_writable: instruction_account.is_writable,
+                            .get_key_of_account_at_index(meta.index_in_transaction),
+                        is_signer: meta.is_signer,
+                        is_writable: meta.is_writable,
                     })
                     .collect::<Vec<_>>();
                 accounts.clone_from_slice(account_metas.as_slice());
