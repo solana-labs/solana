@@ -5,6 +5,7 @@ use crate::{
     instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
     lamports::LamportsError,
     pubkey::Pubkey,
+    sysvar::Sysvar,
 };
 use std::{
     cell::{RefCell, RefMut},
@@ -113,6 +114,17 @@ impl TransactionContext {
         self.accounts
             .get(index_in_transaction)
             .ok_or(InstructionError::NotEnoughAccountKeys)
+    }
+
+    /// Checks if the account key at the given index is the belongs to the given sysvar
+    pub fn check_sysvar<S: Sysvar>(
+        &self,
+        index_in_transaction: usize,
+    ) -> Result<(), InstructionError> {
+        if !S::check_id(&self.account_keys[index_in_transaction]) {
+            return Err(InstructionError::InvalidArgument);
+        }
+        Ok(())
     }
 
     /// Searches for an account by its key
@@ -241,13 +253,6 @@ impl TransactionContext {
 /// List of (stack height, instruction) for each top-level instruction
 pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
 
-#[derive(Clone, Debug)]
-pub struct AccountMeta {
-    pub index_in_transaction: usize,
-    pub is_signer: bool,
-    pub is_writable: bool,
-}
-
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
@@ -290,17 +295,6 @@ impl InstructionContext {
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> usize {
         self.instruction_accounts.len()
-    }
-
-    pub fn get_instruction_accounts_metas(&self) -> Vec<AccountMeta> {
-        self.instruction_accounts
-            .iter()
-            .map(|instruction_account| AccountMeta {
-                index_in_transaction: instruction_account.index_in_transaction,
-                is_signer: instruction_account.is_signer,
-                is_writable: instruction_account.is_writable,
-            })
-            .collect()
     }
 
     /// Number of accounts in this Instruction
@@ -406,6 +400,30 @@ impl InstructionContext {
         )
     }
 
+    /// Returns whether an account is a signer
+    pub fn is_signer(&self, index_in_instruction: usize) -> Result<bool, InstructionError> {
+        Ok(if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                .get(index_in_instruction.saturating_sub(self.program_accounts.len()))
+                .ok_or(InstructionError::MissingAccount)?
+                .is_signer
+        })
+    }
+
+    /// Returns whether an account is writable
+    pub fn is_writable(&self, index_in_instruction: usize) -> Result<bool, InstructionError> {
+        Ok(if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                .get(index_in_instruction.saturating_sub(self.program_accounts.len()))
+                .ok_or(InstructionError::MissingAccount)?
+                .is_writable
+        })
+    }
+
     /// Calculates the set of all keys of signer accounts in this Instruction
     pub fn get_signers(&self, transaction_context: &TransactionContext) -> HashSet<Pubkey> {
         let mut result = HashSet::new();
@@ -417,28 +435,6 @@ impl InstructionContext {
             }
         }
         result
-    }
-
-    /// Returns whether an account is a signer
-    pub fn is_signer(&self, index_in_instruction: usize) -> bool {
-        if index_in_instruction < self.program_accounts.len() {
-            false
-        } else {
-            self.instruction_accounts
-                [index_in_instruction.saturating_sub(self.program_accounts.len())]
-            .is_signer
-        }
-    }
-
-    /// Returns whether an account is writable
-    pub fn is_writable(&self, index_in_instruction: usize) -> bool {
-        if index_in_instruction < self.program_accounts.len() {
-            false
-        } else {
-            self.instruction_accounts
-                [index_in_instruction.saturating_sub(self.program_accounts.len())]
-            .is_writable
-        }
     }
 }
 
@@ -474,10 +470,8 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Assignes the owner of this account (transaction wide)
-    pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
+    pub fn set_owner(&mut self, pubkey: &[u8]) {
         self.account.copy_into_owner_from_slice(pubkey);
-        self.verify_writability()
-        // TODO: return Err(InstructionError::ModifiedProgramId);
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -486,16 +480,8 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)
-    pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+    pub fn set_lamports(&mut self, lamports: u64) {
         self.account.set_lamports(lamports);
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            return Err(InstructionError::ExecutableLamportChange);
-        }
-        if !self.is_writable() {
-            return Err(InstructionError::ReadonlyLamportChange);
-        }
-        // TODO: return Err(InstructionError::ExternalAccountLamportSpend);
-        Ok(())
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -504,7 +490,8 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_add(lamports)
                 .ok_or(LamportsError::ArithmeticOverflow)?,
-        )
+        );
+        Ok(())
     }
 
     /// Subtracts lamports from this account (transaction wide)
@@ -513,18 +500,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_sub(lamports)
                 .ok_or(LamportsError::ArithmeticUnderflow)?,
-        )
-    }
-
-    /// Verifies that this account is writable (instruction wide)
-    fn verify_writability(&self) -> Result<(), InstructionError> {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            return Err(InstructionError::ExecutableDataModified);
-        }
-        if !self.is_writable() {
-            return Err(InstructionError::ReadonlyDataModified);
-        }
-        // TODO: return Err(InstructionError::ExternalAccountDataModified);
+        );
         Ok(())
     }
 
@@ -533,21 +509,26 @@ impl<'a> BorrowedAccount<'a> {
         self.account.data()
     }
 
+    /// Returns a writable slice of the account data (transaction wide)
+    pub fn get_data_mut(&mut self) -> &mut [u8] {
+        self.account.data_as_mut_slice()
+    }
+
     /// Overwrites the account data and size (transaction wide)
-    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+    pub fn set_data(&mut self, data: &[u8]) {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
-            // TODO: return Err(InstructionError::AccountDataSizeChanged);
         }
-        self.verify_writability()
     }
 
-    /*pub fn realloc(&self, new_len: usize, zero_init: bool) {
-        // TODO: return Err(InstructionError::InvalidRealloc);
-        // TODO: return Err(InstructionError::AccountDataSizeChanged);
-    }*/
+    /// Resizes the account data (transaction wide)
+    ///
+    /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
+    pub fn set_data_length(&mut self, new_len: usize) {
+        self.account.data_mut().resize(new_len, 0);
+    }
 
     /// Deserializes the account data into a state
     pub fn get_state<T: serde::de::DeserializeOwned>(&self) -> Result<T, InstructionError> {
@@ -565,7 +546,7 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::AccountDataTooSmall);
         }
         bincode::serialize_into(&mut *data, state).map_err(|_| InstructionError::GenericError)?;
-        self.verify_writability()
+        Ok(())
     }
 
     /// Returns whether this account is executable (transaction wide)
@@ -574,11 +555,8 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Configures whether this account is executable (transaction wide)
-    pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
+    pub fn set_executable(&mut self, is_executable: bool) {
         self.account.set_executable(is_executable);
-        self.verify_writability()
-        // TODO: return Err(InstructionError::ExecutableAccountNotRentExempt);
-        // TODO: return Err(InstructionError::ExecutableModified);
     }
 
     /// Returns the rent epoch of this account (transaction wide)
@@ -588,25 +566,15 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is a signer (instruction wide)
     pub fn is_signer(&self) -> bool {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            false
-        } else {
-            self.instruction_context.instruction_accounts[self
-                .index_in_instruction
-                .saturating_sub(self.instruction_context.program_accounts.len())]
-            .is_signer
-        }
+        self.instruction_context
+            .is_signer(self.index_in_instruction)
+            .unwrap_or_default()
     }
 
     /// Returns whether this account is writable (instruction wide)
     pub fn is_writable(&self) -> bool {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
-            false
-        } else {
-            self.instruction_context.instruction_accounts[self
-                .index_in_instruction
-                .saturating_sub(self.instruction_context.program_accounts.len())]
-            .is_writable
-        }
+        self.instruction_context
+            .is_writable(self.index_in_instruction)
+            .unwrap_or_default()
     }
 }

@@ -3107,17 +3107,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                     instruction_context.get_program_id(invoke_context.transaction_context);
                 data.clone_from_slice(instruction_context.get_instruction_data());
                 let account_metas = question_mark!(
-                    instruction_context
-                        .get_instruction_accounts_metas()
-                        .iter()
-                        .map(|meta| Ok(AccountMeta {
-                            pubkey: *invoke_context
-                                .get_key_of_account_at_index(meta.index_in_transaction)
-                                .map_err(SyscallError::InstructionError)?,
-                            is_signer: meta.is_signer,
-                            is_writable: meta.is_writable,
+                    (instruction_context.get_number_of_program_accounts()
+                        ..instruction_context.get_number_of_accounts())
+                        .map(|index_in_instruction| Ok(AccountMeta {
+                            pubkey: *invoke_context.get_key_of_account_at_index(
+                                instruction_context
+                                    .get_index_in_transaction(index_in_instruction)?
+                            )?,
+                            is_signer: instruction_context.is_signer(index_in_instruction)?,
+                            is_writable: instruction_context.is_writable(index_in_instruction)?,
                         }))
-                        .collect::<Result<Vec<_>, EbpfError<BpfError>>>(),
+                        .collect::<Result<Vec<_>, InstructionError>>()
+                        .map_err(SyscallError::InstructionError),
                     result
                 );
                 accounts.clone_from_slice(account_metas.as_slice());
