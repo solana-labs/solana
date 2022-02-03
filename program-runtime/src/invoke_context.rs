@@ -19,13 +19,15 @@ use {
             tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
-        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+        instruction::{AccountMeta, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, KeyedAccount},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
+        transaction_context::{
+            InstructionAccount, InstructionContext, TransactionAccount, TransactionContext,
+        },
     },
     std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
@@ -408,8 +410,9 @@ impl<'a> InvokeContext<'a> {
         self.transaction_context.pop()
     }
 
-    /// Current depth of the invocation stack
-    pub fn get_invoke_depth(&self) -> usize {
+    /// Current height of the invocation stack, top level instructions are height
+    /// `solana_sdk::instruction::TRANSACTION_LEVEL_STACK_HEIGHT`
+    pub fn get_stack_height(&self) -> usize {
         self.transaction_context
             .get_instruction_context_stack_height()
     }
@@ -798,11 +801,13 @@ impl<'a> InvokeContext<'a> {
             .map(|index| *self.transaction_context.get_key_of_account_at_index(*index))
             .unwrap_or_else(native_loader::id);
 
-        let is_lowest_invocation_level = self
+        let stack_height = self
             .transaction_context
-            .get_instruction_context_stack_height()
-            == 0;
-        if !is_lowest_invocation_level {
+            .get_instruction_context_stack_height();
+
+        let is_top_level_instruction = stack_height == 0;
+
+        if !is_top_level_instruction {
             // Verify the calling program hasn't misbehaved
             let mut verify_caller_time = Measure::start("verify_caller_time");
             let verify_caller_result = self.verify_and_update(instruction_accounts, true);
@@ -816,20 +821,10 @@ impl<'a> InvokeContext<'a> {
             );
             verify_caller_result?;
 
-            // Record instruction
-            let compiled_instruction = CompiledInstruction {
-                program_id_index: self
-                    .transaction_context
-                    .find_index_of_account(&program_id)
-                    .unwrap_or(0) as u8,
-                data: instruction_data.to_vec(),
-                accounts: instruction_accounts
-                    .iter()
-                    .map(|instruction_account| instruction_account.index_in_transaction as u8)
-                    .collect(),
-            };
-            self.transaction_context
-                .record_compiled_instruction(compiled_instruction);
+            self.transaction_context.record_instruction(
+                stack_height.saturating_add(1),
+                InstructionContext::new(program_indices, instruction_accounts, instruction_data),
+            );
         }
 
         let result = self
@@ -848,7 +843,7 @@ impl<'a> InvokeContext<'a> {
                 // Verify the called program has not misbehaved
                 let mut verify_callee_time = Measure::start("verify_callee_time");
                 let result = execution_result.and_then(|_| {
-                    if is_lowest_invocation_level {
+                    if is_top_level_instruction {
                         self.verify(instruction_accounts, program_indices)
                     } else {
                         self.verify_and_update(instruction_accounts, false)
@@ -994,6 +989,24 @@ impl<'a> InvokeContext<'a> {
     /// Get cached sysvars
     pub fn get_sysvar_cache(&self) -> &SysvarCache {
         &self.sysvar_cache
+    }
+
+    /// Get instruction trace
+    pub fn get_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
+        self.transaction_context.get_instruction_trace()
+    }
+
+    // Get pubkey of account at index
+    pub fn get_key_of_account_at_index(&self, index_in_transaction: usize) -> &Pubkey {
+        self.transaction_context
+            .get_key_of_account_at_index(index_in_transaction)
+    }
+
+    /// Get an instruction context
+    pub fn get_instruction_context_at(&self, level: usize) -> Option<&InstructionContext> {
+        self.transaction_context
+            .get_instruction_context_at(level)
+            .ok()
     }
 }
 

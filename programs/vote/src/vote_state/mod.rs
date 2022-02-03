@@ -1151,6 +1151,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     to_account: &KeyedAccount,
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: Option<&Rent>,
+    clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
@@ -1163,8 +1164,23 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         .ok_or(InstructionError::InsufficientFunds)?;
 
     if remaining_balance == 0 {
-        // Deinitialize upon zero-balance
-        vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
+        let reject_active_vote_account_close = clock
+            .zip(vote_state.epoch_credits.last())
+            .map(|(clock, (last_epoch_with_credits, _, _))| {
+                let current_epoch = clock.epoch;
+                // if current_epoch - last_epoch_with_credits < 2 then the validator has received credits
+                // either in the current epoch or the previous epoch. If it's >= 2 then it has been at least
+                // one full epoch since the validator has received credits.
+                current_epoch.saturating_sub(*last_epoch_with_credits) < 2
+            })
+            .unwrap_or(false);
+
+        if reject_active_vote_account_close {
+            return Err(InstructionError::ActiveVoteAccountClose);
+        } else {
+            // Deinitialize upon zero-balance
+            vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
+        }
     } else if let Some(rent_sysvar) = rent_sysvar {
         let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.data_len()?);
         if remaining_balance < min_rent_exempt_balance {
@@ -1436,6 +1452,39 @@ mod tests {
                 100,
             )),
         )
+    }
+
+    fn create_test_account_with_epoch_credits(
+        credits_to_append: &[u64],
+    ) -> (Pubkey, RefCell<AccountSharedData>) {
+        let (vote_pubkey, vote_account) = create_test_account();
+        let vote_account_space = vote_account.borrow().data().len();
+
+        let mut vote_state = VoteState::from(&*vote_account.borrow_mut()).unwrap();
+        vote_state.authorized_withdrawer = vote_pubkey;
+
+        vote_state.epoch_credits = Vec::new();
+
+        let mut current_epoch_credits = 0;
+        let mut previous_epoch_credits = 0;
+        for (epoch, credits) in credits_to_append.iter().enumerate() {
+            current_epoch_credits += credits;
+            vote_state.epoch_credits.push((
+                u64::try_from(epoch).unwrap(),
+                current_epoch_credits,
+                previous_epoch_credits,
+            ));
+            previous_epoch_credits = current_epoch_credits;
+        }
+
+        let lamports = vote_account.borrow().lamports();
+        let mut vote_account_with_epoch_credits =
+            AccountSharedData::new(lamports, vote_account_space, &vote_pubkey);
+        let versioned = VoteStateVersions::new_current(vote_state);
+        VoteState::to(&versioned, &mut vote_account_with_epoch_credits);
+        let ref_vote_account_with_epoch_credits = RefCell::new(vote_account_with_epoch_credits);
+
+        (vote_pubkey, ref_vote_account_with_epoch_credits)
     }
 
     fn simulate_process_vote(
@@ -2222,6 +2271,13 @@ mod tests {
     #[test]
     fn test_vote_state_withdraw() {
         let (vote_pubkey, vote_account) = create_test_account();
+        let credits_through_epoch_1: Vec<u64> = vec![2, 1];
+        let credits_through_epoch_2: Vec<u64> = vec![2, 1, 3];
+
+        let clock_epoch_3 = &Clock {
+            epoch: 3,
+            ..Clock::default()
+        };
 
         // unsigned request
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
@@ -2235,6 +2291,7 @@ mod tests {
                 &RefCell::new(AccountSharedData::default()),
             ),
             &signers,
+            None,
             None,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
@@ -2253,17 +2310,24 @@ mod tests {
             ),
             &signers,
             None,
+            Some(&Clock::default()),
         );
         assert_eq!(res, Err(InstructionError::InsufficientFunds));
 
-        // non rent exempt withdraw, before feature activation
+        // non rent exempt withdraw, before 7txXZZD6 feature activation
+        // without 0 credit epoch, before ALBk3EWd feature activation
         {
-            let (vote_pubkey, vote_account) = create_test_account();
-            let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-            let lamports = vote_account.borrow().lamports();
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
             let rent_sysvar = Rent::default();
             let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account.borrow().data().len())
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
                 .max(1);
             assert!(minimum_balance <= lamports);
             let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
@@ -2277,18 +2341,121 @@ mod tests {
                 ),
                 &signers,
                 None,
+                None,
             );
             assert_eq!(res, Ok(()));
         }
 
-        // non rent exempt withdraw, after feature activation
+        // non rent exempt withdraw, before 7txXZZD6 feature activation
+        // with 0 credit epoch, before ALBk3EWd feature activation
         {
-            let (vote_pubkey, vote_account) = create_test_account();
-            let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-            let lamports = vote_account.borrow().lamports();
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
             let rent_sysvar = Rent::default();
             let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account.borrow().data().len())
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                None,
+                None,
+            );
+            assert_eq!(res, Ok(()));
+        }
+
+        // non rent exempt withdraw, before 7txXZZD6 feature activation
+        // without 0 credit epoch, after ALBk3EWd feature activation
+        {
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                None,
+                Some(clock_epoch_3),
+            );
+            assert_eq!(res, Ok(()));
+        }
+
+        // non rent exempt withdraw, before 7txXZZD6 feature activation
+        // with 0 credit epoch, after ALBk3EWd activation
+        {
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                None,
+                Some(clock_epoch_3),
+            );
+            assert_eq!(res, Ok(()));
+        }
+
+        // non rent exempt withdraw, after 7txXZZD6 feature activation
+        // with 0 credit epoch, before ALBk3EWd feature activation
+        {
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
                 .max(1);
             assert!(minimum_balance <= lamports);
             let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
@@ -2302,11 +2469,108 @@ mod tests {
                 ),
                 &signers,
                 Some(&rent_sysvar),
+                None,
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
 
-        // partial valid withdraw, after feature activation
+        // non rent exempt withdraw, after 7txXZZD6 feature activation
+        // without 0 credit epoch, before ALBk3EWd feature activation
+        {
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                Some(&rent_sysvar),
+                None,
+            );
+            assert_eq!(res, Err(InstructionError::InsufficientFunds));
+        }
+
+        // non rent exempt withdraw, after 7txXZZD6 feature activation
+        // with 0 credit epoch, after ALBk3EWd feature activation
+        {
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_1);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                Some(&rent_sysvar),
+                Some(clock_epoch_3),
+            );
+            assert_eq!(res, Err(InstructionError::InsufficientFunds));
+        }
+
+        // non rent exempt withdraw, after 7txXZZD6 feature activation
+        // without 0 credit epoch, after ALBk3EWd feature activation
+        {
+            let (vote_pubkey, vote_account_with_epoch_credits) =
+                create_test_account_with_epoch_credits(&credits_through_epoch_2);
+            let keyed_accounts = &[KeyedAccount::new(
+                &vote_pubkey,
+                true,
+                &vote_account_with_epoch_credits,
+            )];
+            let lamports = vote_account_with_epoch_credits.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                Some(&rent_sysvar),
+                Some(clock_epoch_3),
+            );
+            assert_eq!(res, Err(InstructionError::InsufficientFunds));
+        }
+
+        // partial valid withdraw, after 7txXZZD6 feature activation
         {
             let to_account = RefCell::new(AccountSharedData::default());
             let (vote_pubkey, vote_account) = create_test_account();
@@ -2325,6 +2589,7 @@ mod tests {
                 &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                 &signers,
                 Some(&rent_sysvar),
+                Some(&Clock::default()),
             );
             assert_eq!(res, Ok(()));
             assert_eq!(
@@ -2334,12 +2599,45 @@ mod tests {
             assert_eq!(to_account.borrow().lamports(), withdraw_lamports);
         }
 
-        // full withdraw, before/after activation
+        // full withdraw, before/after 7txXZZD6 feature activation
+        // with/without 0 credit epoch, before ALBk3EWd feature activation
+        {
+            let rent_sysvar = Rent::default();
+            for rent_sysvar in [None, Some(&rent_sysvar)] {
+                for credits in [&credits_through_epoch_1, &credits_through_epoch_2] {
+                    let to_account = RefCell::new(AccountSharedData::default());
+                    let (vote_pubkey, vote_account) =
+                        create_test_account_with_epoch_credits(credits);
+                    let lamports = vote_account.borrow().lamports();
+                    let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+                    let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+                    let res = withdraw(
+                        &keyed_accounts[0],
+                        lamports,
+                        &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
+                        &signers,
+                        rent_sysvar,
+                        None,
+                    );
+                    assert_eq!(res, Ok(()));
+                    assert_eq!(vote_account.borrow().lamports(), 0);
+                    assert_eq!(to_account.borrow().lamports(), lamports);
+                    let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+                    // State has been deinitialized since balance is zero
+                    assert!(post_state.is_uninitialized());
+                }
+            }
+        }
+
+        // full withdraw, before/after 7txXZZD6 feature activation
+        // with 0 credit epoch, after ALBk3EWd feature activation
         {
             let rent_sysvar = Rent::default();
             for rent_sysvar in [None, Some(&rent_sysvar)] {
                 let to_account = RefCell::new(AccountSharedData::default());
-                let (vote_pubkey, vote_account) = create_test_account();
+                // let (vote_pubkey, vote_account) = create_test_account();
+                let (vote_pubkey, vote_account) =
+                    create_test_account_with_epoch_credits(&credits_through_epoch_1);
                 let lamports = vote_account.borrow().lamports();
                 let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
                 let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
@@ -2349,6 +2647,7 @@ mod tests {
                     &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                     &signers,
                     rent_sysvar,
+                    Some(clock_epoch_3),
                 );
                 assert_eq!(res, Ok(()));
                 assert_eq!(vote_account.borrow().lamports(), 0);
@@ -2356,6 +2655,35 @@ mod tests {
                 let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
                 // State has been deinitialized since balance is zero
                 assert!(post_state.is_uninitialized());
+            }
+        }
+
+        // full withdraw, before/after 7txXZZD6 feature activation
+        // without 0 credit epoch, after ALBk3EWd feature activation
+        {
+            let rent_sysvar = Rent::default();
+            for rent_sysvar in [None, Some(&rent_sysvar)] {
+                let to_account = RefCell::new(AccountSharedData::default());
+                // let (vote_pubkey, vote_account) = create_test_account();
+                let (vote_pubkey, vote_account) =
+                    create_test_account_with_epoch_credits(&credits_through_epoch_2);
+                let lamports = vote_account.borrow().lamports();
+                let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+                let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+                let res = withdraw(
+                    &keyed_accounts[0],
+                    lamports,
+                    &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
+                    &signers,
+                    rent_sysvar,
+                    Some(clock_epoch_3),
+                );
+                assert_eq!(res, Err(InstructionError::ActiveVoteAccountClose));
+                assert_eq!(vote_account.borrow().lamports(), lamports);
+                assert_eq!(to_account.borrow().lamports(), 0);
+                let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+                // State is still initialized
+                assert!(!post_state.is_uninitialized());
             }
         }
 
@@ -2387,6 +2715,7 @@ mod tests {
             lamports,
             withdrawer_keyed_account,
             &signers,
+            None,
             None,
         );
         assert_eq!(res, Ok(()));

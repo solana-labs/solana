@@ -113,6 +113,7 @@ enum InstructionErrorType {
     UNSUPPORTED_SYSVAR = 48;
     ILLEGAL_OWNER = 49;
     ACCOUNTS_DATA_BUDGET_EXCEEDED = 50;
+    ACTIVE_VOTE_ACCOUNT_CLOSE = 51;
 }
 
 message UnixTimestamp {
