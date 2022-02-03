@@ -1,13 +1,15 @@
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     clock::Clock,
-    entrypoint,
+    declare_id, entrypoint,
     entrypoint::ProgramResult,
     msg,
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
 use std::convert::TryInto;
+
+declare_id!("Sim1jD5C35odT8mzctm8BWnjic8xW5xgeb5MbcbErTo");
 
 entrypoint!(process_instruction);
 
@@ -29,13 +31,17 @@ pub fn process_instruction(
 
     msg!("next_slot is {:?} ", slot);
     msg!("clock is in slot {:?} ", clock.slot);
+    if clock.slot >= slot {
+        msg!("On-chain");
+    } else {
+        panic!("Simulation");
+    }
 
     msg!("incinerator balance: {:?}", incinerator_account.lamports());
-
-    if clock.slot >= slot {
-        msg!("We are onchain, let's get the money");
+    if incinerator_account.lamports() > 0 {
+        panic!("Incinerator has lamports!");
     } else {
-        panic!("We are in a simulation, let's credit the victim !");
+        msg!("Incinerator empty");
     }
     Ok(())
 }
