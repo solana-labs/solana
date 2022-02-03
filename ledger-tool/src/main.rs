@@ -56,7 +56,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeState},
         system_program,
-        transaction::{SanitizedTransaction, TransactionError},
+        transaction::{DisabledAddressLoader, SanitizedTransaction},
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -232,10 +232,12 @@ fn output_slot(
             num_hashes += entry.num_hashes;
             for transaction in entry.transactions {
                 let tx_signature = transaction.signatures[0];
-                let sanitize_result =
-                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    });
+                let sanitize_result = SanitizedTransaction::try_create(
+                    transaction,
+                    Hash::default(),
+                    None,
+                    &DisabledAddressLoader,
+                );
 
                 match sanitize_result {
                     Ok(transaction) => {
@@ -780,9 +782,12 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .transactions
             .into_iter()
             .filter_map(|transaction| {
-                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                SanitizedTransaction::try_create(
+                    transaction,
+                    Hash::default(),
+                    None,
+                    &DisabledAddressLoader,
+                )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
                 })

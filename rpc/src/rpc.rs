@@ -68,7 +68,10 @@ use {
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
-        transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
+        transaction::{
+            self, DisabledAddressLoader, SanitizedTransaction, TransactionError,
+            VersionedTransaction,
+        },
     },
     solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -4271,10 +4274,8 @@ where
 
 fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, |_| {
-        Err(TransactionError::UnsupportedVersion)
-    })
-    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
+    SanitizedTransaction::try_create(transaction, message_hash, None, &DisabledAddressLoader)
+        .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
