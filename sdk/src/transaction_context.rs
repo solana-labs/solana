@@ -5,6 +5,7 @@ use crate::{
     instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
     lamports::LamportsError,
     pubkey::Pubkey,
+    sysvar::Sysvar,
 };
 use std::{
     cell::{RefCell, RefMut},
@@ -113,6 +114,17 @@ impl TransactionContext {
         self.accounts
             .get(index_in_transaction)
             .ok_or(InstructionError::NotEnoughAccountKeys)
+    }
+
+    /// Checks if the account key at the given index is the belongs to the given sysvar
+    pub fn check_sysvar<S: Sysvar>(
+        &self,
+        index_in_transaction: usize,
+    ) -> Result<(), InstructionError> {
+        if !S::check_id(&self.account_keys[index_in_transaction]) {
+            return Err(InstructionError::InvalidArgument);
+        }
+        Ok(())
     }
 
     /// Searches for an account by its key
