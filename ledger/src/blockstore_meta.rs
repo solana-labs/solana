@@ -214,11 +214,7 @@ impl SlotMeta {
             );
         }
 
-<<<<<<< HEAD
-        self.consumed == self.last_index + 1
-=======
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
->>>>>>> e08139f94 (uses Option<u64> for SlotMeta.last_index (#21775))
     }
 
     pub fn is_parent_set(&self) -> bool {
