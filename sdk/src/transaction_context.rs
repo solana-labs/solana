@@ -96,13 +96,27 @@ impl TransactionContext {
     }
 
     /// Searches for an account by its key
-    pub fn get_key_of_account_at_index(&self, index_in_transaction: usize) -> &Pubkey {
-        &self.account_keys[index_in_transaction]
+    pub fn get_key_of_account_at_index(
+        &self,
+        index_in_transaction: usize,
+    ) -> Result<&Pubkey, InstructionError> {
+        if index_in_transaction < self.account_keys.len() {
+            Ok(&self.account_keys[index_in_transaction])
+        } else {
+            Err(InstructionError::NotEnoughAccountKeys)
+        }
     }
 
     /// Searches for an account by its key
-    pub fn get_account_at_index(&self, index_in_transaction: usize) -> &RefCell<AccountSharedData> {
-        &self.accounts[index_in_transaction]
+    pub fn get_account_at_index(
+        &self,
+        index_in_transaction: usize,
+    ) -> Result<&RefCell<AccountSharedData>, InstructionError> {
+        if index_in_transaction < self.account_keys.len() {
+            Ok(&self.accounts[index_in_transaction])
+        } else {
+            Err(InstructionError::NotEnoughAccountKeys)
+        }
     }
 
     /// Searches for an account by its key
