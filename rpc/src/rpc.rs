@@ -80,10 +80,10 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        ConfirmedTransactionStatusWithSignature, Encodable,
-        EncodedConfirmedTransactionWithStatusMeta, Reward, RewardType,
-        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
-        VersionedConfirmedBlock,
+        ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
+        RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
+        UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token::{
@@ -916,12 +916,8 @@ impl JsonRpcRequestProcessor {
         &self,
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
-    ) -> Result<()>
-    where
-        T: std::fmt::Debug,
-    {
-        if result.is_err() {
-            let err = result.as_ref().unwrap_err();
+    ) -> Result<()> {
+        if let Err(err) = result {
             debug!(
                 "check_blockstore_root, slot: {:?}, max root: {:?}, err: {:?}",
                 slot,
@@ -942,21 +938,16 @@ impl JsonRpcRequestProcessor {
         &self,
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
-    ) -> Result<()>
-    where
-        T: std::fmt::Debug,
-    {
-        if result.is_err() {
-            if let BlockstoreError::SlotCleanedUp = result.as_ref().unwrap_err() {
-                return Err(RpcCustomError::BlockCleanedUp {
-                    slot,
-                    first_available_block: self
-                        .blockstore
-                        .get_first_available_block()
-                        .unwrap_or_default(),
-                }
-                .into());
+    ) -> Result<()> {
+        if let Err(BlockstoreError::SlotCleanedUp) = result {
+            return Err(RpcCustomError::BlockCleanedUp {
+                slot,
+                first_available_block: self
+                    .blockstore
+                    .get_first_available_block()
+                    .unwrap_or_default(),
             }
+            .into());
         }
         Ok(())
     }
@@ -964,15 +955,9 @@ impl JsonRpcRequestProcessor {
     fn check_bigtable_result<T>(
         &self,
         result: &std::result::Result<T, solana_storage_bigtable::Error>,
-    ) -> Result<()>
-    where
-        T: std::fmt::Debug,
-    {
-        if result.is_err() {
-            let err = result.as_ref().unwrap_err();
-            if let solana_storage_bigtable::Error::BlockNotFound(slot) = err {
-                return Err(RpcCustomError::LongTermStorageSlotSkipped { slot: *slot }.into());
-            }
+    ) -> Result<()> {
+        if let Err(solana_storage_bigtable::Error::BlockNotFound(slot)) = result {
+            return Err(RpcCustomError::LongTermStorageSlotSkipped { slot: *slot }.into());
         }
         Ok(())
     }
@@ -1015,28 +1000,30 @@ impl JsonRpcRequestProcessor {
                 self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
-                let configure_block = |versioned_block: VersionedConfirmedBlock| {
-                    let confirmed_block = versioned_block
-                        .into_legacy_block()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-                    let mut confirmed_block =
-                        confirmed_block.configure(encoding, transaction_details, show_rewards);
-                    if slot == 0 {
-                        confirmed_block.block_time = Some(self.genesis_creation_time());
-                        confirmed_block.block_height = Some(0);
-                    }
-                    Ok(confirmed_block)
-                };
+                let encode_block =
+                    |mut confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
+                        if slot == 0 {
+                            confirmed_block.block_time = Some(self.genesis_creation_time());
+                            confirmed_block.block_height = Some(0);
+                        }
+                        Ok(confirmed_block
+                            .encode_with_options(encoding, transaction_details, show_rewards)
+                            .map_err(RpcCustomError::from)?)
+                    };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return bigtable_result.ok().map(configure_block).transpose();
+                        return bigtable_result.ok().map(encode_block).transpose();
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return result.ok().map(configure_block).transpose();
+                return result
+                    .ok()
+                    .map(ConfirmedBlock::from)
+                    .map(encode_block)
+                    .transpose();
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
@@ -1045,10 +1032,8 @@ impl JsonRpcRequestProcessor {
                     let result = self.blockstore.get_complete_block(slot, true);
                     return result
                         .ok()
-                        .map(|versioned_block| {
-                            let mut confirmed_block = versioned_block
-                                .into_legacy_block()
-                                .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
+                        .map(ConfirmedBlock::from)
+                        .map(|mut confirmed_block| -> Result<UiConfirmedBlock> {
                             if confirmed_block.block_time.is_none()
                                 || confirmed_block.block_height.is_none()
                             {
@@ -1064,11 +1049,10 @@ impl JsonRpcRequestProcessor {
                                     }
                                 }
                             }
-                            Ok(confirmed_block.configure(
-                                encoding,
-                                transaction_details,
-                                show_rewards,
-                            ))
+
+                            Ok(confirmed_block
+                                .encode_with_options(encoding, transaction_details, show_rewards)
+                                .map_err(RpcCustomError::from)?)
                         })
                         .transpose();
                 }
@@ -1395,7 +1379,7 @@ impl JsonRpcRequestProcessor {
 
         if self.config.enable_rpc_transaction_history {
             let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
-            let versioned_confirmed_tx = if commitment.is_confirmed() {
+            let confirmed_transaction = if commitment.is_confirmed() {
                 let highest_confirmed_slot = confirmed_bank.slot();
                 self.blockstore
                     .get_complete_transaction(signature, highest_confirmed_slot)
@@ -1403,12 +1387,13 @@ impl JsonRpcRequestProcessor {
                 self.blockstore.get_rooted_transaction(signature)
             };
 
-            match versioned_confirmed_tx.unwrap_or(None) {
-                Some(versioned_confirmed_tx) => {
-                    let mut confirmed_transaction = versioned_confirmed_tx
-                        .into_legacy_confirmed_transaction()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
+            let encode_transaction =
+                |confirmed_tx: ConfirmedTransactionWithStatusMeta| -> Result<EncodedConfirmedTransactionWithStatusMeta> {
+                    Ok(confirmed_tx.encode(encoding).map_err(RpcCustomError::from)?)
+                };
 
+            match confirmed_transaction.unwrap_or(None) {
+                Some(mut confirmed_transaction) => {
                     if commitment.is_confirmed()
                         && confirmed_bank // should be redundant
                             .status_cache_ancestors()
@@ -1420,8 +1405,9 @@ impl JsonRpcRequestProcessor {
                                 .get(confirmed_transaction.slot)
                                 .map(|bank| bank.clock().unix_timestamp);
                         }
-                        return Ok(Some(confirmed_transaction.encode(encoding)));
+                        return Ok(Some(encode_transaction(confirmed_transaction)?));
                     }
+
                     if confirmed_transaction.slot
                         <= self
                             .block_commitment_cache
@@ -1429,7 +1415,7 @@ impl JsonRpcRequestProcessor {
                             .unwrap()
                             .highest_confirmed_root()
                     {
-                        return Ok(Some(confirmed_transaction.encode(encoding)));
+                        return Ok(Some(encode_transaction(confirmed_transaction)?));
                     }
                 }
                 None => {
@@ -1438,13 +1424,7 @@ impl JsonRpcRequestProcessor {
                             .get_confirmed_transaction(&signature)
                             .await
                             .unwrap_or(None)
-                            .map(|versioned_confirmed_tx| {
-                                let confirmed_tx = versioned_confirmed_tx
-                                    .into_legacy_confirmed_transaction()
-                                    .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                                Ok(confirmed_tx.encode(encoding))
-                            })
+                            .map(encode_transaction)
                             .transpose();
                     }
                 }
@@ -4320,15 +4300,7 @@ pub fn create_test_transactions_and_populate_blockstore(
     );
     let ix_error_signature = ix_error_tx.signatures[0];
     let entry_2 = solana_entry::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
-    // Failed transaction
-    let fail_tx = solana_sdk::system_transaction::transfer(
-        mint_keypair,
-        &keypair2.pubkey(),
-        rent_exempt_amount,
-        Hash::default(),
-    );
-    let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
-    let entries = vec![entry_1, entry_2, entry_3];
+    let entries = vec![entry_1, entry_2];
 
     let shreds =
         solana_ledger::blockstore::entries_to_test_shreds(&entries, slot, previous_slot, true, 0);
@@ -4349,17 +4321,20 @@ pub fn create_test_transactions_and_populate_blockstore(
 
     // Check that process_entries successfully writes can_commit transactions statuses, and
     // that they are matched properly by get_rooted_block
-    let _result = solana_ledger::blockstore_processor::process_entries_for_tests(
-        &bank,
-        entries,
-        true,
-        Some(
-            &solana_ledger::blockstore_processor::TransactionStatusSender {
-                sender: transaction_status_sender,
-                enable_cpi_and_log_storage: false,
-            },
+    assert_eq!(
+        solana_ledger::blockstore_processor::process_entries_for_tests(
+            &bank,
+            entries,
+            true,
+            Some(
+                &solana_ledger::blockstore_processor::TransactionStatusSender {
+                    sender: transaction_status_sender,
+                    enable_cpi_and_log_storage: false,
+                },
+            ),
+            Some(&replay_vote_sender),
         ),
-        Some(&replay_vote_sender),
+        Ok(())
     );
 
     transaction_status_service.join().unwrap();
@@ -4399,7 +4374,7 @@ pub mod tests {
             fee_calculator::DEFAULT_BURN_PERCENT,
             hash::{hash, Hash},
             instruction::InstructionError,
-            message::Message,
+            message::{v0, Message, MessageHeader, VersionedMessage},
             nonce, rpc_port,
             signature::{Keypair, Signer},
             system_program, system_transaction,
@@ -6601,7 +6576,7 @@ pub mod tests {
         let confirmed_block: Option<EncodedConfirmedBlock> =
             serde_json::from_value(result["result"].clone()).unwrap();
         let confirmed_block = confirmed_block.unwrap();
-        assert_eq!(confirmed_block.transactions.len(), 3);
+        assert_eq!(confirmed_block.transactions.len(), 2);
         assert_eq!(confirmed_block.rewards, vec![]);
 
         for EncodedTransactionWithStatusMeta { transaction, meta } in
@@ -6646,7 +6621,7 @@ pub mod tests {
         let confirmed_block: Option<EncodedConfirmedBlock> =
             serde_json::from_value(result["result"].clone()).unwrap();
         let confirmed_block = confirmed_block.unwrap();
-        assert_eq!(confirmed_block.transactions.len(), 3);
+        assert_eq!(confirmed_block.transactions.len(), 2);
         assert_eq!(confirmed_block.rewards, vec![]);
 
         for EncodedTransactionWithStatusMeta { transaction, meta } in
@@ -8091,6 +8066,28 @@ pub mod tests {
         assert_eq!(
             sanitize_transaction(unsanitary_versioned_tx).unwrap_err(),
             expect58
+        );
+    }
+
+    #[test]
+    fn test_sanitize_unsupported_transaction_version() {
+        let versioned_tx = VersionedTransaction {
+            signatures: vec![Signature::default()],
+            message: VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys: vec![Pubkey::new_unique()],
+                ..v0::Message::default()
+            }),
+        };
+
+        assert_eq!(
+            sanitize_transaction(versioned_tx).unwrap_err(),
+            Error::invalid_params(
+                "invalid transaction: Transaction version is unsupported".to_string(),
+            )
         );
     }
 }

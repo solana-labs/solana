@@ -16,7 +16,10 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
-    solana_transaction_status::{ConfirmedBlock, Encodable, UiTransactionEncoding},
+    solana_transaction_status::{
+        ConfirmedBlock, Encodable, EncodeError, LegacyTransactionWithStatusMeta,
+        UiTransactionEncoding,
+    },
     std::{
         collections::HashSet,
         path::Path,
@@ -30,7 +33,6 @@ async fn upload(
     blockstore: Blockstore,
     starting_slot: Slot,
     ending_slot: Option<Slot>,
-    allow_missing_metadata: bool,
     force_reupload: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None, None)
@@ -42,7 +44,6 @@ async fn upload(
         bigtable,
         starting_slot,
         ending_slot,
-        allow_missing_metadata,
         force_reupload,
         Arc::new(AtomicBool::new(false)),
     )
@@ -73,13 +74,17 @@ async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn st
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
-    let versioned_block = bigtable.get_confirmed_block(slot).await?;
-    let block = versioned_block
-        .into_legacy_block()
-        .ok_or_else(|| "Failed to read versioned transaction in block".to_string())?;
+    let confirmed_block = bigtable.get_confirmed_block(slot).await?;
+    let encoded_block = confirmed_block
+        .encode(UiTransactionEncoding::Base64)
+        .map_err(|err| match err {
+            EncodeError::UnsupportedTransactionVersion => {
+                "Failed to process unsupported transaction version in block".to_string()
+            }
+        })?;
 
     let cli_block = CliBlock {
-        encoded_confirmed_block: block.encode(UiTransactionEncoding::Base64),
+        encoded_confirmed_block: encoded_block.into(),
         slot,
     };
     println!("{}", output_format.formatted_string(&cli_block));
@@ -156,20 +161,20 @@ async fn confirm(
     let mut get_transaction_error = None;
     if verbose {
         match bigtable.get_confirmed_transaction(signature).await {
-            Ok(Some(versioned_confirmed_tx)) => {
-                let confirmed_transaction = versioned_confirmed_tx
-                    .into_legacy_confirmed_transaction()
+            Ok(Some(confirmed_tx)) => {
+                let legacy_tx_with_meta = confirmed_tx
+                    .tx_with_meta
+                    .into_legacy_transaction_with_meta()
                     .ok_or_else(|| "Failed to read versioned transaction in block".to_string())?;
 
                 transaction = Some(CliTransaction {
-                    transaction: confirmed_transaction
-                        .transaction
+                    transaction: legacy_tx_with_meta
                         .transaction
                         .encode(UiTransactionEncoding::Json),
-                    meta: confirmed_transaction.transaction.meta.map(|m| m.into()),
-                    block_time: confirmed_transaction.block_time,
-                    slot: Some(confirmed_transaction.slot),
-                    decoded_transaction: confirmed_transaction.transaction.transaction,
+                    meta: legacy_tx_with_meta.meta.map(|m| m.into()),
+                    block_time: confirmed_tx.block_time,
+                    slot: Some(confirmed_tx.slot),
+                    decoded_transaction: legacy_tx_with_meta.transaction,
                     prefix: "  ".to_string(),
                     sigverify_status: vec![],
                 });
@@ -250,13 +255,28 @@ pub async fn transaction_history(
                                     );
                                 }
                                 Some(transaction_with_meta) => {
-                                    println_transaction(
-                                        &transaction_with_meta.transaction,
-                                        &transaction_with_meta.meta.clone().map(|m| m.into()),
-                                        "  ",
-                                        None,
-                                        None,
-                                    );
+                                    let legacy_tx_with_meta = transaction_with_meta
+                                        .clone()
+                                        .into_legacy_transaction_with_meta();
+
+                                    if let Some(LegacyTransactionWithStatusMeta {
+                                        transaction,
+                                        meta,
+                                    }) = legacy_tx_with_meta
+                                    {
+                                        println_transaction(
+                                            &transaction,
+                                            &meta.map(|m| m.into()),
+                                            "  ",
+                                            None,
+                                            None,
+                                        );
+                                    } else {
+                                        println!(
+                                                "  Transaction info for {} skipped because transaction version is unsupported",
+                                                result.signature,
+                                            );
+                                    }
                                 }
                             }
                             break;
@@ -267,11 +287,8 @@ pub async fn transaction_history(
                             println!("  Unable to get confirmed transaction details: {}", err);
                             break;
                         }
-                        Ok(versioned_block) => {
-                            let block = versioned_block.into_legacy_block().ok_or_else(|| {
-                                "Failed to read versioned transaction in block".to_string()
-                            })?;
-                            loaded_block = Some((result.slot, block));
+                        Ok(confirmed_block) => {
+                            loaded_block = Some((result.slot, confirmed_block));
                         }
                     }
                 }
@@ -315,12 +332,6 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .index(2)
                                 .help("Stop uploading at this slot [default: last available slot]"),
-                        )
-                        .arg(
-                            Arg::with_name("allow_missing_metadata")
-                                .long("allow-missing-metadata")
-                                .takes_value(false)
-                                .help("Don't panic if transaction metadata is missing"),
                         )
                         .arg(
                             Arg::with_name("force_reupload")
@@ -516,7 +527,6 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("upload", Some(arg_matches)) => {
             let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
-            let allow_missing_metadata = arg_matches.is_present("allow_missing_metadata");
             let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore = crate::open_blockstore(
                 &canonicalize_ledger_path(ledger_path),
@@ -528,7 +538,6 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 blockstore,
                 starting_slot,
                 ending_slot,
-                allow_missing_metadata,
                 force_reupload,
             ))
         }

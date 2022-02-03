@@ -3,6 +3,7 @@ use {
     crate::rpc_response::RpcSimulateTransactionResult,
     jsonrpc_core::{Error, ErrorCode},
     solana_sdk::clock::Slot,
+    solana_transaction_status::EncodeError,
     thiserror::Error,
 };
 
@@ -66,6 +67,14 @@ pub enum RpcCustomError {
 #[serde(rename_all = "camelCase")]
 pub struct NodeUnhealthyErrorData {
     pub num_slots_behind: Option<Slot>,
+}
+
+impl From<EncodeError> for RpcCustomError {
+    fn from(err: EncodeError) -> Self {
+        match err {
+            EncodeError::UnsupportedTransactionVersion => Self::UnsupportedTransactionVersion,
+        }
+    }
 }
 
 impl From<RpcCustomError> for Error {
