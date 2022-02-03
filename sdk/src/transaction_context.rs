@@ -253,13 +253,6 @@ impl TransactionContext {
 /// List of (stack height, instruction) for each top-level instruction
 pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
 
-#[derive(Clone, Debug)]
-pub struct AccountMeta {
-    pub index_in_transaction: usize,
-    pub is_signer: bool,
-    pub is_writable: bool,
-}
-
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
@@ -302,17 +295,6 @@ impl InstructionContext {
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> usize {
         self.instruction_accounts.len()
-    }
-
-    pub fn get_instruction_accounts_metas(&self) -> Vec<AccountMeta> {
-        self.instruction_accounts
-            .iter()
-            .map(|instruction_account| AccountMeta {
-                index_in_transaction: instruction_account.index_in_transaction,
-                is_signer: instruction_account.is_signer,
-                is_writable: instruction_account.is_writable,
-            })
-            .collect()
     }
 
     /// Number of accounts in this Instruction

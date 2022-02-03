@@ -706,10 +706,13 @@ pub fn inner_instructions_list_from_instruction_trace(
                     CompiledInstruction::new_from_raw_parts(
                         instruction_context.get_program_id_index() as u8,
                         instruction_context.get_instruction_data().to_vec(),
-                        instruction_context
-                            .get_instruction_accounts_metas()
-                            .iter()
-                            .map(|meta| meta.index_in_transaction as u8)
+                        (instruction_context.get_number_of_program_accounts()
+                            ..instruction_context.get_number_of_accounts())
+                            .map(|index_in_instruction| {
+                                instruction_context
+                                    .get_index_in_transaction(index_in_instruction)
+                                    .unwrap_or_default() as u8
+                            })
                             .collect(),
                     )
                 })
