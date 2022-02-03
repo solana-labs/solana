@@ -1458,7 +1458,6 @@ impl BankingStage {
         transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
-        slot_metrics_tracker: Option<&mut LeaderSlotMetricsTracker>,
     ) -> Vec<usize> {
         let filter =
             Self::prepare_filter_for_pending_transactions(transactions.len(), pending_indexes);
@@ -1485,17 +1484,7 @@ impl BankingStage {
             &mut error_counters,
         );
 
-        let output =
-            Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes);
-
-        let total_buffered_packets_filtered = filter.len().saturating_sub(output.len());
-
-        if let Some(slot_metrics_tracker) = slot_metrics_tracker {
-            slot_metrics_tracker
-                .increment_buffered_packets_filtered_count(total_buffered_packets_filtered as u64);
-        }
-
-        output
+        Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1540,26 +1529,31 @@ impl BankingStage {
         let ProcessTransactionsSummary {
             transactions_attempted_execution_count,
             committed_transactions_count,
+            committed_transactions_with_successful_result_count,
             failed_commit_count,
             ref retryable_transaction_indexes,
             cost_model_throttled_transactions_count,
             ..
         } = process_transactions_summary;
 
-        slot_metrics_tracker.increment_attempted_transactions_execution_count(
+        slot_metrics_tracker.increment_transactions_attempted_execution_count(
             transactions_attempted_execution_count as u64,
         );
 
         slot_metrics_tracker
             .increment_committed_transactions_count(committed_transactions_count as u64);
 
-        slot_metrics_tracker
-            .increment_executed_transactions_failed_record_count(failed_commit_count as u64);
+        slot_metrics_tracker.increment_committed_transactions_with_successful_result_count(
+            committed_transactions_with_successful_result_count as u64,
+        );
 
         slot_metrics_tracker
-            .increment_retryable_errored_transaction_count(retryable_transaction_indexes.len() as u64);
+            .increment_executed_transactions_failed_commit_count(failed_commit_count as u64);
 
-        slot_metrics_tracker.increment_nonretryable_errored_transaction_count(
+        slot_metrics_tracker
+            .increment_retryable_transactions_count(retryable_transaction_indexes.len() as u64);
+
+        slot_metrics_tracker.increment_nonretryable_errored_transactions_count(
             transactions_attempted_execution_count
                 .saturating_sub(committed_transactions_count)
                 .saturating_sub(retryable_transaction_indexes.len()) as u64,
@@ -1578,9 +1572,14 @@ impl BankingStage {
             &transactions,
             &transaction_to_packet_indexes,
             retryable_transaction_indexes,
-            Some(slot_metrics_tracker),
         );
         filter_pending_packets_time.stop();
+
+        let retryable_packets_filtered_count = retryable_transaction_indexes
+            .len()
+            .saturating_sub(filtered_retryable_tx_indexes.len());
+        slot_metrics_tracker
+            .increment_retryable_packets_filtered_count(retryable_packets_filtered_count as u64);
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
@@ -1638,7 +1637,6 @@ impl BankingStage {
             &transactions,
             &transaction_to_packet_indexes,
             &unprocessed_tx_indexes,
-            None,
         );
 
         inc_new_counter_info!(
@@ -2336,7 +2334,7 @@ mod tests {
 
             poh_recorder
                 .lock()
-                .unwrap()   
+                .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
