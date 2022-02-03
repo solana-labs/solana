@@ -99,6 +99,8 @@ export type SendOptions = {
   skipPreflight?: boolean;
   /** preflight commitment level */
   preflightCommitment?: Commitment;
+  /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
+  maxRetries?: number;
 };
 
 /**
@@ -111,6 +113,8 @@ export type ConfirmOptions = {
   commitment?: Commitment;
   /** preflight commitment level */
   preflightCommitment?: Commitment;
+  /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
+  maxRetries?: number;
 };
 
 /**
@@ -3931,6 +3935,9 @@ export class Connection {
     const preflightCommitment =
       (options && options.preflightCommitment) || this.commitment;
 
+    if (options && options.maxRetries) {
+      config.maxRetries = options.maxRetries;
+    }
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
     }
