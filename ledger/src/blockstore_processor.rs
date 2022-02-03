@@ -355,7 +355,7 @@ fn execute_batches(
     } else {
         execute_batches_internal(
             bank,
-            &batches,
+            batches,
             entry_callback,
             transaction_status_sender,
             replay_vote_sender,
