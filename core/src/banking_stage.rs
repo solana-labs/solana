@@ -34,15 +34,14 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
         feature_set,
-        message::{
-            v0::{LoadedAddresses, MessageAddressTableLookup},
-            Message,
-        },
+        message::Message,
         pubkey::Pubkey,
         short_vec::decode_shortu16_len,
         signature::Signature,
         timing::{duration_as_ms, timestamp, AtomicInterval},
-        transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
+        transaction::{
+            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
+        },
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     solana_transaction_status::token_balances::{
@@ -1205,7 +1204,7 @@ impl BankingStage {
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
-        address_loader: impl Fn(&[MessageAddressTableLookup]) -> transaction::Result<LoadedAddresses>,
+        address_loader: &impl AddressLoader,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         transaction_indexes
             .iter()
@@ -1222,7 +1221,7 @@ impl BankingStage {
                     tx,
                     message_hash,
                     Some(p.meta.is_simple_vote_tx()),
-                    &address_loader,
+                    address_loader,
                 )
                 .ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
@@ -1288,7 +1287,7 @@ impl BankingStage {
             &packet_indexes,
             &bank.feature_set,
             bank.vote_only_bank(),
-            |lookup| bank.load_lookup_table_addresses(lookup),
+            bank.as_ref(),
         );
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
@@ -1363,7 +1362,7 @@ impl BankingStage {
             transaction_indexes,
             &bank.feature_set,
             bank.vote_only_bank(),
-            |lookup| bank.load_lookup_table_addresses(lookup),
+            bank.as_ref(),
         );
         unprocessed_packet_conversion_time.stop();
 
@@ -1586,12 +1585,15 @@ mod tests {
             account::AccountSharedData,
             hash::Hash,
             instruction::InstructionError,
-            message::{v0, MessageHeader, VersionedMessage},
+            message::{
+                v0::{self, MessageAddressTableLookup},
+                MessageHeader, VersionedMessage,
+            },
             poh_config::PohConfig,
             signature::{Keypair, Signer},
             system_instruction::SystemError,
             system_transaction,
-            transaction::{Transaction, TransactionError},
+            transaction::{DisabledAddressLoader, Transaction, TransactionError},
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
@@ -2710,15 +2712,12 @@ mod tests {
         let tx = VersionedTransaction::try_new(message, &[&keypair]).unwrap();
         let message_hash = tx.message.hash();
         let sanitized_tx =
-            SanitizedTransaction::try_create(tx.clone(), message_hash, Some(false), |lookups| {
-                Ok(bank.load_lookup_table_addresses(lookups).unwrap())
-            })
-            .unwrap();
+            SanitizedTransaction::try_create(tx.clone(), message_hash, Some(false), bank.as_ref())
+                .unwrap();
 
         let entry = next_versioned_entry(&genesis_config.hash(), 1, vec![tx]);
         let entries = vec![entry];
 
-        // todo: check if sig fees are needed
         bank.transfer(1, &mint_keypair, &keypair.pubkey()).unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
@@ -3352,7 +3351,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                |_| Err(TransactionError::UnsupportedVersion),
+                &DisabledAddressLoader,
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
@@ -3363,7 +3362,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                |_| Err(TransactionError::UnsupportedVersion),
+                &DisabledAddressLoader,
             );
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
@@ -3383,7 +3382,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                |_| Err(TransactionError::UnsupportedVersion),
+                &DisabledAddressLoader,
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -3394,7 +3393,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                |_| Err(TransactionError::UnsupportedVersion),
+                &DisabledAddressLoader,
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
@@ -3414,7 +3413,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                |_| Err(TransactionError::UnsupportedVersion),
+                &DisabledAddressLoader,
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -3425,7 +3424,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                |_| Err(TransactionError::UnsupportedVersion),
+                &DisabledAddressLoader,
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
