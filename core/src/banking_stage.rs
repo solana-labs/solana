@@ -679,30 +679,30 @@ impl BankingStage {
         would_be_leader: bool,
         would_be_leader_shortly: bool,
     ) -> BufferedPacketsDecision {
-        leader_pubkey.map_or(
-            // If leader is not known, return the buffered packets as is
-            BufferedPacketsDecision::Hold,
-            // else process the packets
-            |x| {
-                if let Some(bank) = bank_still_processing_txs {
-                    // If the bank is available, this node is the leader
-                    BufferedPacketsDecision::Consume(bank.ns_per_slot)
-                } else if would_be_leader_shortly {
-                    // If the node will be the leader soon, hold the packets for now
-                    BufferedPacketsDecision::Hold
-                } else if would_be_leader {
-                    // Node will be leader within ~20 slots, hold the transactions in
-                    // case it is the only node which produces an accepted slot.
-                    BufferedPacketsDecision::ForwardAndHold
-                } else if x != *my_pubkey {
-                    // If the current node is not the leader, forward the buffered packets
-                    BufferedPacketsDecision::Forward
-                } else {
-                    // We don't know the leader. Hold the packets for now
-                    BufferedPacketsDecision::Hold
-                }
-            },
-        )
+        // If has active bank, then immediately process buffered packets
+        // otherwise, based on leader schedule to either forward or hold packets
+        if let Some(bank) = bank_still_processing_txs {
+            // If the bank is available, this node is the leader
+            BufferedPacketsDecision::Consume(bank.ns_per_slot)
+        } else if would_be_leader_shortly {
+            // If the node will be the leader soon, hold the packets for now
+            BufferedPacketsDecision::Hold
+        } else if would_be_leader {
+            // Node will be leader within ~20 slots, hold the transactions in
+            // case it is the only node which produces an accepted slot.
+            BufferedPacketsDecision::ForwardAndHold
+        } else if let Some(x) = leader_pubkey {
+            if x != *my_pubkey {
+                // If the current node is not the leader, forward the buffered packets
+                BufferedPacketsDecision::Forward
+            } else {
+                // If the current node is the leader, return the buffered packets as is
+                BufferedPacketsDecision::Hold
+            }
+        } else {
+            // We don't know the leader. Hold the packets for now
+            BufferedPacketsDecision::Hold
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2317,9 +2317,10 @@ mod tests {
         let my_pubkey = solana_sdk::pubkey::new_rand();
         let my_pubkey1 = solana_sdk::pubkey::new_rand();
         let bank = Arc::new(Bank::default_for_tests());
+        // having active bank allows to consume immediately
         assert_matches!(
             BankingStage::consume_or_forward_packets(&my_pubkey, None, Some(&bank), false, false),
-            BufferedPacketsDecision::Hold
+            BufferedPacketsDecision::Consume(_)
         );
         assert_matches!(
             BankingStage::consume_or_forward_packets(&my_pubkey, None, None, false, false),
