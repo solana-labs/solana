@@ -11,7 +11,6 @@ use {
         },
         blockstore_meta::*,
         entry::{create_ticks, Entry},
-        erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{Result as ShredResult, Shred, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
@@ -1063,21 +1062,16 @@ impl Blockstore {
             }
         }
 
-        let set_index = u64::from(shred.common_header.fec_set_index);
-        let erasure_config = ErasureConfig::new(
-            shred.coding_header.num_data_shreds as usize,
-            shred.coding_header.num_coding_shreds as usize,
-        );
-
+        let set_index = u64::from(shred.fec_set_index());
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
             self.erasure_meta(slot, set_index)
                 .expect("Expect database get to succeed")
-                .unwrap_or_else(|| ErasureMeta::new(set_index, erasure_config))
+                .unwrap_or_else(|| ErasureMeta::from_coding_shred(&shred).unwrap())
         });
 
         // TODO: handle_duplicate is not invoked and so duplicate shreds are
         // not gossiped to the rest of cluster.
-        if erasure_config != erasure_meta.config() {
+        if !erasure_meta.check_coding_shred(&shred) {
             metrics.num_coding_shreds_invalid_erasure_config += 1;
             let conflicting_shred = self.find_conflicting_coding_shred(
                 &shred,
@@ -1100,7 +1094,7 @@ impl Blockstore {
             warn!("Received multiple erasure configs for the same erasure set!!!");
             warn!(
                 "Slot: {}, shred index: {}, set_index: {}, is_duplicate: {}, stored config: {:#?}, new config: {:#?}",
-                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), erasure_config
+                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), shred.coding_header,
             );
 
             return false;
@@ -1230,7 +1224,7 @@ impl Blockstore {
             }
         }
 
-        let set_index = u64::from(shred.common_header.fec_set_index);
+        let set_index = u64::from(shred.fec_set_index());
         let newly_completed_data_sets = self.insert_data_shred(
             slot_meta,
             index_meta.data_mut(),
