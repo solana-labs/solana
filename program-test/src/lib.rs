@@ -98,7 +98,11 @@ pub fn builtin_process_instruction(
 
     let log_collector = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
-    stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
+    stable_log::program_invoke(
+        &log_collector,
+        program_id,
+        invoke_context.get_stack_height(),
+    );
 
     // Skip the processor account
     let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
@@ -246,7 +250,11 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
 
-        stable_log::program_invoke(&log_collector, &program_id, invoke_context.invoke_depth());
+        stable_log::program_invoke(
+            &log_collector,
+            &program_id,
+            invoke_context.get_stack_height(),
+        );
 
         // Convert AccountInfos into Accounts
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
@@ -305,9 +313,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
-            instruction_recorder.record_instruction(instruction.clone());
-        }
+        invoke_context.record_instruction(invoke_context.get_stack_height(), instruction.clone());
 
         let message = SanitizedMessage::Legacy(message);
         invoke_context

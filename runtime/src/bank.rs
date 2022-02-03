@@ -53,7 +53,7 @@ use {
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
-        message_processor::MessageProcessor,
+        message_processor::{InstructionTrace, MessageProcessor},
         rent_collector::{CollectedInfo, RentCollector},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
@@ -79,7 +79,6 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        instruction_recorder::InstructionRecorder,
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
             TransactionAccountRefCells, TransactionExecutor,
@@ -695,6 +694,17 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 
 /// A list of instructions that were invoked during each instruction of a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
+
+/// Convert from an InstructionTrace to InnerInstructionsList
+pub fn inner_instructions_list_from_instruction_trace(
+    instruction_trace: &InstructionTrace,
+    message: &SanitizedMessage,
+) -> Option<InnerInstructionsList> {
+    instruction_trace
+        .iter()
+        .map(|r| r.compile_instructions(message))
+        .collect()
+}
 
 /// A list of log messages emitted during a transaction
 pub type TransactionLogMessages = Vec<String>;
@@ -3880,15 +3890,7 @@ impl Bank {
         let pre_account_state_info =
             self.get_transaction_account_state_info(&account_refcells, tx.message());
 
-        let instruction_recorders = if enable_cpi_recording {
-            let ix_count = tx.message().instructions().len();
-            let mut recorders = Vec::with_capacity(ix_count);
-            recorders.resize_with(ix_count, InstructionRecorder::default);
-            Some(recorders)
-        } else {
-            None
-        };
-
+        let mut instruction_trace = Vec::with_capacity(tx.message().instructions().len());
         let log_collector = if enable_log_recording {
             Some(LogCollector::new_ref())
         } else {
@@ -3906,7 +3908,7 @@ impl Bank {
             self.rent_collector.rent,
             log_collector.clone(),
             executors.clone(),
-            instruction_recorders.as_deref(),
+            &mut instruction_trace,
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -3962,13 +3964,11 @@ impl Bank {
                     .ok()
             });
 
-        let inner_instructions: Option<InnerInstructionsList> =
-            instruction_recorders.and_then(|instruction_recorders| {
-                instruction_recorders
-                    .into_iter()
-                    .map(|r| r.compile_instructions(tx.message()))
-                    .collect()
-            });
+        let inner_instructions = if enable_cpi_recording {
+            inner_instructions_list_from_instruction_trace(&instruction_trace, tx.message())
+        } else {
+            None
+        };
 
         if let Err(e) =
             Self::refcells_to_accounts(&mut loaded_transaction.accounts, account_refcells)
@@ -6673,7 +6673,9 @@ pub(crate) mod tests {
             status_cache::MAX_CACHE_ENTRIES,
         },
         crossbeam_channel::{bounded, unbounded},
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{
+            instruction_recorder::InstructionRecorder, invoke_context::InvokeContext,
+        },
         solana_sdk::{
             account::Account,
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
@@ -16167,5 +16169,57 @@ pub(crate) mod tests {
                 assert_eq!(bank.load_accounts_data_len() as i64, initial + delta);
             }
         }
+    }
+
+    #[test]
+    fn test_inner_instructions_list_from_instruction_trace() {
+        let instruction1 = Instruction::new_with_bytes(Pubkey::default(), &[1], Vec::new());
+        let instruction2 = Instruction::new_with_bytes(Pubkey::default(), &[2], Vec::new());
+        let instruction3 = Instruction::new_with_bytes(Pubkey::default(), &[3], Vec::new());
+        let instruction4 = Instruction::new_with_bytes(Pubkey::default(), &[4], Vec::new());
+        let instruction5 = Instruction::new_with_bytes(Pubkey::default(), &[5], Vec::new());
+        let instruction6 = Instruction::new_with_bytes(Pubkey::default(), &[6], Vec::new());
+
+        let instruction_trace = vec![
+            InstructionRecorder::default(),
+            InstructionRecorder::default(),
+            InstructionRecorder::default(),
+        ];
+        instruction_trace[0].record_instruction(1, instruction1.clone());
+        instruction_trace[0].record_instruction(2, instruction2.clone());
+        instruction_trace[2].record_instruction(1, instruction3.clone());
+        instruction_trace[2].record_instruction(2, instruction4.clone());
+        instruction_trace[2].record_instruction(3, instruction5.clone());
+        instruction_trace[2].record_instruction(2, instruction6.clone());
+
+        let message = Message::new(
+            &[
+                instruction1,
+                instruction2,
+                instruction3,
+                instruction4,
+                instruction5,
+                instruction6,
+            ],
+            None,
+        );
+
+        let inner_instructions = inner_instructions_list_from_instruction_trace(
+            &instruction_trace,
+            &SanitizedMessage::Legacy(message),
+        );
+
+        assert_eq!(
+            inner_instructions,
+            Some(vec![
+                vec![CompiledInstruction::new_from_raw_parts(0, vec![2], vec![])],
+                vec![],
+                vec![
+                    CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
+                    CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
+                    CompiledInstruction::new_from_raw_parts(0, vec![6], vec![])
+                ]
+            ])
+        );
     }
 }

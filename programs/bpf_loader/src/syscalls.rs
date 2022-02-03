@@ -21,13 +21,17 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
-            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
-            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            sol_log_data_syscall_enabled, update_syscall_base_costs,
+            add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
+            disable_fees_sysvar, do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
+            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
+            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+            update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{
+            AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
+            TRANSACTION_LEVEL_STACK_HEIGHT,
+        },
         keccak,
         message::{Message, SanitizedMessage},
         native_loader,
@@ -204,6 +208,24 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
     }
 
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id())
+    {
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_processed_sibling_instruction",
+            SyscallGetProcessedSiblingInstruction::call,
+        )?;
+    }
+
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
+    }
+
     Ok(syscall_registry)
 }
 
@@ -241,6 +263,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_sol_log_data_syscall_active = invoke_context
         .feature_set
         .is_active(&sol_log_data_syscall_enabled::id());
+    let add_get_processed_sibling_instruction_syscall = invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id());
 
     let loader_id = invoke_context
         .get_loader()
@@ -396,6 +421,24 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         vm,
         is_sol_log_data_syscall_active,
         Box::new(SyscallLogData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // processed inner instructions
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetProcessedSiblingInstruction {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // Get stack height
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetStackHeight {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -2387,6 +2430,7 @@ fn call<'a, 'b: 'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
+    let stack_height = invoke_context.get_stack_height();
     let (message, caller_write_privileges, program_indices) = invoke_context
         .create_message(&instruction, &signers)
         .map_err(SyscallError::InstructionError)?;
@@ -2401,9 +2445,7 @@ fn call<'a, 'b: 'a>(
     )?;
 
     // Record the instruction
-    if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
-        instruction_recorder.record_instruction(instruction);
-    }
+    invoke_context.record_instruction(stack_height.saturating_add(1), instruction);
 
     // Process instruction
     let message = SanitizedMessage::Legacy(message);
@@ -2681,6 +2723,141 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
         stable_log::program_data(&log_collector, &fields);
 
         *result = Ok(0);
+    }
+}
+
+pub struct SyscallGetProcessedSiblingInstruction<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'a, 'b> {
+    fn call(
+        &mut self,
+        index: u64,
+        meta_addr: u64,
+        program_id_addr: u64,
+        data_addr: u64,
+        accounts_addr: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let loader_id = question_mark!(
+            invoke_context
+                .get_loader()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        let stack_height = invoke_context.get_stack_height();
+        let instruction_trace = invoke_context.get_instruction_trace();
+        let instruction = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
+            // pick one of the top-level instructions
+            instruction_trace
+                .len()
+                .checked_sub(2)
+                .and_then(|result| result.checked_sub(index as usize))
+                .and_then(|index| instruction_trace.get(index))
+                .and_then(|instruction_recorder| instruction_recorder.get(0))
+        } else {
+            // Walk the last list of inner instructions
+            instruction_trace
+                .last()
+                .and_then(|inners| inners.find(stack_height, index as usize))
+        };
+
+        if let Some(instruction) = instruction {
+            let ProcessedSiblingInstruction {
+                data_len,
+                accounts_len,
+            } = question_mark!(
+                translate_type_mut::<ProcessedSiblingInstruction>(
+                    memory_mapping,
+                    meta_addr,
+                    &loader_id
+                ),
+                result
+            );
+
+            if *data_len == instruction.data.len() && *accounts_len == instruction.accounts.len() {
+                let program_id = question_mark!(
+                    translate_type_mut::<Pubkey>(memory_mapping, program_id_addr, &loader_id),
+                    result
+                );
+                let data = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        data_addr,
+                        *data_len as u64,
+                        &loader_id,
+                    ),
+                    result
+                );
+                let accounts = question_mark!(
+                    translate_slice_mut::<AccountMeta>(
+                        memory_mapping,
+                        accounts_addr,
+                        *accounts_len as u64,
+                        &loader_id,
+                    ),
+                    result
+                );
+
+                *program_id = instruction.program_id;
+                data.clone_from_slice(instruction.data.as_slice());
+                accounts.clone_from_slice(instruction.accounts.as_slice());
+            }
+            *data_len = instruction.data.len();
+            *accounts_len = instruction.accounts.len();
+            *result = Ok(true as u64);
+            return;
+        }
+        *result = Ok(false as u64);
+    }
+}
+
+pub struct SyscallGetStackHeight<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetStackHeight<'a, 'b> {
+    fn call(
+        &mut self,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        *result = Ok(invoke_context.get_stack_height() as u64);
     }
 }
 

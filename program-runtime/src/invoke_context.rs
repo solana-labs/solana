@@ -21,7 +21,10 @@ use {
             tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
-        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+        instruction::{
+            AccountMeta, CompiledInstruction, Instruction, InstructionError,
+            TRANSACTION_LEVEL_STACK_HEIGHT,
+        },
         keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
@@ -201,7 +204,7 @@ pub struct InvokeContext<'a> {
     compute_meter: Rc<RefCell<ComputeMeter>>,
     accounts_data_meter: AccountsDataMeter,
     executors: Rc<RefCell<Executors>>,
-    pub instruction_recorder: Option<&'a InstructionRecorder>,
+    pub instruction_trace: Vec<InstructionRecorder>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -237,7 +240,7 @@ impl<'a> InvokeContext<'a> {
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
             accounts_data_meter: AccountsDataMeter::new(current_accounts_data_len),
             executors,
-            instruction_recorder: None,
+            instruction_trace: Vec::new(),
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -375,8 +378,8 @@ impl<'a> InvokeContext<'a> {
         self.invoke_stack.pop();
     }
 
-    /// Current depth of the invocation stack
-    pub fn invoke_depth(&self) -> usize {
+    /// Current height of the stack
+    pub fn get_stack_height(&self) -> usize {
         self.invoke_stack.len()
     }
 
@@ -566,9 +569,7 @@ impl<'a> InvokeContext<'a> {
             prev_account_sizes.push((account, account_length));
         }
 
-        if let Some(instruction_recorder) = &self.instruction_recorder {
-            instruction_recorder.record_instruction(instruction);
-        }
+        self.record_instruction(self.get_stack_height(), instruction);
 
         let message = SanitizedMessage::Legacy(message);
         self.process_instruction(
@@ -953,6 +954,29 @@ impl<'a> InvokeContext<'a> {
     /// Get cached sysvars
     pub fn get_sysvar_cache(&self) -> &SysvarCache {
         &self.sysvar_cache
+    }
+
+    /// Record top-level instruction in the instruction trace
+    pub fn record_top_level_instruction(&mut self, instruction: Instruction) {
+        self.instruction_trace.push(InstructionRecorder::default());
+        self.record_instruction(TRANSACTION_LEVEL_STACK_HEIGHT, instruction);
+    }
+
+    /// Record instruction in the instruction trace
+    pub fn record_instruction(&mut self, stack_height: usize, instruction: Instruction) {
+        if let Some(instruction_recorder) = self.instruction_trace.last() {
+            instruction_recorder.record_instruction(stack_height, instruction)
+        }
+    }
+
+    /// Get the instruction trace
+    pub fn get_instruction_trace(&self) -> &[InstructionRecorder] {
+        &self.instruction_trace
+    }
+
+    /// Get the mutable instruction trace
+    pub fn get_instruction_trace_mut(&mut self) -> &mut Vec<InstructionRecorder> {
+        &mut self.instruction_trace
     }
 }
 

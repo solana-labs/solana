@@ -38,6 +38,9 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
     }
 }
 
+/// Trace of all instructions attempted
+pub type InstructionTrace = Vec<InstructionRecorder>;
+
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessedMessageInfo {
@@ -60,7 +63,7 @@ impl MessageProcessor {
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&[InstructionRecorder]>,
+        instruction_trace: &mut InstructionTrace,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
@@ -89,6 +92,12 @@ impl MessageProcessor {
             .zip(program_indices.iter())
             .enumerate()
         {
+            invoke_context.record_top_level_instruction(
+                instruction.decompile(message).map_err(|err| {
+                    TransactionError::InstructionError(instruction_index as u8, err)
+                })?,
+            );
+
             if invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
@@ -111,10 +120,6 @@ impl MessageProcessor {
                 }
             }
 
-            if let Some(instruction_recorders) = instruction_recorders {
-                invoke_context.instruction_recorder =
-                    Some(&instruction_recorders[instruction_index]);
-            }
             let mut time = Measure::start("execute_instruction");
             let ProcessInstructionResult {
                 compute_units_consumed,
@@ -139,9 +144,13 @@ impl MessageProcessor {
                 timings.execute_accessories.process_instructions.total_us,
                 time.as_us()
             );
-            result
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+
+            result.map_err(|err| {
+                instruction_trace.append(invoke_context.get_instruction_trace_mut());
+                TransactionError::InstructionError(instruction_index as u8, err)
+            })?;
         }
+        instruction_trace.append(invoke_context.get_instruction_trace_mut());
         Ok(ProcessedMessageInfo {
             accounts_data_len: invoke_context.get_accounts_data_meter().current(),
         })
@@ -263,7 +272,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -293,7 +302,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -327,7 +336,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -473,7 +482,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -507,7 +516,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -538,7 +547,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
@@ -596,7 +605,7 @@ mod tests {
             RentCollector::default().rent,
             None,
             Rc::new(RefCell::new(Executors::default())),
-            None,
+            &mut Vec::new(),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
