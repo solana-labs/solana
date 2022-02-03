@@ -919,7 +919,9 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_transaction,
-            transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
+            transaction::{
+                DisabledAddressLoader, Result, SanitizedTransaction, VersionedTransaction,
+            },
         },
     };
 
@@ -1003,9 +1005,12 @@ mod tests {
                             versioned_tx.message.hash()
                         };
 
-                    SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    })
+                    SanitizedTransaction::try_create(
+                        versioned_tx,
+                        message_hash,
+                        None,
+                        &DisabledAddressLoader,
+                    )
                 }?;
 
                 Ok(sanitized_tx)

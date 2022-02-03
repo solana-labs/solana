@@ -199,7 +199,7 @@ mod tests {
             hash::Hash,
             signature::{Keypair, Signer},
             system_transaction,
-            transaction::{TransactionError, VersionedTransaction},
+            transaction::{DisabledAddressLoader, VersionedTransaction},
         },
         solana_vote_program::vote_transaction,
         std::{cmp, sync::Arc},
@@ -248,7 +248,7 @@ mod tests {
             VersionedTransaction::from(transaction),
             message_hash,
             Some(true),
-            |_| Err(TransactionError::UnsupportedVersion),
+            &DisabledAddressLoader,
         )
         .unwrap();
         (vote_transaction, vec![mint_keypair.pubkey()], 10)
