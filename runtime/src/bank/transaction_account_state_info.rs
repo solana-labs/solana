@@ -22,16 +22,25 @@ impl Bank {
         (0..message.account_keys_len())
             .map(|i| {
                 let rent_state = if message.is_writable(i) {
-                    let account = transaction_context.get_account_at_index(i).borrow();
+                    let state = if let Ok(account) = transaction_context.get_account_at_index(i) {
+                        let account = account.borrow();
 
-                    // Native programs appear to be RentPaying because they carry low lamport
-                    // balances; however they will never be loaded as writable
-                    debug_assert!(!native_loader::check_id(account.owner()));
+                        // Native programs appear to be RentPaying because they carry low lamport
+                        // balances; however they will never be loaded as writable
+                        debug_assert!(!native_loader::check_id(account.owner()));
 
-                    Some(RentState::from_account(
-                        &account,
-                        &self.rent_collector().rent,
-                    ))
+                        Some(RentState::from_account(
+                            &account,
+                            &self.rent_collector().rent,
+                        ))
+                    } else {
+                        None
+                    };
+                    debug_assert!(
+                        state.is_some(),
+                        "message and transaction context out of sync, fatal"
+                    );
+                    state
                 } else {
                     None
                 };

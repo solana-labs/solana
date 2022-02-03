@@ -271,7 +271,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         for instruction_account in instruction_accounts.iter() {
             let account_key = invoke_context
                 .transaction_context
-                .get_key_of_account_at_index(instruction_account.index_in_transaction);
+                .get_key_of_account_at_index(instruction_account.index_in_transaction)
+                .unwrap();
             let account_info_index = account_infos
                 .iter()
                 .position(|account_info| account_info.unsigned_key() == account_key)
@@ -281,6 +282,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let mut account = invoke_context
                 .transaction_context
                 .get_account_at_index(instruction_account.index_in_transaction)
+                .unwrap()
                 .borrow_mut();
             account.copy_into_owner_from_slice(account_info.owner.as_ref());
             account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
@@ -309,6 +311,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow_mut();
             let account_info = &account_infos[account_info_index];
             **account_info.try_borrow_mut_lamports().unwrap() = account.lamports();

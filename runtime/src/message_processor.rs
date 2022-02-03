@@ -103,6 +103,7 @@ impl MessageProcessor {
                 let mut mut_account_ref = invoke_context
                     .transaction_context
                     .get_account_at_index(account_index)
+                    .map_err(|_| TransactionError::InvalidAccountIndex)?
                     .borrow_mut();
                 instructions::store_current_index(
                     mut_account_ref.data_as_mut_slice(),
@@ -243,8 +244,14 @@ mod tests {
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), true),
-            AccountMeta::new_readonly(*transaction_context.get_key_of_account_at_index(1), false),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(0).unwrap(),
+                true,
+            ),
+            AccountMeta::new_readonly(
+                *transaction_context.get_key_of_account_at_index(1).unwrap(),
+                false,
+            ),
         ];
 
         let message = SanitizedMessage::Legacy(Message::new(
@@ -253,7 +260,7 @@ mod tests {
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
@@ -276,6 +283,7 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(0)
+                .unwrap()
                 .borrow()
                 .lamports(),
             100
@@ -283,6 +291,7 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(1)
+                .unwrap()
                 .borrow()
                 .lamports(),
             0
@@ -294,7 +303,7 @@ mod tests {
                 &MockSystemInstruction::TransferLamports { lamports: 50 },
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -326,7 +335,7 @@ mod tests {
                 &MockSystemInstruction::ChangeData { data: 50 },
                 account_metas,
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -439,9 +448,18 @@ mod tests {
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), true),
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(1), false),
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), false),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(0).unwrap(),
+                true,
+            ),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(1).unwrap(),
+                false,
+            ),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(0).unwrap(),
+                false,
+            ),
         ];
 
         // Try to borrow mut the same account
@@ -451,7 +469,7 @@ mod tests {
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
@@ -485,7 +503,7 @@ mod tests {
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -515,7 +533,7 @@ mod tests {
                 },
                 account_metas,
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -537,6 +555,7 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(0)
+                .unwrap()
                 .borrow()
                 .lamports(),
             80
@@ -544,12 +563,17 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(1)
+                .unwrap()
                 .borrow()
                 .lamports(),
             20
         );
         assert_eq!(
-            transaction_context.get_account_at_index(0).borrow().data(),
+            transaction_context
+                .get_account_at_index(0)
+                .unwrap()
+                .borrow()
+                .data(),
             &vec![42]
         );
     }
