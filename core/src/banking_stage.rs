@@ -592,6 +592,7 @@ impl BankingStage {
                             gossip_vote_sender,
                             banking_stage_stats,
                             qos_service,
+                            slot_metrics_tracker,
                         );
                         let ProcessTransactionsSummary {
                             reached_max_poh_height,
@@ -1531,7 +1532,6 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             qos_service,
-            slot_metrics_tracker,
         );
         process_tx_time.stop();
 
@@ -1542,7 +1542,7 @@ impl BankingStage {
             committed_transactions_count,
             failed_commit_count,
             ref retryable_transaction_indexes,
-            cost_model_limit_transactions_count,
+            cost_model_throttled_transactions_count,
             ..
         } = process_transactions_summary;
 
@@ -1565,8 +1565,8 @@ impl BankingStage {
                 .saturating_sub(retryable_transaction_indexes.len()) as u64,
         );
 
-        slot_metrics_tracker.increment_cost_model_limit_transactions_count(
-            cost_model_limit_transactions_count as u64,
+        slot_metrics_tracker.increment_cost_model_throttled_transactions_count(
+            cost_model_throttled_transactions_count as u64,
         );
 
         let retryable_tx_count = retryable_transaction_indexes.len();
@@ -2336,7 +2336,7 @@ mod tests {
 
             poh_recorder
                 .lock()
-                .unwrap()
+                .unwrap()   
                 .is_exited
                 .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();

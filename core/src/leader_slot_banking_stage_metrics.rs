@@ -57,7 +57,7 @@ struct LeaderSlotPacketCountMetrics {
     // total number of transactions that were excluded from the block because they were too expensive
     // according to the cost model. These transactions are added back to the buffered queue and are
     // already counted in `self.retrayble_errored_transaction_count`.
-    cost_model_limit_transactions_count: u64,
+    cost_model_throttled_transactions_count: u64,
 
     // total number of unprocessed packets that were valid for forwarding
     forwardable_packet_candidates_count: u64,
@@ -436,11 +436,11 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    pub(crate) fn increment_cost_model_limit_transactions_count(&mut self, count: u64) {
+    pub(crate) fn increment_cost_model_throttled_transactions_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &self.leader_slot_metrics {
             leader_slot_metrics
                 .packet_count_metrics
-                .cost_model_limit_transactions_count
+                .cost_model_throttled_transactions_count
                 .saturating_add(count);
         }
     }
