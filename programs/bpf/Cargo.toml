@@ -81,6 +81,8 @@ members = [
     "rust/sanity",
     "rust/secp256k1_recover",
     "rust/sha",
+    "rust/sibling_inner_instruction",
+    "rust/sibling_instruction",
     "rust/spoof1",
     "rust/spoof1_system",
     "rust/sysvar",

@@ -3018,6 +3018,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-sibling-instructions"
+version = "1.10.0"
+dependencies = [
+ "solana-program 1.10.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-sibling_inner-instructions"
+version = "1.10.0"
+dependencies = [
+ "solana-program 1.10.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-spoof1"
 version = "1.10.0"
 dependencies = [

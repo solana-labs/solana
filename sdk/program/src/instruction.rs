@@ -528,7 +528,8 @@ pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
 /// default [`AccountMeta::new`] constructor creates writable accounts, this is
 /// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
 /// is not writable.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key.
     pub pubkey: Pubkey,
@@ -639,12 +640,154 @@ impl CompiledInstruction {
         let data = serialize(data).unwrap();
         Self {
             program_id_index: program_ids_index,
-            data,
             accounts,
+            data,
+        }
+    }
+
+    pub fn new_from_raw_parts(program_id_index: u8, data: Vec<u8>, accounts: Vec<u8>) -> Self {
+        Self {
+            program_id_index,
+            accounts,
+            data,
         }
     }
 
     pub fn program_id<'a>(&self, program_ids: &'a [Pubkey]) -> &'a Pubkey {
         &program_ids[self.program_id_index as usize]
     }
+}
+
+/// Use to query and convey information about the sibling instruction components
+/// when calling the `sol_get_processed_sibling_instruction` syscall.
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+pub struct ProcessedSiblingInstruction {
+    /// Length of the instruction data
+    pub data_len: usize,
+    /// Number of AccountMeta structures
+    pub accounts_len: usize,
+}
+
+/// Returns a sibling instruction from the processed sibling instruction list.
+///
+/// The processed sibling instruction list is a reverse-ordered list of
+/// successfully processed sibling instructions. For example, given the call flow:
+///
+/// A
+/// B -> C -> D
+/// B -> E
+/// B -> F
+///
+/// Then B's processed sibling instruction list is: `[A]`
+/// Then F's processed sibling instruction list is: `[E, C]`
+pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
+    #[cfg(target_arch = "bpf")]
+    {
+        extern "C" {
+            fn sol_get_processed_sibling_instruction(
+                index: u64,
+                meta: *mut ProcessedSiblingInstruction,
+                program_id: *mut Pubkey,
+                data: *mut u8,
+                accounts: *mut AccountMeta,
+            ) -> u64;
+        }
+
+        let mut meta = ProcessedSiblingInstruction::default();
+        let mut program_id = Pubkey::default();
+
+        if 1 == unsafe {
+            sol_get_processed_sibling_instruction(
+                index as u64,
+                &mut meta,
+                &mut program_id,
+                &mut u8::default(),
+                &mut AccountMeta::default(),
+            )
+        } {
+            let mut data = Vec::new();
+            let mut accounts = Vec::new();
+            data.resize_with(meta.data_len, u8::default);
+            accounts.resize_with(meta.accounts_len, AccountMeta::default);
+
+            let _ = unsafe {
+                sol_get_processed_sibling_instruction(
+                    index as u64,
+                    &mut meta,
+                    &mut program_id,
+                    data.as_mut_ptr(),
+                    accounts.as_mut_ptr(),
+                )
+            };
+
+            Some(Instruction::new_with_bytes(program_id, &data, accounts))
+        } else {
+            None
+        }
+    }
+
+    #[cfg(not(target_arch = "bpf"))]
+    crate::program_stubs::sol_get_processed_sibling_instruction(index)
+}
+
+// Stack height when processing transaction-level instructions
+pub const TRANSACTION_LEVEL_STACK_HEIGHT: usize = 1;
+
+/// Get the current stack height, transaction-level instructions are height
+/// TRANSACTION_LEVEL_STACK_HEIGHT, fist invoked inner instruction is height
+/// TRANSACTION_LEVEL_STACK_HEIGHT + 1, etc...
+pub fn get_stack_height() -> usize {
+    #[cfg(target_arch = "bpf")]
+    {
+        extern "C" {
+            fn sol_get_stack_height() -> u64;
+        }
+
+        unsafe { sol_get_stack_height() as usize }
+    }
+
+    #[cfg(not(target_arch = "bpf"))]
+    {
+        crate::program_stubs::sol_get_stack_height() as usize
+    }
+}
+
+#[test]
+fn test_account_meta_layout() {
+    #[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+    struct AccountMetaRust {
+        pub pubkey: Pubkey,
+        pub is_signer: bool,
+        pub is_writable: bool,
+    }
+
+    let account_meta_rust = AccountMetaRust::default();
+    let base_rust_addr = &account_meta_rust as *const _ as u64;
+    let pubkey_rust_addr = &account_meta_rust.pubkey as *const _ as u64;
+    let is_signer_rust_addr = &account_meta_rust.is_signer as *const _ as u64;
+    let is_writable_rust_addr = &account_meta_rust.is_writable as *const _ as u64;
+
+    let account_meta_c = AccountMeta::default();
+    let base_c_addr = &account_meta_c as *const _ as u64;
+    let pubkey_c_addr = &account_meta_c.pubkey as *const _ as u64;
+    let is_signer_c_addr = &account_meta_c.is_signer as *const _ as u64;
+    let is_writable_c_addr = &account_meta_c.is_writable as *const _ as u64;
+
+    assert_eq!(
+        std::mem::size_of::<AccountMetaRust>(),
+        std::mem::size_of::<AccountMeta>()
+    );
+    assert_eq!(
+        pubkey_rust_addr - base_rust_addr,
+        pubkey_c_addr - base_c_addr
+    );
+    assert_eq!(
+        is_signer_rust_addr - base_rust_addr,
+        is_signer_c_addr - base_c_addr
+    );
+    assert_eq!(
+        is_writable_rust_addr - base_rust_addr,
+        is_writable_c_addr - base_c_addr
+    );
 }

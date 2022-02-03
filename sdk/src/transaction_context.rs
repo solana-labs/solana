@@ -2,7 +2,7 @@
 
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::{CompiledInstruction, InstructionError},
+    instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
     lamports::LamportsError,
     pubkey::Pubkey,
 };
@@ -32,7 +32,7 @@ pub struct TransactionContext {
     instruction_context_capacity: usize,
     instruction_context_stack: Vec<InstructionContext>,
     number_of_instructions_at_transaction_level: usize,
-    instruction_trace: Vec<Vec<CompiledInstruction>>,
+    instruction_trace: InstructionTrace,
     return_data: (Pubkey, Vec<u8>),
 }
 
@@ -60,7 +60,12 @@ impl TransactionContext {
     }
 
     /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn deconstruct(self) -> (Vec<TransactionAccount>, Vec<Vec<CompiledInstruction>>) {
+    pub fn deconstruct(
+        self,
+    ) -> (
+        Vec<TransactionAccount>,
+        Vec<Vec<(usize, InstructionContext)>>,
+    ) {
         (
             Vec::from(Pin::into_inner(self.account_keys))
                 .into_iter()
@@ -126,7 +131,8 @@ impl TransactionContext {
         self.instruction_context_capacity
     }
 
-    /// Gets the level of the next InstructionContext
+    /// Gets instruction stack height, top-level instructions are height
+    /// `solana_sdk::instruction::TRANSACTION_LEVEL_STACK_HEIGHT`
     pub fn get_instruction_context_stack_height(&self) -> usize {
         self.instruction_context_stack.len()
     }
@@ -151,17 +157,23 @@ impl TransactionContext {
         if self.instruction_context_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
+
+        let instruction_context = InstructionContext {
+            program_accounts: program_accounts.to_vec(),
+            instruction_accounts: instruction_accounts.to_vec(),
+            instruction_data: instruction_data.to_vec(),
+        };
         if self.instruction_context_stack.is_empty() {
             debug_assert!(
                 self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
             );
-            self.instruction_trace.push(Vec::new());
+            self.instruction_trace.push(vec![(
+                TRANSACTION_LEVEL_STACK_HEIGHT,
+                instruction_context.clone(),
+            )]);
         }
-        self.instruction_context_stack.push(InstructionContext {
-            program_accounts: program_accounts.to_vec(),
-            instruction_accounts: instruction_accounts.to_vec(),
-            instruction_data: instruction_data.to_vec(),
-        });
+
+        self.instruction_context_stack.push(instruction_context);
         Ok(())
     }
 
@@ -204,17 +216,32 @@ impl TransactionContext {
     }
 
     /// Used by the runtime when a new CPI instruction begins
-    pub fn record_compiled_instruction(&mut self, instruction: CompiledInstruction) {
+    pub fn record_instruction(&mut self, stack_height: usize, instruction: InstructionContext) {
         if let Some(records) = self.instruction_trace.last_mut() {
-            records.push(instruction);
+            records.push((stack_height, instruction));
         }
     }
+
+    /// Returns instruction trace
+    pub fn get_instruction_trace(&self) -> &InstructionTrace {
+        &self.instruction_trace
+    }
+}
+
+/// List of (stack height, instruction) for each top-level instruction
+pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
+
+#[derive(Clone, Debug)]
+pub struct AccountMeta {
+    pub index_in_transaction: usize,
+    pub is_signer: bool,
+    pub is_writable: bool,
 }
 
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InstructionContext {
     program_accounts: Vec<usize>,
     instruction_accounts: Vec<InstructionAccount>,
@@ -222,14 +249,48 @@ pub struct InstructionContext {
 }
 
 impl InstructionContext {
+    /// New
+    pub fn new(
+        program_accounts: &[usize],
+        instruction_accounts: &[InstructionAccount],
+        instruction_data: &[u8],
+    ) -> Self {
+        InstructionContext {
+            program_accounts: program_accounts.to_vec(),
+            instruction_accounts: instruction_accounts.to_vec(),
+            instruction_data: instruction_data.to_vec(),
+        }
+    }
+
     /// Number of program accounts
     pub fn get_number_of_program_accounts(&self) -> usize {
         self.program_accounts.len()
     }
 
+    /// Get the index of the instruction's program id
+    pub fn get_program_id_index(&self) -> usize {
+        self.program_accounts.last().cloned().unwrap_or_default()
+    }
+
+    /// Get the instruction's program id
+    pub fn get_program_id(&self, transaction_context: &TransactionContext) -> Pubkey {
+        transaction_context.account_keys[self.program_accounts.last().cloned().unwrap_or_default()]
+    }
+
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> usize {
         self.instruction_accounts.len()
+    }
+
+    pub fn get_instruction_accounts_metas(&self) -> Vec<AccountMeta> {
+        self.instruction_accounts
+            .iter()
+            .map(|instruction_account| AccountMeta {
+                index_in_transaction: instruction_account.index_in_transaction,
+                is_signer: instruction_account.is_signer,
+                is_writable: instruction_account.is_writable,
+            })
+            .collect()
     }
 
     /// Number of accounts in this Instruction
@@ -346,6 +407,28 @@ impl InstructionContext {
             }
         }
         result
+    }
+
+    /// Returns whether an account is a signer
+    pub fn is_signer(&self, index_in_instruction: usize) -> bool {
+        if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                [index_in_instruction.saturating_sub(self.program_accounts.len())]
+            .is_signer
+        }
+    }
+
+    /// Returns whether an account is writable
+    pub fn is_writable(&self, index_in_instruction: usize) -> bool {
+        if index_in_instruction < self.program_accounts.len() {
+            false
+        } else {
+            self.instruction_accounts
+                [index_in_instruction.saturating_sub(self.program_accounts.len())]
+            .is_writable
+        }
     }
 }
 

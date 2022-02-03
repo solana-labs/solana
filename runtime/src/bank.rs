@@ -130,7 +130,7 @@ use {
             AddressLookupError, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
-        transaction_context::{TransactionAccount, TransactionContext},
+        transaction_context::{InstructionTrace, TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
@@ -576,7 +576,7 @@ pub struct TransactionResults {
 pub struct TransactionExecutionDetails {
     pub status: Result<()>,
     pub log_messages: Option<Vec<String>>,
-    pub inner_instructions: Option<Vec<Vec<CompiledInstruction>>>,
+    pub inner_instructions: Option<InnerInstructionsList>,
     pub durable_nonce_fee: Option<DurableNonceFee>,
 }
 
@@ -672,11 +672,39 @@ impl TransactionBalancesSet {
 }
 pub type TransactionBalances = Vec<Vec<u64>>;
 
-/// An ordered list of instructions that were invoked during a transaction instruction
+/// An ordered list of compiled instructions that were invoked during a
+/// transaction instruction
 pub type InnerInstructions = Vec<CompiledInstruction>;
 
-/// A list of instructions that were invoked during each instruction of a transaction
+/// A list of compiled instructions that were invoked during each instruction of
+/// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
+
+/// Convert from an IntrustionTrace to InnerInstructionsList
+pub fn inner_instructions_list_from_instruction_trace(
+    instruction_trace: &InstructionTrace,
+) -> InnerInstructionsList {
+    instruction_trace
+        .iter()
+        .map(|inner_instructions_trace| {
+            inner_instructions_trace
+                .iter()
+                .skip(1)
+                .map(|(_, instruction_context)| {
+                    CompiledInstruction::new_from_raw_parts(
+                        instruction_context.get_program_id_index() as u8,
+                        instruction_context.get_instruction_data().to_vec(),
+                        instruction_context
+                            .get_instruction_accounts_metas()
+                            .iter()
+                            .map(|meta| meta.index_in_transaction as u8)
+                            .collect(),
+                    )
+                })
+                .collect()
+        })
+        .collect()
+}
 
 /// A list of log messages emitted during a transaction
 pub type TransactionLogMessages = Vec<String>;
@@ -3890,14 +3918,18 @@ impl Bank {
         let (accounts, instruction_trace) = transaction_context.deconstruct();
         loaded_transaction.accounts = accounts;
 
+        let inner_instructions = if enable_cpi_recording {
+            Some(inner_instructions_list_from_instruction_trace(
+                &instruction_trace,
+            ))
+        } else {
+            None
+        };
+
         TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages,
-            inner_instructions: if enable_cpi_recording {
-                Some(instruction_trace)
-            } else {
-                None
-            },
+            inner_instructions,
             durable_nonce_fee,
         })
     }
@@ -6616,6 +6648,7 @@ pub(crate) mod tests {
             sysvar::rewards::Rewards,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
+            transaction_context::InstructionContext,
         },
         solana_vote_program::{
             vote_instruction,
@@ -15828,5 +15861,37 @@ pub(crate) mod tests {
                 assert_eq!(bank.load_accounts_data_len() as i64, initial + delta);
             }
         }
+    }
+
+    #[test]
+    fn test_inner_instructions_list_from_instruction_trace() {
+        let instruction_trace = vec![
+            vec![
+                (1, InstructionContext::new(&[], &[], &[1])),
+                (2, InstructionContext::new(&[], &[], &[2])),
+            ],
+            vec![],
+            vec![
+                (1, InstructionContext::new(&[], &[], &[3])),
+                (2, InstructionContext::new(&[], &[], &[4])),
+                (3, InstructionContext::new(&[], &[], &[5])),
+                (2, InstructionContext::new(&[], &[], &[6])),
+            ],
+        ];
+
+        let inner_instructions = inner_instructions_list_from_instruction_trace(&instruction_trace);
+
+        assert_eq!(
+            inner_instructions,
+            vec![
+                vec![CompiledInstruction::new_from_raw_parts(0, vec![2], vec![])],
+                vec![],
+                vec![
+                    CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
+                    CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
+                    CompiledInstruction::new_from_raw_parts(0, vec![6], vec![])
+                ]
+            ]
+        );
     }
 }
