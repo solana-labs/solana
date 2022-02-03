@@ -124,12 +124,12 @@ struct ProcessTransactionsSummary {
 
     // The number of transactions filtered out by the cost model
     #[allow(dead_code)]
-    cost_model_limit_transactions_count: usize,
+    cost_model_throttled_transactions_count: usize,
 }
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
-    cost_model_limit_transactions_count: usize,
+    cost_model_throttled_transactions_count: usize,
     execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
 }
 
@@ -1119,7 +1119,7 @@ impl BankingStage {
         let (transactions_qos_results, num_included) =
             qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
-        let cost_model_limit_transactions_count = txs.len().saturating_sub(num_included);
+        let cost_model_throttled_transactions_count = txs.len().saturating_sub(num_included);
 
         qos_service.accumulate_estimated_transaction_costs(
             &Self::accumulate_batched_transaction_costs(
@@ -1180,7 +1180,7 @@ impl BankingStage {
         );
 
         ProcessTransactionBatchOutput {
-            cost_model_limit_transactions_count,
+            cost_model_throttled_transactions_count,
             execute_and_commit_transactions_output,
         }
     }
@@ -1253,7 +1253,7 @@ impl BankingStage {
         // All transactions that were executed but then failed record because the
         // slot ended
         let mut total_failed_commit_count: usize = 0;
-        let mut total_cost_model_limit_transactions_count: usize = 0;
+        let mut total_cost_model_throttled_transactions_count: usize = 0;
         let mut reached_max_poh_height = false;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
@@ -1271,11 +1271,12 @@ impl BankingStage {
             );
 
             let ProcessTransactionBatchOutput {
-                cost_model_limit_transactions_count: new_cost_model_limit_transactions_count,
+                cost_model_throttled_transactions_count: new_cost_model_throttled_transactions_count,
                 execute_and_commit_transactions_output,
             } = process_transaction_batch_output;
-            total_cost_model_limit_transactions_count = total_cost_model_limit_transactions_count
-                .saturating_add(new_cost_model_limit_transactions_count);
+            total_cost_model_throttled_transactions_count =
+                total_cost_model_throttled_transactions_count
+                    .saturating_add(new_cost_model_throttled_transactions_count);
 
             let ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count: new_transactions_attempted_execution_count,
@@ -1345,7 +1346,7 @@ impl BankingStage {
                 total_committed_transactions_with_successful_result_count,
             failed_commit_count: total_failed_commit_count,
             retryable_transaction_indexes: all_retryable_tx_indexes,
-            cost_model_limit_transactions_count: total_cost_model_limit_transactions_count,
+            cost_model_throttled_transactions_count: total_cost_model_throttled_transactions_count,
         }
     }
 
