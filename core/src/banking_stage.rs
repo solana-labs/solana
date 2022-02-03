@@ -121,13 +121,7 @@ struct ProcessTransactionsSummary {
 
     // The number of transactions filtered out by the cost model
     #[allow(dead_code)]
-    cost_model_limit_transactions_count: usize,
-}
-
-pub struct ProcessTransactionBatchOutput {
-    // The number of transactions filtered out by the cost model
-    cost_model_limit_transactions_count: usize,
-    execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
+    cost_model_throttled_transactions_count: usize,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
@@ -1079,7 +1073,7 @@ impl BankingStage {
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-    ) -> ProcessTransactionBatchOutput {
+    ) -> ExecuteAndCommitTransactionsOutput {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
@@ -1121,10 +1115,7 @@ impl BankingStage {
             txs.len(),
         );
 
-        ProcessTransactionBatchOutput {
-            cost_model_limit_transactions_count,
-            execute_and_commit_transactions_output,
-        }
+        execute_and_commit_transactions_output
     }
 
     /// Sends transactions to the bank.
@@ -1151,14 +1142,13 @@ impl BankingStage {
         // All transactions that were executed but then failed record because the
         // slot ended
         let mut total_failed_commit_count: usize = 0;
-        let mut total_cost_model_limit_transactions_count: usize = 0;
         let mut reached_max_poh_height = false;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
                 chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
             );
-            let process_transaction_batch_output = Self::process_and_record_transactions(
+            let execute_and_commit_transactions_output = Self::process_and_record_transactions(
                 bank,
                 &transactions[chunk_start..chunk_end],
                 poh,
@@ -1166,13 +1156,6 @@ impl BankingStage {
                 transaction_status_sender.clone(),
                 gossip_vote_sender,
             );
-
-            let ProcessTransactionBatchOutput {
-                cost_model_limit_transactions_count: new_cost_model_limit_transactions_count,
-                execute_and_commit_transactions_output,
-            } = process_transaction_batch_output;
-            total_cost_model_limit_transactions_count = total_cost_model_limit_transactions_count
-                .saturating_add(new_cost_model_limit_transactions_count);
 
             let ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count: new_transactions_attempted_execution_count,
@@ -1242,7 +1225,7 @@ impl BankingStage {
                 total_committed_transactions_with_successful_result_count,
             failed_commit_count: total_failed_commit_count,
             retryable_transaction_indexes: all_retryable_tx_indexes,
-            cost_model_limit_transactions_count: total_cost_model_limit_transactions_count,
+            cost_model_throttled_transactions_count: 0,
         }
     }
 
@@ -1433,7 +1416,7 @@ impl BankingStage {
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> ProcessTransactionsSummary {
         let mut packet_conversion_time = Measure::start("packet_conversion");
-        let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
+        let (transactions, transaction_to_packet_indexes, cost_model_throttled_packet_indexes) =
             Self::transactions_from_packets(
                 packet_batch,
                 &packet_indexes,
@@ -1445,16 +1428,17 @@ impl BankingStage {
                 cost_model,
             );
         packet_conversion_time.stop();
+        let cost_model_throttled_transactions_count = cost_model_throttled_packet_indexes.len();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
 
         banking_stage_stats
             .cost_forced_retry_transactions_count
-            .fetch_add(retryable_packet_indexes.len(), Ordering::Relaxed);
+            .fetch_add(cost_model_throttled_packet_indexes.len(), Ordering::Relaxed);
         debug!(
             "bank: {} filtered transactions {} cost limited transactions {}",
             bank.slot(),
             transactions.len(),
-            retryable_packet_indexes.len()
+            cost_model_throttled_packet_indexes.len()
         );
 
         let tx_len = transactions.len();
@@ -1471,6 +1455,8 @@ impl BankingStage {
         );
         process_tx_time.stop();
 
+        process_transactions_summary.cost_model_throttled_transactions_count =
+            cost_model_throttled_transactions_count;
         let ProcessTransactionsSummary {
             ref retryable_transaction_indexes,
             ..
@@ -1509,7 +1495,7 @@ impl BankingStage {
 
         // combine cost-related unprocessed transactions with bank determined unprocessed for
         // buffering
-        filtered_retryable_tx_indexes.extend(retryable_packet_indexes);
+        filtered_retryable_tx_indexes.extend(cost_model_throttled_packet_indexes);
 
         // Increment timing-based metrics
         banking_stage_stats
