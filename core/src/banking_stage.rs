@@ -1645,6 +1645,8 @@ impl BankingStage {
             }
             let (bank, bank_creation_time) = bank_start.unwrap();
 
+            new_tx_count += packet_indexes.len();
+
             let process_transactions_summary = Self::process_packets_transactions(
                 &bank,
                 &bank_creation_time,
@@ -1662,8 +1664,6 @@ impl BankingStage {
                 retryable_transaction_indexes,
                 ..
             } = process_transactions_summary;
-
-            new_tx_count += packet_indexes.len();
 
             // Collect any unprocessed transactions in this batch for forwarding
             Self::push_unprocessed(
