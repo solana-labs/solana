@@ -1,5 +1,5 @@
 use {
-    crate::errors::TranscriptError,
+    crate::{errors::TranscriptError, zk_token_elgamal::pod},
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar, traits::IsIdentity},
     merlin::Transcript,
 };
@@ -19,9 +19,6 @@ pub trait TranscriptProtocol {
     /// Append a domain separator for close account proof.
     fn close_account_proof_domain_sep(&mut self);
 
-    /// Append a domain separator for update account public key proof.
-    fn update_account_public_key_proof_domain_sep(&mut self);
-
     /// Append a domain separator for withdraw proof.
     fn withdraw_proof_domain_sep(&mut self);
 
@@ -33,6 +30,33 @@ pub trait TranscriptProtocol {
 
     /// Append a `point` with the given `label`.
     fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto);
+
+    /// Append an ElGamal pubkey with the given `label`.
+    fn append_pubkey(&mut self, label: &'static [u8], point: &pod::ElGamalPubkey);
+
+    /// Append an ElGamal ciphertext with the given `label`.
+    fn append_ciphertext(&mut self, label: &'static [u8], point: &pod::ElGamalCiphertext);
+
+    /// Append a Pedersen commitment with the given `label`.
+    fn append_commitment(&mut self, label: &'static [u8], point: &pod::PedersenCommitment);
+
+    /// Append an ElGamal decryption handle with the given `label`.
+    fn append_handle(&mut self, label: &'static [u8], point: &pod::DecryptHandle);
+
+    /// Append a domain separator for equality proof.
+    fn equality_proof_domain_sep(&mut self);
+
+    /// Append a domain separator for zero-balance proof.
+    fn zero_balance_proof_domain_sep(&mut self);
+
+    /// Append a domain separator for validity proof.
+    fn validity_proof_domain_sep(&mut self);
+
+    /// Append a domain separator for aggregated validity proof.
+    fn aggregated_validity_proof_domain_sep(&mut self);
+
+    /// Append a domain separator for fee sigma proof.
+    fn fee_sigma_proof_domain_sep(&mut self);
 
     /// Check that a point is not the identity, then append it to the
     /// transcript.  Otherwise, return an error.
@@ -64,10 +88,6 @@ impl TranscriptProtocol for Transcript {
 
     fn close_account_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"CloseAccountProof");
-    }
-
-    fn update_account_public_key_proof_domain_sep(&mut self) {
-        self.append_message(b"dom-sep", b"UpdateAccountPublicKeyProof");
     }
 
     fn withdraw_proof_domain_sep(&mut self) {
@@ -104,5 +124,41 @@ impl TranscriptProtocol for Transcript {
         self.challenge_bytes(label, &mut buf);
 
         Scalar::from_bytes_mod_order_wide(&buf)
+    }
+
+    fn append_pubkey(&mut self, label: &'static [u8], pubkey: &pod::ElGamalPubkey) {
+        self.append_message(label, &pubkey.0);
+    }
+
+    fn append_ciphertext(&mut self, label: &'static [u8], ciphertext: &pod::ElGamalCiphertext) {
+        self.append_message(label, &ciphertext.0);
+    }
+
+    fn append_commitment(&mut self, label: &'static [u8], commitment: &pod::PedersenCommitment) {
+        self.append_message(label, &commitment.0);
+    }
+
+    fn append_handle(&mut self, label: &'static [u8], handle: &pod::DecryptHandle) {
+        self.append_message(label, &handle.0);
+    }
+
+    fn equality_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"equality-proof")
+    }
+
+    fn zero_balance_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"zero-balance-proof")
+    }
+
+    fn validity_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"validity-proof")
+    }
+
+    fn aggregated_validity_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"aggregated-validity-proof")
+    }
+
+    fn fee_sigma_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"fee-sigma-proof")
     }
 }

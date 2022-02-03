@@ -32,6 +32,9 @@ use {
 
 #[derive(Debug)]
 pub enum SkippedReason {
+    DisabledInflation,
+    JustActivated,
+    TooEarlyUnfairSplit,
     ZeroPoints,
     ZeroPointValue,
     ZeroReward,
@@ -212,16 +215,18 @@ fn calculate_stake_points_and_credits(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
 ) -> (u128, u64) {
+    let credits_in_stake = stake.credits_observed;
+    let credits_in_vote = new_vote_state.credits();
     // if there is no newer credits since observed, return no point
-    if new_vote_state.credits() <= stake.credits_observed {
+    if credits_in_vote <= credits_in_stake {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
         }
-        return (0, stake.credits_observed);
+        return (0, credits_in_stake);
     }
 
     let mut points = 0;
-    let mut new_credits_observed = stake.credits_observed;
+    let mut new_credits_observed = credits_in_stake;
 
     for (epoch, final_epoch_credits, initial_epoch_credits) in
         new_vote_state.epoch_credits().iter().copied()
@@ -230,10 +235,10 @@ fn calculate_stake_points_and_credits(
 
         // figure out how much this stake has seen that
         //   for which the vote account has a record
-        let earned_credits = if stake.credits_observed < initial_epoch_credits {
+        let earned_credits = if credits_in_stake < initial_epoch_credits {
             // the staker observed the entire epoch
             final_epoch_credits - initial_epoch_credits
-        } else if stake.credits_observed < final_epoch_credits {
+        } else if credits_in_stake < final_epoch_credits {
             // the staker registered sometime during the epoch, partial credit
             final_epoch_credits - new_credits_observed
         } else {
@@ -276,8 +281,11 @@ fn calculate_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    fix_activating_credits_observed: bool,
+    _fix_activating_credits_observed: bool, // this unused flag will soon be justified by an upcoming feature pr
 ) -> Option<(u64, u64, u64)> {
+    // ensure to run to trigger (optional) inflation_point_calc_tracer
+    // this awkward flag variable will soon be justified by an upcoming feature pr
+    let mut forced_credits_update_with_skipped_reward = false;
     let (points, credits_observed) = calculate_stake_points_and_credits(
         stake,
         vote_state,
@@ -287,20 +295,31 @@ fn calculate_stake_rewards(
 
     // Drive credits_observed forward unconditionally when rewards are disabled
     // or when this is the stake's activation epoch
-    if point_value.rewards == 0
-        || (fix_activating_credits_observed && stake.delegation.activation_epoch == rewarded_epoch)
-    {
+    if point_value.rewards == 0 {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+            inflation_point_calc_tracer(&SkippedReason::DisabledInflation.into());
+        }
+        forced_credits_update_with_skipped_reward = true;
+    } else if stake.delegation.activation_epoch == rewarded_epoch {
+        // not assert!()-ed; but points should be zero
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+            inflation_point_calc_tracer(&SkippedReason::JustActivated.into());
+        }
+        forced_credits_update_with_skipped_reward = true;
+    }
+
+    if forced_credits_update_with_skipped_reward {
         return Some((0, 0, credits_observed));
     }
 
     if points == 0 {
-        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(&SkippedReason::ZeroPoints.into());
         }
         return None;
     }
     if point_value.points == 0 {
-        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(&SkippedReason::ZeroPointValue.into());
         }
         return None;
@@ -316,13 +335,13 @@ fn calculate_stake_rewards(
 
     // don't bother trying to split if fractional lamports got truncated
     if rewards == 0 {
-        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(&SkippedReason::ZeroReward.into());
         }
         return None;
     }
     let (voter_rewards, staker_rewards, is_split) = vote_state.commission_split(rewards);
-    if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+    if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::SplitRewards(
             rewards,
             voter_rewards,
@@ -335,6 +354,9 @@ fn calculate_stake_rewards(
         // don't collect if we lose a whole lamport somewhere
         //  is_split means there should be tokens on both sides,
         //  uncool to move credits_observed if one side didn't get paid
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+            inflation_point_calc_tracer(&SkippedReason::TooEarlyUnfairSplit.into());
+        }
         return None;
     }
 

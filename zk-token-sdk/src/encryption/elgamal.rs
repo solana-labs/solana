@@ -23,6 +23,7 @@ use {
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
+        traits::Identity,
     },
     serde::{Deserialize, Serialize},
     solana_sdk::{
@@ -49,7 +50,7 @@ use {
 };
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
-struct ElGamal;
+pub struct ElGamal;
 impl ElGamal {
     /// Generates an ElGamal keypair.
     ///
@@ -93,6 +94,7 @@ impl ElGamal {
 
     /// On input a public key, message, and Pedersen opening, the function
     /// returns the corresponding ElGamal ciphertext.
+    #[cfg(not(target_arch = "bpf"))]
     fn encrypt_with<T: Into<Scalar>>(
         amount: T,
         public: &ElGamalPubkey,
@@ -104,10 +106,22 @@ impl ElGamal {
         ElGamalCiphertext { commitment, handle }
     }
 
+    /// On input a message, the function returns a twisted ElGamal ciphertext where the associated
+    /// Pedersen opening is always zero. Since the opening is zero, any twisted ElGamal ciphertext
+    /// of this form is a valid ciphertext under any ElGamal public key.
+    #[cfg(not(target_arch = "bpf"))]
+    pub fn encode<T: Into<Scalar>>(amount: T) -> ElGamalCiphertext {
+        let commitment = Pedersen::encode(amount);
+        let handle = DecryptHandle(RistrettoPoint::identity());
+
+        ElGamalCiphertext { commitment, handle }
+    }
+
     /// On input a secret key and a ciphertext, the function returns the decrypted message.
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
     /// message, use `DiscreteLog::decode`.
+    #[cfg(not(target_arch = "bpf"))]
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog {
             generator: *G,
@@ -117,6 +131,7 @@ impl ElGamal {
 
     /// On input a secret key and a ciphertext, the function returns the decrypted message
     /// interpretted as type `u32`.
+    #[cfg(not(target_arch = "bpf"))]
     fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u32> {
         let discrete_log_instance = Self::decrypt(secret, ciphertext);
         discrete_log_instance.decode_u32()
@@ -124,6 +139,7 @@ impl ElGamal {
 
     /// On input a secret key, a ciphertext, and a pre-computed hashmap, the function returns the
     /// decrypted message interpretted as type `u32`.
+    #[cfg(not(target_arch = "bpf"))]
     fn decrypt_u32_online(
         secret: &ElGamalSecretKey,
         ciphertext: &ElGamalCiphertext,

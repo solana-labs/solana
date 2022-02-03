@@ -26,10 +26,10 @@ use {
 #[repr(C)]
 pub struct CloseAccountData {
     /// The source account ElGamal pubkey
-    pub elgamal_pubkey: pod::ElGamalPubkey, // 32 bytes
+    pub pubkey: pod::ElGamalPubkey, // 32 bytes
 
     /// The source account available balance in encrypted form
-    pub balance: pod::ElGamalCiphertext, // 64 bytes
+    pub ciphertext: pod::ElGamalCiphertext, // 64 bytes
 
     /// Proof that the source account available balance is zero
     pub proof: CloseAccountProof, // 64 bytes
@@ -37,23 +37,33 @@ pub struct CloseAccountData {
 
 #[cfg(not(target_arch = "bpf"))]
 impl CloseAccountData {
-    pub fn new(source_keypair: &ElGamalKeypair, balance: ElGamalCiphertext) -> Self {
-        let proof = CloseAccountProof::new(source_keypair, &balance);
+    pub fn new(
+        keypair: &ElGamalKeypair,
+        ciphertext: &ElGamalCiphertext,
+    ) -> Result<Self, ProofError> {
+        let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
+        let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
-        CloseAccountData {
-            elgamal_pubkey: source_keypair.public.into(),
-            balance: balance.into(),
+        let mut transcript = CloseAccountProof::transcript_new(&pod_pubkey, &pod_ciphertext);
+
+        let proof = CloseAccountProof::new(keypair, ciphertext, &mut transcript);
+
+        Ok(CloseAccountData {
+            pubkey: pod_pubkey,
+            ciphertext: pod_ciphertext,
             proof,
-        }
+        })
     }
 }
 
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for CloseAccountData {
     fn verify(&self) -> Result<(), ProofError> {
-        let elgamal_pubkey = self.elgamal_pubkey.try_into()?;
-        let balance = self.balance.try_into()?;
-        self.proof.verify(&elgamal_pubkey, &balance)
+        let mut transcript = CloseAccountProof::transcript_new(&self.pubkey, &self.ciphertext);
+
+        let pubkey = self.pubkey.try_into()?;
+        let ciphertext = self.ciphertext.try_into()?;
+        self.proof.verify(&pubkey, &ciphertext, &mut transcript)
     }
 }
 
@@ -69,18 +79,24 @@ pub struct CloseAccountProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl CloseAccountProof {
-    fn transcript_new() -> Transcript {
-        Transcript::new(b"CloseAccountProof")
+    fn transcript_new(
+        pubkey: &pod::ElGamalPubkey,
+        ciphertext: &pod::ElGamalCiphertext,
+    ) -> Transcript {
+        let mut transcript = Transcript::new(b"CloseAccountProof");
+
+        transcript.append_pubkey(b"pubkey", pubkey);
+        transcript.append_ciphertext(b"ciphertext", ciphertext);
+
+        transcript
     }
 
-    pub fn new(source_keypair: &ElGamalKeypair, balance: &ElGamalCiphertext) -> Self {
-        let mut transcript = Self::transcript_new();
-        // TODO: Add ciphertext to transcript
-
-        // add a domain separator to record the start of the protocol
-        transcript.close_account_proof_domain_sep();
-
-        let proof = ZeroBalanceProof::new(source_keypair, balance, &mut transcript);
+    pub fn new(
+        keypair: &ElGamalKeypair,
+        ciphertext: &ElGamalCiphertext,
+        transcript: &mut Transcript,
+    ) -> Self {
+        let proof = ZeroBalanceProof::new(keypair, ciphertext, transcript);
 
         CloseAccountProof {
             proof: proof.into(),
@@ -89,72 +105,33 @@ impl CloseAccountProof {
 
     pub fn verify(
         &self,
-        elgamal_pubkey: &ElGamalPubkey,
-        balance: &ElGamalCiphertext,
+        pubkey: &ElGamalPubkey,
+        ciphertext: &ElGamalCiphertext,
+        transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        let mut transcript = Self::transcript_new();
-
-        // add a domain separator to record the start of the protocol
-        transcript.close_account_proof_domain_sep();
-
-        // verify zero balance proof
         let proof: ZeroBalanceProof = self.proof.try_into()?;
-        proof.verify(elgamal_pubkey, balance, &mut transcript)?;
+        proof.verify(pubkey, ciphertext, transcript)?;
+
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        crate::encryption::{
-            elgamal::{DecryptHandle, ElGamalKeypair},
-            pedersen::{Pedersen, PedersenOpening},
-        },
-    };
+    use super::*;
 
     #[test]
     fn test_close_account_correctness() {
-        let source_keypair = ElGamalKeypair::new_rand();
+        let keypair = ElGamalKeypair::new_rand();
 
         // general case: encryption of 0
-        let balance = source_keypair.public.encrypt(0_u64);
-        let proof = CloseAccountProof::new(&source_keypair, &balance);
-        assert!(proof.verify(&source_keypair.public, &balance).is_ok());
+        let ciphertext = keypair.public.encrypt(0_u64);
+        let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
+        assert!(close_account_data.verify().is_ok());
 
         // general case: encryption of > 0
-        let balance = source_keypair.public.encrypt(1_u64);
-        let proof = CloseAccountProof::new(&source_keypair, &balance);
-        assert!(proof.verify(&source_keypair.public, &balance).is_err());
-
-        // // edge case: all zero ciphertext - such ciphertext should always be a valid encryption of 0
-        let zeroed_ct: ElGamalCiphertext = pod::ElGamalCiphertext::zeroed().try_into().unwrap();
-        let proof = CloseAccountProof::new(&source_keypair, &zeroed_ct);
-        assert!(proof.verify(&source_keypair.public, &zeroed_ct).is_ok());
-
-        // edge cases: only C or D is zero - such ciphertext is always invalid
-        let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
-        let handle = balance.handle;
-
-        let zeroed_comm_ciphertext = ElGamalCiphertext {
-            commitment: zeroed_comm,
-            handle,
-        };
-
-        let proof = CloseAccountProof::new(&source_keypair, &zeroed_comm_ciphertext);
-        assert!(proof
-            .verify(&source_keypair.public, &zeroed_comm_ciphertext)
-            .is_err());
-
-        let zeroed_handle_ciphertext = ElGamalCiphertext {
-            commitment: balance.commitment,
-            handle: DecryptHandle::default(),
-        };
-
-        let proof = CloseAccountProof::new(&source_keypair, &zeroed_handle_ciphertext);
-        assert!(proof
-            .verify(&source_keypair.public, &zeroed_handle_ciphertext)
-            .is_err());
+        let ciphertext = keypair.public.encrypt(1_u64);
+        let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
+        assert!(close_account_data.verify().is_err());
     }
 }
