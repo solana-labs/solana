@@ -129,14 +129,6 @@ pub mod spl_token_v2_set_authority_fix {
     solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
 }
 
-pub mod stop_verify_mul64_imm_nonzero {
-    solana_sdk::declare_id!("EHFwHg2vhwUb7ifm7BuY9RMbsyt1rS1rUii7yeDJtGnN");
-}
-
-pub mod start_verify_shift32_imm {
-    solana_sdk::declare_id!("CqvdhqAYMc6Eq6tjW3H42Qg39TK2SCsL8ydMsC363PRp");
-}
-
 pub mod merge_nonce_error_into_system_error {
     solana_sdk::declare_id!("21AWDosvp3pBamFW91KB35pNoaoZVTM7ess8nr2nt53B");
 }
@@ -235,14 +227,6 @@ pub mod add_compute_budget_program {
     solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
 }
 
-pub mod reject_deployment_of_unresolved_syscalls {
-    solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
-}
-
-pub mod reject_section_virtual_address_file_offset_mismatch {
-    solana_sdk::declare_id!("5N4NikcJLEiZNqwndhNyvZw15LvFXp1oF7AJQTNTZY5k");
-}
-
 pub mod nonce_must_be_writable {
     solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
 }
@@ -273,10 +257,6 @@ pub mod evict_invalid_stakes_cache_entries {
 
 pub mod allow_votes_to_directly_update_vote_state {
     solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
-}
-
-pub mod reject_all_elf_rw {
-    solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
 }
 
 pub mod cap_accounts_data_len {
@@ -319,6 +299,14 @@ pub mod bank_tranaction_count_fix {
     solana_sdk::declare_id!("Vo5siZ442SaZBKPXNocthiXysNviW4UYPwRFggmbgAp");
 }
 
+pub mod disable_bpf_deprecated_load_instructions {
+    solana_sdk::declare_id!("3XgNukcZWf9o3HdA3fpJbm94XFc4qpvTXc8h1wxYwiPi");
+}
+
+pub mod disable_bpf_unresolved_symbols_at_runtime {
+    solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -346,8 +334,6 @@ lazy_static! {
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (tx_wide_compute_cap::id(), "transaction wide compute cap"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
-        (stop_verify_mul64_imm_nonzero::id(), "sets rbpf vm config verify_mul64_imm_nonzero to false"),
-        (start_verify_shift32_imm::id(), "sets rbpf vm config verify_shift32_imm to true"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
@@ -372,8 +358,6 @@ lazy_static! {
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
-        (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
-        (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
         (nonce_must_be_writable::id(), "nonce must be writable"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (leave_nonce_on_success::id(), "leave nonce as is on success"),
@@ -382,7 +366,6 @@ lazy_static! {
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
-        (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         (cap_accounts_data_len::id(), "cap the accounts data len"),
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
@@ -393,6 +376,8 @@ lazy_static! {
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
         (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
+        (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
+        (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

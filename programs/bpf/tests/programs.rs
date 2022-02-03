@@ -211,10 +211,7 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
             enable_instruction_tracing: true,
-            reject_unresolved_syscalls: true,
-            reject_section_virtual_address_file_offset_mismatch: true,
-            verify_mul64_imm_nonzero: false,
-            verify_shift32_imm: true,
+            reject_broken_elfs: true,
             ..Config::default()
         };
         let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
