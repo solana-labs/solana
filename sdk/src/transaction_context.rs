@@ -100,11 +100,9 @@ impl TransactionContext {
         &self,
         index_in_transaction: usize,
     ) -> Result<&Pubkey, InstructionError> {
-        if index_in_transaction < self.account_keys.len() {
-            Ok(&self.account_keys[index_in_transaction])
-        } else {
-            Err(InstructionError::NotEnoughAccountKeys)
-        }
+        self.account_keys
+            .get(index_in_transaction)
+            .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
     /// Searches for an account by its key
@@ -112,11 +110,9 @@ impl TransactionContext {
         &self,
         index_in_transaction: usize,
     ) -> Result<&RefCell<AccountSharedData>, InstructionError> {
-        if index_in_transaction < self.account_keys.len() {
-            Ok(&self.accounts[index_in_transaction])
-        } else {
-            Err(InstructionError::NotEnoughAccountKeys)
-        }
+        self.accounts
+            .get(index_in_transaction)
+            .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
     /// Searches for an account by its key

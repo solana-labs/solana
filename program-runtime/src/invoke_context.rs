@@ -1010,7 +1010,10 @@ impl<'a> InvokeContext<'a> {
     }
 
     // Get pubkey of account at index
-    pub fn get_key_of_account_at_index(&self, index_in_transaction: usize) -> &Pubkey {
+    pub fn get_key_of_account_at_index(
+        &self,
+        index_in_transaction: usize,
+    ) -> Result<&Pubkey, InstructionError> {
         self.transaction_context
             .get_key_of_account_at_index(index_in_transaction)
     }
