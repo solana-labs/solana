@@ -46,7 +46,7 @@ use {
         cell::RefCell,
         cmp,
         collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
-        convert::TryInto,
+        convert::{TryFrom, TryInto},
         fs,
         io::{Error as IoError, ErrorKind},
         path::{Path, PathBuf},
@@ -1345,14 +1345,14 @@ impl Blockstore {
         // Check that we do not receive shred_index >= than the last_index
         // for the slot
         let last_index = slot_meta.last_index;
-        if shred_index >= last_index {
+        if last_index.map(|ix| shred_index >= ix).unwrap_or_default() {
             let leader_pubkey = leader_schedule
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
             let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
                 just_inserted_data_shreds,
                 slot,
-                last_index,
+                last_index.unwrap(),
             );
 
             if self
@@ -1371,7 +1371,7 @@ impl Blockstore {
                 (
                     "error",
                     format!(
-                        "Leader {:?}, slot {}: received index {} >= slot.last_index {}, shred_source: {:?}",
+                        "Leader {:?}, slot {}: received index {} >= slot.last_index {:?}, shred_source: {:?}",
                         leader_pubkey, slot, shred_index, last_index, shred_source
                     ),
                     String
@@ -1516,7 +1516,14 @@ impl Blockstore {
                     i64
                 ),
                 ("slot", slot_meta.slot, i64),
-                ("last_index", slot_meta.last_index, i64),
+                (
+                    "last_index",
+                    slot_meta
+                        .last_index
+                        .and_then(|ix| i64::try_from(ix).ok())
+                        .unwrap_or(-1),
+                    i64
+                ),
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
             );
@@ -1548,7 +1555,8 @@ impl Blockstore {
             .collect()
     }
 
-    pub fn get_data_shreds(
+    #[cfg(test)]
+    fn get_data_shreds(
         &self,
         slot: Slot,
         from_index: u64,
@@ -3157,20 +3165,11 @@ fn update_slot_meta(
         slot_meta.first_shred_timestamp = timestamp() - slot_time_elapsed;
     }
     slot_meta.consumed = new_consumed;
-    slot_meta.last_index = {
-        // If the last index in the slot hasn't been set before, then
-        // set it to this shred index
-        if slot_meta.last_index == std::u64::MAX {
-            if is_last_in_slot {
-                u64::from(index)
-            } else {
-                std::u64::MAX
-            }
-        } else {
-            slot_meta.last_index
-        }
-    };
-
+    // If the last index in the slot hasn't been set before, then
+    // set it to this shred index
+    if is_last_in_slot && slot_meta.last_index.is_none() {
+        slot_meta.last_index = Some(u64::from(index));
+    }
     update_completed_data_indexes(
         is_last_in_slot || is_last_in_data,
         index,
@@ -3968,7 +3967,7 @@ pub mod tests {
                 let num_shreds = shreds_per_slot[i as usize];
                 assert_eq!(meta.consumed, num_shreds);
                 assert_eq!(meta.received, num_shreds);
-                assert_eq!(meta.last_index, num_shreds - 1);
+                assert_eq!(meta.last_index, Some(num_shreds - 1));
                 if i == num_slots - 1 {
                     assert!(meta.next_slots.is_empty());
                 } else {
@@ -4201,7 +4200,7 @@ pub mod tests {
         assert_eq!(meta.consumed, num_shreds);
         assert_eq!(meta.received, num_shreds);
         assert_eq!(meta.parent_slot, 0);
-        assert_eq!(meta.last_index, num_shreds - 1);
+        assert_eq!(meta.last_index, Some(num_shreds - 1));
         assert!(meta.next_slots.is_empty());
         assert!(meta.is_connected);
 
@@ -4230,7 +4229,7 @@ pub mod tests {
                 .meta(0)
                 .unwrap()
                 .expect("Expected metadata object to exist");
-            assert_eq!(meta.last_index, num_shreds - 1);
+            assert_eq!(meta.last_index, Some(num_shreds - 1));
             if i != 0 {
                 assert_eq!(result.len(), 0);
                 assert!(meta.consumed == 0 && meta.received == num_shreds as u64);
@@ -4424,9 +4423,9 @@ pub mod tests {
                 }
                 assert_eq!(meta.consumed, 0);
                 if num_shreds % 2 == 0 {
-                    assert_eq!(meta.last_index, num_shreds - 1);
+                    assert_eq!(meta.last_index, Some(num_shreds - 1));
                 } else {
-                    assert_eq!(meta.last_index, std::u64::MAX);
+                    assert_eq!(meta.last_index, None);
                 }
 
                 blockstore.insert_shreds(even_shreds, None, false).unwrap();
@@ -4440,7 +4439,7 @@ pub mod tests {
                 assert_eq!(meta.received, num_shreds);
                 assert_eq!(meta.consumed, num_shreds);
                 assert_eq!(meta.parent_slot, parent_slot);
-                assert_eq!(meta.last_index, num_shreds - 1);
+                assert_eq!(meta.last_index, Some(num_shreds - 1));
             }
         }
 
@@ -4695,7 +4694,7 @@ pub mod tests {
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
-            assert_eq!(s1.last_index, shreds_per_slot as u64 - 1);
+            assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
 
             // 2) Write to the second slot
             let shreds2 = shreds
@@ -4707,7 +4706,7 @@ pub mod tests {
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s2.is_connected);
             assert_eq!(s2.parent_slot, 1);
-            assert_eq!(s2.last_index, shreds_per_slot as u64 - 1);
+            assert_eq!(s2.last_index, Some(shreds_per_slot as u64 - 1));
 
             // Check the first slot again, it should chain to the second slot,
             // but still isn't part of the trunk
@@ -4715,7 +4714,7 @@ pub mod tests {
             assert_eq!(s1.next_slots, vec![2]);
             assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
-            assert_eq!(s1.last_index, shreds_per_slot as u64 - 1);
+            assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
@@ -4731,7 +4730,7 @@ pub mod tests {
                 } else {
                     assert_eq!(s.parent_slot, i - 1);
                 }
-                assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
+                assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
                 assert!(s.is_connected);
             }
         }
@@ -4814,7 +4813,7 @@ pub mod tests {
                 } else {
                     assert_eq!(s.parent_slot, i - 1);
                 }
-                assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
+                assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
                 assert!(s.is_connected);
             }
         }
@@ -4866,7 +4865,7 @@ pub mod tests {
                     assert_eq!(s.parent_slot, i - 1);
                 }
 
-                assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
+                assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
 
                 // Other than slot 0, no slots should be part of the trunk
                 if i != 0 {
@@ -4902,7 +4901,7 @@ pub mod tests {
                             assert_eq!(s.parent_slot, i - 1);
                         }
 
-                        assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
+                        assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
                     }
                 }
             }
@@ -5169,7 +5168,7 @@ pub mod tests {
 
                 let meta = blockstore.meta(i).unwrap().unwrap();
                 assert_eq!(meta.received, 1);
-                assert_eq!(meta.last_index, 0);
+                assert_eq!(meta.last_index, Some(0));
                 if i != 0 {
                     assert_eq!(meta.parent_slot, i - 1);
                     assert_eq!(meta.consumed, 1);
@@ -5492,7 +5491,7 @@ pub mod tests {
 
             // Trying to insert a shred with index > the "is_last" shred should fail
             if shred8.is_data() {
-                shred8.set_slot(slot_meta.last_index + 1);
+                shred8.set_slot(slot_meta.last_index.unwrap() + 1);
             } else {
                 panic!("Shred in unexpected format")
             }
@@ -5771,7 +5770,7 @@ pub mod tests {
 
         assert_eq!(slot_meta.consumed, num_shreds);
         assert_eq!(slot_meta.received, num_shreds);
-        assert_eq!(slot_meta.last_index, num_shreds - 1);
+        assert_eq!(slot_meta.last_index, Some(num_shreds - 1));
         assert!(slot_meta.is_full());
 
         let (shreds, _) = make_slot_entries(0, 0, 22);
@@ -5780,7 +5779,7 @@ pub mod tests {
 
         assert_eq!(slot_meta.consumed, num_shreds);
         assert_eq!(slot_meta.received, num_shreds);
-        assert_eq!(slot_meta.last_index, num_shreds - 1);
+        assert_eq!(slot_meta.last_index, Some(num_shreds - 1));
         assert!(slot_meta.is_full());
 
         assert!(blockstore.has_duplicate_shreds_in_slot(0));
@@ -8543,7 +8542,7 @@ pub mod tests {
                 assert_eq!(meta.consumed, 0);
                 assert_eq!(meta.received, last_index + 1);
                 assert_eq!(meta.parent_slot, 0);
-                assert_eq!(meta.last_index, last_index);
+                assert_eq!(meta.last_index, Some(last_index));
                 assert!(!blockstore.is_full(0));
             }
 
@@ -8559,7 +8558,7 @@ pub mod tests {
             assert_eq!(meta.consumed, num_shreds);
             assert_eq!(meta.received, num_shreds);
             assert_eq!(meta.parent_slot, 0);
-            assert_eq!(meta.last_index, num_shreds - 1);
+            assert_eq!(meta.last_index, Some(num_shreds - 1));
             assert!(blockstore.is_full(0));
             assert!(!blockstore.is_dead(0));
         }
