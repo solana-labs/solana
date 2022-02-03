@@ -295,13 +295,12 @@ pub mod spl_associated_token_account_v1_0_4 {
     solana_sdk::declare_id!("FaTa4SpiaSNH44PGC4z8bnGVTkSRYaWvrBs3KTu8XQQq");
 }
 
-<<<<<<< HEAD
 pub mod update_syscall_base_costs {
     solana_sdk::declare_id!("2h63t332mGCCsWK2nqqqHhN4U9ayyqhLVFvczznHDoTZ");
-=======
+}
+
 pub mod reject_vote_account_close_unless_zero_credit_epoch {
     solana_sdk::declare_id!("ALBk3EWdeAg2WAGf6GPDUf1nynyNqCdEVmgouG7rpuCj");
->>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
 }
 
 lazy_static! {
@@ -372,11 +371,8 @@ lazy_static! {
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
         (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
-<<<<<<< HEAD
         (update_syscall_base_costs::id(), "Update syscall base costs"),
-=======
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
->>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
