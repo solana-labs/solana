@@ -5,6 +5,7 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
+    std::convert::TryFrom,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::State,
@@ -2087,12 +2088,8 @@ mod tests {
                     lamports,
                     &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                     &signers,
-<<<<<<< HEAD
                     rent_sysvar.as_ref(),
-=======
-                    rent_sysvar,
                     Some(clock_epoch_3),
->>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
                 );
                 assert_eq!(res, Ok(()));
                 assert_eq!(vote_account.borrow().lamports(), 0);

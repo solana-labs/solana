@@ -236,9 +236,6 @@ pub enum InstructionError {
     /// Illegal account owner
     #[error("Provided owner is not allowed")]
     IllegalOwner,
-<<<<<<< HEAD
-    // Note: For any new error added here an equivilent ProgramError and it's
-=======
 
     /// Accounts data budget exceeded
     #[error("Requested account data allocation exceeded the accounts data budget")]
@@ -248,7 +245,6 @@ pub enum InstructionError {
     #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
     ActiveVoteAccountClose,
     // Note: For any new error added here an equivalent ProgramError and its
->>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
     // conversions must also be added
 }
 

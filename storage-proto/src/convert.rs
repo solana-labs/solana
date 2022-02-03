@@ -522,11 +522,8 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     47 => InstructionError::ArithmeticOverflow,
                     48 => InstructionError::UnsupportedSysvar,
                     49 => InstructionError::IllegalOwner,
-<<<<<<< HEAD
-=======
                     50 => InstructionError::AccountsDataBudgetExceeded,
                     51 => InstructionError::ActiveVoteAccountClose,
->>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -778,15 +775,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             InstructionError::IllegalOwner => {
                                 tx_by_addr::InstructionErrorType::IllegalOwner
                             }
-<<<<<<< HEAD
-=======
                             InstructionError::AccountsDataBudgetExceeded => {
                                 tx_by_addr::InstructionErrorType::AccountsDataBudgetExceeded
                             }
                             InstructionError::ActiveVoteAccountClose => {
                                 tx_by_addr::InstructionErrorType::ActiveVoteAccountClose
                             }
->>>>>>> 75563f6c7 (Reject close of active vote accounts (#22651))
                         } as i32,
                         custom: match instruction_error {
                             InstructionError::Custom(custom) => {
