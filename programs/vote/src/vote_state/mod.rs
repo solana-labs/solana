@@ -18,7 +18,6 @@ use {
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
     },
-    std::convert::TryFrom,
     std::{
         boxed::Box,
         collections::{HashSet, VecDeque},
