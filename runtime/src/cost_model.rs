@@ -498,8 +498,8 @@ mod tests {
         let key1 = Pubkey::new_unique();
         let cost1 = 100;
         let cost2 = 200;
-        // updated_cost = (mean + 2*std) = 150 + 2 * 50 = 250
-        let updated_cost = 250;
+        // updated_cost = (mean + 2*std)
+        let updated_cost = 238;
 
         let mut cost_model = CostModel::default();
 
