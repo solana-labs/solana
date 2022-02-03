@@ -70,7 +70,6 @@ impl Default for TestValidatorNodeConfig {
     }
 }
 
-#[derive(Default)]
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
@@ -88,6 +87,32 @@ pub struct TestValidatorGenesis {
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
+}
+
+impl Default for TestValidatorGenesis {
+    fn default() -> Self {
+        Self {
+            fee_rate_governor: FeeRateGovernor::default(),
+            ledger_path: Option::<PathBuf>::default(),
+            rent: Rent::default(),
+            rpc_config: JsonRpcConfig {
+                full_api: true,
+                ..JsonRpcConfig::default()
+            },
+            rpc_ports: Option::<(u16, u16)>::default(),
+            warp_slot: Option::<Slot>::default(),
+            no_bpf_jit: bool::default(),
+            accounts: HashMap::<Pubkey, AccountSharedData>::default(),
+            programs: Vec::<ProgramInfo>::default(),
+            epoch_schedule: Option::<EpochSchedule>::default(),
+            node_config: TestValidatorNodeConfig::default(),
+            validator_exit: Arc::<RwLock<Exit>>::default(),
+            start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
+            authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
+            max_ledger_shreds: Option::<u64>::default(),
+            max_genesis_archive_unpacked_size: Option::<u64>::default(),
+        }
+    }
 }
 
 impl TestValidatorGenesis {
@@ -529,7 +554,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         };
 
         let validator = Some(Validator::new(
