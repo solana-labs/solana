@@ -829,6 +829,7 @@ mod tests {
             keyed_account::{get_signers, keyed_account_at_index},
         },
         std::cell::RefCell,
+        std::convert::TryFrom,
     };
 
     const MAX_RECENT_VOTES: usize = 16;
