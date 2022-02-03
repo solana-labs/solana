@@ -187,91 +187,95 @@ impl LeaderSlotMetrics {
             "banking_stage-leader_slot_packet_count_metrics",
             ("id", self.id as i64, i64),
             ("slot", self.slot as i64, i64),
-            /*
             (
-                "processed_txs_count",
-                self.processed_txs_count.swap(0, Ordering::Relaxed) as i64,
+                "total_new_valid_packets",
+                self.packet_count_metrics.total_new_valid_packets as i64,
                 i64
             ),
             (
-                "retryable_txs_count",
-                self.retryable_txs_count.swap(0, Ordering::Relaxed) as i64,
+                "newly_failed_sigverify_count",
+                self.packet_count_metrics.newly_failed_sigverify_count as i64,
                 i64
             ),
             (
-                "compute_cost_time",
-                self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,
+                "exceeded_buffer_limit_dropped_packets_count",
+                self.packet_count_metrics
+                    .exceeded_buffer_limit_dropped_packets_count as i64,
                 i64
             ),
             (
-                "compute_cost_count",
-                self.compute_cost_count.swap(0, Ordering::Relaxed) as i64,
+                "newly_buffered_packets_count",
+                self.packet_count_metrics.newly_buffered_packets_count as i64,
                 i64
             ),
             (
-                "cost_tracking_time",
-                self.cost_tracking_time.swap(0, Ordering::Relaxed) as i64,
+                "retryable_packets_filtered_count",
+                self.packet_count_metrics.retryable_packets_filtered_count as i64,
                 i64
             ),
             (
-                "selected_txs_count",
-                self.selected_txs_count.swap(0, Ordering::Relaxed) as i64,
+                "transactions_attempted_execution_count",
+                self.packet_count_metrics
+                    .transactions_attempted_execution_count as i64,
                 i64
             ),
             (
-                "retried_txs_per_block_limit_count",
-                self.retried_txs_per_block_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
+                "committed_transactions_count",
+                self.packet_count_metrics.committed_transactions_count as i64,
                 i64
             ),
             (
-                "retried_txs_per_vote_limit_count",
-                self.retried_txs_per_vote_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
+                "committed_transactions_with_successful_result_count",
+                self.packet_count_metrics
+                    .committed_transactions_with_successful_result_count as i64,
                 i64
             ),
             (
-                "retried_txs_per_account_limit_count",
-                self.retried_txs_per_account_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
+                "retryable_errored_transaction_count",
+                self.packet_count_metrics
+                    .retryable_errored_transaction_count as i64,
                 i64
             ),
             (
-                "retried_txs_per_account_data_limit_count",
-                self.retried_txs_per_account_data_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
+                "nonretryable_errored_transactions_count",
+                self.packet_count_metrics
+                    .nonretryable_errored_transactions_count as i64,
                 i64
             ),
             (
-                "estimated_signature_cu",
-                self.estimated_signature_cu.swap(0, Ordering::Relaxed) as i64,
+                "executed_transactions_failed_commit_count",
+                self.packet_count_metrics
+                    .executed_transactions_failed_commit_count as i64,
                 i64
             ),
             (
-                "estimated_write_lock_cu",
-                self.estimated_write_lock_cu.swap(0, Ordering::Relaxed) as i64,
+                "cost_model_throttled_transactions_count",
+                self.packet_count_metrics
+                    .cost_model_throttled_transactions_count as i64,
                 i64
             ),
             (
-                "estimated_data_bytes_cu",
-                self.estimated_data_bytes_cu.swap(0, Ordering::Relaxed) as i64,
+                "forwardable_packet_candidates_count",
+                self.packet_count_metrics
+                    .forwardable_packet_candidates_count as i64,
                 i64
             ),
             (
-                "estimated_execute_cu",
-                self.estimated_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                "successful_forwarded_packets_count",
+                self.packet_count_metrics.successful_forwarded_packets_count as i64,
                 i64
             ),
             (
-                "actual_execute_cu",
-                self.actual_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                "packet_batch_forward_failure_count",
+                self.packet_count_metrics.packet_batch_forward_failure_count as i64,
                 i64
             ),
             (
-                "actual_execute_time_us",
-                self.actual_execute_time_us.swap(0, Ordering::Relaxed) as i64,
+                "cleared_from_buffer_after_forward_count",
+                self.packet_count_metrics
+                    .cleared_from_buffer_after_forward_count as i64,
                 i64
-            ),*/
+            ),
         );
     }
 }
