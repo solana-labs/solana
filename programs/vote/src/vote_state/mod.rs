@@ -5,7 +5,6 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
-    std::convert::TryFrom,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::State,
@@ -19,6 +18,7 @@ use {
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
     },
+    std::convert::TryFrom,
     std::{
         boxed::Box,
         collections::{HashSet, VecDeque},

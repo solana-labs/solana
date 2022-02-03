@@ -413,14 +413,21 @@ pub fn process_instruction(
             } else {
                 None
             };
-            let clock_if_feature_active = if invoke_context
-                .is_feature_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
-            {
+            let clock_if_feature_active = if invoke_context.is_feature_active(
+                &feature_set::reject_vote_account_close_unless_zero_credit_epoch::id(),
+            ) {
                 Some(invoke_context.get_sysvar_cache().get_clock()?)
             } else {
                 None
             };
-            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar.as_deref(), clock_if_feature_active.as_deref())
+            vote_state::withdraw(
+                me,
+                lamports,
+                to,
+                &signers,
+                rent_sysvar.as_deref(),
+                clock_if_feature_active.as_deref(),
+            )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
