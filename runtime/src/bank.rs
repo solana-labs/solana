@@ -3393,7 +3393,7 @@ impl Bank {
         hashed_txs: &[HashedTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
-        mut error_counters: &mut ErrorCounters,
+        error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
             hashed_txs.as_transactions_iter(),

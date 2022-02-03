@@ -2691,14 +2691,15 @@ mod tests {
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
-            let execute_and_commit_transactions_output = BankingStage::process_and_record_transactions(
-                &bank,
-                &transactions,
-                &recorder,
-                0,
-                None,
-                &gossip_vote_sender,
-            );
+            let execute_and_commit_transactions_output =
+                BankingStage::process_and_record_transactions(
+                    &bank,
+                    &transactions,
+                    &recorder,
+                    0,
+                    None,
+                    &gossip_vote_sender,
+                );
 
             poh_recorder
                 .lock()
@@ -2847,10 +2848,11 @@ mod tests {
         bank: Arc<Bank>,
         transactions: Vec<Transaction>,
     ) -> ProcessTransactionsSummary {
-        let transactions: Vec<HashedTransaction> = transactions.into_iter().map(|tx| tx.into()).collect();
+        let transactions: Vec<HashedTransaction> =
+            transactions.into_iter().map(|tx| tx.into()).collect();
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path)
-            .expect("Expected to be able to open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
         let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
