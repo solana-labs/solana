@@ -13,14 +13,10 @@ use {
         entry::{create_ticks, Entry},
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-<<<<<<< HEAD
-        shred::{Result as ShredResult, Shred, ShredId, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
-=======
         shred::{
-            max_ticks_per_n_shreds, ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType,
-            Shredder, SHRED_PAYLOAD_SIZE,
+            ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType, Shredder,
+            SHRED_PAYLOAD_SIZE,
         },
->>>>>>> 8183f2863 (adds ErasureSetId identifying erasure coding sets of shreds (#21928))
     },
     bincode::deserialize,
     log::*,
