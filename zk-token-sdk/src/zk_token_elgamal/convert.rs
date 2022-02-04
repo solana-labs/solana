@@ -312,7 +312,11 @@ mod target_arch {
 
     impl From<TransferPubkeys> for pod::TransferPubkeys {
         fn from(keys: TransferPubkeys) -> Self {
-            Self(keys.to_bytes())
+            Self {
+                source: keys.source.into(),
+                dest: keys.dest.into(),
+                auditor: keys.auditor.into(),
+            }
         }
     }
 
@@ -320,13 +324,22 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
+            Ok(Self {
+                source: pod.source.try_into()?,
+                dest: pod.dest.try_into()?,
+                auditor: pod.auditor.try_into()?,
+            })
         }
     }
 
     impl From<TransferWithFeePubkeys> for pod::TransferWithFeePubkeys {
         fn from(keys: TransferWithFeePubkeys) -> Self {
-            Self(keys.to_bytes())
+            Self {
+                source: keys.source.into(),
+                dest: keys.dest.into(),
+                auditor: keys.auditor.into(),
+                fee_collector: keys.fee_collector.into(),
+            }
         }
     }
 
@@ -334,13 +347,23 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::TransferWithFeePubkeys) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
+            Ok(Self {
+                source: pod.source.try_into()?,
+                dest: pod.dest.try_into()?,
+                auditor: pod.auditor.try_into()?,
+                fee_collector: pod.fee_collector.try_into()?,
+            })
         }
     }
 
     impl From<TransferAmountEncryption> for pod::TransferAmountEncryption {
         fn from(ciphertext: TransferAmountEncryption) -> Self {
-            Self(ciphertext.to_bytes())
+            Self {
+                commitment: ciphertext.commitment.into(),
+                source: ciphertext.source.into(),
+                dest: ciphertext.dest.into(),
+                auditor: ciphertext.auditor.into(),
+            }
         }
     }
 
@@ -348,13 +371,22 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
+            Ok(Self {
+                commitment: pod.commitment.try_into()?,
+                source: pod.source.try_into()?,
+                dest: pod.dest.try_into()?,
+                auditor: pod.auditor.try_into()?,
+            })
         }
     }
 
     impl From<FeeEncryption> for pod::FeeEncryption {
         fn from(ciphertext: FeeEncryption) -> Self {
-            Self(ciphertext.to_bytes())
+            Self {
+                commitment: ciphertext.commitment.into(),
+                dest: ciphertext.dest.into(),
+                fee_collector: ciphertext.fee_collector.into(),
+            }
         }
     }
 
@@ -362,19 +394,29 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
+            Ok(Self {
+                commitment: pod.commitment.try_into()?,
+                dest: pod.dest.try_into()?,
+                fee_collector: pod.fee_collector.try_into()?,
+            })
         }
     }
 
     impl From<FeeParameters> for pod::FeeParameters {
         fn from(parameters: FeeParameters) -> Self {
-            Self(parameters.to_bytes())
+            Self {
+                fee_rate_basis_points: parameters.fee_rate_basis_points.into(),
+                maximum_fee: parameters.maximum_fee.into(),
+            }
         }
     }
 
     impl From<pod::FeeParameters> for FeeParameters {
         fn from(pod: pod::FeeParameters) -> Self {
-            Self::from_bytes(&pod.0)
+            Self {
+                fee_rate_basis_points: pod.fee_rate_basis_points.into(),
+                maximum_fee: pod.maximum_fee.into(),
+            }
         }
     }
 }
