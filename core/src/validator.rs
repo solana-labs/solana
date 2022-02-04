@@ -818,6 +818,8 @@ impl Validator {
             RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        let (optimistically_confirmed_slots_sender, optimistically_confirmed_slots_receiver) =
+            unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -902,6 +904,7 @@ impl Validator {
             bank_notification_sender,
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
+            optimistically_confirmed_slots_sender,
             &cost_model,
             &identity_keypair,
         );

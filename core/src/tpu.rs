@@ -13,7 +13,7 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
     },
-    crossbeam_channel::{unbounded, Receiver},
+    crossbeam_channel::{unbounded, Receiver, Sender},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -26,7 +26,7 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::signature::Keypair,
+    solana_sdk::{clock::Slot, hash::Hash, signature::Keypair},
     std::{
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
@@ -77,6 +77,7 @@ impl Tpu {
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        optimistically_confirmed_slots_sender: Sender<Vec<(Slot, Hash)>>,
         cost_model: &Arc<RwLock<CostModel>>,
         keypair: &Keypair,
     ) -> Self {
@@ -143,6 +144,7 @@ impl Tpu {
             blockstore.clone(),
             bank_notification_sender,
             cluster_confirmed_slot_sender,
+            optimistically_confirmed_slots_sender,
         );
 
         let banking_stage = BankingStage::new(

@@ -201,6 +201,7 @@ impl ClusterInfoVoteListener {
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        optimistically_confirmed_slots_sender: Sender<Vec<(Slot, Hash)>>,
     ) -> Self {
         let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
             unbounded();
@@ -249,6 +250,7 @@ impl ClusterInfoVoteListener {
                     blockstore,
                     bank_notification_sender,
                     cluster_confirmed_slot_sender,
+                    optimistically_confirmed_slots_sender,
                 );
             })
             .unwrap();
@@ -443,6 +445,7 @@ impl ClusterInfoVoteListener {
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        optimistically_confirmed_slots_sender: Sender<Vec<(Slot, Hash)>>,
     ) -> Result<()> {
         let mut confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
@@ -483,6 +486,7 @@ impl ClusterInfoVoteListener {
                 Ok(confirmed_slots) => {
                     confirmation_verifier
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
+                    let _ = optimistically_confirmed_slots_sender.send(confirmed_slots);
                 }
                 Err(e) => match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected) => {
