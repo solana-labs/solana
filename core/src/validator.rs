@@ -875,6 +875,7 @@ impl Validator {
             accounts_package_channel,
             last_full_snapshot_slot,
             block_metadata_notifier,
+            optimistically_confirmed_slots_receiver,
         );
 
         let tpu = Tpu::new(

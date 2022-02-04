@@ -5,7 +5,7 @@ use {
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{clock::Slot, transaction::Transaction},
+    solana_sdk::{clock::Slot, hash::Hash, transaction::Transaction},
     std::{
         sync::{Arc, Mutex, RwLock},
         thread::{self, Builder, JoinHandle},
@@ -44,6 +44,7 @@ impl VotingService {
         poh_recorder: Arc<Mutex<PohRecorder>>,
         tower_storage: Arc<dyn TowerStorage>,
         bank_forks: Arc<RwLock<BankForks>>,
+        optimistically_confirmed_slots_receiver: Receiver<Vec<(Slot, Hash)>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("sol-vote-service".to_string())

@@ -54,7 +54,7 @@ use {
         },
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Keypair},
     std::{
         boxed::Box,
         collections::HashSet,
@@ -145,6 +145,7 @@ impl Tvu {
         accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        optimistically_confirmed_slots_receiver: Receiver<Vec<(Slot, Hash)>>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -302,6 +303,7 @@ impl Tvu {
             poh_recorder.clone(),
             tower_storage,
             bank_forks.clone(),
+            optimistically_confirmed_slots_receiver,
         );
 
         let (cost_update_sender, cost_update_receiver) = unbounded();
