@@ -368,7 +368,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
 pub struct RollingBitField {
     max_width: u64,
     min: u64,
-    max: u64, // exclusive
+    max_exclusive: u64,
     bits: BitVec,
     count: usize,
     // These are items that are true and lower than min.
@@ -406,7 +406,7 @@ impl RollingBitField {
             bits,
             count: 0,
             min: 0,
-            max: 0,
+            max_exclusive: 0,
             excess: HashSet::new(),
         }
     }
@@ -418,7 +418,7 @@ impl RollingBitField {
 
     pub fn range_width(&self) -> u64 {
         // note that max isn't updated on remove, so it can be above the current max
-        self.max - self.min
+        self.max_exclusive - self.min
     }
 
     pub fn min(&self) -> Option<u64> {
@@ -449,7 +449,7 @@ impl RollingBitField {
                 self.count += 1;
             }
             false
-        } else if key < self.max {
+        } else if key < self.max_exclusive {
             true // fits current bit field range
         } else {
             // key is >= max
@@ -487,15 +487,15 @@ impl RollingBitField {
                 self.bits.set(address, true);
                 if bits_empty {
                     self.min = key;
-                    self.max = key + 1;
+                    self.max_exclusive = key + 1;
                 } else {
                     self.min = std::cmp::min(self.min, key);
-                    self.max = std::cmp::max(self.max, key + 1);
+                    self.max_exclusive = std::cmp::max(self.max_exclusive, key + 1);
                     assert!(
-                        self.min + self.max_width >= self.max,
+                        self.min + self.max_width >= self.max_exclusive,
                         "min: {}, max: {}, max_width: {}",
                         self.min,
-                        self.max,
+                        self.max_exclusive,
                         self.max_width
                     );
                 }
@@ -508,7 +508,7 @@ impl RollingBitField {
     pub fn remove(&mut self, key: &u64) -> bool {
         if key >= &self.min {
             // if asked to remove something bigger than max, then no-op
-            if key < &self.max {
+            if key < &self.max_exclusive {
                 let address = self.get_address(key);
                 let get = self.bits.get(address);
                 if get {
@@ -539,7 +539,7 @@ impl RollingBitField {
         if self.count > 0 && !self.all_items_in_excess() {
             if key == &self.min {
                 let start = self.min + 1; // min just got removed
-                for key in start..self.max {
+                for key in start..self.max_exclusive {
                     if self.contains_assume_in_range(&key) {
                         self.min = key;
                         break;
@@ -558,7 +558,7 @@ impl RollingBitField {
             // Otherwise, we look in excess since the request is < min.
             // So, resetting min like this after a remove results in the correct behavior for the model.
             // Later, if we insert and there are 0 items total (excess + bitfield), then we reset min/max to reflect the new item only.
-            self.min = self.max;
+            self.min = self.max_exclusive;
         }
     }
 
@@ -571,7 +571,7 @@ impl RollingBitField {
     // This is the 99% use case.
     // This needs be fast for the most common case of asking for key >= min.
     pub fn contains(&self, key: &u64) -> bool {
-        if key < &self.max {
+        if key < &self.max_exclusive {
             if key >= &self.min {
                 // in the bitfield range
                 self.contains_assume_in_range(key)
@@ -596,14 +596,14 @@ impl RollingBitField {
         std::mem::swap(&mut n, self);
     }
 
-    pub fn max(&self) -> u64 {
-        self.max
+    pub fn max_exclusive(&self) -> u64 {
+        self.max_exclusive
     }
 
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| all.push(*slot));
-        for key in self.min..self.max {
+        for key in self.min..self.max_exclusive {
             if self.contains_assume_in_range(&key) {
                 all.push(key);
             }
@@ -2136,12 +2136,12 @@ pub mod tests {
         assert_eq!(bitfield.excess.len(), 1);
         assert_eq!(bitfield.min, too_big);
         assert_eq!(bitfield.min(), Some(0));
-        assert_eq!(bitfield.max, too_big + 1);
+        assert_eq!(bitfield.max_exclusive, too_big + 1);
 
         // delete the thing that is NOT in excess
         bitfield.remove(&too_big);
         assert_eq!(bitfield.min, too_big + 1);
-        assert_eq!(bitfield.max, too_big + 1);
+        assert_eq!(bitfield.max_exclusive, too_big + 1);
         let too_big_times_2 = too_big * 2;
         bitfield.insert(too_big_times_2);
         assert!(bitfield.contains(&0));
@@ -2150,7 +2150,7 @@ pub mod tests {
         assert_eq!(bitfield.excess.len(), 1);
         assert_eq!(bitfield.min(), bitfield.excess.iter().min().copied());
         assert_eq!(bitfield.min, too_big_times_2);
-        assert_eq!(bitfield.max, too_big_times_2 + 1);
+        assert_eq!(bitfield.max_exclusive, too_big_times_2 + 1);
 
         bitfield.remove(&0);
         bitfield.remove(&too_big_times_2);
@@ -2160,7 +2160,7 @@ pub mod tests {
         assert!(bitfield.contains(&other));
         assert!(bitfield.excess.is_empty());
         assert_eq!(bitfield.min, other);
-        assert_eq!(bitfield.max, other + 1);
+        assert_eq!(bitfield.max_exclusive, other + 1);
     }
 
     #[test]
@@ -2178,13 +2178,13 @@ pub mod tests {
         assert_eq!(bitfield.excess.len(), 1);
         assert!(bitfield.excess.contains(&0));
         assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.max, too_big + 1);
+        assert_eq!(bitfield.max_exclusive, too_big + 1);
 
         // delete the thing that IS in excess
         // this does NOT affect min/max
         bitfield.remove(&0);
         assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.max, too_big + 1);
+        assert_eq!(bitfield.max_exclusive, too_big + 1);
         // re-add to excess
         bitfield.insert(0);
         assert!(bitfield.contains(&0));
@@ -2192,7 +2192,7 @@ pub mod tests {
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.excess.len(), 1);
         assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.max, too_big + 1);
+        assert_eq!(bitfield.max_exclusive, too_big + 1);
     }
 
     #[test]
@@ -2620,12 +2620,12 @@ pub mod tests {
         } else {
             (
                 std::cmp::min(bitfield.min, slot),
-                std::cmp::max(bitfield.max, slot + 1),
+                std::cmp::max(bitfield.max_exclusive, slot + 1),
             )
         };
         bitfield.insert(slot);
         assert_eq!(bitfield.min, new_min);
-        assert_eq!(bitfield.max, new_max);
+        assert_eq!(bitfield.max_exclusive, new_max);
         assert_eq!(bitfield.len(), len + 1);
         assert!(!bitfield.is_empty());
         assert!(bitfield.contains(&slot));
@@ -2672,24 +2672,24 @@ pub mod tests {
         assert!(bitfield.remove(&0));
         assert!(!bitfield.remove(&0));
         assert_eq!(bitfield.min, 2);
-        assert_eq!(bitfield.max, 4);
+        assert_eq!(bitfield.max_exclusive, 4);
         assert_eq!(bitfield.len(), 2);
         assert!(!bitfield.remove(&0)); // redundant remove
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.get_all(), vec![2, 3]);
         bitfield.insert(4); // wrapped around value - same bit as '0'
         assert_eq!(bitfield.min, 2);
-        assert_eq!(bitfield.max, 5);
+        assert_eq!(bitfield.max_exclusive, 5);
         assert_eq!(bitfield.len(), 3);
         assert_eq!(bitfield.get_all(), vec![2, 3, 4]);
         assert!(bitfield.remove(&2));
         assert_eq!(bitfield.min, 3);
-        assert_eq!(bitfield.max, 5);
+        assert_eq!(bitfield.max_exclusive, 5);
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.get_all(), vec![3, 4]);
         assert!(bitfield.remove(&3));
         assert_eq!(bitfield.min, 4);
-        assert_eq!(bitfield.max, 5);
+        assert_eq!(bitfield.max_exclusive, 5);
         assert_eq!(bitfield.len(), 1);
         assert_eq!(bitfield.get_all(), vec![4]);
         assert!(bitfield.remove(&4));
