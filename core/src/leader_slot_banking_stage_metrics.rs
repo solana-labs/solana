@@ -83,51 +83,6 @@ impl LeaderSlotPacketCountMetrics {
     }
 }
 
-impl LeaderSlotMetricsTracker {
-    pub(crate) fn new(id: u32) -> Self {
-        Self {
-            leader_slot_metrics: None,
-            id,
-        }
-    }
-
-    pub(crate) fn update_on_leader_slot_boundary(&mut self, bank_start: &Option<BankStart>) {
-        match (self.leader_slot_metrics.as_mut(), bank_start) {
-            (None, None) => {}
-
-            (Some(leader_slot_metrics), None) => {
-                // Slot has ended, time to report metrics
-                leader_slot_metrics.report();
-            }
-
-            (None, Some(bank_start)) => {
-                // Our leader slot has begain, time to create a new slot tracker
-                self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
-                    self.id,
-                    bank_start.working_bank.slot(),
-                    &bank_start.bank_creation_time,
-                    // TODO: track the number of packets in buffered queue
-                    0,
-                ));
-            }
-
-            (Some(leader_slot_metrics), Some(bank_start)) => {
-                if leader_slot_metrics.slot != bank_start.working_bank.slot() {
-                    // Last slot has ended, new slot has began
-                    leader_slot_metrics.report();
-                    self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
-                        self.id,
-                        bank_start.working_bank.slot(),
-                        &bank_start.bank_creation_time,
-                        // TODO: track the number of packets in buffered queue,
-                        0,
-                    ));
-                }
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct LeaderSlotMetrics {
     // banking_stage creates one QosService instance per working threads, that is uniquely
@@ -147,6 +102,9 @@ pub(crate) struct LeaderSlotMetrics {
     packet_count_metrics: LeaderSlotPacketCountMetrics,
 
     timing_metrics: LeaderSlotTimingMetrics,
+
+    // Used by tests to check if the `self.report()` method was called
+    is_reported: bool,
 }
 
 impl LeaderSlotMetrics {
@@ -165,11 +123,13 @@ impl LeaderSlotMetrics {
                 buffered_packets_starting_count,
             ),
             timing_metrics: LeaderSlotTimingMetrics::default(),
+            is_reported: false,
         }
     }
 
-    pub(crate) fn report(&self) {
+    pub(crate) fn report(&mut self) {
         let bank_detected_to_now = self.bank_detected_time.elapsed().as_micros() as u64;
+        self.is_reported = true;
         datapoint_info!(
             "banking_stage-leader_slot_timing_metrics",
             ("id", self.id as i64, i64),
@@ -278,6 +238,15 @@ impl LeaderSlotMetrics {
             ),
         );
     }
+
+    /// Returns `Some(self.slot)` if the metrics have been reported, otherwise returns None
+    fn reported_slot(&self) -> Option<Slot> {
+        if self.is_reported {
+            Some(self.slot)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -289,6 +258,63 @@ pub struct LeaderSlotMetricsTracker {
 }
 
 impl LeaderSlotMetricsTracker {
+    pub(crate) fn new(id: u32) -> Self {
+        Self {
+            leader_slot_metrics: None,
+            id,
+        }
+    }
+
+    // Returns true if metrics were reported
+    pub(crate) fn update_on_leader_slot_boundary(
+        &mut self,
+        bank_start: &Option<BankStart>,
+    ) -> Option<Slot> {
+        match (self.leader_slot_metrics.as_mut(), bank_start) {
+            (None, None) => None,
+
+            (Some(leader_slot_metrics), None) => {
+                leader_slot_metrics.report();
+                // Ensure tests catch that `report()` method was called
+                let reported_slot = leader_slot_metrics.reported_slot();
+                // Slot has ended, time to report metrics
+                self.leader_slot_metrics = None;
+                reported_slot
+            }
+
+            (None, Some(bank_start)) => {
+                // Our leader slot has begain, time to create a new slot tracker
+                self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
+                    self.id,
+                    bank_start.working_bank.slot(),
+                    &bank_start.bank_creation_time,
+                    // TODO: track the number of packets in buffered queue
+                    0,
+                ));
+                self.leader_slot_metrics.as_ref().unwrap().reported_slot()
+            }
+
+            (Some(leader_slot_metrics), Some(bank_start)) => {
+                if leader_slot_metrics.slot != bank_start.working_bank.slot() {
+                    // Last slot has ended, new slot has began
+                    leader_slot_metrics.report();
+                    // Ensure tests catch that `report()` method was called
+                    let reported_slot = leader_slot_metrics.reported_slot();
+                    self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
+                        self.id,
+                        bank_start.working_bank.slot(),
+                        &bank_start.bank_creation_time,
+                        // TODO: track the number of packets in buffered queue,
+                        0,
+                    ));
+                    reported_slot
+                } else {
+                    leader_slot_metrics.reported_slot()
+                }
+            }
+        }
+    }
+
     pub(crate) fn increment_total_new_valid_packets(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             leader_slot_metrics
@@ -466,5 +492,198 @@ impl LeaderSlotMetricsTracker {
                 .executed_transactions_failed_commit_count
                 .saturating_add(count);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
+        solana_sdk::pubkey::Pubkey,
+        std::sync::Arc,
+    };
+
+    struct TestSlotBoundaryComponents {
+        first_bank: Arc<Bank>,
+        first_poh_recorder_bank: BankStart,
+        next_bank: Arc<Bank>,
+        next_poh_recorder_bank: BankStart,
+        leader_slot_metrics_tracker: LeaderSlotMetricsTracker,
+    }
+
+    fn setup_test_slot_boundary_banks() -> TestSlotBoundaryComponents {
+        let genesis = create_genesis_config(10);
+        let first_bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let first_poh_recorder_bank = BankStart {
+            working_bank: first_bank.clone(),
+            bank_creation_time: Arc::new(Instant::now()),
+        };
+
+        // Create a child descended from the first bank
+        let next_bank = Arc::new(Bank::new_from_parent(
+            &first_bank,
+            &Pubkey::new_unique(),
+            first_bank.slot() + 1,
+        ));
+        let next_poh_recorder_bank = BankStart {
+            working_bank: next_bank.clone(),
+            bank_creation_time: Arc::new(Instant::now()),
+        };
+
+        let banking_stage_thread_id = 0;
+        let leader_slot_metrics_tracker = LeaderSlotMetricsTracker::new(banking_stage_thread_id);
+
+        TestSlotBoundaryComponents {
+            first_bank,
+            first_poh_recorder_bank,
+            next_bank,
+            next_poh_recorder_bank,
+            leader_slot_metrics_tracker,
+        }
+    }
+
+    #[test]
+    pub fn test_update_on_leader_slot_boundary_not_leader_to_not_leader() {
+        let TestSlotBoundaryComponents {
+            mut leader_slot_metrics_tracker,
+            ..
+        } = setup_test_slot_boundary_banks();
+        // Test that with no bank being tracked, and no new bank being tracked, nothing is reported
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&None)
+            .is_none());
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+    }
+
+    #[test]
+    pub fn test_update_on_leader_slot_boundary_not_leader_to_leader() {
+        let TestSlotBoundaryComponents {
+            first_poh_recorder_bank,
+            mut leader_slot_metrics_tracker,
+            ..
+        } = setup_test_slot_boundary_banks();
+
+        // Test case where the thread has not detected a leader bank, and now sees a leader bank.
+        // Metrics should not be reported because leader slot has not ended
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
+            .is_none());
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
+    }
+
+    #[test]
+    pub fn test_update_on_leader_slot_boundary_leader_to_not_leader() {
+        let TestSlotBoundaryComponents {
+            first_bank,
+            first_poh_recorder_bank,
+            mut leader_slot_metrics_tracker,
+            ..
+        } = setup_test_slot_boundary_banks();
+
+        // Test case where the thread has a leader bank, and now detects there's no more leader bank,
+        // implying the slot has ended. Metrics should be reported for `first_bank.slot()`,
+        // because that leader slot has just ended.
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
+            .is_none());
+        assert_eq!(
+            leader_slot_metrics_tracker
+                .update_on_leader_slot_boundary(&None)
+                .unwrap(),
+            first_bank.slot()
+        );
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&None)
+            .is_none());
+    }
+
+    #[test]
+    pub fn test_update_on_leader_slot_boundary_leader_to_leader_same_slot() {
+        let TestSlotBoundaryComponents {
+            first_bank,
+            first_poh_recorder_bank,
+            mut leader_slot_metrics_tracker,
+            ..
+        } = setup_test_slot_boundary_banks();
+
+        // Test case where the thread has a leader bank, and now detects the same leader bank,
+        // implying the slot is still running. Metrics should not be reported
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank.clone()))
+            .is_none());
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
+            .is_none());
+        assert_eq!(
+            leader_slot_metrics_tracker
+                .update_on_leader_slot_boundary(&None)
+                .unwrap(),
+            first_bank.slot()
+        );
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+    }
+
+    #[test]
+    pub fn test_update_on_leader_slot_boundary_leader_to_leader_bigger_slot() {
+        let TestSlotBoundaryComponents {
+            first_bank,
+            first_poh_recorder_bank,
+            next_bank,
+            next_poh_recorder_bank,
+            mut leader_slot_metrics_tracker,
+        } = setup_test_slot_boundary_banks();
+
+        // Test case where the thread has a leader bank, and now detects there's a new leader bank
+        // for a bigger slot, implying the slot has ended. Metrics should be reported for the
+        // smaller slot
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
+            .is_none());
+        assert_eq!(
+            leader_slot_metrics_tracker
+                .update_on_leader_slot_boundary(&Some(next_poh_recorder_bank))
+                .unwrap(),
+            first_bank.slot()
+        );
+        assert_eq!(
+            leader_slot_metrics_tracker
+                .update_on_leader_slot_boundary(&None)
+                .unwrap(),
+            next_bank.slot()
+        );
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+    }
+
+    #[test]
+    pub fn test_update_on_leader_slot_boundary_leader_to_leader_smaller_slot() {
+        let TestSlotBoundaryComponents {
+            first_bank,
+            first_poh_recorder_bank,
+            next_bank,
+            next_poh_recorder_bank,
+            mut leader_slot_metrics_tracker,
+        } = setup_test_slot_boundary_banks();
+        // Test case where the thread has a leader bank, and now detects there's a new leader bank
+        // for a samller slot, implying the slot has ended. Metrics should be reported for the
+        // bigger slot
+        assert!(leader_slot_metrics_tracker
+            .update_on_leader_slot_boundary(&Some(next_poh_recorder_bank))
+            .is_none());
+        assert_eq!(
+            leader_slot_metrics_tracker
+                .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
+                .unwrap(),
+            next_bank.slot()
+        );
+        assert_eq!(
+            leader_slot_metrics_tracker
+                .update_on_leader_slot_boundary(&None)
+                .unwrap(),
+            first_bank.slot()
+        );
+        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
     }
 }
