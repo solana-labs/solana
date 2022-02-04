@@ -247,7 +247,7 @@ pub fn run_cluster_partition<C>(
     let enable_partition = Arc::new(AtomicBool::new(true));
     let mut validator_config = ValidatorConfig {
         enable_partition: Some(enable_partition.clone()),
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
 
     // Returns:
@@ -362,10 +362,10 @@ pub fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
-    validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default);
+    validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default_for_test);
     validator_configs.push(error_validator_config);
 
     let mut validator_keys = Vec::with_capacity(num_nodes);

@@ -651,6 +651,22 @@ impl TransactionBalancesSet {
 }
 pub type TransactionBalances = Vec<Vec<u64>>;
 
+pub struct LoadAndExecuteTransactionsOutput {
+    pub loaded_transactions: Vec<TransactionLoadResult>,
+    // Vector of results indicating whether a transaction was executed or could not
+    // be executed. Note executed transactions can still have failed!
+    pub execution_results: Vec<TransactionExecutionResult>,
+    pub inner_instructions: Vec<Option<InnerInstructionsList>>,
+    pub transaction_log_messages: Vec<Option<TransactionLogMessages>>,
+    pub retryable_transaction_indexes: Vec<usize>,
+    // Total number of transactions that were executed
+    pub executed_transactions_count: usize,
+    // Total number of the executed transactions that returned success/not
+    // an error.
+    pub executed_with_successful_result_count: usize,
+    pub signature_count: u64,
+}
+
 /// An ordered list of instructions that were invoked during a transaction instruction
 pub type InnerInstructions = Vec<CompiledInstruction>;
 
@@ -3197,15 +3213,12 @@ impl Bank {
 
         let mut timings = ExecuteTimings::default();
 
-        let (
-            loaded_txs,
-            executed,
-            _inner_instructions,
-            log_messages,
-            _retryable_transactions,
-            _transaction_count,
-            _signature_count,
-        ) = self.load_and_execute_transactions(
+        let LoadAndExecuteTransactionsOutput {
+            loaded_transactions,
+            execution_results,
+            transaction_log_messages,
+            ..
+        } = self.load_and_execute_transactions(
             &batch,
             // After simulation, transactions will need to be forwarded to the leader
             // for processing. During forwarding, the transaction could expire if the
@@ -3216,9 +3229,13 @@ impl Bank {
             &mut timings,
         );
 
-        let transaction_result = executed[0].0.clone().map(|_| ());
-        let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
-        let post_transaction_accounts = loaded_txs
+        let transaction_result = execution_results[0].0.clone().map(|_| ());
+        let transaction_log_messages = transaction_log_messages
+            .get(0)
+            .cloned()
+            .flatten()
+            .unwrap_or_default();
+        let post_transaction_accounts = loaded_transactions
             .into_iter()
             .next()
             .unwrap()
@@ -3229,7 +3246,11 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
-        (transaction_result, log_messages, post_transaction_accounts)
+        (
+            transaction_result,
+            transaction_log_messages,
+            post_transaction_accounts,
+        )
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
@@ -3372,21 +3393,21 @@ impl Bank {
         hashed_txs: &[HashedTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
-        mut error_counters: &mut ErrorCounters,
+        error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
             hashed_txs.as_transactions_iter(),
             lock_results.to_vec(),
             max_age,
-            &mut error_counters,
+            error_counters,
         );
-        let cache_results = self.check_status_cache(hashed_txs, age_results, &mut error_counters);
+        let cache_results = self.check_status_cache(hashed_txs, age_results, error_counters);
         if self.upgrade_epoch() {
             // Reject all non-vote transactions
             self.filter_by_vote_transactions(
                 hashed_txs.as_transactions_iter(),
                 cache_results,
-                &mut error_counters,
+                error_counters,
             )
         } else {
             cache_results
@@ -3623,21 +3644,13 @@ impl Bank {
         enable_cpi_recording: bool,
         enable_log_recording: bool,
         timings: &mut ExecuteTimings,
-    ) -> (
-        Vec<TransactionLoadResult>,
-        Vec<TransactionExecutionResult>,
-        Vec<Option<InnerInstructionsList>>,
-        Vec<Option<TransactionLogMessages>>,
-        Vec<usize>,
-        u64,
-        u64,
-    ) {
+    ) -> LoadAndExecuteTransactionsOutput {
         let hashed_txs = batch.hashed_transactions();
         debug!("processing transactions: {}", hashed_txs.len());
         inc_new_counter_info!("bank-process_transactions", hashed_txs.len());
         let mut error_counters = ErrorCounters::default();
 
-        let retryable_txs: Vec<_> = batch
+        let retryable_transaction_indexes: Vec<_> = batch
             .lock_results()
             .iter()
             .enumerate()
@@ -3661,7 +3674,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_txs = self.rc.accounts.load_accounts(
+        let mut loaded_transactions = self.rc.accounts.load_accounts(
             &self.ancestors,
             hashed_txs.as_transactions_iter(),
             check_results,
@@ -3678,8 +3691,8 @@ impl Bank {
             Vec::with_capacity(hashed_txs.len());
         let mut transaction_log_messages: Vec<Option<Vec<String>>> =
             Vec::with_capacity(hashed_txs.len());
-
-        let executed: Vec<TransactionExecutionResult> = loaded_txs
+        let mut executed_transactions_count: usize = 0;
+        let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
             .iter_mut()
             .zip(hashed_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
@@ -3713,6 +3726,8 @@ impl Bank {
                     } else {
                         Ok(())
                     };
+
+                    executed_transactions_count += 1;
 
                     if process_result.is_ok() {
                         let mut get_executors_time = Measure::start("get_executors_time");
@@ -3831,12 +3846,14 @@ impl Bank {
         timings.load_us += load_time.as_us();
         timings.execute_us += execution_time.as_us();
 
-        let mut tx_count: u64 = 0;
+        let mut executed_with_successful_result_count: usize = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), hashed_tx)) in executed.iter().zip(hashed_txs).enumerate() {
+        for (i, ((r, _nonce_rollback), hashed_tx)) in
+            execution_results.iter().zip(hashed_txs).enumerate()
+        {
             let tx = hashed_tx.transaction();
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
@@ -3901,7 +3918,7 @@ impl Bank {
             }
 
             if r.is_ok() {
-                tx_count += 1;
+                executed_with_successful_result_count += 1;
             } else {
                 if *err_count == 0 {
                     debug!("tx error: {:?} {:?}", r, tx);
@@ -3913,19 +3930,21 @@ impl Bank {
             debug!(
                 "{} errors of {} txs",
                 *err_count,
-                *err_count as u64 + tx_count
+                *err_count + executed_with_successful_result_count
             );
         }
         Self::update_error_counters(&error_counters);
-        (
-            loaded_txs,
-            executed,
+
+        LoadAndExecuteTransactionsOutput {
+            loaded_transactions,
+            execution_results,
             inner_instructions,
             transaction_log_messages,
-            retryable_txs,
-            tx_count,
+            retryable_transaction_indexes,
+            executed_transactions_count,
+            executed_with_successful_result_count,
             signature_count,
-        )
+        }
     }
 
     fn filter_program_errors_and_collect_fee<'a>(
@@ -3983,12 +4002,17 @@ impl Bank {
         results
     }
 
+    /// `committed_transactions_count` is the number of transactions out of `sanitized_txs`
+    /// that was executed. Of those, `committed_transactions_count`,
+    /// `committed_with_failure_result_count` is the number of executed transactions that returned
+    /// a failure result.
     pub fn commit_transactions(
         &self,
         hashed_txs: &[HashedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
-        executed: &[TransactionExecutionResult],
-        tx_count: u64,
+        execution_results: Vec<TransactionExecutionResult>,
+        committed_transactions_count: u64,
+        committed_with_failure_result_count: u64,
         signature_count: u64,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
@@ -3997,34 +4021,42 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
+        let tx_count = if self.bank_tranaction_count_fix_enabled() {
+            committed_transactions_count
+        } else {
+            committed_transactions_count.saturating_sub(committed_with_failure_result_count)
+        };
+
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
 
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
+        inc_new_counter_info!(
+            "bank-process_transactions-txs",
+            committed_transactions_count as usize
+        );
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
-        if !hashed_txs.is_empty() {
-            let processed_tx_count = hashed_txs.len() as u64;
-            let failed_tx_count = processed_tx_count.saturating_sub(tx_count);
+        if committed_with_failure_result_count > 0 {
             self.transaction_error_count
-                .fetch_add(failed_tx_count, Relaxed);
-            self.transaction_entries_count.fetch_add(1, Relaxed);
-            self.transactions_per_entry_max
-                .fetch_max(processed_tx_count, Relaxed);
+                .fetch_add(committed_with_failure_result_count, Relaxed);
         }
 
-        if executed
+        // Should be equivalent to checking `committed_transactions_count > 0`
+        if execution_results
             .iter()
             .any(|(res, _nonce_rollback)| Self::can_commit(res))
         {
             self.is_delta.store(true, Relaxed);
+            self.transaction_entries_count.fetch_add(1, Relaxed);
+            self.transactions_per_entry_max
+                .fetch_max(committed_transactions_count, Relaxed);
         }
 
         let mut write_time = Measure::start("write_time");
         self.rc.accounts.store_cached(
             self.slot(),
             hashed_txs.as_transactions_iter(),
-            executed,
+            &execution_results,
             loaded_txs,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
@@ -4033,10 +4065,14 @@ impl Bank {
             self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),
         );
-        let rent_debits = self.collect_rent(executed, loaded_txs);
+        let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
-        self.update_stakes_cache(hashed_txs.as_transactions_iter(), executed, loaded_txs);
+        self.update_stakes_cache(
+            hashed_txs.as_transactions_iter(),
+            &execution_results,
+            loaded_txs,
+        );
         update_stakes_cache_time.stop();
 
         // once committed there is no way to unroll
@@ -4048,13 +4084,15 @@ impl Bank {
         );
         timings.store_us += write_time.as_us();
         timings.update_stakes_cache_us += update_stakes_cache_time.as_us();
-        self.update_transaction_statuses(hashed_txs, executed);
-        let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(hashed_txs.as_transactions_iter(), executed);
+        self.update_transaction_statuses(hashed_txs, &execution_results);
+        let fee_collection_results = self.filter_program_errors_and_collect_fee(
+            hashed_txs.as_transactions_iter(),
+            &execution_results,
+        );
 
         TransactionResults {
             fee_collection_results,
-            execution_results: executed.to_vec(),
+            execution_results,
             rent_debits,
         }
     }
@@ -4666,15 +4704,16 @@ impl Bank {
             vec![]
         };
 
-        let (
-            mut loaded_txs,
-            executed,
+        let LoadAndExecuteTransactionsOutput {
+            mut loaded_transactions,
+            execution_results,
             inner_instructions,
-            transaction_logs,
-            _,
-            tx_count,
+            transaction_log_messages,
+            executed_transactions_count,
+            executed_with_successful_result_count,
             signature_count,
-        ) = self.load_and_execute_transactions(
+            ..
+        } = self.load_and_execute_transactions(
             batch,
             max_age,
             enable_cpi_recording,
@@ -4684,9 +4723,11 @@ impl Bank {
 
         let results = self.commit_transactions(
             batch.hashed_transactions(),
-            &mut loaded_txs,
-            &executed,
-            tx_count,
+            &mut loaded_transactions,
+            execution_results,
+            executed_transactions_count as u64,
+            executed_transactions_count.saturating_sub(executed_with_successful_result_count)
+                as u64,
             signature_count,
             timings,
         );
@@ -4699,7 +4740,7 @@ impl Bank {
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
             inner_instructions,
-            transaction_logs,
+            transaction_log_messages,
         )
     }
 
@@ -5639,6 +5680,11 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
+    }
+
+    pub fn bank_tranaction_count_fix_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::bank_tranaction_count_fix::id())
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
