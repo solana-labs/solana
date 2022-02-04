@@ -1,13 +1,15 @@
 use {
     crate::nonce_keyed_account::NonceKeyedAccount,
     log::*,
-    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_program_runtime::{
+        ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
-        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
+        keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -15,7 +17,6 @@ use {
             NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
         },
         system_program,
-        sysvar::rent::Rent,
     },
     std::collections::HashSet,
 };
@@ -349,11 +350,11 @@ pub fn process_instruction(
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
-            if from_keyed_account::<solana_sdk::sysvar::recent_blockhashes::RecentBlockhashes>(
+            let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
-            )?
-            .is_empty()
-            {
+                invoke_context,
+            )?;
+            if recent_blockhashes.is_empty() {
                 ic_msg!(
                     invoke_context,
                     "Advance nonce account: recent blockhash list is empty",
@@ -366,42 +367,35 @@ pub fn process_instruction(
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
-            let _ = from_keyed_account::<solana_sdk::sysvar::recent_blockhashes::RecentBlockhashes>(
+            let _recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
-            )?;
-            me.withdraw_nonce_account(
-                lamports,
-                to,
-                &from_keyed_account::<Rent>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 3,
-                )?)?,
-                &signers,
                 invoke_context,
-            )
+            )?;
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
+                invoke_context,
+            )?;
+            me.withdraw_nonce_account(lamports, to, &rent, &signers, invoke_context)
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
-            if from_keyed_account::<solana_sdk::sysvar::recent_blockhashes::RecentBlockhashes>(
+            let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
-            )?
-            .is_empty()
-            {
+                invoke_context,
+            )?;
+            if recent_blockhashes.is_empty() {
                 ic_msg!(
                     invoke_context,
                     "Initialize nonce account: recent blockhash list is empty",
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            me.initialize_nonce_account(
-                &authorized,
-                &from_keyed_account::<Rent>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?,
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
-            )
+            )?;
+            me.initialize_nonce_account(&authorized, &rent, invoke_context)
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -485,8 +479,8 @@ mod tests {
         message::Message,
         nonce, nonce_account, recent_blockhashes_account,
         signature::{Keypair, Signer},
-        system_instruction, system_program, sysvar,
-        sysvar::recent_blockhashes::IterItem,
+        system_instruction, system_program,
+        sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
         transaction::TransactionError,
         transaction_context::TransactionContext,
     };
@@ -494,7 +488,9 @@ mod tests {
         super::*,
         crate::{bank::Bank, bank_client::BankClient},
         bincode::serialize,
-        solana_program_runtime::invoke_context::{mock_process_instruction, InvokeContext},
+        solana_program_runtime::invoke_context::{
+            mock_process_instruction, InvokeContext, ProcessInstructionWithContext,
+        },
         std::{cell::RefCell, sync::Arc},
     };
 
@@ -512,6 +508,7 @@ mod tests {
         transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
         instruction_accounts: Vec<AccountMeta>,
         expected_result: Result<(), InstructionError>,
+        process_instruction: ProcessInstructionWithContext,
     ) -> Vec<AccountSharedData> {
         mock_process_instruction(
             &system_program::id(),
@@ -520,7 +517,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             expected_result,
-            super::process_instruction,
+            process_instruction,
         )
     }
 
@@ -567,6 +564,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 50);
@@ -606,6 +604,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 50);
@@ -652,6 +651,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 50);
@@ -1079,6 +1079,7 @@ mod tests {
                 is_writable: false,
             }],
             Ok(()),
+            super::process_instruction,
         );
     }
 
@@ -1114,6 +1115,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
+            super::process_instruction,
         );
 
         // Attempt to transfer with no destination
@@ -1130,6 +1132,7 @@ mod tests {
                 is_writable: false,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
+            super::process_instruction,
         );
     }
 
@@ -1474,6 +1477,7 @@ mod tests {
             transaction_accounts,
             instruction.accounts,
             expected_result,
+            super::process_instruction,
         )
     }
 
@@ -1493,6 +1497,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
+            super::process_instruction,
         );
     }
 
@@ -1508,33 +1513,7 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-        );
-    }
-
-    #[test]
-    fn test_process_nonce_ix_bad_recent_blockhash_state_fail() {
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
-            vec![
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
         );
     }
 
@@ -1569,6 +1548,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
         let blockhash = hash(&serialize(&0).unwrap());
         #[allow(deprecated)]
@@ -1577,9 +1557,7 @@ mod tests {
                 vec![IterItem(0u64, &blockhash, 0); sysvar::recent_blockhashes::MAX_ENTRIES]
                     .into_iter(),
             );
-        mock_process_instruction(
-            &system_program::id(),
-            Vec::new(),
+        process_instruction(
             &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             vec![
                 (nonce_address, accounts[0].clone()),
@@ -1632,6 +1610,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
+            super::process_instruction,
         );
     }
 
@@ -1647,81 +1626,7 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-        );
-    }
-
-    #[test]
-    fn test_process_withdraw_ix_bad_recent_blockhash_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
-            vec![
-                (nonce_address, create_default_account()),
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-        );
-    }
-
-    #[test]
-    fn test_process_withdraw_ix_bad_rent_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_recent_blockhashes_account()),
-                (sysvar::rent::id(), create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: sysvar::rent::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
         );
     }
 
@@ -1763,6 +1668,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
     }
 
@@ -1773,6 +1679,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
+            super::process_instruction,
         );
     }
 
@@ -1789,68 +1696,7 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-        );
-    }
-
-    #[test]
-    fn test_process_initialize_bad_recent_blockhash_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (blockhash_id, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
-        );
-    }
-
-    #[test]
-    fn test_process_initialize_ix_bad_rent_state_fail() {
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (blockhash_id, create_default_recent_blockhashes_account()),
-                (sysvar::rent::id(), create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: sysvar::rent::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
         );
     }
 
@@ -1885,6 +1731,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
     }
 
@@ -1919,6 +1766,7 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
         process_instruction(
             &serialize(&SystemInstruction::AuthorizeNonceAccount(nonce_address)).unwrap(),
@@ -1929,6 +1777,7 @@ mod tests {
                 is_writable: true,
             }],
             Ok(()),
+            super::process_instruction,
         );
     }
 
@@ -2034,6 +1883,7 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
+            super::process_instruction,
         );
     }
 
@@ -2068,15 +1918,14 @@ mod tests {
                 },
             ],
             Ok(()),
+            super::process_instruction,
         );
         #[allow(deprecated)]
         let new_recent_blockhashes_account =
             solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
                 vec![].into_iter(),
             );
-        mock_process_instruction(
-            &system_program::id(),
-            Vec::new(),
+        process_instruction(
             &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             vec![
                 (nonce_address, accounts[0].clone()),

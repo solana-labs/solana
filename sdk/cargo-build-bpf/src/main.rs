@@ -710,7 +710,7 @@ fn main() {
         }
     }
 
-    let bpf_tools_version = "v1.21";
+    let bpf_tools_version = "v1.23";
     let version = format!("{}\nbpf-tools {}", crate_version!(), bpf_tools_version);
     let matches = App::new(crate_name!())
         .about(crate_description!())
