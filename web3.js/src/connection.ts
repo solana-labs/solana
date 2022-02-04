@@ -99,6 +99,8 @@ export type SendOptions = {
   skipPreflight?: boolean;
   /** preflight commitment level */
   preflightCommitment?: Commitment;
+  /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
+  maxRetries?: number;
 };
 
 /**
@@ -111,6 +113,8 @@ export type ConfirmOptions = {
   commitment?: Commitment;
   /** preflight commitment level */
   preflightCommitment?: Commitment;
+  /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
+  maxRetries?: number;
 };
 
 /**
@@ -3931,6 +3935,9 @@ export class Connection {
     const preflightCommitment =
       (options && options.preflightCommitment) || this.commitment;
 
+    if (options && options.maxRetries) {
+      config.maxRetries = options.maxRetries;
+    }
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
     }
@@ -4103,7 +4110,16 @@ export class Connection {
         this._rpcWebSocketConnected = false;
         this._rpcWebSocketIdleTimeout = setTimeout(() => {
           this._rpcWebSocketIdleTimeout = null;
-          this._rpcWebSocket.close();
+          try {
+            this._rpcWebSocket.close();
+          } catch (err) {
+            // swallow error if socket has already been closed.
+            if (err instanceof Error) {
+              console.log(
+                `Error when closing socket connection: ${err.message}`,
+              );
+            }
+          }
         }, 500);
       }
       return;

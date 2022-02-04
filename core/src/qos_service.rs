@@ -124,15 +124,17 @@ impl QosService {
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
         transactions_costs: impl Iterator<Item = &'a TransactionCost>,
         bank: &Arc<Bank>,
-    ) -> Vec<transaction::Result<()>> {
+    ) -> (Vec<transaction::Result<()>>, usize) {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        let mut num_included = 0;
         let select_results = transactions
             .zip(transactions_costs)
             .map(|(tx, cost)| match cost_tracker.try_add(tx, cost) {
                 Ok(current_block_cost) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
                     self.metrics.selected_txs_count.fetch_add(1, Ordering::Relaxed);
+                    num_included += 1;
                     Ok(())
                 },
                 Err(e) => {
@@ -162,7 +164,7 @@ impl QosService {
         self.metrics
             .cost_tracking_time
             .fetch_add(cost_tracking_time.as_us(), Ordering::Relaxed);
-        select_results
+        (select_results, num_included)
     }
 
     // metrics are reported by bank slot
@@ -542,7 +544,9 @@ mod tests {
         bank.write_cost_tracker()
             .unwrap()
             .set_limits(cost_limit, cost_limit, cost_limit);
-        let results = qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
+        let (results, num_selected) =
+            qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
+        assert_eq!(num_selected, 2);
 
         // verify that first transfer tx and first vote are allowed
         assert_eq!(results.len(), txs.len());

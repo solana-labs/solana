@@ -617,7 +617,7 @@ fn main() {
             enable_rpc_transaction_history: true,
             enable_cpi_and_log_storage: true,
             faucet_addr,
-            ..JsonRpcConfig::default()
+            ..JsonRpcConfig::default_for_test()
         })
         .pubsub_config(PubSubConfig {
             enable_vote_subscription,

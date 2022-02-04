@@ -11,15 +11,24 @@ edition = "2021"
 
 [dependencies]
 crossbeam-channel = "0.5"
+futures-util = "0.3.19"
 histogram = "0.6.9"
 itertools = "0.10.3"
+libc = "0.2.115"
 log = "0.4.14"
+nix = "0.23.1"
+quinn = "0.8.0"
+rand = "0.7.0"
+rcgen = "0.8.14"
+rustls = { version = "0.20.2", features = ["dangerous_configuration"] }
+pem = "1.0.2"
+pkcs8 = { version = "0.8.0", features = ["alloc"] }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
 solana-sdk = { path = "../sdk", version = "=1.10.0" }
-thiserror = "1.0"
-libc = "0.2.115"
-nix = "0.23.1"
 solana-perf = { path = "../perf", version = "=1.10.0" }
+thiserror = "1.0"
+tokio = { version = "1", features = ["full"] }
+
 
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.10.0" }

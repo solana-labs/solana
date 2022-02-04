@@ -576,7 +576,15 @@ pub fn main() {
             Arg::with_name("minimal_rpc_api")
                 .long("--minimal-rpc-api")
                 .takes_value(false)
+                .hidden(true)
                 .help("Only expose the RPC methods required to serve snapshots to other nodes"),
+        )
+        .arg(
+            Arg::with_name("full_rpc_api")
+                .long("--full-rpc-api")
+                .conflicts_with("minimal_rpc_api")
+                .takes_value(false)
+                .help("Expose RPC methods for querying chain state and transaction history"),
         )
         .arg(
             Arg::with_name("obsolete_v1_7_rpc_api")
@@ -2123,6 +2131,10 @@ pub fn main() {
         None
     };
 
+    if matches.is_present("minimal_rpc_api") {
+        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2144,7 +2156,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            minimal_api: matches.is_present("minimal_rpc_api"),
+            full_api: matches.is_present("full_rpc_api"),
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,

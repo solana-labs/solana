@@ -23,6 +23,7 @@ use {
         invoke_context::{ComputeMeter, Executor, InvokeContext},
         log_collector::LogCollector,
         stable_log,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
@@ -38,22 +39,19 @@ use {
         account_utils::State,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Clock,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, do_support_realloc, reduce_required_deploy_balance,
-            reject_all_elf_rw, reject_deployment_of_unresolved_syscalls,
-            reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
-            start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
+            cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
+            disable_bpf_unresolved_symbols_at_runtime, do_support_realloc,
+            reduce_required_deploy_balance, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
-        keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         program_error::ACCOUNTS_DATA_BUDGET_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        rent::Rent,
         saturating_add_assign,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     },
@@ -127,23 +125,14 @@ pub fn create_executor(
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
-        reject_unresolved_syscalls: reject_deployment_of_broken_elfs
+        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
             && invoke_context
                 .feature_set
-                .is_active(&reject_deployment_of_unresolved_syscalls::id()),
-        reject_section_virtual_address_file_offset_mismatch: reject_deployment_of_broken_elfs
-            && invoke_context
-                .feature_set
-                .is_active(&reject_section_virtual_address_file_offset_mismatch::id()),
-        verify_mul64_imm_nonzero: !invoke_context
+                .is_active(&disable_bpf_deprecated_load_instructions::id()),
+        disable_unresolved_symbols_at_runtime: invoke_context
             .feature_set
-            .is_active(&stop_verify_mul64_imm_nonzero::id()),
-        verify_shift32_imm: invoke_context
-            .feature_set
-            .is_active(&start_verify_shift32_imm::id()),
-        reject_all_writable_sections: invoke_context
-            .feature_set
-            .is_active(&reject_all_elf_rw::id()),
+            .is_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
+        reject_broken_elfs: reject_deployment_of_broken_elfs,
         ..Config::default()
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
@@ -308,7 +297,7 @@ fn process_instruction_common(
     if program.executable()? {
         debug_assert_eq!(
             first_instruction_account,
-            1 - (invoke_context.invoke_depth() > 1) as usize,
+            1 - (invoke_context.get_stack_height() > 1) as usize,
         );
 
         if !check_loader_id(&program.owner()?) {
@@ -460,14 +449,14 @@ fn process_loader_upgradeable_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?;
-            let rent = from_keyed_account::<Rent>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 4,
-            )?)?;
-            let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 5,
-            )?)?;
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
+                invoke_context,
+            )?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 5)?,
+                invoke_context,
+            )?;
             let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 7)?;
             let upgrade_authority_address = Some(*authority.unsigned_key());
             let upgrade_authority_signer = authority.signer_key().is_none();
@@ -614,14 +603,14 @@ fn process_loader_upgradeable_instruction(
             let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
-            let rent = from_keyed_account::<Rent>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 4,
-            )?)?;
-            let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 5,
-            )?)?;
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
+                invoke_context,
+            )?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 5)?,
+                invoke_context,
+            )?;
             let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 6)?;
 
             // Verify Program account
@@ -1046,7 +1035,7 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
-        let invoke_depth = invoke_context.invoke_depth();
+        let stack_height = invoke_context.get_stack_height();
 
         let mut serialize_time = Measure::start("serialize");
         let program_id = *invoke_context.transaction_context.get_program_key()?;
@@ -1075,7 +1064,7 @@ impl Executor for BpfExecutor {
             create_vm_time.stop();
 
             execute_time = Measure::start("execute");
-            stable_log::program_invoke(&log_collector, &program_id, invoke_depth);
+            stable_log::program_invoke(&log_collector, &program_id, stack_height);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
             let result = if use_jit {
@@ -2588,7 +2577,7 @@ mod tests {
         let mut elf_new = Vec::new();
         file.read_to_end(&mut elf_new).unwrap();
         assert_ne!(elf_orig.len(), elf_new.len());
-        let slot = 42;
+        const SLOT: u64 = 42;
         let buffer_address = Pubkey::new_unique();
         let upgrade_authority_address = Pubkey::new_unique();
 
@@ -2596,7 +2585,6 @@ mod tests {
             buffer_address: &Pubkey,
             buffer_authority: &Pubkey,
             upgrade_authority_address: &Pubkey,
-            slot: u64,
             elf_orig: &[u8],
             elf_new: &[u8],
         ) -> (Vec<(Pubkey, AccountSharedData)>, Vec<AccountMeta>) {
@@ -2631,7 +2619,7 @@ mod tests {
             );
             programdata_account
                 .set_state(&UpgradeableLoaderState::ProgramData {
-                    slot,
+                    slot: SLOT,
                     upgrade_authority_address: Some(*upgrade_authority_address),
                 })
                 .unwrap();
@@ -2649,7 +2637,7 @@ mod tests {
             let spill_account = AccountSharedData::new(0, 0, &Pubkey::new_unique());
             let rent_account = create_account_for_test(&rent);
             let clock_account = create_account_for_test(&Clock {
-                slot,
+                slot: SLOT,
                 ..Clock::default()
             });
             let upgrade_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
@@ -2725,7 +2713,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2740,7 +2727,7 @@ mod tests {
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
-                slot,
+                slot: SLOT,
                 upgrade_authority_address: Some(upgrade_authority_address)
             }
         );
@@ -2758,14 +2745,13 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
         transaction_accounts[0]
             .1
             .set_state(&UpgradeableLoaderState::ProgramData {
-                slot,
+                slot: SLOT,
                 upgrade_authority_address: None,
             })
             .unwrap();
@@ -2780,7 +2766,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2798,7 +2783,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2814,7 +2798,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2830,7 +2813,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2846,7 +2828,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2862,7 +2843,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2881,7 +2861,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2899,7 +2878,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2918,7 +2896,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2944,7 +2921,6 @@ mod tests {
             &buffer_address,
             &upgrade_authority_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2966,7 +2942,6 @@ mod tests {
             &buffer_address,
             &buffer_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -2981,7 +2956,6 @@ mod tests {
             &buffer_address,
             &buffer_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
@@ -3002,14 +2976,13 @@ mod tests {
             &buffer_address,
             &buffer_address,
             &upgrade_authority_address,
-            slot,
             &elf_orig,
             &elf_new,
         );
         transaction_accounts[0]
             .1
             .set_state(&UpgradeableLoaderState::ProgramData {
-                slot,
+                slot: SLOT,
                 upgrade_authority_address: None,
             })
             .unwrap();

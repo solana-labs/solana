@@ -102,7 +102,11 @@ pub fn builtin_process_instruction(
 
     let log_collector = invoke_context.get_log_collector();
     let program_id = transaction_context.get_program_key()?;
-    stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
+    stable_log::program_invoke(
+        &log_collector,
+        program_id,
+        invoke_context.get_stack_height(),
+    );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
     let deduplicated_indices: HashSet<usize> = indices_in_instruction.clone().collect();
@@ -174,8 +178,8 @@ pub fn builtin_process_instruction(
         let mut borrowed_account =
             instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
         if borrowed_account.is_writable() {
-            borrowed_account.set_lamports(lamports)?;
-            borrowed_account.set_data(&data)?;
+            borrowed_account.set_lamports(lamports);
+            borrowed_account.set_data(&data);
         }
     }
 
@@ -251,7 +255,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         stable_log::program_invoke(
             &log_collector,
             &instruction.program_id,
-            invoke_context.invoke_depth(),
+            invoke_context.get_stack_height(),
         );
 
         let signers = signers_seeds
@@ -267,7 +271,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         for instruction_account in instruction_accounts.iter() {
             let account_key = invoke_context
                 .transaction_context
-                .get_key_of_account_at_index(instruction_account.index_in_transaction);
+                .get_key_of_account_at_index(instruction_account.index_in_transaction)
+                .unwrap();
             let account_info_index = account_infos
                 .iter()
                 .position(|account_info| account_info.unsigned_key() == account_key)
@@ -277,6 +282,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let mut account = invoke_context
                 .transaction_context
                 .get_account_at_index(instruction_account.index_in_transaction)
+                .unwrap()
                 .borrow_mut();
             account.copy_into_owner_from_slice(account_info.owner.as_ref());
             account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
@@ -305,6 +311,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow_mut();
             let account_info = &account_infos[account_info_index];
             **account_info.try_borrow_mut_lamports().unwrap() = account.lamports();
@@ -417,7 +424,8 @@ fn setup_fees(bank: Bank) -> Bank {
         &[],     // transactions
         &mut [], // loaded accounts
         vec![],  // transaction execution results
-        0,       // tx count
+        0,       // executed tx count
+        0,       // executed with failure output tx count
         1,       // signature count
         &mut ExecuteTimings::default(),
     );

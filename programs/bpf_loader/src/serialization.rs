@@ -493,6 +493,7 @@ mod tests {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow();
             assert_eq!(account.lamports(), account_info.lamports());
             assert_eq!(account.data(), &account_info.data.borrow()[..]);
@@ -518,6 +519,7 @@ mod tests {
             let mut account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow_mut();
             account.set_lamports(0);
             account.set_data(vec![0; 0]);
@@ -536,6 +538,7 @@ mod tests {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow();
             assert_eq!(&*account, original_account);
         }
@@ -567,6 +570,7 @@ mod tests {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow();
             assert_eq!(account.lamports(), account_info.lamports());
             assert_eq!(account.data(), &account_info.data.borrow()[..]);
@@ -579,6 +583,7 @@ mod tests {
             let mut account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow_mut();
             account.set_lamports(0);
             account.set_data(vec![0; 0]);
@@ -596,6 +601,7 @@ mod tests {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
+                .unwrap()
                 .borrow();
             assert_eq!(&*account, original_account);
         }

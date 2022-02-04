@@ -211,10 +211,7 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
             enable_instruction_tracing: true,
-            reject_unresolved_syscalls: true,
-            reject_section_virtual_address_file_offset_mismatch: true,
-            verify_mul64_imm_nonzero: false,
-            verify_shift32_imm: true,
+            reject_broken_elfs: true,
             ..Config::default()
         };
         let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
@@ -1414,7 +1411,7 @@ fn assert_instruction_count() {
             ("sanity", 2378),
             ("sanity++", 2278),
             ("secp256k1_recover", 25383),
-            ("sha", 1895),
+            ("sha", 1328),
             ("struct_pass", 108),
             ("struct_ret", 122),
         ]);
@@ -1423,20 +1420,20 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-            ("solana_bpf_rust_alloc", 7388),
-            ("solana_bpf_rust_custom_heap", 536),
-            ("solana_bpf_rust_dep_crate", 47),
-            ("solana_bpf_rust_external_spend", 507),
-            ("solana_bpf_rust_iter", 824),
+            ("solana_bpf_rust_alloc", 4559),
+            ("solana_bpf_rust_custom_heap", 458),
+            ("solana_bpf_rust_dep_crate", 2),
+            ("solana_bpf_rust_external_spend", 327),
+            ("solana_bpf_rust_iter", 108),
             ("solana_bpf_rust_many_args", 1289),
-            ("solana_bpf_rust_mem", 5997),
-            ("solana_bpf_rust_membuiltins", 3976),
-            ("solana_bpf_rust_noop", 481),
+            ("solana_bpf_rust_mem", 2217),
+            ("solana_bpf_rust_membuiltins", 1705),
+            ("solana_bpf_rust_noop", 315),
             ("solana_bpf_rust_param_passing", 146),
-            ("solana_bpf_rust_rand", 488),
+            ("solana_bpf_rust_rand", 418),
             ("solana_bpf_rust_sanity", 9128),
-            ("solana_bpf_rust_secp256k1_recover", 25889),
-            ("solana_bpf_rust_sha", 30692),
+            ("solana_bpf_rust_secp256k1_recover", 25707),
+            ("solana_bpf_rust_sha", 26467),
         ]);
     }
 
@@ -3342,4 +3339,80 @@ fn test_program_bpf_realloc_invoke() {
             .unwrap(),
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
+}
+
+#[test]
+#[cfg(any(feature = "bpf_rust"))]
+fn test_program_bpf_processed_inner_instruction() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let sibling_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_sibling_instructions",
+    );
+    let sibling_inner_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_sibling_inner_instructions",
+    );
+    let noop_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
+    let invoke_and_return_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_return",
+    );
+
+    let instruction2 = Instruction::new_with_bytes(
+        noop_program_id,
+        &[43],
+        vec![
+            AccountMeta::new_readonly(noop_program_id, false),
+            AccountMeta::new(mint_keypair.pubkey(), true),
+        ],
+    );
+    let instruction1 = Instruction::new_with_bytes(
+        noop_program_id,
+        &[42],
+        vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new_readonly(noop_program_id, false),
+        ],
+    );
+    let instruction0 = Instruction::new_with_bytes(
+        sibling_program_id,
+        &[1, 2, 3, 0, 4, 5, 6],
+        vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new_readonly(noop_program_id, false),
+            AccountMeta::new_readonly(invoke_and_return_program_id, false),
+            AccountMeta::new_readonly(sibling_inner_program_id, false),
+        ],
+    );
+    let message = Message::new(
+        &[instruction2, instruction1, instruction0],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair], message)
+        .is_ok());
 }

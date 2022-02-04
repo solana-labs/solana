@@ -6,18 +6,20 @@ pub use solana_sdk::stake::instruction::*;
 use {
     crate::{config, stake_state::StakeAccount},
     log::*,
-    solana_program_runtime::invoke_context::InvokeContext,
+    solana_program_runtime::{
+        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+    },
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
-        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
+        keyed_account::{get_signers, keyed_account_at_index},
         program_utils::limited_deserialize,
         stake::{
             instruction::StakeInstruction,
             program::id,
             state::{Authorized, Lockup},
         },
-        sysvar::{clock::Clock, rent::Rent, stake_history::StakeHistory},
+        sysvar::clock::Clock,
     },
 };
 
@@ -38,24 +40,23 @@ pub fn process_instruction(
 
     let signers = get_signers(&keyed_accounts[first_instruction_account..]);
     match limited_deserialize(data)? {
-        StakeInstruction::Initialize(authorized, lockup) => me.initialize(
-            &authorized,
-            &lockup,
-            &from_keyed_account::<Rent>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 1,
-            )?)?,
-        ),
+        StakeInstruction::Initialize(authorized, lockup) => {
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            me.initialize(&authorized, &lockup, &rent)
+        }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
 
             if require_custodian_for_locked_stake_authorize {
-                let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 1,
-                )?)?;
+                let clock = get_sysvar_with_account_check::clock(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                    invoke_context,
+                )?;
                 let _current_authority =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
                 let custodian =
@@ -90,10 +91,10 @@ pub fn process_instruction(
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
 
             if require_custodian_for_locked_stake_authorize {
-                let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?;
+                let clock = get_sysvar_with_account_check::clock(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                    invoke_context,
+                )?;
                 let custodian =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 3)
                         .ok()
@@ -124,17 +125,18 @@ pub fn process_instruction(
         }
         StakeInstruction::DelegateStake => {
             let vote = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            let stake_history = get_sysvar_with_account_check::stake_history(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
+                invoke_context,
+            )?;
             me.delegate(
                 vote,
-                &from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?,
-                &from_keyed_account::<StakeHistory>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 3,
-                )?)?,
+                &clock,
+                &stake_history,
                 &config::from_keyed_account(keyed_account_at_index(
                     keyed_accounts,
                     first_instruction_account + 4,
@@ -150,44 +152,48 @@ pub fn process_instruction(
         StakeInstruction::Merge => {
             let source_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            let stake_history = get_sysvar_with_account_check::stake_history(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
+                invoke_context,
+            )?;
             me.merge(
                 invoke_context,
                 source_stake,
-                &from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?,
-                &from_keyed_account::<StakeHistory>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 3,
-                )?)?,
+                &clock,
+                &stake_history,
                 &signers,
             )
         }
         StakeInstruction::Withdraw(lamports) => {
             let to = &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            let stake_history = get_sysvar_with_account_check::stake_history(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
+                invoke_context,
+            )?;
             me.withdraw(
                 lamports,
                 to,
-                &from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?,
-                &from_keyed_account::<StakeHistory>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 3,
-                )?)?,
+                &clock,
+                &stake_history,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 5).ok(),
             )
         }
-        StakeInstruction::Deactivate => me.deactivate(
-            &from_keyed_account::<Clock>(keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + 1,
-            )?)?,
-            &signers,
-        ),
+        StakeInstruction::Deactivate => {
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            me.deactivate(&clock, &signers)
+        }
         StakeInstruction::SetLockup(lockup) => {
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
             me.set_lockup(&lockup, &signers, &clock)
@@ -208,14 +214,11 @@ pub fn process_instruction(
                     .ok_or(InstructionError::MissingRequiredSignature)?,
                 };
 
-                me.initialize(
-                    &authorized,
-                    &Lockup::default(),
-                    &from_keyed_account::<Rent>(keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account + 1,
-                    )?)?,
-                )
+                let rent = get_sysvar_with_account_check::rent(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                    invoke_context,
+                )?;
+                me.initialize(&authorized, &Lockup::default(), &rent)
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
@@ -225,10 +228,10 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 1,
-                )?)?;
+                let clock = get_sysvar_with_account_check::clock(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                    invoke_context,
+                )?;
                 let _current_authority =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
                 let authorized_pubkey =
@@ -259,10 +262,10 @@ pub fn process_instruction(
             {
                 let authority_base =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-                let clock = from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?;
+                let clock = get_sysvar_with_account_check::clock(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                    invoke_context,
+                )?;
                 let authorized_pubkey =
                     &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
                         .signer_key()
@@ -323,10 +326,7 @@ mod tests {
         super::*,
         crate::stake_state::{Meta, StakeState},
         bincode::serialize,
-        solana_program_runtime::{
-            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
-            sysvar_cache::SysvarCache,
-        },
+        solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{self, AccountSharedData},
             instruction::{AccountMeta, Instruction},
@@ -339,7 +339,7 @@ mod tests {
             },
             sysvar::{self, stake_history::StakeHistory},
         },
-        std::str::FromStr,
+        std::{collections::HashSet, str::FromStr},
     };
 
     fn create_default_account() -> AccountSharedData {
@@ -387,31 +387,36 @@ mod tests {
         instruction: &Instruction,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
-        let transaction_accounts = instruction
+        let mut pubkeys: HashSet<Pubkey> = instruction
             .accounts
             .iter()
-            .map(|meta| {
+            .map(|meta| meta.pubkey)
+            .collect();
+        pubkeys.insert(sysvar::clock::id());
+        let transaction_accounts = pubkeys
+            .iter()
+            .map(|pubkey| {
                 (
-                    meta.pubkey,
-                    if sysvar::clock::check_id(&meta.pubkey) {
+                    *pubkey,
+                    if sysvar::clock::check_id(pubkey) {
                         account::create_account_shared_data_for_test(
                             &sysvar::clock::Clock::default(),
                         )
-                    } else if sysvar::rewards::check_id(&meta.pubkey) {
+                    } else if sysvar::rewards::check_id(pubkey) {
                         account::create_account_shared_data_for_test(
                             &sysvar::rewards::Rewards::new(0.0),
                         )
-                    } else if sysvar::stake_history::check_id(&meta.pubkey) {
+                    } else if sysvar::stake_history::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&StakeHistory::default())
-                    } else if stake_config::check_id(&meta.pubkey) {
+                    } else if stake_config::check_id(pubkey) {
                         config::create_account(0, &stake_config::Config::default())
-                    } else if sysvar::rent::check_id(&meta.pubkey) {
+                    } else if sysvar::rent::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Rent::default())
-                    } else if meta.pubkey == invalid_stake_state_pubkey() {
+                    } else if *pubkey == invalid_stake_state_pubkey() {
                         AccountSharedData::new(0, 0, &id())
-                    } else if meta.pubkey == invalid_vote_state_pubkey() {
+                    } else if *pubkey == invalid_vote_state_pubkey() {
                         AccountSharedData::new(0, 0, &solana_vote_program::id())
-                    } else if meta.pubkey == spoofed_stake_state_pubkey() {
+                    } else if *pubkey == spoofed_stake_state_pubkey() {
                         AccountSharedData::new(0, 0, &spoofed_stake_program_id())
                     } else {
                         AccountSharedData::new(0, 0, &id())
@@ -419,17 +424,11 @@ mod tests {
                 )
             })
             .collect();
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(Clock::default());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
+        process_instruction(
             &instruction.data,
             transaction_accounts,
             instruction.accounts.clone(),
             expected_result,
-            &sysvar_cache,
-            super::process_instruction,
         )
     }
 
@@ -657,32 +656,6 @@ mod tests {
                 is_writable: false,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-        );
-
-        // rent fails to deserialize
-        process_instruction(
-            &serialize(&StakeInstruction::Initialize(
-                Authorized::default(),
-                Lockup::default(),
-            ))
-            .unwrap(),
-            vec![
-                (stake_address, stake_account.clone()),
-                (rent_address, create_default_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: stake_address,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: rent_address,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
-            Err(InstructionError::InvalidArgument),
         );
 
         // fails to deserialize stake state
@@ -1116,7 +1089,7 @@ mod tests {
             vec![
                 (address_with_seed, stake_account),
                 (authorized_owner, authorized_account),
-                (clock_address, clock_account),
+                (clock_address, clock_account.clone()),
                 (withdrawer, new_authorized_account),
             ],
             vec![
@@ -1169,13 +1142,10 @@ mod tests {
         )
         .unwrap();
 
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(Clock::default());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
+        process_instruction(
             &instruction.data,
             vec![
+                (clock_address, clock_account),
                 (stake_address, stake_account),
                 (withdrawer, withdrawer_account),
                 (custodian, custodian_account),
@@ -1198,8 +1168,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            &sysvar_cache,
-            super::process_instruction,
         );
     }
 }

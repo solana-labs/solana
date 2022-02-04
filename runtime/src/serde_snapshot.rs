@@ -42,15 +42,13 @@ use {
         },
         thread::Builder,
     },
+    storage::{SerializableStorage, SerializedAppendVecId},
 };
 
-mod common;
 mod newer;
 mod storage;
 mod tests;
 mod utils;
-
-use storage::{SerializableStorage, SerializedAppendVecId};
 
 // a number of test cases in accounts_db use this
 #[cfg(test)]
