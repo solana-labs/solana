@@ -22,7 +22,7 @@ solana-measure = { path = "../../measure", version = "=1.8.17" }
 solana-metrics = { path = "../../metrics", version = "=1.8.17" }
 solana-runtime = { path = "../../runtime", version = "=1.8.17" }
 solana-sdk = { path = "../../sdk", version = "=1.8.17" }
-solana_rbpf = "=0.2.21"
+solana_rbpf = "=0.2.22"
 thiserror = "1.0"
 
 [dev-dependencies]

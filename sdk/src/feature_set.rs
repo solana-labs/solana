@@ -165,14 +165,6 @@ pub mod libsecp256k1_0_5_upgrade_enabled {
     solana_sdk::declare_id!("DhsYfRjxfnh2g7HKJYSzT79r74Afa1wbHkAgHndrA1oy");
 }
 
-pub mod stop_verify_mul64_imm_nonzero {
-    solana_sdk::declare_id!("EHFwHg2vhwUb7ifm7BuY9RMbsyt1rS1rUii7yeDJtGnN");
-}
-
-pub mod start_verify_shift32_imm {
-    solana_sdk::declare_id!("CqvdhqAYMc6Eq6tjW3H42Qg39TK2SCsL8ydMsC363PRp");
-}
-
 pub mod merge_nonce_error_into_system_error {
     solana_sdk::declare_id!("21AWDosvp3pBamFW91KB35pNoaoZVTM7ess8nr2nt53B");
 }
@@ -261,18 +253,6 @@ pub mod add_compute_budget_program {
     solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
 }
 
-pub mod reject_deployment_of_unresolved_syscalls {
-    solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
-}
-
-pub mod reject_section_virtual_address_file_offset_mismatch {
-    solana_sdk::declare_id!("5N4NikcJLEiZNqwndhNyvZw15LvFXp1oF7AJQTNTZY5k");
-}
-
-pub mod reject_all_elf_rw {
-    solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
-}
-
 pub mod spl_token_v3_3_0_release {
     solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
 }
@@ -299,6 +279,14 @@ pub mod bank_tranaction_count_fix {
 
 pub mod update_syscall_base_costs {
     solana_sdk::declare_id!("2h63t332mGCCsWK2nqqqHhN4U9ayyqhLVFvczznHDoTZ");
+}
+
+pub mod disable_bpf_deprecated_load_instructions {
+    solana_sdk::declare_id!("3XgNukcZWf9o3HdA3fpJbm94XFc4qpvTXc8h1wxYwiPi");
+}
+
+pub mod disable_bpf_unresolved_symbols_at_runtime {
+    solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
 }
 
 lazy_static! {
@@ -342,8 +330,6 @@ lazy_static! {
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
-        (stop_verify_mul64_imm_nonzero::id(), "Sets rbpf vm config verify_mul64_imm_nonzero to false"),
-        (start_verify_shift32_imm::id(), "sets rbpf vm config verify_shift32_imm to true"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
@@ -366,9 +352,6 @@ lazy_static! {
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
-        (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
-        (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
-        (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
@@ -376,6 +359,8 @@ lazy_static! {
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
         (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
         (update_syscall_base_costs::id(), "Update syscall base costs"),
+        (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
+        (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
