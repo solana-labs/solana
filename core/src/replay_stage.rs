@@ -4412,7 +4412,7 @@ pub mod tests {
         // runs in `update_propagation_status`
         assert!(!progress_map.is_propagated(10));
 
-        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        let vote_tracker = VoteTracker::default();
         vote_tracker.insert_vote(10, vote_pubkey);
         ReplayStage::update_propagation_status(
             &mut progress_map,
@@ -4497,7 +4497,7 @@ pub mod tests {
             );
         }
 
-        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        let vote_tracker = VoteTracker::default();
         for vote_pubkey in &vote_pubkeys {
             // Insert a vote for the last bank for each voter
             vote_tracker.insert_vote(10, *vote_pubkey);
@@ -4584,7 +4584,7 @@ pub mod tests {
             progress_map.insert(i, fork_progress);
         }
 
-        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        let vote_tracker = VoteTracker::default();
         // Insert a new vote
         vote_tracker.insert_vote(10, vote_pubkeys[2]);
 
