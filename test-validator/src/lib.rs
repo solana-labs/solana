@@ -557,12 +557,15 @@ impl TestValidator {
                 match genesis_config.accounts.remove(deactivate_feature_pk) {
                     Some(_) => info!("Feature for {:?} deactivated", deactivate_feature_pk),
                     None => warn!(
-                        "{:?} account not found in genesis_config",
+                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
                         deactivate_feature_pk
                     ),
                 }
             } else {
-                warn!("{:?} is not a feature public key", deactivate_feature_pk);
+                warn!(
+                    "Feature {:?} set for deactivation is not a known Feature public key",
+                    deactivate_feature_pk
+                );
             }
         }
 
