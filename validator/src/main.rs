@@ -792,10 +792,11 @@ pub fn main() {
                        download from other validators"),
         )
         .arg(
-            Arg::with_name("incremental_snapshots")
-                .long("incremental-snapshots")
+            Arg::with_name("no_incremental_snapshots")
+                .long("no-incremental-snapshots")
                 .takes_value(false)
-                .long_help("Enable incremental snapshots by setting this flag. \
+                .help("Disable incremental snapshots")
+                .long_help("Disable incremental snapshots by setting this flag. \
                    When enabled, --snapshot-interval-slots will set the \
                    incremental snapshot interval. To set the full snapshot \
                    interval, use --full-snapshot-interval-slots.")
@@ -1910,7 +1911,7 @@ pub fn main() {
             "max_genesis_archive_unpacked_size",
             u64
         ),
-        incremental_snapshot_fetch: matches.is_present("incremental_snapshots"),
+        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots"),
     };
 
     let private_rpc = matches.is_present("private_rpc");
@@ -2373,7 +2374,7 @@ pub fn main() {
         value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);
     let (full_snapshot_archive_interval_slots, incremental_snapshot_archive_interval_slots) =
         if incremental_snapshot_interval_slots > 0 {
-            if matches.is_present("incremental_snapshots") {
+            if !matches.is_present("no_incremental_snapshots") {
                 (
                     value_t_or_exit!(matches, "full_snapshot_interval_slots", u64),
                     incremental_snapshot_interval_slots,
