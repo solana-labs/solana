@@ -203,8 +203,11 @@ pub mod columns {
 }
 
 pub enum AccessType {
+    /// Primary (read/write) access only; fails if Primary access already open
     PrimaryOnly,
-    PrimaryOnlyForMaintenance, // this indicates no compaction
+    /// Primary (read/write) access only but disable compaction
+    PrimaryOnlyForMaintenance,
+    /// Primary (read) access or fall back on Secondary (read) access if needed
     TryPrimaryThenSecondary,
 }
 
@@ -330,7 +333,13 @@ impl Rocks {
                 oldest_slot,
             ),
             AccessType::TryPrimaryThenSecondary => {
-                match DB::open_cf_descriptors(&db_options, path, cfs) {
+                let error_if_log_file_exist = false;
+                match DB::open_cf_for_read_only(
+                    &db_options,
+                    path,
+                    cf_names.clone(),
+                    error_if_log_file_exist,
+                ) {
                     Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot),
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
