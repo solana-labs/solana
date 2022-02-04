@@ -186,7 +186,7 @@ fn output_slot(
                 println!(" Slot Meta {:?}", meta);
             } else {
                 println!(
-                    " num_shreds: {} parent_slot: {} num_entries: {}",
+                    " num_shreds: {} parent_slot: {:?} num_entries: {}",
                     num_shreds,
                     meta.parent_slot,
                     entries.len()
