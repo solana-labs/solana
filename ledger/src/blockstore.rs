@@ -13,14 +13,7 @@ use {
         entry::{create_ticks, Entry},
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-<<<<<<< HEAD
-        shred::{Result as ShredResult, Shred, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
-=======
-        shred::{
-            max_ticks_per_n_shreds, Result as ShredResult, Shred, ShredId, ShredType, Shredder,
-            SHRED_PAYLOAD_SIZE,
-        },
->>>>>>> 4ceb2689f (adds ShredId uniquely identifying each shred (#21820))
+        shred::{Result as ShredResult, Shred, ShredId, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
     },
     bincode::deserialize,
     log::*,
@@ -5576,7 +5569,6 @@ pub mod tests {
             let coding_shred =
                 Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
-<<<<<<< HEAD
             let mut erasure_metas = HashMap::new();
             let mut index_working_set = HashMap::new();
             let mut just_received_coding_shreds = HashMap::new();
@@ -5616,46 +5608,6 @@ pub mod tests {
             ));
             assert_eq!(counter.load(Ordering::Relaxed), 1);
         }
-=======
-        let mut erasure_metas = HashMap::new();
-        let mut index_working_set = HashMap::new();
-        let mut just_received_shreds = HashMap::new();
-        let mut write_batch = blockstore.db.batch().unwrap();
-        let mut index_meta_time = 0;
-        assert!(blockstore.check_insert_coding_shred(
-            coding_shred.clone(),
-            &mut erasure_metas,
-            &mut index_working_set,
-            &mut write_batch,
-            &mut just_received_shreds,
-            &mut index_meta_time,
-            &|_shred| {
-                panic!("no dupes");
-            },
-            false,
-            false,
-            &mut BlockstoreInsertionMetrics::default(),
-        ));
-
-        // insert again fails on dupe
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        let counter = AtomicUsize::new(0);
-        assert!(!blockstore.check_insert_coding_shred(
-            coding_shred,
-            &mut erasure_metas,
-            &mut index_working_set,
-            &mut write_batch,
-            &mut just_received_shreds,
-            &mut index_meta_time,
-            &|_shred| {
-                counter.fetch_add(1, Ordering::Relaxed);
-            },
-            false,
-            false,
-            &mut BlockstoreInsertionMetrics::default(),
-        ));
-        assert_eq!(counter.load(Ordering::Relaxed), 1);
->>>>>>> 4ceb2689f (adds ShredId uniquely identifying each shred (#21820))
     }
 
     #[test]
@@ -8219,43 +8171,22 @@ pub mod tests {
             // Check if shreds are duplicated
             assert_eq!(
                 blockstore.is_shred_duplicate(
-                    slot,
-                    0,
+                    ShredId::new(slot, /*index:*/ 0, duplicate_shred.shred_type()),
                     duplicate_shred.payload.clone(),
-                    duplicate_shred.shred_type()
                 ),
                 Some(shred.payload.to_vec())
             );
             assert!(blockstore
                 .is_shred_duplicate(
-                    slot,
-                    0,
+                    ShredId::new(slot, /*index:*/ 0, duplicate_shred.shred_type()),
                     non_duplicate_shred.payload,
-                    duplicate_shred.shred_type()
                 )
                 .is_none());
 
-<<<<<<< HEAD
             // Store a duplicate shred
             blockstore
                 .store_duplicate_slot(slot, shred.payload.clone(), duplicate_shred.payload.clone())
                 .unwrap();
-=======
-        // Check if shreds are duplicated
-        assert_eq!(
-            blockstore.is_shred_duplicate(
-                ShredId::new(slot, /*index:*/ 0, duplicate_shred.shred_type()),
-                duplicate_shred.payload.clone(),
-            ),
-            Some(shred.payload.to_vec())
-        );
-        assert!(blockstore
-            .is_shred_duplicate(
-                ShredId::new(slot, /*index:*/ 0, non_duplicate_shred.shred_type()),
-                non_duplicate_shred.payload,
-            )
-            .is_none());
->>>>>>> 4ceb2689f (adds ShredId uniquely identifying each shred (#21820))
 
             // Slot is now marked as duplicate
             assert!(blockstore.has_duplicate_shreds_in_slot(slot));
@@ -8724,7 +8655,6 @@ pub mod tests {
             assert_eq!(meta, expected_slot_meta);
             assert_eq!(blockstore.get_index(slot).unwrap().unwrap(), expected_index);
 
-<<<<<<< HEAD
             // Case 2: Inserting a duplicate with an even smaller last shred index should not
             // mark the slot as dead since the Slotmeta is full.
             let mut even_smaller_last_shred_duplicate =
@@ -8735,10 +8665,12 @@ pub mod tests {
                 std::u8::MAX - even_smaller_last_shred_duplicate.payload[0];
             assert!(blockstore
                 .is_shred_duplicate(
-                    slot,
-                    even_smaller_last_shred_duplicate.index(),
+                    ShredId::new(
+                        slot,
+                        even_smaller_last_shred_duplicate.index(),
+                        ShredType::Data,
+                    ),
                     even_smaller_last_shred_duplicate.payload.clone(),
-                    ShredType::Data,
                 )
                 .is_some());
             blockstore
@@ -8754,37 +8686,6 @@ pub mod tests {
                 } else {
                     assert!(blockstore.get_data_shred(slot, i).unwrap().is_none());
                 }
-=======
-        // Case 2: Inserting a duplicate with an even smaller last shred index should not
-        // mark the slot as dead since the Slotmeta is full.
-        let mut even_smaller_last_shred_duplicate = shreds[smaller_last_shred_index - 1].clone();
-        even_smaller_last_shred_duplicate.set_last_in_slot();
-        // Flip a byte to create a duplicate shred
-        even_smaller_last_shred_duplicate.payload[0] =
-            std::u8::MAX - even_smaller_last_shred_duplicate.payload[0];
-        assert!(blockstore
-            .is_shred_duplicate(
-                ShredId::new(
-                    slot,
-                    even_smaller_last_shred_duplicate.index(),
-                    ShredType::Data
-                ),
-                even_smaller_last_shred_duplicate.payload.clone(),
-            )
-            .is_some());
-        blockstore
-            .insert_shreds(vec![even_smaller_last_shred_duplicate], None, false)
-            .unwrap();
-        assert!(!blockstore.is_dead(slot));
-        for i in 0..num_shreds {
-            if i <= smaller_last_shred_index as u64 {
-                assert_eq!(
-                    blockstore.get_data_shred(slot, i).unwrap().unwrap(),
-                    shreds[i as usize].payload
-                );
-            } else {
-                assert!(blockstore.get_data_shred(slot, i).unwrap().is_none());
->>>>>>> 4ceb2689f (adds ShredId uniquely identifying each shred (#21820))
             }
             let mut meta = blockstore.meta(slot).unwrap().unwrap();
             meta.first_shred_timestamp = expected_slot_meta.first_shred_timestamp;
