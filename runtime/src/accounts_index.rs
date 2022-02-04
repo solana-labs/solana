@@ -600,6 +600,10 @@ impl RollingBitField {
         self.max_exclusive
     }
 
+    pub fn max_inclusive(&self) -> u64 {
+        self.max_exclusive.saturating_sub(1)
+    }
+
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| all.push(*slot));
@@ -615,7 +619,6 @@ impl RollingBitField {
 #[derive(Debug)]
 pub struct RootsTracker {
     roots: RollingBitField,
-    max_root_inclusive: Slot,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -633,7 +636,6 @@ impl RootsTracker {
     pub fn new(max_width: u64) -> Self {
         Self {
             roots: RollingBitField::new(max_width),
-            max_root_inclusive: 0,
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
@@ -1793,7 +1795,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let roots_tracker = &self.roots_tracker.read().unwrap();
         let newest_root_in_slot_list =
             Self::get_newest_root_in_slot_list(&roots_tracker.roots, slot_list, max_clean_root);
-        let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root_inclusive);
+        let max_clean_root = max_clean_root.unwrap_or_else(|| roots_tracker.roots.max_inclusive());
 
         slot_list.retain(|(slot, value)| {
             let should_purge =
@@ -1868,14 +1870,13 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
+        assert!(slot >= w_roots_tracker.roots.max_inclusive());
         w_roots_tracker.roots.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
         }
-        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
-        assert!(slot >= w_roots_tracker.max_root_inclusive);
-        w_roots_tracker.max_root_inclusive = slot;
     }
 
     pub fn add_uncleaned_roots<I>(&self, roots: I)
@@ -1887,7 +1888,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn max_root_inclusive(&self) -> Slot {
-        self.roots_tracker.read().unwrap().max_root_inclusive
+        self.roots_tracker.read().unwrap().roots.max_inclusive()
     }
 
     /// Remove the slot when the storage for the slot is freed
