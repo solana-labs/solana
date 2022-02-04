@@ -2045,8 +2045,8 @@ mod tests {
         // with/without 0 credit epoch, before ALBk3EWd feature activation
         {
             let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(&rent_sysvar)] {
-                for credits in [&credits_through_epoch_1, &credits_through_epoch_2] {
+            for rent_sysvar in &[None, Some(rent_sysvar)] {
+                for credits in &[&credits_through_epoch_1, &credits_through_epoch_2] {
                     let to_account = RefCell::new(AccountSharedData::default());
                     let (vote_pubkey, vote_account) =
                         create_test_account_with_epoch_credits(credits);
@@ -2058,7 +2058,7 @@ mod tests {
                         lamports,
                         &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                         &signers,
-                        rent_sysvar,
+                        rent_sysvar.as_ref(),
                         None,
                     );
                     assert_eq!(res, Ok(()));
@@ -2104,7 +2104,7 @@ mod tests {
         // without 0 credit epoch, after ALBk3EWd feature activation
         {
             let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(&rent_sysvar)] {
+            for rent_sysvar in &[None, Some(rent_sysvar)] {
                 let to_account = RefCell::new(AccountSharedData::default());
                 // let (vote_pubkey, vote_account) = create_test_account();
                 let (vote_pubkey, vote_account) =
@@ -2117,7 +2117,7 @@ mod tests {
                     lamports,
                     &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                     &signers,
-                    rent_sysvar,
+                    rent_sysvar.as_ref(),
                     Some(clock_epoch_3),
                 );
                 assert_eq!(res, Err(InstructionError::ActiveVoteAccountClose));
