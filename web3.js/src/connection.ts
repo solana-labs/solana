@@ -4112,8 +4112,13 @@ export class Connection {
           this._rpcWebSocketIdleTimeout = null;
           try {
             this._rpcWebSocket.close();
-          } catch {
+          } catch (err) {
             // swallow error if socket has already been closed.
+            if (err instanceof Error) {
+              console.log(
+                `Error when closing socket connection: ${err.message}`,
+              );
+            }
           }
         }, 500);
       }
