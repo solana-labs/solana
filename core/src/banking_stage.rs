@@ -140,7 +140,6 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // committed into the Poh stream. If so, the result tells us
     // how many such transactions were committed
     commit_transactions_result: Result<(), PohRecorderError>,
-    execute_timings: ExecuteTimings,
 }
 
 #[derive(Debug, Default)]
@@ -1001,7 +1000,6 @@ impl BankingStage {
                 executed_with_successful_result_count,
                 retryable_transaction_indexes,
                 commit_transactions_result: Err(e),
-                execute_timings,
             };
         }
         record_time.stop();
@@ -1062,7 +1060,6 @@ impl BankingStage {
             executed_with_successful_result_count,
             retryable_transaction_indexes,
             commit_transactions_result: Ok(()),
-            execute_timings,
         }
     }
 
@@ -1094,7 +1091,6 @@ impl BankingStage {
 
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
-            ref execute_timings,
             ..
         } = execute_and_commit_transactions_output;
 
@@ -1441,8 +1437,6 @@ impl BankingStage {
             cost_model_throttled_packet_indexes.len()
         );
 
-        let tx_len = transactions.len();
-
         let mut process_tx_time = Measure::start("process_tx_time");
 
         let mut process_transactions_summary = Self::process_transactions(
@@ -1538,7 +1532,7 @@ impl BankingStage {
         let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
             Self::transactions_from_packets(
                 packet_batch,
-                &transaction_indexes,
+                transaction_indexes,
                 &bank.feature_set,
                 &bank.read_cost_tracker().unwrap(),
                 banking_stage_stats,
