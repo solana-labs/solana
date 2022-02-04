@@ -897,6 +897,12 @@ impl BankingStage {
                 }
             }
 
+            let current_poh_bank = {
+                let poh = poh_recorder.lock().unwrap();
+                poh.bank_start()
+            };
+            slot_metrics_tracker.update_on_leader_slot_boundary(&current_poh_bank);
+
             let recv_timeout = if !buffered_packet_batches.is_empty() {
                 // If packets are buffered, let's wait for less time on recv from the channel.
                 // This helps detect the next leader faster, and processing the buffered
