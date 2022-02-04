@@ -2,7 +2,6 @@
 
 use {
     solana_program::{
-        incinerator,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         sysvar,
@@ -25,10 +24,7 @@ fn no_panic() {
     let transaction = Transaction::new_signed_with_payer(
         &[Instruction {
             program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(sysvar::slot_history::id(), false),
-                AccountMeta::new_readonly(incinerator::id(), false),
-            ],
+            accounts: vec![AccountMeta::new_readonly(sysvar::slot_history::id(), false)],
             data: vec![],
         }],
         Some(&payer.pubkey()),

@@ -19,9 +19,7 @@ pub fn process_instruction(
     _instruction_data: &[u8],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
-
     let slot_account = next_account_info(account_info_iter)?;
-    let incinerator_account = next_account_info(account_info_iter)?;
 
     // Slot is an u64 at the end of the structure
     let data = slot_account.data.borrow();
@@ -37,11 +35,5 @@ pub fn process_instruction(
         panic!("Simulation");
     }
 
-    msg!("incinerator balance: {:?}", incinerator_account.lamports());
-    if incinerator_account.lamports() > 0 {
-        panic!("Incinerator has lamports!");
-    } else {
-        msg!("Incinerator empty");
-    }
     Ok(())
 }
