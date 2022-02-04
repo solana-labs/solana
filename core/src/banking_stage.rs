@@ -525,20 +525,6 @@ impl BankingStage {
         Ok(())
     }
 
-    // Returns whether the given `PacketBatch` has any more remaining unprocessed
-    // transactions
-    fn update_buffered_packets_with_new_unprocessed(
-        original_unprocessed_indexes: &mut Vec<usize>,
-        new_unprocessed_indexes: Vec<usize>,
-    ) -> bool {
-        let has_more_unprocessed_transactions =
-            Self::packet_has_more_unprocessed_transactions(&new_unprocessed_indexes);
-        if has_more_unprocessed_transactions {
-            *original_unprocessed_indexes = new_unprocessed_indexes
-        };
-        has_more_unprocessed_transactions
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
@@ -561,23 +547,19 @@ impl BankingStage {
         RetainMut::retain_mut(
             buffered_packet_batches,
             |buffered_packet_batch_and_offsets| {
-                let (packet_batch, ref mut original_unprocessed_indexes, _forwarded) =
+                let (packet_batch, ref mut current_unprocessed_indexes, _forwarded) =
                     buffered_packet_batch_and_offsets;
                 if let Some((next_leader, bank)) = &reached_end_of_slot {
                     // We've hit the end of this slot, no need to perform more processing,
                     // just filter the remaining packets for the invalid (e.g. too old) ones
-                    let new_unprocessed_indexes = Self::filter_unprocessed_packets(
+                    *current_unprocessed_indexes = Self::filter_unprocessed_packets(
                         bank,
                         packet_batch,
-                        original_unprocessed_indexes,
+                        current_unprocessed_indexes,
                         my_pubkey,
                         *next_leader,
                         banking_stage_stats,
                     );
-                    Self::update_buffered_packets_with_new_unprocessed(
-                        original_unprocessed_indexes,
-                        new_unprocessed_indexes,
-                    )
                 } else {
                     let bank_start = poh_recorder.lock().unwrap().bank_start();
                     if let Some(BankStart {
@@ -590,7 +572,7 @@ impl BankingStage {
                             &bank_creation_time,
                             recorder,
                             packet_batch,
-                            original_unprocessed_indexes.to_owned(),
+                            current_unprocessed_indexes.to_owned(),
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                             banking_stage_stats,
@@ -622,31 +604,20 @@ impl BankingStage {
                         // duplicate signature, etc.)
                         //
                         // Note: This assumes that every packet deserializes into one transaction!
-                        consumed_buffered_packets_count += original_unprocessed_indexes
+                        consumed_buffered_packets_count += current_unprocessed_indexes
                             .len()
                             .saturating_sub(retryable_transaction_indexes.len());
 
                         // Out of the buffered packets just retried, collect any still unprocessed
                         // transactions in this batch for forwarding
                         rebuffered_packet_count += retryable_transaction_indexes.len();
-                        let has_more_unprocessed_transactions =
-                            Self::update_buffered_packets_with_new_unprocessed(
-                                original_unprocessed_indexes,
-                                retryable_transaction_indexes,
-                            );
+                        *current_unprocessed_indexes = retryable_transaction_indexes;
                         if let Some(test_fn) = &test_fn {
                             test_fn();
                         }
-                        has_more_unprocessed_transactions
-                    } else {
-                        // `original_unprocessed_indexes` must have remaining packets to process
-                        // if not yet processed.
-                        assert!(Self::packet_has_more_unprocessed_transactions(
-                            original_unprocessed_indexes
-                        ));
-                        true
                     }
                 }
+                !current_unprocessed_indexes.is_empty()
             },
         );
 
@@ -1682,7 +1653,7 @@ impl BankingStage {
         batch_limit: usize,
         banking_stage_stats: &mut BankingStageStats,
     ) {
-        if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
+        if !packet_indexes.is_empty() {
             if unprocessed_packet_batches.len() >= batch_limit {
                 *dropped_packet_batches_count += 1;
                 if let Some(dropped_batch) = unprocessed_packet_batches.pop_front() {
@@ -1696,10 +1667,6 @@ impl BankingStage {
             *newly_buffered_packets_count += packet_indexes.len();
             unprocessed_packet_batches.push_back((packet_batch, packet_indexes, false));
         }
-    }
-
-    fn packet_has_more_unprocessed_transactions(packet_indexes: &[usize]) -> bool {
-        !packet_indexes.is_empty()
     }
 
     pub fn join(self) -> thread::Result<()> {
