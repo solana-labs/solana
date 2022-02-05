@@ -4,12 +4,7 @@ use {
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
-<<<<<<< HEAD
-    console::{style, Emoji},
-=======
     console::style,
-    crossbeam_channel::unbounded,
->>>>>>> d2c89213f (Implement json output for solana ping (#22959))
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
         input_parsers::*,
@@ -1367,14 +1362,7 @@ pub fn process_ping(
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
 ) -> ProcessResult {
-<<<<<<< HEAD
-    println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
-    println!();
-
     let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
-=======
-    let (signal_sender, signal_receiver) = unbounded();
->>>>>>> d2c89213f (Implement json output for solana ping (#22959))
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
     })
