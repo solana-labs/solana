@@ -250,10 +250,11 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
-            let mut accounts = Vec::with_capacity(message.account_keys_len());
-            let mut account_deps = Vec::with_capacity(message.account_keys_len());
+            let account_keys = message.account_keys();
+            let mut accounts = Vec::with_capacity(account_keys.len());
+            let mut account_deps = Vec::with_capacity(account_keys.len());
             let mut rent_debits = RentDebits::default();
-            for (i, key) in message.account_keys_iter().enumerate() {
+            for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
@@ -328,7 +329,7 @@ impl Accounts {
                 };
                 accounts.push((*key, account));
             }
-            debug_assert_eq!(accounts.len(), message.account_keys_len());
+            debug_assert_eq!(accounts.len(), account_keys.len());
             // Appends the account_deps at the end of the accounts,
             // this way they can be accessed in a uniform way.
             // At places where only the accounts are needed,
@@ -1176,7 +1177,7 @@ impl Accounts {
             let message = tx.message();
             let loaded_transaction = tx_load_result.as_mut().unwrap();
             let mut fee_payer_index = None;
-            for (i, (address, account)) in (0..message.account_keys_len())
+            for (i, (address, account)) in (0..message.account_keys().len())
                 .zip(loaded_transaction.accounts.iter_mut())
                 .filter(|(i, _)| message.is_non_loader_key(*i))
             {

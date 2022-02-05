@@ -5,7 +5,7 @@ use {
         message::{
             legacy::Message as LegacyMessage,
             v0::{self, LoadedAddresses},
-            MessageHeader,
+            AccountKeys, MessageHeader,
         },
         nonce::NONCED_TX_MARKER_IX_INDEX,
         program_utils::limited_deserialize,
@@ -85,7 +85,8 @@ impl SanitizedMessage {
 
     /// Returns the fee payer for the transaction
     pub fn fee_payer(&self) -> &Pubkey {
-        self.get_account_key(0)
+        self.account_keys()
+            .get(0)
             .expect("sanitized message always has non-program fee payer at index 0")
     }
 
@@ -117,34 +118,19 @@ impl SanitizedMessage {
         }
         .map(move |ix| {
             (
-                self.get_account_key(usize::from(ix.program_id_index))
+                self.account_keys()
+                    .get(usize::from(ix.program_id_index))
                     .expect("program id index is sanitized"),
                 ix,
             )
         })
     }
 
-    /// Iterator of all account keys referenced in this message, including dynamically loaded keys.
-    pub fn account_keys_iter(&self) -> Box<dyn Iterator<Item = &Pubkey> + '_> {
+    /// Returns the list of account keys that are loaded for this message.
+    pub fn account_keys(&self) -> AccountKeys {
         match self {
-            Self::Legacy(message) => Box::new(message.account_keys.iter()),
-            Self::V0(message) => Box::new(message.account_keys_iter()),
-        }
-    }
-
-    /// Length of all account keys referenced in this message, including dynamically loaded keys.
-    pub fn account_keys_len(&self) -> usize {
-        match self {
-            Self::Legacy(message) => message.account_keys.len(),
-            Self::V0(message) => message.account_keys_len(),
-        }
-    }
-
-    /// Returns the address of the account at the specified index.
-    pub fn get_account_key(&self, index: usize) -> Option<&Pubkey> {
-        match self {
-            Self::Legacy(message) => message.account_keys.get(index),
-            Self::V0(message) => message.get_account_key(index),
+            Self::Legacy(message) => AccountKeys::new(&message.account_keys, None),
+            Self::V0(message) => message.account_keys(),
         }
     }
 
@@ -210,7 +196,7 @@ impl SanitizedMessage {
     }
 
     fn try_position(&self, key: &Pubkey) -> Option<u8> {
-        u8::try_from(self.account_keys_iter().position(|k| k == key)?).ok()
+        u8::try_from(self.account_keys().iter().position(|k| k == key)?).ok()
     }
 
     /// Try to compile an instruction using the account keys in this message.
@@ -230,6 +216,7 @@ impl SanitizedMessage {
 
     /// Decompile message instructions without cloning account keys
     pub fn decompile_instructions(&self) -> Vec<BorrowedInstruction> {
+        let account_keys = self.account_keys();
         self.program_instructions_iter()
             .map(|(program_id, instruction)| {
                 let accounts = instruction
@@ -240,7 +227,7 @@ impl SanitizedMessage {
                         BorrowedAccountMeta {
                             is_signer: self.is_signer(account_index),
                             is_writable: self.is_writable(account_index),
-                            pubkey: self.get_account_key(account_index).unwrap(),
+                            pubkey: account_keys.get(account_index).unwrap(),
                         }
                     })
                     .collect();
@@ -267,7 +254,7 @@ impl SanitizedMessage {
         self.instructions()
             .get(NONCED_TX_MARKER_IX_INDEX as usize)
             .filter(
-                |ix| match self.get_account_key(ix.program_id_index as usize) {
+                |ix| match self.account_keys().get(ix.program_id_index as usize) {
                     Some(program_id) => system_program::check_id(program_id),
                     _ => false,
                 },
@@ -284,7 +271,7 @@ impl SanitizedMessage {
                     if nonce_must_be_writable && !self.is_writable(idx) {
                         None
                     } else {
-                        self.get_account_key(idx)
+                        self.account_keys().get(idx)
                     }
                 })
             })

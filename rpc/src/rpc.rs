@@ -3591,7 +3591,7 @@ pub mod rpc_full {
             if config.sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
-            let number_of_accounts = transaction.message().account_keys_len();
+            let number_of_accounts = transaction.message().account_keys().len();
 
             let TransactionSimulationResult {
                 result,
