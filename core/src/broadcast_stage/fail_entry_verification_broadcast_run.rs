@@ -85,12 +85,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         )
         .expect("Expected to create a new shredder");
 
-<<<<<<< HEAD
-        let (data_shreds, _, _) = shredder.entries_to_shreds(
-=======
         let (data_shreds, _) = shredder.entries_to_shreds(
-            keypair,
->>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
             &receive_results.entries,
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
@@ -98,13 +93,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
 
         self.next_shred_index += data_shreds.len() as u32;
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {
-<<<<<<< HEAD
-            let (good_last_data_shred, _, _) =
-                shredder.entries_to_shreds(&[good_last_entry], true, self.next_shred_index);
-=======
             let (good_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[good_last_entry], true, self.next_shred_index);
->>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
+                shredder.entries_to_shreds(&[good_last_entry], true, self.next_shred_index);
 
             let (bad_last_data_shred, _) =
                 // Don't mark the last shred as last so that validators won't know that

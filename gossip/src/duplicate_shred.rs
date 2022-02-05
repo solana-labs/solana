@@ -334,12 +334,7 @@ pub(crate) mod tests {
         })
         .take(5)
         .collect();
-<<<<<<< HEAD
-        let (mut data_shreds, _coding_shreds, _last_shred_index) = shredder.entries_to_shreds(
-=======
         let (mut data_shreds, _coding_shreds) = shredder.entries_to_shreds(
-            keypair,
->>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
             &entries,
             true, // is_last_in_slot
             next_shred_index,

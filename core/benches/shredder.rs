@@ -42,28 +42,14 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
         Some(shred_size),
     );
     let entries = make_large_unchained_entries(txs_per_entry, num_entries);
-<<<<<<< HEAD
     let shredder = Shredder::new(1, 0, Arc::new(Keypair::new()), 0, 0).unwrap();
-    let data_shreds = shredder
-        .entries_to_data_shreds(
-            &entries,
-            true, // is_last_in_slot
-            0,    // next_shred_index
-            0,    // fec_set_offset
-            &mut ProcessShredsStats::default(),
-        )
-        .0;
-=======
-    let shredder = Shredder::new(1, 0, 0, 0).unwrap();
     let data_shreds = shredder.entries_to_data_shreds(
-        &Keypair::new(),
         &entries,
         true, // is_last_in_slot
         0,    // next_shred_index
         0,    // fec_set_offset
         &mut ProcessShredsStats::default(),
     );
->>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
     assert!(data_shreds.len() >= num_shreds);
     data_shreds
 }

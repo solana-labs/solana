@@ -123,8 +123,7 @@ impl StandardBroadcastRun {
                 None => (0, 0),
             },
         };
-<<<<<<< HEAD
-        let (data_shreds, next_shred_index) = Shredder::new(
+        let data_shreds = Shredder::new(
             slot,
             parent_slot,
             self.keypair.clone(),
@@ -139,18 +138,6 @@ impl StandardBroadcastRun {
             fec_set_offset,
             process_stats,
         );
-=======
-        let data_shreds = Shredder::new(slot, parent_slot, reference_tick, self.shred_version)
-            .unwrap()
-            .entries_to_data_shreds(
-                keypair,
-                entries,
-                is_slot_end,
-                next_shred_index,
-                fec_set_offset,
-                process_stats,
-            );
->>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
         let mut data_shreds_buffer = match &mut self.unfinished_slot {
             Some(state) => {
                 assert_eq!(state.slot, slot);
