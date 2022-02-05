@@ -463,28 +463,23 @@ impl BankingStage {
 
     fn filter_valid_packets_for_forwarding<'a>(
         packet_batches: impl Iterator<Item = &'a PacketBatchAndOffsets>,
-    ) -> (Vec<&'a Packet>, usize) {
-        let mut total_packets: usize = 0;
-        (
-            packet_batches
-                .filter(|(_batch, _indexes, forwarded)| !forwarded)
-                .flat_map(|(batch, valid_indexes, _forwarded)| {
-                    total_packets = total_packets.saturating_add(valid_indexes.len());
-                    valid_indexes.iter().map(move |x| &batch.packets[*x])
-                })
-                .collect(),
-            total_packets,
-        )
+    ) -> Vec<&'a Packet> {
+        packet_batches
+            .filter(|(_batch, _indexes, forwarded)| !forwarded)
+            .flat_map(|(batch, valid_indexes, _forwarded)| {
+                valid_indexes.iter().map(move |x| &batch.packets[*x])
+            })
+            .collect()
     }
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
-    /// the number of successfully forwarded packets if transmissions was successful
+    /// the number of successfully forwarded packets in second part of tuple
     fn forward_buffered_packets(
         socket: &std::net::UdpSocket,
         tpu_forwards: &std::net::SocketAddr,
         packets: Vec<&Packet>,
         data_budget: &DataBudget,
-    ) -> std::io::Result<usize> {
+    ) -> (std::io::Result<()>, usize) {
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
@@ -511,11 +506,11 @@ impl BankingStage {
             inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
             if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec)
             {
-                return Err(ioerr);
+                return (Err(ioerr), 0);
             }
         }
 
-        Ok(packet_vec.len())
+        (Ok(()), packet_vec.len())
     }
 
     // Returns whether the given `PacketBatch` has any more remaining unprocessed
@@ -823,18 +818,24 @@ impl BankingStage {
             None => return,
         };
 
-        let (forwardable_packets, total_unprocessed_packets_in_buffer) =
+        let forwardable_packets =
             Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
-        slot_metrics_tracker
-            .increment_forwardable_packet_candidates_count(forwardable_packets.len() as u64);
-        if let Ok(sucessful_forwarded_packets_count) =
-            Self::forward_buffered_packets(socket, &addr, forwardable_packets, data_budget)
-        {
+        let forwardable_packets_len = forwardable_packets.len();
+        let (_forward_result, sucessful_forwarded_packets_count) =
+            Self::forward_buffered_packets(socket, &addr, forwardable_packets, data_budget);
+        let failed_forwarded_packets_count =
+            forwardable_packets_len.saturating_sub(sucessful_forwarded_packets_count);
+
+        if failed_forwarded_packets_count > 0 {
+            slot_metrics_tracker
+                .increment_failed_forwarded_packets_count(failed_forwarded_packets_count as u64);
+            slot_metrics_tracker.increment_packet_batch_forward_failure_count(1);
+        }
+
+        if sucessful_forwarded_packets_count > 0 {
             slot_metrics_tracker.increment_successful_forwarded_packets_count(
                 sucessful_forwarded_packets_count as u64,
             );
-        } else {
-            slot_metrics_tracker.increment_packet_batch_forward_failure_count(1);
         }
 
         if hold {
@@ -843,9 +844,8 @@ impl BankingStage {
                 *forwarded = true;
             }
         } else {
-            slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
-                total_unprocessed_packets_in_buffer as u64,
-            );
+            slot_metrics_tracker
+                .increment_cleared_from_buffer_after_forward_count(forwardable_packets_len as u64);
             buffered_packet_batches.clear();
         }
     }
@@ -3394,6 +3394,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &mut LeaderSlotMetricsTracker::new(0),
             );
             assert_eq!(
                 buffered_packet_batches[0].1.len(),
@@ -3414,6 +3415,7 @@ mod tests {
                     &BankingStageStats::default(),
                     &recorder,
                     &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                    &mut LeaderSlotMetricsTracker::new(0),
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packet_batches.is_empty())
@@ -3480,6 +3482,7 @@ mod tests {
                         &BankingStageStats::default(),
                         &recorder,
                         &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                        &mut LeaderSlotMetricsTracker::new(0),
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`
@@ -3577,6 +3580,7 @@ mod tests {
                     &send_socket,
                     true,
                     &data_budget,
+                    &mut LeaderSlotMetricsTracker::new(0),
                 );
 
                 recv_socket
@@ -3676,6 +3680,7 @@ mod tests {
                     &send_socket,
                     hold,
                     &DataBudget::default(),
+                    &mut LeaderSlotMetricsTracker::new(0),
                 );
 
                 recv_socket
@@ -3737,6 +3742,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             batch_limit,
             &mut banking_stage_stats,
+            &mut LeaderSlotMetricsTracker::new(0),
         );
         assert_eq!(unprocessed_packets.len(), 1);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3755,6 +3761,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             batch_limit,
             &mut banking_stage_stats,
+            &mut LeaderSlotMetricsTracker::new(0),
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3778,6 +3785,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             batch_limit,
             &mut banking_stage_stats,
+            &mut LeaderSlotMetricsTracker::new(0),
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(

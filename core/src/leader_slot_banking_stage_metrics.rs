@@ -59,11 +59,10 @@ struct LeaderSlotPacketCountMetrics {
     // already counted in `self.retrayble_errored_transaction_count`.
     cost_model_throttled_transactions_count: u64,
 
-    // total number of unprocessed packets that were valid for forwarding
-    forwardable_packet_candidates_count: u64,
+    // total number of forwardsable packets that failed forwarding
+    failed_forwarded_packets_count: u64,
 
-    // total number of the `forwardable_packet_candidates_count` packets that were successfully
-    // forwarded
+    // total number of forwardsable packets that were successfully forwarded
     successful_forwarded_packets_count: u64,
 
     // total number of attempted forwards that failed. Note this is not a count of the number of packets
@@ -215,9 +214,8 @@ impl LeaderSlotMetrics {
                 i64
             ),
             (
-                "forwardable_packet_candidates_count",
-                self.packet_count_metrics
-                    .forwardable_packet_candidates_count as i64,
+                "failed_forwarded_packets_count",
+                self.packet_count_metrics.failed_forwarded_packets_count as i64,
                 i64
             ),
             (
@@ -439,13 +437,13 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    pub(crate) fn increment_forwardable_packet_candidates_count(&mut self, count: u64) {
+    pub(crate) fn increment_failed_forwarded_packets_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             leader_slot_metrics
                 .packet_count_metrics
-                .forwardable_packet_candidates_count = leader_slot_metrics
+                .failed_forwarded_packets_count = leader_slot_metrics
                 .packet_count_metrics
-                .forwardable_packet_candidates_count
+                .failed_forwarded_packets_count
                 .saturating_add(count);
         }
     }
