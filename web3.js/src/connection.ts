@@ -4110,7 +4110,16 @@ export class Connection {
         this._rpcWebSocketConnected = false;
         this._rpcWebSocketIdleTimeout = setTimeout(() => {
           this._rpcWebSocketIdleTimeout = null;
-          this._rpcWebSocket.close();
+          try {
+            this._rpcWebSocket.close();
+          } catch (err) {
+            // swallow error if socket has already been closed.
+            if (err instanceof Error) {
+              console.log(
+                `Error when closing socket connection: ${err.message}`,
+              );
+            }
+          }
         }, 500);
       }
       return;

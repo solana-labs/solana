@@ -59,6 +59,7 @@ use {
         feature_set::FeatureSet,
         hash::Hash,
         pubkey::Pubkey,
+        quic::QUIC_PORT_OFFSET,
         sanitize::{Sanitize, SanitizeError},
         signature::{Keypair, Signable, Signature, Signer},
         timing::timestamp,
@@ -92,7 +93,7 @@ use {
 };
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
-pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 11; // VALIDATOR_PORT_RANGE must be at least this wide
+pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 12; // VALIDATOR_PORT_RANGE must be at least this wide
 
 /// The Data plane fanout size, also used as the neighborhood size
 pub const DATA_PLANE_FANOUT: usize = 200;
@@ -2741,6 +2742,7 @@ pub struct Sockets {
     pub retransmit_sockets: Vec<UdpSocket>,
     pub serve_repair: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
+    pub tpu_quic: UdpSocket,
 }
 
 #[derive(Debug)]
@@ -2757,6 +2759,8 @@ impl Node {
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tpu_quic_port = tpu.local_addr().unwrap().port() + QUIC_PORT_OFFSET;
+        let tpu_quic = UdpSocket::bind(format!("127.0.0.1:{}", tpu_quic_port)).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
@@ -2806,6 +2810,7 @@ impl Node {
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
                 ancestor_hashes_requests,
+                tpu_quic,
             },
         }
     }
@@ -2841,6 +2846,10 @@ impl Node {
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
         let (tpu_port, tpu) = Self::bind(bind_ip_addr, port_range);
+        let (_tpu_port_quic, tpu_quic) = Self::bind(
+            bind_ip_addr,
+            (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
+        );
         let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
@@ -2884,6 +2893,7 @@ impl Node {
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
                 ancestor_hashes_requests,
+                tpu_quic,
             },
         }
     }
@@ -2905,6 +2915,11 @@ impl Node {
 
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
+
+        let (_tpu_port_quic, tpu_quic) = Self::bind(
+            bind_ip_addr,
+            (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
+        );
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
@@ -2955,6 +2970,7 @@ impl Node {
                 serve_repair,
                 ip_echo: Some(ip_echo),
                 ancestor_hashes_requests,
+                tpu_quic,
             },
         }
     }

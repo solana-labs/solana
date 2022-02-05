@@ -504,7 +504,7 @@ pub mod tests {
             None,
             None,
             None,
-            Arc::new(VoteTracker::new(&bank)),
+            Arc::<VoteTracker>::default(),
             retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
             verified_vote_receiver,

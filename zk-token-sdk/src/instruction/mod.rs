@@ -14,7 +14,10 @@ use {
     },
     curve25519_dalek::scalar::Scalar,
 };
-pub use {close_account::CloseAccountData, transfer::TransferData, withdraw::WithdrawData};
+pub use {
+    close_account::CloseAccountData, transfer::TransferData,
+    transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
+};
 
 /// Constant for 2^32
 #[cfg(not(target_arch = "bpf"))]
