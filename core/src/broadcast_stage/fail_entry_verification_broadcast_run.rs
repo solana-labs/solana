@@ -88,12 +88,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         )
         .expect("Expected to create a new shredder");
 
-<<<<<<< HEAD
-        let (data_shreds, _) = shredder.entries_to_shreds(
-=======
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
-            keypair,
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
             &receive_results.entries,
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
@@ -106,20 +101,12 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         }
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {
             let (good_last_data_shred, _) =
-<<<<<<< HEAD
-                shredder.entries_to_shreds(&[good_last_entry], true, self.next_shred_index);
-=======
-                shredder.entries_to_shreds(keypair, &[good_last_entry], true, self.next_shred_index, self.next_code_index);
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
+                shredder.entries_to_shreds(&[good_last_entry], true, self.next_shred_index, self.next_code_index);
 
             let (bad_last_data_shred, _) =
                 // Don't mark the last shred as last so that validators won't know that
                 // they've gotten all the shreds, and will continue trying to repair
-<<<<<<< HEAD
-                shredder.entries_to_shreds(&[bad_last_entry], false, self.next_shred_index);
-=======
-                shredder.entries_to_shreds(keypair, &[bad_last_entry], false, self.next_shred_index, self.next_code_index);
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
+                shredder.entries_to_shreds(&[bad_last_entry], false, self.next_shred_index, self.next_code_index);
 
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)

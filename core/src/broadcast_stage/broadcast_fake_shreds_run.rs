@@ -9,11 +9,8 @@ pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
     shred_version: u16,
-<<<<<<< HEAD
     keypair: Arc<Keypair>,
-=======
     next_code_index: u32,
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
 }
 
 impl BroadcastFakeShredsRun {
@@ -22,11 +19,8 @@ impl BroadcastFakeShredsRun {
             last_blockhash: Hash::default(),
             partition,
             shred_version,
-<<<<<<< HEAD
             keypair,
-=======
             next_code_index: 0,
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
         }
     }
 }

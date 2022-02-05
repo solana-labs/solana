@@ -736,18 +736,13 @@ mod test {
         parent: Slot,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
-<<<<<<< HEAD
         let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
-        shredder.entries_to_shreds(entries, true, 0).0
-=======
-        let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
         let (data_shreds, _) = shredder.entries_to_shreds(
-            keypair, entries, true, // is_last_in_slot
+            entries, true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
         data_shreds
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
     }
 
     #[test]

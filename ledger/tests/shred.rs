@@ -50,15 +50,11 @@ fn test_multi_fec_block_coding() {
         .collect();
 
     let serialized_entries = bincode::serialize(&entries).unwrap();
-<<<<<<< HEAD
-    let (data_shreds, coding_shreds) = shredder.entries_to_shreds(&entries, true, 0);
-=======
     let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
-        &keypair, &entries, true, // is_last_in_slot
+        &entries, true, // is_last_in_slot
         0,    // next_shred_index
         0,    // next_code_index
     );
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
     let next_index = data_shreds.last().unwrap().index() + 1;
     assert_eq!(next_index as usize, num_data_shreds);
     assert_eq!(data_shreds.len(), num_data_shreds);
@@ -228,15 +224,10 @@ fn setup_different_sized_fec_blocks(
     let total_num_data_shreds: usize = 2 * num_shreds_per_iter;
     for i in 0..2 {
         let is_last = i == 1;
-<<<<<<< HEAD
-        let (data_shreds, coding_shreds) =
-            shredder.entries_to_shreds(&entries, is_last, next_index);
-=======
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
-            &keypair, &entries, is_last, next_index, // next_shred_index
+            &entries, is_last, next_index, // next_shred_index
             next_index, // next_code_index
         );
->>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
         for shred in &data_shreds {
             if (shred.index() as usize) == total_num_data_shreds - 1 {
                 assert!(shred.data_complete());
