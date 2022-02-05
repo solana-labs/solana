@@ -6262,7 +6262,7 @@ pub mod tests {
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
-                for i in 0..transaction.message.total_account_keys_len() {
+                for i in 0..transaction.message.static_account_keys().len() {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
@@ -7129,7 +7129,7 @@ pub mod tests {
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
-                for i in 0..transaction.message.total_account_keys_len() {
+                for i in 0..transaction.message.static_account_keys().len() {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
@@ -7231,7 +7231,7 @@ pub mod tests {
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
-                for i in 0..transaction.message.total_account_keys_len() {
+                for i in 0..transaction.message.static_account_keys().len() {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
@@ -7590,7 +7590,7 @@ pub mod tests {
                         .write_transaction_status(
                             slot,
                             transaction.signatures[0],
-                            transaction.message.static_account_keys_iter().collect(),
+                            transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
                         )
@@ -7614,7 +7614,7 @@ pub mod tests {
                         .write_transaction_status(
                             slot,
                             transaction.signatures[0],
-                            transaction.message.static_account_keys_iter().collect(),
+                            transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
                         )

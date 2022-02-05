@@ -838,7 +838,7 @@ impl NonceFull {
         accounts: &[TransactionAccount],
         rent_debits: &RentDebits,
     ) -> Result<Self> {
-        let fee_payer = (0..message.account_keys_len()).find_map(|i| {
+        let fee_payer = (0..message.account_keys().len()).find_map(|i| {
             if let Some((k, a)) = &accounts.get(i) {
                 if message.is_non_loader_key(i) {
                     return Some((k, a));
@@ -3464,7 +3464,7 @@ impl Bank {
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
-        let number_of_accounts = transaction.message().account_keys_len();
+        let number_of_accounts = transaction.message().account_keys().len();
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -3648,7 +3648,7 @@ impl Bank {
         let mut balances: TransactionBalances = vec![];
         for transaction in batch.sanitized_transactions() {
             let mut transaction_balances: Vec<u64> = vec![];
-            for account_key in transaction.message().account_keys_iter() {
+            for account_key in transaction.message().account_keys().iter() {
                 transaction_balances.push(self.get_balance(account_key));
             }
             balances.push(transaction_balances);
@@ -4045,7 +4045,7 @@ impl Bank {
 
         for (execution_result, tx) in execution_results.iter().zip(sanitized_txs) {
             if let Some(debug_keys) = &self.transaction_debug_keys {
-                for key in tx.message().account_keys_iter() {
+                for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
                         let result = execution_result.flattened_result();
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, result, tx);
@@ -4062,7 +4062,7 @@ impl Bank {
                     .mentioned_addresses
                     .is_empty()
                 {
-                    for key in tx.message().account_keys_iter() {
+                    for key in tx.message().account_keys().iter() {
                         if transaction_log_collector_config
                             .mentioned_addresses
                             .contains(key)
@@ -5971,7 +5971,7 @@ impl Bank {
             ) {
                 let message = tx.message();
                 for (_i, (pubkey, account)) in
-                    (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
+                    (0..message.account_keys().len()).zip(loaded_transaction.accounts.iter())
                 {
                     self.stakes_cache.check_and_store(pubkey, account);
                 }
@@ -6764,16 +6764,16 @@ pub(crate) mod tests {
             let message = new_sanitized_message(&instructions, Some(&from_address));
             let accounts = [
                 (
-                    *message.get_account_key(0).unwrap(),
+                    *message.account_keys().get(0).unwrap(),
                     rent_collected_from_account.clone(),
                 ),
                 (
-                    *message.get_account_key(1).unwrap(),
+                    *message.account_keys().get(1).unwrap(),
                     rent_collected_nonce_account.clone(),
                 ),
-                (*message.get_account_key(2).unwrap(), to_account.clone()),
+                (*message.account_keys().get(2).unwrap(), to_account.clone()),
                 (
-                    *message.get_account_key(3).unwrap(),
+                    *message.account_keys().get(3).unwrap(),
                     recent_blockhashes_sysvar_account.clone(),
                 ),
             ];
@@ -6795,16 +6795,16 @@ pub(crate) mod tests {
             let message = new_sanitized_message(&instructions, Some(&nonce_address));
             let accounts = [
                 (
-                    *message.get_account_key(0).unwrap(),
+                    *message.account_keys().get(0).unwrap(),
                     rent_collected_nonce_account,
                 ),
                 (
-                    *message.get_account_key(1).unwrap(),
+                    *message.account_keys().get(1).unwrap(),
                     rent_collected_from_account,
                 ),
-                (*message.get_account_key(2).unwrap(), to_account),
+                (*message.account_keys().get(2).unwrap(), to_account),
                 (
-                    *message.get_account_key(3).unwrap(),
+                    *message.account_keys().get(3).unwrap(),
                     recent_blockhashes_sysvar_account,
                 ),
             ];
