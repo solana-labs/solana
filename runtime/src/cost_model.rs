@@ -98,17 +98,11 @@ impl CostModel {
         tx_cost
     }
 
-    pub fn upsert_instruction_cost(
-        &mut self,
-        program_key: &Pubkey,
-        cost: u64,
-    ) -> Result<u64, &'static str> {
+    // update-or-insert op is always successful. However the result of upsert, eg the aggregated
+    // value, requires additional calculation, which should only be envoked when needed.
+    pub fn upsert_instruction_cost(&mut self, program_key: &Pubkey, cost: u64) {
         self.instruction_execution_cost_table
             .upsert(program_key, cost);
-        match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => Ok(cost),
-            None => Err("failed to upsert to ExecuteCostTable"),
-        }
     }
 
     pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
@@ -117,12 +111,16 @@ impl CostModel {
             None => {
                 let default_value = self.instruction_execution_cost_table.get_default();
                 debug!(
-                    "Program key {:?} does not have assigned cost, using default value {}",
+                    "instruction {:?} does not have aggregated cost, using default {}",
                     program_key, default_value
                 );
                 default_value
             }
         }
+    }
+
+    pub fn get_program_keys(&self) -> Vec<&Pubkey> {
+        self.instruction_execution_cost_table.get_program_keys()
     }
 
     fn get_signature_cost(&self, transaction: &SanitizedTransaction) -> u64 {
@@ -191,6 +189,7 @@ mod tests {
             transaction::Transaction,
         },
         std::{
+            collections::HashMap,
             str::FromStr,
             sync::{Arc, RwLock},
             thread::{self, JoinHandle},
@@ -214,13 +213,11 @@ mod tests {
         let mut testee = CostModel::default();
 
         let known_key = Pubkey::from_str("known11111111111111111111111111111111111111").unwrap();
-        testee.upsert_instruction_cost(&known_key, 100).unwrap();
+        testee.upsert_instruction_cost(&known_key, 100);
         // find cost for known programs
         assert_eq!(100, testee.find_instruction_cost(&known_key));
 
-        testee
-            .upsert_instruction_cost(&bpf_loader::id(), 1999)
-            .unwrap();
+        testee.upsert_instruction_cost(&bpf_loader::id(), 1999);
         assert_eq!(1999, testee.find_instruction_cost(&bpf_loader::id()));
 
         // unknown program is assigned with default cost
@@ -233,6 +230,85 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_iterating_instruction_cost_by_program_keys() {
+        solana_logger::setup();
+        let mut testee = CostModel::default();
+
+        let mut test_key_and_cost = HashMap::<Pubkey, u64>::new();
+        (0u64..10u64).for_each(|n| {
+            test_key_and_cost.insert(Pubkey::new_unique(), n);
+        });
+
+        test_key_and_cost.iter().for_each(|(key, cost)| {
+            testee.upsert_instruction_cost(key, *cost);
+            info!("key {:?} cost {}", key, cost);
+        });
+
+        let keys = testee.get_program_keys();
+        // verify each key has pre-set value
+        keys.iter().for_each(|key| {
+            let expected_cost = test_key_and_cost.get(key).unwrap();
+            info!(
+                "check key {:?} expect {} find {}",
+                key,
+                expected_cost,
+                testee.find_instruction_cost(key)
+            );
+            assert_eq!(*expected_cost, testee.find_instruction_cost(key));
+        });
+    }
+
+    #[test]
+    fn test_cost_model_data_len_cost() {
+        let lamports = 0;
+        let owner = Pubkey::default();
+        let seed = String::default();
+        let space = 100;
+        let base = Pubkey::default();
+        for instruction in [
+            SystemInstruction::CreateAccount {
+                lamports,
+                space,
+                owner,
+            },
+            SystemInstruction::CreateAccountWithSeed {
+                base,
+                seed: seed.clone(),
+                lamports,
+                space,
+                owner,
+            },
+            SystemInstruction::Allocate { space },
+            SystemInstruction::AllocateWithSeed {
+                base,
+                seed,
+                space,
+                owner,
+            },
+        ] {
+            assert_eq!(
+                space,
+                CostModel::calculate_account_data_size_on_deserialized_system_instruction(
+                    instruction
+                )
+            );
+        }
+        assert_eq!(
+            0,
+            CostModel::calculate_account_data_size_on_deserialized_system_instruction(
+                SystemInstruction::TransferWithSeed {
+                    lamports,
+                    from_seed: String::default(),
+                    from_owner: Pubkey::default(),
+                }
+            )
+        );
+    }
+
+    #[test]
+>>>>>>> 7aa1fb4e2 (1. Persist to blockstore less frequently;)
     fn test_cost_model_simple_transaction() {
         let (mint_keypair, start_hash) = test_setup();
 
@@ -249,9 +325,7 @@ mod tests {
         let expected_cost = 8;
 
         let mut testee = CostModel::default();
-        testee
-            .upsert_instruction_cost(&system_program::id(), expected_cost)
-            .unwrap();
+        testee.upsert_instruction_cost(&system_program::id(), expected_cost);
         assert_eq!(
             expected_cost,
             testee.get_transaction_cost(&simple_transaction)
@@ -279,9 +353,7 @@ mod tests {
         let expected_cost = program_cost * 2;
 
         let mut testee = CostModel::default();
-        testee
-            .upsert_instruction_cost(&system_program::id(), program_cost)
-            .unwrap();
+        testee.upsert_instruction_cost(&system_program::id(), program_cost);
         assert_eq!(expected_cost, testee.get_transaction_cost(&tx));
     }
 
@@ -362,7 +434,7 @@ mod tests {
         );
 
         // insert instruction cost to table
-        assert!(cost_model.upsert_instruction_cost(&key1, cost1).is_ok());
+        cost_model.upsert_instruction_cost(&key1, cost1);
 
         // now it is known insturction with known cost
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
@@ -382,9 +454,7 @@ mod tests {
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
-        cost_model
-            .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
-            .unwrap();
+        cost_model.upsert_instruction_cost(&system_program::id(), expected_execution_cost);
         let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
@@ -396,17 +466,17 @@ mod tests {
         let key1 = Pubkey::new_unique();
         let cost1 = 100;
         let cost2 = 200;
-        // updated_cost = (mean + 2*std)
-        let updated_cost = 238;
+        // updated_cost = (mean + 2*std) of [100, 200] => 120.899
+        let updated_cost = 121;
 
         let mut cost_model = CostModel::default();
 
         // insert instruction cost to table
-        assert!(cost_model.upsert_instruction_cost(&key1, cost1).is_ok());
+        cost_model.upsert_instruction_cost(&key1, cost1);
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
 
         // update instruction cost
-        assert!(cost_model.upsert_instruction_cost(&key1, cost2).is_ok());
+        cost_model.upsert_instruction_cost(&key1, cost2);
         assert_eq!(updated_cost, cost_model.find_instruction_cost(&key1));
     }
 
@@ -448,8 +518,8 @@ mod tests {
                 if i == 5 {
                     thread::spawn(move || {
                         let mut cost_model = cost_model.write().unwrap();
-                        assert!(cost_model.upsert_instruction_cost(&prog1, cost1).is_ok());
-                        assert!(cost_model.upsert_instruction_cost(&prog2, cost2).is_ok());
+                        cost_model.upsert_instruction_cost(&prog1, cost1);
+                        cost_model.upsert_instruction_cost(&prog2, cost2);
                     })
                 } else {
                     thread::spawn(move || {

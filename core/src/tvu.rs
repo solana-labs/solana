@@ -308,6 +308,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
+<<<<<<< HEAD
         let (cost_update_sender, cost_update_receiver) = channel();
         let cost_update_service = CostUpdateService::new(
             exit.clone(),
@@ -315,6 +316,11 @@ impl Tvu {
             cost_model.clone(),
             cost_update_receiver,
         );
+=======
+        let (cost_update_sender, cost_update_receiver) = unbounded();
+        let cost_update_service =
+            CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
+>>>>>>> 7aa1fb4e2 (1. Persist to blockstore less frequently;)
 
         let (drop_bank_sender, drop_bank_receiver) = channel();
 
