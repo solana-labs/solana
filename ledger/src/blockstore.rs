@@ -8129,11 +8129,6 @@ pub mod tests {
         for ((slot, index), _) in data_iter {
             num_data += 1;
             assert!(blockstore.get_data_shred(slot, index).unwrap().is_some());
-<<<<<<< HEAD
-=======
-            // Test that the data index has current shred accounted for
-            assert!(shred_index.data().contains(index));
->>>>>>> efd64a386 (simplifies ShredIndex api (#21932))
         }
 
         // Test the data index doesn't have anything extra
@@ -8147,11 +8142,6 @@ pub mod tests {
         for ((slot, index), _) in coding_iter {
             num_coding += 1;
             assert!(blockstore.get_coding_shred(slot, index).unwrap().is_some());
-<<<<<<< HEAD
-=======
-            // Test that the coding index has current shred accounted for
-            assert!(shred_index.coding().contains(index));
->>>>>>> efd64a386 (simplifies ShredIndex api (#21932))
         }
 
         // Test the data index doesn't have anything extra
