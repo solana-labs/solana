@@ -181,22 +181,23 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, coding_shreds, last_shred_index) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             self.next_shred_index,
         );
 
+        self.next_shred_index += data_shreds.len() as u32;
         let (duplicate_entries, next_duplicate_shred_index) =
             self.queue_or_create_duplicate_entries(&bank, &receive_results);
-        let (duplicate_data_shreds, duplicate_coding_shreds, _) = if !duplicate_entries.is_empty() {
+        let (duplicate_data_shreds, duplicate_coding_shreds) = if !duplicate_entries.is_empty() {
             shredder.entries_to_shreds(
                 &duplicate_entries,
                 last_tick_height == bank.max_tick_height(),
                 next_duplicate_shred_index,
             )
         } else {
-            (vec![], vec![], 0)
+            (vec![], vec![])
         };
 
         // Manually track the shred index because relying on slot meta consumed is racy
@@ -204,8 +205,6 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             self.next_shred_index = 0;
             self.duplicate_queue
                 .register_hash(&self.last_duplicate_entry_hash, &FeeCalculator::default());
-        } else {
-            self.next_shred_index = last_shred_index;
         }
 
         // Partition network with duplicate and real shreds based on stake

@@ -123,7 +123,7 @@ impl StandardBroadcastRun {
                 None => (0, 0),
             },
         };
-        let (data_shreds, next_shred_index) = Shredder::new(
+        let data_shreds = Shredder::new(
             slot,
             parent_slot,
             self.keypair.clone(),
@@ -146,6 +146,10 @@ impl StandardBroadcastRun {
             None => Vec::default(),
         };
         data_shreds_buffer.extend(data_shreds.clone());
+        let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
+            Some(index) => index + 1,
+            None => next_shred_index,
+        };
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
             slot,

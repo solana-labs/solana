@@ -1665,7 +1665,7 @@ impl Blockstore {
                         0
                     }
                 };
-                let (mut data_shreds, mut coding_shreds, _) =
+                let (mut data_shreds, mut coding_shreds) =
                     shredder.entries_to_shreds(&current_entries, true, start_index);
                 all_shreds.append(&mut data_shreds);
                 all_shreds.append(&mut coding_shreds);
@@ -1686,7 +1686,7 @@ impl Blockstore {
         }
 
         if !slot_entries.is_empty() {
-            let (mut data_shreds, mut coding_shreds, _) =
+            let (mut data_shreds, mut coding_shreds) =
                 shredder.entries_to_shreds(&slot_entries, is_full_slot, 0);
             all_shreds.append(&mut data_shreds);
             all_shreds.append(&mut coding_shreds);
@@ -8104,7 +8104,7 @@ pub mod tests {
         let entries = make_slot_entries_with_transactions(num_entries);
         let leader_keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, parent_slot, leader_keypair.clone(), 0, 0).unwrap();
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(&entries, true, 0);
 
         let genesis_config = create_genesis_config(2).genesis_config;
         let bank = Arc::new(Bank::new(&genesis_config));
@@ -8156,8 +8156,8 @@ pub mod tests {
         let entries2 = make_slot_entries_with_transactions(1);
         let leader_keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, 0, leader_keypair, 0, 0).unwrap();
-        let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);
-        let (duplicate_shreds, _, _) = shredder.entries_to_shreds(&entries2, true, 0);
+        let (shreds, _) = shredder.entries_to_shreds(&entries1, true, 0);
+        let (duplicate_shreds, _) = shredder.entries_to_shreds(&entries2, true, 0);
         let shred = shreds[0].clone();
         let duplicate_shred = duplicate_shreds[0].clone();
         let non_duplicate_shred = shred.clone();

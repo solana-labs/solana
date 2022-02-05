@@ -334,7 +334,7 @@ pub(crate) mod tests {
         })
         .take(5)
         .collect();
-        let (mut data_shreds, _coding_shreds, _last_shred_index) = shredder.entries_to_shreds(
+        let (mut data_shreds, _coding_shreds) = shredder.entries_to_shreds(
             &entries,
             true, // is_last_in_slot
             next_shred_index,
