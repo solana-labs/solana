@@ -41,7 +41,7 @@ impl Sanitize for VersionedTransaction {
 
         // Signatures are verified before message keys are loaded so all signers
         // must correspond to static account keys.
-        if self.signatures.len() > self.message.static_account_keys_len() {
+        if self.signatures.len() > self.message.static_account_keys().len() {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
@@ -127,7 +127,7 @@ impl VersionedTransaction {
     fn _verify_with_results(&self, message_bytes: &[u8]) -> Vec<bool> {
         self.signatures
             .iter()
-            .zip(self.message.static_account_keys_iter())
+            .zip(self.message.static_account_keys().iter())
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), message_bytes))
             .collect()
     }

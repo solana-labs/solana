@@ -11,7 +11,10 @@ use {
     inflector::Inflector,
     serde_json::Value,
     solana_account_decoder::parse_token::spl_token_id,
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, stake, system_program},
+    solana_sdk::{
+        instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey, stake,
+        system_program,
+    },
     std::{
         collections::HashMap,
         str::{from_utf8, Utf8Error},
@@ -98,7 +101,7 @@ pub enum ParsableProgram {
 pub fn parse(
     program_id: &Pubkey,
     instruction: &CompiledInstruction,
-    account_keys: &[Pubkey],
+    account_keys: &AccountKeys,
 ) -> Result<ParsedInstruction, ParseInstructionError> {
     let program_name = PARSABLE_PROGRAM_IDS
         .get(program_id)
@@ -156,13 +159,14 @@ mod test {
 
     #[test]
     fn test_parse() {
+        let no_keys = AccountKeys::new(&[], None);
         let memo_instruction = CompiledInstruction {
             program_id_index: 0,
             accounts: vec![],
             data: vec![240, 159, 166, 150],
         };
         assert_eq!(
-            parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &[]).unwrap(),
+            parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &no_keys).unwrap(),
             ParsedInstruction {
                 program: "spl-memo".to_string(),
                 program_id: MEMO_V1_PROGRAM_ID.to_string(),
@@ -170,7 +174,7 @@ mod test {
             }
         );
         assert_eq!(
-            parse(&MEMO_V3_PROGRAM_ID, &memo_instruction, &[]).unwrap(),
+            parse(&MEMO_V3_PROGRAM_ID, &memo_instruction, &no_keys).unwrap(),
             ParsedInstruction {
                 program: "spl-memo".to_string(),
                 program_id: MEMO_V3_PROGRAM_ID.to_string(),
@@ -179,7 +183,7 @@ mod test {
         );
 
         let non_parsable_program_id = Pubkey::new(&[1; 32]);
-        assert!(parse(&non_parsable_program_id, &memo_instruction, &[]).is_err());
+        assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys).is_err());
     }
 
     #[test]

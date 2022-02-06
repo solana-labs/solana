@@ -1,4 +1,4 @@
-use {super::*, std::time::Instant};
+use {super::*, solana_sdk::message::AccountKeys, std::time::Instant};
 
 #[derive(Default)]
 pub struct PurgeStats {
@@ -334,16 +334,17 @@ impl Blockstore {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
-                    for pubkey in transaction.message.into_static_account_keys() {
-                        batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
-                        batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
-                    }
+
                     let meta = self.read_transaction_status((signature, slot))?;
-                    let loaded_addresses =
-                        meta.map(|meta| meta.loaded_addresses).unwrap_or_default();
-                    for address in loaded_addresses.into_ordered_iter() {
-                        batch.delete::<cf::AddressSignatures>((0, address, slot, signature))?;
-                        batch.delete::<cf::AddressSignatures>((1, address, slot, signature))?;
+                    let loaded_addresses = meta.map(|meta| meta.loaded_addresses);
+                    let account_keys = AccountKeys::new(
+                        transaction.message.static_account_keys(),
+                        loaded_addresses.as_ref(),
+                    );
+
+                    for pubkey in account_keys.iter() {
+                        batch.delete::<cf::AddressSignatures>((0, *pubkey, slot, signature))?;
+                        batch.delete::<cf::AddressSignatures>((1, *pubkey, slot, signature))?;
                     }
                 }
             }

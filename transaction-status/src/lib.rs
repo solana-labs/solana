@@ -26,8 +26,7 @@ use {
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
         instruction::CompiledInstruction,
-        message::{v0::LoadedAddresses, Message, MessageHeader},
-        pubkey::Pubkey,
+        message::{v0::LoadedAddresses, AccountKeys, Message, MessageHeader},
         sanitize::Sanitize,
         signature::Signature,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
@@ -82,8 +81,8 @@ pub enum UiInstruction {
 }
 
 impl UiInstruction {
-    fn parse(instruction: &CompiledInstruction, account_keys: &[Pubkey]) -> Self {
-        let program_id = instruction.program_id(account_keys);
+    fn parse(instruction: &CompiledInstruction, account_keys: &AccountKeys) -> Self {
+        let program_id = &account_keys[instruction.program_id_index as usize];
         if let Ok(parsed_instruction) = parse(program_id, instruction, account_keys) {
             UiInstruction::Parsed(UiParsedInstruction::Parsed(parsed_instruction))
         } else {
@@ -130,7 +129,7 @@ pub struct UiPartiallyDecodedInstruction {
 }
 
 impl UiPartiallyDecodedInstruction {
-    fn from(instruction: &CompiledInstruction, account_keys: &[Pubkey]) -> Self {
+    fn from(instruction: &CompiledInstruction, account_keys: &AccountKeys) -> Self {
         Self {
             program_id: account_keys[instruction.program_id_index as usize].to_string(),
             accounts: instruction
@@ -162,12 +161,13 @@ pub struct UiInnerInstructions {
 
 impl UiInnerInstructions {
     fn parse(inner_instructions: InnerInstructions, message: &Message) -> Self {
+        let account_keys = AccountKeys::new(&message.account_keys, None);
         Self {
             index: inner_instructions.index,
             instructions: inner_instructions
                 .instructions
                 .iter()
-                .map(|ix| UiInstruction::parse(ix, &message.account_keys))
+                .map(|ix| UiInstruction::parse(ix, &account_keys))
                 .collect(),
         }
     }
@@ -572,14 +572,11 @@ pub struct VersionedTransactionWithStatusMeta {
 }
 
 impl VersionedTransactionWithStatusMeta {
-    pub fn account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
-        let static_keys_iter = self.transaction.message.static_account_keys().iter();
-        let dynamic_keys_iter = self
-            .meta
-            .iter()
-            .flat_map(|meta| meta.loaded_addresses.ordered_iter());
-
-        static_keys_iter.chain(dynamic_keys_iter)
+    pub fn account_keys(&self) -> AccountKeys {
+        AccountKeys::new(
+            self.transaction.message.static_account_keys(),
+            self.meta.as_ref().map(|meta| &meta.loaded_addresses),
+        )
     }
 
     pub fn into_legacy_transaction_with_meta(self) -> Option<TransactionWithStatusMeta> {
@@ -753,13 +750,14 @@ impl Encodable for &Message {
     type Encoded = UiMessage;
     fn encode(self, encoding: UiTransactionEncoding) -> Self::Encoded {
         if encoding == UiTransactionEncoding::JsonParsed {
+            let account_keys = AccountKeys::new(&self.account_keys, None);
             UiMessage::Parsed(UiParsedMessage {
                 account_keys: parse_accounts(self),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
                     .iter()
-                    .map(|instruction| UiInstruction::parse(instruction, &self.account_keys))
+                    .map(|instruction| UiInstruction::parse(instruction, &account_keys))
                     .collect(),
             })
         } else {
