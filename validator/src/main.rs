@@ -792,6 +792,18 @@ pub fn main() {
                        download from other validators"),
         )
         .arg(
+            Arg::with_name("incremental_snapshots")
+                .long("incremental-snapshots")
+                .takes_value(false)
+                .hidden(true)
+                .conflicts_with("no_incremental_snapshots")
+                .help("Enable incremental snapshots")
+                .long_help("Enable incremental snapshots by setting this flag. \
+                   When enabled, --snapshot-interval-slots will set the \
+                   incremental snapshot interval. To set the full snapshot \
+                   interval, use --full-snapshot-interval-slots.")
+         )
+        .arg(
             Arg::with_name("no_incremental_snapshots")
                 .long("no-incremental-snapshots")
                 .takes_value(false)
@@ -2420,6 +2432,9 @@ pub fn main() {
             validator_config.accounts_hash_interval_slots);
 
         exit(1);
+    }
+    if matches.is_present("incremental_snapshots") {
+        warn!("--incremental_snapshots is now the default behavior. This flag is deprecated and can be removed from the launch args")
     }
 
     if matches.is_present("limit_ledger_size") {
