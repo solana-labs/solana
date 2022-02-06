@@ -604,8 +604,9 @@ impl BankingStage {
         let mut shuffled_packet_senders_ip = Vec::<IpAddr>::new();
 
         let mut rng = rand::thread_rng();
-        let shuffled_locators: Vec<PacketLocator> = WeightedShuffle::new(&mut rng, stakes)
+        let shuffled_locators: Vec<PacketLocator> = WeightedShuffle::new(stakes)
             .unwrap()
+            .shuffle(&mut rng)
             .map(|i| {
                 if need_to_shuffle_sender_ips {
                     let packet_sender_info = packet_sender_info.as_ref().unwrap();
@@ -693,18 +694,22 @@ impl BankingStage {
                             bank_creation_time,
                         }) = bank_start
                         {
-                            let (processed, verified_txs_len, mut new_unprocessed_indexes) =
-                                Self::process_packets_transactions(
-                                    &working_bank,
-                                    &bank_creation_time,
-                                    recorder,
-                                    packet_batch,
-                                    packet_indexes.clone(),
-                                    transaction_status_sender.clone(),
-                                    gossip_vote_sender,
-                                    banking_stage_stats,
-                                    qos_service,
-                                );
+                            let process_transactions_summary = Self::process_packets_transactions(
+                                &working_bank,
+                                &bank_creation_time,
+                                recorder,
+                                packet_batch,
+                                packet_indexes.clone(),
+                                transaction_status_sender.clone(),
+                                gossip_vote_sender,
+                                banking_stage_stats,
+                                qos_service,
+                            );
+                            let ProcessTransactionsSummary {
+                                reached_max_poh_height,
+                                mut retryable_transaction_indexes,
+                                ..
+                            } = process_transactions_summary;
 
                             // original unprocessed indexes, minor packet index are the new
                             // unprocessed
@@ -718,9 +723,10 @@ impl BankingStage {
                                     }
                                 })
                                 .collect();
-                            new_unprocessed_indexes.extend(unprocessed_indexes);
+                            retryable_transaction_indexes.extend(unprocessed_indexes);
 
-                            if processed < verified_txs_len
+                            if reached_max_poh_height
+                                // TODO adding timing metrics here from when bank was added to now
                                 || !Bank::should_bank_still_be_processing_txs(
                                     &bank_creation_time,
                                     max_tx_ingestion_ns,
@@ -731,11 +737,21 @@ impl BankingStage {
                                     working_bank,
                                 ));
                             }
-                            new_tx_count += processed;
+
+                            // The difference between all transactions passed to execution and the ones that
+                            // are retryable were the ones that were either:
+                            // 1) Committed into the block
+                            // 2) Dropped without being committed because they had some fatal error (too old,
+                            // duplicate signature, etc.)
+                            //
+                            // Note: This assumes that every packet deserializes into one transaction!
+                            consumed_buffered_packets_count += original_unprocessed_indexes
+                                .len()
+                                .saturating_sub(retryable_transaction_indexes.len());
 
                             // Out of the buffered packets just retried, collect any still unprocessed
                             // transactions in this batch for forwarding
-                            rebuffered_packet_count += new_unprocessed_indexes.len();
+                            rebuffered_packet_count += retryable_transaction_indexes.len();
                             Self::update_buffered_packets_with_new_unprocessed(
                                 original_unprocessed_indexes,
                                 retryable_transaction_indexes,
