@@ -1,5 +1,5 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
-//! to contruct a software pipeline. The stage uses all available CPU cores and
+//! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use {
     crate::qos_service::QosService,
@@ -225,7 +225,7 @@ impl BankingStageStats {
     }
 
     fn report(&mut self, report_interval_ms: u64) {
-        // skip repoting metrics if stats is empty
+        // skip reporting metrics if stats is empty
         if self.is_empty() {
             return;
         }
