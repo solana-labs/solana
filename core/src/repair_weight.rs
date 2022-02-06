@@ -768,7 +768,7 @@ mod test {
             if slot == 6 {
                 assert_eq!(stake_voted_at, 3 * stake);
             } else {
-                assert_eq!(stake_voted_at, 0);
+                assert_eq!(stake_voted_at, 400);
             }
         }
 

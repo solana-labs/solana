@@ -80,7 +80,7 @@ impl UpdateOperation {
             Self::Add(stake) => *stake += new_stake,
             Self::MarkValid(_slot) => panic!("Should not get here"),
             Self::MarkInvalid(_slot) => panic!("Should not get here"),
-            Self::Subtract(stake) => *stake += new_stake,
+            Self::Subtract(stake) => *stake -= new_stake,
         }
     }
 }
@@ -2028,7 +2028,7 @@ mod test {
                 ),
                 (
                     ((3, Hash::default()), UpdateLabel::Subtract),
-                    UpdateOperation::Subtract(2 * stake),
+                    UpdateOperation::Subtract(0),
                 ),
                 (
                     ((5, Hash::default()), UpdateLabel::Subtract),
