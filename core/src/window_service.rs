@@ -737,7 +737,12 @@ mod test {
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
-        shredder.entries_to_shreds(entries, true, 0).0
+        let (data_shreds, _) = shredder.entries_to_shreds(
+            entries, true, // is_last_in_slot
+            0,    // next_shred_index
+            0,    // next_code_index
+        );
+        data_shreds
     }
 
     #[test]
