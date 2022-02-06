@@ -10,7 +10,7 @@ use {
     itertools::izip,
     libc::{iovec, mmsghdr, sockaddr_storage, socklen_t, AF_INET, AF_INET6, MSG_WAITFORONE},
     nix::sys::socket::InetAddr,
-    std::{mem, os::unix::io::AsRawFd},
+    std::{convert::TryFrom, mem, os::unix::io::AsRawFd},
 };
 
 #[cfg(not(target_os = "linux"))]
@@ -101,30 +101,13 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
     } else {
         usize::try_from(nrecv).unwrap()
     };
-    for (addr, hdr, pkt) in izip!(addrs, hdrs, packets.iter_mut()).take(nrecv) {
+    for (addr, hdr, pkt) in izip!(&addrs, &hdrs, packets.iter_mut()).take(nrecv) {
         pkt.meta.size = hdr.msg_len as usize;
-        if let Some(addr) = cast_socket_addr(&addr, &hdr) {
+        if let Some(addr) = cast_socket_addr(addr, hdr) {
             pkt.meta.set_addr(&addr.to_std());
         }
     }
-<<<<<<< HEAD
-    let mut npkts = 0;
-
-    izip!(&addrs, &hdrs, packets.iter_mut())
-        .take(nrecv as usize)
-        .filter_map(|(addr, hdr, pkt)| {
-            let addr = cast_socket_addr(addr, hdr)?.to_std();
-            Some((addr, hdr, pkt))
-        })
-        .for_each(|(addr, hdr, pkt)| {
-            pkt.meta.size = hdr.msg_len as usize;
-            pkt.meta.set_addr(&addr);
-            npkts += 1;
-        });
-    Ok(npkts)
-=======
     Ok(nrecv)
->>>>>>> 379feecae (patches bug in recv_mmsg when npkts != nrecv)
 }
 
 #[cfg(test)]
