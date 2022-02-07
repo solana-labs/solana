@@ -185,6 +185,8 @@ pub struct BpfComputeBudget {
     /// Number of compute units per additional 32k heap above the default (~.5
     /// us per 32k at 15 units/us rounded up)
     pub heap_cost: u64,
+    /// Memory operation syscall base cost
+    pub mem_op_base_cost: u64,
 }
 
 impl Default for BpfComputeBudget {
@@ -213,6 +215,7 @@ impl BpfComputeBudget {
             secp256k1_recover_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
+            mem_op_base_cost: 10,
         }
     }
 }
