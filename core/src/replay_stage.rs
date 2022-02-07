@@ -1587,7 +1587,10 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions { vote_only_bank },
+                NewBankOptions {
+                    vote_only_bank,
+                    simulation_bank: false,
+                },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
