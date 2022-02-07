@@ -814,12 +814,10 @@ impl<'a> InvokeContext<'a> {
             })
             .unwrap_or_else(|| Ok(native_loader::id()))?;
 
-        let stack_height = self
+        let nesting_level = self
             .transaction_context
             .get_instruction_context_stack_height();
-
-        let is_top_level_instruction = stack_height == 0;
-
+        let is_top_level_instruction = nesting_level == 0;
         if !is_top_level_instruction {
             // Verify the calling program hasn't misbehaved
             let mut verify_caller_time = Measure::start("verify_caller_time");
@@ -836,7 +834,7 @@ impl<'a> InvokeContext<'a> {
 
             self.transaction_context
                 .record_instruction(InstructionContext::new(
-                    stack_height.saturating_add(1),
+                    nesting_level,
                     program_indices,
                     instruction_accounts,
                     instruction_data,

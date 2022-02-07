@@ -2,7 +2,7 @@
 
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
+    instruction::InstructionError,
     lamports::LamportsError,
     pubkey::Pubkey,
     sysvar::Sysvar,
@@ -176,7 +176,7 @@ impl TransactionContext {
         }
 
         let instruction_context = InstructionContext {
-            stack_height: TRANSACTION_LEVEL_STACK_HEIGHT,
+            nesting_level: 0,
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
             instruction_data: instruction_data.to_vec(),
@@ -252,7 +252,7 @@ pub type InstructionTrace = Vec<Vec<InstructionContext>>;
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
 #[derive(Debug, Clone)]
 pub struct InstructionContext {
-    stack_height: usize,
+    nesting_level: usize,
     program_accounts: Vec<usize>,
     instruction_accounts: Vec<InstructionAccount>,
     instruction_data: Vec<u8>,
@@ -261,22 +261,24 @@ pub struct InstructionContext {
 impl InstructionContext {
     /// New
     pub fn new(
-        stack_height: usize,
+        nesting_level: usize,
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) -> Self {
         InstructionContext {
-            stack_height,
+            nesting_level,
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
             instruction_data: instruction_data.to_vec(),
         }
     }
 
-    /// How many nested parent Instructions this one has plus one (itself)
+    /// How many Instructions were on the stack after this one was pushed
+    ///
+    /// That is the number of nested parent Instructions plus one (itself).
     pub fn get_stack_height(&self) -> usize {
-        self.stack_height
+        self.nesting_level.saturating_add(1)
     }
 
     /// Number of program accounts
