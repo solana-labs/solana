@@ -643,7 +643,7 @@ impl LedgerStorage {
             let signature = transaction.signatures[0];
             let memo = extract_and_fmt_memos(transaction_with_meta);
 
-            for address in transaction_with_meta.account_keys_iter() {
+            for address in transaction_with_meta.account_keys().iter() {
                 if !is_sysvar_id(address) {
                     by_addr
                         .entry(address)
@@ -730,7 +730,7 @@ impl LedgerStorage {
             let index = index as u32;
             let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
 
-            for address in transaction_with_meta.account_keys_iter() {
+            for address in transaction_with_meta.account_keys().iter() {
                 if !is_sysvar_id(address) {
                     addresses.insert(address);
                 }

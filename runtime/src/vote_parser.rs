@@ -44,7 +44,7 @@ pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<Par
         return None;
     }
     let first_account = usize::from(*first_instruction.accounts.first()?);
-    let key = message.get_account_key(first_account)?;
+    let key = message.account_keys().get(first_account)?;
     let (vote, switch_proof_hash) = parse_vote_instruction_data(&first_instruction.data)?;
     Some((*key, vote, switch_proof_hash))
 }

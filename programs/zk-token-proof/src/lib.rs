@@ -53,5 +53,9 @@ pub fn process_instruction(
             ic_msg!(invoke_context, "VerifyTransfer");
             verify::<TransferData>(input, invoke_context)
         }
+        ProofInstruction::VerifyTransferWithFee => {
+            ic_msg!(invoke_context, "VerifyTransferWithFee");
+            verify::<TransferWithFeeData>(input, invoke_context)
+        }
     }
 }
