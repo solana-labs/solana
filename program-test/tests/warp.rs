@@ -180,6 +180,9 @@ async fn clock_sysvar_updated_from_warp() {
         context.warp_to_slot(expected_slot).unwrap_err(),
         ProgramTestError::InvalidWarpSlot,
     );
+
+    // Try warping ahead one slot
+    assert!(context.warp_to_slot(expected_slot + 1).is_ok());
 }
 
 #[tokio::test]
