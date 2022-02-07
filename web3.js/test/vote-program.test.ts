@@ -4,6 +4,7 @@ import chaiAsPromised from 'chai-as-promised';
 import {
   Keypair,
   LAMPORTS_PER_SOL,
+  VoteAuthorizationLayout,
   VoteInit,
   VoteInstruction,
   VoteProgram,
@@ -76,6 +77,25 @@ describe('VoteProgram', () => {
     );
   });
 
+  it('authorize', () => {
+    const votePubkey = Keypair.generate().publicKey;
+    const authorizedPubkey = Keypair.generate().publicKey;
+    const newAuthorizedPubkey = Keypair.generate().publicKey;
+    const voteAuthorizationType = VoteAuthorizationLayout.Voter;
+    const params = {
+      votePubkey,
+      authorizedPubkey,
+      newAuthorizedPubkey,
+      voteAuthorizationType,
+    };
+    const transaction = VoteProgram.authorize(params);
+    expect(transaction.instructions).to.have.length(1);
+    const [authorizeInstruction] = transaction.instructions;
+    expect(params).to.eql(
+      VoteInstruction.decodeAuthorize(authorizeInstruction),
+    );
+  });
+
   it('withdraw', () => {
     const votePubkey = Keypair.generate().publicKey;
     const authorizedWithdrawerPubkey = Keypair.generate().publicKey;
@@ -133,9 +153,8 @@ describe('VoteProgram', () => {
           authorized.publicKey,
           5,
         ),
-        lamports: minimumAmount + 2 * LAMPORTS_PER_SOL,
+        lamports: minimumAmount + 10 * LAMPORTS_PER_SOL,
       });
-
       await sendAndConfirmTransaction(
         connection,
         createAndInitialize,
@@ -143,23 +162,103 @@ describe('VoteProgram', () => {
         {preflightCommitment: 'confirmed'},
       );
       expect(await connection.getBalance(newVoteAccount.publicKey)).to.eq(
-        minimumAmount + 2 * LAMPORTS_PER_SOL,
+        minimumAmount + 10 * LAMPORTS_PER_SOL,
       );
 
       // Withdraw from Vote account
-      const recipient = Keypair.generate();
+      let recipient = Keypair.generate();
       let withdraw = VoteProgram.withdraw({
         votePubkey: newVoteAccount.publicKey,
         authorizedWithdrawerPubkey: authorized.publicKey,
         lamports: LAMPORTS_PER_SOL,
         toPubkey: recipient.publicKey,
       });
-
       await sendAndConfirmTransaction(connection, withdraw, [authorized], {
         preflightCommitment: 'confirmed',
       });
       expect(await connection.getBalance(recipient.publicKey)).to.eq(
         LAMPORTS_PER_SOL,
+      );
+
+      const newAuthorizedWithdrawer = Keypair.generate();
+      await helpers.airdrop({
+        connection,
+        address: newAuthorizedWithdrawer.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+      expect(
+        await connection.getBalance(newAuthorizedWithdrawer.publicKey),
+      ).to.eq(LAMPORTS_PER_SOL);
+
+      // Authorize a new Withdrawer.
+      let authorize = VoteProgram.authorize({
+        votePubkey: newVoteAccount.publicKey,
+        authorizedPubkey: authorized.publicKey,
+        newAuthorizedPubkey: newAuthorizedWithdrawer.publicKey,
+        voteAuthorizationType: VoteAuthorizationLayout.Withdrawer,
+      });
+      await sendAndConfirmTransaction(connection, authorize, [authorized], {
+        preflightCommitment: 'confirmed',
+      });
+
+      // Test old authorized cannot withdraw anymore.
+      withdraw = VoteProgram.withdraw({
+        votePubkey: newVoteAccount.publicKey,
+        authorizedWithdrawerPubkey: authorized.publicKey,
+        lamports: minimumAmount,
+        toPubkey: recipient.publicKey,
+      });
+      await expect(
+        sendAndConfirmTransaction(connection, withdraw, [authorized], {
+          preflightCommitment: 'confirmed',
+        }),
+      ).to.be.rejected;
+
+      // Test newAuthorizedWithdrawer may withdraw.
+      recipient = Keypair.generate();
+      withdraw = VoteProgram.withdraw({
+        votePubkey: newVoteAccount.publicKey,
+        authorizedWithdrawerPubkey: newAuthorizedWithdrawer.publicKey,
+        lamports: LAMPORTS_PER_SOL,
+        toPubkey: recipient.publicKey,
+      });
+      await sendAndConfirmTransaction(
+        connection,
+        withdraw,
+        [newAuthorizedWithdrawer],
+        {
+          preflightCommitment: 'confirmed',
+        },
+      );
+      expect(await connection.getBalance(recipient.publicKey)).to.eq(
+        LAMPORTS_PER_SOL,
+      );
+
+      const newAuthorizedVoter = Keypair.generate();
+      await helpers.airdrop({
+        connection,
+        address: newAuthorizedVoter.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+      expect(await connection.getBalance(newAuthorizedVoter.publicKey)).to.eq(
+        LAMPORTS_PER_SOL,
+      );
+
+      // The authorized Withdrawer may sign to authorize a new Voter, see
+      // https://github.com/solana-labs/solana/issues/22521
+      authorize = VoteProgram.authorize({
+        votePubkey: newVoteAccount.publicKey,
+        authorizedPubkey: newAuthorizedWithdrawer.publicKey,
+        newAuthorizedPubkey: newAuthorizedVoter.publicKey,
+        voteAuthorizationType: VoteAuthorizationLayout.Voter,
+      });
+      await sendAndConfirmTransaction(
+        connection,
+        authorize,
+        [newAuthorizedWithdrawer],
+        {
+          preflightCommitment: 'confirmed',
+        },
       );
     }).timeout(10 * 1000);
   }
