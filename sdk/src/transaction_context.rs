@@ -61,12 +61,7 @@ impl TransactionContext {
     }
 
     /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn deconstruct(
-        self,
-    ) -> (
-        Vec<TransactionAccount>,
-        Vec<Vec<(usize, InstructionContext)>>,
-    ) {
+    pub fn deconstruct(self) -> (Vec<TransactionAccount>, Vec<Vec<InstructionContext>>) {
         (
             Vec::from(Pin::into_inner(self.account_keys))
                 .into_iter()
@@ -181,6 +176,7 @@ impl TransactionContext {
         }
 
         let instruction_context = InstructionContext {
+            stack_height: TRANSACTION_LEVEL_STACK_HEIGHT,
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
             instruction_data: instruction_data.to_vec(),
@@ -189,10 +185,8 @@ impl TransactionContext {
             debug_assert!(
                 self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
             );
-            self.instruction_trace.push(vec![(
-                TRANSACTION_LEVEL_STACK_HEIGHT,
-                instruction_context.clone(),
-            )]);
+            self.instruction_trace
+                .push(vec![instruction_context.clone()]);
         }
 
         self.instruction_context_stack.push(instruction_context);
@@ -238,9 +232,9 @@ impl TransactionContext {
     }
 
     /// Used by the runtime when a new CPI instruction begins
-    pub fn record_instruction(&mut self, stack_height: usize, instruction: InstructionContext) {
+    pub fn record_instruction(&mut self, instruction: InstructionContext) {
         if let Some(records) = self.instruction_trace.last_mut() {
-            records.push((stack_height, instruction));
+            records.push(instruction);
         }
     }
 
@@ -251,13 +245,14 @@ impl TransactionContext {
 }
 
 /// List of (stack height, instruction) for each top-level instruction
-pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
+pub type InstructionTrace = Vec<Vec<InstructionContext>>;
 
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
 #[derive(Debug, Clone)]
 pub struct InstructionContext {
+    stack_height: usize,
     program_accounts: Vec<usize>,
     instruction_accounts: Vec<InstructionAccount>,
     instruction_data: Vec<u8>,
@@ -266,15 +261,22 @@ pub struct InstructionContext {
 impl InstructionContext {
     /// New
     pub fn new(
+        stack_height: usize,
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) -> Self {
         InstructionContext {
+            stack_height,
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
             instruction_data: instruction_data.to_vec(),
         }
+    }
+
+    /// How many nested parent Instructions this one has plus one (itself)
+    pub fn get_stack_height(&self) -> usize {
+        self.stack_height
     }
 
     /// Number of program accounts

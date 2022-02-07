@@ -834,10 +834,13 @@ impl<'a> InvokeContext<'a> {
             );
             verify_caller_result?;
 
-            self.transaction_context.record_instruction(
-                stack_height.saturating_add(1),
-                InstructionContext::new(program_indices, instruction_accounts, instruction_data),
-            );
+            self.transaction_context
+                .record_instruction(InstructionContext::new(
+                    stack_height.saturating_add(1),
+                    program_indices,
+                    instruction_accounts,
+                    instruction_data,
+                ));
         }
 
         let result = self
@@ -1002,11 +1005,6 @@ impl<'a> InvokeContext<'a> {
     /// Get cached sysvars
     pub fn get_sysvar_cache(&self) -> &SysvarCache {
         &self.sysvar_cache
-    }
-
-    /// Get instruction trace
-    pub fn get_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
-        self.transaction_context.get_instruction_trace()
     }
 
     // Get pubkey of account at index

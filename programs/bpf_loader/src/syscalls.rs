@@ -3037,7 +3037,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
         );
 
         let stack_height = invoke_context.get_stack_height();
-        let instruction_trace = invoke_context.get_instruction_trace();
+        let instruction_trace = invoke_context.transaction_context.get_instruction_trace();
         let instruction_context = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
             // pick one of the top-level instructions
             instruction_trace
@@ -3050,8 +3050,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
             // Walk the last list of inner instructions
             instruction_trace.last().and_then(|inners| {
                 let mut current_index = 0;
-                inners.iter().rev().skip(1).find(|(this_stack_height, _)| {
-                    if stack_height == *this_stack_height {
+                inners.iter().rev().skip(1).find(|instruction_context| {
+                    if stack_height == instruction_context.get_stack_height() {
                         if index == current_index {
                             return true;
                         } else {
@@ -3061,8 +3061,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                     false
                 })
             })
-        }
-        .map(|(_, instruction_context)| instruction_context);
+        };
 
         if let Some(instruction_context) = instruction_context {
             let ProcessedSiblingInstruction {
