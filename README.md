@@ -38,6 +38,8 @@ $ sudo apt-get update
 $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang make
 ```
 
+On windows, you can find more detailed notes to build [here](WINDOWS.md).
+
 ## **2. Download the source code.**
 
 ```bash
