@@ -4330,6 +4330,7 @@ pub fn create_test_transactions_and_populate_blockstore(
             true,
             None,
             blockstore,
+            false,
             &Arc::new(AtomicBool::new(false)),
         );
 
@@ -4343,7 +4344,6 @@ pub fn create_test_transactions_and_populate_blockstore(
             Some(
                 &solana_ledger::blockstore_processor::TransactionStatusSender {
                     sender: transaction_status_sender,
-                    enable_cpi_and_log_storage: false,
                 },
             ),
             Some(&replay_vote_sender),
