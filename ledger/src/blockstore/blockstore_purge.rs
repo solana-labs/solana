@@ -7,10 +7,21 @@ pub struct PurgeStats {
 }
 
 impl Blockstore {
-    /// Silently deletes all blockstore column families in the range \[from_slot,to_slot\]
-    /// Dangerous; Use with care:
-    /// Does not check for integrity and does not update slot metas that refer to deleted slots
-    /// Modifies multiple column families simultaneously
+    /// Performs cleanup based on the specified deletion range.  After this
+    /// function call, entries within \[`from_slot`, `to_slot`\] will become
+    /// unavailable to the reader immediately, while its disk space occupied
+    /// by the deletion entries are reclaimed later via RocksDB's background
+    /// compaction.
+    ///
+    /// Note that this function modifies multiple column families at the same
+    /// time and might break the consistency between different column families
+    /// as it does not update the associated slot-meta entries that refer to
+    /// the deleted entries.
+    ///
+    /// For slot-id based column families, the purge is done by range deletion,
+    /// while the non-slot-id based column families, `cf::TransactionStatus`,
+    /// `AddressSignature`, and `cf::TransactionStatusIndex`, are cleaned-up
+    /// based on the `purge_type` setting.
     pub fn purge_slots(&self, from_slot: Slot, to_slot: Slot, purge_type: PurgeType) {
         let mut purge_stats = PurgeStats::default();
         let purge_result =
@@ -114,7 +125,8 @@ impl Blockstore {
         self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut PurgeStats::default())
     }
 
-    // Returns whether or not all columns successfully purged the slot range
+    /// A helper function to `purge_slots` that executes the ledger clean up
+    /// from `from_slot` to `to_slot`.
     pub(crate) fn run_purge_with_stats(
         &self,
         from_slot: Slot,
@@ -314,9 +326,11 @@ impl Blockstore {
         Ok(result)
     }
 
-    /// Purges special columns (using a non-Slot primary-index) exactly, by deserializing each slot
-    /// being purged and iterating through all transactions to determine the keys of individual
-    /// records. **This method is very slow.**
+    /// Purges special columns (using a non-Slot primary-index) exactly, by
+    /// deserializing each slot being purged and iterating through all
+    /// transactions to determine the keys of individual records.
+    ///
+    /// **This method is very slow.**
     fn purge_special_columns_exact(
         &self,
         batch: &mut WriteBatch,
@@ -360,8 +374,9 @@ impl Blockstore {
         Ok(())
     }
 
-    /// Purges special columns (using a non-Slot primary-index) by range. Purge occurs if frozen
-    /// primary index has a max-slot less than the highest slot being purged.
+    /// Purges special columns (using a non-Slot primary-index) by range. Purge
+    /// occurs if frozen primary index has a max-slot less than the highest slot
+    /// being purged.
     fn purge_special_columns_with_primary_index(
         &self,
         write_batch: &mut WriteBatch,
