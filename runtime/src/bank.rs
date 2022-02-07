@@ -200,7 +200,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
+#[frozen_abi(digest = "2gyFzcvK5sXe1NgcGWnd4ATf3pCBaS43sNVPSDdjd7Rj")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 pub(crate) type TransactionAccountRefCell = (Pubkey, Rc<RefCell<AccountSharedData>>);
 type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;

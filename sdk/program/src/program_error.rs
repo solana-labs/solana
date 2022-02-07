@@ -49,6 +49,10 @@ pub enum ProgramError {
     UnsupportedSysvar,
     #[error("Provided owner is not allowed")]
     IllegalOwner,
+    #[error("Requested account data allocation exceeded the accounts data budget")]
+    AccountsDataBudgetExceeded,
+    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
+    ActiveVoteAccountClose,
 }
 
 pub trait PrintProgramError {
@@ -87,6 +91,8 @@ impl PrintProgramError for ProgramError {
             Self::AccountNotRentExempt => msg!("Error: AccountNotRentExempt"),
             Self::UnsupportedSysvar => msg!("Error: UnsupportedSysvar"),
             Self::IllegalOwner => msg!("Error: IllegalOwner"),
+            Self::AccountsDataBudgetExceeded => msg!("Error: AccountsDataBudgetExceeded"),
+            Self::ActiveVoteAccountClose => msg!("Error: ActiveVoteAccountClose"),
         }
     }
 }
@@ -117,6 +123,8 @@ pub const BORSH_IO_ERROR: u64 = to_builtin!(15);
 pub const ACCOUNT_NOT_RENT_EXEMPT: u64 = to_builtin!(16);
 pub const UNSUPPORTED_SYSVAR: u64 = to_builtin!(17);
 pub const ILLEGAL_OWNER: u64 = to_builtin!(18);
+pub const ACCOUNTS_DATA_BUDGET_EXCEEDED: u64 = to_builtin!(19);
+pub const ACTIVE_VOTE_ACCOUNT_CLOSE: u64 = to_builtin!(20);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivilent to InstructionError
@@ -143,6 +151,8 @@ impl From<ProgramError> for u64 {
             ProgramError::AccountNotRentExempt => ACCOUNT_NOT_RENT_EXEMPT,
             ProgramError::UnsupportedSysvar => UNSUPPORTED_SYSVAR,
             ProgramError::IllegalOwner => ILLEGAL_OWNER,
+            ProgramError::AccountsDataBudgetExceeded => ACCOUNTS_DATA_BUDGET_EXCEEDED,
+            ProgramError::ActiveVoteAccountClose => ACTIVE_VOTE_ACCOUNT_CLOSE,
             ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -175,6 +185,8 @@ impl From<u64> for ProgramError {
             ACCOUNT_NOT_RENT_EXEMPT => Self::AccountNotRentExempt,
             UNSUPPORTED_SYSVAR => Self::UnsupportedSysvar,
             ILLEGAL_OWNER => Self::IllegalOwner,
+            ACCOUNTS_DATA_BUDGET_EXCEEDED => Self::AccountsDataBudgetExceeded,
+            ACTIVE_VOTE_ACCOUNT_CLOSE => Self::ActiveVoteAccountClose,
             _ => Self::Custom(error as u32),
         }
     }
@@ -203,6 +215,8 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::AccountNotRentExempt => Ok(Self::AccountNotRentExempt),
             Self::Error::UnsupportedSysvar => Ok(Self::UnsupportedSysvar),
             Self::Error::IllegalOwner => Ok(Self::IllegalOwner),
+            Self::Error::AccountsDataBudgetExceeded => Ok(Self::AccountsDataBudgetExceeded),
+            Self::Error::ActiveVoteAccountClose => Ok(Self::ActiveVoteAccountClose),
             _ => Err(error),
         }
     }
@@ -233,6 +247,8 @@ where
             ACCOUNT_NOT_RENT_EXEMPT => Self::AccountNotRentExempt,
             UNSUPPORTED_SYSVAR => Self::UnsupportedSysvar,
             ILLEGAL_OWNER => Self::IllegalOwner,
+            ACCOUNTS_DATA_BUDGET_EXCEEDED => Self::AccountsDataBudgetExceeded,
+            ACTIVE_VOTE_ACCOUNT_CLOSE => Self::ActiveVoteAccountClose,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
