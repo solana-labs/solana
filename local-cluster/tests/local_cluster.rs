@@ -3,8 +3,8 @@ use {
     assert_matches::assert_matches,
     common::{
         copy_blocks, create_custom_leader_schedule, last_vote_in_tower, ms_for_n_slots,
-        open_blockstore, purge_slots, remove_tower, restore_tower, root_in_tower,
-        run_cluster_partition, run_kill_partition_switch_threshold, save_tower, test_faulty_node,
+        open_blockstore, purge_slots, remove_tower, restore_tower, run_cluster_partition,
+        run_kill_partition_switch_threshold, test_faulty_node,
         wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
     },
     crossbeam_channel::{unbounded, Receiver},
@@ -23,7 +23,7 @@ use {
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        tower_storage::FileTowerStorage,
+        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
@@ -1913,6 +1913,18 @@ fn test_validator_saves_tower() {
     assert!(tower4.root() >= new_root);
 }
 
+fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
+    file_tower_storage
+        .store(&SavedTowerVersions::from(saved_tower))
+        .unwrap();
+}
+
+fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
+}
+
 // This test verifies that even if votes from a validator end up taking too long to land, and thus
 // some of the referenced slots are slots are no longer present in the slot hashes sysvar,
 // consensus can still be attained.
@@ -2370,6 +2382,102 @@ fn test_hard_fork_invalidates_tower() {
 #[serial]
 fn test_run_test_load_program_accounts_root() {
     run_test_load_program_accounts(CommitmentConfig::finalized());
+}
+
+#[test]
+#[serial]
+fn test_restart_tower_rollback() {
+    // Test node crashing and failing to save its tower before restart
+    // Cluster continues to make progress, this node is able to rejoin with
+    // outdated tower post restart.
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    // First set up the cluster with 2 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![10000, 1];
+
+    let validator_strings = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ];
+
+    let validator_keys = validator_strings
+        .iter()
+        .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+        .take(node_stakes.len())
+        .collect::<Vec<_>>();
+
+    let b_pubkey = validator_keys[1].0.pubkey();
+
+    let mut config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default_for_test(),
+            node_stakes.len(),
+        ),
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+
+    let val_b_ledger_path = cluster.ledger_path(&b_pubkey);
+
+    let mut earlier_tower: Tower;
+    loop {
+        sleep(Duration::from_millis(1000));
+
+        // Grab the current saved tower
+        earlier_tower = restore_tower(&val_b_ledger_path, &b_pubkey).unwrap();
+        if earlier_tower.last_voted_slot().unwrap_or(0) > 1 {
+            break;
+        }
+    }
+
+    let mut exited_validator_info: ClusterValidatorInfo;
+    let last_voted_slot: Slot;
+    loop {
+        sleep(Duration::from_millis(1000));
+
+        // Wait for second, lesser staked validator to make a root past the earlier_tower's
+        // latest vote slot, then exit that validator
+        let tower = restore_tower(&val_b_ledger_path, &b_pubkey).unwrap();
+        if tower.root()
+            > earlier_tower
+                .last_voted_slot()
+                .expect("Earlier tower must have at least one vote")
+        {
+            exited_validator_info = cluster.exit_node(&b_pubkey);
+            last_voted_slot = tower.last_voted_slot().unwrap();
+            break;
+        }
+    }
+
+    // Now rewrite the tower with the *earlier_tower*. We disable voting until we reach
+    // a slot we did not previously vote for in order to avoid duplicate vote slashing
+    // issues.
+    save_tower(
+        &val_b_ledger_path,
+        &earlier_tower,
+        &exited_validator_info.info.keypair,
+    );
+    exited_validator_info.config.wait_to_vote_slot = Some(last_voted_slot + 10);
+
+    cluster.restart_node(
+        &b_pubkey,
+        exited_validator_info,
+        SocketAddrSpace::Unspecified,
+    );
+
+    // Check this node is making new roots
+    cluster.check_for_new_roots(
+        20,
+        "test_restart_tower_rollback",
+        SocketAddrSpace::Unspecified,
+    );
 }
 
 #[test]
