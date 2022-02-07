@@ -1344,6 +1344,16 @@ mod tests {
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
         for _ in 0..invoke_stack.len() {
+            if depth_reached > 0 {
+                invoke_context
+                    .transaction_context
+                    .record_instruction(InstructionContext::new(
+                        depth_reached,
+                        &[MAX_DEPTH + depth_reached],
+                        &instruction_accounts,
+                        &[],
+                    ));
+            }
             if Err(InstructionError::CallDepth)
                 == invoke_context.push(&instruction_accounts, &[MAX_DEPTH + depth_reached], &[])
             {
@@ -1471,6 +1481,9 @@ mod tests {
 
         // External modification tests
         {
+            /*invoke_context
+            .transaction_context
+            .record_instruction(InstructionContext::new(0, &[4], &instruction_accounts, &[]));*/
             invoke_context
                 .push(&instruction_accounts, &[4], &[])
                 .unwrap();
@@ -1537,6 +1550,9 @@ mod tests {
             ),
         ];
         for case in cases {
+            /*invoke_context
+            .transaction_context
+            .record_instruction(InstructionContext::new(0, &[4], &instruction_accounts, &[]));*/
             invoke_context
                 .push(&instruction_accounts, &[4], &[])
                 .unwrap();
@@ -1550,6 +1566,9 @@ mod tests {
         let compute_units_to_consume = 10;
         let expected_results = vec![Ok(()), Err(InstructionError::GenericError)];
         for expected_result in expected_results {
+            /*invoke_context
+            .transaction_context
+            .record_instruction(InstructionContext::new(0, &[4], &instruction_accounts, &[]));*/
             invoke_context
                 .push(&instruction_accounts, &[4], &[])
                 .unwrap();
