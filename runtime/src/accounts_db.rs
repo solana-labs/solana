@@ -72,7 +72,7 @@ use {
         convert::TryFrom,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::{Error as IoError, Result as IoResult},
-        ops::{Range, RangeBounds},
+        ops::{AddAssign, Range, RangeBounds},
         path::{Path, PathBuf},
         str::FromStr,
         sync::{
@@ -215,6 +215,46 @@ pub struct ErrorCounters {
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
     pub invalid_rent_paying_account: usize,
+}
+
+impl AddAssign for ErrorCounters {
+    fn add_assign(&mut self, rhs: Self) {
+        let Self {
+            total,
+            account_in_use,
+            account_loaded_twice,
+            account_not_found,
+            blockhash_not_found,
+            blockhash_too_old,
+            call_chain_too_deep,
+            already_processed,
+            instruction_error,
+            insufficient_funds,
+            invalid_account_for_fee,
+            invalid_account_index,
+            invalid_program_for_execution,
+            not_allowed_during_cluster_maintenance,
+            invalid_writable_account,
+            invalid_rent_paying_account,
+        } = rhs;
+
+        self.total += total;
+        self.account_in_use += account_in_use;
+        self.account_loaded_twice += account_loaded_twice;
+        self.account_not_found += account_not_found;
+        self.blockhash_not_found += blockhash_not_found;
+        self.blockhash_too_old += blockhash_too_old;
+        self.call_chain_too_deep += call_chain_too_deep;
+        self.already_processed += already_processed;
+        self.instruction_error += instruction_error;
+        self.insufficient_funds += insufficient_funds;
+        self.invalid_account_for_fee += invalid_account_for_fee;
+        self.invalid_account_index += invalid_account_index;
+        self.invalid_program_for_execution += invalid_program_for_execution;
+        self.not_allowed_during_cluster_maintenance += not_allowed_during_cluster_maintenance;
+        self.invalid_writable_account += invalid_writable_account;
+        self.invalid_rent_paying_account += invalid_rent_paying_account;
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]

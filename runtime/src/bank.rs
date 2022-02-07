@@ -3940,6 +3940,24 @@ impl Bank {
         })
     }
 
+    pub fn load_transaction_batch_accounts(
+        &self,
+        sanitized_txs: &[SanitizedTransaction],
+        lock_results: Vec<TransactionCheckResult>,
+        batch_error_counters: &RwLock<ErrorCounters>,
+    ) -> Vec<TransactionLoadResult> {
+        self.rc.accounts.load_transaction_batch_accounts(
+            &self.ancestors,
+            sanitized_txs,
+            lock_results,
+            &self.blockhash_queue.read().unwrap(),
+            batch_error_counters,
+            &self.rent_collector,
+            &self.feature_set,
+            &self.fee_structure,
+        )
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3982,16 +4000,13 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_transactions = self.rc.accounts.load_accounts(
-            &self.ancestors,
+        let batch_error_counters = RwLock::new(ErrorCounters::default());
+        let mut loaded_transactions = self.load_transaction_batch_accounts(
             sanitized_txs,
             check_results,
-            &self.blockhash_queue.read().unwrap(),
-            &mut error_counters,
-            &self.rent_collector,
-            &self.feature_set,
-            &self.fee_structure,
+            &batch_error_counters,
         );
+        error_counters += batch_error_counters.into_inner().unwrap();
         load_time.stop();
 
         let mut execution_time = Measure::start("execution_time");
@@ -16508,13 +16523,13 @@ pub(crate) mod tests {
         let number_of_instructions_at_transaction_level = tx.message().instructions.len();
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
-        let mut error_counters = ErrorCounters::default();
-        let loaded_txs = bank.rc.accounts.load_accounts(
+        let error_counters = RwLock::new(ErrorCounters::default());
+        let loaded_txs = bank.rc.accounts.load_transaction_batch_accounts(
             &bank.ancestors,
             &[sanitized_tx.clone()],
             vec![(Ok(()), None)],
             &bank.blockhash_queue.read().unwrap(),
-            &mut error_counters,
+            &error_counters,
             &bank.rent_collector,
             &bank.feature_set,
             &FeeStructure::default(),
