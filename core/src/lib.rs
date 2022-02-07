@@ -53,6 +53,7 @@ pub mod sigverify_shreds;
 pub mod sigverify_stage;
 pub mod snapshot_packager_service;
 pub mod system_monitor_service;
+mod tower1_7_14;
 pub mod tower_storage;
 pub mod tpu;
 pub mod tree_diff;

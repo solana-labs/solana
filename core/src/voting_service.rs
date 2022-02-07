@@ -1,5 +1,10 @@
 use {
+<<<<<<< HEAD
     crate::tower_storage::{SavedTower, TowerStorage},
+=======
+    crate::tower_storage::{SavedTowerVersions, TowerStorage},
+    crossbeam_channel::Receiver,
+>>>>>>> 5acf0f633 (Add feature gate for new vote instruction and plumb through replay (#21683))
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
@@ -15,7 +20,7 @@ pub enum VoteOp {
     PushVote {
         tx: Transaction,
         tower_slots: Vec<Slot>,
-        saved_tower: SavedTower,
+        saved_tower: SavedTowerVersions,
     },
     RefreshVote {
         tx: Transaction,
