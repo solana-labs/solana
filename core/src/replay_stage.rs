@@ -78,7 +78,7 @@ use {
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
-pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
+pub const SUPER_MINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
@@ -2740,7 +2740,7 @@ impl ReplayStage {
         if leader_propagated_stats.total_epoch_stake == 0
             || leader_propagated_stats.propagated_validators_stake as f64
                 / leader_propagated_stats.total_epoch_stake as f64
-                > SUPERMINORITY_THRESHOLD
+                > SUPER_MINORITY_THRESHOLD
         {
             leader_propagated_stats.is_propagated = true;
             did_newly_reach_threshold = true
@@ -3299,7 +3299,7 @@ pub mod tests {
             .is_some());
 
         // // There are 20 equally staked accounts, of which 3 have built
-        // banks above or at bank 1. Because 3/20 < SUPERMINORITY_THRESHOLD,
+        // banks above or at bank 1. Because 3/20 < SUPER_MINORITY_THRESHOLD,
         // we should see 3 validators in bank 1's propagated_validator set.
         let expected_leader_slots = vec![
             1,

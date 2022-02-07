@@ -3,7 +3,7 @@ use {
         cluster_info_vote_listener::SlotVoteTracker,
         cluster_slots::SlotPubkeys,
         consensus::{Stake, VotedStakes},
-        replay_stage::SUPERMINORITY_THRESHOLD,
+        replay_stage::SUPER_MINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
@@ -354,7 +354,7 @@ impl ForkProgress {
                             true
                         } else {
                             info.stake as f64 / info.total_epoch_stake as f64
-                                > SUPERMINORITY_THRESHOLD
+                                > SUPER_MINORITY_THRESHOLD
                         }
                     },
                     info.total_epoch_stake,

@@ -67,7 +67,7 @@ impl RepairWeight {
             }
             let mut tree_root = self.slot_to_tree.get(&slot).cloned();
             let mut new_ancestors = VecDeque::new();
-            // If we don't know know  how this slot chains to any existing trees
+            // If we don't know know how this slot chains to any existing trees
             // in `self.trees`, then use `blockstore` to see if this chains
             // any existing trees in `self.trees`
             if tree_root.is_none() {
