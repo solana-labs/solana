@@ -5,7 +5,7 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::FileTowerStorage,
+        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,
@@ -405,4 +405,16 @@ pub fn test_faulty_node(
         .collect();
 
     (cluster, validator_keys)
+}
+
+pub fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
+    file_tower_storage
+        .store(&SavedTowerVersions::from(saved_tower))
+        .unwrap();
+}
+
+pub fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
 }

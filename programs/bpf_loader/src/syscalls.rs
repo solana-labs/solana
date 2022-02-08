@@ -3077,7 +3077,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                 result
             );
 
-            if *data_len >= instruction_context.get_instruction_data().len()
+            if *data_len == instruction_context.get_instruction_data().len()
                 && *accounts_len == instruction_context.get_number_of_instruction_accounts()
             {
                 let program_id = question_mark!(

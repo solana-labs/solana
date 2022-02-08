@@ -123,21 +123,22 @@ impl TransferWithFeeData {
             FeeEncryption::new(fee_to_encrypt, pubkey_dest, pubkey_fee_collector);
 
         // generate transcript and append all public inputs
-        let pod_transfer_with_fee_pubkeys = pod::TransferWithFeePubkeys::new(
-            &keypair_source.public,
-            pubkey_dest,
-            pubkey_auditor,
-            pubkey_fee_collector,
-        );
-        let pod_ciphertext_lo = pod::TransferAmountEncryption(ciphertext_lo.to_bytes());
-        let pod_ciphertext_hi = pod::TransferAmountEncryption(ciphertext_hi.to_bytes());
+        let pod_transfer_with_fee_pubkeys = pod::TransferWithFeePubkeys {
+            source: keypair_source.public.into(),
+            dest: (*pubkey_dest).into(),
+            auditor: (*pubkey_auditor).into(),
+            fee_collector: (*pubkey_fee_collector).into(),
+        };
+        let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.to_pod();
+        let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.to_pod();
         let pod_ciphertext_new_source: pod::ElGamalCiphertext = ciphertext_new_source.into();
-        let pod_ciphertext_fee = pod::FeeEncryption(ciphertext_fee.to_bytes());
+        let pod_ciphertext_fee: pod::FeeEncryption = ciphertext_fee.to_pod();
 
         let mut transcript = TransferWithFeeProof::transcript_new(
             &pod_transfer_with_fee_pubkeys,
             &pod_ciphertext_lo,
             &pod_ciphertext_hi,
+            &pod_ciphertext_new_source,
             &pod_ciphertext_fee,
         );
 
@@ -225,13 +226,14 @@ impl Verifiable for TransferWithFeeData {
             &self.transfer_with_fee_pubkeys,
             &self.ciphertext_lo,
             &self.ciphertext_hi,
+            &self.ciphertext_new_source,
             &self.ciphertext_fee,
         );
 
         let ciphertext_lo = self.ciphertext_lo.try_into()?;
         let ciphertext_hi = self.ciphertext_hi.try_into()?;
-        let transfer_with_fee_pubkeys = self.transfer_with_fee_pubkeys.try_into()?;
-        let new_spendable_ciphertext = self.ciphertext_new_source.try_into()?;
+        let pubkeys_transfer_with_fee = self.transfer_with_fee_pubkeys.try_into()?;
+        let ciphertext_new_source = self.ciphertext_new_source.try_into()?;
 
         let ciphertext_fee = self.ciphertext_fee.try_into()?;
         let fee_parameters = self.fee_parameters.into();
@@ -239,8 +241,8 @@ impl Verifiable for TransferWithFeeData {
         self.proof.verify(
             &ciphertext_lo,
             &ciphertext_hi,
-            &transfer_with_fee_pubkeys,
-            &new_spendable_ciphertext,
+            &pubkeys_transfer_with_fee,
+            &ciphertext_new_source,
             &ciphertext_fee,
             fee_parameters,
             &mut transcript,
@@ -268,14 +270,34 @@ impl TransferWithFeeProof {
         transfer_with_fee_pubkeys: &pod::TransferWithFeePubkeys,
         ciphertext_lo: &pod::TransferAmountEncryption,
         ciphertext_hi: &pod::TransferAmountEncryption,
+        ciphertext_new_source: &pod::ElGamalCiphertext,
         ciphertext_fee: &pod::FeeEncryption,
     ) -> Transcript {
         let mut transcript = Transcript::new(b"FeeProof");
 
-        transcript.append_message(b"transfer-with-fee-pubkeys", &transfer_with_fee_pubkeys.0);
-        transcript.append_message(b"ciphertext-lo", &ciphertext_lo.0);
-        transcript.append_message(b"ciphertext-hi", &ciphertext_hi.0);
-        transcript.append_message(b"ciphertext-fee", &ciphertext_fee.0);
+        transcript.append_pubkey(b"pubkey_source", &transfer_with_fee_pubkeys.source);
+        transcript.append_pubkey(b"pubkey_dest", &transfer_with_fee_pubkeys.dest);
+        transcript.append_pubkey(b"pubkey_auditor", &transfer_with_fee_pubkeys.auditor);
+        transcript.append_pubkey(
+            b"pubkey_fee_collector",
+            &transfer_with_fee_pubkeys.fee_collector,
+        );
+
+        transcript.append_commitment(b"comm-lo-amount", &ciphertext_lo.commitment);
+        transcript.append_handle(b"handle-lo-source", &ciphertext_lo.source);
+        transcript.append_handle(b"handle-lo-dest", &ciphertext_lo.dest);
+        transcript.append_handle(b"handle-lo-auditor", &ciphertext_lo.auditor);
+
+        transcript.append_commitment(b"comm-hi-amount", &ciphertext_hi.commitment);
+        transcript.append_handle(b"handle-hi-source", &ciphertext_hi.source);
+        transcript.append_handle(b"handle-hi-dest", &ciphertext_hi.dest);
+        transcript.append_handle(b"handle-hi-auditor", &ciphertext_hi.auditor);
+
+        transcript.append_ciphertext(b"ctxt-new-source", ciphertext_new_source);
+
+        transcript.append_commitment(b"comm-fee", &ciphertext_fee.commitment);
+        transcript.append_handle(b"handle-fee-dest", &ciphertext_fee.dest);
+        transcript.append_handle(b"handle-fee-auditor", &ciphertext_fee.fee_collector);
 
         transcript
     }
@@ -510,23 +532,6 @@ impl TransferWithFeePubkeys {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
-impl pod::TransferWithFeePubkeys {
-    pub fn new(
-        source: &ElGamalPubkey,
-        dest: &ElGamalPubkey,
-        auditor: &ElGamalPubkey,
-        fee_collector: &ElGamalPubkey,
-    ) -> Self {
-        let mut bytes = [0u8; 128];
-        bytes[..32].copy_from_slice(&source.to_bytes());
-        bytes[32..64].copy_from_slice(&dest.to_bytes());
-        bytes[64..96].copy_from_slice(&auditor.to_bytes());
-        bytes[96..128].copy_from_slice(&fee_collector.to_bytes());
-        Self(bytes)
-    }
-}
-
 #[derive(Clone)]
 #[repr(C)]
 #[cfg(not(target_arch = "bpf"))]
@@ -553,29 +558,12 @@ impl FeeEncryption {
         (fee_encryption, opening)
     }
 
-    pub fn to_bytes(&self) -> [u8; 96] {
-        let mut bytes = [0u8; 96];
-        bytes[..32].copy_from_slice(&self.commitment.to_bytes());
-        bytes[32..64].copy_from_slice(&self.dest.to_bytes());
-        bytes[64..96].copy_from_slice(&self.fee_collector.to_bytes());
-        bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-        let bytes = array_ref![bytes, 0, 96];
-        let (commitment, dest, fee_collector) = array_refs![bytes, 32, 32, 32];
-
-        let commitment =
-            PedersenCommitment::from_bytes(commitment).ok_or(ProofError::Verification)?;
-        let dest = DecryptHandle::from_bytes(dest).ok_or(ProofError::Verification)?;
-        let fee_collector =
-            DecryptHandle::from_bytes(fee_collector).ok_or(ProofError::Verification)?;
-
-        Ok(Self {
-            commitment,
-            dest,
-            fee_collector,
-        })
+    pub fn to_pod(&self) -> pod::FeeEncryption {
+        pod::FeeEncryption {
+            commitment: self.commitment.into(),
+            dest: self.dest.into(),
+            fee_collector: self.fee_collector.into(),
+        }
     }
 }
 

@@ -822,12 +822,17 @@ pub fn create_test_recorder(
     bank: &Arc<Bank>,
     blockstore: &Arc<Blockstore>,
     poh_config: Option<PohConfig>,
+    leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
 ) -> (
     Arc<AtomicBool>,
     Arc<Mutex<PohRecorder>>,
     PohService,
     Receiver<WorkingBankEntry>,
 ) {
+    let leader_schedule_cache = match leader_schedule_cache {
+        Some(provided_cache) => provided_cache,
+        None => Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+    };
     let exit = Arc::new(AtomicBool::new(false));
     let poh_config = Arc::new(poh_config.unwrap_or_default());
     let (mut poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
@@ -838,7 +843,7 @@ pub fn create_test_recorder(
         bank.ticks_per_slot(),
         &Pubkey::default(),
         blockstore,
-        &Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+        &leader_schedule_cache,
         &poh_config,
         exit.clone(),
     );

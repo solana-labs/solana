@@ -1075,26 +1075,33 @@ impl ProgramTestContext {
             bank.register_tick(&Hash::new_unique());
         }
 
-        // warp ahead to one slot *before* the desired slot because the warped
-        // bank is frozen
+        // Ensure that we are actually progressing forward
         let working_slot = bank.slot();
         if warp_slot <= working_slot {
             return Err(ProgramTestError::InvalidWarpSlot);
         }
 
+        // Warp ahead to one slot *before* the desired slot because the bank
+        // from Bank::warp_from_parent() is frozen. If the desired slot is one
+        // slot *after* the working_slot, no need to warp at all.
         let pre_warp_slot = warp_slot - 1;
-        let warp_bank = bank_forks.insert(Bank::warp_from_parent(
-            &bank,
-            &Pubkey::default(),
-            pre_warp_slot,
-        ));
+        let warp_bank = if pre_warp_slot == working_slot {
+            bank.freeze();
+            bank
+        } else {
+            bank_forks.insert(Bank::warp_from_parent(
+                &bank,
+                &Pubkey::default(),
+                pre_warp_slot,
+            ))
+        };
         bank_forks.set_root(
             pre_warp_slot,
             &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             Some(pre_warp_slot),
         );
 
-        // warp bank is frozen, so go forward one slot from it
+        // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
             &warp_bank,
             &Pubkey::default(),

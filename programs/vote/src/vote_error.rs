@@ -61,6 +61,9 @@ pub enum VoteError {
 
     #[error("every slot in the vote was older than the SlotHashes history")]
     VotesTooOldAllFiltered,
+
+    #[error("Proposed root is not in slot hashes")]
+    RootOnDifferentFork,
 }
 
 impl<E> DecodeError<E> for VoteError {
