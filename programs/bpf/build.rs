@@ -91,6 +91,8 @@ fn main() {
             "sanity",
             "secp256k1_recover",
             "sha",
+            "sibling_inner_instruction",
+            "sibling_instruction",
             "spoof1",
             "spoof1_system",
             "upgradeable",

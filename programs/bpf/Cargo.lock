@@ -2773,6 +2773,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-sibling-instructions"
+version = "1.9.6"
+dependencies = [
+ "solana-program 1.9.6",
+]
+
+[[package]]
+name = "solana-bpf-rust-sibling_inner-instructions"
+version = "1.9.6"
+dependencies = [
+ "solana-program 1.9.6",
+]
+
+[[package]]
 name = "solana-bpf-rust-spoof1"
 version = "1.9.6"
 dependencies = [
