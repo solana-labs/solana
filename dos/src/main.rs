@@ -14,6 +14,16 @@ use {
         str::FromStr,
         time::{Duration, Instant},
     },
+    // TODO(klykov): maybe later will move to test_tx.rs
+    solana_sdk::{
+        transaction::Transaction,
+        signature::Keypair,
+        hash::Hash,
+        stake,
+        system_program,
+        instruction::CompiledInstruction,
+        system_instruction::SystemInstruction,
+    }
 };
 
 fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
@@ -21,6 +31,39 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     let mut contact = nodes[source].clone();
     contact.id = solana_sdk::pubkey::new_rand();
     contact
+}
+
+fn test_multisig_tx(nsign: usize) -> Transaction {
+    let kpvals: Vec<Keypair> = (0..nsign).map( |_| Keypair::new() ).collect();
+    let keypairs: Vec<&Keypair> = kpvals.iter().collect();
+
+    let lamports = 5;
+    let blockhash = Hash::default();
+
+    let transfer_instruction = SystemInstruction::Transfer { lamports };
+
+    let program_ids = vec![system_program::id(), stake::program::id()];
+
+    let instructions = vec![CompiledInstruction::new(
+        0,
+        &transfer_instruction,
+        vec![0, 1],
+    )];
+
+    let tx = Transaction::new_with_compiled_instructions(
+        &keypairs,
+        &[],
+        blockhash,
+        program_ids,
+        instructions,
+    );
+    tx
+}
+
+fn test_invalid_multisig_tx(nsign: usize, blockhash: Hash) -> Transaction {
+    let mut tx = test_multisig_tx(nsign, blockhash);
+    tx.signatures = vec![Transaction::get_invalid_signature(); nsign];
+    tx
 }
 
 fn run_dos(
@@ -31,6 +74,7 @@ fn run_dos(
     data_size: usize,
     mode: String,
     data_input: Option<String>,
+    num_sign: usize, // makes sense only with transaction mode
 ) {
     let mut target = None;
     let mut rpc_client = None;
@@ -88,7 +132,7 @@ fn run_dos(
             data.resize(data_size, 0);
         }
         "transaction" => {
-            let tx = solana_perf::test_tx::test_tx();
+            let tx = test_multisig_tx(num_sign);
             info!("{:?}", tx);
             data = bincode::serialize(&tx).unwrap();
         }
@@ -218,6 +262,13 @@ fn main() {
                 .help("Allow contacting private ip addresses")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("num_sign")
+                .long("number-of-signatures")
+                .takes_value(true)
+                .value_name("NSIGN")
+                .help("Number of signatures in transaction"),
+        )
         .get_matches();
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
@@ -233,6 +284,7 @@ fn main() {
     let mode = value_t_or_exit!(matches, "mode", String);
     let data_type = value_t_or_exit!(matches, "data_type", String);
     let data_input = value_t!(matches, "data_input", String).ok();
+    let num_sign = value_t!(matches, "num_sign", usize).unwrap_or(2);
 
     let mut nodes = vec![];
     if !skip_gossip {
@@ -266,6 +318,7 @@ fn main() {
         data_size,
         mode,
         data_input,
+        num_sign
     );
 }
 
@@ -292,6 +345,7 @@ pub mod test {
             10,
             "tvu".to_string(),
             None,
+            2,
         );
 
         run_dos(
@@ -302,6 +356,7 @@ pub mod test {
             10,
             "repair".to_string(),
             None,
+            2,
         );
 
         run_dos(
@@ -312,6 +367,7 @@ pub mod test {
             10,
             "serve_repair".to_string(),
             None,
+            2,
         );
     }
 
@@ -329,12 +385,13 @@ pub mod test {
 
         run_dos(
             &[node],
-            10_000_000,
+            10, // was 10_000_000
             cluster.entry_point_info.gossip,
             "transaction".to_string(),
             1000,
             "tpu".to_string(),
             None,
+            3,
         );
     }
 }
