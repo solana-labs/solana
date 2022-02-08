@@ -11,6 +11,7 @@ use {
         blockstore::Blockstore,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
+        leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
     solana_perf::packet::to_packet_batches,
@@ -218,8 +219,13 @@ fn main() {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
-        let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None);
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(
+            &bank,
+            &blockstore,
+            None,
+            Some(leader_schedule_cache.clone()),
+        );
         let cluster_info = ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
@@ -332,6 +338,7 @@ fn main() {
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
+                    leader_schedule_cache.set_root(&bank);
                     bank_forks.set_root(root, &AbsRequestSender::default(), None);
                     root += 1;
                 }
