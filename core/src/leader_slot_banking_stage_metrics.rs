@@ -9,9 +9,6 @@ struct LeaderSlotTimingMetrics {}
 // validator's leader slot
 #[derive(Debug, Default)]
 struct LeaderSlotPacketCountMetrics {
-    // total number of packets in the buffer when the leader slot began
-    buffered_packets_starting_count: u64,
-
     // total number of live packets TPU received from verified receiver for processing.
     total_new_valid_packets: u64,
 
@@ -74,11 +71,8 @@ struct LeaderSlotPacketCountMetrics {
 }
 
 impl LeaderSlotPacketCountMetrics {
-    fn new(buffered_packets_starting_count: u64) -> Self {
-        Self {
-            buffered_packets_starting_count,
-            ..Self::default()
-        }
+    fn new() -> Self {
+        Self { ..Self::default() }
     }
 }
 
@@ -100,28 +94,18 @@ pub(crate) struct LeaderSlotMetrics {
 
     packet_count_metrics: LeaderSlotPacketCountMetrics,
 
-    timing_metrics: LeaderSlotTimingMetrics,
-
     // Used by tests to check if the `self.report()` method was called
     is_reported: bool,
 }
 
 impl LeaderSlotMetrics {
-    pub(crate) fn new(
-        id: u32,
-        slot: Slot,
-        bank_creation_time: &Instant,
-        buffered_packets_starting_count: u64,
-    ) -> Self {
+    pub(crate) fn new(id: u32, slot: Slot, bank_creation_time: &Instant) -> Self {
         Self {
             id,
             slot,
             bank_detected_time: Instant::now(),
             bank_detected_delay_us: bank_creation_time.elapsed().as_micros() as u64,
-            packet_count_metrics: LeaderSlotPacketCountMetrics::new(
-                buffered_packets_starting_count,
-            ),
-            timing_metrics: LeaderSlotTimingMetrics::default(),
+            packet_count_metrics: LeaderSlotPacketCountMetrics::new(),
             is_reported: false,
         }
     }
@@ -286,8 +270,6 @@ impl LeaderSlotMetricsTracker {
                     self.id,
                     bank_start.working_bank.slot(),
                     &bank_start.bank_creation_time,
-                    // TODO: track the number of packets in buffered queue
-                    0,
                 ));
                 self.leader_slot_metrics.as_ref().unwrap().reported_slot()
             }
@@ -302,8 +284,6 @@ impl LeaderSlotMetricsTracker {
                         self.id,
                         bank_start.working_bank.slot(),
                         &bank_start.bank_creation_time,
-                        // TODO: track the number of packets in buffered queue,
-                        0,
                     ));
                     reported_slot
                 } else {
