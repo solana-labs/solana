@@ -132,21 +132,28 @@ impl TransactionContext {
         self.account_keys.iter().rposition(|key| key == pubkey)
     }
 
-    /// Gets an InstructionContext by its height in the stack
+    /// Gets an InstructionContext by its nesting level in the stack
     pub fn get_instruction_context_at(
         &self,
         level: usize,
     ) -> Result<&InstructionContext, InstructionError> {
-        if level >= self.get_instruction_context_stack_height() {
-            return Err(InstructionError::CallDepth);
-        }
-        let top_level_index = self.instruction_stack[0]; // TODO: Panic source
+        let top_level_index = *self
+            .instruction_stack
+            .get(0)
+            .ok_or(InstructionError::CallDepth)?;
         let cpi_index = if level == 0 {
             0
         } else {
-            self.instruction_stack[level]
-        }; // TODO: Panic source
-        let instruction_context = &self.instruction_trace[top_level_index][cpi_index]; // TODO: Panic source
+            *self
+                .instruction_stack
+                .get(level)
+                .ok_or(InstructionError::CallDepth)?
+        };
+        let instruction_context = self
+            .instruction_trace
+            .get(top_level_index)
+            .and_then(|instruction_trace| instruction_trace.get(cpi_index))
+            .ok_or(InstructionError::CallDepth)?;
         debug_assert_eq!(instruction_context.nesting_level, level);
         Ok(instruction_context)
     }
@@ -174,30 +181,31 @@ impl TransactionContext {
     /// Pushes a new InstructionContext
     pub fn push(
         &mut self,
-        // TODO: Remove parameters as they are only needed for recording the transaction level instruction
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
-        if self.get_instruction_context_stack_height() >= self.instruction_context_capacity {
+        if self.instruction_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
-        let trace_length = if self.instruction_stack.is_empty() {
+        if self.instruction_stack.is_empty() {
             debug_assert!(
                 self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
             );
             let instruction_context = InstructionContext {
-                nesting_level: 0,
+                nesting_level: self.instruction_stack.len(),
                 program_accounts: program_accounts.to_vec(),
                 instruction_accounts: instruction_accounts.to_vec(),
                 instruction_data: instruction_data.to_vec(),
             };
+            self.instruction_stack.push(self.instruction_trace.len());
             self.instruction_trace.push(vec![instruction_context]);
-            self.instruction_trace.len()
+        } else if let Some(instruction_trace) = self.instruction_trace.last_mut() {
+            self.instruction_stack
+                .push(instruction_trace.len().saturating_sub(1));
         } else {
-            self.instruction_trace.last().unwrap().len() // TODO: Panic source
-        };
-        self.instruction_stack.push(trace_length.saturating_sub(1));
+            return Err(InstructionError::CallDepth);
+        }
         Ok(())
     }
 

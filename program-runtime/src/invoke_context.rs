@@ -1013,13 +1013,6 @@ impl<'a> InvokeContext<'a> {
         self.transaction_context
             .get_key_of_account_at_index(index_in_transaction)
     }
-
-    /// Get an instruction context
-    pub fn get_instruction_context_at(&self, level: usize) -> Option<&InstructionContext> {
-        self.transaction_context
-            .get_instruction_context_at(level)
-            .ok()
-    }
 }
 
 pub struct MockInvokeContextPreparation {
@@ -1481,9 +1474,6 @@ mod tests {
 
         // External modification tests
         {
-            /*invoke_context
-            .transaction_context
-            .record_instruction(InstructionContext::new(0, &[4], &instruction_accounts, &[]));*/
             invoke_context
                 .push(&instruction_accounts, &[4], &[])
                 .unwrap();
@@ -1550,9 +1540,6 @@ mod tests {
             ),
         ];
         for case in cases {
-            /*invoke_context
-            .transaction_context
-            .record_instruction(InstructionContext::new(0, &[4], &instruction_accounts, &[]));*/
             invoke_context
                 .push(&instruction_accounts, &[4], &[])
                 .unwrap();
@@ -1566,9 +1553,6 @@ mod tests {
         let compute_units_to_consume = 10;
         let expected_results = vec![Ok(()), Err(InstructionError::GenericError)];
         for expected_result in expected_results {
-            /*invoke_context
-            .transaction_context
-            .record_instruction(InstructionContext::new(0, &[4], &instruction_accounts, &[]));*/
             invoke_context
                 .push(&instruction_accounts, &[4], &[])
                 .unwrap();
