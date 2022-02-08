@@ -504,6 +504,34 @@ pub fn bind_common(
         .and_then(|_| TcpListener::bind(&addr).map(|listener| (sock.into(), listener)))
 }
 
+pub fn bind_two_consecutive_in_range(
+    ip_addr: IpAddr,
+    range: PortRange,
+) -> io::Result<((u16, UdpSocket), (u16, UdpSocket))> {
+    let mut first: Option<UdpSocket> = None;
+    for port in range.0..range.1 {
+        if let Ok(bind) = bind_to(ip_addr, port, false) {
+            match first {
+                Some(first_bind) => {
+                    return Ok((
+                        (first_bind.local_addr().unwrap().port(), first_bind),
+                        (bind.local_addr().unwrap().port(), bind),
+                    ));
+                }
+                None => {
+                    first = Some(bind);
+                }
+            }
+        } else {
+            first = None;
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "couldn't find two consecutive ports in range".to_string(),
+    ))
+}
+
 pub fn find_available_port_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<u16> {
     let (start, end) = range;
     let mut tries_left = end - start;

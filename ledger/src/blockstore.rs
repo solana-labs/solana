@@ -104,9 +104,16 @@ pub struct SignatureInfosForAddress {
 }
 
 #[derive(Clone, Copy)]
+/// Controls how `blockstore::purge_slots` purges the data.
 pub enum PurgeType {
+    /// A slower but more accurate way to purge slots by also ensuring higher
+    /// level of consistency between data during the clean up process.
     Exact,
+    /// A faster approximation of `Exact` where the purge process only takes
+    /// care of the primary index and does not update the associated entries.
     PrimaryIndex,
+    /// The fastest purge mode that relies on the slot-id based TTL
+    /// compaction filter to do the cleanup.
     CompactionFilter,
 }
 
@@ -6262,7 +6269,7 @@ pub mod tests {
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
-                for i in 0..transaction.message.total_account_keys_len() {
+                for i in 0..transaction.message.static_account_keys().len() {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
@@ -7129,7 +7136,7 @@ pub mod tests {
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
-                for i in 0..transaction.message.total_account_keys_len() {
+                for i in 0..transaction.message.static_account_keys().len() {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
@@ -7231,7 +7238,7 @@ pub mod tests {
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
-                for i in 0..transaction.message.total_account_keys_len() {
+                for i in 0..transaction.message.static_account_keys().len() {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
@@ -7590,7 +7597,7 @@ pub mod tests {
                         .write_transaction_status(
                             slot,
                             transaction.signatures[0],
-                            transaction.message.static_account_keys_iter().collect(),
+                            transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
                         )
@@ -7614,7 +7621,7 @@ pub mod tests {
                         .write_transaction_status(
                             slot,
                             transaction.signatures[0],
-                            transaction.message.static_account_keys_iter().collect(),
+                            transaction.message.static_account_keys().iter().collect(),
                             vec![],
                             TransactionStatusMeta::default(),
                         )

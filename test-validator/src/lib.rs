@@ -25,6 +25,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         exit::Exit,
+        feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         instruction::{AccountMeta, Instruction},
@@ -36,7 +37,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         fs::{remove_dir_all, File},
         io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -106,6 +107,7 @@ pub struct TestValidatorGenesis {
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
+    deactivate_feature_set: HashSet<Pubkey>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -135,11 +137,19 @@ impl Default for TestValidatorGenesis {
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             accountsdb_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
+            deactivate_feature_set: HashSet::<Pubkey>::default(),
         }
     }
 }
 
 impl TestValidatorGenesis {
+    /// Adds features to deactivate to a set, eliminating redundancies
+    /// during `initialize_ledger`, if member of the set is not a Feature
+    /// it will be silently ignored
+    pub fn deactivate_features(&mut self, deactivate_list: &[Pubkey]) -> &mut Self {
+        self.deactivate_feature_set.extend(deactivate_list);
+        self
+    }
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
         self
@@ -539,6 +549,24 @@ impl TestValidator {
 
         if let Some(ticks_per_slot) = config.ticks_per_slot {
             genesis_config.ticks_per_slot = ticks_per_slot;
+        }
+
+        // Remove features tagged to deactivate
+        for deactivate_feature_pk in &config.deactivate_feature_set {
+            if FEATURE_NAMES.contains_key(deactivate_feature_pk) {
+                match genesis_config.accounts.remove(deactivate_feature_pk) {
+                    Some(_) => info!("Feature for {:?} deactivated", deactivate_feature_pk),
+                    None => warn!(
+                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
+                        deactivate_feature_pk
+                    ),
+                }
+            } else {
+                warn!(
+                    "Feature {:?} set for deactivation is not a known Feature public key",
+                    deactivate_feature_pk
+                );
+            }
         }
 
         let ledger_path = match &config.ledger_path {

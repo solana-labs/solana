@@ -20,7 +20,6 @@ use {
         sysvar::clock::Clock,
     },
     std::{
-        boxed::Box,
         cmp::Ordering,
         collections::{HashSet, VecDeque},
         fmt::Debug,
@@ -40,6 +39,93 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
+
+#[frozen_abi(digest = "6LBwH5w3WyAWZhsM3KTG9QZP7nYBhcC61K33kHR6gMAD")]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
+pub enum VoteTransaction {
+    Vote(Vote),
+    VoteStateUpdate(VoteStateUpdate),
+}
+
+impl VoteTransaction {
+    pub fn slots(&self) -> Vec<Slot> {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.clone(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.slots(),
+        }
+    }
+
+    pub fn slot(&self, i: usize) -> Slot {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots[i],
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+                vote_state_update.lockouts[i].slot
+            }
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.len(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.lockouts.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.is_empty(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+                vote_state_update.lockouts.is_empty()
+            }
+        }
+    }
+
+    pub fn hash(&self) -> Hash {
+        match self {
+            VoteTransaction::Vote(vote) => vote.hash,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.hash,
+        }
+    }
+
+    pub fn timestamp(&self) -> Option<UnixTimestamp> {
+        match self {
+            VoteTransaction::Vote(vote) => vote.timestamp,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
+        }
+    }
+
+    pub fn set_timestamp(&mut self, ts: Option<UnixTimestamp>) {
+        match self {
+            VoteTransaction::Vote(vote) => vote.timestamp = ts,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp = ts,
+        }
+    }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.last().copied(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+                Some(vote_state_update.lockouts.back()?.slot)
+            }
+        }
+    }
+
+    pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
+        Some((self.last_voted_slot()?, self.hash()))
+    }
+}
+
+impl From<Vote> for VoteTransaction {
+    fn from(vote: Vote) -> Self {
+        VoteTransaction::Vote(vote)
+    }
+}
+
+impl From<VoteStateUpdate> for VoteTransaction {
+    fn from(vote_state_update: VoteStateUpdate) -> Self {
+        VoteTransaction::VoteStateUpdate(vote_state_update)
+    }
+}
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -93,6 +179,7 @@ impl Lockout {
     }
 }
 
+#[frozen_abi(digest = "BctadFJjUKbvPJzr6TszbX6rBfQUNSRKpKKngkzgXgeY")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct VoteStateUpdate {
     /// The proposed tower
@@ -131,6 +218,10 @@ impl VoteStateUpdate {
             hash,
             timestamp: None,
         }
+    }
+
+    pub fn slots(&self) -> Vec<Slot> {
+        self.lockouts.iter().map(|lockout| lockout.slot).collect()
     }
 }
 
@@ -382,6 +473,12 @@ impl VoteState {
             // to the current vote state root for safety.
             if earliest_slot_hash_in_history > new_proposed_root {
                 vote_state_update.root = self.root_slot;
+            } else if !slot_hashes
+                // Verify that the root is in slot hashes
+                .iter()
+                .any(|&(slot, _)| slot == new_proposed_root)
+            {
+                return Err(VoteError::RootOnDifferentFork);
             }
         }
 
@@ -779,7 +876,6 @@ impl VoteState {
         if vote.slots.is_empty() {
             return Err(VoteError::EmptySlots);
         }
-
         let filtered_vote_slots = feature_set.and_then(|feature_set| {
             if feature_set.is_active(&filter_votes_outside_slot_hashes::id()) {
                 let earliest_slot_in_history =
@@ -1537,8 +1633,10 @@ mod tests {
         let versioned = VoteStateVersions::new_current(vote_state);
         assert!(VoteState::serialize(&versioned, &mut buffer[0..4]).is_err());
         VoteState::serialize(&versioned, &mut buffer).unwrap();
-        let des = VoteState::deserialize(&buffer).unwrap();
-        assert_eq!(des, versioned.convert_to_current(),);
+        assert_eq!(
+            VoteState::deserialize(&buffer).unwrap(),
+            versioned.convert_to_current()
+        );
     }
 
     #[test]

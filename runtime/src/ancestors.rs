@@ -86,7 +86,7 @@ impl Ancestors {
     }
 
     pub fn max_slot(&self) -> Slot {
-        self.ancestors.max() - 1
+        self.ancestors.max_exclusive().saturating_sub(1)
     }
 }
 #[cfg(test)]

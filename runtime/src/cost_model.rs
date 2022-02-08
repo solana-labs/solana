@@ -157,14 +157,18 @@ impl CostModel {
         transaction: &SanitizedTransaction,
     ) {
         let message = transaction.message();
-        message.account_keys_iter().enumerate().for_each(|(i, k)| {
-            let is_writable = message.is_writable(i);
+        message
+            .account_keys()
+            .iter()
+            .enumerate()
+            .for_each(|(i, k)| {
+                let is_writable = message.is_writable(i);
 
-            if is_writable {
-                tx_cost.writable_accounts.push(*k);
-                tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
-            }
-        });
+                if is_writable {
+                    tx_cost.writable_accounts.push(*k);
+                    tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
+                }
+            });
     }
 
     fn get_data_bytes_cost(&self, transaction: &SanitizedTransaction) -> u64 {

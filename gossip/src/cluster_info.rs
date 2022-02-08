@@ -42,8 +42,8 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
     solana_net_utils::{
-        bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
-        multi_bind_in_range, PortRange,
+        bind_common, bind_common_in_range, bind_in_range, bind_two_consecutive_in_range,
+        find_available_port_in_range, multi_bind_in_range, PortRange,
     },
     solana_perf::{
         data_budget::DataBudget,
@@ -2758,9 +2758,8 @@ impl Node {
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tpu_quic_port = tpu.local_addr().unwrap().port() + QUIC_PORT_OFFSET;
-        let tpu_quic = UdpSocket::bind(format!("127.0.0.1:{}", tpu_quic_port)).unwrap();
+        let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
@@ -2845,11 +2844,8 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
-        let (tpu_port, tpu) = Self::bind(bind_ip_addr, port_range);
-        let (_tpu_port_quic, tpu_quic) = Self::bind(
-            bind_ip_addr,
-            (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
-        );
+        let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
         let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);

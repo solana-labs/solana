@@ -1,5 +1,5 @@
 use {
-    crate::tower_storage::{SavedTower, TowerStorage},
+    crate::tower_storage::{SavedTowerVersions, TowerStorage},
     crossbeam_channel::Receiver,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
@@ -16,7 +16,7 @@ pub enum VoteOp {
     PushVote {
         tx: Transaction,
         tower_slots: Vec<Slot>,
-        saved_tower: SavedTower,
+        saved_tower: SavedTowerVersions,
     },
     RefreshVote {
         tx: Transaction,
