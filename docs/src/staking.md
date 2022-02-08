@@ -54,27 +54,14 @@ and do the delegation.
 
 #### Supported Wallets
 
-Staking operations are supported by the following wallet solutions:
+Many web and mobile wallets support Solana staking operations. Please check with
+your favorite wallet's maintainers regarding status
 
-- Phantom.app in conjunction with a seed phrase or a Ledger Nano.
-  Check out Phantom's [guide to staking](https://phantom.app/blog/solana-staking-in-just-3-clicks) for details.
-
-- SolFlare.com in conjunction with a keystore file or a Ledger Nano.
-  Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
-
+#### Solana command line tools
 - Solana command line tools can perform all stake operations in conjunction
   with a CLI-generated keypair file wallet, a paper wallet, or with a connected
   Ledger Nano.
   [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
-
-- [Exodus](https://www.exodus.com/) wallet. They make the process very simple,
-  but you cannot choose a validator: they assign you to their partner validator.
-  See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq)
-  for details.
-
-- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges.
-  Note that you cannot choose a validator with these services: they assign you
-  to their partner validator.
 
 #### Create a Stake Account
 

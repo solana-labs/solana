@@ -3,12 +3,11 @@ title: Ledger Nano
 ---
 
 This page describes how to use a Ledger Nano S or Nano X to interact with Solana
-using the command line tools. To see other solutions to interact with Solana with
-your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
+using the command line tools.
 
 ## Before You Begin
 
-- [Set up a Nano with the Solana App](../ledger-live.md)
+- [Set up a Nano with the Solana App](https://support.ledger.com/hc/en-us/articles/360016265659-Solana-SOL-?docs=true)
 - [Install the Solana command-line tools](../../cli/install-solana-cli-tools.md)
 
 ## Use Ledger Nano with Solana CLI
