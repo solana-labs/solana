@@ -7013,6 +7013,14 @@ pub(crate) mod tests {
         );
     }
 
+    fn rent_with_exemption_threshold(exemption_threshold: f64) -> Rent {
+        Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold,
+            burn_percent: 10,
+        }
+    }
+
     #[test]
     fn test_credit_debit_rent_no_side_effect_on_hash() {
         solana_logger::setup();
@@ -7027,11 +7035,7 @@ pub(crate) mod tests {
         let keypair5: Keypair = Keypair::new();
         let keypair6: Keypair = Keypair::new();
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(21.0);
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank = Bank::new_from_parent(
@@ -7339,11 +7343,7 @@ pub(crate) mod tests {
             false,
         );
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 2.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(2.0);
 
         let rent = Rent::free();
 
@@ -7446,11 +7446,7 @@ pub(crate) mod tests {
             Account::from(validator_3_vote_account),
         );
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 10.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(10.0);
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         // Enable rent collection
@@ -7617,11 +7613,7 @@ pub(crate) mod tests {
     #[test]
     fn test_rent_exempt_executable_account() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(100_000);
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 1000.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
@@ -7692,11 +7684,7 @@ pub(crate) mod tests {
             keypairs.push(Keypair::new());
         }
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 1000.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
         let root_bank = Bank::new_for_tests(&genesis_config);
         // until we completely transition to the eager rent collection,
