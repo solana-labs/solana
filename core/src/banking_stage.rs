@@ -529,9 +529,6 @@ impl BankingStage {
             if let Some((next_leader, bank)) = &reached_end_of_slot {
                 // We've hit the end of this slot, no need to perform more processing,
                 // just filter the remaining packets for the invalid (e.g. too old) ones
-
-                // We've hit the end of the slot, no need to update the `slot_metrics_tracker`
-                // since that only tracks intra-leader-slot metrics
                 let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
                     bank,
                     packet_batch,
@@ -539,6 +536,11 @@ impl BankingStage {
                     my_pubkey,
                     *next_leader,
                     banking_stage_stats,
+                );
+                slot_metrics_tracker.increment_end_of_slot_filtered_invalid_count(
+                    original_unprocessed_indexes
+                        .len()
+                        .saturating_sub(new_unprocessed_indexes.len()) as u64,
                 );
                 Self::update_buffered_packets_with_new_unprocessed(
                     original_unprocessed_indexes,
@@ -1778,19 +1780,26 @@ impl BankingStage {
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 #[allow(clippy::while_let_on_iterator)]
                 while let Some(packet_batch) = packet_batch_iter.next() {
-                    let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
-                    let unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
+                    let original_unprocessed_indexes =
+                        Self::generate_packet_indexes(&packet_batch.packets);
+                    let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
                         &bank,
                         &packet_batch,
-                        &packet_indexes,
+                        &original_unprocessed_indexes,
                         my_pubkey,
                         next_leader,
                         banking_stage_stats,
                     );
+                    slot_metrics_tracker.increment_end_of_slot_filtered_invalid_count(
+                        original_unprocessed_indexes
+                            .len()
+                            .saturating_sub(new_unprocessed_indexes.len())
+                            as u64,
+                    );
                     Self::push_unprocessed(
                         buffered_packet_batches,
                         packet_batch,
-                        unprocessed_indexes,
+                        new_unprocessed_indexes,
                         &mut dropped_packet_batches_count,
                         &mut dropped_packets_count,
                         &mut newly_buffered_packets_count,

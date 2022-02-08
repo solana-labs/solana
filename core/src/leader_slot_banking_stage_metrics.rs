@@ -68,6 +68,9 @@ struct LeaderSlotPacketCountMetrics {
 
     // total number of valid unprocessed packets in the buffer that were removed after being forwarded
     cleared_from_buffer_after_forward_count: u64,
+
+    // total number of packets removed at the end of the slot due to being too old, duplicate, etc.
+    end_of_slot_filtered_invalid_count: u64,
 }
 
 impl LeaderSlotPacketCountMetrics {
@@ -216,6 +219,11 @@ impl LeaderSlotMetrics {
                 "cleared_from_buffer_after_forward_count",
                 self.packet_count_metrics
                     .cleared_from_buffer_after_forward_count as i64,
+                i64
+            ),
+            (
+                "end_of_slot_filtered_invalid_count",
+                self.packet_count_metrics.end_of_slot_filtered_invalid_count as i64,
                 i64
             ),
         );
@@ -406,6 +414,17 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
+    pub(crate) fn increment_executed_transactions_failed_commit_count(&mut self, count: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .packet_count_metrics
+                .executed_transactions_failed_commit_count = leader_slot_metrics
+                .packet_count_metrics
+                .executed_transactions_failed_commit_count
+                .saturating_add(count);
+        }
+    }
+
     pub(crate) fn increment_cost_model_throttled_transactions_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             leader_slot_metrics
@@ -461,13 +480,13 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    pub(crate) fn increment_executed_transactions_failed_commit_count(&mut self, count: u64) {
+    pub(crate) fn increment_end_of_slot_filtered_invalid_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             leader_slot_metrics
                 .packet_count_metrics
-                .executed_transactions_failed_commit_count = leader_slot_metrics
+                .end_of_slot_filtered_invalid_count = leader_slot_metrics
                 .packet_count_metrics
-                .executed_transactions_failed_commit_count
+                .end_of_slot_filtered_invalid_count
                 .saturating_add(count);
         }
     }
