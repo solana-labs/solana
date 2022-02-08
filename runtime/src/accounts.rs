@@ -1595,14 +1595,13 @@ mod tests {
     #[test]
     fn test_load_accounts_fee_payer_is_nonce() {
         let mut error_counters = ErrorCounters::default();
+        let mut rent = Rent::default();
+        rent.set_lamports_per_byte_year(42);
         let rent_collector = RentCollector::new(
             0,
             &EpochSchedule::default(),
             500_000.0,
-            &Rent {
-                lamports_per_byte_year: 42,
-                ..Rent::default()
-            },
+            &rent,
         );
         let min_balance = rent_collector.rent.minimum_balance(NonceState::size());
         let nonce = Keypair::new();

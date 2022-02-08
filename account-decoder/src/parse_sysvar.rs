@@ -154,7 +154,7 @@ pub struct UiRent {
 impl From<Rent> for UiRent {
     fn from(rent: Rent) -> Self {
         Self {
-            lamports_per_byte_year: rent.lamports_per_byte_year.to_string(),
+            lamports_per_byte_year: rent.lamports_per_byte_year().to_string(),
             exemption_threshold: rent.exemption_threshold,
             burn_percent: rent.burn_percent,
         }

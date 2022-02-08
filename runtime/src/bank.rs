@@ -6869,11 +6869,7 @@ pub(crate) mod tests {
             dummy_leader_stake_lamports,
         );
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 5,
-            exemption_threshold: 1.2,
-            burn_percent: 5,
-        };
+        genesis_config.rent = Rent::new(5, 1.2, 5);
 
         let bank = Bank::new_for_tests(&genesis_config);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), mint_lamports);
@@ -6887,7 +6883,7 @@ pub(crate) mod tests {
 
         assert_eq!(rent.burn_percent, 5);
         assert_eq!(rent.exemption_threshold, 1.2);
-        assert_eq!(rent.lamports_per_byte_year, 5);
+        assert_eq!(rent.lamports_per_byte_year(), 5);
     }
 
     #[test]
@@ -7013,6 +7009,10 @@ pub(crate) mod tests {
         );
     }
 
+    fn rent_with_exemption_threshold(exemption_threshold: f64) -> Rent {
+        Rent::new(1, exemption_threshold, 10)
+    }
+
     #[test]
     fn test_credit_debit_rent_no_side_effect_on_hash() {
         solana_logger::setup();
@@ -7027,11 +7027,7 @@ pub(crate) mod tests {
         let keypair5: Keypair = Keypair::new();
         let keypair6: Keypair = Keypair::new();
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(21.0);
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank = Bank::new_from_parent(
@@ -7339,11 +7335,7 @@ pub(crate) mod tests {
             false,
         );
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 2.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(2.0);
 
         let rent = Rent::free();
 
@@ -7446,11 +7438,7 @@ pub(crate) mod tests {
             Account::from(validator_3_vote_account),
         );
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 10.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(10.0);
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         // Enable rent collection
@@ -7617,11 +7605,7 @@ pub(crate) mod tests {
     #[test]
     fn test_rent_exempt_executable_account() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(100_000);
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 1000.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
@@ -7692,11 +7676,7 @@ pub(crate) mod tests {
             keypairs.push(Keypair::new());
         }
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 1000.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
         let root_bank = Bank::new_for_tests(&genesis_config);
         // until we completely transition to the eager rent collection,
@@ -9220,7 +9200,7 @@ pub(crate) mod tests {
     #[test]
     fn test_bank_withdraw_from_nonce_account() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        genesis_config.rent.lamports_per_byte_year = 42;
+        genesis_config.rent.set_lamports_per_byte_year(42);
         let bank = Bank::new_for_tests(&genesis_config);
 
         let min_balance = bank.get_minimum_balance_for_rent_exemption(nonce::State::size());
@@ -11205,7 +11185,7 @@ pub(crate) mod tests {
         F: FnMut(&mut GenesisConfig),
     {
         let (mut genesis_config, mint_keypair) = create_genesis_config(supply_lamports);
-        genesis_config.rent.lamports_per_byte_year = 0;
+        genesis_config.rent.set_lamports_per_byte_year(0);
         genesis_cfg_fn(&mut genesis_config);
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
@@ -11612,7 +11592,7 @@ pub(crate) mod tests {
     #[test]
     fn test_nonce_fee_calculator_updates() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        genesis_config.rent.lamports_per_byte_year = 0;
+        genesis_config.rent.set_lamports_per_byte_year(0);
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees

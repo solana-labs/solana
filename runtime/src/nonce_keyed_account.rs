@@ -354,10 +354,7 @@ mod test {
 
     #[test]
     fn keyed_account_expected_behavior() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, keyed_account| {
             let data = nonce::state::Data {
@@ -447,10 +444,7 @@ mod test {
 
     #[test]
     fn nonce_inx_initialized_account_not_signer_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_account| {
             set_invoke_context_blockhash(invoke_context, 31);
@@ -479,10 +473,7 @@ mod test {
 
     #[test]
     fn nonce_inx_too_early_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, keyed_account| {
             let mut signers = HashSet::new();
@@ -499,10 +490,7 @@ mod test {
 
     #[test]
     fn nonce_inx_uninitialized_account_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, keyed_account| {
             let mut signers = HashSet::new();
@@ -515,10 +503,7 @@ mod test {
 
     #[test]
     fn nonce_inx_independent_nonce_authority_ok() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_account| {
             with_mockup(42, true, |_invoke_context, nonce_authority| {
@@ -540,10 +525,7 @@ mod test {
 
     #[test]
     fn nonce_inx_no_nonce_authority_sig_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_account| {
             with_mockup(42, false, |_invoke_context, nonce_authority| {
@@ -562,10 +544,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_unintialized_acc_ok() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -608,10 +587,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_unintialized_acc_unsigned_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, false, |invoke_context, nonce_keyed| {
             let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -636,10 +612,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_unintialized_acc_insuff_funds_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -665,10 +638,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_uninitialized_acc_two_withdraws_ok() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             with_mockup(42, false, |_invoke_context, to_keyed| {
@@ -725,10 +695,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_initialized_acc_two_withdraws_ok() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             let mut signers = HashSet::new();
@@ -804,10 +771,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_initialized_acc_nonce_too_early_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             set_invoke_context_blockhash(invoke_context, 0);
@@ -833,10 +797,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_initialized_acc_insuff_funds_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             set_invoke_context_blockhash(invoke_context, 95);
@@ -863,10 +824,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_initialized_acc_insuff_rent_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             set_invoke_context_blockhash(invoke_context, 95);
@@ -893,10 +851,7 @@ mod test {
 
     #[test]
     fn withdraw_inx_overflow() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_keyed| {
             set_invoke_context_blockhash(invoke_context, 95);
@@ -923,10 +878,7 @@ mod test {
 
     #[test]
     fn initialize_inx_ok() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, keyed_account| {
             let state = AccountUtilsState::<Versions>::state(keyed_account)
@@ -953,10 +905,7 @@ mod test {
 
     #[test]
     fn initialize_inx_initialized_account_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, keyed_account| {
             set_invoke_context_blockhash(invoke_context, 31);
@@ -970,12 +919,15 @@ mod test {
         })
     }
 
+    fn rent_with_42_lamports_per_byte_year() -> Rent {
+        let mut rent = Rent::default();
+        rent.set_lamports_per_byte_year(42);
+        rent
+    }
+
     #[test]
     fn initialize_inx_uninitialized_acc_insuff_funds_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports - 42, true, |invoke_context, keyed_account| {
             set_invoke_context_blockhash(invoke_context, 63);
@@ -987,10 +939,7 @@ mod test {
 
     #[test]
     fn authorize_inx_ok() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_account| {
             let mut signers = HashSet::new();
@@ -1018,10 +967,7 @@ mod test {
 
     #[test]
     fn authorize_inx_uninitialized_state_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_account| {
             let mut signers = HashSet::new();
@@ -1034,10 +980,7 @@ mod test {
 
     #[test]
     fn authorize_inx_bad_authority_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
+        let rent = rent_with_42_lamports_per_byte_year();
         let min_lamports = rent.minimum_balance(State::size());
         with_mockup(min_lamports + 42, true, |invoke_context, nonce_account| {
             let mut signers = HashSet::new();

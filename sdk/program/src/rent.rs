@@ -6,7 +6,7 @@ use crate::clock::DEFAULT_SLOTS_PER_EPOCH;
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug, AbiExample)]
 pub struct Rent {
     /// Rental rate
-    pub lamports_per_byte_year: u64,
+    lamports_per_byte_year: u64,
 
     /// exemption threshold, in years
     pub exemption_threshold: f64,
@@ -33,15 +33,28 @@ pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
 
 impl Default for Rent {
     fn default() -> Self {
-        Self {
-            lamports_per_byte_year: DEFAULT_LAMPORTS_PER_BYTE_YEAR,
-            exemption_threshold: DEFAULT_EXEMPTION_THRESHOLD,
-            burn_percent: DEFAULT_BURN_PERCENT,
-        }
+        panic!("not here"); /*
+                            Self {
+                                lamports_per_byte_year: DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+                                exemption_threshold: DEFAULT_EXEMPTION_THRESHOLD,
+                                burn_percent: DEFAULT_BURN_PERCENT,
+                            }*/
     }
 }
 
 impl Rent {
+    pub fn new(lamports_per_byte_year: u64, exemption_threshold: f64, burn_percent: u8) -> Self {
+        Self {
+            lamports_per_byte_year,
+            exemption_threshold,
+            burn_percent,
+        }
+    }
+
+    pub fn lamports_per_byte_year(&self) -> u64 {
+        self.lamports_per_byte_year
+    }
+
     /// calculate how much rent to burn from the collected rent
     pub fn calculate_burn(&self, rent_collected: u64) -> (u64, u64) {
         let burned_portion = (rent_collected * u64::from(self.burn_percent)) / 100;
@@ -79,6 +92,11 @@ impl Rent {
             lamports_per_byte_year: 0,
             ..Rent::default()
         }
+    }
+
+    /// only used by tests
+    pub fn set_lamports_per_byte_year(&mut self, lamports_per_byte_year: u64) {
+        self.lamports_per_byte_year = lamports_per_byte_year;
     }
 
     pub fn with_slots_per_epoch(slots_per_epoch: u64) -> Self {
