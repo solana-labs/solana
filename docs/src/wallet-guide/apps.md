@@ -71,4 +71,8 @@ __**DEVS**__: integrate Zelcore wallet into your products by implementing Sollet
 ### Zelcore Wallet Security
 Zelcore utilizes a username/password schema to derive private keys for all assets. Security layers include blockchain-based 2FA PIN, mobile device biometrics, and passphrases to allow users to set up as much or as little security as they like. All hashing functions done on-device, and no login/account info is stored nor transmitted off your device. The private keys only exist on-device while logged in, upon logging out there is no digital footprint left of your PKs.
 
+## Huobi Wallet
+
+[Huobi Wallet](https://www.huobiwallet.io/) is available for download in the Appstore (iOS) and Playstore (Android). It is user-friendly, secure and has multi-chain support for tokens and NFTs.
+
 **Treat your username, password, d2FA PIN, passphrases, etc. with utmost care, just like your private keys. Never give these to anyone!**
