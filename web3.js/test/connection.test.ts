@@ -1978,9 +1978,13 @@ describe('Connection', () => {
     while (x < 10) {
       const block1 = await connection.getBlock(x);
       if (block1 && block1.transactions.length >= 1) {
-        expect(block1.previousBlockhash).to.eq(blockhash0);
+        if (block1.parentSlot == 0) {
+          expect(block1.previousBlockhash).to.eq(blockhash0);
+        } else {
+          expect(block1.parentSlot).to.be.above(0);
+          expect(block1.previousBlockhash).to.not.eq(blockhash0);
+        }
         expect(block1.blockhash).not.to.be.null;
-        expect(block1.parentSlot).to.eq(0);
         expect(block1.transactions[0].transaction).not.to.be.null;
         break;
       }
@@ -2087,9 +2091,13 @@ describe('Connection', () => {
     while (x < 10) {
       const block1 = await connection.getConfirmedBlock(x);
       if (block1.transactions.length >= 1) {
-        expect(block1.previousBlockhash).to.eq(blockhash0);
+        if (block1.parentSlot == 0) {
+          expect(block1.previousBlockhash).to.eq(blockhash0);
+        } else {
+          expect(block1.parentSlot).to.be.above(0);
+          expect(block1.previousBlockhash).to.not.eq(blockhash0);
+        }
         expect(block1.blockhash).not.to.be.null;
-        expect(block1.parentSlot).to.eq(0);
         expect(block1.transactions[0].transaction).not.to.be.null;
         break;
       }
@@ -2224,9 +2232,13 @@ describe('Connection', () => {
     while (x < 10) {
       const block1 = await connection.getBlockSignatures(x);
       if (block1.signatures.length >= 1) {
-        expect(block1.previousBlockhash).to.eq(blockhash0);
+        if (block1.parentSlot == 0) {
+          expect(block1.previousBlockhash).to.eq(blockhash0);
+        } else {
+          expect(block1.parentSlot).to.be.above(0);
+          expect(block1.previousBlockhash).to.not.eq(blockhash0);
+        }
         expect(block1.blockhash).not.to.be.null;
-        expect(block1.parentSlot).to.eq(0);
         expect(block1.signatures[0]).not.to.be.null;
         expect(block1).to.not.have.property('rewards');
         break;
