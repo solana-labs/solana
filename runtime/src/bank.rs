@@ -116,6 +116,7 @@ use {
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         pubkey::Pubkey,
+        rent::Rent,
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
@@ -1160,6 +1161,9 @@ pub struct Bank {
     /// latest rent collector, knows the epoch
     rent_collector: RentCollector,
 
+    /// initial rent rate from genesis
+    initial_lamports_per_byte_year: u64,
+
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
 
@@ -1311,6 +1315,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let bank = Self {
+            initial_lamports_per_byte_year: Rent::default().lamports_per_byte_year,
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1509,8 +1514,32 @@ impl Bank {
         )
     }
 
-    fn get_rent_collector_from(rent_collector: &RentCollector, epoch: Epoch) -> RentCollector {
-        rent_collector.clone_with_epoch(epoch)
+    /// return rental rate in lamports_per_byte_year
+    fn calculate_rent_rate_from_state_size(
+        current_rent: &Rent,
+        _initial_lamports_per_byte_year: u64,
+        _accounts_data_len: u64,
+    ) -> u64 {
+        current_rent.lamports_per_byte_year
+    }
+
+    fn get_rent_collector_from(
+        rent_collector: &RentCollector,
+        epoch: Epoch,
+        initial_lamports_per_byte_year: u64,
+        accounts_data_len: u64,
+    ) -> RentCollector {
+        if rent_collector.epoch == epoch {
+            rent_collector.clone_with_epoch(epoch)
+        } else {
+            // epoch changed, consider rent rate change
+            let lamports_per_byte_year = Self::calculate_rent_rate_from_state_size(
+                &rent_collector.rent,
+                initial_lamports_per_byte_year,
+                accounts_data_len,
+            );
+            rent_collector.clone_with_epoch_and_rate(epoch, lamports_per_byte_year)
+        }
     }
 
     fn _new_from_parent(
@@ -1633,6 +1662,7 @@ impl Bank {
             blockhash_queue,
 
             // TODO: clean this up, so much special-case copying...
+            initial_lamports_per_byte_year: parent.initial_lamports_per_byte_year,
             hashes_per_tick: parent.hashes_per_tick,
             ticks_per_slot: parent.ticks_per_slot,
             ns_per_slot: parent.ns_per_slot,
@@ -1640,7 +1670,12 @@ impl Bank {
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
-            rent_collector: Self::get_rent_collector_from(&parent.rent_collector, epoch),
+            rent_collector: Self::get_rent_collector_from(
+                &parent.rent_collector,
+                epoch,
+                parent.initial_lamports_per_byte_year,
+                parent.load_accounts_data_len(),
+            ),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator,
@@ -1920,6 +1955,7 @@ impl Bank {
             T::default()
         }
         let mut bank = Self {
+            initial_lamports_per_byte_year: genesis_config.rent.lamports_per_byte_year,
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -1951,7 +1987,12 @@ impl Bank {
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
             // clone()-ing is needed to consider a gated behavior in rent_collector
-            rent_collector: Self::get_rent_collector_from(&fields.rent_collector, fields.epoch),
+            rent_collector: Self::get_rent_collector_from(
+                &fields.rent_collector,
+                fields.epoch,
+                genesis_config.rent.lamports_per_byte_year,
+                accounts_data_len,
+            ),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes_cache: StakesCache::new(fields.stakes),
