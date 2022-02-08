@@ -15,6 +15,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             cap_accounts_data_len, do_support_realloc, neon_evm_compute_budget,
+            record_instruction_in_transaction_context_push,
             reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
             tx_wide_compute_cap, FeatureSet,
         },
@@ -280,10 +281,13 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
-        if self
-            .transaction_context
-            .get_instruction_context_stack_height()
-            > self.compute_budget.max_invoke_depth
+        if !self
+            .feature_set
+            .is_active(&record_instruction_in_transaction_context_push::id())
+            && self
+                .transaction_context
+                .get_instruction_context_stack_height()
+                > self.compute_budget.max_invoke_depth
         {
             return Err(InstructionError::CallDepth);
         }
@@ -409,8 +413,13 @@ impl<'a> InvokeContext<'a> {
                 std::mem::transmute(keyed_accounts.as_slice())
             }),
         ));
-        self.transaction_context
-            .push(program_indices, instruction_accounts, instruction_data)
+        self.transaction_context.push(
+            program_indices,
+            instruction_accounts,
+            instruction_data,
+            self.feature_set
+                .is_active(&record_instruction_in_transaction_context_push::id()),
+        )
     }
 
     /// Pop a stack frame from the invocation stack
@@ -832,13 +841,18 @@ impl<'a> InvokeContext<'a> {
             );
             verify_caller_result?;
 
-            self.transaction_context
-                .record_instruction(InstructionContext::new(
-                    nesting_level,
-                    program_indices,
-                    instruction_accounts,
-                    instruction_data,
-                ));
+            if !self
+                .feature_set
+                .is_active(&record_instruction_in_transaction_context_push::id())
+            {
+                self.transaction_context
+                    .record_instruction(InstructionContext::new(
+                        nesting_level,
+                        program_indices,
+                        instruction_accounts,
+                        instruction_data,
+                    ));
+            }
         }
 
         let result = self
@@ -1331,22 +1345,13 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut transaction_context = TransactionContext::new(accounts, MAX_DEPTH, 1);
+        let mut transaction_context =
+            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
         for _ in 0..invoke_stack.len() {
-            if depth_reached > 0 {
-                invoke_context
-                    .transaction_context
-                    .record_instruction(InstructionContext::new(
-                        depth_reached,
-                        &[MAX_DEPTH + depth_reached],
-                        &instruction_accounts,
-                        &[],
-                    ));
-            }
             if Err(InstructionError::CallDepth)
                 == invoke_context.push(&instruction_accounts, &[MAX_DEPTH + depth_reached], &[])
             {

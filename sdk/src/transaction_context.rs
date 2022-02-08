@@ -184,7 +184,19 @@ impl TransactionContext {
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
+        record_instruction_in_transaction_context_push: bool,
     ) -> Result<(), InstructionError> {
+        if record_instruction_in_transaction_context_push && !self.instruction_stack.is_empty() {
+            let instruction_context = InstructionContext {
+                nesting_level: self.instruction_stack.len(),
+                program_accounts: program_accounts.to_vec(),
+                instruction_accounts: instruction_accounts.to_vec(),
+                instruction_data: instruction_data.to_vec(),
+            };
+            if let Some(instruction_trace) = self.instruction_trace.last_mut() {
+                instruction_trace.push(instruction_context);
+            }
+        }
         if self.instruction_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
@@ -248,6 +260,9 @@ impl TransactionContext {
     }
 
     /// Used by the runtime when a new CPI instruction begins
+    ///
+    /// Deprecated, automatically done in push()
+    /// once record_instruction_in_transaction_context_push is activated.
     pub fn record_instruction(&mut self, instruction: InstructionContext) {
         if let Some(records) = self.instruction_trace.last_mut() {
             records.push(instruction);

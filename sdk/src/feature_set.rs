@@ -307,6 +307,10 @@ pub mod disable_bpf_unresolved_symbols_at_runtime {
     solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
 }
 
+pub mod record_instruction_in_transaction_context_push {
+    solana_sdk::declare_id!("3aJdcZqxoLpSBxgeYGjPwaYS1zzcByxUDqJkbzWAH1Zb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -378,6 +382,7 @@ lazy_static! {
         (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
+        (record_instruction_in_transaction_context_push::id(), "Move the CPI stack overflow check to the end of push"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
