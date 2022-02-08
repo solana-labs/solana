@@ -143,13 +143,8 @@ impl Dashboard {
                             )
                         };
 
-<<<<<<< HEAD
                         progress_bar.set_message(&format!(
-                            "{}{}{}| \
-=======
-                        progress_bar.set_message(format!(
                             "{}{}| \
->>>>>>> dcd4ea911 (monitor: Remove getMaxRetransmitSlot RPC method usage)
                                     Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
                                     Snapshot Slot: {} | \
                                     Transactions: {} | {}",
