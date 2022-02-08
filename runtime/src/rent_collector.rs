@@ -54,7 +54,20 @@ impl RentCollector {
     }
 
     pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
+        self.clone_with_epoch_and_rate(epoch, self.rent.lamports_per_byte_year)
+    }
+
+    pub fn clone_with_epoch_and_rate(&self, epoch: Epoch, lamports_per_byte_year: u64) -> Self {
+        let rent = if lamports_per_byte_year != self.rent.lamports_per_byte_year {
+            Rent {
+                lamports_per_byte_year,
+                ..self.rent
+            }
+        } else {
+            self.rent
+        };
         Self {
+            rent,
             epoch,
             ..self.clone()
         }
