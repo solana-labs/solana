@@ -240,7 +240,7 @@ pub struct LeaderSlotMetricsTracker {
 }
 
 impl LeaderSlotMetricsTracker {
-    pub(crate) fn new(id: u32) -> Self {
+    pub fn new(id: u32) -> Self {
         Self {
             leader_slot_metrics: None,
             id,
