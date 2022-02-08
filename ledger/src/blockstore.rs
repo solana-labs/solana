@@ -3737,7 +3737,10 @@ fn chain_new_slot_to_prev_slot(
     current_slot: Slot,
     current_slot_meta: &mut SlotMeta,
 ) {
-    prev_slot_meta.next_slots.push(current_slot);
+    // Ensure that next_slots never has duplicated slots
+    if !prev_slot_meta.next_slots.contains(&current_slot) {
+        prev_slot_meta.next_slots.push(current_slot);
+    }
     current_slot_meta.is_connected = prev_slot_meta.is_connected && prev_slot_meta.is_full();
 }
 
