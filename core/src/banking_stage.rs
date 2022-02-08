@@ -1530,8 +1530,6 @@ impl BankingStage {
         );
         process_tx_time.stop();
 
-        // Indexes of transactions in the transactions slice that
-        // failed, but are retryable
         let ProcessTransactionsSummary {
             transactions_attempted_execution_count,
             committed_transactions_count,
