@@ -476,17 +476,20 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         eprintln!("Can't get home directory path: {}", err);
         exit(1);
     }));
-    let version = "v1.23";
+
+    // The following line is scanned by CI configuration script to
+    // separate cargo caches according to the version of sbf-tools.
+    let bpf_tools_version = "v1.23";
     let package = "bpf-tools";
     let target_path = home_dir
         .join(".cache")
         .join("solana")
-        .join(version)
+        .join(bpf_tools_version)
         .join(package);
     install_if_missing(
         config,
         package,
-        version,
+        bpf_tools_version,
         "https://github.com/solana-labs/bpf-tools/releases/download",
         bpf_tools_download_file_name,
         &target_path,

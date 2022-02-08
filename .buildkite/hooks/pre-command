@@ -12,7 +12,8 @@ export PS4="++"
 # Restore target/ from the previous CI build on this machine
 #
 eval "$(ci/channel-info.sh)"
-export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
+eval "$(ci/sbf-tools-info.sh)"
+export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"-"$SBF_TOOLS_VERSION"
 (
   set -x
   MAX_CACHE_SIZE=18 # gigabytes
