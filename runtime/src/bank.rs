@@ -4671,7 +4671,11 @@ impl Bank {
             .write()
             .unwrap()
             .extend(rent_debits.into_unordered_rewards_iter());
-        if total_collected.account_data_len_reclaimed > 0 {
+        if self
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_len::id())
+            && total_collected.account_data_len_reclaimed > 0
+        {
             self.update_accounts_data_len(-(total_collected.account_data_len_reclaimed as i64));
         }
 
@@ -15757,7 +15761,7 @@ pub(crate) mod tests {
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.activate_feature(&solana_sdk::feature_set::cap_accounts_data_len::id());
+        bank.activate_feature(&feature_set::cap_accounts_data_len::id());
 
         let mut i = 0;
         let result = loop {
