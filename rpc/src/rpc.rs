@@ -116,7 +116,7 @@ const MAX_RPC_EPOCH_CREDITS_HISTORY: usize = 5;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
-    Response { context, value }
+    RpcResponse { context, value }
 }
 
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
@@ -412,7 +412,8 @@ impl JsonRpcRequestProcessor {
                 self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
-        let result = if program_id == &spl_token_id() && encoding == UiAccountEncoding::JsonParsed {
+        let accounts = if program_id == &spl_token_id() && encoding == UiAccountEncoding::JsonParsed
+        {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
             keyed_accounts
@@ -425,9 +426,9 @@ impl JsonRpcRequestProcessor {
                 })
                 .collect::<Result<Vec<_>>>()?
         };
-        Ok(result).map(|result| match with_context {
-            true => OptionalContext::Context(new_response(&bank, result)),
-            false => OptionalContext::NoContext(result),
+        Ok(match with_context {
+            true => OptionalContext::Context(new_response(&bank, accounts)),
+            false => OptionalContext::NoContext(accounts),
         })
     }
 
@@ -754,7 +755,7 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(config.commitment);
 
         if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
-            Ok(Response {
+            Ok(RpcResponse {
                 context: RpcResponseContext { slot },
                 value: accounts,
             })
