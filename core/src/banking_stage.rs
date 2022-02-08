@@ -538,7 +538,6 @@ impl BankingStage {
                     my_pubkey,
                     *next_leader,
                     banking_stage_stats,
-                    cost_model,
                 );
                 Self::update_buffered_packets_with_new_unprocessed(
                     original_unprocessed_indexes,
@@ -1277,7 +1276,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         demote_program_write_locks: bool,
         votes_only: bool,
-        cost_model: &Arc<RwLock<CostModel>>,
+        cost_model: Option<&Arc<RwLock<CostModel>>>,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
@@ -1310,20 +1309,22 @@ impl BankingStage {
                     let is_vote = &packet_batch.packets[tx_index].meta.is_simple_vote_tx;
 
                     // excluding vote TX from cost_model, for now
-                    if !is_vote
-                        && read_cost_tracker
-                            .would_transaction_fit(
-                                &tx,
-                                &cost_model
-                                    .read()
-                                    .unwrap()
-                                    .calculate_cost(&tx, demote_program_write_locks),
-                            )
-                            .is_err()
-                    {
-                        debug!("transaction {:?} would exceed limit", tx);
-                        retryable_transaction_packet_indexes.push(tx_index);
-                        return None;
+                    if let Some(cost_model) = &cost_model {
+                        if !is_vote
+                            && read_cost_tracker
+                                .would_transaction_fit(
+                                    &tx,
+                                    &cost_model
+                                        .read()
+                                        .unwrap()
+                                        .calculate_cost(&tx, demote_program_write_locks),
+                                )
+                                .is_err()
+                        {
+                            debug!("transaction {:?} would exceed limit", tx);
+                            retryable_transaction_packet_indexes.push(tx_index);
+                            return None;
+                        }
                     }
                     Some((tx, tx_index))
                 })
@@ -1421,7 +1422,7 @@ impl BankingStage {
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
                 bank.vote_only_bank(),
-                cost_model,
+                Some(cost_model),
             );
         packet_conversion_time.stop();
         let cost_model_throttled_transactions_count = cost_model_throttled_packet_indexes.len();
@@ -1516,7 +1517,6 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
         banking_stage_stats: &BankingStageStats,
-        cost_model: &Arc<RwLock<CostModel>>,
     ) -> Vec<usize> {
         // Check if we are the next leader. If so, let's not filter the packets
         // as we'll filter it again while processing the packets.
@@ -1538,7 +1538,7 @@ impl BankingStage {
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
                 bank.vote_only_bank(),
-                cost_model,
+                None,
             );
         unprocessed_packet_conversion_time.stop();
 
@@ -1686,7 +1686,6 @@ impl BankingStage {
                         my_pubkey,
                         next_leader,
                         banking_stage_stats,
-                        cost_model,
                     );
                     Self::push_unprocessed(
                         buffered_packet_batches,
@@ -3672,7 +3671,7 @@ mod tests {
                     &BankingStageStats::default(),
                     false,
                     votes_only,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    Some(&Arc::new(RwLock::new(CostModel::default()))),
                 );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
@@ -3687,7 +3686,7 @@ mod tests {
                     &BankingStageStats::default(),
                     false,
                     votes_only,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    Some(&Arc::new(RwLock::new(CostModel::default()))),
                 );
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
@@ -3711,7 +3710,7 @@ mod tests {
                     &BankingStageStats::default(),
                     false,
                     votes_only,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    Some(&Arc::new(RwLock::new(CostModel::default()))),
                 );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -3726,7 +3725,7 @@ mod tests {
                     &BankingStageStats::default(),
                     false,
                     votes_only,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    Some(&Arc::new(RwLock::new(CostModel::default()))),
                 );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
@@ -3750,7 +3749,7 @@ mod tests {
                     &BankingStageStats::default(),
                     false,
                     votes_only,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    Some(&Arc::new(RwLock::new(CostModel::default()))),
                 );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -3765,7 +3764,7 @@ mod tests {
                     &BankingStageStats::default(),
                     false,
                     votes_only,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    Some(&Arc::new(RwLock::new(CostModel::default()))),
                 );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
