@@ -52,31 +52,13 @@ impl TransferAmountEncryption {
         (transfer_amount_encryption, opening)
     }
 
-    pub fn to_bytes(&self) -> [u8; 128] {
-        let mut bytes = [0u8; 128];
-        bytes[..32].copy_from_slice(&self.commitment.to_bytes());
-        bytes[32..64].copy_from_slice(&self.source.to_bytes());
-        bytes[64..96].copy_from_slice(&self.dest.to_bytes());
-        bytes[96..128].copy_from_slice(&self.auditor.to_bytes());
-        bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-        let bytes = array_ref![bytes, 0, 128];
-        let (commitment, source, dest, auditor) = array_refs![bytes, 32, 32, 32, 32];
-
-        let commitment =
-            PedersenCommitment::from_bytes(commitment).ok_or(ProofError::Verification)?;
-        let source = DecryptHandle::from_bytes(source).ok_or(ProofError::Verification)?;
-        let dest = DecryptHandle::from_bytes(dest).ok_or(ProofError::Verification)?;
-        let auditor = DecryptHandle::from_bytes(auditor).ok_or(ProofError::Verification)?;
-
-        Ok(Self {
-            commitment,
-            source,
-            dest,
-            auditor,
-        })
+    pub fn to_pod(&self) -> pod::TransferAmountEncryption {
+        pod::TransferAmountEncryption {
+            commitment: self.commitment.into(),
+            source: self.source.into(),
+            dest: self.dest.into(),
+            auditor: self.auditor.into(),
+        }
     }
 }
 
@@ -143,8 +125,11 @@ impl TransferData {
             - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
 
         // generate transcript and append all public inputs
-        let pod_transfer_pubkeys =
-            pod::TransferPubkeys::new(&keypair_source.public, pubkey_dest, pubkey_auditor);
+        let pod_transfer_pubkeys = pod::TransferPubkeys {
+            source: keypair_source.public.into(),
+            dest: (*pubkey_dest).into(),
+            auditor: (*pubkey_auditor).into(),
+        };
         let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.into();
         let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
         let pod_ciphertext_new_source: pod::ElGamalCiphertext = ciphertext_new_source.into();
@@ -282,10 +267,21 @@ impl TransferProof {
     ) -> Transcript {
         let mut transcript = Transcript::new(b"transfer-proof");
 
-        transcript.append_message(b"transfer-pubkeys", &transfer_pubkeys.0);
-        transcript.append_message(b"ciphertext-lo", &ciphertext_lo.0);
-        transcript.append_message(b"ciphertext-hi", &ciphertext_hi.0);
-        transcript.append_message(b"ciphertext-new-source", &ciphertext_new_source.0);
+        transcript.append_pubkey(b"pubkey_source", &transfer_pubkeys.source);
+        transcript.append_pubkey(b"pubkey_dest", &transfer_pubkeys.dest);
+        transcript.append_pubkey(b"pubkey_auditor", &transfer_pubkeys.auditor);
+
+        transcript.append_commitment(b"comm-lo-amount", &ciphertext_lo.commitment);
+        transcript.append_handle(b"handle-lo-source", &ciphertext_lo.source);
+        transcript.append_handle(b"handle-lo-dest", &ciphertext_lo.dest);
+        transcript.append_handle(b"handle-lo-auditor", &ciphertext_lo.auditor);
+
+        transcript.append_commitment(b"comm-hi-amount", &ciphertext_hi.commitment);
+        transcript.append_handle(b"handle-hi-source", &ciphertext_hi.source);
+        transcript.append_handle(b"handle-hi-dest", &ciphertext_hi.dest);
+        transcript.append_handle(b"handle-hi-auditor", &ciphertext_hi.auditor);
+
+        transcript.append_ciphertext(b"ciphertext-new-source", ciphertext_new_source);
 
         transcript
     }
@@ -367,6 +363,8 @@ impl TransferProof {
             transcript,
         )?;
 
+        println!("equality pass");
+
         // verify validity proof
         aggregated_validity_proof.verify(
             (&transfer_pubkeys.dest, &transfer_pubkeys.auditor),
@@ -375,6 +373,8 @@ impl TransferProof {
             (&ciphertext_lo.auditor, &ciphertext_hi.auditor),
             transcript,
         )?;
+
+        println!("validity pass");
 
         // verify range proof
         let commitment_new_source = self.commitment_new_source.try_into()?;
@@ -426,17 +426,6 @@ impl TransferPubkeys {
             dest,
             auditor,
         })
-    }
-}
-
-#[cfg(not(target_arch = "bpf"))]
-impl pod::TransferPubkeys {
-    pub fn new(source: &ElGamalPubkey, dest: &ElGamalPubkey, auditor: &ElGamalPubkey) -> Self {
-        let mut bytes = [0u8; 96];
-        bytes[..32].copy_from_slice(&source.to_bytes());
-        bytes[32..64].copy_from_slice(&dest.to_bytes());
-        bytes[64..96].copy_from_slice(&auditor.to_bytes());
-        Self(bytes)
     }
 }
 
