@@ -62,7 +62,7 @@ pub const MESSAGE_HEADER_LENGTH: usize = 3;
 /// whether the account is read-only, or read-write; and whether the account
 /// must have signed the transaction containing the instruction.
 ///
-/// Wheres individual `Instruction`s contain a list of all accounts they may
+/// Whereas individual `Instruction`s contain a list of all accounts they may
 /// access, along with their required permissions, a `Message` contains a
 /// single shared flat list of _all_ accounts required by _all_ instructions in
 /// a transaction. When building a `Message`, this flat list is created and
