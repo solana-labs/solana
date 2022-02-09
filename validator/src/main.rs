@@ -2434,7 +2434,7 @@ pub fn main() {
         exit(1);
     }
     if matches.is_present("incremental_snapshots") {
-        warn!("--incremental_snapshots is now the default behavior. This flag is deprecated and can be removed from the launch args")
+        warn!("--incremental-snapshots is now the default behavior. This flag is deprecated and can be removed from the launch args")
     }
 
     if matches.is_present("limit_ledger_size") {
