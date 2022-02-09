@@ -99,7 +99,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, nonce_must_be_writable, tx_wide_compute_cap, FeatureSet,
+            self, disable_fee_calculator, nonce_must_be_writable, rent_increase_with_account_size,
+            tx_wide_compute_cap, FeatureSet,
         },
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -1514,13 +1515,17 @@ impl Bank {
         )
     }
 
-    /// return rental rate in lamports_per_byte_year
+    /// return rental rate in lamports_per_byte_year based on current accounts state
     fn calculate_rent_rate_from_state_size(
-        current_rent: &Rent,
-        _initial_lamports_per_byte_year: u64,
-        _accounts_data_len: u64,
+        previous_rent: u64,
+        initial_lamports_per_byte_year: u64,
+        accounts_data_len: u64,
     ) -> u64 {
-        current_rent.lamports_per_byte_year
+        // each time we surpass a multiple of this limit, double rent
+        let data_len_first_inflection_point = 250_000_000;
+        let shift = accounts_data_len / data_len_first_inflection_point;
+        // rent never decreases after it has increased
+        std::cmp::max(previous_rent, initial_lamports_per_byte_year << shift)
     }
 
     fn get_rent_collector_from(
@@ -1528,13 +1533,16 @@ impl Bank {
         epoch: Epoch,
         initial_lamports_per_byte_year: u64,
         accounts_data_len: u64,
+        rent_increase_with_account_size_active: Option<bool>, // None means clone previous rent_collector
     ) -> RentCollector {
-        if rent_collector.epoch == epoch {
+        if rent_collector.epoch == epoch
+            || !rent_increase_with_account_size_active.unwrap_or_default()
+        {
             rent_collector.clone_with_epoch(epoch)
         } else {
             // epoch changed, consider rent rate change
             let lamports_per_byte_year = Self::calculate_rent_rate_from_state_size(
-                &rent_collector.rent,
+                rent_collector.rent.lamports_per_byte_year,
                 initial_lamports_per_byte_year,
                 accounts_data_len,
             );
@@ -1653,6 +1661,10 @@ impl Bank {
         let (feature_set, feature_set_time) =
             Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
 
+        let rent_increase_with_account_size_active = parent
+            .feature_set
+            .is_active(&rent_increase_with_account_size::id());
+
         let mut new = Bank {
             rc,
             src,
@@ -1675,6 +1687,7 @@ impl Bank {
                 epoch,
                 parent.initial_lamports_per_byte_year,
                 parent.load_accounts_data_len(),
+                Some(rent_increase_with_account_size_active),
             ),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
@@ -1992,6 +2005,7 @@ impl Bank {
                 fields.epoch,
                 genesis_config.rent.lamports_per_byte_year,
                 accounts_data_len,
+                None,
             ),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),

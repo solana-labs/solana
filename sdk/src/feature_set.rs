@@ -223,6 +223,10 @@ pub mod disable_fee_calculator {
     solana_sdk::declare_id!("2jXx2yDmGysmBKfKYNgLj2DQyAQv6mMk2BPh4eSbyB4H");
 }
 
+pub mod rent_increase_with_account_size {
+    solana_sdk::declare_id!("GqFVkAFc2igdMRfKfrtYkbCc3jRmUX1b6eSY38m5TBWn");
+}
+
 pub mod add_compute_budget_program {
     solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
 }
