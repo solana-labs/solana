@@ -408,13 +408,9 @@ impl JsonRpcRequestProcessor {
                 self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
-<<<<<<< HEAD
-        let result = if program_id == &spl_token_id() && encoding == UiAccountEncoding::JsonParsed {
-=======
-        let accounts = if is_known_spl_token_id(program_id)
+        let result = if is_known_spl_token_id(program_id)
             && encoding == UiAccountEncoding::JsonParsed
         {
->>>>>>> 86d465c53 (Prepare RPC subsystem for multiple SPL Token program ids)
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
             keyed_accounts

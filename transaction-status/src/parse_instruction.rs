@@ -10,16 +10,8 @@ use {
     },
     inflector::Inflector,
     serde_json::Value,
-<<<<<<< HEAD
-    solana_account_decoder::parse_token::spl_token_id,
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, stake, system_program},
-=======
     solana_account_decoder::parse_token::spl_token_ids,
-    solana_sdk::{
-        instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey, stake,
-        system_program,
-    },
->>>>>>> 86d465c53 (Prepare RPC subsystem for multiple SPL Token program ids)
+    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, stake, system_program},
     std::{
         collections::HashMap,
         str::{from_utf8, Utf8Error},
