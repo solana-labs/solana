@@ -15,6 +15,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             cap_accounts_data_len, do_support_realloc, neon_evm_compute_budget,
+            record_instruction_in_transaction_context_push,
             reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
             tx_wide_compute_cap, FeatureSet,
         },
@@ -280,10 +281,13 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
-        if self
-            .transaction_context
-            .get_instruction_context_stack_height()
-            > self.compute_budget.max_invoke_depth
+        if !self
+            .feature_set
+            .is_active(&record_instruction_in_transaction_context_push::id())
+            && self
+                .transaction_context
+                .get_instruction_context_stack_height()
+                > self.compute_budget.max_invoke_depth
         {
             return Err(InstructionError::CallDepth);
         }
@@ -409,8 +413,13 @@ impl<'a> InvokeContext<'a> {
                 std::mem::transmute(keyed_accounts.as_slice())
             }),
         ));
-        self.transaction_context
-            .push(program_indices, instruction_accounts, instruction_data)
+        self.transaction_context.push(
+            program_indices,
+            instruction_accounts,
+            instruction_data,
+            self.feature_set
+                .is_active(&record_instruction_in_transaction_context_push::id()),
+        )
     }
 
     /// Pop a stack frame from the invocation stack
@@ -814,12 +823,10 @@ impl<'a> InvokeContext<'a> {
             })
             .unwrap_or_else(|| Ok(native_loader::id()))?;
 
-        let stack_height = self
+        let nesting_level = self
             .transaction_context
             .get_instruction_context_stack_height();
-
-        let is_top_level_instruction = stack_height == 0;
-
+        let is_top_level_instruction = nesting_level == 0;
         if !is_top_level_instruction {
             // Verify the calling program hasn't misbehaved
             let mut verify_caller_time = Measure::start("verify_caller_time");
@@ -834,10 +841,18 @@ impl<'a> InvokeContext<'a> {
             );
             verify_caller_result?;
 
-            self.transaction_context.record_instruction(
-                stack_height.saturating_add(1),
-                InstructionContext::new(program_indices, instruction_accounts, instruction_data),
-            );
+            if !self
+                .feature_set
+                .is_active(&record_instruction_in_transaction_context_push::id())
+            {
+                self.transaction_context
+                    .record_instruction(InstructionContext::new(
+                        nesting_level,
+                        program_indices,
+                        instruction_accounts,
+                        instruction_data,
+                    ));
+            }
         }
 
         let result = self
@@ -1004,11 +1019,6 @@ impl<'a> InvokeContext<'a> {
         &self.sysvar_cache
     }
 
-    /// Get instruction trace
-    pub fn get_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
-        self.transaction_context.get_instruction_trace()
-    }
-
     // Get pubkey of account at index
     pub fn get_key_of_account_at_index(
         &self,
@@ -1016,13 +1026,6 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<&Pubkey, InstructionError> {
         self.transaction_context
             .get_key_of_account_at_index(index_in_transaction)
-    }
-
-    /// Get an instruction context
-    pub fn get_instruction_context_at(&self, level: usize) -> Option<&InstructionContext> {
-        self.transaction_context
-            .get_instruction_context_at(level)
-            .ok()
     }
 }
 
@@ -1342,7 +1345,8 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut transaction_context = TransactionContext::new(accounts, MAX_DEPTH, 1);
+        let mut transaction_context =
+            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit

@@ -702,7 +702,7 @@ pub fn inner_instructions_list_from_instruction_trace(
             inner_instructions_trace
                 .iter()
                 .skip(1)
-                .map(|(_, instruction_context)| {
+                .map(|instruction_context| {
                     CompiledInstruction::new_from_raw_parts(
                         instruction_context.get_program_id_index() as u8,
                         instruction_context.get_instruction_data().to_vec(),
@@ -15872,15 +15872,15 @@ pub(crate) mod tests {
     fn test_inner_instructions_list_from_instruction_trace() {
         let instruction_trace = vec![
             vec![
-                (1, InstructionContext::new(&[], &[], &[1])),
-                (2, InstructionContext::new(&[], &[], &[2])),
+                InstructionContext::new(0, &[], &[], &[1]),
+                InstructionContext::new(1, &[], &[], &[2]),
             ],
             vec![],
             vec![
-                (1, InstructionContext::new(&[], &[], &[3])),
-                (2, InstructionContext::new(&[], &[], &[4])),
-                (3, InstructionContext::new(&[], &[], &[5])),
-                (2, InstructionContext::new(&[], &[], &[6])),
+                InstructionContext::new(0, &[], &[], &[3]),
+                InstructionContext::new(1, &[], &[], &[4]),
+                InstructionContext::new(2, &[], &[], &[5]),
+                InstructionContext::new(1, &[], &[], &[6]),
             ],
         ];
 
