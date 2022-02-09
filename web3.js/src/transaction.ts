@@ -265,7 +265,7 @@ export class Transaction {
         const y = yt.item;
         const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
         const checkWritable =
-          x.isWritable === y.isWritable ? pubkeySorting : x.isWritable ? -1 : 1;
+          x.isWritable === y.isWritable ? 0 : x.isWritable ? -1 : 1;
         return checkSigner || checkWritable || xt.index - yt.index;
       })
      .map(({ item }) => item);
