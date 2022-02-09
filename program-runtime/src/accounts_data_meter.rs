@@ -73,11 +73,12 @@ impl AccountsDataMeter {
         self.maximum.saturating_sub(self.current())
     }
 
-    /// Consume accounts data space, in bytes.  If `amount` is positive, we are *increasing* the
-    /// amount of accounts data space used.  If `amount` is negative, we are *decreasing* the
-    /// amount of accounts data space used.  If `amount` is greater than the remaining space,
-    /// return an error and *do not* consume more accounts data space.
-    pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
+    /// Adjust the space used by accounts data by `amount` (in bytes).
+    ///
+    /// If `amount` is *positive*, we *increase* the space used by accounts data.  If `amount` is
+    /// *negative*, we *decrease* the space used by accounts data.  If `amount` is greater than
+    /// the remaining space, return an error and *do not* consume more accounts data space.
+    pub fn adjust_delta(&mut self, amount: i64) -> Result<(), InstructionError> {
         if amount > self.remaining() as i64 {
             return Err(InstructionError::AccountsDataBudgetExceeded);
         }
@@ -141,63 +142,65 @@ mod tests {
     }
 
     #[test]
-    fn test_consume() {
+    fn test_adjust_delta() {
         let initial_accounts_data_len = 0;
         let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
 
         // Test: simple, positive numbers
-        let result = accounts_data_meter.consume(0);
+        let result = accounts_data_meter.adjust_delta(0);
         assert!(result.is_ok());
-        let result = accounts_data_meter.consume(1);
+        let result = accounts_data_meter.adjust_delta(1);
         assert!(result.is_ok());
-        let result = accounts_data_meter.consume(4);
+        let result = accounts_data_meter.adjust_delta(4);
         assert!(result.is_ok());
-        let result = accounts_data_meter.consume(9);
+        let result = accounts_data_meter.adjust_delta(9);
         assert!(result.is_ok());
 
-        // Test: can consume the remaining amount
+        // Test: adjust_delta can use up the remaining amount
         let remaining = accounts_data_meter.remaining() as i64;
-        let result = accounts_data_meter.consume(remaining);
+        let result = accounts_data_meter.adjust_delta(remaining);
         assert!(result.is_ok());
         assert_eq!(accounts_data_meter.remaining(), 0);
     }
 
     #[test]
-    fn test_consume_deallocate() {
+    fn test_adjust_delta_deallocate() {
         let initial_accounts_data_len = 10_000;
         let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
         let remaining_before = accounts_data_meter.remaining();
 
         let amount = (initial_accounts_data_len / 2) as i64;
         let amount = -amount;
-        let result = accounts_data_meter.consume(amount);
+        let result = accounts_data_meter.adjust_delta(amount);
         assert!(result.is_ok());
         let remaining_after = accounts_data_meter.remaining();
         assert_eq!(remaining_after, remaining_before + amount.abs() as u64);
     }
 
     #[test]
-    fn test_consume_too_much() {
+    fn test_adjust_delta_exceeding() {
         let initial_accounts_data_len = 0;
         let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
 
-        // Test: consuming more than what's available (1) returns an error, (2) does not consume
+        // Test: adjusting delta by more than what's available
+        // (1) returns an error,
+        // (2) does not adjust delta
         let remaining = accounts_data_meter.remaining();
-        let result = accounts_data_meter.consume(remaining as i64 + 1);
+        let result = accounts_data_meter.adjust_delta(remaining as i64 + 1);
         assert!(result.is_err());
         assert_eq!(accounts_data_meter.remaining(), remaining);
     }
 
     #[test]
-    fn test_consume_zero() {
+    fn test_adjust_delta_zero() {
         // Pre-condition: set up the accounts data meter such that there is no remaining space
         let initial_accounts_data_len = 1234;
         let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
         accounts_data_meter.maximum = initial_accounts_data_len;
         assert_eq!(accounts_data_meter.remaining(), 0);
 
-        // Test: can always consume zero, even if there is no remaining space
-        let result = accounts_data_meter.consume(0);
+        // Test: can always adjust delta by zero, even if there is no remaining space
+        let result = accounts_data_meter.adjust_delta(0);
         assert!(result.is_ok());
     }
 }
