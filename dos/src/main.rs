@@ -33,13 +33,11 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     contact
 }
 
-fn test_multisig_tx(nsign: usize) -> Transaction {
+fn test_multisig_tx(nsign: usize, blockhash: Hash) -> Transaction {
     let kpvals: Vec<Keypair> = (0..nsign).map( |_| Keypair::new() ).collect();
     let keypairs: Vec<&Keypair> = kpvals.iter().collect();
 
     let lamports = 5;
-    let blockhash = Hash::default();
-
     let transfer_instruction = SystemInstruction::Transfer { lamports };
 
     let program_ids = vec![system_program::id(), stake::program::id()];
@@ -75,6 +73,7 @@ fn run_dos(
     mode: String,
     data_input: Option<String>,
     num_sign: usize, // makes sense only with transaction mode
+    valid_block_hash: bool, // makes sense only with transaction mode
 ) {
     let mut target = None;
     let mut rpc_client = None;
@@ -90,7 +89,10 @@ fn run_dos(
                     "gossip" => Some(node.gossip),
                     "tvu" => Some(node.tvu),
                     "tvu_forwards" => Some(node.tvu_forwards),
-                    "tpu" => Some(node.tpu),
+                    "tpu" => {
+                        rpc_client = Some(RpcClient::new_socket(node.rpc));
+                        Some(node.tpu)
+                    },
                     "tpu_forwards" => Some(node.tpu_forwards),
                     "repair" => Some(node.repair),
                     "serve_repair" => Some(node.serve_repair),
@@ -132,7 +134,12 @@ fn run_dos(
             data.resize(data_size, 0);
         }
         "transaction" => {
-            let tx = test_multisig_tx(num_sign);
+            let blockhash = if valid_block_hash {
+                rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap()
+            } else {
+                Hash::default()
+            };
+            let tx = test_multisig_tx(num_sign, blockhash);
             info!("{:?}", tx);
             data = bincode::serialize(&tx).unwrap();
         }
@@ -269,6 +276,13 @@ fn main() {
                 .value_name("NSIGN")
                 .help("Number of signatures in transaction"),
         )
+        .arg(
+            Arg::with_name("valid_blockhash")
+                .long("generate-valid-blockhash")
+                .takes_value(false)
+                .help("Generate a valid blockhash for transaction")
+                .hidden(true),
+        )
         .get_matches();
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
@@ -285,6 +299,7 @@ fn main() {
     let data_type = value_t_or_exit!(matches, "data_type", String);
     let data_input = value_t!(matches, "data_input", String).ok();
     let num_sign = value_t!(matches, "num_sign", usize).unwrap_or(2);
+    let valid_blockhash = matches.is_present("valid_blockhash");
 
     let mut nodes = vec![];
     if !skip_gossip {
@@ -318,7 +333,8 @@ fn main() {
         data_size,
         mode,
         data_input,
-        num_sign
+        num_sign,
+        valid_blockhash,
     );
 }
 
@@ -346,6 +362,7 @@ pub mod test {
             "tvu".to_string(),
             None,
             2,
+            false,
         );
 
         run_dos(
@@ -357,6 +374,7 @@ pub mod test {
             "repair".to_string(),
             None,
             2,
+            false,
         );
 
         run_dos(
@@ -368,6 +386,7 @@ pub mod test {
             "serve_repair".to_string(),
             None,
             2,
+            false,
         );
     }
 
@@ -385,13 +404,14 @@ pub mod test {
 
         run_dos(
             &[node],
-            10, // was 10_000_000
+            1, // was 10_000_000
             cluster.entry_point_info.gossip,
             "transaction".to_string(),
             1000,
             "tpu".to_string(),
             None,
             3,
+            true,
         );
     }
 }
