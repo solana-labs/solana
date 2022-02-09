@@ -257,8 +257,8 @@ export class Transaction {
       });
     });
 
-    // Sort. Prioritizing first by signer, then by writable
-    accountMetas
+    // Stable Sort. Prioritizing first by signer, then by writable
+    const sortedAccountMetas = accountMetas
       .map((item, index) => ({ item, index }))
       .sort(function (xt, yt) {
         const x = xt.item;
@@ -272,7 +272,7 @@ export class Transaction {
 
     // Cull duplicate account metas
     const uniqueMetas: AccountMeta[] = [];
-    accountMetas.forEach(accountMeta => {
+    sortedAccountMetas.forEach(accountMeta => {
       const pubkeyString = accountMeta.pubkey.toString();
       const uniqueIndex = uniqueMetas.findIndex(x => {
         return x.pubkey.toString() === pubkeyString;
