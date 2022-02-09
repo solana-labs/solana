@@ -30,7 +30,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.0" 
 
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = "0.5.3"
-libc = "0.2.115"
+libc = "0.2.117"
 nix = "0.23.1"
 
 [lib]
