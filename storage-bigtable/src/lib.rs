@@ -14,10 +14,10 @@ use {
     },
     solana_storage_proto::convert::{generated, tx_by_addr},
     solana_transaction_status::{
-        extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature, Reward,
-        TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus,
-        TransactionStatusMeta, TransactionWithStatusMeta, VersionedConfirmedBlock,
-        VersionedConfirmedTransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
+        extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
+        TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -115,6 +115,7 @@ struct StoredConfirmedBlock {
     block_height: Option<u64>,
 }
 
+#[cfg(test)]
 impl From<ConfirmedBlock> for StoredConfirmedBlock {
     fn from(confirmed_block: ConfirmedBlock) -> Self {
         let ConfirmedBlock {
@@ -139,7 +140,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
     }
 }
 
-impl From<StoredConfirmedBlock> for VersionedConfirmedBlock {
+impl From<StoredConfirmedBlock> for ConfirmedBlock {
     fn from(confirmed_block: StoredConfirmedBlock) -> Self {
         let StoredConfirmedBlock {
             previous_blockhash,
@@ -169,20 +170,38 @@ struct StoredConfirmedBlockTransaction {
     meta: Option<StoredConfirmedBlockTransactionStatusMeta>,
 }
 
+#[cfg(test)]
 impl From<TransactionWithStatusMeta> for StoredConfirmedBlockTransaction {
     fn from(value: TransactionWithStatusMeta) -> Self {
-        Self {
-            transaction: value.transaction.into(),
-            meta: value.meta.map(|meta| meta.into()),
+        match value {
+            TransactionWithStatusMeta::MissingMetadata(transaction) => Self {
+                transaction: VersionedTransaction::from(transaction),
+                meta: None,
+            },
+            TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                transaction,
+                meta,
+            }) => Self {
+                transaction,
+                meta: Some(meta.into()),
+            },
         }
     }
 }
 
-impl From<StoredConfirmedBlockTransaction> for VersionedTransactionWithStatusMeta {
-    fn from(value: StoredConfirmedBlockTransaction) -> Self {
-        Self {
-            transaction: value.transaction,
-            meta: value.meta.map(|meta| meta.into()),
+impl From<StoredConfirmedBlockTransaction> for TransactionWithStatusMeta {
+    fn from(tx_with_meta: StoredConfirmedBlockTransaction) -> Self {
+        let StoredConfirmedBlockTransaction { transaction, meta } = tx_with_meta;
+        match meta {
+            None => Self::MissingMetadata(
+                transaction
+                    .into_legacy_transaction()
+                    .expect("versioned transactions always have meta"),
+            ),
+            Some(meta) => Self::Complete(VersionedTransactionWithStatusMeta {
+                transaction,
+                meta: meta.into(),
+            }),
         }
     }
 }
@@ -394,7 +413,7 @@ impl LedgerStorage {
     }
 
     /// Fetch the confirmed block from the desired slot
-    pub async fn get_confirmed_block(&self, slot: Slot) -> Result<VersionedConfirmedBlock> {
+    pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         debug!(
             "LedgerStorage::get_confirmed_block request received: {:?}",
             slot
@@ -440,7 +459,7 @@ impl LedgerStorage {
     pub async fn get_confirmed_transaction(
         &self,
         signature: &Signature,
-    ) -> Result<Option<VersionedConfirmedTransactionWithStatusMeta>> {
+    ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
         debug!(
             "LedgerStorage::get_confirmed_transaction request received: {:?}",
             signature
@@ -465,17 +484,17 @@ impl LedgerStorage {
                 warn!("Transaction info for {} is corrupt", signature);
                 Ok(None)
             }
-            Some(bucket_block_transaction) => {
-                if bucket_block_transaction.transaction.signatures[0] != *signature {
+            Some(tx_with_meta) => {
+                if tx_with_meta.transaction_signature() != signature {
                     warn!(
                         "Transaction info or confirmed block for {} is corrupt",
                         signature
                     );
                     Ok(None)
                 } else {
-                    Ok(Some(VersionedConfirmedTransactionWithStatusMeta {
+                    Ok(Some(ConfirmedTransactionWithStatusMeta {
                         slot,
-                        tx_with_meta: bucket_block_transaction,
+                        tx_with_meta,
                         block_time: block.block_time,
                     }))
                 }
@@ -638,7 +657,7 @@ impl LedgerStorage {
         let mut tx_cells = vec![];
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
             let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
-            let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
+            let err = meta.status.clone().err();
             let index = index as u32;
             let signature = transaction.signatures[0];
             let memo = extract_and_fmt_memos(transaction_with_meta);
@@ -725,21 +744,41 @@ impl LedgerStorage {
         let mut expected_tx_infos: HashMap<String, UploadedTransaction> = HashMap::new();
         let confirmed_block = self.get_confirmed_block(slot).await?;
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
-            let VersionedTransactionWithStatusMeta { transaction, meta } = transaction_with_meta;
-            let signature = transaction.signatures[0];
-            let index = index as u32;
-            let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
+            match transaction_with_meta {
+                TransactionWithStatusMeta::MissingMetadata(transaction) => {
+                    let signature = transaction.signatures[0];
+                    let index = index as u32;
+                    let err = None;
 
-            for address in transaction_with_meta.account_keys().iter() {
-                if !is_sysvar_id(address) {
-                    addresses.insert(address);
+                    for address in transaction.message.account_keys.iter() {
+                        if !is_sysvar_id(address) {
+                            addresses.insert(address);
+                        }
+                    }
+
+                    expected_tx_infos.insert(
+                        signature.to_string(),
+                        UploadedTransaction { slot, index, err },
+                    );
+                }
+                TransactionWithStatusMeta::Complete(tx_with_meta) => {
+                    let VersionedTransactionWithStatusMeta { transaction, meta } = tx_with_meta;
+                    let signature = transaction.signatures[0];
+                    let index = index as u32;
+                    let err = meta.status.clone().err();
+
+                    for address in tx_with_meta.account_keys().iter() {
+                        if !is_sysvar_id(address) {
+                            addresses.insert(address);
+                        }
+                    }
+
+                    expected_tx_infos.insert(
+                        signature.to_string(),
+                        UploadedTransaction { slot, index, err },
+                    );
                 }
             }
-
-            expected_tx_infos.insert(
-                signature.to_string(),
-                UploadedTransaction { slot, index, err },
-            );
         }
 
         let address_slot_rows: Vec<_> = addresses

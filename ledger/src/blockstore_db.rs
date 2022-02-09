@@ -102,6 +102,7 @@ pub enum BlockstoreError {
     ParentEntriesUnavailable,
     SlotUnavailable,
     UnsupportedTransactionVersion,
+    MissingTransactionMetadata,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
