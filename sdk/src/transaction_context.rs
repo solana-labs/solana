@@ -186,21 +186,7 @@ impl TransactionContext {
         instruction_data: &[u8],
         record_instruction_in_transaction_context_push: bool,
     ) -> Result<(), InstructionError> {
-        if record_instruction_in_transaction_context_push && !self.instruction_stack.is_empty() {
-            let instruction_context = InstructionContext {
-                nesting_level: self.instruction_stack.len(),
-                program_accounts: program_accounts.to_vec(),
-                instruction_accounts: instruction_accounts.to_vec(),
-                instruction_data: instruction_data.to_vec(),
-            };
-            if let Some(instruction_trace) = self.instruction_trace.last_mut() {
-                instruction_trace.push(instruction_context);
-            }
-        }
-        if self.instruction_stack.len() >= self.instruction_context_capacity {
-            return Err(InstructionError::CallDepth);
-        }
-        if self.instruction_stack.is_empty() {
+        let index_in_trace = if self.instruction_stack.is_empty() {
             debug_assert!(
                 self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
             );
@@ -210,14 +196,26 @@ impl TransactionContext {
                 instruction_accounts: instruction_accounts.to_vec(),
                 instruction_data: instruction_data.to_vec(),
             };
-            self.instruction_stack.push(self.instruction_trace.len());
             self.instruction_trace.push(vec![instruction_context]);
+            self.instruction_trace.len().saturating_sub(1)
         } else if let Some(instruction_trace) = self.instruction_trace.last_mut() {
-            self.instruction_stack
-                .push(instruction_trace.len().saturating_sub(1));
+            if record_instruction_in_transaction_context_push {
+                let instruction_context = InstructionContext {
+                    nesting_level: self.instruction_stack.len(),
+                    program_accounts: program_accounts.to_vec(),
+                    instruction_accounts: instruction_accounts.to_vec(),
+                    instruction_data: instruction_data.to_vec(),
+                };
+                instruction_trace.push(instruction_context);
+            }
+            instruction_trace.len().saturating_sub(1)
         } else {
             return Err(InstructionError::CallDepth);
+        };
+        if self.instruction_stack.len() >= self.instruction_context_capacity {
+            return Err(InstructionError::CallDepth);
         }
+        self.instruction_stack.push(index_in_trace);
         Ok(())
     }
 
