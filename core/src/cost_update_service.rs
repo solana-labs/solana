@@ -10,16 +10,7 @@ use {
     solana_runtime::{bank::Bank, cost_model::CostModel},
     solana_sdk::timing::timestamp,
     std::{
-<<<<<<< HEAD
-        collections::HashMap,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::Receiver,
-            Arc, RwLock,
-        },
-=======
-        sync::{Arc, RwLock},
->>>>>>> 7aa1fb4e2 (1. Persist to blockstore less frequently;)
+        sync::{mpsc::Receiver, Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
 };
