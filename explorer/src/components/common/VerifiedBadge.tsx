@@ -2,10 +2,12 @@ import { VerifiableBuild } from "utils/program-verification";
 
 export function VerifiedBadge({
   verifiableBuild,
+  deploySlot,
 }: {
   verifiableBuild: VerifiableBuild;
+  deploySlot: number;
 }) {
-  if (verifiableBuild && verifiableBuild.verified_slot) {
+  if (verifiableBuild && verifiableBuild.verified_slot === deploySlot) {
     return (
       <h3 className="mb-0">
         <a
