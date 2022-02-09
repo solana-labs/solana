@@ -58,25 +58,15 @@ pub fn collect_token_balances(
     let mut collect_time = Measure::start("collect_token_balances");
 
     for transaction in batch.sanitized_transactions() {
-<<<<<<< HEAD
         let has_token_program = transaction
             .message()
             .account_keys_iter()
-            .any(is_token_program);
+            .any(is_known_spl_token_id);
 
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
             for (index, account_id) in transaction.message().account_keys_iter().enumerate() {
-                if transaction.message().is_invoked(index) || is_token_program(account_id) {
-=======
-        let account_keys = transaction.message().account_keys();
-        let has_token_program = account_keys.iter().any(is_known_spl_token_id);
-
-        let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
-        if has_token_program {
-            for (index, account_id) in account_keys.iter().enumerate() {
                 if transaction.message().is_invoked(index) || is_known_spl_token_id(account_id) {
->>>>>>> 86d465c53 (Prepare RPC subsystem for multiple SPL Token program ids)
                     continue;
                 }
 
