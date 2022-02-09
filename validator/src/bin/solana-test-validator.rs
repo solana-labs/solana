@@ -570,6 +570,7 @@ fn main() {
             ("ticks_per_slot", "--ticks-per-slot"),
             ("slots_per_epoch", "--slots-per-epoch"),
             ("faucet_sol", "--faucet-sol"),
+            ("deactivate_feature", "--deactivate-feature"),
         ] {
             if matches.is_present(name) {
                 println!("{} argument ignored, ledger already exists", long);
