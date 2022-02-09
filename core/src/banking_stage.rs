@@ -159,6 +159,7 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
+    end_of_slot_filtered_invalid_count: AtomicUsize,
     batch_packet_indexes_len: Histogram,
 
     // Timing
@@ -273,6 +274,12 @@ impl BankingStageStats {
                 (
                     "consumed_buffered_packets_count",
                     self.consumed_buffered_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "end_of_slot_filtered_invalid_count",
+                    self.end_of_slot_filtered_invalid_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -563,12 +570,19 @@ impl BankingStage {
                         *next_leader,
                         banking_stage_stats,
                     );
+
+                    let end_of_slot_filtered_invalid_count = original_unprocessed_indexes
+                        .len()
+                        .saturating_sub(new_unprocessed_indexes.len());
+
                     slot_metrics_tracker.increment_end_of_slot_filtered_invalid_count(
-                        original_unprocessed_indexes
-                            .len()
-                            .saturating_sub(new_unprocessed_indexes.len())
-                            as u64,
+                        end_of_slot_filtered_invalid_count as u64,
                     );
+
+                    banking_stage_stats
+                        .end_of_slot_filtered_invalid_count
+                        .fetch_add(end_of_slot_filtered_invalid_count, Ordering::Relaxed);
+
                     Self::update_buffered_packets_with_new_unprocessed(
                         original_unprocessed_indexes,
                         new_unprocessed_indexes,
