@@ -260,7 +260,7 @@ export class Transaction {
     // Stable Sort. Prioritizing first by signer, then by writable
     const sortedAccountMetas = accountMetas
       .map((item, index) => ({ item, index }))
-      .sort(function (xt, yt) {
+      .sort((xt, yt) => {
         const x = xt.item;
         const y = yt.item;
         const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
