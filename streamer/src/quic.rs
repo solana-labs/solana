@@ -50,12 +50,12 @@ fn configure_server(
     const MAX_CONCURRENT_UNI_STREAMS: u32 = 1;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
-    config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
+    config.receive_window((10_000 * PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
+    config.datagram_receive_buffer_size(Some(PACKET_DATA_SIZE));
 
     // disable bidi & datagrams
     const MAX_CONCURRENT_BIDI_STREAMS: u32 = 0;
     config.max_concurrent_bidi_streams(MAX_CONCURRENT_BIDI_STREAMS.into());
-    config.datagram_receive_buffer_size(None);
 
     Ok((server_config, cert_chain_pem))
 }
@@ -121,7 +121,12 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
 }
 
 pub fn rt() -> Runtime {
-    Builder::new_current_thread().enable_all().build().unwrap()
+    //Builder::new_current_thread().enable_all().build().unwrap()
+    Builder::new_multi_thread().enable_all().build().unwrap()
+}
+
+pub fn rt_mt() -> Runtime {
+    Builder::new_multi_thread().enable_all().build().unwrap()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -222,13 +227,47 @@ pub fn spawn_server(
                         let quinn::NewConnection {
                             connection,
                             mut uni_streams,
+                            mut datagrams,
                             ..
                         } = new_connection;
 
                         let remote_addr = connection.remote_address();
-                        let packet_sender = packet_sender.clone();
+                        let packet_sender_datagrams = packet_sender.clone();
+                        let packet_sender_streams = packet_sender.clone();
+
+                        trace!("new connection {}", remote_addr);
                         tokio::spawn(async move {
-                            debug!("new connection {}", remote_addr);
+                            loop {
+                                trace!("waiting for datagrams..");
+                                match datagrams.next().await {
+                                    Some(maybe_datagram) => match maybe_datagram {
+                                        Ok(datagram) => {
+                                            trace!("got datagram");
+
+                                            let mut batch = PacketBatch::with_capacity(1);
+                                            let mut packet = Packet::default();
+                                            packet.data[..datagram.len()]
+                                                .copy_from_slice(&datagram);
+                                            packet.meta.set_addr(&remote_addr);
+                                            packet.meta.size = datagram.len();
+                                            batch.packets.push(packet);
+
+                                            packet_sender_datagrams.send(batch).unwrap();
+                                        }
+                                        Err(e) => {
+                                            trace!("error: {:?}", e);
+                                            break;
+                                        }
+                                    },
+                                    None => {
+                                        trace!("datagrams none..");
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+
+                        tokio::spawn(async move {
                             while let Some(Ok(mut stream)) = uni_streams.next().await {
                                 let mut maybe_batch = None;
                                 while !exit.load(Ordering::Relaxed) {
@@ -236,7 +275,7 @@ pub fn spawn_server(
                                         &stream.read_chunk(PACKET_DATA_SIZE, false).await,
                                         &mut maybe_batch,
                                         &remote_addr,
-                                        &packet_sender,
+                                        &packet_sender_streams,
                                     ) {
                                         break;
                                     }
@@ -288,7 +327,11 @@ mod test {
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
-        ClientConfig::new(Arc::new(crypto))
+        let mut config = ClientConfig::new(Arc::new(crypto));
+        let transport = Arc::get_mut(&mut config.transport).unwrap();
+        transport.datagram_send_buffer_size(100 * 1024 * 1024);
+        transport.datagram_receive_buffer_size(Some(100 * 1024 * 1024));
+        config
     }
 
     #[test]
@@ -312,6 +355,106 @@ mod test {
         runtime
             .block_on(endpoint.connect(*addr, "localhost").unwrap())
             .unwrap()
+    }
+
+    fn get_env(name: &'static str, default: usize) -> usize {
+        std::env::var(name)
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(default)
+    }
+
+    #[test]
+    fn test_quic_datagrams() {
+        solana_logger::setup();
+        use solana_measure::measure::Measure;
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+
+        //let packet = vec![20u8; max_datagram_size];
+        let packets_per_thread = get_env("PACKETS_PER_THREAD", 1000);
+        let batch_size = get_env("BATCH_SIZE", 1);
+        let num_threads = get_env("NUM_THREADS", 100);
+        let packet_size = get_env("PACKET_SIZE", 100);
+
+        let num_batches = packets_per_thread / batch_size;
+        let num_packets = num_threads * packets_per_thread;
+
+        let start = Instant::now();
+        let mut time = Measure::start("total_send_receive");
+        let mut send_time = Measure::start("start_send_datagrams");
+        let send_threads: Vec<_> = (0..num_threads)
+            .into_iter()
+            .map(|tid| {
+                thread::spawn(move || {
+                    let runtime = rt_mt();
+                    let _rt_guard = runtime.enter();
+                    let conn = Arc::new(make_client_endpoint(&runtime, &server_address));
+                    if tid == 0 {
+                        let max_datagram_size = conn.connection.max_datagram_size().unwrap();
+                        info!("max_datagram_size: {:?}", max_datagram_size);
+                    }
+
+                    let packet = vec![20u8; packet_size];
+                    for _ in 0..num_batches {
+                        //info!("sending..");
+                        for _ in 0..batch_size {
+                            conn.connection
+                                .send_datagram(packet.clone().into())
+                                .unwrap();
+                        }
+                        // send things in batches and slowly to prevent congestion control.
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                })
+            })
+            .collect();
+        for st in send_threads {
+            st.join().unwrap();
+        }
+        send_time.stop();
+        info!("{} polling now for received", send_time);
+        let mut receive_time = Measure::start("receive datagrams");
+        let mut num_received = 0;
+        let mut last_received = 0;
+        let mut start_recv = Instant::now();
+        loop {
+            if let Ok(received) = receiver.recv_timeout(Duration::from_millis(1000)) {
+                num_received += received.packets.len();
+            }
+            if num_received >= num_packets {
+                break;
+            }
+            if start_recv.elapsed().as_secs() >= 2 {
+                info!(
+                    "waiting for {} received: {} tps: {:.2}",
+                    num_packets,
+                    num_received,
+                    num_received as f32 / start.elapsed().as_secs_f32()
+                );
+                start_recv = Instant::now();
+                if num_received > 0 && num_received <= last_received {
+                    break;
+                }
+                last_received = num_received;
+            }
+        }
+        time.stop();
+        receive_time.stop();
+        info!(
+            "{} {} tps: {:.2}",
+            time,
+            receive_time,
+            num_received as f32 / time.as_s()
+        );
+        /*let packet0 = &received.packets[0];
+        assert_eq!(packet0.data[..packet0.meta.size], packet[..]);*/
+        exit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
     }
 
     #[test]
