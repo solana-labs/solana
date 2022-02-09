@@ -764,10 +764,6 @@ impl BankingStage {
             _ => (),
         }
 
-        // Check if we need to start new metrics for a new leader slot, or
-        // report metrics for a completed leader slot. Check after the `decision`
-        // above is executed to include forwarding in the metrics
-        slot_metrics_tracker.update_on_leader_slot_boundary(&bank_start);
         decision
     }
 
