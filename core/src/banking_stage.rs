@@ -2,7 +2,9 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use {
-    crate::leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+    crate::leader_slot_banking_stage_metrics::{
+        LeaderSlotMetricsTracker, ProcessTransactionsSummary,
+    },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
     itertools::Itertools,
@@ -84,40 +86,10 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
-/// A summary of what happened to transactions passed to the execution pipeline.
-/// Transactions can
-/// 1) Did not even make it to execution due to being filtered out by things like AccountInUse
-/// lock conflictss or CostModel compute limits. These types of errors are retryable and
-/// counted in `Self::retryable_transaction_indexes`.
-/// 2) Did not execute due to some fatal error like too old, or duplicate signature. These
-/// will be dropped from the transactions queue and not counted in `Self::retryable_transaction_indexes`
-/// 3) Were executed and committed, captured by `committed_transactions_count` below.
-/// 4) Were executed and failed commit, captured by `failed_commit_count` below.
-struct ProcessTransactionsSummary {
-    // Returns true if we hit the end of the block/max PoH height for the block before
-    // processing all the transactions in the batch.
-    reached_max_poh_height: bool,
-
-    // Total number of transactions that were passed as candidates for execution. See description
-    // of struct above for possible outcomes for these transactions
-    transactions_attempted_execution_count: usize,
-
-    // Total number of transactions that made it into the block
-    committed_transactions_count: usize,
-
-    // Total number of transactions that made it into the block where the transactions
-    // output from execution was success/no error.
-    committed_transactions_with_successful_result_count: usize,
-
-    // All transactions that were executed but then failed record because the
-    // slot ended
-    failed_commit_count: usize,
-
-    // Indexes of transactions in the transactions slice that were not committed but are retryable
-    retryable_transaction_indexes: Vec<usize>,
-
+pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
     cost_model_throttled_transactions_count: usize,
+    execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
@@ -1510,12 +1482,7 @@ impl BankingStage {
         process_transactions_summary.cost_model_throttled_transactions_count =
             cost_model_throttled_transactions_count;
         let ProcessTransactionsSummary {
-            transactions_attempted_execution_count,
-            committed_transactions_count,
-            committed_transactions_with_successful_result_count,
-            failed_commit_count,
             ref retryable_transaction_indexes,
-            cost_model_throttled_transactions_count,
             ..
         } = process_transactions_summary;
 
@@ -1534,32 +1501,8 @@ impl BankingStage {
         });
 
         cost_tracking_time.stop();
-        slot_metrics_tracker.increment_transactions_attempted_execution_count(
-            transactions_attempted_execution_count as u64,
-        );
 
-        slot_metrics_tracker
-            .increment_committed_transactions_count(committed_transactions_count as u64);
-
-        slot_metrics_tracker.increment_committed_transactions_with_successful_result_count(
-            committed_transactions_with_successful_result_count as u64,
-        );
-
-        slot_metrics_tracker
-            .increment_executed_transactions_failed_commit_count(failed_commit_count as u64);
-
-        slot_metrics_tracker
-            .increment_retryable_transactions_count(retryable_transaction_indexes.len() as u64);
-
-        slot_metrics_tracker.increment_nonretryable_errored_transactions_count(
-            transactions_attempted_execution_count
-                .saturating_sub(committed_transactions_count)
-                .saturating_sub(retryable_transaction_indexes.len()) as u64,
-        );
-
-        slot_metrics_tracker.increment_cost_model_throttled_transactions_count(
-            cost_model_throttled_transactions_count as u64,
-        );
+        slot_metrics_tracker.accumulate_process_transactions_summary(&process_transactions_summary);
 
         let retryable_tx_count = retryable_transaction_indexes.len();
         inc_new_counter_info!("banking_stage-unprocessed_transactions", retryable_tx_count);

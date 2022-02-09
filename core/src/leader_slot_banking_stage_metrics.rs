@@ -1,5 +1,41 @@
 use {solana_poh::poh_recorder::BankStart, solana_sdk::clock::Slot, std::time::Instant};
 
+/// A summary of what happened to transactions passed to the execution pipeline.
+/// Transactions can
+/// 1) Did not even make it to execution due to being filtered out by things like AccountInUse
+/// lock conflicts or CostModel compute limits. These types of errors are retryable and
+/// counted in `Self::retryable_transaction_indexes`.
+/// 2) Did not execute due to some fatal error like too old, or duplicate signature. These
+/// will be dropped from the transactions queue and not counted in `Self::retryable_transaction_indexes`
+/// 3) Were executed and committed, captured by `committed_transactions_count` below.
+/// 4) Were executed and failed commit, captured by `failed_commit_count` below.
+pub(crate) struct ProcessTransactionsSummary {
+    // Returns true if we hit the end of the block/max PoH height for the block before
+    // processing all the transactions in the batch.
+    pub reached_max_poh_height: bool,
+
+    // Total number of transactions that were passed as candidates for execution. See description
+    // of struct above for possible outcomes for these transactions
+    pub transactions_attempted_execution_count: usize,
+
+    // Total number of transactions that made it into the block
+    pub committed_transactions_count: usize,
+
+    // Total number of transactions that made it into the block where the transactions
+    // output from execution was success/no error.
+    pub committed_transactions_with_successful_result_count: usize,
+
+    // All transactions that were executed but then failed record because the
+    // slot ended
+    pub failed_commit_count: usize,
+
+    // Indexes of transactions in the transactions slice that were not committed but are retryable
+    pub retryable_transaction_indexes: Vec<usize>,
+
+    // The number of transactions filtered out by the cost model
+    pub cost_model_throttled_transactions_count: usize,
+}
+
 // Metrics capturing wallclock time spent in various parts of BankingStage during this
 // validator's leader slot
 #[derive(Debug, Default)]
@@ -298,6 +334,46 @@ impl LeaderSlotMetricsTracker {
                     leader_slot_metrics.reported_slot()
                 }
             }
+        }
+    }
+
+    pub(crate) fn accumulate_process_transactions_summary(
+        &mut self,
+        process_transactions_summary: &ProcessTransactionsSummary,
+    ) {
+        if self.leader_slot_metrics.is_some() {
+            let ProcessTransactionsSummary {
+                transactions_attempted_execution_count,
+                committed_transactions_count,
+                committed_transactions_with_successful_result_count,
+                failed_commit_count,
+                ref retryable_transaction_indexes,
+                cost_model_throttled_transactions_count,
+                ..
+            } = process_transactions_summary;
+            self.increment_transactions_attempted_execution_count(
+                *transactions_attempted_execution_count as u64,
+            );
+
+            self.increment_committed_transactions_count(*committed_transactions_count as u64);
+
+            self.increment_committed_transactions_with_successful_result_count(
+                *committed_transactions_with_successful_result_count as u64,
+            );
+
+            self.increment_executed_transactions_failed_commit_count(*failed_commit_count as u64);
+
+            self.increment_retryable_transactions_count(retryable_transaction_indexes.len() as u64);
+
+            self.increment_nonretryable_errored_transactions_count(
+                transactions_attempted_execution_count
+                    .saturating_sub(*committed_transactions_count)
+                    .saturating_sub(retryable_transaction_indexes.len()) as u64,
+            );
+
+            self.increment_cost_model_throttled_transactions_count(
+                *cost_model_throttled_transactions_count as u64,
+            );
         }
     }
 
