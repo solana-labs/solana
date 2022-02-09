@@ -325,6 +325,15 @@ fn main() {
                 .long("no-accounts-db-caching")
                 .help("Disables accounts caching"),
         )
+        .arg(
+            Arg::with_name("deactivate_feature")
+                .long("deactivate-feature")
+                .takes_value(true)
+                .value_name("FEATURE_PUBKEY")
+                .validator(is_pubkey)
+                .multiple(true)
+                .help("deactivate this feature in genesis.")
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -549,6 +558,8 @@ fn main() {
         });
     }
 
+    let features_to_deactivate = pubkeys_of(&matches, "deactivate_feature").unwrap_or_default();
+
     if TestValidatorGenesis::ledger_exists(&ledger_path) {
         for (name, long) in &[
             ("bpf_program", "--bpf-program"),
@@ -558,6 +569,7 @@ fn main() {
             ("ticks_per_slot", "--ticks-per-slot"),
             ("slots_per_epoch", "--slots-per-epoch"),
             ("faucet_sol", "--faucet-sol"),
+            ("deactivate_feature", "--deactivate-feature"),
         ] {
             if matches.is_present(name) {
                 println!("{} argument ignored, ledger already exists", long);
@@ -626,7 +638,8 @@ fn main() {
         .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
-        .add_accounts_from_json_files(&accounts_to_load);
+        .add_accounts_from_json_files(&accounts_to_load)
+        .deactivate_features(&features_to_deactivate);
 
     if !accounts_to_clone.is_empty() {
         genesis.clone_accounts(
