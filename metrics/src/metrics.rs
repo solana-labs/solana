@@ -463,7 +463,7 @@ pub fn set_panic_hook(program: &'static str) {
 #[macro_export]
 macro_rules! canary_assert {
     ($assertion:expr) => {
-        let is_canary_validator: bool = env::var("CANARY_VALIDATOR").is_ok();
+        let is_canary_validator: bool = env::var("SOLANA_CANARY_VALIDATOR").is_ok();
         if is_canary_validator {
             if(!$assertion) {
                 panic!("canary_assert failed.");
