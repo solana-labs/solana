@@ -15,18 +15,23 @@ pub struct AccountsDataMeter {
     /// The maximum amount of accounts data space that can be used (in bytes)
     maximum: u64,
 
-    /// The current amount of accounts data space used (in bytes)
-    current: u64,
+    /// The initial amount of accounts data space used (in bytes)
+    initial: u64,
+
+    /// The amount of accounts data space that has changed since `initial` (in bytes)
+    delta: i64,
 }
 
 impl AccountsDataMeter {
     /// Make a new AccountsDataMeter
-    pub fn new(current_accounts_data_len: u64) -> Self {
+    #[must_use]
+    pub fn new(initial_accounts_data_len: u64) -> Self {
         let accounts_data_meter = Self {
             maximum: MAX_ACCOUNTS_DATA_LEN,
-            current: current_accounts_data_len,
+            initial: initial_accounts_data_len,
+            delta: 0,
         };
-        debug_assert!(accounts_data_meter.current <= accounts_data_meter.maximum);
+        debug_assert!(accounts_data_meter.initial <= accounts_data_meter.maximum);
         accounts_data_meter
     }
 
@@ -35,36 +40,47 @@ impl AccountsDataMeter {
         self.maximum
     }
 
+    /// Return the initial amount of accounts data space used (in bytes)
+    pub fn initial(&self) -> u64 {
+        self.initial
+    }
+
+    /// Return the amount of accounts data space that has changed (in bytes)
+    pub fn delta(&self) -> i64 {
+        self.delta
+    }
+
     /// Return the current amount of accounts data space used (in bytes)
     pub fn current(&self) -> u64 {
-        self.current
+        /// NOTE: Mixed integer ops currently not stable, so copying the impl.
+        /// * https://github.com/rust-lang/rust/issues/87840
+        /// * https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
+        const fn saturating_add_signed(lhs: u64, rhs: i64) -> u64 {
+            let (res, overflow) = lhs.overflowing_add(rhs as u64);
+            if overflow == (rhs < 0) {
+                res
+            } else if overflow {
+                u64::MAX
+            } else {
+                u64::MIN
+            }
+        }
+        saturating_add_signed(self.initial, self.delta)
     }
 
     /// Get the remaining amount of accounts data space (in bytes)
     pub fn remaining(&self) -> u64 {
-        self.maximum.saturating_sub(self.current)
+        self.maximum.saturating_sub(self.current())
     }
 
     /// Consume accounts data space, in bytes.  If `amount` is positive, we are *increasing* the
     /// amount of accounts data space used.  If `amount` is negative, we are *decreasing* the
     /// amount of accounts data space used.
     pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
-        if amount == 0 {
-            // nothing to do here; lets us skip doing unnecessary work in the 'else' case
-            return Ok(());
+        if amount > self.remaining() as i64 {
+            return Err(InstructionError::AccountsDataBudgetExceeded);
         }
-
-        if amount.is_positive() {
-            let amount = amount as u64;
-            if amount > self.remaining() {
-                return Err(InstructionError::AccountsDataBudgetExceeded);
-            }
-            self.current = self.current.saturating_add(amount);
-        } else {
-            let amount = amount.abs() as u64;
-            self.current = self.current.saturating_sub(amount);
-        }
-
+        self.delta = self.delta.saturating_add(amount);
         Ok(())
     }
 }
@@ -74,8 +90,8 @@ impl AccountsDataMeter {
     pub fn set_maximum(&mut self, maximum: u64) {
         self.maximum = maximum;
     }
-    pub fn set_current(&mut self, current: u64) {
-        self.current = current;
+    pub fn set_initial(&mut self, initial: u64) {
+        self.initial = initial;
     }
 }
 
@@ -85,10 +101,10 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let current = 1234;
-        let accounts_data_meter = AccountsDataMeter::new(current);
+        let initial = 1234;
+        let accounts_data_meter = AccountsDataMeter::new(initial);
         assert_eq!(accounts_data_meter.maximum, MAX_ACCOUNTS_DATA_LEN);
-        assert_eq!(accounts_data_meter.current, current);
+        assert_eq!(accounts_data_meter.initial, initial);
     }
 
     #[test]
@@ -98,30 +114,30 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_new_panics_if_current_len_too_big() {
+    fn test_new_panics_if_initial_len_too_big() {
         let _ = AccountsDataMeter::new(MAX_ACCOUNTS_DATA_LEN + 1);
     }
 
     #[test]
     fn test_remaining() {
-        let current_accounts_data_len = 0;
-        let accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
+        let initial_accounts_data_len = 0;
+        let accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
         assert_eq!(accounts_data_meter.remaining(), MAX_ACCOUNTS_DATA_LEN);
     }
 
     #[test]
     fn test_remaining_saturates() {
-        let current_accounts_data_len = 0;
-        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
-        // To test that remaining() saturates, need to break the invariant that current <= maximum
-        accounts_data_meter.current = MAX_ACCOUNTS_DATA_LEN + 1;
+        let initial_accounts_data_len = 0;
+        let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
+        // To test that remaining() saturates, need to break the invariant that initial <= maximum
+        accounts_data_meter.initial = MAX_ACCOUNTS_DATA_LEN + 1;
         assert_eq!(accounts_data_meter.remaining(), 0);
     }
 
     #[test]
     fn test_consume() {
-        let current_accounts_data_len = 0;
-        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
+        let initial_accounts_data_len = 0;
+        let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
 
         // Test: simple, positive numbers
         let result = accounts_data_meter.consume(0);
@@ -142,11 +158,11 @@ mod tests {
 
     #[test]
     fn test_consume_deallocate() {
-        let current_accounts_data_len = 10_000;
-        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
+        let initial_accounts_data_len = 10_000;
+        let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
         let remaining_before = accounts_data_meter.remaining();
 
-        let amount = (current_accounts_data_len / 2) as i64;
+        let amount = (initial_accounts_data_len / 2) as i64;
         let amount = -amount;
         let result = accounts_data_meter.consume(amount);
         assert!(result.is_ok());
@@ -156,8 +172,8 @@ mod tests {
 
     #[test]
     fn test_consume_too_much() {
-        let current_accounts_data_len = 0;
-        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
+        let initial_accounts_data_len = 0;
+        let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
 
         // Test: consuming more than what's available (1) returns an error, (2) does not consume
         let remaining = accounts_data_meter.remaining();
@@ -169,9 +185,9 @@ mod tests {
     #[test]
     fn test_consume_zero() {
         // Pre-condition: set up the accounts data meter such that there is no remaining space
-        let current_accounts_data_len = 1234;
-        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
-        accounts_data_meter.maximum = current_accounts_data_len;
+        let initial_accounts_data_len = 1234;
+        let mut accounts_data_meter = AccountsDataMeter::new(initial_accounts_data_len);
+        accounts_data_meter.maximum = initial_accounts_data_len;
         assert_eq!(accounts_data_meter.remaining(), 0);
 
         // Test: can always consume zero, even if there is no remaining space
