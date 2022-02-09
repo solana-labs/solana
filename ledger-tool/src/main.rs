@@ -831,10 +831,10 @@ fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(any(target_env = "msvc", target_os = "macos")))]
 use jemallocator::Jemalloc;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(any(target_env = "msvc", target_os = "macos")))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 

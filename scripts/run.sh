@@ -7,8 +7,15 @@
 #
 set -e
 
+readlink_cmd="readlink"
+if [[ $OSTYPE == darwin* ]]; then
+  # Mac OS X's version of `readlink` does not support the -f option,
+  # But `greadlink` does, which you can get with `brew install coreutils`
+  readlink_cmd="greadlink"
+fi
+
 # Prefer possible `cargo build` binaries over PATH binaries
-script_dir="$(readlink -f "$(dirname "$0")")"
+script_dir="$("${readlink_cmd}" -f "$(dirname "$0")")"
 if [[ "$script_dir" =~ /scripts$ ]]; then
   cd "$script_dir/.."
 else
@@ -23,6 +30,7 @@ fi
 PATH=$PWD/target/$profile:$PATH
 
 ok=true
+
 for program in solana-{faucet,genesis,keygen,validator}; do
   $program -V || ok=false
 done

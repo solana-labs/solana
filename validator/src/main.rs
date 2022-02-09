@@ -1,5 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(any(target_env = "msvc", target_os = "macos")))]
 use jemallocator::Jemalloc;
 use {
     clap::{
@@ -81,7 +81,7 @@ use {
     },
 };
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(any(target_env = "msvc", target_os = "macos")))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 

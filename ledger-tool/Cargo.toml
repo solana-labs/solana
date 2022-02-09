@@ -37,7 +37,7 @@ solana-version = { path = "../version", version = "=1.10.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.0" }
 tokio = { version = "1", features = ["full"] }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
+[target.'cfg(not(any(target_env = "msvc", target_os="macos")))'.dependencies]
 jemallocator = {package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"]}
 
 [dev-dependencies]
