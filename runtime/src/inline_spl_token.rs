@@ -1,4 +1,6 @@
-// Partial SPL Token declarations inlined to avoid an external dependency on the spl-token crate
+/// Partial SPL Token declarations inlined to avoid an external dependency on the spl-token crate
+use solana_sdk::pubkey::{Pubkey, PUBKEY_BYTES};
+
 solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 pub(crate) mod new_token_program {
@@ -21,11 +23,38 @@ pub const SPL_TOKEN_ACCOUNT_MINT_OFFSET: usize = 0;
 pub const SPL_TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
 
 pub mod state {
-    const LEN: usize = 165;
+    use super::*;
+
+    pub(crate) const ACCOUNT_LENGTH: usize = 165;
+
+    #[cfg(test)]
     pub struct Account;
+    #[cfg(test)]
     impl Account {
         pub fn get_packed_len() -> usize {
-            LEN
+            ACCOUNT_LENGTH
+        }
+    }
+
+    pub fn unpack_account_owner(account_data: &[u8]) -> Option<&Pubkey> {
+        if account_data.len() != ACCOUNT_LENGTH {
+            None
+        } else {
+            Some(bytemuck::from_bytes(
+                &account_data
+                    [SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
+            ))
+        }
+    }
+
+    pub fn unpack_account_mint(account_data: &[u8]) -> Option<&Pubkey> {
+        if account_data.len() != ACCOUNT_LENGTH {
+            None
+        } else {
+            Some(bytemuck::from_bytes(
+                &account_data
+                    [SPL_TOKEN_ACCOUNT_MINT_OFFSET..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
+            ))
         }
     }
 }

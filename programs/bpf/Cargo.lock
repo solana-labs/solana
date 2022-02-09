@@ -5244,6 +5244,7 @@ dependencies = [
  "bincode",
  "blake3 1.3.0",
  "bv",
+ "bytemuck",
  "byteorder 1.4.3",
  "bzip2",
  "crossbeam-channel",

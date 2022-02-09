@@ -5,7 +5,7 @@ use {
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
         in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
-        inline_spl_token::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        inline_spl_token, inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
         secondary_index::*,
     },
@@ -20,7 +20,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{BankId, Slot},
-        pubkey::{Pubkey, PUBKEY_BYTES},
+        pubkey::Pubkey,
     },
     std::{
         collections::{btree_map::BTreeMap, HashSet},
@@ -1602,26 +1602,42 @@ impl<T: IndexValue> AccountsIndex<T> {
         // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
-        if *account_owner == inline_spl_token::id()
-            && account_data.len() == inline_spl_token::state::Account::get_packed_len()
-        {
+        if *account_owner == inline_spl_token::id() {
             if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                let owner_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&owner_key) {
-                    self.spl_token_owner_index.insert(&owner_key, pubkey);
+                if let Some(owner_key) = inline_spl_token::state::unpack_account_owner(account_data)
+                {
+                    if account_indexes.include_key(owner_key) {
+                        self.spl_token_owner_index.insert(owner_key, pubkey);
+                    }
                 }
             }
 
             if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                let mint_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&mint_key) {
-                    self.spl_token_mint_index.insert(&mint_key, pubkey);
+                if let Some(mint_key) = inline_spl_token::state::unpack_account_mint(account_data) {
+                    if account_indexes.include_key(mint_key) {
+                        self.spl_token_mint_index.insert(mint_key, pubkey);
+                    }
+                }
+            }
+        }
+        if *account_owner == inline_spl_token_2022::id() {
+            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
+                if let Some(owner_key) =
+                    inline_spl_token_2022::state::unpack_account_owner(account_data)
+                {
+                    if account_indexes.include_key(owner_key) {
+                        self.spl_token_owner_index.insert(owner_key, pubkey);
+                    }
+                }
+            }
+
+            if account_indexes.contains(&AccountIndex::SplTokenMint) {
+                if let Some(mint_key) =
+                    inline_spl_token_2022::state::unpack_account_mint(account_data)
+                {
+                    if account_indexes.include_key(mint_key) {
+                        self.spl_token_mint_index.insert(mint_key, pubkey);
+                    }
                 }
             }
         }
@@ -2010,7 +2026,11 @@ impl<T: IndexValue> AccountsIndex<T> {
 pub mod tests {
     use {
         super::*,
-        solana_sdk::signature::{Keypair, Signer},
+        crate::inline_spl_token::*,
+        solana_sdk::{
+            pubkey::PUBKEY_BYTES,
+            signature::{Keypair, Signer},
+        },
         std::ops::RangeInclusive,
     };
 
