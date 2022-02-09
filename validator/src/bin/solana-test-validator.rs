@@ -326,14 +326,14 @@ fn main() {
                 .help("Disables accounts caching"),
         )
         .arg(
-            Arg::with_name("disable_feature")
-                .long("disable-feature")
+            Arg::with_name("deactivate_feature")
+                .long("deactivate-feature")
                 .short("d")
                 .takes_value(true)
                 .value_name("FEATURE_PUBKEY")
                 .validator(is_pubkey)
                 .multiple(true)
-                .help("Disable this feature in genesis.")
+                .help("deactivate this feature in genesis.")
         )
         .get_matches();
 
@@ -559,7 +559,7 @@ fn main() {
         });
     }
 
-    let features_to_disable = pubkeys_of(&matches, "disable_feature").unwrap_or_default();
+    let features_to_deactivate = pubkeys_of(&matches, "deactivate_feature").unwrap_or_default();
 
     if TestValidatorGenesis::ledger_exists(&ledger_path) {
         for (name, long) in &[
@@ -639,7 +639,7 @@ fn main() {
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
-        .deactivate_features(&features_to_disable);
+        .deactivate_features(&features_to_deactivate);
 
     if !accounts_to_clone.is_empty() {
         genesis.clone_accounts(
