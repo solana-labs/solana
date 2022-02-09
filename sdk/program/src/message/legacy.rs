@@ -378,9 +378,8 @@ impl Message {
     ///         &blockhash,
     ///     );
     ///
-    ///     let blockhash = client.get_latest_blockhash()?;
     ///     let mut tx = Transaction::new_unsigned(message);
-    ///     tx.sign(&[payer], blockhash);
+    ///     tx.sign(&[payer], tx.message.recent_blockhash);
     ///     client.send_and_confirm_transaction(&tx)?;
     ///
     ///     Ok(())

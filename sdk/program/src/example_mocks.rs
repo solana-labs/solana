@@ -109,7 +109,9 @@ pub mod solana_sdk {
         use crate::message::Message;
         use crate::pubkey::Pubkey;
 
-        pub struct Transaction;
+        pub struct Transaction {
+            pub message: Message,
+        }
 
         impl Transaction {
             pub fn new<T: Signers>(
@@ -117,15 +119,21 @@ pub mod solana_sdk {
                 _message: Message,
                 _recent_blockhash: Hash,
             ) -> Transaction {
-                Transaction
+                Transaction {
+                    message: Message::new(&[], None),
+                }
             }
 
             pub fn new_unsigned(_message: Message) -> Self {
-                Transaction
+                Transaction {
+                    message: Message::new(&[], None),
+                }
             }
 
             pub fn new_with_payer(_instructions: &[Instruction], _payer: Option<&Pubkey>) -> Self {
-                Transaction
+                Transaction {
+                    message: Message::new(&[], None),
+                }
             }
 
             pub fn sign<T: Signers>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}
