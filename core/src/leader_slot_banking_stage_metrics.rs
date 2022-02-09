@@ -255,7 +255,7 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    // Returns true if metrics were reported
+    // Returns reported slot if metrics were reported
     pub(crate) fn update_on_leader_slot_boundary(
         &mut self,
         bank_start: &Option<BankStart>,
