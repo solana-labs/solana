@@ -8,7 +8,6 @@ use {
     log::*,
     solana_sdk::hash::hash,
     std::{
-        // backtrace::Backtrace,
         cmp,
         collections::HashMap,
         convert::Into,
@@ -467,7 +466,6 @@ macro_rules! canary_assert {
         let is_canary_validator: bool = env::var("CANARY_VALIDATOR").is_ok();
         if is_canary_validator {
             if(!$assertion) {
-                // error!("");
                 panic!("canary_assert failed.");
             }
         }
