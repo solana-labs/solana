@@ -8,6 +8,7 @@ use {
     log::*,
     solana_sdk::hash::hash,
     std::{
+        // backtrace::Backtrace,
         cmp,
         collections::HashMap,
         convert::Into,
@@ -458,6 +459,19 @@ pub fn set_panic_hook(program: &'static str) {
             std::process::exit(1);
         }));
     });
+}
+
+#[macro_export]
+macro_rules! canary_assert {
+    ($assertion:expr) => {
+        let is_canary_validator: bool = env::var("CANARY_VALIDATOR").is_ok();
+        if is_canary_validator {
+            if(!$assertion) {
+                // error!("");
+                panic!("canary_assert failed.");
+            }
+        }
+    }
 }
 
 #[cfg(test)]
