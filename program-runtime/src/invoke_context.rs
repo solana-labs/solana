@@ -212,7 +212,7 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        current_accounts_data_len: u64,
+        initial_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -225,7 +225,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
-            accounts_data_meter: AccountsDataMeter::new(current_accounts_data_len),
+            accounts_data_meter: AccountsDataMeter::new(initial_accounts_data_len),
             executors,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
@@ -1657,7 +1657,7 @@ mod tests {
 
         invoke_context
             .accounts_data_meter
-            .set_current(user_account_data_len as u64);
+            .set_initial(user_account_data_len as u64);
         invoke_context
             .accounts_data_meter
             .set_maximum(user_account_data_len as u64 * 3);

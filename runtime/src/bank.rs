@@ -3878,7 +3878,7 @@ impl Bank {
                 .map(|_| info)
             })
             .map(|info| {
-                self.store_accounts_data_len(info.accounts_data_len);
+                self.update_accounts_data_len(info.accounts_data_len_delta);
             })
             .map_err(|err| {
                 match err {
