@@ -328,7 +328,6 @@ fn main() {
         .arg(
             Arg::with_name("deactivate_feature")
                 .long("deactivate-feature")
-                .short("d")
                 .takes_value(true)
                 .value_name("FEATURE_PUBKEY")
                 .validator(is_pubkey)
