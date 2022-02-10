@@ -30,6 +30,7 @@ impl Default for RentCollector {
 }
 
 /// when rent is collected for this account, this is the action to apply to the account
+#[derive(Debug)]
 pub enum RentResult {
     /// maybe collect rent later, leave account alone
     LeaveAloneNoRent,
