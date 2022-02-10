@@ -2,7 +2,9 @@
 pub mod counter;
 pub mod datapoint;
 mod metrics;
-pub use crate::metrics::{flush, query, set_host_id, set_panic_hook, submit};
+pub use crate::metrics::{
+    canary_assert, flush, query, set_host_id, set_is_canary_validator, set_panic_hook, submit,
+};
 use std::sync::Arc;
 
 /// A helper that sends the count of created tokens as a datapoint.

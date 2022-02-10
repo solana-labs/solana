@@ -2562,6 +2562,7 @@ pub fn main() {
         }
     }
 
+    solana_metrics::set_is_canary_validator(env::var("SOLANA_CANARY_VALIDATOR").is_ok());
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 

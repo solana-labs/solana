@@ -460,14 +460,27 @@ pub fn set_panic_hook(program: &'static str) {
     });
 }
 
-#[macro_export]
-macro_rules! canary_assert {
-    ($assertion:expr) => {
-        let is_canary_validator: bool = env::var("SOLANA_CANARY_VALIDATOR").is_ok();
+lazy_static! {
+    static ref IS_CANARY_VALIDATOR: Arc<RwLock<bool>> = { Arc::new(RwLock::new(false)) };
+}
+
+pub fn set_is_canary_validator(is_canary_validator: bool) {
+    info!("Setting IS_CANARY_VALIDATOR: {}", is_canary_validator);
+    *IS_CANARY_VALIDATOR.write().unwrap() = is_canary_validator;
+}
+
+pub fn canary_assert(assertion: bool, failure_message: &str) {
+    let is_canary_validator = *IS_CANARY_VALIDATOR.read().unwrap();
+
+    if !assertion {
+        let point = DataPoint::new("panic")
+            .add_field_str("thread", thread::current().name().unwrap_or("?"))
+            .add_field_str("message", failure_message)
+            .to_owned();
+        submit(point, Level::Warn);
+
         if is_canary_validator {
-            if(!$assertion) {
-                panic!("canary_assert failed.");
-            }
+            panic!("canary_assert failed: {}", failure_message);
         }
     }
 }
