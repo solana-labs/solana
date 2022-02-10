@@ -54,11 +54,11 @@ use solana_sdk::{
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     system_program, sysvar,
     sysvar::{clock, rent},
-    transaction::{SanitizedTransaction, Transaction, TransactionError},
+    transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
 };
 use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta,
+    TransactionStatusMeta, TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
 };
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -429,10 +429,12 @@ fn execute_transactions(
 
                     Ok(ConfirmedTransactionWithStatusMeta {
                         slot: bank.slot(),
-                        transaction: TransactionWithStatusMeta {
-                            transaction: tx.clone(),
-                            meta: Some(tx_status_meta),
-                        },
+                        tx_with_meta: TransactionWithStatusMeta::Complete(
+                            VersionedTransactionWithStatusMeta {
+                                transaction: VersionedTransaction::from(tx.clone()),
+                                meta: tx_status_meta,
+                            },
+                        ),
                         block_time: None,
                     })
                 }
@@ -2476,10 +2478,10 @@ fn test_program_upgradeable_locks() {
     assert!(matches!(
         results1[0],
         Ok(ConfirmedTransactionWithStatusMeta {
-            transaction: TransactionWithStatusMeta {
-                meta: Some(TransactionStatusMeta { status: Ok(()), .. }),
+            tx_with_meta: TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                meta: TransactionStatusMeta { status: Ok(()), .. },
                 ..
-            },
+            }),
             ..
         })
     ));
@@ -2488,16 +2490,16 @@ fn test_program_upgradeable_locks() {
     assert!(matches!(
         results2[0],
         Ok(ConfirmedTransactionWithStatusMeta {
-            transaction: TransactionWithStatusMeta {
-                meta: Some(TransactionStatusMeta {
+            tx_with_meta: TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                meta: TransactionStatusMeta {
                     status: Err(TransactionError::InstructionError(
                         0,
                         InstructionError::ProgramFailedToComplete
                     )),
                     ..
-                }),
+                },
                 ..
-            },
+            }),
             ..
         })
     ));

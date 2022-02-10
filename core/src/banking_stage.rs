@@ -2955,16 +2955,9 @@ mod tests {
         );
         let ix_error_signature = ix_error_tx.signatures[0];
         let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx.clone()]);
-        let fail_tx = system_transaction::transfer(
-            &mint_keypair,
-            &pubkey1,
-            rent_exempt_amount,
-            genesis_config.hash(),
-        );
-        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
-        let entries = vec![entry_1, entry_2, entry_3];
+        let entries = vec![entry_1, entry_2];
 
-        let transactions = sanitize_transactions(vec![success_tx, ix_error_tx, fail_tx]);
+        let transactions = sanitize_transactions(vec![success_tx, ix_error_tx]);
         bank.transfer(rent_exempt_amount, &mint_keypair, &keypair1.pubkey())
             .unwrap();
 
@@ -3024,27 +3017,24 @@ mod tests {
             transaction_status_service.join().unwrap();
 
             let confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
-            assert_eq!(confirmed_block.transactions.len(), 3);
-
-            for VersionedTransactionWithStatusMeta { transaction, meta } in
-                confirmed_block.transactions.into_iter()
-            {
-                if transaction.signatures[0] == success_signature {
-                    let meta = meta.unwrap();
-                    assert_eq!(meta.status, Ok(()));
-                } else if transaction.signatures[0] == ix_error_signature {
-                    let meta = meta.unwrap();
-                    assert_eq!(
-                        meta.status,
-                        Err(TransactionError::InstructionError(
-                            0,
-                            InstructionError::Custom(1)
-                        ))
-                    );
-                } else {
-                    assert_eq!(meta, None);
-                }
-            }
+            let actual_tx_results: Vec<_> = confirmed_block
+                .transactions
+                .into_iter()
+                .map(|VersionedTransactionWithStatusMeta { transaction, meta }| {
+                    (transaction.signatures[0], meta.status)
+                })
+                .collect();
+            let expected_tx_results = vec![
+                (success_signature, Ok(())),
+                (
+                    ix_error_signature,
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::Custom(1),
+                    )),
+                ),
+            ];
+            assert_eq!(actual_tx_results, expected_tx_results);
 
             poh_recorder
                 .lock()
@@ -3191,7 +3181,7 @@ mod tests {
             let recorded_meta = confirmed_block.transactions.pop().unwrap().meta;
             assert_eq!(
                 recorded_meta,
-                Some(TransactionStatusMeta {
+                TransactionStatusMeta {
                     status: Ok(()),
                     pre_balances: vec![1, 0, 0],
                     post_balances: vec![1, 0, 0],
@@ -3200,7 +3190,7 @@ mod tests {
                     rewards: Some(vec![]),
                     loaded_addresses: sanitized_tx.get_loaded_addresses(),
                     ..TransactionStatusMeta::default()
-                })
+                }
             );
             poh_recorder
                 .lock()
