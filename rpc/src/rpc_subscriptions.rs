@@ -39,8 +39,12 @@ use {
         timing::timestamp,
         transaction,
     },
+<<<<<<< HEAD
     solana_transaction_status::ConfirmedBlock,
     solana_vote_program::vote_state::Vote,
+=======
+    solana_transaction_status::{ConfirmedBlock, LegacyConfirmedBlock},
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
@@ -278,30 +282,26 @@ impl RpcNotifier {
 }
 
 fn filter_block_result_txs(
-    block: ConfirmedBlock,
+    mut block: LegacyConfirmedBlock,
     last_modified_slot: Slot,
     params: &BlockSubscriptionParams,
 ) -> Option<RpcBlockUpdate> {
-    let transactions = match params.kind {
+    block.transactions = match params.kind {
         BlockSubscriptionKind::All => block.transactions,
         BlockSubscriptionKind::MentionsAccountOrProgram(pk) => block
             .transactions
             .into_iter()
-            .filter(|tx| tx.transaction.message.account_keys.contains(&pk))
+            .filter(|tx_with_meta| tx_with_meta.transaction.message.account_keys.contains(&pk))
             .collect(),
     };
 
-    if transactions.is_empty() {
+    if block.transactions.is_empty() {
         if let BlockSubscriptionKind::MentionsAccountOrProgram(_) = params.kind {
             return None;
         }
     }
 
-    let block = ConfirmedBlock {
-        transactions,
-        ..block
-    }
-    .configure(
+    let block = block.configure(
         params.encoding,
         params.transaction_details,
         params.show_rewards,
@@ -962,14 +962,36 @@ impl RpcSubscriptions {
                                 if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
                                     break;
                                 }
+<<<<<<< HEAD
                                 match blockstore.get_complete_block(s, false) {
                                     Ok(block) => {
                                         if let Some(res) = filter_block_result_txs(block, s, params)
+=======
+
+                                let block_update_result = blockstore
+                                    .get_complete_block(s, false)
+                                    .map_err(|e| {
+                                        error!("get_complete_block error: {}", e);
+                                        RpcBlockUpdateError::BlockStoreError
+                                    })
+                                    .and_then(|versioned_block| {
+                                        ConfirmedBlock::from(versioned_block)
+                                            .into_legacy_block()
+                                            .ok_or(
+                                                RpcBlockUpdateError::UnsupportedTransactionVersion,
+                                            )
+                                    });
+
+                                match block_update_result {
+                                    Ok(block_update) => {
+                                        if let Some(block_update) =
+                                            filter_block_result_txs(block_update, s, params)
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                                         {
                                             notifier.notify(
                                                 Response {
                                                     context: RpcResponseContext { slot: s },
-                                                    value: res,
+                                                    value: block_update,
                                                 },
                                                 subscription,
                                                 false,
@@ -1346,8 +1368,13 @@ pub(crate) mod tests {
     #[serial]
     fn test_check_confirmed_block_subscribe() {
         let exit = Arc::new(AtomicBool::new(false));
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1388,10 +1415,11 @@ pub(crate) mod tests {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+        bank.transfer(rent_exempt_amount, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
         let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
-            vec![&keypair1, &keypair2, &keypair3, &keypair4],
+            vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
             0,
             bank,
             blockstore.clone(),
@@ -1403,8 +1431,15 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
+<<<<<<< HEAD
         let block = blockstore.get_complete_block(slot, false).unwrap();
         let block = block.configure(params.encoding, params.transaction_details, false);
+=======
+        let confirmed_block =
+            ConfirmedBlock::from(blockstore.get_complete_block(slot, false).unwrap());
+        let legacy_block = confirmed_block.into_legacy_block().unwrap();
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1443,8 +1478,13 @@ pub(crate) mod tests {
     #[serial]
     fn test_check_confirmed_block_subscribe_with_mentions() {
         let exit = Arc::new(AtomicBool::new(false));
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1486,10 +1526,11 @@ pub(crate) mod tests {
         let bank = bank_forks.read().unwrap().working_bank();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+        bank.transfer(rent_exempt_amount, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
         let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
-            vec![&keypair1, &keypair2, &keypair3, &keypair4],
+            vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
             0,
             bank,
             blockstore.clone(),
@@ -1502,9 +1543,18 @@ pub(crate) mod tests {
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
         // make sure it filtered out the other keypairs
+<<<<<<< HEAD
         let mut block = blockstore.get_complete_block(slot, false).unwrap();
         block.transactions.retain(|tx| {
             tx.transaction
+=======
+        let confirmed_block =
+            ConfirmedBlock::from(blockstore.get_complete_block(slot, false).unwrap());
+        let mut legacy_block = confirmed_block.into_legacy_block().unwrap();
+        legacy_block.transactions.retain(|tx_with_meta| {
+            tx_with_meta
+                .transaction
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 .message
                 .account_keys
                 .contains(&keypair1.pubkey())
@@ -1538,8 +1588,13 @@ pub(crate) mod tests {
     #[serial]
     fn test_check_finalized_block_subscribe() {
         let exit = Arc::new(AtomicBool::new(false));
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1579,10 +1634,11 @@ pub(crate) mod tests {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+        bank.transfer(rent_exempt_amount, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
         let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
-            vec![&keypair1, &keypair2, &keypair3, &keypair4],
+            vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
             0,
             bank,
             blockstore.clone(),
@@ -1599,8 +1655,15 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
+<<<<<<< HEAD
         let block = blockstore.get_complete_block(slot, false).unwrap();
         let block = block.configure(params.encoding, params.transaction_details, false);
+=======
+        let confirmed_block =
+            ConfirmedBlock::from(blockstore.get_complete_block(slot, false).unwrap());
+        let legacy_block = confirmed_block.into_legacy_block().unwrap();
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
