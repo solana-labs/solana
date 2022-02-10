@@ -461,7 +461,7 @@ pub fn set_panic_hook(program: &'static str) {
 }
 
 lazy_static! {
-    static ref IS_CANARY_VALIDATOR: Arc<RwLock<bool>> = { Arc::new(RwLock::new(false)) };
+    static ref IS_CANARY_VALIDATOR: Arc<RwLock<bool>> = Arc::new(RwLock::new(false));
 }
 
 pub fn set_is_canary_validator(is_canary_validator: bool) {
