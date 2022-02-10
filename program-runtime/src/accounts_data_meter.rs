@@ -75,13 +75,19 @@ impl AccountsDataMeter {
 
     /// Consume accounts data space, in bytes.  If `amount` is positive, we are *increasing* the
     /// amount of accounts data space used.  If `amount` is negative, we are *decreasing* the
-    /// amount of accounts data space used.
+    /// amount of accounts data space used.  If `amount` is greater than the remaining space,
+    /// return an error and *do not* consume more accounts data space.
     pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
         if amount > self.remaining() as i64 {
             return Err(InstructionError::AccountsDataBudgetExceeded);
         }
-        self.delta = self.delta.saturating_add(amount);
+        self.consume_unchecked(amount);
         Ok(())
+    }
+
+    /// Unconditionally consume accounts data space.  Refer to `consume()` for more documentation.
+    pub fn consume_unchecked(&mut self, amount: i64) {
+        self.delta = self.delta.saturating_add(amount);
     }
 }
 
