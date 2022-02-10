@@ -175,6 +175,13 @@ pub struct BankingStageStats {
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
     batch_packet_indexes_len: Histogram,
+    batch_index_not_found_count: AtomicUsize,
+    end_of_slot_filter_batch_count: AtomicUsize,
+    active_bank_unavailable_count: AtomicUsize,
+    packets_attempted_count: AtomicUsize,
+    active_bank_available_count: AtomicUsize,
+    buffered_batches_count_before: AtomicUsize,
+    buffered_batches_count_after: AtomicUsize,
 
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
@@ -185,6 +192,9 @@ pub struct BankingStageStats {
     packet_conversion_elapsed: AtomicU64,
     unprocessed_packet_conversion_elapsed: AtomicU64,
     transaction_processing_elapsed: AtomicU64,
+    buffer_scan_start: AtomicU64,
+    buffer_shuffle_start: AtomicU64,
+    report_sender_info_start: AtomicU64,
 }
 
 impl BankingStageStats {
@@ -232,6 +242,16 @@ impl BankingStageStats {
                 .load(Ordering::Relaxed)
             + self.transaction_processing_elapsed.load(Ordering::Relaxed)
             + self.batch_packet_indexes_len.entries()
+            + self.batch_index_not_found_count.load(Ordering::Relaxed) as u64
+            + self.end_of_slot_filter_batch_count.load(Ordering::Relaxed) as u64
+            + self.active_bank_unavailable_count.load(Ordering::Relaxed) as u64
+            + self.buffered_batches_count_before.load(Ordering::Relaxed) as u64
+            + self.buffered_batches_count_after.load(Ordering::Relaxed) as u64
+            + self.packets_attempted_count.load(Ordering::Relaxed) as u64
+            + self.active_bank_available_count.load(Ordering::Relaxed) as u64
+            + self.buffer_scan_start.load(Ordering::Relaxed)
+            + self.buffer_shuffle_start.load(Ordering::Relaxed)
+            + self.report_sender_info_start.load(Ordering::Relaxed)
     }
 
     fn report(&mut self, report_interval_ms: u64) {
@@ -358,6 +378,59 @@ impl BankingStageStats {
                 (
                     "packet_batch_indices_len_90pct",
                     self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0) as i64,
+                    i64
+                ),
+                (
+                    "buffer_scan_start",
+                    self.buffer_scan_start.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "buffer_shuffle_start",
+                    self.buffer_shuffle_start.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "report_sender_info_start",
+                    self.report_sender_info_start.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "batch_index_not_found_count",
+                    self.batch_index_not_found_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "end_of_slot_filter_batch_count",
+                    self.end_of_slot_filter_batch_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "active_bank_unavailable_count",
+                    self.active_bank_unavailable_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "packets_attempted_count",
+                    self.packets_attempted_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "active_bank_available_count",
+                    self.active_bank_available_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "buffered_batches_count_before",
+                    self.buffered_batches_count_before
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "buffered_batches_count_after",
+                    self.buffered_batches_count_after.swap(0, Ordering::Relaxed) as i64,
                     i64
                 )
             );
@@ -639,6 +712,24 @@ impl BankingStage {
             .collect()
     }
 
+    // collect the unattempted unprocessed packet indexes from batch, which is difference between batch's original
+    // unprocessed packet indexes, and packet indexes attempted in this process iteration.
+    fn collect_unattempted_packet_indexes_from_batch(
+        original_unprocessed_indexes: &[usize],
+        attempted_packet_indexes: &[usize],
+    ) -> Vec<usize> {
+        original_unprocessed_indexes
+            .iter()
+            .filter_map(|index| {
+                if !attempted_packet_indexes.contains(index) {
+                    Some(*index)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
@@ -653,19 +744,35 @@ impl BankingStage {
         qos_service: &QosService,
     ) {
         let mut rebuffered_packet_count = 0;
+        let mut batch_index_not_found_count = 0;
+        let mut active_bank_unavailable_count = 0;
+        let mut packets_attempted_count = 0;
+        let mut active_bank_available_count = 0;
+        let mut end_of_slot_filter_batch_count = 0;
         let mut consumed_buffered_packets_count = 0;
         let buffered_packet_batches_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
+        // TODO - add cli option to enable/disable PacketSender info logging
         let mut packet_sender_info = Some(PacketSenderInfo::default());
+
+        let mut buffer_scan_start = Measure::start("get_stakes_and_locators");
         let (stakes, locators) =
             Self::get_stakes_and_locators(buffered_packet_batches, &mut packet_sender_info);
+        buffer_scan_start.stop();
+
+        let mut buffer_shuffle_start = Measure::start("weighted_shuffle");
         let shuffled_packet_locators =
             Self::weighted_shuffle(&stakes, &locators, &mut packet_sender_info);
+        buffer_shuffle_start.stop();
+
+        let mut report_sender_info_start = Measure::start("packet_sender_info_report");
         if let Some(packet_sender_info) = packet_sender_info {
             packet_sender_info.report(banking_stage_stats.id);
         }
+        report_sender_info_start.stop();
+
         shuffled_packet_locators
             .into_iter()
             .for_each(|(batch_index, packet_indexes)| {
@@ -675,18 +782,30 @@ impl BankingStage {
                     if let Some((next_leader, bank)) = &reached_end_of_slot {
                         // We've hit the end of this slot, no need to perform more processing,
                         // just filter the remaining packets for the invalid (e.g. too old) ones
-                        let new_unprocessed_indexes = Self::filter_unprocessed_packets(
-                            bank,
-                            packet_batch,
-                            original_unprocessed_indexes,
-                            my_pubkey,
-                            *next_leader,
-                            banking_stage_stats,
-                        );
-                        Self::update_buffered_packets_with_new_unprocessed(
-                            original_unprocessed_indexes,
-                            new_unprocessed_indexes,
-                        );
+
+                        end_of_slot_filter_batch_count += 1;
+                        if let Some(bank) = bank {
+                            let mut new_unprocessed_indexes = Self::filter_unprocessed_packets(
+                                bank,
+                                packet_batch,
+                                &packet_indexes,
+                                my_pubkey,
+                                *next_leader,
+                                banking_stage_stats,
+                            );
+
+                            new_unprocessed_indexes.extend(
+                                Self::collect_unattempted_packet_indexes_from_batch(
+                                    original_unprocessed_indexes,
+                                    &packet_indexes,
+                                ),
+                            );
+
+                            Self::update_buffered_packets_with_new_unprocessed(
+                                original_unprocessed_indexes,
+                                new_unprocessed_indexes,
+                            );
+                        }
                     } else {
                         let bank_start = poh_recorder.lock().unwrap().bank_start();
                         if let Some(BankStart {
@@ -694,6 +813,9 @@ impl BankingStage {
                             bank_creation_time,
                         }) = bank_start
                         {
+                            active_bank_available_count += 1;
+                            packets_attempted_count += packet_indexes.len();
+
                             let process_transactions_summary = Self::process_packets_transactions(
                                 &working_bank,
                                 &bank_creation_time,
@@ -711,19 +833,16 @@ impl BankingStage {
                                 ..
                             } = process_transactions_summary;
 
-                            // original unprocessed indexes, minor packet index are the new
-                            // unprocessed
-                            let unprocessed_indexes: Vec<_> = original_unprocessed_indexes
-                                .iter()
-                                .filter_map(|index| {
-                                    if !packet_indexes.contains(index) {
-                                        Some(*index)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                            retryable_transaction_indexes.extend(unprocessed_indexes);
+                            // Out of the buffered packets just retried, collect any still unprocessed
+                            // transactions in this batch for forwarding
+                            rebuffered_packet_count += retryable_transaction_indexes.len();
+
+                            retryable_transaction_indexes.extend(
+                                Self::collect_unattempted_packet_indexes_from_batch(
+                                    original_unprocessed_indexes,
+                                    &packet_indexes,
+                                ),
+                            );
 
                             if reached_max_poh_height
                                 // TODO adding timing metrics here from when bank was added to now
@@ -734,7 +853,7 @@ impl BankingStage {
                             {
                                 reached_end_of_slot = Some((
                                     poh_recorder.lock().unwrap().next_slot_leader(),
-                                    working_bank,
+                                    Some(working_bank),
                                 ));
                             }
 
@@ -749,9 +868,6 @@ impl BankingStage {
                                 .len()
                                 .saturating_sub(retryable_transaction_indexes.len());
 
-                            // Out of the buffered packets just retried, collect any still unprocessed
-                            // transactions in this batch for forwarding
-                            rebuffered_packet_count += retryable_transaction_indexes.len();
                             Self::update_buffered_packets_with_new_unprocessed(
                                 original_unprocessed_indexes,
                                 retryable_transaction_indexes,
@@ -760,23 +876,38 @@ impl BankingStage {
                                 test_fn();
                             }
                         } else {
-                            rebuffered_packet_count += original_unprocessed_indexes.len();
-                            // `original_unprocessed_indexes` must have remaining packets to process
+                            active_bank_unavailable_count += 1;
+
+                            // TODO - testing theory that !poh.has_bank() would grab poh lock,
+                            // causing replay_stage fail to set new bank, hence bad
+                            reached_end_of_slot =
+                                Some((poh_recorder.lock().unwrap().next_slot_leader(), None));
+
+                            // TODO - maybe should be a new metrics, disbale for now to help
+                            // investigation
+                            // rebuffered_packet_count += packet_indexes.len();
+
+                            // `packet_indexes` must have remaining packets to process
                             // if not yet processed.
                             assert!(Self::packet_has_more_unprocessed_transactions(
-                                original_unprocessed_indexes
+                                &packet_indexes
                             ));
                         }
                     }
+                } else {
+                    // Should not be here
+                    batch_index_not_found_count += 1;
                 }
             });
 
         // remove those batch has no more unprocessed packets
+        let buffered_batches_count_before = buffered_packet_batches.len();
         buffered_packet_batches.retain(|buffered_packet_batch_and_offsets| {
             let (_packet_batch, ref unprocessed_indexes, _forward) =
                 buffered_packet_batch_and_offsets;
             Self::packet_has_more_unprocessed_transactions(unprocessed_indexes)
         });
+        let buffered_batches_count_after = buffered_packet_batches.len();
 
         proc_start.stop();
 
@@ -798,6 +929,36 @@ impl BankingStage {
         banking_stage_stats
             .consumed_buffered_packets_count
             .fetch_add(consumed_buffered_packets_count, Ordering::Relaxed);
+        banking_stage_stats
+            .buffer_scan_start
+            .fetch_add(buffer_scan_start.as_us(), Ordering::Relaxed);
+        banking_stage_stats
+            .buffer_shuffle_start
+            .fetch_add(buffer_shuffle_start.as_us(), Ordering::Relaxed);
+        banking_stage_stats
+            .report_sender_info_start
+            .fetch_add(report_sender_info_start.as_us(), Ordering::Relaxed);
+        banking_stage_stats
+            .batch_index_not_found_count
+            .fetch_add(batch_index_not_found_count, Ordering::Relaxed);
+        banking_stage_stats
+            .end_of_slot_filter_batch_count
+            .fetch_add(end_of_slot_filter_batch_count, Ordering::Relaxed);
+        banking_stage_stats
+            .active_bank_unavailable_count
+            .fetch_add(active_bank_unavailable_count, Ordering::Relaxed);
+        banking_stage_stats
+            .packets_attempted_count
+            .fetch_add(packets_attempted_count, Ordering::Relaxed);
+        banking_stage_stats
+            .active_bank_available_count
+            .fetch_add(active_bank_available_count, Ordering::Relaxed);
+        banking_stage_stats
+            .buffered_batches_count_before
+            .fetch_add(buffered_batches_count_before, Ordering::Relaxed);
+        banking_stage_stats
+            .buffered_batches_count_after
+            .fetch_add(buffered_batches_count_after, Ordering::Relaxed);
     }
 
     fn consume_or_forward_packets(
