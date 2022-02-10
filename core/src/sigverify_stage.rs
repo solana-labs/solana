@@ -12,7 +12,7 @@ use {
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::Deduper,
+    solana_perf::sigverify::{count_valid_packets, shrink_batches, Deduper},
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -58,6 +58,7 @@ struct SigVerifierStats {
     total_packets: usize,
     total_dedup: usize,
     total_excess_fail: usize,
+    total_shrink_time: usize,
 }
 
 impl SigVerifierStats {
@@ -166,6 +167,7 @@ impl SigVerifierStats {
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
+            ("total_shrink_time", self.total_shrink_time, i64),
         );
     }
 }
@@ -248,7 +250,17 @@ impl SigVerifyStage {
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        let batches = verifier.verify_batches(batches, num_valid_packets);
+        let mut batches = verifier.verify_batches(batches, num_valid_packets);
+        verify_batch_time.stop();
+
+        let mut shrink_time = Measure::start("sigverify_shrink_time");
+        let num_valid_packets = count_valid_packets(&batches);
+        if num_packets > num_valid_packets.saturating_mul(4) {
+            let valid = shrink_batches(&mut batches);
+            batches.truncate(valid);
+        }
+        shrink_time.stop();
+
         sendr.send(batches)?;
         verify_batch_time.stop();
 
@@ -283,6 +295,7 @@ impl SigVerifyStage {
         stats.total_packets += num_packets;
         stats.total_dedup += dedup_fail;
         stats.total_excess_fail += excess_fail;
+        stats.total_shrink_time += shrink_time.as_us() as usize;
 
         Ok(())
     }

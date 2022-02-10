@@ -167,6 +167,13 @@ pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
     batches.iter().map(|batch| batch.packets.len()).sum()
 }
 
+pub fn count_valid_packets(batches: &[PacketBatch]) -> usize {
+    batches
+        .iter()
+        .map(|batch| batch.packets.iter().filter(|p| !p.meta.discard()).count())
+        .sum()
+}
+
 // internal function to be unit-tested; should be used only by get_packet_offsets
 fn do_get_packet_offsets(
     packet: &Packet,
@@ -496,6 +503,45 @@ impl Deduper {
     }
 }
 
+//inplace shrink a batch of packets
+pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
+    let mut i = 0;
+    let mut ii = 0;
+    let mut j = 1;
+    let mut jj = 0;
+    let mut last = 0;
+    while j < batches.len() {
+        while jj < batches[j].packets.len() {
+            if batches[j].packets[jj].meta.discard() {
+                jj = jj.saturating_add(1);
+                continue;
+            }
+            last = j;
+            let mut done = false;
+            while i < j && !done {
+                while ii < batches[i].packets.len() {
+                    if batches[i].packets[ii].meta.discard() {
+                        batches[i].packets[ii] = batches[j].packets[jj].clone();
+                        batches[j].packets[jj].meta.set_discard(true);
+                        last = i;
+                        done = true;
+                        break;
+                    }
+                    ii = ii.saturating_add(1);
+                }
+                if ii >= batches[i].packets.len() {
+                    ii = 0;
+                    i = i.saturating_add(1);
+                }
+            }
+            jj = jj.saturating_add(1);
+        }
+        jj = 0;
+        j = j.saturating_add(1);
+    }
+    last.saturating_add(1)
+}
+
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
@@ -681,7 +727,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            packet::{to_packet_batches, Packet, PacketBatch},
+            packet::{to_packet_batches, Packet, PacketBatch, PACKETS_PER_BATCH},
             sigverify::{self, PacketOffsets},
             test_tx::{new_test_vote_tx, test_multisig_tx, test_tx},
         },
@@ -1432,5 +1478,25 @@ mod tests {
         }
         //allow for 1 false positive even if extremely unlikely
         assert!(discard < 2);
+    }
+
+    #[test]
+    fn test_shrink() {
+        for _ in 0..10 {
+            let mut batches = to_packet_batches(
+                &(0..1024).map(|_| test_tx()).collect::<Vec<_>>(),
+                PACKETS_PER_BATCH,
+            );
+            batches.iter_mut().for_each(|b| {
+                b.packets
+                    .iter_mut()
+                    .for_each(|p| p.meta.set_discard(thread_rng().gen()))
+            });
+            let packet_count = count_valid_packets(&batches);
+            let res = shrink_batches(&mut batches);
+            batches.truncate(res);
+            let packet_count2 = count_valid_packets(&batches);
+            assert_eq!(packet_count, packet_count2);
+        }
     }
 }
