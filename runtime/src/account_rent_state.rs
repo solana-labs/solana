@@ -60,7 +60,9 @@ pub(crate) fn check_rent_state(
             debug!(
                 "Account {:?} not rent exempt, state {:?}",
                 transaction_context.get_key_of_account_at_index(index),
-                transaction_context.get_account_at_index(index).borrow(),
+                transaction_context
+                    .get_account_at_index(index)
+                    .map(|account| account.borrow()),
             );
             return Err(TransactionError::InvalidRentPayingAccount);
         }

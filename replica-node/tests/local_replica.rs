@@ -145,7 +145,7 @@ fn setup_snapshot_validator_config(
         account_paths: account_storage_paths,
         accounts_hash_interval_slots: snapshot_interval_slots,
         accountsdb_repl_service_config,
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
 
     SnapshotValidatorConfig {
@@ -160,7 +160,10 @@ fn test_local_cluster_start_and_exit_with_config(socket_addr_space: SocketAddrSp
     solana_logger::setup();
     const NUM_NODES: usize = 1;
     let mut config = ClusterConfig {
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default_for_test(),
+            NUM_NODES,
+        ),
         node_stakes: vec![3; NUM_NODES],
         cluster_lamports: 100,
         ticks_per_slot: 8,

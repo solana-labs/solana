@@ -305,12 +305,8 @@ impl Tvu {
         );
 
         let (cost_update_sender, cost_update_receiver) = unbounded();
-        let cost_update_service = CostUpdateService::new(
-            exit.clone(),
-            blockstore.clone(),
-            cost_model.clone(),
-            cost_update_receiver,
-        );
+        let cost_update_service =
+            CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
 
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
@@ -456,7 +452,7 @@ pub mod tests {
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, &blockstore, None);
+            create_test_recorder(&bank, &blockstore, None, None);
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -504,7 +500,7 @@ pub mod tests {
             None,
             None,
             None,
-            Arc::new(VoteTracker::new(&bank)),
+            Arc::<VoteTracker>::default(),
             retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
             verified_vote_receiver,

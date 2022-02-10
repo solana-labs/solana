@@ -21,7 +21,7 @@ use {
         progress_map::{ForkProgress, ProgressMap, PropagatedStats},
         repair_service::DuplicateSlotsResetReceiver,
         rewards_recorder_service::RewardsRecorderSender,
-        tower_storage::{SavedTower, TowerStorage},
+        tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
@@ -64,7 +64,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::Vote,
+    solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},
         result,
@@ -425,6 +425,7 @@ impl ReplayStage {
                     last_refresh_time: Instant::now(),
                     last_print_time: Instant::now(),
                 };
+
                 loop {
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
@@ -561,7 +562,7 @@ impl ReplayStage {
                         &vote_account,
                         &ancestors,
                         &mut frozen_banks,
-                        &tower,
+                        &mut tower,
                         &mut progress,
                         &vote_tracker,
                         &cluster_slots,
@@ -1823,7 +1824,7 @@ impl ReplayStage {
         bank: &Bank,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
-        vote: Vote,
+        vote: VoteTransaction,
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
@@ -2026,7 +2027,7 @@ impl ReplayStage {
                 .send(VoteOp::PushVote {
                     tx: vote_tx,
                     tower_slots,
-                    saved_tower,
+                    saved_tower: SavedTowerVersions::from(saved_tower),
                 })
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
         }
@@ -2299,7 +2300,7 @@ impl ReplayStage {
         my_vote_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         frozen_banks: &mut Vec<Arc<Bank>>,
-        tower: &Tower,
+        tower: &mut Tower,
         progress: &mut ProgressMap,
         vote_tracker: &VoteTracker,
         cluster_slots: &ClusterSlots,
@@ -2320,6 +2321,70 @@ impl ReplayStage {
                     .expect("All frozen banks must exist in the Progress map")
                     .computed;
                 if !is_computed {
+                    // Check if our tower is behind, if so (and the feature migration flag is in use)
+                    // overwrite with the newer bank.
+                    if let (true, Some((_, vote_account))) = (
+                        Tower::is_direct_vote_state_update_enabled(bank),
+                        bank.get_vote_account(my_vote_pubkey),
+                    ) {
+                        if let Some(mut bank_vote_state) =
+                            vote_account.vote_state().as_ref().ok().cloned()
+                        {
+                            if bank_vote_state.last_voted_slot()
+                                > tower.vote_state.last_voted_slot()
+                            {
+                                info!(
+                                    "Frozen bank vote state slot {:?}
+                                    is newer than our local vote state slot {:?},
+                                    adopting the bank vote state as our own.
+                                    Bank votes: {:?}, root: {:?},
+                                    Local votes: {:?}, root: {:?}",
+                                    bank_vote_state.last_voted_slot(),
+                                    tower.vote_state.last_voted_slot(),
+                                    bank_vote_state.votes,
+                                    bank_vote_state.root_slot,
+                                    tower.vote_state.votes,
+                                    tower.vote_state.root_slot
+                                );
+
+                                if let Some(local_root) = tower.vote_state.root_slot {
+                                    if bank_vote_state
+                                        .root_slot
+                                        .map(|bank_root| local_root > bank_root)
+                                        .unwrap_or(true)
+                                    {
+                                        // If the local root is larger than this on chain vote state
+                                        // root (possible due to supermajority roots being set on
+                                        // startup), then we need to adjust the tower
+                                        bank_vote_state.root_slot = Some(local_root);
+                                        bank_vote_state
+                                            .votes
+                                            .retain(|lockout| lockout.slot > local_root);
+                                        info!(
+                                            "Local root is larger than on chain root,
+                                            overwrote bank root {:?} and updated votes {:?}",
+                                            bank_vote_state.root_slot, bank_vote_state.votes
+                                        );
+
+                                        if let Some(first_vote) = bank_vote_state.votes.front() {
+                                            assert!(ancestors
+                                                .get(&first_vote.slot)
+                                                .expect(
+                                                    "Ancestors map must contain an
+                                                        entry for all slots on this fork
+                                                        greater than `local_root` and less
+                                                        than `bank_slot`"
+                                                )
+                                                .contains(&local_root));
+                                        }
+                                    }
+                                }
+
+                                tower.vote_state.root_slot = bank_vote_state.root_slot;
+                                tower.vote_state.votes = bank_vote_state.votes;
+                            }
+                        }
+                    }
                     let computed_bank_state = Tower::collect_vote_lockouts(
                         my_vote_pubkey,
                         bank_slot,
@@ -3919,36 +3984,35 @@ pub mod tests {
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             let slot = bank1.slot();
 
-            let signatures = create_test_transactions_and_populate_blockstore(
+            let mut test_signatures_iter = create_test_transactions_and_populate_blockstore(
                 vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
                 bank0.slot(),
                 bank1,
                 blockstore.clone(),
                 Arc::new(AtomicU64::default()),
-            );
+            )
+            .into_iter();
 
             let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
-            assert_eq!(confirmed_block.transactions.len(), 3);
-
-            for VersionedTransactionWithStatusMeta { transaction, meta } in
-                confirmed_block.transactions.into_iter()
-            {
-                if transaction.signatures[0] == signatures[0] {
-                    let meta = meta.unwrap();
-                    assert_eq!(meta.status, Ok(()));
-                } else if transaction.signatures[0] == signatures[1] {
-                    let meta = meta.unwrap();
-                    assert_eq!(
-                        meta.status,
-                        Err(TransactionError::InstructionError(
-                            0,
-                            InstructionError::Custom(1)
-                        ))
-                    );
-                } else {
-                    assert_eq!(meta, None);
-                }
-            }
+            let actual_tx_results: Vec<_> = confirmed_block
+                .transactions
+                .into_iter()
+                .map(|VersionedTransactionWithStatusMeta { transaction, meta }| {
+                    (transaction.signatures[0], meta.status)
+                })
+                .collect();
+            let expected_tx_results = vec![
+                (test_signatures_iter.next().unwrap(), Ok(())),
+                (
+                    test_signatures_iter.next().unwrap(),
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::Custom(1),
+                    )),
+                ),
+            ];
+            assert_eq!(actual_tx_results, expected_tx_results);
+            assert!(test_signatures_iter.next().is_none());
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }
@@ -3990,12 +4054,12 @@ pub mod tests {
             .values()
             .cloned()
             .collect();
-        let tower = Tower::new_for_tests(0, 0.67);
+        let mut tower = Tower::new_for_tests(0, 0.67);
         let newly_computed = ReplayStage::compute_bank_stats(
             &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
@@ -4039,7 +4103,7 @@ pub mod tests {
             &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
@@ -4075,7 +4139,7 @@ pub mod tests {
             &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
@@ -4091,7 +4155,7 @@ pub mod tests {
     fn test_same_weight_select_lower_slot() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
-        let tower = Tower::default();
+        let mut tower = Tower::default();
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1)) / (tr(2));
@@ -4114,7 +4178,7 @@ pub mod tests {
             &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut vote_simulator.progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
@@ -4170,7 +4234,7 @@ pub mod tests {
 
         // Set the voting behavior
         let mut cluster_votes = HashMap::new();
-        let votes = vec![0, 2];
+        let votes = vec![2];
         cluster_votes.insert(my_node_pubkey, votes.clone());
         vote_simulator.fill_bank_forks(forks, &cluster_votes, true);
 
@@ -4195,7 +4259,7 @@ pub mod tests {
             &my_vote_pubkey,
             &vote_simulator.bank_forks.read().unwrap().ancestors(),
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut vote_simulator.progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
@@ -4478,7 +4542,7 @@ pub mod tests {
         // runs in `update_propagation_status`
         assert!(!progress_map.get_leader_propagation_slot_must_exist(10).0);
 
-        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        let vote_tracker = VoteTracker::default();
         vote_tracker.insert_vote(10, vote_pubkey);
         ReplayStage::update_propagation_status(
             &mut progress_map,
@@ -4563,7 +4627,7 @@ pub mod tests {
             );
         }
 
-        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        let vote_tracker = VoteTracker::default();
         for vote_pubkey in &vote_pubkeys {
             // Insert a vote for the last bank for each voter
             vote_tracker.insert_vote(10, *vote_pubkey);
@@ -4650,7 +4714,7 @@ pub mod tests {
             progress_map.insert(i, fork_progress);
         }
 
-        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        let vote_tracker = VoteTracker::default();
         // Insert a new vote
         vote_tracker.insert_vote(10, vote_pubkeys[2]);
 
@@ -5110,12 +5174,12 @@ pub mod tests {
         );
 
         // Update propagation status
-        let tower = Tower::new_for_tests(0, 0.67);
+        let mut tower = Tower::new_for_tests(0, 0.67);
         ReplayStage::compute_bank_stats(
             &validator_node_to_vote_keys[&my_pubkey],
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut progress,
             &vote_tracker,
             &ClusterSlots::default(),
@@ -5498,7 +5562,7 @@ pub mod tests {
             &Pubkey::new_unique(),
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
@@ -5625,7 +5689,7 @@ pub mod tests {
             &Pubkey::new_unique(),
             &ancestors,
             &mut frozen_banks,
-            &tower,
+            &mut tower,
             &mut progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),

@@ -132,7 +132,7 @@ async fn clock_sysvar_updated_from_warp() {
     );
 
     let mut context = program_test.start_with_context().await;
-    let expected_slot = 100_000;
+    let mut expected_slot = 100_000;
     let instruction = Instruction::new_with_bincode(
         program_id,
         &expected_slot,
@@ -158,6 +158,26 @@ async fn clock_sysvar_updated_from_warp() {
 
     // Warp to success!
     context.warp_to_slot(expected_slot).unwrap();
+    let instruction = Instruction::new_with_bincode(
+        program_id,
+        &expected_slot,
+        vec![AccountMeta::new_readonly(clock::id(), false)],
+    );
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&context.payer.pubkey()),
+        &[&context.payer],
+        context.last_blockhash,
+    );
+    context
+        .banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap();
+
+    // Try warping ahead one slot (corner case in warp logic)
+    expected_slot += 1;
+    assert!(context.warp_to_slot(expected_slot).is_ok());
     let instruction = Instruction::new_with_bincode(
         program_id,
         &expected_slot,

@@ -2,7 +2,7 @@ use {
     crate::{parse_instruction::parse_memo_data, VersionedTransactionWithStatusMeta},
     solana_sdk::{
         instruction::CompiledInstruction,
-        message::{Message, SanitizedMessage},
+        message::{AccountKeys, Message, SanitizedMessage},
         pubkey::Pubkey,
     },
 };
@@ -45,20 +45,23 @@ pub trait ExtractMemos {
 
 impl ExtractMemos for Message {
     fn extract_memos(&self) -> Vec<String> {
-        extract_memos_inner(self.account_keys.iter(), &self.instructions)
+        extract_memos_inner(
+            &AccountKeys::new(&self.account_keys, None),
+            &self.instructions,
+        )
     }
 }
 
 impl ExtractMemos for SanitizedMessage {
     fn extract_memos(&self) -> Vec<String> {
-        extract_memos_inner(self.account_keys_iter(), self.instructions())
+        extract_memos_inner(&self.account_keys(), self.instructions())
     }
 }
 
 impl ExtractMemos for VersionedTransactionWithStatusMeta {
     fn extract_memos(&self) -> Vec<String> {
         extract_memos_inner(
-            self.account_keys_iter(),
+            &self.account_keys(),
             self.transaction.message.instructions(),
         )
     }
@@ -70,11 +73,11 @@ enum KeyType<'a> {
     Unknown(&'a Pubkey),
 }
 
-fn extract_memos_inner<'a>(
-    account_keys: impl Iterator<Item = &'a Pubkey>,
+fn extract_memos_inner(
+    account_keys: &AccountKeys,
     instructions: &[CompiledInstruction],
 ) -> Vec<String> {
-    let mut account_keys: Vec<KeyType> = account_keys.map(KeyType::Unknown).collect();
+    let mut account_keys: Vec<KeyType> = account_keys.iter().map(KeyType::Unknown).collect();
     instructions
         .iter()
         .filter_map(|ix| {
@@ -129,15 +132,16 @@ mod test {
                 data: memo1.as_bytes().to_vec(),
             },
         ];
-        let account_keys = vec![
+        let static_keys = vec![
             fee_payer,
             spl_memo_id_v1(),
             another_program_id,
             spl_memo_id_v3(),
         ];
+        let account_keys = AccountKeys::new(&static_keys, None);
 
         assert_eq!(
-            extract_memos_inner(account_keys.iter(), &memo_instructions),
+            extract_memos_inner(&account_keys, &memo_instructions),
             expected_memos
         );
     }

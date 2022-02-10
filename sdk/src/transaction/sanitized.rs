@@ -39,6 +39,17 @@ pub struct TransactionAccountLocks<'a> {
     pub writable: Vec<&'a Pubkey>,
 }
 
+pub trait AddressLoader {
+    fn load_addresses(&self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
+}
+
+pub struct DisabledAddressLoader;
+impl AddressLoader for DisabledAddressLoader {
+    fn load_addresses(&self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
+        Err(TransactionError::UnsupportedVersion)
+    }
+}
+
 impl SanitizedTransaction {
     /// Create a sanitized transaction from an unsanitized transaction.
     /// If the input transaction uses address tables, attempt to lookup
@@ -47,7 +58,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
+        address_loader: &impl AddressLoader,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -55,7 +66,7 @@ impl SanitizedTransaction {
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
-                loaded_addresses: address_loader(&message.address_table_lookups)?,
+                loaded_addresses: address_loader.load_addresses(&message.address_table_lookups)?,
                 message,
             }),
         };
@@ -145,7 +156,7 @@ impl SanitizedTransaction {
         if self.message.has_duplicates() {
             Err(TransactionError::AccountLoadedTwice)
         } else if feature_set.is_active(&feature_set::max_tx_account_locks::id())
-            && self.message.account_keys_len() > MAX_TX_ACCOUNT_LOCKS
+            && self.message.account_keys().len() > MAX_TX_ACCOUNT_LOCKS
         {
             Err(TransactionError::TooManyAccountLocks)
         } else {
@@ -156,17 +167,16 @@ impl SanitizedTransaction {
     /// Return the list of accounts that must be locked during processing this transaction.
     pub fn get_account_locks_unchecked(&self) -> TransactionAccountLocks {
         let message = &self.message;
+        let account_keys = message.account_keys();
         let num_readonly_accounts = message.num_readonly_accounts();
-        let num_writable_accounts = message
-            .account_keys_len()
-            .saturating_sub(num_readonly_accounts);
+        let num_writable_accounts = account_keys.len().saturating_sub(num_readonly_accounts);
 
         let mut account_locks = TransactionAccountLocks {
             writable: Vec::with_capacity(num_writable_accounts),
             readonly: Vec::with_capacity(num_readonly_accounts),
         };
 
-        for (i, key) in message.account_keys_iter().enumerate() {
+        for (i, key) in account_keys.iter().enumerate() {
             if message.is_writable(i) {
                 account_locks.writable.push(key);
             } else {
@@ -204,7 +214,7 @@ impl SanitizedTransaction {
         if self
             .signatures
             .iter()
-            .zip(self.message.account_keys_iter())
+            .zip(self.message.account_keys().iter())
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &message_bytes))
             .any(|verified| !verified)
         {

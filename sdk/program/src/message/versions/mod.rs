@@ -50,45 +50,6 @@ impl VersionedMessage {
         }
     }
 
-    pub fn into_static_account_keys(self) -> Vec<Pubkey> {
-        match self {
-            Self::Legacy(message) => message.account_keys,
-            Self::V0(message) => message.account_keys,
-        }
-    }
-
-    pub fn static_account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
-        match self {
-            Self::Legacy(message) => message.account_keys.iter(),
-            Self::V0(message) => message.account_keys.iter(),
-        }
-    }
-
-    pub fn static_account_keys_len(&self) -> usize {
-        match self {
-            Self::Legacy(message) => message.account_keys.len(),
-            Self::V0(message) => message.account_keys.len(),
-        }
-    }
-
-    pub fn total_account_keys_len(&self) -> usize {
-        match self {
-            Self::Legacy(message) => message.account_keys.len(),
-            Self::V0(message) => message.account_keys.len().saturating_add(
-                message
-                    .address_table_lookups
-                    .iter()
-                    .map(|lookup| {
-                        lookup
-                            .writable_indexes
-                            .len()
-                            .saturating_add(lookup.readonly_indexes.len())
-                    })
-                    .sum(),
-            ),
-        }
-    }
-
     pub fn recent_blockhash(&self) -> &Hash {
         match self {
             Self::Legacy(message) => &message.recent_blockhash,

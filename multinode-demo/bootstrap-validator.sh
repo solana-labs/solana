@@ -123,12 +123,14 @@ args+=(
   --ledger "$ledger_dir"
   --rpc-port 8899
   --snapshot-interval-slots 200
+  --no-incremental-snapshots
   --identity "$identity"
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
   --no-poh-speed-test
   --no-os-network-limits-test
   --no-wait-for-vote-to-start-leader
+  --full-rpc-api
 )
 default_arg --gossip-port 8001
 default_arg --log -

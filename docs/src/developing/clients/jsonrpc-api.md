@@ -375,7 +375,7 @@ Returns identity and transaction information about a confirmed block in the ledg
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
-  - (optional) `votes: bool` - whether to return the simple vote transactions. This option only work with an encoding  `jsonParsed`. If parameter not provided, the default includes simple votes transactions.
+  - (optional) `votes: bool` - whether to return the simple vote transactions. This option only work with an `encoding` set to  `jsonParsed` and `transactionDetails` set to `full`. If parameter not provided, the default includes simple votes transactions.
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:

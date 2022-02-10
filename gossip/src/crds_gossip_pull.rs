@@ -246,8 +246,9 @@ impl CrdsGossipPull {
             return Err(CrdsGossipError::NoPeers);
         }
         let mut rng = rand::thread_rng();
-        let mut peers = WeightedShuffle::new(&mut rng, &weights)
+        let mut peers = WeightedShuffle::new(&weights)
             .unwrap()
+            .shuffle(&mut rng)
             .map(|i| peers[i]);
         let peer = {
             let mut rng = rand::thread_rng();

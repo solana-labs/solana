@@ -169,8 +169,9 @@ impl CrdsGossipPush {
                 .filter(|(_, stake)| *stake > 0)
                 .collect();
             let weights: Vec<_> = peers.iter().map(|(_, stake)| *stake).collect();
-            WeightedShuffle::new(&mut rng, &weights)
+            WeightedShuffle::new(&weights)
                 .unwrap()
+                .shuffle(&mut rng)
                 .map(move |i| peers[i])
         };
         let mut keep = HashSet::new();
@@ -369,7 +370,7 @@ impl CrdsGossipPush {
             return;
         }
         let num_bloom_items = MIN_NUM_BLOOM_ITEMS.max(network_size);
-        let shuffle = WeightedShuffle::new(&mut rng, &weights).unwrap();
+        let shuffle = WeightedShuffle::new(&weights).unwrap().shuffle(&mut rng);
         let mut active_set = self.active_set.write().unwrap();
         let need = Self::compute_need(self.num_active, active_set.len(), ratio);
         for peer in shuffle.map(|i| peers[i]) {

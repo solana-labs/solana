@@ -673,7 +673,7 @@ pub mod test {
     #[test]
     fn test_accounts_cluster_bench() {
         solana_logger::setup();
-        let validator_config = ValidatorConfig::default();
+        let validator_config = ValidatorConfig::default_for_test();
         let num_nodes = 1;
         let mut config = ClusterConfig {
             cluster_lamports: 10_000_000,

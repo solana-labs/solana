@@ -96,7 +96,6 @@ use {
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
-        ops::Deref,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -224,6 +223,15 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
+        }
+    }
+}
+
+impl ValidatorConfig {
+    pub fn default_for_test() -> Self {
+        Self {
+            rpc_config: JsonRpcConfig::default_for_test(),
+            ..Self::default()
         }
     }
 }
@@ -531,8 +539,11 @@ impl Validator {
             }
         }
 
-        let mut cluster_info =
-            ClusterInfo::new(node.info.clone(), identity_keypair, socket_addr_space);
+        let mut cluster_info = ClusterInfo::new(
+            node.info.clone(),
+            identity_keypair.clone(),
+            socket_addr_space,
+        );
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
@@ -650,7 +661,7 @@ impl Validator {
                     leader_schedule_cache.clone(),
                     max_complete_transaction_status_slot,
                 )),
-                if config.rpc_config.minimal_api {
+                if !config.rpc_config.full_api {
                     None
                 } else {
                     let (trigger, pubsub_service) = PubSubService::new(
@@ -793,10 +804,7 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
-        let vote_tracker = Arc::new(VoteTracker::new(
-            bank_forks.read().unwrap().root_bank().deref(),
-        ));
-
+        let vote_tracker = Arc::<VoteTracker>::default();
         let mut cost_model = CostModel::default();
         cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
         let cost_model = Arc::new(RwLock::new(cost_model));
@@ -877,6 +885,7 @@ impl Validator {
                 transaction_forwards: node.sockets.tpu_forwards,
                 vote: node.sockets.tpu_vote,
                 broadcast: node.sockets.broadcast,
+                transactions_quic: node.sockets.tpu_quic,
             },
             &rpc_subscriptions,
             transaction_status_sender,
@@ -894,6 +903,7 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &identity_keypair,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
@@ -1765,7 +1775,7 @@ mod tests {
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
             rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
@@ -1847,7 +1857,7 @@ mod tests {
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
                     rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-                    ..ValidatorConfig::default()
+                    ..ValidatorConfig::default_for_test()
                 };
                 Validator::new(
                     validator_node,
@@ -1890,7 +1900,7 @@ mod tests {
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut config = ValidatorConfig::default();
+        let mut config = ValidatorConfig::default_for_test();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
 

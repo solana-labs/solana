@@ -41,10 +41,9 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, do_support_realloc, reduce_required_deploy_balance,
-            reject_all_elf_rw, reject_deployment_of_unresolved_syscalls,
-            reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
-            start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
+            cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
+            disable_bpf_unresolved_symbols_at_runtime, do_support_realloc,
+            reduce_required_deploy_balance, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         keyed_account::{keyed_account_at_index, KeyedAccount},
@@ -126,23 +125,14 @@ pub fn create_executor(
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
-        reject_unresolved_syscalls: reject_deployment_of_broken_elfs
+        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
             && invoke_context
                 .feature_set
-                .is_active(&reject_deployment_of_unresolved_syscalls::id()),
-        reject_section_virtual_address_file_offset_mismatch: reject_deployment_of_broken_elfs
-            && invoke_context
-                .feature_set
-                .is_active(&reject_section_virtual_address_file_offset_mismatch::id()),
-        verify_mul64_imm_nonzero: !invoke_context
+                .is_active(&disable_bpf_deprecated_load_instructions::id()),
+        disable_unresolved_symbols_at_runtime: invoke_context
             .feature_set
-            .is_active(&stop_verify_mul64_imm_nonzero::id()),
-        verify_shift32_imm: invoke_context
-            .feature_set
-            .is_active(&start_verify_shift32_imm::id()),
-        reject_all_writable_sections: invoke_context
-            .feature_set
-            .is_active(&reject_all_elf_rw::id()),
+            .is_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
+        reject_broken_elfs: reject_deployment_of_broken_elfs,
         ..Config::default()
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
@@ -307,7 +297,7 @@ fn process_instruction_common(
     if program.executable()? {
         debug_assert_eq!(
             first_instruction_account,
-            1 - (invoke_context.invoke_depth() > 1) as usize,
+            1 - (invoke_context.get_stack_height() > 1) as usize,
         );
 
         if !check_loader_id(&program.owner()?) {
@@ -1045,7 +1035,7 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
-        let invoke_depth = invoke_context.invoke_depth();
+        let stack_height = invoke_context.get_stack_height();
 
         let mut serialize_time = Measure::start("serialize");
         let program_id = *invoke_context.transaction_context.get_program_key()?;
@@ -1074,7 +1064,7 @@ impl Executor for BpfExecutor {
             create_vm_time.stop();
 
             execute_time = Measure::start("execute");
-            stable_log::program_invoke(&log_collector, &program_id, invoke_depth);
+            stable_log::program_invoke(&log_collector, &program_id, stack_height);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
             let result = if use_jit {

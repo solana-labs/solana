@@ -25,6 +25,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         exit::Exit,
+        feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         instruction::{AccountMeta, Instruction},
@@ -36,7 +37,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         fs::{remove_dir_all, File},
         io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -84,7 +85,6 @@ impl Default for TestValidatorNodeConfig {
     }
 }
 
-#[derive(Default)]
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
@@ -107,9 +107,49 @@ pub struct TestValidatorGenesis {
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
+    deactivate_feature_set: HashSet<Pubkey>,
+}
+
+impl Default for TestValidatorGenesis {
+    fn default() -> Self {
+        Self {
+            fee_rate_governor: FeeRateGovernor::default(),
+            ledger_path: Option::<PathBuf>::default(),
+            tower_storage: Option::<Arc<dyn TowerStorage>>::default(),
+            rent: Rent::default(),
+            rpc_config: JsonRpcConfig {
+                full_api: true,
+                ..JsonRpcConfig::default()
+            },
+            pubsub_config: PubSubConfig::default(),
+            rpc_ports: Option::<(u16, u16)>::default(),
+            warp_slot: Option::<Slot>::default(),
+            no_bpf_jit: bool::default(),
+            accounts: HashMap::<Pubkey, AccountSharedData>::default(),
+            programs: Vec::<ProgramInfo>::default(),
+            ticks_per_slot: Option::<u64>::default(),
+            epoch_schedule: Option::<EpochSchedule>::default(),
+            node_config: TestValidatorNodeConfig::default(),
+            validator_exit: Arc::<RwLock<Exit>>::default(),
+            start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
+            authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
+            max_ledger_shreds: Option::<u64>::default(),
+            max_genesis_archive_unpacked_size: Option::<u64>::default(),
+            accountsdb_plugin_config_files: Option::<Vec<PathBuf>>::default(),
+            accounts_db_caching_enabled: bool::default(),
+            deactivate_feature_set: HashSet::<Pubkey>::default(),
+        }
+    }
 }
 
 impl TestValidatorGenesis {
+    /// Adds features to deactivate to a set, eliminating redundancies
+    /// during `initialize_ledger`, if member of the set is not a Feature
+    /// it will be silently ignored
+    pub fn deactivate_features(&mut self, deactivate_list: &[Pubkey]) -> &mut Self {
+        self.deactivate_feature_set.extend(deactivate_list);
+        self
+    }
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
         self
@@ -511,6 +551,24 @@ impl TestValidator {
             genesis_config.ticks_per_slot = ticks_per_slot;
         }
 
+        // Remove features tagged to deactivate
+        for deactivate_feature_pk in &config.deactivate_feature_set {
+            if FEATURE_NAMES.contains_key(deactivate_feature_pk) {
+                match genesis_config.accounts.remove(deactivate_feature_pk) {
+                    Some(_) => info!("Feature for {:?} deactivated", deactivate_feature_pk),
+                    None => warn!(
+                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
+                        deactivate_feature_pk
+                    ),
+                }
+            } else {
+                warn!(
+                    "Feature {:?} set for deactivation is not a known Feature public key",
+                    deactivate_feature_pk
+                );
+            }
+        }
+
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
             Some(ledger_path) => {
@@ -630,7 +688,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {
             validator_config.tower_storage = tower_storage.clone();

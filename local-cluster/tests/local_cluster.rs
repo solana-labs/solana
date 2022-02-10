@@ -3,8 +3,8 @@ use {
     assert_matches::assert_matches,
     common::{
         copy_blocks, create_custom_leader_schedule, last_vote_in_tower, ms_for_n_slots,
-        open_blockstore, purge_slots, remove_tower, restore_tower, run_cluster_partition,
-        run_kill_partition_switch_threshold, test_faulty_node,
+        open_blockstore, purge_slots, remove_tower, restore_tower, root_in_tower,
+        run_cluster_partition, run_kill_partition_switch_threshold, save_tower, test_faulty_node,
         wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
     },
     crossbeam_channel::{unbounded, Receiver},
@@ -23,7 +23,7 @@ use {
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        tower_storage::{FileTowerStorage, SavedTower, TowerStorage},
+        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
@@ -87,7 +87,10 @@ fn test_local_cluster_start_and_exit_with_config() {
     solana_logger::setup();
     const NUM_NODES: usize = 1;
     let mut config = ClusterConfig {
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default_for_test(),
+            NUM_NODES,
+        ),
         node_stakes: vec![3; NUM_NODES],
         cluster_lamports: 100,
         ticks_per_slot: 8,
@@ -107,7 +110,7 @@ fn test_ledger_cleanup_service() {
     let num_nodes = 3;
     let validator_config = ValidatorConfig {
         max_ledger_shreds: Some(100),
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -293,7 +296,7 @@ fn test_leader_failure_4() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_leader_failure_4");
     let num_nodes = 4;
-    let validator_config = ValidatorConfig::default();
+    let validator_config = ValidatorConfig::default_for_test();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
@@ -384,7 +387,7 @@ fn test_cluster_partition_1_1_1() {
 fn test_two_unbalanced_stakes() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_two_unbalanced_stakes");
-    let validator_config = ValidatorConfig::default();
+    let validator_config = ValidatorConfig::default_for_test();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
     let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
@@ -423,7 +426,10 @@ fn test_forwarding() {
     let mut config = ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 2_000_000,
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), 2),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default_for_test(),
+            2,
+        ),
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
@@ -454,7 +460,7 @@ fn test_restart_node() {
     error!("test_restart_node");
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH * 2;
     let ticks_per_slot = 16;
-    let validator_config = ValidatorConfig::default();
+    let validator_config = ValidatorConfig::default_for_test();
     let mut cluster = LocalCluster::new(
         &mut ClusterConfig {
             node_stakes: vec![100; 1],
@@ -498,7 +504,10 @@ fn test_mainnet_beta_cluster_type() {
         cluster_type: ClusterType::MainnetBeta,
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), 1),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default_for_test(),
+            1,
+        ),
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
@@ -1577,7 +1586,7 @@ fn test_fake_shreds_broadcast_leader() {
 #[test]
 fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let validator_config = ValidatorConfig::default();
+    let validator_config = ValidatorConfig::default_for_test();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
@@ -1600,7 +1609,7 @@ fn test_no_voting() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig {
         voting_disabled: true,
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -1653,7 +1662,7 @@ fn test_optimistic_confirmation_violation_detection() {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
+            &ValidatorConfig::default_for_test(),
             node_stakes.len(),
         ),
         validator_keys: Some(validator_keys),
@@ -1774,7 +1783,7 @@ fn test_validator_saves_tower() {
 
     let validator_config = ValidatorConfig {
         require_tower: true,
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let validator_identity_keypair = Arc::new(Keypair::new());
     let validator_id = validator_identity_keypair.pubkey();
@@ -1904,16 +1913,6 @@ fn test_validator_saves_tower() {
     assert!(tower4.root() >= new_root);
 }
 
-fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
-    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
-    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
-    file_tower_storage.store(&saved_tower).unwrap();
-}
-
-fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
-    restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
-}
-
 // This test verifies that even if votes from a validator end up taking too long to land, and thus
 // some of the referenced slots are slots are no longer present in the slot hashes sysvar,
 // consensus can still be attained.
@@ -1968,7 +1967,7 @@ fn test_slot_hash_expiry() {
     // We want B to not vote (we are trying to simulate its votes not landing until it gets to the
     // minority fork)
     let mut validator_configs =
-        make_identical_validator_configs(&ValidatorConfig::default(), node_stakes.len());
+        make_identical_validator_configs(&ValidatorConfig::default_for_test(), node_stakes.len());
     validator_configs[1].voting_disabled = true;
 
     let mut config = ClusterConfig {
@@ -2149,7 +2148,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
+            &ValidatorConfig::default_for_test(),
             node_stakes.len(),
         ),
         validator_keys: Some(validator_keys),
@@ -2260,7 +2259,7 @@ fn test_hard_fork_invalidates_tower() {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
+            &ValidatorConfig::default_for_test(),
             node_stakes.len(),
         ),
         validator_keys: Some(validator_keys),
@@ -2308,6 +2307,14 @@ fn test_hard_fork_invalidates_tower() {
     validator_b_info.config.new_hard_forks = hard_fork_slots;
     validator_b_info.config.wait_for_supermajority = Some(hard_fork_slot);
     validator_b_info.config.expected_shred_version = Some(expected_shred_version);
+
+    // Clear ledger of all slots post hard fork
+    {
+        let blockstore_a = open_blockstore(&validator_a_info.info.ledger_path);
+        let blockstore_b = open_blockstore(&validator_b_info.info.ledger_path);
+        purge_slots(&blockstore_a, hard_fork_slot + 1, 100);
+        purge_slots(&blockstore_b, hard_fork_slot + 1, 100);
+    }
 
     // restart validator A first
     let cluster_for_a = cluster.clone();
@@ -2363,91 +2370,6 @@ fn test_hard_fork_invalidates_tower() {
 #[serial]
 fn test_run_test_load_program_accounts_root() {
     run_test_load_program_accounts(CommitmentConfig::finalized());
-}
-
-#[test]
-#[serial]
-fn test_restart_tower_rollback() {
-    // Test node crashing and failing to save its tower before restart
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-
-    // First set up the cluster with 4 nodes
-    let slots_per_epoch = 2048;
-    let node_stakes = vec![10000, 1];
-
-    let validator_strings = vec![
-        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
-        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
-    ];
-
-    let validator_b_keypair = Arc::new(Keypair::from_base58_string(validator_strings[1]));
-    let validator_b_pubkey = validator_b_keypair.pubkey();
-
-    let validator_keys = validator_strings
-        .iter()
-        .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
-        .take(node_stakes.len())
-        .collect::<Vec<_>>();
-    let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
-        node_stakes: node_stakes.clone(),
-        validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
-            node_stakes.len(),
-        ),
-        validator_keys: Some(validator_keys),
-        slots_per_epoch,
-        stakers_slot_offset: slots_per_epoch,
-        skip_warmup_slots: true,
-        ..ClusterConfig::default()
-    };
-    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-
-    let val_b_ledger_path = cluster.ledger_path(&validator_b_pubkey);
-
-    let mut earlier_tower: Tower;
-    loop {
-        sleep(Duration::from_millis(1000));
-
-        // Grab the current saved tower
-        earlier_tower = restore_tower(&val_b_ledger_path, &validator_b_pubkey).unwrap();
-        if earlier_tower.last_voted_slot().unwrap_or(0) > 1 {
-            break;
-        }
-    }
-
-    let exited_validator_info: ClusterValidatorInfo;
-    loop {
-        sleep(Duration::from_millis(1000));
-
-        // Wait for second, lesser staked validator to make a root past the earlier_tower's
-        // latest vote slot, then exit that validator
-        if let Some(root) = root_in_tower(&val_b_ledger_path, &validator_b_pubkey) {
-            if root
-                > earlier_tower
-                    .last_voted_slot()
-                    .expect("Earlier tower must have at least one vote")
-            {
-                exited_validator_info = cluster.exit_node(&validator_b_pubkey);
-                break;
-            }
-        }
-    }
-
-    // Now rewrite the tower with the *earlier_tower*
-    save_tower(&val_b_ledger_path, &earlier_tower, &validator_b_keypair);
-    cluster.restart_node(
-        &validator_b_pubkey,
-        exited_validator_info,
-        SocketAddrSpace::Unspecified,
-    );
-
-    // Check this node is making new roots
-    cluster.check_for_new_roots(
-        20,
-        "test_restart_tower_rollback",
-        SocketAddrSpace::Unspecified,
-    );
 }
 
 #[test]
@@ -2758,7 +2680,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
+            &ValidatorConfig::default_for_test(),
             node_stakes.len(),
         ),
         validator_keys: Some(validator_keys),
@@ -2861,7 +2783,7 @@ impl SnapshotValidatorConfig {
             snapshot_config: Some(snapshot_config),
             account_paths: account_storage_paths,
             accounts_hash_interval_slots,
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         };
 
         SnapshotValidatorConfig {

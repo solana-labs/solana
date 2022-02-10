@@ -1,7 +1,7 @@
 use {
     crate::{
         bpf_loader_upgradeable,
-        message::{legacy::BUILTIN_PROGRAMS_KEYS, v0},
+        message::{legacy::BUILTIN_PROGRAMS_KEYS, v0, AccountKeys},
         pubkey::Pubkey,
         sysvar,
     },
@@ -57,66 +57,18 @@ impl LoadedAddresses {
     pub fn len(&self) -> usize {
         self.writable.len().saturating_add(self.readonly.len())
     }
-
-    /// Iterate over loaded addresses in the order that they are used
-    /// as account indexes
-    pub fn ordered_iter(&self) -> impl Iterator<Item = &Pubkey> {
-        self.writable.iter().chain(self.readonly.iter())
-    }
-
-    /// Iterate over loaded addresses in the order that they are used
-    /// as account indexes
-    pub fn into_ordered_iter(self) -> impl Iterator<Item = Pubkey> {
-        self.writable.into_iter().chain(self.readonly.into_iter())
-    }
 }
 
 impl LoadedMessage {
-    /// Returns an iterator of account key segments. The ordering of segments
-    /// affects how account indexes from compiled instructions are resolved and
-    /// so should not be changed.
-    fn account_keys_segment_iter(&self) -> impl Iterator<Item = &Vec<Pubkey>> {
-        vec![
-            &self.message.account_keys,
-            &self.loaded_addresses.writable,
-            &self.loaded_addresses.readonly,
-        ]
-        .into_iter()
-    }
-
-    /// Returns the total length of loaded accounts for this message
-    pub fn account_keys_len(&self) -> usize {
-        let mut len = 0usize;
-        for key_segment in self.account_keys_segment_iter() {
-            len = len.saturating_add(key_segment.len());
-        }
-        len
-    }
-
-    /// Iterator for the addresses of the loaded accounts for this message
-    pub fn account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
-        self.account_keys_segment_iter().flatten()
+    /// Returns the list of account keys that are loaded for this message.
+    pub fn account_keys(&self) -> AccountKeys {
+        AccountKeys::new(&self.account_keys, Some(&self.loaded_addresses))
     }
 
     /// Returns true if any account keys are duplicates
     pub fn has_duplicates(&self) -> bool {
         let mut uniq = HashSet::new();
-        self.account_keys_iter().any(|x| !uniq.insert(x))
-    }
-
-    /// Returns the address of the account at the specified index of the list of
-    /// message account keys constructed from static keys, followed by dynamically
-    /// loaded writable addresses, and lastly the list of dynamically loaded
-    /// readonly addresses.
-    pub fn get_account_key(&self, mut index: usize) -> Option<&Pubkey> {
-        for key_segment in self.account_keys_segment_iter() {
-            if index < key_segment.len() {
-                return Some(&key_segment[index]);
-            }
-            index = index.saturating_sub(key_segment.len());
-        }
-
-        None
+        self.account_keys().iter().any(|x| !uniq.insert(x))
     }
 
     /// Returns true if the account at the specified index was requested to be
@@ -144,7 +96,7 @@ impl LoadedMessage {
     /// Returns true if the account at the specified index was loaded as writable
     pub fn is_writable(&self, key_index: usize) -> bool {
         if self.is_writable_index(key_index) {
-            if let Some(key) = self.get_account_key(key_index) {
+            if let Some(key) = self.account_keys().get(key_index) {
                 let demote_program_id = self.is_key_called_as_program(key_index)
                     && !self.is_upgradeable_loader_present();
                 return !(sysvar::is_sysvar_id(key)
@@ -169,7 +121,8 @@ impl LoadedMessage {
 
     /// Returns true if any account is the bpf upgradeable loader
     pub fn is_upgradeable_loader_present(&self) -> bool {
-        self.account_keys_iter()
+        self.account_keys()
+            .iter()
             .any(|&key| key == bpf_loader_upgradeable::id())
     }
 }
@@ -210,39 +163,6 @@ mod tests {
     }
 
     #[test]
-    fn test_account_keys_segment_iter() {
-        let (message, keys) = check_test_loaded_message();
-
-        let expected_segments = vec![
-            vec![keys[0], keys[1], keys[2], keys[3]],
-            vec![keys[4]],
-            vec![keys[5]],
-        ];
-
-        let mut iter = message.account_keys_segment_iter();
-        for expected_segment in expected_segments {
-            assert_eq!(iter.next(), Some(&expected_segment));
-        }
-    }
-
-    #[test]
-    fn test_account_keys_len() {
-        let (message, keys) = check_test_loaded_message();
-
-        assert_eq!(message.account_keys_len(), keys.len());
-    }
-
-    #[test]
-    fn test_account_keys_iter() {
-        let (message, keys) = check_test_loaded_message();
-
-        let mut iter = message.account_keys_iter();
-        for expected_key in keys {
-            assert_eq!(iter.next(), Some(&expected_key));
-        }
-    }
-
-    #[test]
     fn test_has_duplicates() {
         let message = check_test_loaded_message().0;
 
@@ -274,18 +194,6 @@ mod tests {
             let message = create_message_with_dupe_keys(keys);
             assert!(message.has_duplicates());
         }
-    }
-
-    #[test]
-    fn test_get_account_key() {
-        let (message, keys) = check_test_loaded_message();
-
-        assert_eq!(message.get_account_key(0), Some(&keys[0]));
-        assert_eq!(message.get_account_key(1), Some(&keys[1]));
-        assert_eq!(message.get_account_key(2), Some(&keys[2]));
-        assert_eq!(message.get_account_key(3), Some(&keys[3]));
-        assert_eq!(message.get_account_key(4), Some(&keys[4]));
-        assert_eq!(message.get_account_key(5), Some(&keys[5]));
     }
 
     #[test]
