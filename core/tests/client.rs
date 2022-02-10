@@ -4,7 +4,14 @@ use {
     solana_client::{
         pubsub_client::PubsubClient,
         rpc_client::RpcClient,
+<<<<<<< HEAD:core/tests/client.rs
         rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+=======
+        rpc_config::{
+            RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
+            RpcProgramAccountsConfig,
+        },
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028)):client-test/tests/client.rs
         rpc_response::SlotInfo,
     },
     solana_core::test_validator::TestValidator,
@@ -29,6 +36,11 @@ use {
         system_program, system_transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+<<<<<<< HEAD:core/tests/client.rs
+=======
+    solana_test_validator::TestValidator,
+    solana_transaction_status::{ConfirmedBlock, TransactionDetails, UiTransactionEncoding},
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028)):client-test/tests/client.rs
     std::{
         collections::HashSet,
         net::{IpAddr, SocketAddr},
@@ -196,6 +208,111 @@ fn test_account_subscription() {
 
 #[test]
 #[serial]
+<<<<<<< HEAD:core/tests/client.rs
+=======
+fn test_block_subscription() {
+    // setup BankForks
+    let exit = Arc::new(AtomicBool::new(false));
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair: alice,
+        ..
+    } = create_genesis_config(10_000);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+    // setup Blockstore
+    let ledger_path = get_tmp_ledger_path!();
+    let blockstore = Blockstore::open(&ledger_path).unwrap();
+    let blockstore = Arc::new(blockstore);
+
+    // populate ledger with test txs
+    let bank = bank_forks.read().unwrap().working_bank();
+    let keypair1 = Keypair::new();
+    let keypair2 = Keypair::new();
+    let keypair3 = Keypair::new();
+    let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+    bank.transfer(rent_exempt_amount, &alice, &keypair2.pubkey())
+        .unwrap();
+    let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
+        vec![&alice, &keypair1, &keypair2, &keypair3],
+        0,
+        bank,
+        blockstore.clone(),
+        max_complete_transaction_status_slot,
+    );
+    let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+    // setup RpcSubscriptions && PubSubService
+    let subscriptions = Arc::new(RpcSubscriptions::new_for_tests_with_blockstore(
+        &exit,
+        max_complete_transaction_status_slot,
+        blockstore.clone(),
+        bank_forks.clone(),
+        Arc::new(RwLock::new(BlockCommitmentCache::default())),
+        OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+    ));
+    let pubsub_addr = SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+    );
+    let pub_cfg = PubSubConfig {
+        enable_block_subscription: true,
+        ..PubSubConfig::default()
+    };
+    let (trigger, pubsub_service) = PubSubService::new(pub_cfg, &subscriptions, pubsub_addr);
+
+    std::thread::sleep(Duration::from_millis(400));
+
+    // setup PubsubClient
+    let (mut client, receiver) = PubsubClient::block_subscribe(
+        &format!("ws://0.0.0.0:{}/", pubsub_addr.port()),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig {
+                commitment: CommitmentLevel::Confirmed,
+            }),
+            encoding: Some(UiTransactionEncoding::Json),
+            transaction_details: Some(TransactionDetails::Signatures),
+            show_rewards: None,
+        }),
+    )
+    .unwrap();
+
+    // trigger Gossip notification
+    let slot = bank_forks.read().unwrap().highest_slot();
+    subscriptions.notify_gossip_subscribers(slot);
+    let maybe_actual = receiver.recv_timeout(Duration::from_millis(400));
+    match maybe_actual {
+        Ok(actual) => {
+            let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+            let legacy_block = ConfirmedBlock::from(versioned_block)
+                .into_legacy_block()
+                .unwrap();
+            let block = legacy_block.configure(
+                UiTransactionEncoding::Json,
+                TransactionDetails::Signatures,
+                false,
+            );
+            assert_eq!(actual.value.slot, slot);
+            assert!(block.eq(&actual.value.block.unwrap()));
+        }
+        Err(e) => {
+            eprintln!("unexpected websocket receive timeout");
+            assert_eq!(Some(e), None);
+        }
+    }
+
+    // cleanup
+    exit.store(true, Ordering::Relaxed);
+    trigger.cancel();
+    client.shutdown().unwrap();
+    pubsub_service.close().unwrap();
+}
+
+#[test]
+#[serial]
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028)):client-test/tests/client.rs
 fn test_program_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),

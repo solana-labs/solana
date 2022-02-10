@@ -101,6 +101,11 @@ pub enum BlockstoreError {
     ProtobufDecodeError(#[from] prost::DecodeError),
     ParentEntriesUnavailable,
     SlotUnavailable,
+<<<<<<< HEAD
+=======
+    UnsupportedTransactionVersion,
+    MissingTransactionMetadata,
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 

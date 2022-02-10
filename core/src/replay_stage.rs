@@ -3472,15 +3472,17 @@ mod tests {
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             let slot = bank1.slot();
 
-            let signatures = create_test_transactions_and_populate_blockstore(
+            let mut test_signatures_iter = create_test_transactions_and_populate_blockstore(
                 vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
                 bank0.slot(),
                 bank1,
                 blockstore.clone(),
                 Arc::new(AtomicU64::default()),
-            );
+            )
+            .into_iter();
 
             let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
+<<<<<<< HEAD
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in
@@ -3502,6 +3504,27 @@ mod tests {
                     assert_eq!(meta, None);
                 }
             }
+=======
+            let actual_tx_results: Vec<_> = confirmed_block
+                .transactions
+                .into_iter()
+                .map(|VersionedTransactionWithStatusMeta { transaction, meta }| {
+                    (transaction.signatures[0], meta.status)
+                })
+                .collect();
+            let expected_tx_results = vec![
+                (test_signatures_iter.next().unwrap(), Ok(())),
+                (
+                    test_signatures_iter.next().unwrap(),
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::Custom(1),
+                    )),
+                ),
+            ];
+            assert_eq!(actual_tx_results, expected_tx_results);
+            assert!(test_signatures_iter.next().is_none());
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }

@@ -707,18 +707,16 @@ fn find_latest_replayed_slot_from_ledger(
             latest_slot = new_latest_slot;
             info!("Checking latest_slot {}", latest_slot);
             // Wait for the slot to be fully received by the validator
-            let entries;
             loop {
                 info!("Waiting for slot {} to be full", latest_slot);
                 if blockstore.is_full(latest_slot) {
-                    entries = blockstore.get_slot_entries(latest_slot, 0).unwrap();
-                    assert!(!entries.is_empty());
                     break;
                 } else {
                     sleep(Duration::from_millis(50));
                     blockstore = open_blockstore(ledger_path);
                 }
             }
+<<<<<<< HEAD
             // Check the slot has been replayed
             let non_tick_entry = entries.into_iter().find(|e| !e.transactions.is_empty());
             if let Some(non_tick_entry) = non_tick_entry {
@@ -740,12 +738,20 @@ fn find_latest_replayed_slot_from_ledger(
                         sleep(Duration::from_millis(50));
                         blockstore = open_blockstore(ledger_path);
                     }
+=======
+            // Wait for the slot to be replayed
+            loop {
+                info!("Waiting for slot {} to be replayed", latest_slot);
+                if blockstore.get_bank_hash(latest_slot).is_some() {
+                    return (
+                        latest_slot,
+                        AncestorIterator::new(latest_slot, &blockstore).collect(),
+                    );
+                } else {
+                    sleep(Duration::from_millis(50));
+                    blockstore = open_blockstore(ledger_path);
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 }
-            } else {
-                info!(
-                    "No transactions in slot {}, can't tell if it was replayed",
-                    latest_slot
-                );
             }
         }
         sleep(Duration::from_millis(50));

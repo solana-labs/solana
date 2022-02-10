@@ -44,6 +44,7 @@ use solana_sdk::{
     process_instruction::{InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
+<<<<<<< HEAD
     system_instruction,
     sysvar::{clock, fees, rent},
     transaction::{Transaction, TransactionError},
@@ -55,6 +56,16 @@ use solana_transaction_status::{
 use std::{
     cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
     sync::Arc,
+=======
+    system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
+    system_program, sysvar,
+    sysvar::{clock, rent},
+    transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
+};
+use solana_transaction_status::{
+    token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, InnerInstructions,
+    TransactionStatusMeta, TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
 };
 
 /// BPF program file extension
@@ -377,6 +388,7 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                 .expect("FeeCalculator must exist");
             let fee = fee_calculator.calculate_fee(tx.message());
 
+<<<<<<< HEAD
             let inner_instructions = inner_instructions.map(|inner_instructions| {
                 inner_instructions
                     .into_iter()
@@ -384,6 +396,57 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                     .map(|(index, instructions)| InnerInstructions {
                         index: index as u8,
                         instructions,
+=======
+                    let lamports_per_signature = match durable_nonce_fee {
+                        Some(DurableNonceFee::Valid(lamports_per_signature)) => {
+                            Some(lamports_per_signature)
+                        }
+                        Some(DurableNonceFee::Invalid) => None,
+                        None => bank.get_lamports_per_signature_for_blockhash(
+                            &tx.message().recent_blockhash,
+                        ),
+                    }
+                    .expect("lamports_per_signature must be available");
+                    let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                        &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+                        lamports_per_signature,
+                    );
+
+                    let inner_instructions = inner_instructions.map(|inner_instructions| {
+                        inner_instructions
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, instructions)| InnerInstructions {
+                                index: index as u8,
+                                instructions,
+                            })
+                            .filter(|i| !i.instructions.is_empty())
+                            .collect()
+                    });
+
+                    let tx_status_meta = TransactionStatusMeta {
+                        status,
+                        fee,
+                        pre_balances,
+                        post_balances,
+                        pre_token_balances: Some(pre_token_balances),
+                        post_token_balances: Some(post_token_balances),
+                        inner_instructions,
+                        log_messages,
+                        rewards: None,
+                        loaded_addresses: LoadedAddresses::default(),
+                    };
+
+                    Ok(ConfirmedTransactionWithStatusMeta {
+                        slot: bank.slot(),
+                        tx_with_meta: TransactionWithStatusMeta::Complete(
+                            VersionedTransactionWithStatusMeta {
+                                transaction: VersionedTransaction::from(tx.clone()),
+                                meta: tx_status_meta,
+                            },
+                        ),
+                        block_time: None,
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                     })
                     .filter(|i| !i.instructions.is_empty())
                     .collect()
@@ -2485,6 +2548,7 @@ fn test_program_upgradeable_locks() {
         execute_transactions(&bank, &[invoke_tx, upgrade_tx])
     };
 
+<<<<<<< HEAD
     if false {
         println!("upgrade and invoke");
         for result in &results1 {
@@ -2522,6 +2586,37 @@ fn test_program_upgradeable_locks() {
     } else {
         panic!("no meta");
     }
+=======
+    assert!(matches!(
+        results1[0],
+        Ok(ConfirmedTransactionWithStatusMeta {
+            tx_with_meta: TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                meta: TransactionStatusMeta { status: Ok(()), .. },
+                ..
+            }),
+            ..
+        })
+    ));
+    assert_eq!(results1[1], Err(TransactionError::AccountInUse));
+
+    assert!(matches!(
+        results2[0],
+        Ok(ConfirmedTransactionWithStatusMeta {
+            tx_with_meta: TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                meta: TransactionStatusMeta {
+                    status: Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::ProgramFailedToComplete
+                    )),
+                    ..
+                },
+                ..
+            }),
+            ..
+        })
+    ));
+    assert_eq!(results2[1], Err(TransactionError::AccountInUse));
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
 }
 
 #[cfg(feature = "bpf_rust")]

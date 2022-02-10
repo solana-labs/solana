@@ -13,10 +13,17 @@ use {
     },
     solana_storage_proto::convert::{generated, tx_by_addr},
     solana_transaction_status::{
+<<<<<<< HEAD
         extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransaction,
         ConfirmedTransactionStatusWithSignature, Reward, TransactionByAddrInfo,
         TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
         TransactionWithStatusMeta,
+=======
+        extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
+        TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
     },
     std::{
         collections::{HashMap, HashSet},
@@ -114,6 +121,7 @@ struct StoredConfirmedBlock {
     block_height: Option<u64>,
 }
 
+#[cfg(test)]
 impl From<ConfirmedBlock> for StoredConfirmedBlock {
     fn from(confirmed_block: ConfirmedBlock) -> Self {
         let ConfirmedBlock {
@@ -168,20 +176,51 @@ struct StoredConfirmedBlockTransaction {
     meta: Option<StoredConfirmedBlockTransactionStatusMeta>,
 }
 
+#[cfg(test)]
 impl From<TransactionWithStatusMeta> for StoredConfirmedBlockTransaction {
     fn from(value: TransactionWithStatusMeta) -> Self {
+<<<<<<< HEAD
         Self {
             transaction: value.transaction,
             meta: value.meta.map(|meta| meta.into()),
+=======
+        match value {
+            TransactionWithStatusMeta::MissingMetadata(transaction) => Self {
+                transaction: VersionedTransaction::from(transaction),
+                meta: None,
+            },
+            TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                transaction,
+                meta,
+            }) => Self {
+                transaction,
+                meta: Some(meta.into()),
+            },
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         }
     }
 }
 
 impl From<StoredConfirmedBlockTransaction> for TransactionWithStatusMeta {
+<<<<<<< HEAD
     fn from(value: StoredConfirmedBlockTransaction) -> Self {
         Self {
             transaction: value.transaction,
             meta: value.meta.map(|meta| meta.into()),
+=======
+    fn from(tx_with_meta: StoredConfirmedBlockTransaction) -> Self {
+        let StoredConfirmedBlockTransaction { transaction, meta } = tx_with_meta;
+        match meta {
+            None => Self::MissingMetadata(
+                transaction
+                    .into_legacy_transaction()
+                    .expect("versioned transactions always have meta"),
+            ),
+            Some(meta) => Self::Complete(VersionedTransactionWithStatusMeta {
+                transaction,
+                meta: meta.into(),
+            }),
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         }
     }
 }
@@ -438,7 +477,11 @@ impl LedgerStorage {
     pub async fn get_confirmed_transaction(
         &self,
         signature: &Signature,
+<<<<<<< HEAD
     ) -> Result<Option<ConfirmedTransaction>> {
+=======
+    ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         debug!(
             "LedgerStorage::get_confirmed_transaction request received: {:?}",
             signature
@@ -463,17 +506,23 @@ impl LedgerStorage {
                 warn!("Transaction info for {} is corrupt", signature);
                 Ok(None)
             }
-            Some(bucket_block_transaction) => {
-                if bucket_block_transaction.transaction.signatures[0] != *signature {
+            Some(tx_with_meta) => {
+                if tx_with_meta.transaction_signature() != signature {
                     warn!(
                         "Transaction info or confirmed block for {} is corrupt",
                         signature
                     );
                     Ok(None)
                 } else {
+<<<<<<< HEAD
                     Ok(Some(ConfirmedTransaction {
                         slot,
                         transaction: bucket_block_transaction,
+=======
+                    Ok(Some(ConfirmedTransactionWithStatusMeta {
+                        slot,
+                        tx_with_meta,
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                         block_time: block.block_time,
                     }))
                 }
@@ -635,8 +684,13 @@ impl LedgerStorage {
 
         let mut tx_cells = vec![];
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
+<<<<<<< HEAD
             let TransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
             let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
+=======
+            let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
+            let err = meta.status.clone().err();
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
             let index = index as u32;
             let signature = transaction.signatures[0];
             let memo = extract_and_fmt_memos(&transaction.message);
@@ -723,6 +777,7 @@ impl LedgerStorage {
         let mut expected_tx_infos: HashMap<String, UploadedTransaction> = HashMap::new();
         let confirmed_block = self.get_confirmed_block(slot).await?;
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
+<<<<<<< HEAD
             let TransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
             let signature = transaction.signatures[0];
             let index = index as u32;
@@ -731,13 +786,43 @@ impl LedgerStorage {
             for address in &transaction.message.account_keys {
                 if !is_sysvar_id(address) {
                     addresses.insert(address);
+=======
+            match transaction_with_meta {
+                TransactionWithStatusMeta::MissingMetadata(transaction) => {
+                    let signature = transaction.signatures[0];
+                    let index = index as u32;
+                    let err = None;
+
+                    for address in transaction.message.account_keys.iter() {
+                        if !is_sysvar_id(address) {
+                            addresses.insert(address);
+                        }
+                    }
+
+                    expected_tx_infos.insert(
+                        signature.to_string(),
+                        UploadedTransaction { slot, index, err },
+                    );
+                }
+                TransactionWithStatusMeta::Complete(tx_with_meta) => {
+                    let VersionedTransactionWithStatusMeta { transaction, meta } = tx_with_meta;
+                    let signature = transaction.signatures[0];
+                    let index = index as u32;
+                    let err = meta.status.clone().err();
+
+                    for address in tx_with_meta.account_keys().iter() {
+                        if !is_sysvar_id(address) {
+                            addresses.insert(address);
+                        }
+                    }
+
+                    expected_tx_infos.insert(
+                        signature.to_string(),
+                        UploadedTransaction { slot, index, err },
+                    );
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 }
             }
-
-            expected_tx_infos.insert(
-                signature.to_string(),
-                UploadedTransaction { slot, index, err },
-            );
         }
 
         let address_slot_rows: Vec<_> = addresses

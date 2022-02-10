@@ -41,8 +41,14 @@ use {
     },
     solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_transaction_status::{
+<<<<<<< HEAD
         ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
         TransactionStatusMeta, TransactionWithStatusMeta,
+=======
+        ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta, Rewards,
+        TransactionStatusMeta, TransactionWithStatusMeta, VersionedConfirmedBlock,
+        VersionedTransactionWithStatusMeta,
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
     },
     std::{
         borrow::Cow,
@@ -1972,10 +1978,16 @@ impl Blockstore {
                 TransactionWithStatusMeta {
                     transaction,
                     meta: self
+<<<<<<< HEAD
                         .read_transaction_status((signature, slot))
                         .ok()
                         .flatten(),
                 }
+=======
+                        .read_transaction_status((signature, slot))?
+                        .ok_or(BlockstoreError::MissingTransactionMetadata)?,
+                })
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
             })
             .collect()
     }
@@ -2216,7 +2228,11 @@ impl Blockstore {
     pub fn get_rooted_transaction(
         &self,
         signature: Signature,
+<<<<<<< HEAD
     ) -> Result<Option<ConfirmedTransaction>> {
+=======
+    ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         datapoint_info!(
             "blockstore-rpc-api",
             ("method", "get_rooted_transaction".to_string(), String)
@@ -2229,7 +2245,11 @@ impl Blockstore {
         &self,
         signature: Signature,
         highest_confirmed_slot: Slot,
+<<<<<<< HEAD
     ) -> Result<Option<ConfirmedTransaction>> {
+=======
+    ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
         datapoint_info!(
             "blockstore-rpc-api",
             ("method", "get_complete_transaction".to_string(), String)
@@ -2246,20 +2266,33 @@ impl Blockstore {
         &self,
         signature: Signature,
         confirmed_unrooted_slots: &[Slot],
+<<<<<<< HEAD
     ) -> Result<Option<ConfirmedTransaction>> {
         if let Some((slot, status)) =
+=======
+    ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
+        if let Some((slot, meta)) =
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
             self.get_transaction_status(signature, confirmed_unrooted_slots)?
         {
             let transaction = self
                 .find_transaction_in_slot(slot, signature)?
                 .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
             let block_time = self.get_block_time(slot)?;
+<<<<<<< HEAD
             Ok(Some(ConfirmedTransaction {
                 slot,
                 transaction: TransactionWithStatusMeta {
                     transaction,
                     meta: Some(status),
                 },
+=======
+            Ok(Some(ConfirmedTransactionWithStatusMeta {
+                slot,
+                tx_with_meta: TransactionWithStatusMeta::Complete(
+                    VersionedTransactionWithStatusMeta { transaction, meta },
+                ),
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 block_time,
             }))
         } else {
@@ -6145,7 +6178,7 @@ pub mod tests {
                     .unwrap();
                 TransactionWithStatusMeta {
                     transaction,
-                    meta: Some(TransactionStatusMeta {
+                    meta: TransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -6155,21 +6188,36 @@ pub mod tests {
                         pre_token_balances: Some(vec![]),
                         post_token_balances: Some(vec![]),
                         rewards: Some(vec![]),
+<<<<<<< HEAD
                     }),
+=======
+                        loaded_addresses: LoadedAddresses::default(),
+                    },
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 }
             })
             .collect();
 
         // Even if marked as root, a slot that is empty of entries should return an error
+<<<<<<< HEAD
         let confirmed_block_err = ledger.get_rooted_block(slot - 1, true).unwrap_err();
         assert_matches!(confirmed_block_err, BlockstoreError::SlotUnavailable);
 
         // The previous_blockhash of `expected_block` is default because its parent slot is a root,
         // but empty of entries (eg. snapshot root slots). This now returns an error.
         let confirmed_block_err = ledger.get_rooted_block(slot, true).unwrap_err();
+=======
         assert_matches!(
-            confirmed_block_err,
-            BlockstoreError::ParentEntriesUnavailable
+            blockstore.get_rooted_block(slot - 1, true),
+            Err(BlockstoreError::SlotUnavailable)
+        );
+
+        // The previous_blockhash of `expected_block` is default because its parent slot is a root,
+        // but empty of entries (eg. snapshot root slots). This now returns an error.
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
+        assert_matches!(
+            blockstore.get_rooted_block(slot, true),
+            Err(BlockstoreError::ParentEntriesUnavailable)
         );
 
         // Test if require_previous_blockhash is false
@@ -6991,7 +7039,7 @@ pub mod tests {
                     .unwrap();
                 TransactionWithStatusMeta {
                     transaction,
-                    meta: Some(TransactionStatusMeta {
+                    meta: TransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -7001,7 +7049,12 @@ pub mod tests {
                         pre_token_balances,
                         post_token_balances,
                         rewards,
+<<<<<<< HEAD
                     }),
+=======
+                        loaded_addresses: LoadedAddresses::default(),
+                    },
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 }
             })
             .collect();
@@ -7010,9 +7063,15 @@ pub mod tests {
             let signature = transaction.transaction.signatures[0];
             assert_eq!(
                 blockstore.get_rooted_transaction(signature).unwrap(),
+<<<<<<< HEAD
                 Some(ConfirmedTransaction {
                     slot,
                     transaction: transaction.clone(),
+=======
+                Some(ConfirmedTransactionWithStatusMeta {
+                    slot,
+                    tx_with_meta: TransactionWithStatusMeta::Complete(tx_with_meta.clone()),
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                     block_time: None
                 })
             );
@@ -7020,9 +7079,15 @@ pub mod tests {
                 blockstore
                     .get_complete_transaction(signature, slot + 1)
                     .unwrap(),
+<<<<<<< HEAD
                 Some(ConfirmedTransaction {
                     slot,
                     transaction,
+=======
+                Some(ConfirmedTransactionWithStatusMeta {
+                    slot,
+                    tx_with_meta: TransactionWithStatusMeta::Complete(tx_with_meta),
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                     block_time: None
                 })
             );
@@ -7090,7 +7155,7 @@ pub mod tests {
                     .unwrap();
                 TransactionWithStatusMeta {
                     transaction,
-                    meta: Some(TransactionStatusMeta {
+                    meta: TransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -7100,7 +7165,12 @@ pub mod tests {
                         pre_token_balances,
                         post_token_balances,
                         rewards,
+<<<<<<< HEAD
                     }),
+=======
+                        loaded_addresses: LoadedAddresses::default(),
+                    },
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 }
             })
             .collect();
@@ -7111,9 +7181,15 @@ pub mod tests {
                 blockstore
                     .get_complete_transaction(signature, slot)
                     .unwrap(),
+<<<<<<< HEAD
                 Some(ConfirmedTransaction {
                     slot,
                     transaction,
+=======
+                Some(ConfirmedTransactionWithStatusMeta {
+                    slot,
+                    tx_with_meta: TransactionWithStatusMeta::Complete(tx_with_meta),
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                     block_time: None
                 })
             );
@@ -7877,8 +7953,30 @@ pub mod tests {
                     .unwrap();
                 transactions.push(transaction);
             }
+<<<<<<< HEAD
             // Push transaction that will not have matching status, as a test case
             transactions.push(Transaction::new_with_compiled_instructions(
+=======
+            .into();
+            transaction_status_cf
+                .put_protobuf((0, transaction.signatures[0], slot), &status)
+                .unwrap();
+            transactions.push(transaction.into());
+        }
+
+        let map_result =
+            blockstore.map_transactions_to_statuses(slot, transactions.clone().into_iter());
+        assert!(map_result.is_ok());
+        let map = map_result.unwrap();
+        assert_eq!(map.len(), 4);
+        for (x, m) in map.iter().enumerate() {
+            assert_eq!(m.meta.fee, x as u64);
+        }
+
+        // Push transaction that will not have matching status, as a test case
+        transactions.push(
+            Transaction::new_with_compiled_instructions(
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
                 &[&Keypair::new()],
                 &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
@@ -7886,6 +7984,7 @@ pub mod tests {
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
+<<<<<<< HEAD
             let map = blockstore.map_transactions_to_statuses(slot, transactions.into_iter());
             assert_eq!(map.len(), 5);
             for (x, m) in map.iter().take(4).enumerate() {
@@ -7894,6 +7993,11 @@ pub mod tests {
             assert_eq!(map[4].meta, None);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+=======
+        let map_result =
+            blockstore.map_transactions_to_statuses(slot, transactions.clone().into_iter());
+        assert_matches!(map_result, Err(BlockstoreError::MissingTransactionMetadata));
+>>>>>>> d5dec989b (Enforce tx metadata upload with static types (#23028))
     }
 
     #[test]
