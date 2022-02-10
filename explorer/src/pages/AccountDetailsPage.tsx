@@ -175,7 +175,7 @@ export function AccountHeader({
     );
   }
 
-  if (tokenDetails || isToken) {
+  if (tokenDetails && isToken) {
     return (
       <div className="row align-items-end">
         <div className="col-auto">
