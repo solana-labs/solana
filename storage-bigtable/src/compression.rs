@@ -12,6 +12,12 @@ pub enum CompressionMethod {
     Zstd,
 }
 
+impl CompressionMethod {
+    fn serialized_header_size() -> u64 {
+        bincode::serialized_size(&CompressionMethod::NoCompression).unwrap()
+    }
+}
+
 fn decompress_reader<'a, R: Read + 'a>(
     method: CompressionMethod,
     stream: R,
@@ -27,7 +33,7 @@ fn decompress_reader<'a, R: Read + 'a>(
 }
 
 pub fn decompress(data: &[u8]) -> Result<Vec<u8>, io::Error> {
-    let method_size = bincode::serialized_size(&CompressionMethod::NoCompression).unwrap();
+    let method_size = CompressionMethod::serialized_header_size();
     if (data.len() as u64) < method_size {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -125,14 +131,11 @@ mod test {
     #[test]
     fn test_compress() {
         let data = vec![0; 256];
-        let compress_method_header_len = bincode::serialized_size(&CompressionMethod::NoCompression).unwrap() as usize;
-        assert!(compress_best(&data).expect("compress_best").len() <= data.len() + compress_method_header_len);
+        assert!(compress_best(&data).expect("compress_best").len() <= data.len() + CompressionMethod::serialized_header_size() as usize);
     }
 
     #[test]
     fn test_compress_bench() {
-        let compress_method_header_len = bincode::serialized_size(&CompressionMethod::NoCompression).unwrap() as usize;
-
         println!("size, old, loop, par");
 
         for size in [256, 512, 1024, 2048, 4098, 8196] {
@@ -140,19 +143,19 @@ mod test {
 
             let start = Instant::now();
             for _ in 1..100 {
-                assert!(compress_best(&data).expect("compress_best").len() <= compress_method_header_len + data.len());
+                assert!(compress_best(&data).expect("compress_best").len() <= CompressionMethod::serialized_header_size() as usize + data.len());
             }
             let time_old = start.elapsed();
 
             let start = Instant::now();
             for _ in 1..100 {
-                assert!(compress_best_loop(&data).expect("compress_best").len() <= compress_method_header_len + data.len());
+                assert!(compress_best_loop(&data).expect("compress_best").len() <= CompressionMethod::serialized_header_size() as usize + data.len());
             }
             let time_loop = start.elapsed();
 
             let start = Instant::now();
             for _ in 1..100 {
-                assert!(compress_best_par(&data).expect("compress_best").len() <= compress_method_header_len + data.len());
+                assert!(compress_best_par(&data).expect("compress_best").len() <= CompressionMethod::serialized_header_size() as usize + data.len());
             }
             let time_par = start.elapsed();
 
