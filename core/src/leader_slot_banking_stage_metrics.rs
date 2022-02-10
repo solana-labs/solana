@@ -42,8 +42,38 @@ pub(crate) struct ProcessTransactionsSummary {
 
 // Metrics capturing wallclock time spent in various parts of BankingStage during this
 // validator's leader slot
-#[derive(Debug, Default)]
-struct LeaderSlotTimingMetrics {}
+#[derive(Debug)]
+struct LeaderSlotTimingMetrics {
+    bank_detected_time: Instant,
+
+    // Delay from when the bank was created to when this thread detected it
+    bank_detected_delay_us: u64,
+}
+
+impl LeaderSlotTimingMetrics {
+    fn new(bank_creation_time: &Instant) -> Self {
+        Self {
+            bank_detected_time: Instant::now(),
+            bank_detected_delay_us: bank_creation_time.elapsed().as_micros() as u64,
+        }
+    }
+
+    fn report(&self, id: u32, slot: Slot) {
+        let bank_detected_to_now = self.bank_detected_time.elapsed().as_micros() as u64;
+        datapoint_info!(
+            "banking_stage-leader_slot_loop_timings",
+            ("id", id as i64, i64),
+            ("slot", slot as i64, i64),
+            ("bank_detected_to_now_us", bank_detected_to_now, i64),
+            (
+                "bank_creation_to_now_us",
+                bank_detected_to_now + self.bank_detected_delay_us,
+                i64
+            ),
+            ("bank_detected_delay_us", self.bank_detected_delay_us, i64),
+        );
+    }
+}
 
 // Metrics describing packets ingested/processed in various parts of BankingStage during this
 // validator's leader slot
@@ -117,6 +147,99 @@ impl LeaderSlotPacketCountMetrics {
     fn new() -> Self {
         Self { ..Self::default() }
     }
+
+    fn report(&self, id: u32, slot: Slot) {
+        datapoint_info!(
+            "banking_stage-leader_slot_packet_counts",
+            ("id", id as i64, i64),
+            ("slot", slot as i64, i64),
+            (
+                "total_new_valid_packets",
+                self.total_new_valid_packets as i64,
+                i64
+            ),
+            (
+                "newly_failed_sigverify_count",
+                self.newly_failed_sigverify_count as i64,
+                i64
+            ),
+            (
+                "exceeded_buffer_limit_dropped_packets_count",
+                self.exceeded_buffer_limit_dropped_packets_count as i64,
+                i64
+            ),
+            (
+                "newly_buffered_packets_count",
+                self.newly_buffered_packets_count as i64,
+                i64
+            ),
+            (
+                "retryable_packets_filtered_count",
+                self.retryable_packets_filtered_count as i64,
+                i64
+            ),
+            (
+                "transactions_attempted_execution_count",
+                self.transactions_attempted_execution_count as i64,
+                i64
+            ),
+            (
+                "committed_transactions_count",
+                self.committed_transactions_count as i64,
+                i64
+            ),
+            (
+                "committed_transactions_with_successful_result_count",
+                self.committed_transactions_with_successful_result_count as i64,
+                i64
+            ),
+            (
+                "retryable_errored_transaction_count",
+                self.retryable_errored_transaction_count as i64,
+                i64
+            ),
+            (
+                "nonretryable_errored_transactions_count",
+                self.nonretryable_errored_transactions_count as i64,
+                i64
+            ),
+            (
+                "executed_transactions_failed_commit_count",
+                self.executed_transactions_failed_commit_count as i64,
+                i64
+            ),
+            (
+                "cost_model_throttled_transactions_count",
+                self.cost_model_throttled_transactions_count as i64,
+                i64
+            ),
+            (
+                "failed_forwarded_packets_count",
+                self.failed_forwarded_packets_count as i64,
+                i64
+            ),
+            (
+                "successful_forwarded_packets_count",
+                self.successful_forwarded_packets_count as i64,
+                i64
+            ),
+            (
+                "packet_batch_forward_failure_count",
+                self.packet_batch_forward_failure_count as i64,
+                i64
+            ),
+            (
+                "cleared_from_buffer_after_forward_count",
+                self.cleared_from_buffer_after_forward_count as i64,
+                i64
+            ),
+            (
+                "end_of_slot_filtered_invalid_count",
+                self.end_of_slot_filtered_invalid_count as i64,
+                i64
+            ),
+        );
+    }
 }
 
 #[derive(Debug)]
@@ -129,13 +252,9 @@ pub(crate) struct LeaderSlotMetrics {
     // aggregate metrics per slot
     slot: Slot,
 
-    // when the bank was detected
-    bank_detected_time: Instant,
-
-    // delay from when the bank was created to when this thread detected it
-    bank_detected_delay_us: u64,
-
     packet_count_metrics: LeaderSlotPacketCountMetrics,
+
+    timing_metrics: LeaderSlotTimingMetrics,
 
     // Used by tests to check if the `self.report()` method was called
     is_reported: bool,
@@ -146,127 +265,17 @@ impl LeaderSlotMetrics {
         Self {
             id,
             slot,
-            bank_detected_time: Instant::now(),
-            bank_detected_delay_us: bank_creation_time.elapsed().as_micros() as u64,
             packet_count_metrics: LeaderSlotPacketCountMetrics::new(),
+            timing_metrics: LeaderSlotTimingMetrics::new(bank_creation_time),
             is_reported: false,
         }
     }
 
     pub(crate) fn report(&mut self) {
-        let bank_detected_to_now = self.bank_detected_time.elapsed().as_micros() as u64;
         self.is_reported = true;
-        datapoint_info!(
-            "banking_stage-leader_slot_timing_metrics",
-            ("id", self.id as i64, i64),
-            ("slot", self.slot as i64, i64),
-            ("bank_detected_to_now_us", bank_detected_to_now, i64),
-            (
-                "bank_creation_to_now_us",
-                bank_detected_to_now + self.bank_detected_delay_us,
-                i64
-            ),
-            ("bank_detected_delay_us", self.bank_detected_delay_us, i64),
-        );
 
-        datapoint_info!(
-            "banking_stage-leader_slot_packet_count_metrics",
-            ("id", self.id as i64, i64),
-            ("slot", self.slot as i64, i64),
-            (
-                "total_new_valid_packets",
-                self.packet_count_metrics.total_new_valid_packets as i64,
-                i64
-            ),
-            (
-                "newly_failed_sigverify_count",
-                self.packet_count_metrics.newly_failed_sigverify_count as i64,
-                i64
-            ),
-            (
-                "exceeded_buffer_limit_dropped_packets_count",
-                self.packet_count_metrics
-                    .exceeded_buffer_limit_dropped_packets_count as i64,
-                i64
-            ),
-            (
-                "newly_buffered_packets_count",
-                self.packet_count_metrics.newly_buffered_packets_count as i64,
-                i64
-            ),
-            (
-                "retryable_packets_filtered_count",
-                self.packet_count_metrics.retryable_packets_filtered_count as i64,
-                i64
-            ),
-            (
-                "transactions_attempted_execution_count",
-                self.packet_count_metrics
-                    .transactions_attempted_execution_count as i64,
-                i64
-            ),
-            (
-                "committed_transactions_count",
-                self.packet_count_metrics.committed_transactions_count as i64,
-                i64
-            ),
-            (
-                "committed_transactions_with_successful_result_count",
-                self.packet_count_metrics
-                    .committed_transactions_with_successful_result_count as i64,
-                i64
-            ),
-            (
-                "retryable_errored_transaction_count",
-                self.packet_count_metrics
-                    .retryable_errored_transaction_count as i64,
-                i64
-            ),
-            (
-                "nonretryable_errored_transactions_count",
-                self.packet_count_metrics
-                    .nonretryable_errored_transactions_count as i64,
-                i64
-            ),
-            (
-                "executed_transactions_failed_commit_count",
-                self.packet_count_metrics
-                    .executed_transactions_failed_commit_count as i64,
-                i64
-            ),
-            (
-                "cost_model_throttled_transactions_count",
-                self.packet_count_metrics
-                    .cost_model_throttled_transactions_count as i64,
-                i64
-            ),
-            (
-                "failed_forwarded_packets_count",
-                self.packet_count_metrics.failed_forwarded_packets_count as i64,
-                i64
-            ),
-            (
-                "successful_forwarded_packets_count",
-                self.packet_count_metrics.successful_forwarded_packets_count as i64,
-                i64
-            ),
-            (
-                "packet_batch_forward_failure_count",
-                self.packet_count_metrics.packet_batch_forward_failure_count as i64,
-                i64
-            ),
-            (
-                "cleared_from_buffer_after_forward_count",
-                self.packet_count_metrics
-                    .cleared_from_buffer_after_forward_count as i64,
-                i64
-            ),
-            (
-                "end_of_slot_filtered_invalid_count",
-                self.packet_count_metrics.end_of_slot_filtered_invalid_count as i64,
-                i64
-            ),
-        );
+        self.timing_metrics.report(self.id, self.slot);
+        self.packet_count_metrics.report(self.id, self.slot);
     }
 
     /// Returns `Some(self.slot)` if the metrics have been reported, otherwise returns None
