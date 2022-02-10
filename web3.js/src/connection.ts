@@ -2745,17 +2745,12 @@ export class Connection {
     let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
     switch (subscriptionCommitment) {
       case 'processed':
-      case 'recent':
-      case 'single':
-      case 'confirmed':
-      case 'singleGossip': {
+      case 'confirmed': {
         timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
         break;
       }
       // exhaust enums to ensure full coverage
       case 'finalized':
-      case 'max':
-      case 'root':
     }
 
     try {
