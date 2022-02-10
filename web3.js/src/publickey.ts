@@ -3,6 +3,7 @@ import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {sha256} from '@ethersproject/sha2';
+import util from 'util';
 
 import {Struct, SOLANA_SCHEMA} from './util/borsh-schema';
 import {toBuffer} from './util/to-buffer';
@@ -117,6 +118,13 @@ export class PublicKey extends Struct {
    */
   toString(): string {
     return this.toBase58();
+  }
+
+  /**
+   * Returns public key in string format when console.log is called
+   */
+  [util.inspect.custom]() {
+    return this.toString();
   }
 
   /**

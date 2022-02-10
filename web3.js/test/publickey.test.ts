@@ -2,6 +2,7 @@ import BN from 'bn.js';
 import {Buffer} from 'buffer';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import util from 'util';
 
 import {Keypair} from '../src/keypair';
 import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
@@ -56,19 +57,25 @@ describe('PublicKey', function () {
     const key = new PublicKey('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
     expect(key.toBase58()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
     expect(key.toString()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(util.inspect(key)).to.eq(
+      'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3',
+    );
 
     const key2 = new PublicKey('1111111111111111111111111111BukQL');
     expect(key2.toBase58()).to.eq('1111111111111111111111111111BukQL');
     expect(key2.toString()).to.eq('1111111111111111111111111111BukQL');
+    expect(util.inspect(key2)).to.eq('1111111111111111111111111111BukQL');
 
     const key3 = new PublicKey('11111111111111111111111111111111');
     expect(key3.toBase58()).to.eq('11111111111111111111111111111111');
+    expect(util.inspect(key3)).to.eq('11111111111111111111111111111111');
 
     const key4 = new PublicKey([
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0,
     ]);
     expect(key4.toBase58()).to.eq('11111111111111111111111111111111');
+    expect(util.inspect(key4)).to.eq('11111111111111111111111111111111');
   });
 
   it('toJSON', () => {
