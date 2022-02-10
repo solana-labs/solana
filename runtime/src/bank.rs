@@ -4161,7 +4161,7 @@ impl Bank {
     }
 
     /// Update the accounts data len by adding `delta`.  Since `delta` is signed, negative values
-    /// are allowed as the means to subtract from `accounts_data_len`.
+    /// are allowed as the means to subtract from `accounts_data_len`.  The arithmetic saturates.
     fn update_accounts_data_len(&self, delta: i64) {
         /// Mixed integer ops currently not stable, so copying the impl.
         /// Copied from: https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
@@ -4609,11 +4609,7 @@ impl Bank {
             .write()
             .unwrap()
             .extend(rent_debits.into_unordered_rewards_iter());
-        if self
-            .feature_set
-            .is_active(&feature_set::cap_accounts_data_len::id())
-            && total_collected.account_data_len_reclaimed > 0
-        {
+        if total_collected.account_data_len_reclaimed > 0 {
             self.update_accounts_data_len(-(total_collected.account_data_len_reclaimed as i64));
         }
 
