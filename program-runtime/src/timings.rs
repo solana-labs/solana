@@ -129,6 +129,7 @@ pub struct ExecuteDetailsTimings {
     pub create_executor_jit_compile_us: u64,
     pub per_program_timings: HashMap<Pubkey, ProgramTiming>,
 }
+
 impl ExecuteDetailsTimings {
     pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
         saturating_add_assign!(self.serialize_us, other.serialize_us);
