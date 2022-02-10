@@ -500,11 +500,13 @@ impl<'a> InvokeContext<'a> {
                 .checked_add(u128::from(account.lamports()))
                 .ok_or(InstructionError::UnbalancedInstruction)?;
 
+            let pre_data_len = pre_account.data().len() as i64;
+            let post_data_len = account.data().len() as i64;
+            let data_len_delta = post_data_len.saturating_sub(pre_data_len);
             if cap_accounts_data_len {
-                let pre_data_len = pre_account.data().len() as i64;
-                let post_data_len = account.data().len() as i64;
-                let data_len_delta = post_data_len.saturating_sub(pre_data_len);
                 self.accounts_data_meter.consume(data_len_delta)?;
+            } else {
+                self.accounts_data_meter.consume_unchecked(data_len_delta);
             }
 
             Ok(())
@@ -591,11 +593,13 @@ impl<'a> InvokeContext<'a> {
                             pre_account.update(account.clone());
                         }
 
+                        let pre_data_len = pre_account.data().len() as i64;
+                        let post_data_len = account.data().len() as i64;
+                        let data_len_delta = post_data_len.saturating_sub(pre_data_len);
                         if cap_accounts_data_len {
-                            let pre_data_len = pre_account.data().len() as i64;
-                            let post_data_len = account.data().len() as i64;
-                            let data_len_delta = post_data_len.saturating_sub(pre_data_len);
                             self.accounts_data_meter.consume(data_len_delta)?;
+                        } else {
+                            self.accounts_data_meter.consume_unchecked(data_len_delta);
                         }
 
                         return Ok(());

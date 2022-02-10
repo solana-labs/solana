@@ -9,8 +9,9 @@ use {
         self,
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
-        ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
-        DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+        ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBCompactionStyle, DBIterator,
+        DBRawIterator, DBRecoveryMode, FifoCompactOptions, IteratorMode as RocksIteratorMode,
+        Options, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -35,6 +36,17 @@ use {
 };
 
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
+const FIFO_WRITE_BUFFER_SIZE: u64 = 2 * MAX_WRITE_BUFFER_SIZE;
+// Maximum size of cf::DataShred.  Used when `shred_storage_type`
+// is set to ShredStorageType::RocksFifo.  The default value is set
+// to 125GB, assuming 500GB total storage for ledger and 25% is
+// used by data shreds.
+const DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE: u64 = 125 * 1024 * 1024 * 1024;
+// Maximum size of cf::CodeShred.  Used when `shred_storage_type`
+// is set to ShredStorageType::RocksFifo.  The default value is set
+// to 100GB, assuming 500GB total storage for ledger and 20% is
+// used by coding shreds.
+const DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE: u64 = 100 * 1024 * 1024 * 1024;
 
 // Column family for metadata about a leader slot
 const META_CF: &str = "meta";
@@ -306,8 +318,40 @@ impl Rocks {
             new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
             new_cf_descriptor::<Root>(&access_type, &oldest_slot),
             new_cf_descriptor::<Index>(&access_type, &oldest_slot),
-            new_cf_descriptor::<ShredData>(&access_type, &oldest_slot),
-            new_cf_descriptor::<ShredCode>(&access_type, &oldest_slot),
+            match options.shred_storage_type {
+                ShredStorageType::RocksLevel => {
+                    new_cf_descriptor::<ShredData>(&access_type, &oldest_slot)
+                }
+                ShredStorageType::RocksFifo => {
+                    if options.shred_data_cf_size > FIFO_WRITE_BUFFER_SIZE {
+                        new_cf_descriptor_fifo::<ShredData>(&options.shred_data_cf_size)
+                    } else {
+                        warn!(
+                            "shred_data_cf_size is must be greater than {} for RocksFifo.",
+                            FIFO_WRITE_BUFFER_SIZE
+                        );
+                        warn!("Fall back to ShredStorageType::RocksLevel for cf::ShredData.");
+                        new_cf_descriptor::<ShredData>(&access_type, &oldest_slot)
+                    }
+                }
+            },
+            match options.shred_storage_type {
+                ShredStorageType::RocksLevel => {
+                    new_cf_descriptor::<ShredCode>(&access_type, &oldest_slot)
+                }
+                ShredStorageType::RocksFifo => {
+                    if options.shred_code_cf_size > FIFO_WRITE_BUFFER_SIZE {
+                        new_cf_descriptor_fifo::<ShredCode>(&options.shred_code_cf_size)
+                    } else {
+                        warn!(
+                            "shred_code_cf_size is must be greater than {} for RocksFifo.",
+                            FIFO_WRITE_BUFFER_SIZE
+                        );
+                        warn!("Fall back to ShredStorageType::RocksLevel for cf::ShredCode.");
+                        new_cf_descriptor::<ShredCode>(&access_type, &oldest_slot)
+                    }
+                }
+            },
             new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
             new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
             new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
@@ -953,10 +997,40 @@ pub struct WriteBatch<'a> {
     map: HashMap<&'static str, &'a ColumnFamily>,
 }
 
+pub enum ShredStorageType {
+    // Stores shreds under RocksDB's default compaction (level).
+    RocksLevel,
+    // (Experimental) Stores shreds under RocksDB's FIFO compaction which
+    // allows ledger store to reclaim storage more efficiently with
+    // lower I/O overhead.
+    RocksFifo,
+}
+
 pub struct BlockstoreOptions {
+    // The access type of blockstore. Default: PrimaryOnly
     pub access_type: AccessType,
+    // Whether to open a blockstore under a recovery mode. Default: None.
     pub recovery_mode: Option<BlockstoreRecoveryMode>,
+    // Whether to allow unlimited number of open files. Default: true.
     pub enforce_ulimit_nofile: bool,
+    // Determine how to store both data and coding shreds. Default: RocksLevel.
+    pub shred_storage_type: ShredStorageType,
+    // The maximum storage size for storing data shreds in column family
+    // [`cf::DataShred`].  Typically, data shreds contribute around 25% of the
+    // ledger store storage size if the RPC service is enabled, or 50% if RPC
+    // service is not enabled.
+    //
+    // Currently, this setting is only used when shred_storage_type is set to
+    // [`ShredStorageType::RocksFifo`].
+    pub shred_data_cf_size: u64,
+    // The maximum storage size for storing coding shreds in column family
+    // [`cf::CodeShred`].  Typically, coding shreds contribute around 20% of the
+    // ledger store storage size if the RPC service is enabled, or 40% if RPC
+    // service is not enabled.
+    //
+    // Currently, this setting is only used when shred_storage_type is set to
+    // [`ShredStorageType::RocksFifo`].
+    pub shred_code_cf_size: u64,
 }
 
 impl Default for BlockstoreOptions {
@@ -966,6 +1040,13 @@ impl Default for BlockstoreOptions {
             access_type: AccessType::PrimaryOnly,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
+            shred_storage_type: ShredStorageType::RocksLevel,
+            // Maximum size of cf::DataShred.  Used when `shred_storage_type`
+            // is set to ShredStorageType::RocksFifo.
+            shred_data_cf_size: DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE,
+            // Maximum size of cf::CodeShred.  Used when `shred_storage_type`
+            // is set to ShredStorageType::RocksFifo.
+            shred_code_cf_size: DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE,
         }
     }
 }
@@ -1352,6 +1433,51 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
     }
+
+    options
+}
+
+fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(
+    max_cf_size: &u64,
+) -> ColumnFamilyDescriptor {
+    ColumnFamilyDescriptor::new(C::NAME, get_cf_options_fifo::<C>(max_cf_size))
+}
+
+/// Returns the RocksDB Column Family Options which use FIFO Compaction.
+///
+/// Note that this CF options is optimized for workloads which write-keys
+/// are mostly monotonically increasing over time.  For workloads where
+/// write-keys do not follow any order in general should use get_cf_options
+/// instead.
+///
+/// - [`max_cf_size`]: the maximum allowed column family size.  Note that
+/// rocksdb will start deleting the oldest SST file when the column family
+/// size reaches `max_cf_size` - `FIFO_WRITE_BUFFER_SIZE` to strictly
+/// maintain the size limit.
+fn get_cf_options_fifo<C: 'static + Column + ColumnName>(max_cf_size: &u64) -> Options {
+    let mut options = Options::default();
+
+    options.set_max_write_buffer_number(8);
+    options.set_write_buffer_size(FIFO_WRITE_BUFFER_SIZE as usize);
+    // FIFO always has its files in L0 so we only have one level.
+    options.set_num_levels(1);
+    // Since FIFO puts all its file in L0, it is suggested to have unlimited
+    // number of open files.  The actual total number of open files will
+    // be close to max_cf_size / write_buffer_size.
+    options.set_max_open_files(-1);
+
+    let mut fifo_compact_options = FifoCompactOptions::default();
+
+    // Note that the following actually specifies size trigger for deleting
+    // the oldest SST file instead of specifying the size limit as its name
+    // might suggest.  As a result, we should trigger the file deletion when
+    // the size reaches `max_cf_size - write_buffer_size` in order to correctly
+    // maintain the storage size limit.
+    fifo_compact_options
+        .set_max_table_files_size((*max_cf_size).saturating_sub(FIFO_WRITE_BUFFER_SIZE));
+
+    options.set_compaction_style(DBCompactionStyle::Fifo);
+    options.set_fifo_compaction_options(&fifo_compact_options);
 
     options
 }

@@ -678,6 +678,7 @@ fn open_blockstore(
             access_type,
             recovery_mode: wal_recovery_mode,
             enforce_ulimit_nofile: true,
+            ..BlockstoreOptions::default()
         },
     ) {
         Ok(blockstore) => blockstore,

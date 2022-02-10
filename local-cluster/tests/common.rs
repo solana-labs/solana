@@ -76,6 +76,7 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
             access_type: AccessType::TryPrimaryThenSecondary,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
+            ..BlockstoreOptions::default()
         },
     )
     .unwrap_or_else(|e| {
