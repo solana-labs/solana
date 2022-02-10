@@ -35,7 +35,7 @@ use {
     solana_streamer::sendmmsg::{multi_target_send, SendPktsError},
     std::{
         collections::{BTreeSet, HashMap, HashSet},
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         ops::{AddAssign, DerefMut},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -216,7 +216,7 @@ fn retransmit(
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
     shreds_receiver: &Receiver<Vec<Shred>>,
-    sockets: &[UdpSocket],
+    streamers: &[Sender<(/*payload:*/ Vec<u8>, Vec<SocketAddr>)>],
     stats: &mut RetransmitStats,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
     hasher_reset_ts: &mut Instant,
@@ -246,8 +246,8 @@ fn retransmit(
     stats.epoch_cache_update += epoch_cache_update.as_us();
 
     let socket_addr_space = cluster_info.socket_addr_space();
-    let retransmit_shred = |shred: &Shred, socket: &UdpSocket| {
-        if should_skip_retransmit(shred, shreds_received) {
+    let retransmit_shred = |shred: Shred, streamer: &Sender<_>| {
+        if should_skip_retransmit(&shred, shreds_received) {
             stats.num_shreds_skipped.fetch_add(1, Ordering::Relaxed);
             return 0;
         }
@@ -283,7 +283,7 @@ fn retransmit(
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
         let addrs: Vec<_> = cluster_nodes
-            .get_retransmit_addrs(slot_leader, shred, &root_bank, DATA_PLANE_FANOUT)
+            .get_retransmit_addrs(slot_leader, &shred, &root_bank, DATA_PLANE_FANOUT)
             .into_iter()
             .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
             .collect();
@@ -293,20 +293,8 @@ fn retransmit(
             .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
         let mut retransmit_time = Measure::start("retransmit_to");
-        let num_nodes = match multi_target_send(socket, &shred.payload, &addrs) {
-            Ok(()) => addrs.len(),
-            Err(SendPktsError::IoError(ioerr, num_failed)) => {
-                inc_new_counter_info!("cluster_info-retransmit-packets", addrs.len(), 1);
-                inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
-                error!(
-                    "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
-                    ioerr,
-                    num_failed,
-                    addrs.len(),
-                );
-                addrs.len() - num_failed
-            }
-        };
+        let num_nodes = addrs.len();
+        streamer.send((shred.payload, addrs)).unwrap();
         retransmit_time.stop();
         stats.num_nodes.fetch_add(num_nodes, Ordering::Relaxed);
         stats
@@ -333,9 +321,10 @@ fn retransmit(
             .with_min_len(4)
             .map(|shred| {
                 let index = thread_pool.current_thread_index().unwrap();
-                let socket = &sockets[index % sockets.len()];
-                let num_nodes = retransmit_shred(&shred, socket);
-                (shred.slot(), num_nodes)
+                let stream = &streamers[index % streamers.len()];
+                let slot = shred.slot();
+                let num_nodes = retransmit_shred(shred, stream);
+                (slot, num_nodes)
             })
             .fold(
                 HashMap::<Slot, RetransmitSlotStats>::new,
@@ -364,7 +353,7 @@ fn retransmit(
 /// * `cluster_info` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `r` - Receive channel for shreds to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
-    sockets: Arc<Vec<UdpSocket>>,
+    streamers: Vec<Sender<(/*payload:*/ Vec<u8>, Vec<SocketAddr>)>>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
@@ -380,7 +369,7 @@ pub fn retransmitter(
     let mut stats = RetransmitStats::default();
     let shreds_received = Mutex::new((LruCache::new(DEFAULT_LRU_SIZE), PacketHasher::default()));
     let first_shreds_received = Mutex::<BTreeSet<Slot>>::default();
-    let num_threads = get_thread_count().min(8).max(sockets.len());
+    let num_threads = get_thread_count().min(8).max(streamers.len());
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .thread_name(|i| format!("retransmit-{}", i))
@@ -397,7 +386,7 @@ pub fn retransmitter(
                     &leader_schedule_cache,
                     &cluster_info,
                     &shreds_receiver,
-                    &sockets,
+                    &streamers,
                     &mut stats,
                     &cluster_nodes_cache,
                     &mut hasher_reset_ts,
@@ -417,7 +406,7 @@ pub fn retransmitter(
 }
 
 pub struct RetransmitStage {
-    retransmit_thread_handle: JoinHandle<()>,
+    thread_handles: Vec<JoinHandle<()>>,
     window_service: WindowService,
     cluster_slots_service: ClusterSlotsService,
 }
@@ -430,7 +419,7 @@ impl RetransmitStage {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
-        retransmit_sockets: Arc<Vec<UdpSocket>>,
+        retransmit_sockets: Vec<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<PacketBatch>>,
@@ -449,10 +438,38 @@ impl RetransmitStage {
         duplicate_slots_sender: Sender<Slot>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
+        let stream = |socket, receiver: Receiver<(_, Vec<_>)>| {
+            for (payload, addrs) in receiver.iter() {
+                match multi_target_send(&socket, &payload, &addrs) {
+                    Ok(()) => (),
+                    Err(SendPktsError::IoError(ioerr, num_failed)) => {
+                        inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
+                        error!(
+                            "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                            ioerr,
+                            num_failed,
+                            addrs.len(),
+                        );
+                    }
+                };
+            }
+        };
+        let (mut thread_handles, streamers): (Vec<_>, _) = retransmit_sockets
+            .into_iter()
+            .map(move |socket| {
+                let (sender, receiver) = unbounded();
+                let handle = Builder::new()
+                    .name("retransmit-send".to_string())
+                    .spawn(move || stream(socket, receiver))
+                    .unwrap();
+                (handle, sender)
+            })
+            .unzip();
+
         let (retransmit_sender, retransmit_receiver) = unbounded();
 
         let retransmit_thread_handle = retransmitter(
-            retransmit_sockets,
+            streamers,
             bank_forks.clone(),
             leader_schedule_cache.clone(),
             cluster_info.clone(),
@@ -460,6 +477,7 @@ impl RetransmitStage {
             max_slots,
             rpc_subscriptions,
         );
+        thread_handles.push(retransmit_thread_handle);
 
         let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
@@ -510,14 +528,16 @@ impl RetransmitStage {
         );
 
         Self {
-            retransmit_thread_handle,
+            thread_handles,
             window_service,
             cluster_slots_service,
         }
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
-        self.retransmit_thread_handle.join()?;
+        self.thread_handles
+            .into_iter()
+            .try_for_each(JoinHandle::join)?;
         self.window_service.join()?;
         self.cluster_slots_service.join()
     }
@@ -591,13 +611,26 @@ mod tests {
         );
         cluster_info.insert_info(me);
 
-        let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
+        let retransmit_sockets = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
+        let (_streamer_handles, streamers): (Vec<_>, _) = retransmit_sockets
+            .into_iter()
+            .map(|socket| {
+                let (sender, receiver): (_, Receiver<(_, Vec<_>)>) = unbounded();
+                let handle = Builder::new()
+                    .spawn(move || {
+                        for (payload, addrs) in receiver.iter() {
+                            let _ = multi_target_send(&socket, &payload, &addrs);
+                        }
+                    })
+                    .unwrap();
+                (handle, sender)
+            })
+            .unzip();
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = unbounded();
-        let _retransmit_sender = retransmit_sender.clone();
         let _t_retransmit = retransmitter(
-            retransmit_socket,
+            streamers,
             bank_forks,
             leader_schedule_cache,
             cluster_info,

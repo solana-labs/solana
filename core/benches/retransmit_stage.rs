@@ -4,7 +4,7 @@ extern crate solana_core;
 extern crate test;
 
 use {
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     log::*,
     solana_core::retransmit_stage::retransmitter,
     solana_entry::entry::Entry,
@@ -26,8 +26,9 @@ use {
         system_transaction,
         timing::timestamp,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{sendmmsg::multi_target_send, socket::SocketAddrSpace},
     std::{
+        iter::repeat_with,
         net::UdpSocket,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -79,9 +80,20 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let bank_forks = Arc::new(RwLock::new(bank_forks));
     let (shreds_sender, shreds_receiver) = unbounded();
     const NUM_THREADS: usize = 2;
-    let sockets = (0..NUM_THREADS)
-        .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
-        .collect();
+    let sockets = repeat_with(|| UdpSocket::bind("0.0.0.0:0").unwrap()).take(NUM_THREADS);
+    let (streamer_handles, streamers): (Vec<_>, _) = sockets
+        .map(|socket| {
+            let (sender, receiver): (_, Receiver<(_, Vec<_>)>) = unbounded();
+            let handle = Builder::new()
+                .spawn(move || {
+                    for (payload, addrs) in receiver.iter() {
+                        let _ = multi_target_send(&socket, &payload, &addrs);
+                    }
+                })
+                .unwrap();
+            (handle, sender)
+        })
+        .unzip();
 
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
@@ -109,7 +121,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let num_packets = data_shreds.len();
 
     let retransmitter_handles = retransmitter(
-        Arc::new(sockets),
+        streamers,
         bank_forks,
         leader_schedule_cache,
         cluster_info,
@@ -169,4 +181,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     });
 
     retransmitter_handles.join().unwrap();
+    for handle in streamer_handles {
+        handle.join().unwrap();
+    }
 }
