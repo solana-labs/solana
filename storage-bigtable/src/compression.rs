@@ -1,6 +1,7 @@
 use {
     enum_iterator::IntoEnumIterator,
     std::io::{self, BufReader, Read, Write},
+    rayon::prelude::*,
 };
 
 #[derive(Debug, Serialize, Deserialize, IntoEnumIterator)]
@@ -86,9 +87,31 @@ pub fn compress_best(data: &[u8]) -> Result<Vec<u8>, io::Error> {
         .unwrap())
 }
 
+pub fn compress_best_par(data: &[u8]) -> Result<Vec<u8>, io::Error> {
+    let methods: Vec<CompressionMethod> = CompressionMethod::into_enum_iter().collect();
+    let candidates: Vec<Vec<u8>> = methods.into_par_iter().map(|v| compress(v, data).unwrap()).collect();
+
+    Ok(candidates
+        .into_iter()
+        .min_by(|a, b| a.len().cmp(&b.len()))
+        .unwrap())
+}
+
+pub fn compress_best_loop(data: &[u8]) -> Result<Vec<u8>, io::Error> {
+    let mut best = vec![];
+    for method in CompressionMethod::into_enum_iter() {
+        let c = compress(method, data)?;
+        if best.is_empty() || c.len() < best.len() {
+            best = c;
+        }
+    }
+    Ok(best)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::{Instant};
 
     #[test]
     fn test_compress_uncompress() {
@@ -102,6 +125,38 @@ mod test {
     #[test]
     fn test_compress() {
         let data = vec![0; 256];
-        assert!(compress_best(&data).expect("compress_best").len() < data.len());
+        let compress_method_header_len = bincode::serialized_size(&CompressionMethod::NoCompression).unwrap() as usize;
+        assert!(compress_best(&data).expect("compress_best").len() <= data.len() + compress_method_header_len);
+    }
+
+    #[test]
+    fn test_compress_bench() {
+        let compress_method_header_len = bincode::serialized_size(&CompressionMethod::NoCompression).unwrap() as usize;
+
+        println!("size, old, loop, par");
+
+        for size in [256, 512, 1024, 2048, 4098, 8196] {
+            let data: Vec<u8> = (0..size).map(|_| { rand::random::<u8>() }).collect();
+
+            let start = Instant::now();
+            for _ in 1..100 {
+                assert!(compress_best(&data).expect("compress_best").len() <= compress_method_header_len + data.len());
+            }
+            let time_old = start.elapsed();
+
+            let start = Instant::now();
+            for _ in 1..100 {
+                assert!(compress_best_loop(&data).expect("compress_best").len() <= compress_method_header_len + data.len());
+            }
+            let time_loop = start.elapsed();
+
+            let start = Instant::now();
+            for _ in 1..100 {
+                assert!(compress_best_par(&data).expect("compress_best").len() <= compress_method_header_len + data.len());
+            }
+            let time_par = start.elapsed();
+
+            println!("{}, {:?}, {:?}, {:?}", size, time_old, time_loop, time_par);
+        }
     }
 }

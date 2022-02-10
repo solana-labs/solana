@@ -6053,6 +6053,8 @@ dependencies = [
  "openssl",
  "prost",
  "prost-types",
+ "rand 0.7.3",
+ "rayon",
  "serde",
  "serde_derive",
  "smpl_jwt",
