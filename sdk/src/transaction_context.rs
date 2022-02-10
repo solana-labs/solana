@@ -2,7 +2,7 @@
 
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
+    instruction::InstructionError,
     lamports::LamportsError,
     pubkey::Pubkey,
     sysvar::Sysvar,
@@ -31,7 +31,7 @@ pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
     instruction_context_capacity: usize,
-    instruction_context_stack: Vec<InstructionContext>,
+    instruction_stack: Vec<usize>,
     number_of_instructions_at_transaction_level: usize,
     instruction_trace: InstructionTrace,
     return_data: (Pubkey, Vec<u8>),
@@ -53,7 +53,7 @@ impl TransactionContext {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
             accounts: Pin::new(accounts.into_boxed_slice()),
             instruction_context_capacity,
-            instruction_context_stack: Vec::with_capacity(instruction_context_capacity),
+            instruction_stack: Vec::with_capacity(instruction_context_capacity),
             number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: (Pubkey::default(), Vec::new()),
@@ -61,12 +61,7 @@ impl TransactionContext {
     }
 
     /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn deconstruct(
-        self,
-    ) -> (
-        Vec<TransactionAccount>,
-        Vec<Vec<(usize, InstructionContext)>>,
-    ) {
+    pub fn deconstruct(self) -> (Vec<TransactionAccount>, Vec<Vec<InstructionContext>>) {
         (
             Vec::from(Pin::into_inner(self.account_keys))
                 .into_iter()
@@ -82,7 +77,7 @@ impl TransactionContext {
 
     /// Used in mock_process_instruction
     pub fn deconstruct_without_keys(self) -> Result<Vec<AccountSharedData>, InstructionError> {
-        if !self.instruction_context_stack.is_empty() {
+        if !self.instruction_stack.is_empty() {
             return Err(InstructionError::CallDepth);
         }
         Ok(Vec::from(Pin::into_inner(self.accounts))
@@ -137,15 +132,30 @@ impl TransactionContext {
         self.account_keys.iter().rposition(|key| key == pubkey)
     }
 
-    /// Gets an InstructionContext by its height in the stack
+    /// Gets an InstructionContext by its nesting level in the stack
     pub fn get_instruction_context_at(
         &self,
         level: usize,
     ) -> Result<&InstructionContext, InstructionError> {
-        if level >= self.instruction_context_stack.len() {
-            return Err(InstructionError::CallDepth);
-        }
-        Ok(&self.instruction_context_stack[level])
+        let top_level_index = *self
+            .instruction_stack
+            .get(0)
+            .ok_or(InstructionError::CallDepth)?;
+        let cpi_index = if level == 0 {
+            0
+        } else {
+            *self
+                .instruction_stack
+                .get(level)
+                .ok_or(InstructionError::CallDepth)?
+        };
+        let instruction_context = self
+            .instruction_trace
+            .get(top_level_index)
+            .and_then(|instruction_trace| instruction_trace.get(cpi_index))
+            .ok_or(InstructionError::CallDepth)?;
+        debug_assert_eq!(instruction_context.nesting_level, level);
+        Ok(instruction_context)
     }
 
     /// Gets the max height of the InstructionContext stack
@@ -156,14 +166,13 @@ impl TransactionContext {
     /// Gets instruction stack height, top-level instructions are height
     /// `solana_sdk::instruction::TRANSACTION_LEVEL_STACK_HEIGHT`
     pub fn get_instruction_context_stack_height(&self) -> usize {
-        self.instruction_context_stack.len()
+        self.instruction_stack.len()
     }
 
     /// Returns the current InstructionContext
     pub fn get_current_instruction_context(&self) -> Result<&InstructionContext, InstructionError> {
         let level = self
-            .instruction_context_stack
-            .len()
+            .get_instruction_context_stack_height()
             .checked_sub(1)
             .ok_or(InstructionError::CallDepth)?;
         self.get_instruction_context_at(level)
@@ -175,36 +184,47 @@ impl TransactionContext {
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
+        record_instruction_in_transaction_context_push: bool,
     ) -> Result<(), InstructionError> {
-        if self.instruction_context_stack.len() >= self.instruction_context_capacity {
-            return Err(InstructionError::CallDepth);
-        }
-
-        let instruction_context = InstructionContext {
-            program_accounts: program_accounts.to_vec(),
-            instruction_accounts: instruction_accounts.to_vec(),
-            instruction_data: instruction_data.to_vec(),
-        };
-        if self.instruction_context_stack.is_empty() {
+        let index_in_trace = if self.instruction_stack.is_empty() {
             debug_assert!(
                 self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
             );
-            self.instruction_trace.push(vec![(
-                TRANSACTION_LEVEL_STACK_HEIGHT,
-                instruction_context.clone(),
-            )]);
+            let instruction_context = InstructionContext {
+                nesting_level: self.instruction_stack.len(),
+                program_accounts: program_accounts.to_vec(),
+                instruction_accounts: instruction_accounts.to_vec(),
+                instruction_data: instruction_data.to_vec(),
+            };
+            self.instruction_trace.push(vec![instruction_context]);
+            self.instruction_trace.len().saturating_sub(1)
+        } else if let Some(instruction_trace) = self.instruction_trace.last_mut() {
+            if record_instruction_in_transaction_context_push {
+                let instruction_context = InstructionContext {
+                    nesting_level: self.instruction_stack.len(),
+                    program_accounts: program_accounts.to_vec(),
+                    instruction_accounts: instruction_accounts.to_vec(),
+                    instruction_data: instruction_data.to_vec(),
+                };
+                instruction_trace.push(instruction_context);
+            }
+            instruction_trace.len().saturating_sub(1)
+        } else {
+            return Err(InstructionError::CallDepth);
+        };
+        if self.instruction_stack.len() >= self.instruction_context_capacity {
+            return Err(InstructionError::CallDepth);
         }
-
-        self.instruction_context_stack.push(instruction_context);
+        self.instruction_stack.push(index_in_trace);
         Ok(())
     }
 
     /// Pops the current InstructionContext
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        if self.instruction_context_stack.is_empty() {
+        if self.instruction_stack.is_empty() {
             return Err(InstructionError::CallDepth);
         }
-        self.instruction_context_stack.pop();
+        self.instruction_stack.pop();
         Ok(())
     }
 
@@ -238,9 +258,12 @@ impl TransactionContext {
     }
 
     /// Used by the runtime when a new CPI instruction begins
-    pub fn record_instruction(&mut self, stack_height: usize, instruction: InstructionContext) {
+    ///
+    /// Deprecated, automatically done in push()
+    /// once record_instruction_in_transaction_context_push is activated.
+    pub fn record_instruction(&mut self, instruction: InstructionContext) {
         if let Some(records) = self.instruction_trace.last_mut() {
-            records.push((stack_height, instruction));
+            records.push(instruction);
         }
     }
 
@@ -251,13 +274,14 @@ impl TransactionContext {
 }
 
 /// List of (stack height, instruction) for each top-level instruction
-pub type InstructionTrace = Vec<Vec<(usize, InstructionContext)>>;
+pub type InstructionTrace = Vec<Vec<InstructionContext>>;
 
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
 #[derive(Debug, Clone)]
 pub struct InstructionContext {
+    nesting_level: usize,
     program_accounts: Vec<usize>,
     instruction_accounts: Vec<InstructionAccount>,
     instruction_data: Vec<u8>,
@@ -266,15 +290,24 @@ pub struct InstructionContext {
 impl InstructionContext {
     /// New
     pub fn new(
+        nesting_level: usize,
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) -> Self {
         InstructionContext {
+            nesting_level,
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
             instruction_data: instruction_data.to_vec(),
         }
+    }
+
+    /// How many Instructions were on the stack after this one was pushed
+    ///
+    /// That is the number of nested parent Instructions plus one (itself).
+    pub fn get_stack_height(&self) -> usize {
+        self.nesting_level.saturating_add(1)
     }
 
     /// Number of program accounts

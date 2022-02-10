@@ -4,7 +4,10 @@
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
 use log::*;
-use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
+use {
+    solana_sdk::pubkey::Pubkey,
+    std::collections::{hash_map::Entry, HashMap},
+};
 
 // prune is rather expensive op, free up bulk space in each operation
 // would be more efficient. PRUNE_RATIO defines the after prune table
@@ -15,10 +18,22 @@ const OCCURRENCES_WEIGHT: i64 = 100;
 
 const DEFAULT_CAPACITY: usize = 1024;
 
-#[derive(AbiExample, Debug)]
+// The coefficient represents the degree of weighting decrease in EMA,
+// a constant smoothing factor between 0 and 1. A higher alpha
+// discounts older observations faster.
+// Setting it using `2/(N+1)` where N is 200 samples
+const COEFFICIENT: f64 = 0.01;
+
+#[derive(Debug, Default)]
+struct AggregatedVarianceStats {
+    ema: f64,
+    ema_var: f64,
+}
+
+#[derive(Debug)]
 pub struct ExecuteCostTable {
     capacity: usize,
-    table: HashMap<Pubkey, u64>,
+    table: HashMap<Pubkey, AggregatedVarianceStats>,
     occurrences: HashMap<Pubkey, (usize, u128)>,
 }
 
@@ -37,55 +52,59 @@ impl ExecuteCostTable {
         }
     }
 
-    pub fn get_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        &self.table
-    }
-
+    // number of programs in table
     pub fn get_count(&self) -> usize {
         self.table.len()
     }
 
-    // instead of assigning unknown program with a configured/hard-coded cost
-    // use average or mode function to make a educated guess.
-    pub fn get_average(&self) -> u64 {
-        if self.table.is_empty() {
-            0
-        } else {
-            self.table.iter().map(|(_, value)| value).sum::<u64>() / self.get_count() as u64
-        }
-    }
-
-    pub fn get_mode(&self) -> u64 {
-        if self.occurrences.is_empty() {
-            0
-        } else {
-            let key = self
-                .occurrences
-                .iter()
-                .max_by_key(|&(_, count)| count)
-                .map(|(key, _)| key)
-                .expect("cannot find mode from cost table");
-
-            *self.table.get(key).unwrap()
-        }
+    // default program cost to max
+    pub fn get_default(&self) -> u64 {
+        // default max compute units per program
+        200_000u64
     }
 
     // returns None if program doesn't exist in table. In this case,
-    // client is advised to call `get_average()` or `get_mode()` to
-    // assign a 'default' value for new program.
-    pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
-        self.table.get(key)
+    // it is advised to call `get_default()` for default program cost.
+    // Program cost is estimated as 2 standard deviations above mean, eg
+    // cost = (mean + 2 * std)
+    pub fn get_cost(&self, key: &Pubkey) -> Option<u64> {
+        let aggregated = self.table.get(key)?;
+        let cost_f64 = (aggregated.ema + 2.0 * aggregated.ema_var.sqrt()).ceil();
+
+        // check if cost:f64 can be losslessly convert to u64, otherwise return None
+        let cost_u64 = cost_f64 as u64;
+        if cost_f64 == cost_u64 as f64 {
+            Some(cost_u64)
+        } else {
+            None
+        }
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) -> Option<u64> {
-        let need_to_add = self.table.get(key).is_none();
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
+        let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
         }
 
-        let program_cost = self.table.entry(*key).or_insert(value);
-        *program_cost = (*program_cost + value) / 2;
+        // exponential moving average algorithm
+        // https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation
+        match self.table.entry(*key) {
+            Entry::Occupied(mut entry) => {
+                let aggregated = entry.get_mut();
+                let theta = value as f64 - aggregated.ema;
+                aggregated.ema += theta * COEFFICIENT;
+                aggregated.ema_var =
+                    (1.0 - COEFFICIENT) * (aggregated.ema_var + COEFFICIENT * theta * theta);
+            }
+            Entry::Vacant(entry) => {
+                // the starting values
+                entry.insert(AggregatedVarianceStats {
+                    ema: value as f64,
+                    ema_var: 0.0,
+                });
+            }
+        }
 
         let (count, timestamp) = self
             .occurrences
@@ -93,8 +112,10 @@ impl ExecuteCostTable {
             .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
         *timestamp = Self::micros_since_epoch();
+    }
 
-        Some(*program_cost)
+    pub fn get_program_keys(&self) -> Vec<&Pubkey> {
+        self.table.keys().collect()
     }
 
     // prune the old programs so the table contains `new_size` of records,
@@ -184,9 +205,9 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        // simulate a lot of occurences to key1, so even there're longer than
+        // simulate a lot of occurrences to key1, so even there're longer than
         // usual delay between upsert(key1..) and upsert(key2, ..), test
-        // would still satisfy as key1 has enough occurences to compensate
+        // would still satisfy as key1 has enough occurrences to compensate
         // its age.
         for i in 0..1000 {
             testee.upsert(&key1, i);
@@ -219,25 +240,21 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_average());
-        assert_eq!(cost1, testee.get_mode());
-        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average());
-        assert_eq!(cost2, testee.get_mode());
-        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
-        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
 
         // update 1st record
         testee.upsert(&key1, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(((cost1 + cost2) / 2 + cost2) / 2, testee.get_average());
-        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
-        assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key1).unwrap());
-        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
+        // expected key1 cost is EMA of [100, 110] with alpha=0.01 => 103
+        let expected_cost = 103;
+        assert_eq!(expected_cost, testee.get_cost(&key1).unwrap());
+        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
     }
 
     #[test]
@@ -258,33 +275,50 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
-        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
 
         // insert 3rd record, pushes out the oldest (eg 1st) record
         testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
-        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average());
-        assert_eq!(cost3, testee.get_mode());
         assert!(testee.get_cost(&key1).is_none());
-        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
-        assert_eq!(&cost3, testee.get_cost(&key3).unwrap());
+        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!(cost3, testee.get_cost(&key3).unwrap());
 
         // update 2nd record, so the 3rd becomes the oldest
         // add 4th record, pushes out 3rd key
         testee.upsert(&key2, cost1);
         testee.upsert(&key4, cost4);
-        assert_eq!(((cost1 + cost2) / 2 + cost4) / 2_u64, testee.get_average());
-        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
-        assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key2).unwrap());
+        // expected key2 cost = (mean + 2*std) of [110, 100] => 112
+        let expected_cost_2 = 112;
+        assert_eq!(expected_cost_2, testee.get_cost(&key2).unwrap());
         assert!(testee.get_cost(&key3).is_none());
-        assert_eq!(&cost4, testee.get_cost(&key4).unwrap());
+        assert_eq!(cost4, testee.get_cost(&key4).unwrap());
+    }
+
+    #[test]
+    fn test_get_cost_overflow_u64() {
+        solana_logger::setup();
+        let mut testee = ExecuteCostTable::default();
+
+        let key1 = Pubkey::new_unique();
+        let cost1: u64 = f64::MAX as u64;
+        let cost2: u64 = u64::MAX / 2; // create large variance so the final result will overflow
+
+        // insert one record
+        testee.upsert(&key1, cost1);
+        assert_eq!(1, testee.get_count());
+        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
+
+        // update cost
+        testee.upsert(&key1, cost2);
+        assert!(testee.get_cost(&key1).is_none());
     }
 }

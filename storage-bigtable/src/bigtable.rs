@@ -792,23 +792,46 @@ mod tests {
         prost::Message,
         solana_sdk::{
             hash::Hash, message::v0::LoadedAddresses, signature::Keypair, system_transaction,
+            transaction::VersionedTransaction,
         },
         solana_storage_proto::convert::generated,
         solana_transaction_status::{
             ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
-            VersionedConfirmedBlock,
+            VersionedTransactionWithStatusMeta,
         },
         std::convert::TryInto,
     };
+
+    fn confirmed_block_into_protobuf(confirmed_block: ConfirmedBlock) -> generated::ConfirmedBlock {
+        let ConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions,
+            rewards,
+            block_time,
+            block_height,
+        } = confirmed_block;
+
+        generated::ConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
+            rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
+            block_height: block_height.map(|block_height| generated::BlockHeight { block_height }),
+        }
+    }
 
     #[test]
     fn test_deserialize_protobuf_or_bincode_cell_data() {
         let from = Keypair::new();
         let recipient = solana_sdk::pubkey::new_rand();
         let transaction = system_transaction::transfer(&from, &recipient, 42, Hash::default());
-        let with_meta = TransactionWithStatusMeta {
-            transaction,
-            meta: Some(TransactionStatusMeta {
+        let with_meta = TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+            transaction: VersionedTransaction::from(transaction),
+            meta: TransactionStatusMeta {
                 status: Ok(()),
                 fee: 1,
                 pre_balances: vec![43, 0, 1],
@@ -819,9 +842,9 @@ mod tests {
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
-            }),
-        };
-        let block = ConfirmedBlock {
+            },
+        });
+        let expected_block = ConfirmedBlock {
             transactions: vec![with_meta],
             parent_slot: 1,
             blockhash: Hash::default().to_string(),
@@ -831,11 +854,11 @@ mod tests {
             block_height: Some(1),
         };
         let bincode_block = compress_best(
-            &bincode::serialize::<StoredConfirmedBlock>(&block.clone().into()).unwrap(),
+            &bincode::serialize::<StoredConfirmedBlock>(&expected_block.clone().into()).unwrap(),
         )
         .unwrap();
 
-        let protobuf_block = generated::ConfirmedBlock::from(block.clone());
+        let protobuf_block = confirmed_block_into_protobuf(expected_block.clone());
         let mut buf = Vec::with_capacity(protobuf_block.encoded_len());
         protobuf_block.encode(&mut buf).unwrap();
         let protobuf_block = compress_best(&buf).unwrap();
@@ -849,7 +872,6 @@ mod tests {
             "".to_string(),
         )
         .unwrap();
-        let expected_block: VersionedConfirmedBlock = block.into();
         if let CellData::Protobuf(protobuf_block) = deserialized {
             assert_eq!(expected_block, protobuf_block.try_into().unwrap());
         } else {
@@ -867,7 +889,11 @@ mod tests {
         .unwrap();
         if let CellData::Bincode(bincode_block) = deserialized {
             let mut block = expected_block;
-            if let Some(meta) = &mut block.transactions[0].meta {
+            if let TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                meta,
+                ..
+            }) = &mut block.transactions[0]
+            {
                 meta.inner_instructions = None; // Legacy bincode implementation does not support inner_instructions
                 meta.log_messages = None; // Legacy bincode implementation does not support log_messages
                 meta.pre_token_balances = None; // Legacy bincode implementation does not support token balances

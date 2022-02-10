@@ -30,6 +30,7 @@ impl Default for RentCollector {
 }
 
 /// when rent is collected for this account, this is the action to apply to the account
+#[derive(Debug)]
 pub enum RentResult {
     /// maybe collect rent later, leave account alone
     LeaveAloneNoRent,
@@ -54,7 +55,20 @@ impl RentCollector {
     }
 
     pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
+        self.clone_with_epoch_and_rate(epoch, self.rent.lamports_per_byte_year)
+    }
+
+    pub fn clone_with_epoch_and_rate(&self, epoch: Epoch, lamports_per_byte_year: u64) -> Self {
+        let rent = if lamports_per_byte_year != self.rent.lamports_per_byte_year {
+            Rent {
+                lamports_per_byte_year,
+                ..self.rent
+            }
+        } else {
+            self.rent
+        };
         Self {
+            rent,
             epoch,
             ..self.clone()
         }
@@ -203,6 +217,10 @@ mod tests {
         solana_sdk::{account::Account, sysvar},
     };
 
+    fn default_rent_collector_clone_with_epoch(epoch: Epoch) -> RentCollector {
+        RentCollector::default().clone_with_epoch(epoch)
+    }
+
     #[test]
     fn test_collect_from_account_created_and_existing() {
         let old_lamports = 1000;
@@ -219,7 +237,7 @@ mod tests {
             (account.clone(), account)
         };
 
-        let rent_collector = RentCollector::default().clone_with_epoch(new_epoch);
+        let rent_collector = default_rent_collector_clone_with_epoch(new_epoch);
 
         // collect rent on a newly-created account
         let collected = rent_collector
@@ -263,7 +281,7 @@ mod tests {
         assert_eq!(account.rent_epoch(), 0);
 
         // create a tested rent collector
-        let rent_collector = RentCollector::default().clone_with_epoch(epoch);
+        let rent_collector = default_rent_collector_clone_with_epoch(epoch);
 
         // first mark account as being collected while being rent-exempt
         let collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, None);
@@ -291,7 +309,7 @@ mod tests {
         assert_eq!(account.rent_epoch(), 0);
 
         let epoch = 3;
-        let rent_collector = RentCollector::default().clone_with_epoch(epoch);
+        let rent_collector = default_rent_collector_clone_with_epoch(epoch);
 
         let collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, None);
         assert_eq!(account.lamports(), 0);
@@ -311,7 +329,7 @@ mod tests {
             rent_epoch: account_rent_epoch,
             ..Account::default()
         });
-        let rent_collector = RentCollector::default().clone_with_epoch(account_rent_epoch + 2);
+        let rent_collector = default_rent_collector_clone_with_epoch(account_rent_epoch + 2);
 
         let collected =
             rent_collector.collect_from_existing_account(&Pubkey::new_unique(), &mut account, None);
