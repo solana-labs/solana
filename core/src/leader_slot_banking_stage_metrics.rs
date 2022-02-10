@@ -1,4 +1,8 @@
-use {solana_poh::poh_recorder::BankStart, solana_sdk::clock::Slot, std::time::Instant};
+use {
+    solana_poh::poh_recorder::BankStart,
+    solana_sdk::{clock::Slot, saturating_add_assign},
+    std::time::Instant,
+};
 
 /// A summary of what happened to transactions passed to the execution pipeline.
 /// Transactions can
@@ -379,78 +383,78 @@ impl LeaderSlotMetricsTracker {
 
     pub(crate) fn increment_total_new_valid_packets(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .total_new_valid_packets = leader_slot_metrics
-                .packet_count_metrics
-                .total_new_valid_packets
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .total_new_valid_packets,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_newly_failed_sigverify_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .newly_failed_sigverify_count = leader_slot_metrics
-                .packet_count_metrics
-                .newly_failed_sigverify_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .newly_failed_sigverify_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_exceeded_buffer_limit_dropped_packets_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .exceeded_buffer_limit_dropped_packets_count = leader_slot_metrics
-                .packet_count_metrics
-                .exceeded_buffer_limit_dropped_packets_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .exceeded_buffer_limit_dropped_packets_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_newly_buffered_packets_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .newly_buffered_packets_count = leader_slot_metrics
-                .packet_count_metrics
-                .newly_buffered_packets_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .newly_buffered_packets_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_retryable_packets_filtered_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .retryable_packets_filtered_count = leader_slot_metrics
-                .packet_count_metrics
-                .retryable_packets_filtered_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .retryable_packets_filtered_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_transactions_attempted_execution_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .transactions_attempted_execution_count = leader_slot_metrics
-                .packet_count_metrics
-                .transactions_attempted_execution_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .transactions_attempted_execution_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_committed_transactions_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .committed_transactions_count = leader_slot_metrics
-                .packet_count_metrics
-                .committed_transactions_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .committed_transactions_count,
+                count
+            );
         }
     }
 
@@ -459,111 +463,111 @@ impl LeaderSlotMetricsTracker {
         count: u64,
     ) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .committed_transactions_with_successful_result_count = leader_slot_metrics
-                .packet_count_metrics
-                .committed_transactions_with_successful_result_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .committed_transactions_with_successful_result_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_retryable_transactions_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .retryable_errored_transaction_count = leader_slot_metrics
-                .packet_count_metrics
-                .retryable_errored_transaction_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .retryable_errored_transaction_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_nonretryable_errored_transactions_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .nonretryable_errored_transactions_count = leader_slot_metrics
-                .packet_count_metrics
-                .nonretryable_errored_transactions_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .nonretryable_errored_transactions_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_executed_transactions_failed_commit_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .executed_transactions_failed_commit_count = leader_slot_metrics
-                .packet_count_metrics
-                .executed_transactions_failed_commit_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .executed_transactions_failed_commit_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_cost_model_throttled_transactions_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .cost_model_throttled_transactions_count = leader_slot_metrics
-                .packet_count_metrics
-                .cost_model_throttled_transactions_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .cost_model_throttled_transactions_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_failed_forwarded_packets_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .failed_forwarded_packets_count = leader_slot_metrics
-                .packet_count_metrics
-                .failed_forwarded_packets_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .failed_forwarded_packets_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_successful_forwarded_packets_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .successful_forwarded_packets_count = leader_slot_metrics
-                .packet_count_metrics
-                .successful_forwarded_packets_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .successful_forwarded_packets_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_packet_batch_forward_failure_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .packet_batch_forward_failure_count = leader_slot_metrics
-                .packet_count_metrics
-                .packet_batch_forward_failure_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .packet_batch_forward_failure_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_cleared_from_buffer_after_forward_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .cleared_from_buffer_after_forward_count = leader_slot_metrics
-                .packet_count_metrics
-                .cleared_from_buffer_after_forward_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .cleared_from_buffer_after_forward_count,
+                count
+            );
         }
     }
 
     pub(crate) fn increment_end_of_slot_filtered_invalid_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            leader_slot_metrics
-                .packet_count_metrics
-                .end_of_slot_filtered_invalid_count = leader_slot_metrics
-                .packet_count_metrics
-                .end_of_slot_filtered_invalid_count
-                .saturating_add(count);
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .end_of_slot_filtered_invalid_count,
+                count
+            );
         }
     }
 }
