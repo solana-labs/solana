@@ -30,9 +30,9 @@ useEnv=false
 delete=false
 createWithoutConfig=false
 host="https://internal-metrics.solana.com:8086"
-while getopts "hdec:" opt; do
+while getopts ":hdec:" opt; do
   case $opt in
-  h|\?)
+  h)
     usage
     exit 0
     ;;
@@ -47,7 +47,7 @@ while getopts "hdec:" opt; do
     useEnv=true
     ;;
   *)
-    usage "unhandled option: $opt"
+    usage "unhandled option: $OPTARG"
     ;;
   esac
 done
@@ -77,7 +77,7 @@ else
       "$host/query?u=${username}&p=${password}" \
       --data-urlencode "q=$*"
   }
-  
+
   query "DROP DATABASE \"$netBasename\""
   ! $delete || exit 0
   query "CREATE DATABASE \"$netBasename\""
