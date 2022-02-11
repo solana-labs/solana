@@ -7,6 +7,12 @@ use {
     solana_core::serve_repair::RepairProtocol,
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::pubkey::Pubkey,
+    solana_sdk::timing::timestamp,
+    // TODO(klykov): maybe later will move to test_tx.rs
+    solana_sdk::{
+        hash::Hash, instruction::CompiledInstruction, signature::Keypair, stake,
+        system_instruction::SystemInstruction, system_program, transaction::Transaction,
+    },
     solana_streamer::socket::SocketAddrSpace,
     std::{
         net::{SocketAddr, UdpSocket},
@@ -14,16 +20,6 @@ use {
         str::FromStr,
         time::{Duration, Instant},
     },
-    // TODO(klykov): maybe later will move to test_tx.rs
-    solana_sdk::{
-        transaction::Transaction,
-        signature::Keypair,
-        hash::Hash,
-        stake,
-        system_program,
-        instruction::CompiledInstruction,
-        system_instruction::SystemInstruction,
-    }
 };
 
 fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
@@ -33,9 +29,20 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     contact
 }
 
-fn test_multisig_tx(nsign: usize, blockhash: Hash) -> Transaction {
-    let kpvals: Vec<Keypair> = (0..nsign).map( |_| Keypair::new() ).collect();
+fn test_multisig_tx(
+    transaction_params: &TransactionParams,
+    rpc_client: &Option<RpcClient>,
+) -> Transaction {
+    let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
+        .map(|_| Keypair::new())
+        .collect();
     let keypairs: Vec<&Keypair> = kpvals.iter().collect();
+
+    let blockhash = if transaction_params.valid_block_hash {
+        rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap()
+    } else {
+        Hash::default()
+    };
 
     let lamports = 5;
     let transfer_instruction = SystemInstruction::Transfer { lamports };
@@ -48,20 +55,25 @@ fn test_multisig_tx(nsign: usize, blockhash: Hash) -> Transaction {
         vec![0, 1],
     )];
 
-    let tx = Transaction::new_with_compiled_instructions(
+    let mut tx = Transaction::new_with_compiled_instructions(
         &keypairs,
         &[],
         blockhash,
         program_ids,
         instructions,
     );
+    if !transaction_params.valid_signatures {
+        tx.signatures = vec![Transaction::get_invalid_signature(); transaction_params.num_sign];
+    }
     tx
 }
 
-fn test_invalid_multisig_tx(nsign: usize, blockhash: Hash) -> Transaction {
-    let mut tx = test_multisig_tx(nsign, blockhash);
-    tx.signatures = vec![Transaction::get_invalid_signature(); nsign];
-    tx
+/// Options for data_type=transaction
+struct TransactionParams {
+    unique_transactons: bool, // use unique transactions
+    num_sign: usize,          // number of signatures in a transaction
+    valid_block_hash: bool,   // use valid blockhash or random
+    valid_signatures: bool,   // use valid signatures or not
 }
 
 fn run_dos(
@@ -72,8 +84,7 @@ fn run_dos(
     data_size: usize,
     mode: String,
     data_input: Option<String>,
-    num_sign: usize, // makes sense only with transaction mode
-    valid_block_hash: bool, // makes sense only with transaction mode
+    transaction_params: Option<TransactionParams>,
 ) {
     let mut target = None;
     let mut rpc_client = None;
@@ -92,7 +103,7 @@ fn run_dos(
                     "tpu" => {
                         rpc_client = Some(RpcClient::new_socket(node.rpc));
                         Some(node.tpu)
-                    },
+                    }
                     "tpu_forwards" => Some(node.tpu_forwards),
                     "repair" => Some(node.repair),
                     "serve_repair" => Some(node.serve_repair),
@@ -134,14 +145,15 @@ fn run_dos(
             data.resize(data_size, 0);
         }
         "transaction" => {
-            let blockhash = if valid_block_hash {
-                rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap()
-            } else {
-                Hash::default()
-            };
-            let tx = test_multisig_tx(num_sign, blockhash);
-            info!("{:?}", tx);
-            data = bincode::serialize(&tx).unwrap();
+            if transaction_params.is_none() {
+                panic!("transaction parameters are not specified");
+            }
+            let tp = transaction_params.as_ref().unwrap();
+            if tp.unique_transactons {
+                let tx = test_multisig_tx(tp, &rpc_client);
+                info!("{:?}", tx);
+                data = bincode::serialize(&tx).unwrap();
+            }
         }
         "get_account_info" => {}
         "get_program_accounts" => {}
@@ -180,6 +192,13 @@ fn run_dos(
         } else {
             if data_type == "random" {
                 thread_rng().fill(&mut data[..]);
+            }
+            if let Some(tp) = transaction_params.as_ref() {
+                if tp.unique_transactons {
+                    let tx = test_multisig_tx(tp, &rpc_client);
+                    info!("{:?}", tx);
+                    data = bincode::serialize(&tx).unwrap();
+                }
             }
             let res = socket.send_to(&data, target);
             if res.is_err() {
@@ -283,6 +302,20 @@ fn main() {
                 .help("Generate a valid blockhash for transaction")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("valid_sign")
+                .long("generate-valid-signatures")
+                .takes_value(false)
+                .help("Generate valid signature(s) for transaction")
+                .hidden(true),
+        )
+        .arg(
+            Arg::with_name("unique_trans")
+                .long("generate-unique-transactions")
+                .takes_value(false)
+                .help("Generate unique transaction")
+                .hidden(true),
+        )
         .get_matches();
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
@@ -298,8 +331,16 @@ fn main() {
     let mode = value_t_or_exit!(matches, "mode", String);
     let data_type = value_t_or_exit!(matches, "data_type", String);
     let data_input = value_t!(matches, "data_input", String).ok();
-    let num_sign = value_t!(matches, "num_sign", usize).unwrap_or(2);
-    let valid_blockhash = matches.is_present("valid_blockhash");
+
+    let transaction_params = match data_type.as_str() {
+        "transaction" => Some(TransactionParams {
+            unique_transactons: matches.is_present("unique_trans"),
+            num_sign: value_t!(matches, "num_sign", usize).unwrap_or(2),
+            valid_block_hash: matches.is_present("valid_blockhash"),
+            valid_signatures: matches.is_present("valid_sign"),
+        }),
+        _ => None,
+    };
 
     let mut nodes = vec![];
     if !skip_gossip {
@@ -333,8 +374,7 @@ fn main() {
         data_size,
         mode,
         data_input,
-        num_sign,
-        valid_blockhash,
+        transaction_params,
     );
 }
 
@@ -361,8 +401,7 @@ pub mod test {
             10,
             "tvu".to_string(),
             None,
-            2,
-            false,
+            None,
         );
 
         run_dos(
@@ -373,8 +412,7 @@ pub mod test {
             10,
             "repair".to_string(),
             None,
-            2,
-            false,
+            None,
         );
 
         run_dos(
@@ -385,8 +423,7 @@ pub mod test {
             10,
             "serve_repair".to_string(),
             None,
-            2,
-            false,
+            None,
         );
     }
 
@@ -402,16 +439,22 @@ pub mod test {
         let nodes = cluster.get_node_pubkeys();
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
 
+        let tp = Some(TransactionParams {
+            unique_transactons: false,
+            num_sign: 2,
+            valid_block_hash: false, // use valid blockhash or random
+            valid_signatures: false, // use valid signatures or not
+        });
+
         run_dos(
             &[node],
-            1, // was 10_000_000
+            1_000_000, // was 10_000_000
             cluster.entry_point_info.gossip,
             "transaction".to_string(),
             1000,
             "tpu".to_string(),
             None,
-            3,
-            true,
+            tp,
         );
     }
 }
