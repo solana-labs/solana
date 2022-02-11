@@ -85,7 +85,7 @@ fn test_multisig_tx(
 
 /// Options for data_type=transaction
 struct TransactionParams {
-    unique_transactons: bool, // use unique transactions
+    unique_transactions: bool, // use unique transactions
     num_sign: usize,          // number of signatures in a transaction
     valid_block_hash: bool,   // use valid blockhash or random
     valid_signatures: bool,   // use valid signatures or not
@@ -165,7 +165,7 @@ fn run_dos(
                 panic!("transaction parameters are not specified");
             }
             let tp = transaction_params.as_ref().unwrap();
-            if tp.unique_transactons {
+            if tp.unique_transactions {
                 let tx = test_multisig_tx(tp, &rpc_client, &mut blockhash_time);
                 info!("{:?}", tx);
                 data = bincode::serialize(&tx).unwrap();
@@ -210,7 +210,7 @@ fn run_dos(
                 thread_rng().fill(&mut data[..]);
             }
             if let Some(tp) = transaction_params.as_ref() {
-                if tp.unique_transactons {
+                if tp.unique_transactions {
                     let tx = test_multisig_tx(tp, &rpc_client, &mut blockhash_time);
                     info!("{:?}", tx);
                     data = bincode::serialize(&tx).unwrap();
@@ -350,7 +350,7 @@ fn main() {
 
     let transaction_params = match data_type.as_str() {
         "transaction" => Some(TransactionParams {
-            unique_transactons: matches.is_present("unique_trans"),
+            unique_transactions: matches.is_present("unique_trans"),
             num_sign: value_t!(matches, "num_sign", usize).unwrap_or(2),
             valid_block_hash: matches.is_present("valid_blockhash"),
             valid_signatures: matches.is_present("valid_sign"),
@@ -456,7 +456,7 @@ pub mod test {
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
 
         let tp = Some(TransactionParams {
-            unique_transactons: false,
+            unique_transactions: false,
             num_sign: 2,
             valid_block_hash: false, // use valid blockhash or random
             valid_signatures: false, // use valid signatures or not
