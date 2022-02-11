@@ -3,8 +3,9 @@
 
 use {
     crate::{
-        packet::{self, send_to, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        packet::{self, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
         recvmmsg::NUM_RCVMMSGS,
+        sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
     },
     solana_sdk::timing::timestamp,
@@ -34,6 +35,9 @@ pub enum StreamerError {
 
     #[error("send packets error")]
     Send(#[from] SendError<PacketBatch>),
+
+    #[error(transparent)]
+    SendPktsError(#[from] SendPktsError),
 }
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
@@ -126,7 +130,20 @@ fn recv_send(
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
+<<<<<<< HEAD
     send_to(&packet_batch, sock, socket_addr_space)?;
+=======
+    if let Some(stats) = stats {
+        packet_batch.packets.iter().for_each(|p| stats.record(p));
+    }
+    let packets = packet_batch.packets.iter().filter_map(|pkt| {
+        let addr = pkt.meta.addr();
+        socket_addr_space
+            .check(&addr)
+            .then(|| (&pkt.data[..pkt.meta.size], addr))
+    });
+    batch_send(sock, &packets.collect::<Vec<_>>())?;
+>>>>>>> c078ca3fb (uses sendmmsg in streamer (#23062))
     Ok(())
 }
 
