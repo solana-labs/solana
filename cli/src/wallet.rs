@@ -276,7 +276,7 @@ fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) 
     matches.value_of(arg_name).and_then(|v| {
         let upper = v.to_ascii_uppercase();
         match upper.as_str() {
-            "NONCE" => Some(system_program::id()),
+            "NONCE" | "SYSTEM" => Some(system_program::id()),
             "STAKE" => Some(stake::program::id()),
             "VOTE" => Some(solana_vote_program::id()),
             _ => pubkey_of(matches, arg_name),
