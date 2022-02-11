@@ -20,7 +20,7 @@ pub mod v0;
 /// Bit mask that indicates whether a serialized message is versioned.
 pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 
-/// Message versions supported by the Solana runtime.
+/// Either a legacy message or a v0 message.
 ///
 /// # Serialization
 ///
