@@ -82,6 +82,15 @@ pub fn compress(method: CompressionMethod, data: &[u8]) -> Result<Vec<u8>, io::E
 }
 
 pub fn compress_best(data: &[u8]) -> Result<Vec<u8>, io::Error> {
+    if data.len() < 128 {
+        compress_best_vec(data)
+    }
+    else {
+        compress_best_par(data)
+    }
+}
+
+pub fn compress_best_vec(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let mut candidates = vec![];
     for method in CompressionMethod::into_enum_iter() {
         candidates.push(compress(method, data)?);
@@ -103,6 +112,7 @@ pub fn compress_best_par(data: &[u8]) -> Result<Vec<u8>, io::Error> {
         .unwrap())
 }
 
+#[allow(dead_code)]
 pub fn compress_best_loop(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let mut best = vec![];
     for method in CompressionMethod::into_enum_iter() {
@@ -138,7 +148,7 @@ mod test {
     fn test_compress_bench() {
         println!("size, old, loop, par");
 
-        for size in [256, 512, 1024, 2048, 4098, 8196] {
+        for size in [16, 32, 64, 128, 256, 512, 1024, 2048, 4098, 8196] {
             let data: Vec<u8> = (0..size).map(|_| { rand::random::<u8>() }).collect();
 
             let start = Instant::now();
