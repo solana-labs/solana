@@ -1290,7 +1290,7 @@ Result:
 
 ### getInflationReward
 
-Returns the inflation reward for a list of addresses for an epoch
+Returns the inflation / staking reward for a list of addresses for an epoch
 
 #### Parameters:
 - `<array>` - An array of addresses to query, as base-58 encoded strings
