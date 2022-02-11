@@ -495,25 +495,25 @@ impl Message {
     /// fn make_nonce_account(client: &RpcClient, payer: &Keypair)
     ///     -> Result<Pubkey>
     /// {
-    ///     let nonce_account = Keypair::new();
+    ///     let nonce_account_address = Keypair::new();
     ///     let nonce_account_size = nonce::State::size();
     ///     let nonce_rent = client.get_minimum_balance_for_rent_exemption(nonce_account_size)?;
     ///
     ///     // Assigning the nonce authority to the payer so they can sign for the withdrawal,
-    ///     // and we can throw away the nonce secret key.
+    ///     // and we can throw away the nonce address secret key.
     ///     let create_nonce_instr = system_instruction::create_nonce_account(
     ///         &payer.pubkey(),
-    ///         &nonce_account.pubkey(),
+    ///         &nonce_account_address.pubkey(),
     ///         &payer.pubkey(),
     ///         nonce_rent,
     ///     );
     ///
     ///    let mut nonce_tx = Transaction::new_with_payer(&create_nonce_instr, Some(&payer.pubkey()));
     ///    let blockhash = client.get_latest_blockhash()?;
-    ///    nonce_tx.sign(&[&payer, &nonce_account], blockhash);
+    ///    nonce_tx.sign(&[&payer, &nonce_account_address], blockhash);
     ///    client.send_and_confirm_transaction(&nonce_tx)?;
     ///
-    ///    Ok(nonce_account.pubkey())
+    ///    Ok(nonce_account_address.pubkey())
     /// }
     /// #
     /// # let client = RpcClient::new(String::new());
