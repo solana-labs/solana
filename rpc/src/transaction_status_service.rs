@@ -167,7 +167,7 @@ impl TransactionStatusService {
                             );
                         }
 
-                        if !enable_cpi_and_log_storage {
+                        if !(enable_cpi_and_log_storage || transaction_notifier.is_some()) {
                             transaction_status_meta.log_messages.take();
                             transaction_status_meta.inner_instructions.take();
                         }

@@ -1305,7 +1305,7 @@ fn new_banks_from_ledger(
                 blockstore.clone(),
                 exit,
                 enable_rpc_transaction_history,
-                config.rpc_config.enable_cpi_and_log_storage || transaction_notifier.is_some(),
+                config.rpc_config.enable_cpi_and_log_storage,
                 transaction_notifier,
             )
         } else {
