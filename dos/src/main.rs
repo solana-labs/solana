@@ -34,11 +34,6 @@ fn test_multisig_tx(
     rpc_client: &Option<RpcClient>,
     blockhash_time: &mut (Hash, Instant), // blockhash together with the time of generation
 ) -> Transaction {
-    let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
-        .map(|_| Keypair::new())
-        .collect();
-    let keypairs: Vec<&Keypair> = kpvals.iter().collect();
-
     // generate a new blockhash every 0.5sec
     if blockhash_time.1.elapsed().as_millis() > 500 {
         *blockhash_time = if transaction_params.valid_block_hash {
@@ -62,17 +57,30 @@ fn test_multisig_tx(
         vec![0, 1],
     )];
 
-    let mut tx = Transaction::new_with_compiled_instructions(
-        &keypairs,
-        &[],
-        blockhash_time.0,
-        program_ids,
-        instructions,
-    );
-    if !transaction_params.valid_signatures {
+    if transaction_params.valid_signatures {
+        let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
+            .map(|_| Keypair::new())
+            .collect();
+        let keypairs: Vec<&Keypair> = kpvals.iter().collect();
+
+        Transaction::new_with_compiled_instructions(
+            &keypairs,
+            &[],
+            blockhash_time.0,
+            program_ids,
+            instructions,
+        )
+    } else {
+        let mut tx = Transaction::new_with_compiled_instructions(
+            &[] as &[&Keypair; 0],
+            &[],
+            blockhash_time.0,
+            program_ids,
+            instructions,
+        );
         tx.signatures = vec![Transaction::get_invalid_signature(); transaction_params.num_sign];
+        tx
     }
-    tx
 }
 
 /// Options for data_type=transaction
