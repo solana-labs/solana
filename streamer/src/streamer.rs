@@ -130,12 +130,6 @@ fn recv_send(
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
-<<<<<<< HEAD
-    send_to(&packet_batch, sock, socket_addr_space)?;
-=======
-    if let Some(stats) = stats {
-        packet_batch.packets.iter().for_each(|p| stats.record(p));
-    }
     let packets = packet_batch.packets.iter().filter_map(|pkt| {
         let addr = pkt.meta.addr();
         socket_addr_space
@@ -143,7 +137,6 @@ fn recv_send(
             .then(|| (&pkt.data[..pkt.meta.size], addr))
     });
     batch_send(sock, &packets.collect::<Vec<_>>())?;
->>>>>>> c078ca3fb (uses sendmmsg in streamer (#23062))
     Ok(())
 }
 
