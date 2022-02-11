@@ -1,7 +1,7 @@
 use {
     enum_iterator::IntoEnumIterator,
-    std::io::{self, BufReader, Read, Write},
     rayon::prelude::*,
+    std::io::{self, BufReader, Read, Write},
 };
 
 #[derive(Debug, Serialize, Deserialize, IntoEnumIterator)]
@@ -84,8 +84,7 @@ pub fn compress(method: CompressionMethod, data: &[u8]) -> Result<Vec<u8>, io::E
 pub fn compress_best(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     if data.len() < 128 {
         compress_best_vec(data)
-    }
-    else {
+    } else {
         compress_best_par(data)
     }
 }
@@ -104,7 +103,10 @@ pub fn compress_best_vec(data: &[u8]) -> Result<Vec<u8>, io::Error> {
 
 pub fn compress_best_par(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let methods: Vec<CompressionMethod> = CompressionMethod::into_enum_iter().collect();
-    let candidates: Vec<Vec<u8>> = methods.into_par_iter().map(|v| compress(v, data).unwrap()).collect();
+    let candidates: Vec<Vec<u8>> = methods
+        .into_par_iter()
+        .map(|v| compress(v, data).unwrap())
+        .collect();
 
     Ok(candidates
         .into_iter()
@@ -127,7 +129,7 @@ pub fn compress_best_loop(data: &[u8]) -> Result<Vec<u8>, io::Error> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::time::{Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_compress_uncompress() {
@@ -141,7 +143,10 @@ mod test {
     #[test]
     fn test_compress() {
         let data = vec![0; 256];
-        assert!(compress_best(&data).expect("compress_best").len() <= data.len() + CompressionMethod::serialized_header_size() as usize);
+        assert!(
+            compress_best(&data).expect("compress_best").len()
+                <= data.len() + CompressionMethod::serialized_header_size() as usize
+        );
     }
 
     #[test]
@@ -149,23 +154,32 @@ mod test {
         println!("size, old, loop, par");
 
         for size in [16, 32, 64, 128, 256, 512, 1024, 2048, 4098, 8196] {
-            let data: Vec<u8> = (0..size).map(|_| { rand::random::<u8>() }).collect();
+            let data: Vec<u8> = (0..size).map(|_| rand::random::<u8>()).collect();
 
             let start = Instant::now();
             for _ in 1..100 {
-                assert!(compress_best(&data).expect("compress_best").len() <= CompressionMethod::serialized_header_size() as usize + data.len());
+                assert!(
+                    compress_best(&data).expect("compress_best").len()
+                        <= CompressionMethod::serialized_header_size() as usize + data.len()
+                );
             }
             let time_old = start.elapsed();
 
             let start = Instant::now();
             for _ in 1..100 {
-                assert!(compress_best_loop(&data).expect("compress_best").len() <= CompressionMethod::serialized_header_size() as usize + data.len());
+                assert!(
+                    compress_best_loop(&data).expect("compress_best").len()
+                        <= CompressionMethod::serialized_header_size() as usize + data.len()
+                );
             }
             let time_loop = start.elapsed();
 
             let start = Instant::now();
             for _ in 1..100 {
-                assert!(compress_best_par(&data).expect("compress_best").len() <= CompressionMethod::serialized_header_size() as usize + data.len());
+                assert!(
+                    compress_best_par(&data).expect("compress_best").len()
+                        <= CompressionMethod::serialized_header_size() as usize + data.len()
+                );
             }
             let time_par = start.elapsed();
 
