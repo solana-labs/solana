@@ -104,8 +104,9 @@ impl QosService {
         txs_costs
     }
 
-    // Given a list of transactions and their costs, this function returns a corresponding
-    // list of Results that indicate if a transaction is selected to be included in the current block,
+    /// Given a list of transactions and their costs, this function returns a corresponding
+    /// list of Results that indicate if a transaction is selected to be included in the current block,
+    /// and a count of the number of transactions that would fit in the block
     pub fn select_transactions_per_cost<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -150,6 +151,16 @@ impl QosService {
         (select_results, num_included)
     }
 
+<<<<<<< HEAD
+=======
+    // metrics are reported by bank slot
+    pub fn report_metrics(&self, bank: Arc<Bank>) {
+        self.report_sender
+            .send(QosMetrics::BlockBatchUpdate { bank })
+            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
+    }
+
+>>>>>>> 2f9e30a1f (Introduce slot-specific packet metrics (#22906))
     pub fn accumulate_estimated_transaction_costs(
         &self,
         cost_details: &BatchedTransactionCostDetails,
@@ -194,7 +205,20 @@ impl QosService {
 
 #[derive(Default)]
 struct QosServiceMetrics {
+<<<<<<< HEAD
     last_report: AtomicInterval,
+=======
+    // banking_stage creates one QosService instance per working threads, that is uniquely
+    // identified by id. This field allows to categorize metrics for gossip votes, TPU votes
+    // and other transactions.
+    id: u32,
+
+    // aggregate metrics per slot
+    slot: AtomicU64,
+
+    // accumulated time in micro-sec spent in computing transaction cost. It is the main performance
+    // overhead introduced by cost_model
+>>>>>>> 2f9e30a1f (Introduce slot-specific packet metrics (#22906))
     compute_cost_time: AtomicU64,
     compute_cost_count: AtomicU64,
     cost_tracking_time: AtomicU64,
@@ -227,6 +251,11 @@ impl QosServiceMetrics {
         if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "qos-service-stats",
+<<<<<<< HEAD
+=======
+                ("id", self.id as i64, i64),
+                ("bank_slot", bank_slot as i64, i64),
+>>>>>>> 2f9e30a1f (Introduce slot-specific packet metrics (#22906))
                 (
                     "compute_cost_time",
                     self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,
