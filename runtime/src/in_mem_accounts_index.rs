@@ -970,7 +970,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             return completed_scan; // completed, don't need to get lock or do other work
         }
 
-        let ranges = self.cache_ranges_held.read().unwrap().clone();
+        // maybe we should combine these ranges into map's lock
+        let ranges = self.cache_ranges_held.read().unwrap(); // eliminate race condition by not cloning here
 
         let mut removed = 0;
         // consider chunking these so we don't hold the write lock too long
