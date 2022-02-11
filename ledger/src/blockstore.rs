@@ -1254,7 +1254,7 @@ impl Blockstore {
     /// - `index_meta_time`: the time spent on loading or creating the
     ///     index meta entry from the db.
     /// - `is_trusted`: if false, this function will check whether the
-    ///     input shred is dupliate.
+    ///     input shred is duplicate.
     /// - `handle_duplicate`: the function that handles duplication.
     /// - `leader_schedule`: the leader schedule will be used to check
     ///     whether it is okay to insert the input shred.
@@ -3472,7 +3472,7 @@ fn commit_slot_meta_working_set(
 ///
 /// 1) Finds the slot metadata in the cache of dirty slot metadata we've
 ///    previously touched, otherwise:
-/// 2) Searchs the database for that slot metadata. If still no luck, then:
+/// 2) Searches the database for that slot metadata. If still no luck, then:
 /// 3) Create a dummy orphan slot in the database.
 ///
 /// Also see [`find_slot_meta_in_cached_state`] and [`find_slot_meta_in_db_else_create`].
@@ -3685,7 +3685,7 @@ fn handle_chaining_for_slot(
 /// `slot_meta`: the SlotMeta of the above `slot`.
 /// `working_set`: a slot-id to SlotMetaWorkingSetEntry map which is used
 ///   to traverse the graph.
-/// `passed_visisted_slots`: all the traversed slots which have passed the
+/// `passed_visited_slots`: all the traversed slots which have passed the
 ///   slot_function.  This may also include the input `slot`.
 /// `slot_function`: a function which updates the SlotMeta of the visisted
 ///   slots and determine whether to further traverse the children slots of

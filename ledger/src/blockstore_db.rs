@@ -428,7 +428,7 @@ impl Rocks {
                 // shorten it to a day (24 hours).
                 //
                 // As we write newer SST files over time at rather consistent rate of speed, this
-                // effectively makes each newly-created ssts be re-compacted for the filter at
+                // effectively makes each newly-created sets be re-compacted for the filter at
                 // well-dispersed different timings.
                 // As a whole, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
                 // slowly over the duration of PERIODIC_COMPACTION_SECONDS. So, this results in
@@ -1559,7 +1559,7 @@ pub mod tests {
             CompactionDecision::Keep
         ));
 
-        // mutating oledst_slot doen't affect existing compaction filters...
+        // mutating oldest_slot doesn't affect existing compaction filters...
         oldest_slot.set(1);
         assert!(matches!(
             compaction_filter.filter(dummy_level, &key, &dummy_value),
