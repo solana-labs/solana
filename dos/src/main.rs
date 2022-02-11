@@ -32,17 +32,24 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
 fn test_multisig_tx(
     transaction_params: &TransactionParams,
     rpc_client: &Option<RpcClient>,
+    blockhash_time: &mut (Hash, Instant), // blockhash together with the time of generation
 ) -> Transaction {
     let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
         .map(|_| Keypair::new())
         .collect();
     let keypairs: Vec<&Keypair> = kpvals.iter().collect();
 
-    let blockhash = if transaction_params.valid_block_hash {
-        rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap()
-    } else {
-        Hash::default()
-    };
+    // generate a new blockhash every 0.5sec
+    if blockhash_time.1.elapsed().as_millis() > 500 {
+        *blockhash_time = if transaction_params.valid_block_hash {
+            (
+                rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap(),
+                Instant::now(),
+            )
+        } else {
+            (Hash::default(), Instant::now())
+        };
+    }
 
     let lamports = 5;
     let transfer_instruction = SystemInstruction::Transfer { lamports };
@@ -58,7 +65,7 @@ fn test_multisig_tx(
     let mut tx = Transaction::new_with_compiled_instructions(
         &keypairs,
         &[],
-        blockhash,
+        blockhash_time.0,
         program_ids,
         instructions,
     );
@@ -123,6 +130,7 @@ fn run_dos(
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let mut data = Vec::new();
+    let mut blockhash_time = (Hash::default(), Instant::now() - Duration::from_secs(100));
 
     match data_type.as_str() {
         "repair_highest" => {
@@ -150,7 +158,7 @@ fn run_dos(
             }
             let tp = transaction_params.as_ref().unwrap();
             if tp.unique_transactons {
-                let tx = test_multisig_tx(tp, &rpc_client);
+                let tx = test_multisig_tx(tp, &rpc_client, &mut blockhash_time);
                 info!("{:?}", tx);
                 data = bincode::serialize(&tx).unwrap();
             }
@@ -195,7 +203,7 @@ fn run_dos(
             }
             if let Some(tp) = transaction_params.as_ref() {
                 if tp.unique_transactons {
-                    let tx = test_multisig_tx(tp, &rpc_client);
+                    let tx = test_multisig_tx(tp, &rpc_client, &mut blockhash_time);
                     info!("{:?}", tx);
                     data = bincode::serialize(&tx).unwrap();
                 }
