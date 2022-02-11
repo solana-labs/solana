@@ -1,5 +1,8 @@
 use {
-    crate::nonce_keyed_account::NonceKeyedAccount,
+    crate::nonce_keyed_account::{
+        advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
+        withdraw_nonce_account, NONCE_ACCOUNT_INDEX, WITHDRAW_TO_ACCOUNT_INDEX,
+    },
     log::*,
     solana_program_runtime::{
         ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check2,
@@ -349,7 +352,7 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AdvanceNonceAccount => {
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
@@ -363,11 +366,16 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            me.advance_nonce_account(&signers, invoke_context)
+            advance_nonce_account(
+                invoke_context,
+                instruction_context,
+                &signers,
+                NONCE_ACCOUNT_INDEX,
+            )
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let _to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
             let _recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
@@ -379,10 +387,18 @@ pub fn process_instruction(
                 instruction_context,
                 first_instruction_account + 3,
             )?;
-            me.withdraw_nonce_account(lamports, to, &rent, &signers, invoke_context)
+            withdraw_nonce_account(
+                invoke_context,
+                instruction_context,
+                &signers,
+                NONCE_ACCOUNT_INDEX,
+                WITHDRAW_TO_ACCOUNT_INDEX,
+                lamports,
+                &rent,
+            )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
@@ -401,11 +417,23 @@ pub fn process_instruction(
                 instruction_context,
                 first_instruction_account + 2,
             )?;
-            me.initialize_nonce_account(&authorized, &rent, invoke_context)
+            initialize_nonce_account(
+                invoke_context,
+                instruction_context,
+                NONCE_ACCOUNT_INDEX,
+                &authorized,
+                &rent,
+            )
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            me.authorize_nonce_account(&nonce_authority, &signers, invoke_context)
+            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            authorize_nonce_account(
+                invoke_context,
+                instruction_context,
+                &signers,
+                NONCE_ACCOUNT_INDEX,
+                &nonce_authority,
+            )
         }
         SystemInstruction::Allocate { space } => {
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
