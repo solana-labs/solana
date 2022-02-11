@@ -66,7 +66,7 @@ use {
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max blockl cost limit
+// by max block cost limit
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
