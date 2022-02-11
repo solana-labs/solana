@@ -501,6 +501,98 @@ impl BankingStage {
         has_more_unprocessed_transactions
     }
 
+    fn consume_buffered_packets_new(
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        qos_service: &QosService,
+    ) {
+        // scan buffer to collect unprocessed packet locators, state-less call
+        let (stakes, packet_locators) = 
+            QosService::collect_unprocessed_packets_locators_and_stakes(
+                buffered_packet_batches,
+                None, // TODO TAO - add packet_sedner_info later
+            );
+
+        // shuffle packets, if needed
+        // TODO TAO - flipping weight shuffle optionally
+        let enabled_stake_weighted_shuffle = true;
+        let shuffled_packet_locators = if enabled_stake_weighted_shuffle {
+            QosService::weighted_shuffle(&stakes, &packet_locators, None)// TODO TAO - add packet_sedner_info later
+        } else {
+            packet_locators
+        };
+
+        // remove TXs if its locator has been removed; or add TX for new locator; 
+        // modify state of qos_service.HashMap<locator, { &SanitizedTransaction, {CUs, fees,
+        // extra_fee} }>;
+        // any packet faield to be deserialized into TX, its locators are returned
+        //
+        // Is caching sanitized TXs for buffer a good idea? It does save from repeated deseralizing
+        // but also increases memory footprint. 
+        // need to check otu realwork actual impact
+        //
+        // Oops, can't create transactions with Bank. each sanitized_transaction is created for
+        // each bank -- for its address_loader (forr v0) and its feature_set to verify precompiles.
+        // so the question is: if I geta bank now, would create all TXs from packets wasteing bank
+        // time? I mean by the time all TXs wedre created (and they are not re-usable), bank
+        // already reached max-tick-high?
+        let failed_packet_locator = qos_service.reset_transactions_for_packets(&shuffled_packet_locators);
+
+        // mark those packets that failed to be deserailzied as processed, or discard=True. 
+        // What is current behavior?
+        // A: for a packet_batch, it always call `transactions_from_packets()` first to get a list
+        // of processible transactrions. Those transactions will be attempted then unprocessed will
+        // be buffered (hence the original_unprocessed_indexes will be updated to onlly include
+        // those packets that are good txs.)
+        filter_failed_packets(&mut buffered_packet_batches, failed_packet_locators);
+
+        // calculate transaction costs and fees, sort by fee/cu, return sorted &[&Transaction]
+        // 1. calculation 
+        // update 3rd col of value in qos_service.HashMap<locator, { &SanitizedTransaction, {CUs, fees,
+        // extra_fee} }>;
+        qos_service.reset_transaction_costs_and_fees();
+        // 2. get fee/cu sorted transaction slice
+        // from above create HashMap<fee/cu, &Transaction>
+        // sort by fee/cu, return slice of transactions
+        // NOte: should the fee is same, make sure the original order is maintained in new sorted
+        // list, therefore still retain some of stake-weight-shuffle benefits
+        let sorted_transactions: &[SanitizedTransaction] = qos_service.get_fee_prioritized_transactions();
+
+        // assert_eq!(sorted_transactions.len() + failed_packet_locators.len() ==
+        // packet_locators.len());
+
+        // Will bank becoming available (eg end of slot) be handled by process_transactions
+        // properly, eg: all subsiquencial TXs will be immediately returned as retry-ables?
+        // A: yes, the function loop process chunk of TXs from given TX vector, at end of each
+        // chunk, it checks MAX_Height or bank is gone, if so, it put all unprocessed into
+        // retryable list and break the loop to return immediately
+        //
+        // now push transactions down to processing pipeline
+        while ! end_of_slot {
+            let chunk_of_transactions = make_chunk(transactios);
+            let process_transactions_summary = Self::process_transactions(
+                bank: &Arc<Bank>,
+                bank_creation_time: &Instant,
+                chunk_of_transactions: &[SanitizedTransaction],
+                poh: &TransactionRecorder,
+                transaction_status_sender: Option<TransactionStatusSender>,
+                gossip_vote_sender: &ReplayVoteSender,
+                qos_service: &QosService,
+            );
+            // For each successful transaction processed, take it off from `unprocessed list`, 
+            mark_packet_processed_for_sucessful_transactions();
+
+            end_of_slot = check_end_of_slot();
+        }
+
+        // successfully processed TX should be removed from
+        // qos_servioce.cached_sanitized_transactions map, to reduce memory footprint
+        // retryable TXs should be maped back to their locators, then updated buffered batch with
+        // new retryable packet indexes
+
+        // purge buffer: remove those batches that are fully processed, or too old from buffer
+        buffered_packet_batchs.retain(){...}
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
@@ -521,6 +613,7 @@ impl BankingStage {
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
+        // Propose to change workflow here
         RetainMut::retain_mut(
             buffered_packet_batches,
             |buffered_packet_batch_and_offsets| {

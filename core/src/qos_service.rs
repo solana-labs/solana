@@ -29,6 +29,14 @@ pub enum QosMetrics {
     BlockBatchUpdate { bank: Arc<Bank> },
 }
 
+// To locate a packet in banking_stage's buffered packet batches.
+// It also serves as HashMap key to packet's corresponding sanitized transaction.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PacketLocator {
+    batch_index: usize,
+    packet_index: usize,
+}
+
 // QosService is local to each banking thread, each instance of QosService provides services to
 // one banking thread.
 // It hosts a private thread for async metrics reporting, tagged with banking thredas ID. Banking
@@ -49,6 +57,11 @@ pub struct QosService {
     // metrics reporting runs on a private thread
     reporting_thread: Option<JoinHandle<()>>,
     running_flag: Arc<AtomicBool>,
+    // cached sanitized transaction for unprocessed packets in banking_stage buffer,
+    // it allows to qos based on transaction data (eg. fee/cu),
+    // it also saves from repeated deseralizing by same leader when packet is retried
+    // successfully processed transaction is removed from this cache
+    cached_sanitized_transactions: HashMap<PacketLocator, SanitizedTransaction>,
 }
 
 impl Drop for QosService {
@@ -85,6 +98,7 @@ impl QosService {
             reporting_thread,
             running_flag,
             report_sender,
+            cached_sanitized_transaction: HashMap::new(),
         }
     }
 
@@ -203,6 +217,107 @@ impl QosService {
         self.metrics
             .actual_execute_time_us
             .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
+    // TODO TAO - add/move tests for these functions; 
+    //          - maybe move these state-less functions to util model
+    //
+    // Iterates packets in buffered batches, returns all unprocessed packet's stake,
+    // and its location (batch_index plus packet_index within batch)
+    pub fn get_stakes_and_locators(
+        buffered_packet_batches: &UnprocessedPacketBatches,
+        packet_sender_info: &mut Option<PacketSenderInfo>,
+    ) -> (Vec<u64>, Vec<PacketLocator>) {
+        let mut stakes = Vec::<u64>::new();
+        let mut locators = Vec::<PacketLocator>::new();
+
+        buffered_packet_batches.iter().enumerate().for_each(
+            |(batch_index, buffered_packet_batch_and_offsets)| {
+                let (packet_batch, original_unprocessed_indexes, _forwarded) =
+                    buffered_packet_batch_and_offsets;
+                original_unprocessed_indexes
+                    .iter()
+                    .for_each(|packet_index| {
+                        let p = &packet_batch.packets[*packet_index];
+                        stakes.push(p.meta.weight);
+                        locators.push(PacketLocator {
+                            batch_index,
+                            packet_index: *packet_index,
+                        });
+
+                        if let Some(packet_sender_info) = packet_sender_info {
+                            let ip = p.meta.addr;
+                            packet_sender_info.packet_senders_ip.push(ip);
+                            let sender_detail = packet_sender_info
+                                .senders_detail
+                                .entry(ip)
+                                .or_insert(SenderDetailInfo {
+                                    stake: p.meta.weight,
+                                    packet_count: 0u64,
+                                });
+                            sender_detail.packet_count =
+                                sender_detail.packet_count.saturating_add(1);
+                        }
+                    });
+            },
+        );
+
+        (stakes, locators)
+    }
+
+    #[allow(clippy::needless_collect)]
+    pub fn weighted_shuffle(
+        stakes: &[u64],
+        locators: &[PacketLocator],
+        packet_sender_info: &mut Option<PacketSenderInfo>,
+    ) -> Vec<(usize, usize)> {
+        let need_to_shuffle_sender_ips = packet_sender_info.is_some();
+        let mut shuffled_packet_senders_ip = Vec::<IpAddr>::new();
+
+        let mut rng = rand::thread_rng();
+        let shuffled_locators: Vec<PacketLocator> = WeightedShuffle::new(stakes)
+            .unwrap()
+            .shuffle(&mut rng)
+            .map(|i| {
+                if need_to_shuffle_sender_ips {
+                    let packet_sender_info = packet_sender_info.as_ref().unwrap();
+                    shuffled_packet_senders_ip.push(packet_sender_info.packet_senders_ip[i]);
+                }
+                locators[i].clone()
+            })
+            .collect();
+        if let Some(packet_sender_info) = packet_sender_info {
+            packet_sender_info.packet_senders_ip = shuffled_packet_senders_ip;
+        }
+    }
+
+    pub fn reset_transactions_for_packets(
+        &self,
+        packet_locators: &[(usize, usize)],
+        buffered_packet_batches: &UnprocessedPacketBatches,
+    ) {
+        packet_locators
+            .into_iter()
+            .for_each(|(batch_index, packet_index)| {
+                if !self.cached_sanitized_transactions.contains((batch_index, packet_index)) {
+                    if let Some((packet_batch, ref mut original_unprocessed_indexes, _forwarded)) =
+                        buffered_packet_batches.get_mut(batch_index) {
+                            if let Some(sanitized_tx) = Self::transaction_from_packet(packet_batch, packet_index) {
+                                self.cached_sanitized_transactions.insert( locator, sanitized_tx);
+                            }
+                            // if the packet identified by packet_index cannot be deserialized into
+                            // sanitized tx, it will not be in 'unprocessed packet indexes' at the
+                            // end of this loop.
+                    } else {
+                        // shouldn't be here
+                        // can add counter here
+                    }
+                }
+            });
+    }
+
+    fn transaction_from_packet(
+    ) -> Option<SanitizedTransaction> {
     }
 
     fn reporting_loop(
