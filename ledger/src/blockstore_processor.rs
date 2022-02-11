@@ -1,3 +1,5 @@
+use solana_program_runtime::timings::ExecuteTimingType;
+
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -283,8 +285,8 @@ fn execute_batches_internal(
             })
         });
 
-    timings.total_batches_len += batches.len();
-    timings.num_execute_batches += 1;
+    timings.saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
+    timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
     for timing in new_timings {
         timings.accumulate(&timing);
     }
