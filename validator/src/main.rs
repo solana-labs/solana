@@ -2579,8 +2579,10 @@ pub fn main() {
     }
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    solana_metrics::set_panic_hook("validator");
-
+    solana_metrics::set_panic_hook("validator", {
+        let version = format!("{:?}", solana_version::version!());
+        Some(version)
+    });
     solana_entry::entry::init_poh();
     snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
 
