@@ -273,11 +273,14 @@ impl WalletSubCommands for App<'_, '_> {
 }
 
 fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) -> Option<Pubkey> {
-    matches.value_of(arg_name).and_then(|v| match v {
-        "NONCE" => Some(system_program::id()),
-        "STAKE" => Some(stake::program::id()),
-        "VOTE" => Some(solana_vote_program::id()),
-        _ => pubkey_of(matches, arg_name),
+    matches.value_of(arg_name).and_then(|v| {
+        let upper = v.to_ascii_uppercase();
+        match upper.as_str() {
+            "NONCE" => Some(system_program::id()),
+            "STAKE" => Some(stake::program::id()),
+            "VOTE" => Some(solana_vote_program::id()),
+            _ => pubkey_of(matches, arg_name),
+        }
     })
 }
 
