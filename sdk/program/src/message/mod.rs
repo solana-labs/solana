@@ -55,9 +55,6 @@ pub use non_bpf_modules::*;
 /// The length of a message header in bytes.
 pub const MESSAGE_HEADER_LENGTH: usize = 3;
 
-<<<<<<< HEAD
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
-=======
 /// Describes the organization of a `Message`'s account keys.
 ///
 /// Every [`Instruction`] specifies which accounts it may reference, or
@@ -91,8 +88,7 @@ pub const MESSAGE_HEADER_LENGTH: usize = 3;
 /// access the same read-write accounts are processed sequentially.
 ///
 /// [PoH]: https://docs.solana.com/cluster/synchronization
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
->>>>>>> f7753ce85 (Document message APIs (#22873))
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered
