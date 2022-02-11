@@ -629,7 +629,7 @@ checksum = "ba2ae6de944143141f6155a473a6b02f66c7c3f9f47316f802f80204ebfe6e12"
 dependencies = [
  "camino",
  "cargo-platform",
- "semver 1.0.4",
+ "semver 1.0.5",
  "serde",
  "serde_json",
 ]
@@ -3973,7 +3973,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver 1.0.4",
+ "semver 1.0.5",
 ]
 
 [[package]]
@@ -4174,9 +4174,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
+checksum = "0486718e92ec9a68fbed73bb5ef687d71103b142595b406835649bebd33f72c7"
 dependencies = [
  "serde",
 ]
@@ -4809,7 +4809,7 @@ dependencies = [
  "num-traits",
  "pretty-hex",
  "reqwest",
- "semver 1.0.4",
+ "semver 1.0.5",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4890,7 +4890,7 @@ dependencies = [
  "log 0.4.14",
  "rayon",
  "reqwest",
- "semver 1.0.4",
+ "semver 1.0.5",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5258,7 +5258,7 @@ dependencies = [
  "lazy_static",
  "nix",
  "reqwest",
- "semver 1.0.4",
+ "semver 1.0.5",
  "serde",
  "serde_yaml",
  "solana-clap-utils",
@@ -5739,7 +5739,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.11.2",
  "qstring",
- "semver 1.0.4",
+ "semver 1.0.5",
  "solana-sdk",
  "thiserror",
  "uriparse",
@@ -6899,9 +6899,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.15.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbbf1c778ec206785635ce8ad57fe52b3009ae9e0c9f574a728f3049d3e55838"
+checksum = "0c27a64b625de6d309e8c57716ba93021dccf1b3b5c97edd6d3dd2d2135afc0a"
 dependencies = [
  "bytes 1.1.0",
  "libc",
