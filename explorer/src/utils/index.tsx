@@ -126,6 +126,11 @@ export function camelToTitleCase(str: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
+export function snakeToTitleCase(str: string): string {
+  const result = str.replace(/([-_]\w)/g, (g) => ` ${g[1].toUpperCase()}`);
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}
+
 export function abbreviatedNumber(value: number, fixed = 1) {
   if (value < 1e3) return value;
   if (value >= 1e3 && value < 1e6) return +(value / 1e3).toFixed(fixed) + "K";

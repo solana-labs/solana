@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import bs58 from "bs58";
 import {
@@ -30,6 +30,7 @@ import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
 import { InstructionsSection } from "components/transaction/InstructionsSection";
 import { ProgramLogSection } from "components/transaction/ProgramLogSection";
 import { clusterPath } from "utils/url";
+import { useFetchIdls } from "providers/idl";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -312,6 +313,24 @@ function DetailsSection({ signature }: SignatureProps) {
   const message = transaction?.message;
   const { status: clusterStatus } = useCluster();
   const refreshDetails = () => fetchDetails(signature);
+  const fetchIdls = useFetchIdls();
+  const ixProgramIds = useMemo(
+    () =>
+      details?.data?.transaction?.transaction.message.instructions
+        .map((ix) => ix.programId)
+        .filter(
+          (value, index, self) =>
+            self.map((i) => i.toBase58()).indexOf(value.toBase58()) === index
+        ),
+    [details]
+  );
+
+  // Fetch idls on load
+  React.useEffect(() => {
+    if (ixProgramIds && clusterStatus === ClusterStatus.Connected) {
+      fetchIdls(ixProgramIds);
+    }
+  }, [ixProgramIds, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch details on load
   React.useEffect(() => {

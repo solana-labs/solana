@@ -12,6 +12,13 @@ import {
   useRawTransactionDetails,
 } from "providers/transactions/raw";
 import { Address } from "components/common/Address";
+import { Idl } from "@project-serum/anchor";
+import {
+  decodeInstructionDataFromIdl,
+  matchInstructionAccountsFromIdl,
+} from "providers/idl";
+import { RawIdlParsedDetails } from "./RawIdlParsedDetails";
+import { TransactionInstructionIdlParsed } from "utils/instruction";
 
 type InstructionProps = {
   title: string;
@@ -22,6 +29,7 @@ type InstructionProps = {
   defaultRaw?: boolean;
   innerCards?: JSX.Element[];
   childIndex?: number;
+  idl?: Idl;
 };
 
 export function InstructionCard({
@@ -33,6 +41,7 @@ export function InstructionCard({
   defaultRaw,
   innerCards,
   childIndex,
+  idl,
 }: InstructionProps) {
   const [resultClass] = ixResult(result, index);
   const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
@@ -42,6 +51,20 @@ export function InstructionCard({
   let raw: TransactionInstruction | undefined = undefined;
   if (rawDetails && childIndex === undefined) {
     raw = rawDetails?.data?.raw?.transaction.instructions[index];
+  }
+
+  let ixParsed: TransactionInstructionIdlParsed | undefined;
+  if (!("parsed" in ix) && idl) {
+    const ixDataParsed = decodeInstructionDataFromIdl(ix.data, idl);
+    if (ixDataParsed) {
+      const accountsMatched = matchInstructionAccountsFromIdl(ix, idl);
+      if (accountsMatched) {
+        ixParsed = {
+          accounts: accountsMatched,
+          data: ixDataParsed,
+        };
+      }
+    }
   }
 
   const fetchRaw = useFetchRawTransaction();
@@ -92,6 +115,8 @@ export function InstructionCard({
                   <RawParsedDetails ix={ix}>
                     {raw ? <RawDetails ix={raw} /> : null}
                   </RawParsedDetails>
+                ) : ixParsed ? (
+                  <RawIdlParsedDetails ixParsed={ixParsed} />
                 ) : (
                   <RawDetails ix={ix} />
                 )}

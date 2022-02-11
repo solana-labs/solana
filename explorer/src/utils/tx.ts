@@ -19,6 +19,8 @@ import {
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
+import { Idl } from "@project-serum/anchor";
+import { snakeToTitleCase } from "utils";
 
 export type ProgramName =
   typeof PROGRAM_NAME_BY_ID[keyof typeof PROGRAM_NAME_BY_ID];
@@ -261,11 +263,15 @@ export const SYSVAR_IDS = {
 
 export function programLabel(
   address: string,
-  cluster: Cluster
+  cluster: Cluster,
+  idl?: Idl
 ): string | undefined {
   const programName = PROGRAM_NAME_BY_ID[address];
   if (programName && PROGRAM_DEPLOYMENTS[programName].includes(cluster)) {
     return programName;
+  }
+  if (idl) {
+    return snakeToTitleCase(idl.name);
   }
 
   return LOADER_IDS[address];

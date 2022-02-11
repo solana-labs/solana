@@ -10,6 +10,7 @@ import {
   ParsedConfirmedTransaction,
   ParsedInstruction,
   PartiallyDecodedInstruction,
+  PublicKey,
 } from "@solana/web3.js";
 import { intoTransactionInstruction } from "utils/tx";
 import {
@@ -34,6 +35,26 @@ export type InstructionType = {
   name: string;
   innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
 };
+
+export interface IdlAccountParsed {
+  name: string;
+  pubkey: PublicKey;
+  isSigner: boolean;
+  isWritable: boolean;
+}
+
+export type IdlAccountItemParsed = IdlAccountParsed | IdlAccountsParsed;
+
+// A nested/recursive version of IdlAccountParsed.
+export type IdlAccountsParsed = {
+  name: string;
+  accounts: IdlAccountItemParsed[];
+};
+
+export interface TransactionInstructionIdlParsed {
+  accounts: IdlAccountItemParsed[];
+  data: any;
+}
 
 export interface InstructionItem {
   instruction: ParsedInstruction | PartiallyDecodedInstruction;

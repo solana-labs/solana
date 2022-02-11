@@ -15,7 +15,8 @@ export function mapToDisplayableFields(account: Object) {
         <tr key={key}>
           <td>{key}</td>
           <td className="text-lg-end">
-            <div>Failed to display data</div>
+            <div>Failed to display data</div>{" "}
+            {/* TODO: Check if data can be shown in hex format */}
           </td>
         </tr>
       );

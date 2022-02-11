@@ -13,6 +13,7 @@ import { BlockProvider } from "./providers/block";
 import { EpochProvider } from "./providers/epoch";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
+import { IdlProvider } from "providers/idl";
 
 if (process.env.NODE_ENV === "production") {
   Sentry.init({
@@ -26,17 +27,19 @@ ReactDOM.render(
       <StatsProvider>
         <SupplyProvider>
           <RichListProvider>
-            <AccountsProvider>
-              <BlockProvider>
-                <EpochProvider>
-                  <MintsProvider>
-                    <TransactionsProvider>
-                      <App />
-                    </TransactionsProvider>
-                  </MintsProvider>
-                </EpochProvider>
-              </BlockProvider>
-            </AccountsProvider>
+            <IdlProvider>
+              <AccountsProvider>
+                <BlockProvider>
+                  <EpochProvider>
+                    <MintsProvider>
+                      <TransactionsProvider>
+                        <App />
+                      </TransactionsProvider>
+                    </MintsProvider>
+                  </EpochProvider>
+                </BlockProvider>
+              </AccountsProvider>
+            </IdlProvider>
           </RichListProvider>
         </SupplyProvider>
       </StatsProvider>

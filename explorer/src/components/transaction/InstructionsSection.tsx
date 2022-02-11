@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ErrorCard } from "components/common/ErrorCard";
 import {
   ParsedInnerInstruction,
@@ -41,6 +41,9 @@ import { isWormholeInstruction } from "components/instruction/wormhole/types";
 import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTokenDetailsCard";
 import { isMangoInstruction } from "components/instruction/mango/types";
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
+import { useIdls } from "providers/idl";
+import { Idl } from "@project-serum/anchor";
+import { IdlBasedDetailsCard } from "components/instruction/IdlBasedDetailsCard";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -57,6 +60,17 @@ export function InstructionsSection({ signature }: SignatureProps) {
   const { cluster } = useCluster();
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
+  const ixProgramIds = useMemo(
+    () =>
+      details?.data?.transaction?.transaction.message.instructions
+        .map((ix) => ix.programId)
+        .filter(
+          (value, index, self) =>
+            self.map((i) => i.toBase58()).indexOf(value.toBase58()) === index
+        ),
+    [details]
+  );
+  const idls = useIdls(ixProgramIds?.map((pk) => pk.toString()));
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
 
@@ -111,6 +125,8 @@ export function InstructionsSection({ signature }: SignatureProps) {
         });
       }
 
+      const idl = idls ? idls[index] : undefined;
+
       return renderInstructionCard({
         index,
         ix: instruction,
@@ -118,6 +134,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
         signature,
         tx: transaction,
         innerCards,
+        idl,
       });
     }
   );
@@ -144,6 +161,7 @@ function renderInstructionCard({
   signature,
   innerCards,
   childIndex,
+  idl,
 }: {
   ix: ParsedInstruction | PartiallyDecodedInstruction;
   tx: ParsedTransaction;
@@ -152,6 +170,7 @@ function renderInstructionCard({
   signature: TransactionSignature;
   innerCards?: JSX.Element[];
   childIndex?: number;
+  idl?: Idl | undefined;
 }) {
   const key = `${index}-${childIndex}`;
 
@@ -184,7 +203,11 @@ function renderInstructionCard({
       case "vote":
         return <VoteDetailsCard {...props} />;
       default:
-        return <UnknownDetailsCard {...props} />;
+        return idl ? (
+          <IdlBasedDetailsCard {...props} idl={idl} />
+        ) : (
+          <UnknownDetailsCard {...props} />
+        );
     }
   }
 
@@ -221,6 +244,10 @@ function renderInstructionCard({
   } else if (isWormholeInstruction(transactionIx)) {
     return <WormholeDetailsCard key={key} {...props} />;
   } else {
-    return <UnknownDetailsCard key={key} {...props} />;
+    return idl ? (
+      <IdlBasedDetailsCard key={key} {...props} idl={idl} />
+    ) : (
+      <UnknownDetailsCard key={key} {...props} />
+    );
   }
 }
