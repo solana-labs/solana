@@ -28,7 +28,8 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-        feature_set::{self, FeatureSet},
+        feature_set::{self, tx_wide_compute_cap, FeatureSet},
+        fee::FeeStructure,
         genesis_config::ClusterType,
         hash::Hash,
         message::{
@@ -472,6 +473,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
+        fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -484,7 +486,12 @@ impl Accounts {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
                     let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        Bank::calculate_fee(tx.message(), lamports_per_signature)
+                        Bank::calculate_fee(
+                            tx.message(),
+                            lamports_per_signature,
+                            fee_structure,
+                            feature_set.is_active(&tx_wide_compute_cap::id()),
+                        )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
@@ -1359,6 +1366,8 @@ mod tests {
         lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
+        feature_set: &FeatureSet,
+        fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
@@ -1382,7 +1391,8 @@ mod tests {
             &hash_queue,
             error_counters,
             rent_collector,
-            &FeatureSet::all_enabled(),
+            feature_set,
+            fee_structure,
         )
     }
 
@@ -1398,6 +1408,8 @@ mod tests {
             lamports_per_signature,
             &RentCollector::default(),
             error_counters,
+            &FeatureSet::all_enabled(),
+            &FeeStructure::default(),
         )
     }
 
@@ -1549,6 +1561,8 @@ mod tests {
         let fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
             10,
+            &FeeStructure::default(),
+            false,
         );
         assert_eq!(fee, 10);
 
@@ -1595,6 +1609,8 @@ mod tests {
     #[test]
     fn test_load_accounts_fee_payer_is_nonce() {
         let mut error_counters = ErrorCounters::default();
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&tx_wide_compute_cap::id());
         let rent_collector = RentCollector::new(
             0,
             &EpochSchedule::default(),
@@ -1631,6 +1647,8 @@ mod tests {
             min_balance,
             &rent_collector,
             &mut error_counters,
+            &feature_set,
+            &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
@@ -1645,6 +1663,8 @@ mod tests {
             min_balance,
             &rent_collector,
             &mut error_counters,
+            &feature_set,
+            &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
@@ -1658,6 +1678,8 @@ mod tests {
             min_balance,
             &rent_collector,
             &mut error_counters,
+            &feature_set,
+            &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
@@ -2982,6 +3004,7 @@ mod tests {
             &mut error_counters,
             &rent_collector,
             &FeatureSet::all_enabled(),
+            &FeeStructure::default(),
         )
     }
 
