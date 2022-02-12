@@ -9,9 +9,7 @@ use {
     thiserror::Error,
 };
 
-impl Eq for ReplicaAccountInfo<'_> {}
-
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Information about an account being updated
 pub struct ReplicaAccountInfo<'a> {
     /// The Pubkey for the account
