@@ -98,12 +98,8 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-<<<<<<< HEAD
                 &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
-=======
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 &mut LeaderSlotMetricsTracker::new(0),
->>>>>>> 2f9e30a1f (Introduce slot-specific packet metrics (#22906))
             );
         });
 
