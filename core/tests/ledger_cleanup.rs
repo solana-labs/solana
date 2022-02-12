@@ -9,7 +9,7 @@ mod tests {
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
-            blockstore_db::BlockstoreOptions,
+            blockstore_db::{BlockstoreOptions, ShredStorageType},
             get_tmp_ledger_path,
         },
         solana_measure::measure::Measure,
@@ -32,6 +32,7 @@ mod tests {
     const DEFAULT_SHREDS_PER_SLOT: u64 = 25;
     const DEFAULT_STOP_SIZE_BYTES: u64 = 0;
     const DEFAULT_STOP_SIZE_ITERATIONS: u64 = 0;
+    const DEFAULT_SHRED_DATA_CF_SIZE_BYTES: u64 = 125 * 1024 * 1024 * 1024;
 
     const ROCKSDB_FLUSH_GRACE_PERIOD_SECS: u64 = 20;
 
@@ -50,6 +51,8 @@ mod tests {
         no_compaction: bool,
         num_writers: u64,
         cleanup_service: bool,
+        fifo_compaction: bool,
+        shred_data_cf_size: u64,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -192,6 +195,12 @@ mod tests {
     /// - `CLEANUP_SERVICE`: whether to enable the background cleanup service.
     ///   If set to false, the ledger store in the benchmark will be purely relied
     ///   on RocksDB's compaction.  Default: true.
+    ///
+    /// Fifo-compaction settings:
+    /// - `FIFO_COMPACTION`: if true, then RocksDB's Fifo compaction will be
+    ///   used for storing data shreds.  Default: false.
+    /// - `SHRED_DATA_CF_SIZE_BYTES`: the maximum size of the data-shred column family.
+    ///   Default: 125 * 1024 * 1024 * 1024.
     fn get_benchmark_config() -> BenchmarkConfig {
         let benchmark_slots = read_env("BENCHMARK_SLOTS", DEFAULT_BENCHMARK_SLOTS);
         let batch_size_slots = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE_SLOTS);
@@ -213,6 +222,9 @@ mod tests {
         // If set to false, the ledger store will purely rely on RocksDB's
         // compaction to perform the clean-up.
         let cleanup_service = read_env("CLEANUP_SERVICE", true);
+        let fifo_compaction = read_env("FIFO_COMPACTION", false);
+        let shred_data_cf_size =
+            read_env("SHRED_DATA_CF_SIZE_BYTES", DEFAULT_SHRED_DATA_CF_SIZE_BYTES);
 
         BenchmarkConfig {
             benchmark_slots,
@@ -228,6 +240,8 @@ mod tests {
             no_compaction,
             num_writers,
             cleanup_service,
+            fifo_compaction,
+            shred_data_cf_size,
         }
     }
 
@@ -290,9 +304,20 @@ mod tests {
         solana_logger::setup_with("error,ledger_cleanup::tests=info");
 
         let ledger_path = get_tmp_ledger_path!();
-        let mut blockstore =
-            Blockstore::open_with_options(&ledger_path, BlockstoreOptions::default()).unwrap();
         let config = get_benchmark_config();
+        let mut blockstore = Blockstore::open_with_options(
+            &ledger_path,
+            if config.fifo_compaction {
+                BlockstoreOptions {
+                    shred_storage_type: ShredStorageType::RocksFifo,
+                    shred_data_cf_size: config.shred_data_cf_size,
+                    ..BlockstoreOptions::default()
+                }
+            } else {
+                BlockstoreOptions::default()
+            },
+        )
+        .unwrap();
         if config.no_compaction {
             blockstore.set_no_compaction(true);
         }
