@@ -83,15 +83,15 @@ impl fmt::Debug for DecryptHandle {
     }
 }
 
-/// Serialization of equality proofs
+/// Serialization of `CtxtCommEqualityProof`
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct EqualityProof(pub [u8; 192]);
+pub struct CtxtCommEqualityProof(pub [u8; 192]);
 
-// `EqualityProof` is a Pod and Zeroable.
+// `CtxtCommEqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for EqualityProof {}
-unsafe impl Pod for EqualityProof {}
+unsafe impl Zeroable for CtxtCommEqualityProof {}
+unsafe impl Pod for CtxtCommEqualityProof {}
 
 /// Serialization of validity proofs
 #[derive(Clone, Copy)]

@@ -27,7 +27,7 @@ mod target_arch {
             },
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                equality_proof::EqualityProof,
+                equality_proof::CtxtCommEqualityProof,
                 errors::*,
                 fee_proof::FeeSigmaProof,
                 validity_proof::{AggregatedValidityProof, ValidityProof},
@@ -151,16 +151,16 @@ mod target_arch {
         }
     }
 
-    impl From<EqualityProof> for pod::EqualityProof {
-        fn from(proof: EqualityProof) -> Self {
+    impl From<CtxtCommEqualityProof> for pod::CtxtCommEqualityProof {
+        fn from(proof: CtxtCommEqualityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::EqualityProof> for EqualityProof {
+    impl TryFrom<pod::CtxtCommEqualityProof> for CtxtCommEqualityProof {
         type Error = EqualityProofError;
 
-        fn try_from(pod: pod::EqualityProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::CtxtCommEqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

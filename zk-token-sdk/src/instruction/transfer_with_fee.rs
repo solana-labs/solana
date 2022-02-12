@@ -19,7 +19,7 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
-            equality_proof::EqualityProof,
+            equality_proof::CtxtCommEqualityProof,
             fee_proof::FeeSigmaProof,
             validity_proof::{AggregatedValidityProof, ValidityProof},
         },
@@ -256,7 +256,7 @@ impl Verifiable for TransferWithFeeData {
 pub struct TransferWithFeeProof {
     pub commitment_new_source: pod::PedersenCommitment,
     pub commitment_claimed: pod::PedersenCommitment,
-    pub equality_proof: pod::EqualityProof,
+    pub equality_proof: pod::CtxtCommEqualityProof,
     pub ciphertext_amount_validity_proof: pod::AggregatedValidityProof,
     pub fee_sigma_proof: pod::FeeSigmaProof,
     pub ciphertext_fee_validity_proof: pod::ValidityProof,
@@ -331,7 +331,7 @@ impl TransferWithFeeProof {
         transcript.append_commitment(b"commitment-claimed", &pod_commitment_claimed);
 
         // generate equality_proof
-        let equality_proof = EqualityProof::new(
+        let equality_proof = CtxtCommEqualityProof::new(
             keypair_source,
             ciphertext_new_source,
             source_new_balance,
@@ -420,7 +420,7 @@ impl TransferWithFeeProof {
         let commitment_new_source: PedersenCommitment = self.commitment_new_source.try_into()?;
         let commitment_claimed: PedersenCommitment = self.commitment_claimed.try_into()?;
 
-        let equality_proof: EqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
         let ciphertext_amount_validity_proof: AggregatedValidityProof =
             self.ciphertext_amount_validity_proof.try_into()?;
         let fee_sigma_proof: FeeSigmaProof = self.fee_sigma_proof.try_into()?;

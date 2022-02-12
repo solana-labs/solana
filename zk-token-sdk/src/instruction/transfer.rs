@@ -15,7 +15,7 @@ use {
         errors::ProofError,
         instruction::{combine_u32_ciphertexts, split_u64_into_u32, Role, Verifiable, TWO_32},
         range_proof::RangeProof,
-        sigma_proofs::{equality_proof::EqualityProof, validity_proof::AggregatedValidityProof},
+        sigma_proofs::{equality_proof::CtxtCommEqualityProof, validity_proof::AggregatedValidityProof},
         transcript::TranscriptProtocol,
     },
     arrayref::{array_ref, array_refs},
@@ -247,7 +247,7 @@ pub struct TransferProof {
     pub commitment_new_source: pod::PedersenCommitment,
 
     /// Associated equality proof
-    pub equality_proof: pod::EqualityProof,
+    pub equality_proof: pod::CtxtCommEqualityProof,
 
     /// Associated ciphertext validity proof
     pub validity_proof: pod::AggregatedValidityProof,
@@ -302,7 +302,7 @@ impl TransferProof {
         transcript.append_commitment(b"commitment-new-source", &pod_commitment_new_source);
 
         // generate equality_proof
-        let equality_proof = EqualityProof::new(
+        let equality_proof = CtxtCommEqualityProof::new(
             keypair_source,
             ciphertext_new_source,
             source_new_balance,
@@ -349,7 +349,7 @@ impl TransferProof {
         transcript.append_commitment(b"commitment-new-source", &self.commitment_new_source);
 
         let commitment: PedersenCommitment = self.commitment_new_source.try_into()?;
-        let equality_proof: EqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
