@@ -1488,7 +1488,6 @@ pub struct TransactionStatusBatch {
 #[derive(Clone)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
-    pub enable_cpi_and_log_storage: bool,
 }
 
 impl TransactionStatusSender {
@@ -1496,20 +1495,13 @@ impl TransactionStatusSender {
         &self,
         bank: Arc<Bank>,
         transactions: Vec<SanitizedTransaction>,
-        mut execution_results: Vec<TransactionExecutionResult>,
+        execution_results: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         rent_debits: Vec<RentDebits>,
     ) {
         let slot = bank.slot();
-        if !self.enable_cpi_and_log_storage {
-            execution_results.iter_mut().for_each(|execution_result| {
-                if let TransactionExecutionResult::Executed(details) = execution_result {
-                    details.log_messages.take();
-                    details.inner_instructions.take();
-                }
-            });
-        }
+
         if let Err(e) = self
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {

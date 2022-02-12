@@ -3040,6 +3040,7 @@ mod tests {
                 true,
                 None,
                 blockstore.clone(),
+                false,
                 &Arc::new(AtomicBool::new(false)),
             );
 
@@ -3052,7 +3053,6 @@ mod tests {
                 0,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
-                    enable_cpi_and_log_storage: false,
                 }),
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3199,6 +3199,7 @@ mod tests {
                 true,
                 None,
                 blockstore.clone(),
+                false,
                 &Arc::new(AtomicBool::new(false)),
             );
 
@@ -3211,7 +3212,6 @@ mod tests {
                 0,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
-                    enable_cpi_and_log_storage: false,
                 }),
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
