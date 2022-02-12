@@ -86,12 +86,6 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
-pub struct ProcessTransactionBatchOutput {
-    // The number of transactions filtered out by the cost model
-    cost_model_throttled_transactions_count: usize,
-    execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
-}
-
 pub struct ExecuteAndCommitTransactionsOutput {
     // Total number of transactions that were passed as candidates for execution
     transactions_attempted_execution_count: usize,
@@ -1214,7 +1208,6 @@ impl BankingStage {
 
             // If `bank_creation_time` is None, it's a test so ignore the option so
             // allow processing
-            // TODO adding timing metrics here from when bank was added to now
             let should_bank_still_be_processing_txs =
                 Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
             match (

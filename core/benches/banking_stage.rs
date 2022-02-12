@@ -8,9 +8,9 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::banking_stage::{
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker, BankingStage,
-        BankingStageStats,
+    solana_core::{
+        banking_stage::{BankingStage, BankingStageStats},
+        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
     },
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
