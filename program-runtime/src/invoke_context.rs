@@ -1670,13 +1670,14 @@ mod tests {
         feature_set.deactivate(&requestable_heap_size::id());
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
+        invoke_context.compute_budget = ComputeBudget::new(false);
 
         invoke_context
             .push(&noop_message, &noop_message.instructions()[0], &[0], &[])
             .unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::default()
+            ComputeBudget::new(false)
         );
         invoke_context.pop();
 
@@ -1686,7 +1687,7 @@ mod tests {
         let expected_compute_budget = ComputeBudget {
             max_units: 500_000,
             heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::default()
+            ..ComputeBudget::new(false)
         };
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1699,7 +1700,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::default()
+            ComputeBudget::new(false)
         );
         invoke_context.pop();
     }

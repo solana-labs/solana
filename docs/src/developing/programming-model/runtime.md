@@ -48,8 +48,12 @@ The policy is as follows:
 To prevent a program from abusing computation resources each instruction in a
 transaction is given a compute budget. The budget consists of computation units
 that are consumed as the program performs various operations and bounds that the
-program may not exceed. When the program consumes its entire budget or exceeds
-a bound then the runtime halts the program and returns an error.
+program may not exceed. When the program consumes its entire budget or exceeds a
+bound then the runtime halts the program and returns an error.
+
+Note: The compute budget currently applies per-instruction but is moving toward
+a per-transaction model.  For more information see [Transaction-wide Compute
+Budget](#transaction-wide-compute-buget).
 
 The following operations incur a compute cost:
 
@@ -60,12 +64,12 @@ The following operations incur a compute cost:
   - cross-program invocations
   - ...
 
-For cross-program invocations the programs invoked inherit the budget of their
+For cross-program invocations, the programs invoked inherit the budget of their
 parent. If an invoked program consume the budget or exceeds a bound the entire
-invocation chain and the parent are halted.
+invocation chain is halted.
 
 The current [compute
-budget](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L65)
+budget](https://github.com/solana-labs/solana/blob/0224a8b127ace4c6453dd6492a38c66cb999abd2/sdk/src/compute_budget.rs#L102)
 can be found in the Solana SDK.
 
 For example, if the current budget is:
@@ -80,6 +84,7 @@ max_invoke_depth: 4,
 max_call_depth: 64,
 stack_frame_size: 4096,
 log_pubkey_units: 100,
+...
 ```
 
 Then the program
@@ -90,7 +95,7 @@ Then the program
 - Can not exceed a BPF call depth of 64
 - Cannot exceed 4 levels of cross-program invocations.
 
-Since the compute budget is consumed incrementally as the program executes the
+Since the compute budget is consumed incrementally as the program executes, the
 total budget consumption will be a combination of the various costs of the
 operations it performs.
 
@@ -98,12 +103,38 @@ At runtime a program may log how much of the compute budget remains. See
 [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption)
 for more information.
 
-The budget values are conditional on feature enablement, take a look at the
-compute budget's
-[new](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97)
-function to find out how the budget is constructed. An understanding of how
-[features](runtime.md#features) work and what features are enabled on the
-cluster being used are required to determine the current budget's values.
+## Transaction-wide Compute Budget
+
+Transactions are processed as a single entity and are the primary unit of block
+scheduling.  In order to facilitate better block scheduling and account for the
+computational cost of each transaction, the compute budget is moving to a
+transaction-wide budget rather than per-instruction.
+
+For information on what the compute budget is and how it is applied see [Compute
+Budget](#compute-budget).
+
+With a transaction-wide compute budget the `max_units` cap is applied to the
+entire transaction rather than to each instruction within the transaction.  The
+default number of maximum units remains at 200k which means the sum of the
+compute units used by each instruction in the transaction must not exceed that
+value. The number of maximum units allows is intentionally kept small to
+facilitate optimized programs and form the bases for a minimum fee level.
+
+There are a lot of uses cases that require more than 200k units
+transaction-wide.  To enable these uses cases transactions can include a
+[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/0224a8b127ace4c6453dd6492a38c66cb999abd2/sdk/src/compute_budget.rs#L44)
+requesting a higher compute unit cap.  Higher compute caps will be charged
+higher fees.
+
+Compute Budget instructions don't require any accounts and must lie in the first
+3 instructions of a transaction otherwise they will be ignored.
+
+The `ComputeBudgetInstruction::request_units` function can be used to crate
+these instructions:
+
+```rust
+let instruction = ComputeBudgetInstruction::request_units(300_000);
+```
 
 ## New Features
 

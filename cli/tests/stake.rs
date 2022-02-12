@@ -18,6 +18,7 @@ use {
     solana_sdk::{
         account_utils::StateMut,
         commitment_config::CommitmentConfig,
+        fee::FeeStructure,
         nonce::State as NonceState,
         pubkey::Pubkey,
         signature::{keypair_from_seed, Keypair, Signer},
@@ -876,14 +877,15 @@ fn test_stake_authorize() {
 #[test]
 fn test_stake_authorize_with_fee_payer() {
     solana_logger::setup();
-    const SIG_FEE: u64 = 42;
+    let fee_one_sig = FeeStructure::default().get_max_fee(1, 0);
+    let fee_two_sig = FeeStructure::default().get_max_fee(2, 0);
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator = TestValidator::with_custom_fees(
         mint_pubkey,
-        SIG_FEE,
+        1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
     );
@@ -912,14 +914,14 @@ fn test_stake_authorize_with_fee_payer() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &default_pubkey, 100_000).unwrap();
-    check_balance!(100_000, &rpc_client, &config.signers[0].pubkey());
+    request_and_confirm_airdrop(&rpc_client, &config, &default_pubkey, 5_000_000).unwrap();
+    check_balance!(5_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_payer, &payer_pubkey, 100_000).unwrap();
-    check_balance!(100_000, &rpc_client, &payer_pubkey);
+    request_and_confirm_airdrop(&rpc_client, &config_payer, &payer_pubkey, 5_000_000).unwrap();
+    check_balance!(5_000_000, &rpc_client, &payer_pubkey);
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
-    check_balance!(100_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 5_000_000).unwrap();
+    check_balance!(5_000_000, &rpc_client, &offline_pubkey);
 
     check_ready(&rpc_client);
 
@@ -934,7 +936,7 @@ fn test_stake_authorize_with_fee_payer() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(1_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -945,8 +947,7 @@ fn test_stake_authorize_with_fee_payer() {
         from: 0,
     };
     process_command(&config).unwrap();
-    // `config` balance should be 50,000 - 1 stake account sig - 1 fee sig
-    check_balance!(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
+    check_balance!(4_000_000 - fee_two_sig, &rpc_client, &default_pubkey);
 
     // Assign authority with separate fee payer
     config.signers = vec![&default_signer, &payer_keypair];
@@ -970,10 +971,10 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config` balance has not changed, despite submitting the TX
-    check_balance!(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
+    check_balance!(4_000_000 - fee_two_sig, &rpc_client, &default_pubkey);
     // `config_payer` however has paid `config`'s authority sig
     // and `config_payer`'s fee sig
-    check_balance!(100_000 - SIG_FEE - SIG_FEE, &rpc_client, &payer_pubkey);
+    check_balance!(5_000_000 - fee_two_sig, &rpc_client, &payer_pubkey);
 
     // Assign authority with offline fee payer
     let blockhash = rpc_client.get_latest_blockhash().unwrap();
@@ -1021,10 +1022,10 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed
-    check_balance!(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
+    check_balance!(4_000_000 - fee_two_sig, &rpc_client, &default_pubkey);
     // `config_offline` however has paid 1 sig due to being both authority
     // and fee payer
-    check_balance!(100_000 - SIG_FEE, &rpc_client, &offline_pubkey);
+    check_balance!(5_000_000 - fee_one_sig, &rpc_client, &offline_pubkey);
 }
 
 #[test]
@@ -1058,12 +1059,17 @@ fn test_stake_split() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 500_000)
-        .unwrap();
-    check_balance!(500_000, &rpc_client, &config.signers[0].pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        50_000_000,
+    )
+    .unwrap();
+    check_balance!(50_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
-    check_balance!(100_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 1_000_000).unwrap();
+    check_balance!(1_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
@@ -1207,12 +1213,12 @@ fn test_stake_set_lockup() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 500_000)
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 5_000_000)
         .unwrap();
-    check_balance!(500_000, &rpc_client, &config.signers[0].pubkey());
+    check_balance!(5_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
-    check_balance!(100_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 1_000_000).unwrap();
+    check_balance!(1_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
