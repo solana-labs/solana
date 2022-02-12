@@ -59,6 +59,8 @@ struct SigVerifierStats {
     total_dedup: usize,
     total_excess_fail: usize,
     total_shrink_time: usize,
+    total_shrinks: usize,
+    total_valid_packets: usize,
 }
 
 impl SigVerifierStats {
@@ -168,6 +170,8 @@ impl SigVerifierStats {
             ("total_dedup", self.total_dedup, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
             ("total_shrink_time", self.total_shrink_time, i64),
+            ("total_shrinks", self.total_shrinks, i64),
+            ("total_valid_packets", self.total_valid_packets, i64),
         );
     }
 }
@@ -255,10 +259,13 @@ impl SigVerifyStage {
 
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_valid_packets = count_valid_packets(&batches);
-        if num_packets > num_valid_packets.saturating_mul(4) {
+        let start_len = batches.len();
+        const MAX_EMPTY_BATCH_RATIO: usize = 4;
+        if num_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
             let valid = shrink_batches(&mut batches);
             batches.truncate(valid);
         }
+        let total_shrinks = start_len.saturating_sub(batches.len());
         shrink_time.stop();
 
         sendr.send(batches)?;
@@ -294,8 +301,10 @@ impl SigVerifyStage {
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
         stats.total_dedup += dedup_fail;
+        stats.total_valid_packets += num_valid_packets;
         stats.total_excess_fail += excess_fail;
         stats.total_shrink_time += shrink_time.as_us() as usize;
+        stats.total_shrinks += total_shrinks;
 
         Ok(())
     }
