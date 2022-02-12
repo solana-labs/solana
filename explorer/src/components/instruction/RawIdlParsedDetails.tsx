@@ -1,18 +1,19 @@
 import React from "react";
 import { Address } from "components/common/Address";
-import { HexData } from "components/common/HexData";
 import { TransactionInstructionIdlParsed } from "utils/instruction";
 import { camelToTitleCase } from "utils";
+import { mapDataObjectToRows } from "providers/accounts/idl";
 
 export function RawIdlParsedDetails({
   ixParsed,
 }: {
   ixParsed: TransactionInstructionIdlParsed;
 }) {
-  console.log("huh");
-
   return (
     <>
+      <tr className="table-sep">
+        <td colSpan={2}>Instruction Accounts</td>
+      </tr>
       {ixParsed.accounts.map((item, keyIndex) => {
         if ("pubkey" in item) {
           const { pubkey, isSigner, isWritable, name } = item;
@@ -45,14 +46,10 @@ export function RawIdlParsedDetails({
         }
       })}
 
-      <tr>
-        <td>
-          Instruction Data <span className="text-muted">(Hex)</span>
-        </td>
-        <td className="text-lg-end">
-          <HexData raw={ixParsed.data} />
-        </td>
+      <tr className="table-sep">
+        <td colSpan={2}>Instruction Data</td>
       </tr>
+      {mapDataObjectToRows(ixParsed.data.parsed)}
     </>
   );
 }

@@ -6,7 +6,7 @@ import { Address } from "components/common/Address";
 import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import { mapToDisplayableFields } from "providers/accounts/idl";
+import { mapDataObjectToRows } from "providers/accounts/idl";
 
 export function IdlBasedAccount({
   account,
@@ -87,7 +87,7 @@ export function IdlBasedAccount({
             <td>Account type</td>
             <td className="text-lg-end">{accountType}</td>
           </tr>
-          {mapToDisplayableFields(idlBasedAccount)}
+          {mapDataObjectToRows(idlBasedAccount)}
         </TableCardBody>
       </div>
     </div>

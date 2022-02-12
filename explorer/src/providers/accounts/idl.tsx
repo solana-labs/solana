@@ -1,16 +1,14 @@
 import { Address } from "components/common/Address";
 import { ExpandableRow } from "components/common/ExpandableRow";
 import { Fragment, ReactNode } from "react";
+import { camelToTitleCase } from "utils";
 
-export function mapToDisplayableFields(account: Object) {
-  console.log(account);
-
-  return Object.entries(account).map(([key, value]) => {
+export function mapDataObjectToRows(data: Object) {
+  return Object.entries(data).map(([key, value]) => {
     try {
-      console.log(key, value);
       return mapField(key, value);
     } catch (error: any) {
-      console.log("Error while decoding IDL-based account data", error);
+      console.log("Error while displaying IDL-based account data", error);
       return (
         <tr key={key}>
           <td>{key}</td>
@@ -33,14 +31,13 @@ function mapField(
   if (value === null) {
     return (
       <tr key={keySuffix ? `${key}-${keySuffix}` : key}>
-        <td>{key}</td>
+        <td>{camelToTitleCase(key)}</td>
         <td className="text-lg-end">null</td>
       </tr>
     );
   }
 
   const objectType = value.constructor.name;
-  console.log({ nestingLevel, key, objectType });
 
   let itemKey: string;
   if (nestingLevel === 0) {
@@ -52,6 +49,8 @@ function mapField(
   } else {
     itemKey = keySuffix;
   }
+
+  itemKey = camelToTitleCase(itemKey);
 
   switch (objectType) {
     case "PublicKey":
@@ -87,7 +86,7 @@ function mapField(
     case "Array":
       return (
         <ExpandableRow
-          fieldName={key}
+          fieldName={itemKey}
           nestingLevel={nestingLevel}
           key={keySuffix ? `${key}-${keySuffix}` : key}
         >
@@ -102,7 +101,7 @@ function mapField(
     case "Object":
       return (
         <ExpandableRow
-          fieldName={key}
+          fieldName={itemKey}
           nestingLevel={nestingLevel}
           key={keySuffix ? `${key}-${keySuffix}` : key}
         >
