@@ -52,7 +52,7 @@ impl SlotStatusNotifierImpl {
 
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("accountsdb-plugin-update-slot");
-            match plugin.update_slot_status(slot, parent, slot_status.clone()) {
+            match plugin.update_slot_status(slot, parent, slot_status) {
                 Err(err) => {
                     error!(
                         "Failed to update slot status at slot {}, error: {} to plugin {}",
