@@ -42,7 +42,7 @@ use {
     solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_transaction_status::{
         ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
-        TransactionStatusMeta, TransactionWithStatusMeta,
+        TransactionStatusMeta, TransactionWithMetadata, TransactionWithOptionalMetadata,
     },
     std::{
         borrow::Cow,
@@ -1950,7 +1950,7 @@ impl Blockstore {
                     // from shreds received.
                     parent_slot: slot_meta.parent_slot.unwrap(),
                     transactions: self
-                        .map_transactions_to_statuses(slot, slot_transaction_iterator),
+                        .map_transactions_to_statuses(slot, slot_transaction_iterator)?,
                     rewards,
                     block_time,
                     block_height,
@@ -1965,17 +1965,16 @@ impl Blockstore {
         &self,
         slot: Slot,
         iterator: impl Iterator<Item = Transaction> + 'a,
-    ) -> Vec<TransactionWithStatusMeta> {
+    ) -> Result<Vec<TransactionWithMetadata>> {
         iterator
             .map(|transaction| {
                 let signature = transaction.signatures[0];
-                TransactionWithStatusMeta {
+                Ok(TransactionWithMetadata {
                     transaction,
                     meta: self
-                        .read_transaction_status((signature, slot))
-                        .ok()
-                        .flatten(),
-                }
+                        .read_transaction_status((signature, slot))?
+                        .ok_or(BlockstoreError::MissingTransactionMetadata)?,
+                })
             })
             .collect()
     }
@@ -2256,7 +2255,7 @@ impl Blockstore {
             let block_time = self.get_block_time(slot)?;
             Ok(Some(ConfirmedTransaction {
                 slot,
-                transaction: TransactionWithStatusMeta {
+                transaction: TransactionWithOptionalMetadata {
                     transaction,
                     meta: Some(status),
                 },
@@ -6082,7 +6081,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<TransactionWithStatusMeta> = entries
+        let expected_transactions: Vec<TransactionWithMetadata> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -6143,9 +6142,9 @@ pub mod tests {
                     .transaction_status_cf
                     .put_protobuf((0, signature, slot + 2), &status)
                     .unwrap();
-                TransactionWithStatusMeta {
+                TransactionWithMetadata {
                     transaction,
-                    meta: Some(TransactionStatusMeta {
+                    meta: TransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -6155,7 +6154,7 @@ pub mod tests {
                         pre_token_balances: Some(vec![]),
                         post_token_balances: Some(vec![]),
                         rewards: Some(vec![]),
-                    }),
+                    },
                 }
             })
             .collect();
@@ -6952,7 +6951,7 @@ pub mod tests {
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.set_roots(vec![slot - 1, slot].iter()).unwrap();
 
-        let expected_transactions: Vec<TransactionWithStatusMeta> = entries
+        let expected_transactions: Vec<TransactionWithOptionalMetadata> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -6989,7 +6988,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put_protobuf((0, signature, slot), &status)
                     .unwrap();
-                TransactionWithStatusMeta {
+                TransactionWithOptionalMetadata {
                     transaction,
                     meta: Some(TransactionStatusMeta {
                         status: Ok(()),
@@ -7030,7 +7029,7 @@ pub mod tests {
 
         blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
-        for TransactionWithStatusMeta { transaction, .. } in expected_transactions {
+        for TransactionWithOptionalMetadata { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
             assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None,);
             assert_eq!(
@@ -7051,7 +7050,7 @@ pub mod tests {
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
-        let expected_transactions: Vec<TransactionWithStatusMeta> = entries
+        let expected_transactions: Vec<TransactionWithOptionalMetadata> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -7088,7 +7087,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put_protobuf((0, signature, slot), &status)
                     .unwrap();
-                TransactionWithStatusMeta {
+                TransactionWithOptionalMetadata {
                     transaction,
                     meta: Some(TransactionStatusMeta {
                         status: Ok(()),
@@ -7122,7 +7121,7 @@ pub mod tests {
 
         blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
-        for TransactionWithStatusMeta { transaction, .. } in expected_transactions {
+        for TransactionWithOptionalMetadata { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
             assert_eq!(
                 blockstore
@@ -7877,6 +7876,16 @@ pub mod tests {
                     .unwrap();
                 transactions.push(transaction);
             }
+
+            let map_result =
+                blockstore.map_transactions_to_statuses(slot, transactions.clone().into_iter());
+            assert!(map_result.is_ok());
+            let map = map_result.unwrap();
+            assert_eq!(map.len(), 4);
+            for (x, m) in map.iter().enumerate() {
+                assert_eq!(m.meta.fee, x as u64);
+            }
+
             // Push transaction that will not have matching status, as a test case
             transactions.push(Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
@@ -7886,12 +7895,9 @@ pub mod tests {
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
-            let map = blockstore.map_transactions_to_statuses(slot, transactions.into_iter());
-            assert_eq!(map.len(), 5);
-            for (x, m) in map.iter().take(4).enumerate() {
-                assert_eq!(m.meta.as_ref().unwrap().fee, x as u64);
-            }
-            assert_eq!(map[4].meta, None);
+            let map_result =
+                blockstore.map_transactions_to_statuses(slot, transactions.into_iter());
+            assert_matches!(map_result, Err(BlockstoreError::MissingTransactionMetadata));
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

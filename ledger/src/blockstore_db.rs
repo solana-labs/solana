@@ -101,6 +101,7 @@ pub enum BlockstoreError {
     ProtobufDecodeError(#[from] prost::DecodeError),
     ParentEntriesUnavailable,
     SlotUnavailable,
+    MissingTransactionMetadata,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
