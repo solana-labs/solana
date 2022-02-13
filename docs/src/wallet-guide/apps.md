@@ -14,7 +14,7 @@ _Note: Coin98 does not support stake accounts or staking operations_
 
 ## Exodus
 
-Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+Send, receive, stake & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
 
 Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
 
