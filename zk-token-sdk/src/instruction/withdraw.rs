@@ -19,6 +19,8 @@ use {
     std::convert::TryInto,
 };
 
+const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
+
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
 /// the proof
 ///
@@ -166,7 +168,11 @@ impl WithdrawProof {
         // verify range proof
         //
         // TODO: double compressing here - consider modifying range proof input type to `PedersenCommitment`
-        range_proof.verify(vec![&commitment], vec![64_usize], transcript)?;
+        range_proof.verify(
+            vec![&commitment],
+            vec![WITHDRAW_AMOUNT_BIT_LENGTH],
+            transcript,
+        )?;
 
         Ok(())
     }

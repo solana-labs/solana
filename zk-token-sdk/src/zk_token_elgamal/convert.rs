@@ -313,9 +313,9 @@ mod target_arch {
     impl From<TransferPubkeys> for pod::TransferPubkeys {
         fn from(keys: TransferPubkeys) -> Self {
             Self {
-                source: keys.source.into(),
-                dest: keys.dest.into(),
-                auditor: keys.auditor.into(),
+                source_pubkey: keys.source_pubkey.into(),
+                dest_pubkey: keys.dest_pubkey.into(),
+                auditor_pubkey: keys.auditor_pubkey.into(),
             }
         }
     }
@@ -325,9 +325,9 @@ mod target_arch {
 
         fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
-                source: pod.source.try_into()?,
-                dest: pod.dest.try_into()?,
-                auditor: pod.auditor.try_into()?,
+                source_pubkey: pod.source_pubkey.try_into()?,
+                dest_pubkey: pod.dest_pubkey.try_into()?,
+                auditor_pubkey: pod.auditor_pubkey.try_into()?,
             })
         }
     }
@@ -335,10 +335,10 @@ mod target_arch {
     impl From<TransferWithFeePubkeys> for pod::TransferWithFeePubkeys {
         fn from(keys: TransferWithFeePubkeys) -> Self {
             Self {
-                source: keys.source.into(),
-                dest: keys.dest.into(),
-                auditor: keys.auditor.into(),
-                fee_collector: keys.fee_collector.into(),
+                source_pubkey: keys.source_pubkey.into(),
+                dest_pubkey: keys.dest_pubkey.into(),
+                auditor_pubkey: keys.auditor_pubkey.into(),
+                withdraw_withheld_authority_pubkey: keys.withdraw_withheld_authority_pubkey.into(),
             }
         }
     }
@@ -348,10 +348,12 @@ mod target_arch {
 
         fn try_from(pod: pod::TransferWithFeePubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
-                source: pod.source.try_into()?,
-                dest: pod.dest.try_into()?,
-                auditor: pod.auditor.try_into()?,
-                fee_collector: pod.fee_collector.try_into()?,
+                source_pubkey: pod.source_pubkey.try_into()?,
+                dest_pubkey: pod.dest_pubkey.try_into()?,
+                auditor_pubkey: pod.auditor_pubkey.try_into()?,
+                withdraw_withheld_authority_pubkey: pod
+                    .withdraw_withheld_authority_pubkey
+                    .try_into()?,
             })
         }
     }
@@ -360,9 +362,9 @@ mod target_arch {
         fn from(ciphertext: TransferAmountEncryption) -> Self {
             Self {
                 commitment: ciphertext.commitment.into(),
-                source: ciphertext.source.into(),
-                dest: ciphertext.dest.into(),
-                auditor: ciphertext.auditor.into(),
+                source_handle: ciphertext.source_handle.into(),
+                dest_handle: ciphertext.dest_handle.into(),
+                auditor_handle: ciphertext.auditor_handle.into(),
             }
         }
     }
@@ -373,9 +375,9 @@ mod target_arch {
         fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
             Ok(Self {
                 commitment: pod.commitment.try_into()?,
-                source: pod.source.try_into()?,
-                dest: pod.dest.try_into()?,
-                auditor: pod.auditor.try_into()?,
+                source_handle: pod.source_handle.try_into()?,
+                dest_handle: pod.dest_handle.try_into()?,
+                auditor_handle: pod.auditor_handle.try_into()?,
             })
         }
     }
@@ -384,8 +386,10 @@ mod target_arch {
         fn from(ciphertext: FeeEncryption) -> Self {
             Self {
                 commitment: ciphertext.commitment.into(),
-                dest: ciphertext.dest.into(),
-                fee_collector: ciphertext.fee_collector.into(),
+                dest_handle: ciphertext.dest_handle.into(),
+                withdraw_withheld_authority_handle: ciphertext
+                    .withdraw_withheld_authority_handle
+                    .into(),
             }
         }
     }
@@ -396,8 +400,10 @@ mod target_arch {
         fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
             Ok(Self {
                 commitment: pod.commitment.try_into()?,
-                dest: pod.dest.try_into()?,
-                fee_collector: pod.fee_collector.try_into()?,
+                dest_handle: pod.dest_handle.try_into()?,
+                withdraw_withheld_authority_handle: pod
+                    .withdraw_withheld_authority_handle
+                    .try_into()?,
             })
         }
     }
