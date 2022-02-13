@@ -407,8 +407,8 @@ impl CtxtCtxtEqualityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 192] {
-        let mut buf = [0_u8; 192];
+    pub fn to_bytes(&self) -> [u8; 224] {
+        let mut buf = [0_u8; 224];
         buf[..32].copy_from_slice(self.Y_0.as_bytes());
         buf[32..64].copy_from_slice(self.Y_1.as_bytes());
         buf[64..96].copy_from_slice(self.Y_2.as_bytes());

@@ -93,6 +93,16 @@ pub struct CtxtCommEqualityProof(pub [u8; 192]);
 unsafe impl Zeroable for CtxtCommEqualityProof {}
 unsafe impl Pod for CtxtCommEqualityProof {}
 
+/// Serialization of `CtxtCtxtEqualityProof`
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct CtxtCtxtEqualityProof(pub [u8; 224]);
+
+// `CtxtCtxtEqualityProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for CtxtCtxtEqualityProof {}
+unsafe impl Pod for CtxtCtxtEqualityProof {}
+
 /// Serialization of validity proofs
 #[derive(Clone, Copy)]
 #[repr(transparent)]
