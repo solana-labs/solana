@@ -87,7 +87,8 @@ impl CtxtCommEqualityProof {
         let mut y_r = Scalar::random(&mut OsRng);
 
         let Y_0 = (&y_s * P_source).compress();
-        let Y_1 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_source]).compress();
+        let Y_1 =
+            RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_source]).compress();
         let Y_2 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_r], vec![&(*G), &(*H)]).compress();
 
         // record masking factors in the transcript
@@ -171,17 +172,17 @@ impl CtxtCommEqualityProof {
                 &ww_negated,         // -ww
             ],
             vec![
-                P_source,  // P_source
-                &(*H), // H
-                &Y_0,  // Y_0
-                &(*G), // G
-                D_source,  // D_source
-                C_source,  // C_source
-                &Y_1,  // Y_1
-                &(*G), // G
-                &(*H), // H
-                C_dest, // C_dest
-                &Y_2,  // Y_2
+                P_source, // P_source
+                &(*H),    // H
+                &Y_0,     // Y_0
+                &(*G),    // G
+                D_source, // D_source
+                C_source, // C_source
+                &Y_1,     // Y_1
+                &(*G),    // G
+                &(*H),    // H
+                C_dest,   // C_dest
+                &Y_2,     // Y_2
             ],
         );
 
@@ -285,7 +286,8 @@ impl CtxtCtxtEqualityProof {
         let mut y_r = Scalar::random(&mut OsRng);
 
         let Y_0 = (&y_s * P_source).compress();
-        let Y_1 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_source]).compress();
+        let Y_1 =
+            RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_source]).compress();
         let Y_2 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_r], vec![&(*G), &(*H)]).compress();
         let Y_3 = (&y_r * P_dest).compress();
 
@@ -367,36 +369,36 @@ impl CtxtCtxtEqualityProof {
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
-                &self.z_s,           // z_s
-                &(-&c),              // -c
-                &(-&Scalar::one()),  // -identity
-                &(&w * &self.z_x),   // w * z_x
-                &(&w * &self.z_s),   // w * z_s
-                &(&w_negated * &c),  // -w * c
-                &w_negated,          // -w
-                &(&ww * &self.z_x),  // ww * z_x
-                &(&ww * &self.z_r),  // ww * z_r
-                &(&ww_negated * &c), // -ww * c
-                &ww_negated,         // -ww
-                &(&www * &self.z_r), // z_r
+                &self.z_s,            // z_s
+                &(-&c),               // -c
+                &(-&Scalar::one()),   // -identity
+                &(&w * &self.z_x),    // w * z_x
+                &(&w * &self.z_s),    // w * z_s
+                &(&w_negated * &c),   // -w * c
+                &w_negated,           // -w
+                &(&ww * &self.z_x),   // ww * z_x
+                &(&ww * &self.z_r),   // ww * z_r
+                &(&ww_negated * &c),  // -ww * c
+                &ww_negated,          // -ww
+                &(&www * &self.z_r),  // z_r
                 &(&www_negated * &c), // -www * c
                 &www_negated,
             ],
             vec![
-                P_source,  // P_source
-                &(*H), // H
-                &Y_0,  // Y_0
-                &(*G), // G
-                D_source,  // D_source
-                C_source,  // C_source
-                &Y_1,  // Y_1
-                &(*G), // G
-                &(*H), // H
-                C_dest, // C_dest
-                &Y_2,  // Y_2
-                P_dest, // P_dest
-                D_dest, // D_dest
-                &Y_3, // Y_3
+                P_source, // P_source
+                &(*H),    // H
+                &Y_0,     // Y_0
+                &(*G),    // G
+                D_source, // D_source
+                C_source, // C_source
+                &Y_1,     // Y_1
+                &(*G),    // G
+                &(*H),    // H
+                C_dest,   // C_dest
+                &Y_2,     // Y_2
+                P_dest,   // P_dest
+                D_dest,   // D_dest
+                &Y_3,     // Y_3
             ],
         );
 
@@ -443,7 +445,6 @@ impl CtxtCtxtEqualityProof {
         })
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -668,7 +669,9 @@ mod test {
         let ciphertext_source = keypair_source.public.encrypt(message_source);
 
         let opening_dest = PedersenOpening::new_rand();
-        let ciphertext_dest = keypair_dest.public.encrypt_with(message_dest, &opening_dest);
+        let ciphertext_dest = keypair_dest
+            .public
+            .encrypt_with(message_dest, &opening_dest);
 
         let mut transcript_prover = Transcript::new(b"Test");
         let mut transcript_verifier = Transcript::new(b"Test");
