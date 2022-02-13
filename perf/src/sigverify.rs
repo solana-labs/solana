@@ -505,41 +505,39 @@ impl Deduper {
 
 //inplace shrink a batch of packets
 pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
-    let mut i = 0;
-    let mut ii = 0;
-    let mut j = 1;
-    let mut jj = 0;
-    let mut last = 0;
-    while j < batches.len() {
-        while jj < batches[j].packets.len() {
+    let mut valid_batch_ix = 0;
+    let mut valid_packet_ix = 0;
+    let mut last_valid_batch = 0;
+    for j in 1..batches.len() {
+        for jj in 0..batches[j].packets.len() {
             if batches[j].packets[jj].meta.discard() {
-                jj = jj.saturating_add(1);
                 continue;
             }
-            last = j;
-            let mut done = false;
-            while i < j && !done {
-                while ii < batches[i].packets.len() {
-                    if batches[i].packets[ii].meta.discard() {
-                        batches[i].packets[ii] = batches[j].packets[jj].clone();
+            last_valid_batch = j;
+            let mut found_spot = false;
+            while valid_batch_ix < j && !found_spot {
+                while valid_packet_ix < batches[valid_batch_ix].packets.len() {
+                    if batches[valid_batch_ix].packets[valid_packet_ix]
+                        .meta
+                        .discard()
+                    {
+                        batches[valid_batch_ix].packets[valid_packet_ix] =
+                            batches[j].packets[jj].clone();
                         batches[j].packets[jj].meta.set_discard(true);
-                        last = i;
-                        done = true;
+                        last_valid_batch = valid_batch_ix;
+                        found_spot = true;
                         break;
                     }
-                    ii = ii.saturating_add(1);
+                    valid_packet_ix = valid_packet_ix.saturating_add(1);
                 }
-                if ii >= batches[i].packets.len() {
-                    ii = 0;
-                    i = i.saturating_add(1);
+                if valid_packet_ix >= batches[valid_batch_ix].packets.len() {
+                    valid_packet_ix = 0;
+                    valid_batch_ix = valid_batch_ix.saturating_add(1);
                 }
             }
-            jj = jj.saturating_add(1);
         }
-        jj = 0;
-        j = j.saturating_add(1);
     }
-    last.saturating_add(1)
+    last_valid_batch.saturating_add(1)
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
@@ -1482,9 +1480,11 @@ mod tests {
 
     #[test]
     fn test_shrink() {
-        for _ in 0..10 {
+        for _ in 0..5 {
             let mut batches = to_packet_batches(
-                &(0..1024).map(|_| test_tx()).collect::<Vec<_>>(),
+                &(0..PACKETS_PER_BATCH * 3)
+                    .map(|_| test_tx())
+                    .collect::<Vec<_>>(),
                 PACKETS_PER_BATCH,
             );
             batches.iter_mut().for_each(|b| {
