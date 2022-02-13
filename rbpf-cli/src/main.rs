@@ -273,17 +273,20 @@ native machine code before execting it in the virtual machine.",
         check(text_bytes, &config).unwrap();
     }
     Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
-    let analysis = Analysis::from_executable(&executable);
+    let mut analysis = LazyAnalysis::new(&executable);
 
     match matches.value_of("use") {
         Some("cfg") => {
             let mut file = File::create("cfg.dot").unwrap();
-            analysis.visualize_graphically(&mut file, None).unwrap();
+            analysis
+                .analyze()
+                .visualize_graphically(&mut file, None)
+                .unwrap();
             return;
         }
         Some("disassembler") => {
             let stdout = std::io::stdout();
-            analysis.disassemble(&mut stdout.lock()).unwrap();
+            analysis.analyze().disassemble(&mut stdout.lock()).unwrap();
             return;
         }
         _ => {}
@@ -325,13 +328,15 @@ native machine code before execting it in the virtual machine.",
     if matches.is_present("trace") {
         eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        let analysis = Analysis::from_executable(&executable);
-        vm.get_tracer().write(&mut file, &analysis).unwrap();
+        vm.get_tracer()
+            .write(&mut file, analysis.analyze())
+            .unwrap();
     }
     if matches.is_present("profile") {
         eprintln!("Profile is saved in profile.dot");
         let tracer = &vm.get_tracer();
-        let dynamic_analysis = DynamicAnalysis::new(tracer, &analysis);
+        let analysis = analysis.analyze();
+        let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();
         analysis
             .visualize_graphically(&mut file, Some(&dynamic_analysis))
@@ -352,5 +357,29 @@ impl Debug for Output {
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
         Ok(())
+    }
+}
+
+// Replace with std::lazy::Lazy when stabilized.
+// https://github.com/rust-lang/rust/issues/74465
+struct LazyAnalysis<'a> {
+    analysis: Option<Analysis<'a, BpfError, ThisInstructionMeter>>,
+    executable: &'a Executable<BpfError, ThisInstructionMeter>,
+}
+
+impl<'a> LazyAnalysis<'a> {
+    fn new(executable: &'a Executable<BpfError, ThisInstructionMeter>) -> Self {
+        Self {
+            analysis: None,
+            executable,
+        }
+    }
+
+    fn analyze(&mut self) -> &Analysis<BpfError, ThisInstructionMeter> {
+        if let Some(ref analysis) = self.analysis {
+            return analysis;
+        }
+        self.analysis
+            .insert(Analysis::from_executable(self.executable))
     }
 }
