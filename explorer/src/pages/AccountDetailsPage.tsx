@@ -41,6 +41,7 @@ import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import { IdlBasedAccount } from "components/account/IdlBasedAccount";
+import { useFetchIdl } from "providers/idl";
 
 const IDENTICON_WIDTH = 64;
 
@@ -125,6 +126,14 @@ export function AccountDetailsPage({ address, tab }: Props) {
   const { status } = useCluster();
   const info = useAccountInfo(address);
   let pubkey: PublicKey | undefined;
+  const fetchIdl = useFetchIdl();
+
+  // Fetch idls on load
+  React.useEffect(() => {
+    if (info?.data?.details?.owner && status === ClusterStatus.Connected) {
+      fetchIdl(info?.data?.details?.owner);
+    }
+  }, [info, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   try {
     pubkey = new PublicKey(address);

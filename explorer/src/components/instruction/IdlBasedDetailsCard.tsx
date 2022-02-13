@@ -8,8 +8,8 @@ import { InstructionCard } from "./InstructionCard";
 import { programLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { Idl } from "@project-serum/anchor";
-import { decodeInstructionDataFromIdl } from "providers/idl";
 import { camelToTitleCase } from "utils";
+import { parseIxData } from "providers/idl/parsing";
 
 export function IdlBasedDetailsCard({
   ix,
@@ -31,8 +31,8 @@ export function IdlBasedDetailsCard({
     programLabel(ix.programId.toBase58(), cluster, idl) || "Unknown Program";
   let ixName = "Unknown Instruction";
   if (!("parsed" in ix) && idl) {
-    const ixDataParsed = decodeInstructionDataFromIdl(ix.data, idl);
-    if (ixDataParsed) ixName = camelToTitleCase(ixDataParsed.type);
+    const ixDataParsed = parseIxData(ix.data, idl);
+    if (ixDataParsed) ixName = camelToTitleCase(ixDataParsed.name);
   }
   return (
     <InstructionCard

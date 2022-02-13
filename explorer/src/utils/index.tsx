@@ -56,6 +56,10 @@ export function lamportsToSolString(
   return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol);
 }
 
+export function numberWithSeparator(s: string) {
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 export function SolBalance({
   lamports,
   maximumFractionDigits = 9,

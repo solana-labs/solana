@@ -6,7 +6,9 @@ import { Address } from "components/common/Address";
 import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import { mapDataObjectToRows } from "providers/accounts/idl";
+import { mapAccountToRows } from "providers/idl/display";
+import { useIdl } from "providers/idl";
+import { IdlTypeDef } from "@project-serum/anchor/dist/cjs/idl";
 
 export function IdlBasedAccount({
   account,
@@ -14,12 +16,13 @@ export function IdlBasedAccount({
   idlBasedAccount,
 }: {
   account: Account;
-  accountType: string;
-  idlBasedAccount: Object;
+  accountType: IdlTypeDef;
+  idlBasedAccount: any;
 }) {
   const { details, lamports } = account;
   const { cluster } = useCluster();
   const { tokenRegistry } = useTokenRegistry();
+  const idl = useIdl(account.details?.owner.toBase58())?.data;
   if (lamports === undefined) return null;
 
   const label = addressLabel(account.pubkey.toBase58(), cluster, tokenRegistry);
@@ -77,19 +80,22 @@ export function IdlBasedAccount({
         </TableCardBody>
       </div>
 
-      <div className="card">
-        <div className="card-header align-items-center">
-          <h3 className="card-header-title">Data</h3>
-        </div>
+      {idl && (
+        <div className="card">
+          <div className="card-header align-items-center">
+            <h3 className="card-header-title">Data - {accountType.name}</h3>
+          </div>
 
-        <TableCardBody>
-          <tr>
-            <td>Account type</td>
-            <td className="text-lg-end">{accountType}</td>
-          </tr>
-          {mapDataObjectToRows(idlBasedAccount)}
-        </TableCardBody>
-      </div>
+          <TableCardBody>
+            <tr className="table-sep">
+              <td>Field</td>
+              <td>Type</td>
+              <td className="text-lg-end">Value</td>
+            </tr>
+            {mapAccountToRows(idlBasedAccount, accountType, idl)}
+          </TableCardBody>
+        </div>
+      )}
     </div>
   );
 }

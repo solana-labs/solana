@@ -13,12 +13,8 @@ import {
 } from "providers/transactions/raw";
 import { Address } from "components/common/Address";
 import { Idl } from "@project-serum/anchor";
-import {
-  decodeInstructionDataFromIdl,
-  matchInstructionAccountsFromIdl,
-} from "providers/idl";
 import { RawIdlParsedDetails } from "./RawIdlParsedDetails";
-import { TransactionInstructionIdlParsed } from "utils/instruction";
+import { InstructionParsed, parseIx } from "providers/idl/parsing";
 
 type InstructionProps = {
   title: string;
@@ -53,18 +49,9 @@ export function InstructionCard({
     raw = rawDetails?.data?.raw?.transaction.instructions[index];
   }
 
-  let ixParsed: TransactionInstructionIdlParsed | undefined;
-  if (!("parsed" in ix) && idl) {
-    const ixDataParsed = decodeInstructionDataFromIdl(ix.data, idl);
-    if (ixDataParsed) {
-      const accountsMatched = matchInstructionAccountsFromIdl(ix, idl);
-      if (accountsMatched) {
-        ixParsed = {
-          accounts: accountsMatched,
-          data: ixDataParsed,
-        };
-      }
-    }
+  let ixParsed: InstructionParsed | undefined;
+  if (idl && !("parsed" in ix)) {
+    ixParsed = parseIx(ix, idl);
   }
 
   const fetchRaw = useFetchRawTransaction();
@@ -101,29 +88,47 @@ export function InstructionCard({
         </button>
       </div>
       <div className="table-responsive mb-0">
-        <table className="table table-sm table-nowrap card-table">
-          <tbody className="list">
-            {showRaw ? (
-              <>
+        {ixParsed && idl && !("parsed" in ix) ? (
+          <>
+            <table className="table table-sm table-nowrap card-table">
+              <tbody className="list">
                 <tr>
                   <td>Program</td>
                   <td className="text-lg-end">
                     <Address pubkey={ix.programId} alignRight link />
                   </td>
                 </tr>
-                {"parsed" in ix ? (
-                  <RawParsedDetails ix={ix}>
-                    {raw ? <RawDetails ix={raw} /> : null}
-                  </RawParsedDetails>
-                ) : ixParsed ? (
-                  <RawIdlParsedDetails ixParsed={ixParsed} />
-                ) : (
-                  <RawDetails ix={ix} />
-                )}
-              </>
-            ) : (
-              children
-            )}
+              </tbody>
+            </table>
+            <RawIdlParsedDetails ixParsed={ixParsed} idl={idl} />
+          </>
+        ) : (
+          <table className="table table-sm table-nowrap card-table">
+            <tbody className="list">
+              {showRaw ? (
+                <>
+                  <tr>
+                    <td>Program</td>
+                    <td className="text-lg-end">
+                      <Address pubkey={ix.programId} alignRight link />
+                    </td>
+                  </tr>
+                  {"parsed" in ix ? (
+                    <RawParsedDetails ix={ix}>
+                      {raw ? <RawDetails ix={raw} /> : null}
+                    </RawParsedDetails>
+                  ) : (
+                    <RawDetails ix={ix} />
+                  )}
+                </>
+              ) : (
+                children
+              )}
+            </tbody>
+          </table>
+        )}
+        <table className="table table-sm table-nowrap card-table">
+          <tbody className="list">
             {innerCards && innerCards.length > 0 && (
               <tr>
                 <td colSpan={2}>

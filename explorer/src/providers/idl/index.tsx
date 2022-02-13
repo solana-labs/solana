@@ -1,5 +1,5 @@
 import React from "react";
-import { Connection, PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
@@ -7,13 +7,10 @@ import {
   decodeIdlAccount,
   idlAddress,
   Idl,
-  IdlAccountItem,
 } from "@project-serum/anchor/dist/cjs/idl";
 import { inflate } from "pako";
 import { utf8 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { reportError } from "utils/sentry";
-import { AccountsCoder, InstructionCoder } from "@project-serum/anchor";
-import { IdlAccountItemParsed } from "utils/instruction";
 
 type State = Cache.State<Idl>;
 type Dispatch = Cache.Dispatch<Idl>;
@@ -38,82 +35,6 @@ export function IdlProvider({ children }: IdlProviderProps) {
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
-}
-
-export function decodeAccountFromIdl(
-  account: Buffer,
-  idl: Idl
-): { type: string; parsed: object } | undefined {
-  if (idl.accounts && idl.accounts.length > 0) {
-    const coder = new AccountsCoder(idl);
-    const accountType = idl.accounts.find((accountType: any) =>
-      (account as Buffer)
-        .slice(0, 8)
-        .equals(AccountsCoder.accountDiscriminator(accountType.name))
-    );
-    if (accountType) {
-      const parsed = coder.decode(accountType.name, account);
-      return { type: accountType.name, parsed };
-    }
-  }
-}
-
-export function matchInstructionAccountFromIdl(
-  accounts: IdlAccountItem[],
-  ix: TransactionInstruction,
-  keyIndex: number
-): IdlAccountItemParsed[] {
-  let accountsMatched: IdlAccountItemParsed[] = [];
-  accounts.forEach((account) => {
-    if ("isMut" in account) {
-      accountsMatched.push({
-        isSigner: account.isSigner,
-        isWritable: account.isMut,
-        name: account.name,
-        pubkey: ix.keys[keyIndex].pubkey,
-      });
-      keyIndex++;
-    } else {
-      accountsMatched.push({
-        name: account.name,
-        accounts: matchInstructionAccountFromIdl(accounts, ix, keyIndex),
-      });
-    }
-  });
-  return accountsMatched;
-}
-
-export function matchInstructionAccountsFromIdl(
-  ix: TransactionInstruction,
-  idl: Idl
-): IdlAccountItemParsed[] | undefined {
-  if (idl.accounts && idl.accounts.length > 0) {
-    const ixDataParsed = decodeInstructionDataFromIdl(ix.data, idl);
-    if (!ixDataParsed) return undefined;
-    const ixType = ixDataParsed.type;
-    const ixDef = idl.instructions.find((ixDef) => ixDef.name === ixType);
-    if (!ixDef) return undefined;
-    if (ixDef.accounts.length !== ix.keys.length) {
-      console.log(
-        `Mismatching number of accounts between ix ${ix.keys.length} and IDL ${idl.instructions.length}`
-      );
-      return undefined;
-    }
-    return matchInstructionAccountFromIdl(ixDef.accounts, ix, 0);
-  }
-}
-
-export function decodeInstructionDataFromIdl(
-  ix: Buffer,
-  idl: Idl
-): { type: string; parsed: object } | undefined {
-  if (idl.accounts && idl.accounts.length > 0) {
-    const coder = new InstructionCoder(idl);
-    const parsed = coder.decode(ix);
-    if (!parsed) return undefined;
-    return { type: parsed.name, parsed: parsed.data };
-    // }
-  }
 }
 
 export async function fetchIdl(
@@ -167,6 +88,40 @@ export async function fetchIdls(
   });
 
   return idls;
+}
+
+export async function fetchAndCacheIdl(
+  dispatch: Dispatch,
+  programAddress: PublicKey,
+  cluster: Cluster,
+  url: string
+) {
+  dispatch({
+    type: ActionType.Update,
+    key: programAddress.toBase58(),
+    status: Cache.FetchStatus.Fetching,
+    url,
+  });
+
+  let data;
+  let fetchStatus;
+  try {
+    const idl = await fetchIdl(programAddress, cluster, url);
+    fetchStatus = FetchStatus.Fetched;
+    data = idl;
+  } catch (error) {
+    if (cluster !== Cluster.Custom) {
+      reportError(error, { url });
+    }
+    fetchStatus = FetchStatus.FetchFailed;
+  }
+  dispatch({
+    type: ActionType.Update,
+    status: fetchStatus,
+    data: data,
+    key: programAddress.toBase58(),
+    url,
+  });
 }
 
 export async function fetchAndCacheIdls(
@@ -240,15 +195,20 @@ export function useIdls(
   return programAddresses.map((a) => context.entries[a]?.data);
 }
 
-// export function useFetchIdl() {
-//   const { cluster, url } = useCluster();
-//   return React.useCallback(
-//     (programAccount: PublicKey) => {
-//       fetchIdl(programAccount, cluster, url);
-//     },
-//     [cluster, url]
-//   );
-// }
+export function useFetchIdl() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(`useFetchIdl must be used within a IdlProvider`);
+  }
+
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (programAccount: PublicKey) => {
+      fetchAndCacheIdl(dispatch, programAccount, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
+}
 
 export function useFetchIdls() {
   const dispatch = React.useContext(DispatchContext);

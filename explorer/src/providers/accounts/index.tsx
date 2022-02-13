@@ -28,7 +28,9 @@ import {
 import { RewardsProvider } from "./rewards";
 import { programs, MetadataJson } from "@metaplex/js";
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";
-import { decodeAccountFromIdl, fetchIdl } from "providers/idl";
+import { fetchIdl } from "providers/idl";
+import { parseAccount } from "providers/idl/parsing";
+import { IdlTypeDef } from "@project-serum/anchor/dist/cjs/idl";
 export { useAccountHistory } from "./history";
 
 const Metadata = programs.metadata.Metadata;
@@ -79,7 +81,7 @@ export type ConfigProgramData = {
 
 export type IdlBasedProgramData = {
   program: "idl-based";
-  type: string;
+  type: IdlTypeDef;
   parsed: any;
 };
 
@@ -296,12 +298,12 @@ async function fetchAccountInfo(
         console.log(idl);
 
         if (idl) {
-          const accountParsed = await decodeAccountFromIdl(result.data, idl);
+          const accountParsed = await parseAccount(result.data, idl);
           if (accountParsed) {
             data = {
               program: "idl-based",
               type: accountParsed.type,
-              parsed: accountParsed.parsed,
+              parsed: accountParsed.data,
             };
           }
         }

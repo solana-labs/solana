@@ -51,11 +51,6 @@ export type IdlAccountsParsed = {
   accounts: IdlAccountItemParsed[];
 };
 
-export interface TransactionInstructionIdlParsed {
-  accounts: IdlAccountItemParsed[];
-  data: any;
-}
-
 export interface InstructionItem {
   instruction: ParsedInstruction | PartiallyDecodedInstruction;
   inner: (ParsedInstruction | PartiallyDecodedInstruction)[];
