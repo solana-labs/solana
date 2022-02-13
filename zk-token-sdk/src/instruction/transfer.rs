@@ -34,9 +34,9 @@ const TRANSFER_AMOUNT_HI_BIT_LENGTH: usize = 32;
 #[cfg(not(target_arch = "bpf"))]
 pub struct TransferAmountEncryption {
     pub commitment: PedersenCommitment,
-    pub source_handle: DecryptHandle,
-    pub dest_handle: DecryptHandle,
-    pub auditor_handle: DecryptHandle,
+    pub handle_source: DecryptHandle,
+    pub handle_dest: DecryptHandle,
+    pub handle_auditor: DecryptHandle,
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -50,9 +50,9 @@ impl TransferAmountEncryption {
         let (commitment, opening) = Pedersen::new(amount);
         let transfer_amount_encryption = Self {
             commitment,
-            source_handle: pubkey_source.decrypt_handle(&opening),
-            dest_handle: pubkey_dest.decrypt_handle(&opening),
-            auditor_handle: pubkey_auditor.decrypt_handle(&opening),
+            handle_source: pubkey_source.decrypt_handle(&opening),
+            handle_dest: pubkey_dest.decrypt_handle(&opening),
+            handle_auditor: pubkey_auditor.decrypt_handle(&opening),
         };
 
         (transfer_amount_encryption, opening)
@@ -61,9 +61,9 @@ impl TransferAmountEncryption {
     pub fn to_pod(&self) -> pod::TransferAmountEncryption {
         pod::TransferAmountEncryption {
             commitment: self.commitment.into(),
-            source_handle: self.source_handle.into(),
-            dest_handle: self.dest_handle.into(),
-            auditor_handle: self.auditor_handle.into(),
+            handle_source: self.handle_source.into(),
+            handle_dest: self.handle_dest.into(),
+            handle_auditor: self.handle_auditor.into(),
         }
     }
 }
@@ -119,12 +119,12 @@ impl TransferData {
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
-            handle: ciphertext_lo.source_handle,
+            handle: ciphertext_lo.handle_source,
         };
 
         let transfer_amount_hi_source = ElGamalCiphertext {
             commitment: ciphertext_hi.commitment,
-            handle: ciphertext_hi.source_handle,
+            handle: ciphertext_hi.handle_source,
         };
 
         let ciphertext_new_source = ciphertext_old_source
@@ -132,9 +132,9 @@ impl TransferData {
 
         // generate transcript and append all public inputs
         let pod_transfer_pubkeys = pod::TransferPubkeys {
-            source_pubkey: keypair_source.public.into(),
-            dest_pubkey: (*pubkey_dest).into(),
-            auditor_pubkey: (*pubkey_auditor).into(),
+            pubkey_source: keypair_source.public.into(),
+            pubkey_dest: (*pubkey_dest).into(),
+            pubkey_auditor: (*pubkey_auditor).into(),
         };
         let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.into();
         let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
@@ -171,9 +171,9 @@ impl TransferData {
         let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
-            Role::Source => ciphertext_lo.source_handle,
-            Role::Dest => ciphertext_lo.dest_handle,
-            Role::Auditor => ciphertext_lo.auditor_handle,
+            Role::Source => ciphertext_lo.handle_source,
+            Role::Dest => ciphertext_lo.handle_dest,
+            Role::Auditor => ciphertext_lo.handle_auditor,
         };
 
         Ok(ElGamalCiphertext {
@@ -187,9 +187,9 @@ impl TransferData {
         let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
-            Role::Source => ciphertext_hi.source_handle,
-            Role::Dest => ciphertext_hi.dest_handle,
-            Role::Auditor => ciphertext_hi.auditor_handle,
+            Role::Source => ciphertext_hi.handle_source,
+            Role::Dest => ciphertext_hi.handle_dest,
+            Role::Auditor => ciphertext_hi.handle_auditor,
         };
 
         Ok(ElGamalCiphertext {
@@ -273,19 +273,19 @@ impl TransferProof {
     ) -> Transcript {
         let mut transcript = Transcript::new(b"transfer-proof");
 
-        transcript.append_pubkey(b"source_pubkey", &transfer_pubkeys.source_pubkey);
-        transcript.append_pubkey(b"dest_pubkey", &transfer_pubkeys.dest_pubkey);
-        transcript.append_pubkey(b"auditor_pubkey", &transfer_pubkeys.auditor_pubkey);
+        transcript.append_pubkey(b"pubkey-source", &transfer_pubkeys.pubkey_source);
+        transcript.append_pubkey(b"pubkey-dest", &transfer_pubkeys.pubkey_dest);
+        transcript.append_pubkey(b"pubkey-auditor", &transfer_pubkeys.pubkey_auditor);
 
         transcript.append_commitment(b"comm-lo-amount", &ciphertext_lo.commitment);
-        transcript.append_handle(b"lo-source-handle", &ciphertext_lo.source_handle);
-        transcript.append_handle(b"lo-dest-handle", &ciphertext_lo.dest_handle);
-        transcript.append_handle(b"lo-auditor-handle", &ciphertext_lo.auditor_handle);
+        transcript.append_handle(b"handle-lo-source", &ciphertext_lo.handle_source);
+        transcript.append_handle(b"handle-lo-dest", &ciphertext_lo.handle_dest);
+        transcript.append_handle(b"handle-lo-auditor", &ciphertext_lo.handle_auditor);
 
         transcript.append_commitment(b"comm-hi-amount", &ciphertext_hi.commitment);
-        transcript.append_handle(b"hi-source-handle", &ciphertext_hi.source_handle);
-        transcript.append_handle(b"hi-dest-handle", &ciphertext_hi.dest_handle);
-        transcript.append_handle(b"hi-auditor-handle", &ciphertext_hi.auditor_handle);
+        transcript.append_handle(b"handle-hi-source", &ciphertext_hi.handle_source);
+        transcript.append_handle(b"handle-hi-dest", &ciphertext_hi.handle_dest);
+        transcript.append_handle(b"handle-hi-auditor", &ciphertext_hi.handle_auditor);
 
         transcript.append_ciphertext(b"ciphertext-new-source", ciphertext_new_source);
 
@@ -353,7 +353,7 @@ impl TransferProof {
         ciphertext_lo: &TransferAmountEncryption,
         ciphertext_hi: &TransferAmountEncryption,
         transfer_pubkeys: &TransferPubkeys,
-        new_spendable_ciphertext: &ElGamalCiphertext,
+        ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
         transcript.append_commitment(b"commitment-new-source", &self.commitment_new_source);
@@ -367,8 +367,8 @@ impl TransferProof {
         //
         // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(
-            &transfer_pubkeys.source_pubkey,
-            new_spendable_ciphertext,
+            &transfer_pubkeys.pubkey_source,
+            ciphertext_new_spendable,
             &commitment,
             transcript,
         )?;
@@ -376,12 +376,12 @@ impl TransferProof {
         // verify validity proof
         aggregated_validity_proof.verify(
             (
-                &transfer_pubkeys.dest_pubkey,
-                &transfer_pubkeys.auditor_pubkey,
+                &transfer_pubkeys.pubkey_dest,
+                &transfer_pubkeys.pubkey_auditor,
             ),
             (&ciphertext_lo.commitment, &ciphertext_hi.commitment),
-            (&ciphertext_lo.dest_handle, &ciphertext_hi.dest_handle),
-            (&ciphertext_lo.auditor_handle, &ciphertext_hi.auditor_handle),
+            (&ciphertext_lo.handle_dest, &ciphertext_hi.handle_dest),
+            (&ciphertext_lo.handle_auditor, &ciphertext_hi.handle_auditor),
             transcript,
         )?;
 
@@ -406,9 +406,9 @@ impl TransferProof {
 #[repr(C)]
 #[cfg(not(target_arch = "bpf"))]
 pub struct TransferPubkeys {
-    pub source_pubkey: ElGamalPubkey,
-    pub dest_pubkey: ElGamalPubkey,
-    pub auditor_pubkey: ElGamalPubkey,
+    pub pubkey_source: ElGamalPubkey,
+    pub pubkey_dest: ElGamalPubkey,
+    pub pubkey_auditor: ElGamalPubkey,
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -416,26 +416,26 @@ impl TransferPubkeys {
     // TODO: use constructor instead
     pub fn to_bytes(&self) -> [u8; 96] {
         let mut bytes = [0u8; 96];
-        bytes[..32].copy_from_slice(&self.source_pubkey.to_bytes());
-        bytes[32..64].copy_from_slice(&self.dest_pubkey.to_bytes());
-        bytes[64..96].copy_from_slice(&self.auditor_pubkey.to_bytes());
+        bytes[..32].copy_from_slice(&self.pubkey_source.to_bytes());
+        bytes[32..64].copy_from_slice(&self.pubkey_dest.to_bytes());
+        bytes[64..96].copy_from_slice(&self.pubkey_auditor.to_bytes());
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
         let bytes = array_ref![bytes, 0, 96];
-        let (source_pubkey, dest_pubkey, auditor_pubkey) = array_refs![bytes, 32, 32, 32];
+        let (pubkey_source, pubkey_dest, pubkey_auditor) = array_refs![bytes, 32, 32, 32];
 
-        let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Verification)?;
-        let dest_pubkey = ElGamalPubkey::from_bytes(dest_pubkey).ok_or(ProofError::Verification)?;
-        let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Verification)?;
+        let pubkey_source =
+            ElGamalPubkey::from_bytes(pubkey_source).ok_or(ProofError::Verification)?;
+        let pubkey_dest = ElGamalPubkey::from_bytes(pubkey_dest).ok_or(ProofError::Verification)?;
+        let pubkey_auditor =
+            ElGamalPubkey::from_bytes(pubkey_auditor).ok_or(ProofError::Verification)?;
 
         Ok(Self {
-            source_pubkey,
-            dest_pubkey,
-            auditor_pubkey,
+            pubkey_source,
+            pubkey_dest,
+            pubkey_auditor,
         })
     }
 }
