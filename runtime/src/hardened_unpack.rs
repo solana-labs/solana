@@ -467,6 +467,9 @@ fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool 
         (["rocksdb"], Directory) => true,
         (["rocksdb", _], GNUSparse) => true,
         (["rocksdb", _], Regular) => true,
+        (["rocksdb_fifo"], Directory) => true,
+        (["rocksdb_fifo", _], GNUSparse) => true,
+        (["rocksdb_fifo", _], Regular) => true,
         _ => false,
     }
 }
@@ -600,6 +603,18 @@ mod tests {
             &["rocksdb", "foo"],
             tar::EntryType::GNUSparse,
         ));
+        assert!(is_valid_genesis_archive_entry(
+            &["rocksdb_fifo"],
+            tar::EntryType::Directory
+        ));
+        assert!(is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo"],
+            tar::EntryType::Regular
+        ));
+        assert!(is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo"],
+            tar::EntryType::GNUSparse,
+        ));
 
         assert!(!is_valid_genesis_archive_entry(
             &["aaaa"],
@@ -631,6 +646,30 @@ mod tests {
         ));
         assert!(!is_valid_genesis_archive_entry(
             &["rocksdb", "foo", "bar"],
+            tar::EntryType::GNUSparse
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo"],
+            tar::EntryType::GNUSparse,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo"],
+            tar::EntryType::Directory,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo", "bar"],
+            tar::EntryType::Directory,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo", "bar"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo", "bar"],
             tar::EntryType::GNUSparse
         ));
     }
