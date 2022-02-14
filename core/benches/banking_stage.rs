@@ -8,7 +8,10 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::banking_stage::{BankingStage, BankingStageStats},
+    solana_core::{
+        banking_stage::{BankingStage, BankingStageStats},
+        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+    },
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
@@ -95,6 +98,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &BankingStageStats::default(),
                 &recorder,
                 &Arc::new(RwLock::new(CostModel::default())),
+                &mut LeaderSlotMetricsTracker::new(0),
             );
         });
 
