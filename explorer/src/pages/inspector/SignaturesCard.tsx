@@ -43,7 +43,9 @@ export function TransactionSignatures({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title">Signatures</h3>
+        <h3 id="txSignatures" className="card-header-title">
+          <a href="#txSignatures">Signatures</a>
+        </h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">

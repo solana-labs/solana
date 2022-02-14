@@ -34,9 +34,14 @@ function InstructionCard({
   return (
     <div className="card" id={`instruction-index-${index + 1}`} key={index}>
       <div className={`card-header${!expanded ? " border-bottom-none" : ""}`}>
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
+        <h3
+          id={`txInstruction${index + 1}`}
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
           <span className={`badge bg-info-soft me-2`}>#{index + 1}</span>
-          {programName} Instruction
+          <a href={`#txInstruction${index + 1}`}>
+            {programName} Instruction
+          </a>
         </h3>
 
         <button

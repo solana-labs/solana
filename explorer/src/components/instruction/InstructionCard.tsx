@@ -58,12 +58,20 @@ export function InstructionCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
+        <h3
+          id={`instruction${index + 1}`}
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
           <span className={`badge bg-${resultClass}-soft me-2`}>
             #{index + 1}
             {childIndex !== undefined ? `.${childIndex + 1}` : ""}
           </span>
-          {title}
+          <a href={childIndex === undefined
+            ? `#instruction${index + 1}`
+            : `#instruction${index + 1}.${childIndex + 1}`}
+          >
+            {title}
+          </a>
         </h3>
 
         <button

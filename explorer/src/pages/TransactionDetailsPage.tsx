@@ -204,7 +204,9 @@ function StatusCard({
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Overview</h3>
+        <h3 id="txOverview" className="card-header-title">
+          <a href="#txOverview">Overview</a>
+        </h3>
         <Link
           to={clusterPath(`/tx/${signature}/inspect`)}
           className="btn btn-white btn-sm me-2"
@@ -398,7 +400,9 @@ function AccountsCard({ signature }: SignatureProps) {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title">Account Input(s)</h3>
+        <h3 id="accountInputs" className="card-header-title">
+          <a href="#accountInputs">Account Input(s)</a>
+        </h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">

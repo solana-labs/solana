@@ -25,7 +25,9 @@ export function ProgramLogSection({ signature }: SignatureProps) {
     <>
       <div className="card">
         <div className="card-header">
-          <h3 className="card-header-title">Program Logs</h3>
+          <h3 id="programLogs" className="card-header-title">
+            <a href="#programLogs">Program Logs</a>
+          </h3>
         </div>
         {prettyLogs !== null ? (
           <ProgramLogsCardBody

@@ -94,6 +94,10 @@ export function InstructionsSection({ signature }: SignatureProps) {
 
       if (index in innerInstructions) {
         innerInstructions[index].forEach((ix, childIndex) => {
+          console.log("=============");
+          console.log(ix);
+          console.log(childIndex);
+          console.log("=============");
           if (typeof ix.programId === "string") {
             ix.programId = new PublicKey(ix.programId);
           }
@@ -127,7 +131,9 @@ export function InstructionsSection({ signature }: SignatureProps) {
       <div className="container">
         <div className="header">
           <div className="header-body">
-            <h3 className="mb-0">Instruction(s)</h3>
+            <h3 className="mb-0" id="instructions">
+              <a href="#instructions">Instruction(s)</a>
+            </h3>
           </div>
         </div>
       </div>

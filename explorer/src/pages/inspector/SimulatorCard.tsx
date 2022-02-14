@@ -19,7 +19,9 @@ export function SimulatorCard({ message }: { message: Message }) {
     return (
       <div className="card">
         <div className="card-header">
-          <h3 className="card-header-title">Transaction Simulation</h3>
+          <h3 id="txSimulation" className="card-header-title">
+            <a href="#txSimulation">Transaction Simulation</a>
+          </h3>
         </div>
         <div className="card-body text-center">
           <span className="spinner-grow spinner-grow-sm me-2"></span>
@@ -31,7 +33,9 @@ export function SimulatorCard({ message }: { message: Message }) {
     return (
       <div className="card">
         <div className="card-header">
-          <h3 className="card-header-title">Transaction Simulation</h3>
+          <h3 id="txSimulation" className="card-header-title">
+            <a href="#txSimulation">Transaction Simulation</a>
+          </h3>
           <button className="btn btn-sm d-flex btn-white" onClick={simulate}>
             Simulate
           </button>

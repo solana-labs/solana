@@ -311,7 +311,9 @@ function OverviewCard({
     <>
       <div className="card">
         <div className="card-header">
-          <h3 className="card-header-title">Transaction Overview</h3>
+          <h3 id="txOverview" className="card-header-title">
+            <a href="#txOverview">Transaction Overview</a>
+          </h3>
           <button className="btn btn-sm d-flex btn-white" onClick={onClear}>
             Clear
           </button>
