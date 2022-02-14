@@ -589,7 +589,7 @@ fn main() {
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
-    let admin_service_cluster_info = Arc::new(RwLock::new(None));
+    let admin_service_post_init = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -601,7 +601,7 @@ fn main() {
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
-            cluster_info: admin_service_cluster_info.clone(),
+            post_init: admin_service_post_init.clone(),
             tower_storage: tower_storage.clone(),
         },
     );
@@ -695,7 +695,12 @@ fn main() {
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
         Ok(test_validator) => {
-            *admin_service_cluster_info.write().unwrap() = Some(test_validator.cluster_info());
+            *admin_service_post_init.write().unwrap() =
+                Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
+                    bank_forks: test_validator.bank_forks(),
+                    cluster_info: test_validator.cluster_info(),
+                    vote_account: test_validator.vote_account_address(),
+                });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
             }

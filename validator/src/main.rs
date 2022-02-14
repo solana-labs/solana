@@ -1668,6 +1668,12 @@ pub fn main() {
                     .validator(is_keypair)
                     .help("Validator identity keypair")
             )
+            .arg(
+                clap::Arg::with_name("require_tower")
+                    .long("require-tower")
+                    .takes_value(false)
+                    .help("Refuse to set the validator identity if saved tower state is not found"),
+            )
             .after_help("Note: the new identity only applies to the \
                          currently running validator instance")
         )
@@ -1839,6 +1845,7 @@ pub fn main() {
             return;
         }
         ("set-identity", Some(subcommand_matches)) => {
+            let require_tower = subcommand_matches.is_present("require_tower");
             let identity_keypair = value_t_or_exit!(subcommand_matches, "identity", String);
 
             let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
@@ -1852,7 +1859,7 @@ pub fn main() {
                 .block_on(async move {
                     admin_client
                         .await?
-                        .set_identity(identity_keypair.display().to_string())
+                        .set_identity(identity_keypair.display().to_string(), require_tower)
                         .await
                 })
                 .unwrap_or_else(|err| {
@@ -2504,7 +2511,7 @@ pub fn main() {
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
-    let admin_service_cluster_info = Arc::new(RwLock::new(None));
+    let admin_service_post_init = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -2513,7 +2520,7 @@ pub fn main() {
             validator_exit: validator_config.validator_exit.clone(),
             start_progress: start_progress.clone(),
             authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            cluster_info: admin_service_cluster_info.clone(),
+            post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
         },
     );
@@ -2658,7 +2665,12 @@ pub fn main() {
         start_progress,
         socket_addr_space,
     );
-    *admin_service_cluster_info.write().unwrap() = Some(validator.cluster_info.clone());
+    *admin_service_post_init.write().unwrap() =
+        Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
+            bank_forks: validator.bank_forks.clone(),
+            cluster_info: validator.cluster_info.clone(),
+            vote_account,
+        });
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
