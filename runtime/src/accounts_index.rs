@@ -861,6 +861,8 @@ impl<T: IndexValue> AccountsIndex<T> {
         if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
             // allocate with disk buckets
             config.index_limit_mb = Some(limit.parse::<usize>().unwrap());
+        } else {
+            config.index_limit_mb = Some(10_000);
         }
 
         Self::new(Some(config))
