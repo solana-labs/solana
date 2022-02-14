@@ -8,9 +8,15 @@ use {
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
+<<<<<<< HEAD
     solana_gossip::cluster_info::ClusterInfo,
+=======
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_runtime::bank_forks::BankForks,
+>>>>>>> a6d736572 (`solana-validator set-identity` now supports the `--require-tower` flag)
     solana_sdk::{
         exit::Exit,
+        pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
@@ -23,17 +29,112 @@ use {
 };
 
 #[derive(Clone)]
+pub struct AdminRpcRequestMetadataPostInit {
+    pub cluster_info: Arc<ClusterInfo>,
+    pub bank_forks: Arc<RwLock<BankForks>>,
+    pub vote_account: Pubkey,
+}
+
+#[derive(Clone)]
 pub struct AdminRpcRequestMetadata {
     pub rpc_addr: Option<SocketAddr>,
     pub start_time: SystemTime,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
-    pub cluster_info: Arc<RwLock<Option<Arc<ClusterInfo>>>>,
     pub tower_storage: Arc<dyn TowerStorage>,
+    pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
+<<<<<<< HEAD
+=======
+impl AdminRpcRequestMetadata {
+    fn with_post_init<F, R>(&self, func: F) -> Result<R>
+    where
+        F: FnOnce(&AdminRpcRequestMetadataPostInit) -> Result<R>,
+    {
+        if let Some(post_init) = self.post_init.read().unwrap().as_ref() {
+            func(post_init)
+        } else {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "Retry once validator start up is complete",
+            ))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AdminRpcContactInfo {
+    pub id: String,
+    pub gossip: SocketAddr,
+    pub tvu: SocketAddr,
+    pub tvu_forwards: SocketAddr,
+    pub repair: SocketAddr,
+    pub tpu: SocketAddr,
+    pub tpu_forwards: SocketAddr,
+    pub tpu_vote: SocketAddr,
+    pub rpc: SocketAddr,
+    pub rpc_pubsub: SocketAddr,
+    pub serve_repair: SocketAddr,
+    pub last_updated_timestamp: u64,
+    pub shred_version: u16,
+}
+
+impl From<ContactInfo> for AdminRpcContactInfo {
+    fn from(contact_info: ContactInfo) -> Self {
+        let ContactInfo {
+            id,
+            gossip,
+            tvu,
+            tvu_forwards,
+            repair,
+            tpu,
+            tpu_forwards,
+            tpu_vote,
+            rpc,
+            rpc_pubsub,
+            serve_repair,
+            wallclock,
+            shred_version,
+        } = contact_info;
+        Self {
+            id: id.to_string(),
+            last_updated_timestamp: wallclock,
+            gossip,
+            tvu,
+            tvu_forwards,
+            repair,
+            tpu,
+            tpu_forwards,
+            tpu_vote,
+            rpc,
+            rpc_pubsub,
+            serve_repair,
+            shred_version,
+        }
+    }
+}
+
+impl Display for AdminRpcContactInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Identity: {}", self.id)?;
+        writeln!(f, "Gossip: {}", self.gossip)?;
+        writeln!(f, "TVU: {}", self.tvu)?;
+        writeln!(f, "TVU Forwards: {}", self.tvu_forwards)?;
+        writeln!(f, "Repair: {}", self.repair)?;
+        writeln!(f, "TPU: {}", self.tpu)?;
+        writeln!(f, "TPU Forwards: {}", self.tpu_forwards)?;
+        writeln!(f, "TPU Votes: {}", self.tpu_vote)?;
+        writeln!(f, "RPC: {}", self.rpc)?;
+        writeln!(f, "RPC Pubsub: {}", self.rpc_pubsub)?;
+        writeln!(f, "Serve Repair: {}", self.serve_repair)?;
+        writeln!(f, "Last Updated Timestamp: {}", self.last_updated_timestamp)?;
+        writeln!(f, "Shred Version: {}", self.shred_version)
+    }
+}
+
+>>>>>>> a6d736572 (`solana-validator set-identity` now supports the `--require-tower` flag)
 #[rpc]
 pub trait AdminRpc {
     type Metadata;
@@ -60,7 +161,19 @@ pub trait AdminRpc {
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()>;
 
     #[rpc(meta, name = "setIdentity")]
+<<<<<<< HEAD
     fn set_identity(&self, meta: Self::Metadata, keypair_file: String) -> Result<()>;
+=======
+    fn set_identity(
+        &self,
+        meta: Self::Metadata,
+        keypair_file: String,
+        require_tower: bool,
+    ) -> Result<()>;
+
+    #[rpc(meta, name = "contactInfo")]
+    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
+>>>>>>> a6d736572 (`solana-validator set-identity` now supports the `--require-tower` flag)
 }
 
 pub struct AdminRpcImpl;
@@ -137,7 +250,12 @@ impl AdminRpc for AdminRpcImpl {
         Ok(())
     }
 
-    fn set_identity(&self, meta: Self::Metadata, keypair_file: String) -> Result<()> {
+    fn set_identity(
+        &self,
+        meta: Self::Metadata,
+        keypair_file: String,
+        require_tower: bool,
+    ) -> Result<()> {
         debug!("set_identity request received");
 
         let identity_keypair = read_keypair_file(&keypair_file).map_err(|err| {
@@ -147,26 +265,59 @@ impl AdminRpc for AdminRpcImpl {
             ))
         })?;
 
-        // Ensure a Tower exists for the new identity and exit gracefully.
-        // ReplayStage will be less forgiving if it fails to load the new tower.
-        Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey()).map_err(|err| {
-            jsonrpc_core::error::Error::invalid_params(format!(
-                "Unable to load tower file for new identity: {}",
-                err
-            ))
-        })?;
+        meta.with_post_init(|post_init| {
+            // Ensure a Tower exists for the new identity and exit gracefully.
+            // ReplayStage will be less forgiving if it fails to load the new tower.
+            if let Err(err) =
+                Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey()).map_err(
+                    |err| {
+                        jsonrpc_core::error::Error::invalid_params(format!(
+                            "Unable to load tower file for identity {}: {}",
+                            identity_keypair.pubkey(),
+                            err
+                        ))
+                    },
+                )
+            {
+                if require_tower {
+                    return Err(err);
+                }
 
-        if let Some(cluster_info) = meta.cluster_info.read().unwrap().as_ref() {
+                let root_bank = post_init.bank_forks.read().unwrap().root_bank();
+                let mut tower = Tower::new(
+                    &identity_keypair.pubkey(),
+                    &post_init.vote_account,
+                    root_bank.slot(),
+                    &root_bank,
+                );
+                // Forge a single vote to pacify `Tower::adjust_lockouts_after_replay` when its called
+                // by replay_stage
+                tower.record_bank_vote(&root_bank, &post_init.vote_account);
+                tower
+                    .save(meta.tower_storage.as_ref(), &identity_keypair)
+                    .map_err(|err| {
+                        jsonrpc_core::error::Error::invalid_params(format!(
+                            "Unable to create default tower file for ephemeral identity: {}",
+                            err
+                        ))
+                    })?;
+            }
+
             solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-            cluster_info.set_keypair(Arc::new(identity_keypair));
-            warn!("Identity set to {}", cluster_info.id());
+            post_init
+                .cluster_info
+                .set_keypair(Arc::new(identity_keypair));
+            warn!("Identity set to {}", post_init.cluster_info.id());
             Ok(())
-        } else {
-            Err(jsonrpc_core::error::Error::invalid_params(
-                "Retry once validator start up is complete",
-            ))
-        }
+        })
     }
+<<<<<<< HEAD
+=======
+
+    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
+        meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+>>>>>>> a6d736572 (`solana-validator set-identity` now supports the `--require-tower` flag)
 }
 
 // Start the Admin RPC interface
