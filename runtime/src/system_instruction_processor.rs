@@ -491,7 +491,7 @@ mod tests {
         solana_program_runtime::invoke_context::{
             mock_process_instruction, InvokeContext, ProcessInstructionWithContext,
         },
-        std::{cell::RefCell, sync::Arc},
+        std::sync::Arc,
     };
 
     impl From<Pubkey> for Address {
@@ -676,366 +676,454 @@ mod tests {
 
     #[test]
     fn test_create_account_with_seed_missing_sig() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";
         let to = Pubkey::create_with_seed(&from, seed, &new_owner).unwrap();
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
+        let to_account = AccountSharedData::new(0, 0, &Pubkey::default());
 
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
-        let to_account = RefCell::new(AccountSharedData::new(0, 0, &Pubkey::default()));
-        let to_address =
-            Address::create(&to, Some((&from, seed, &new_owner)), &invoke_context).unwrap();
-
-        assert_eq!(
-            create_account(
-                &KeyedAccount::new(&from, false, &from_account),
-                &KeyedAccount::new(&to, false, &to_account),
-                &to_address,
-                50,
-                2,
-                &new_owner,
-                &HashSet::new(),
-                &invoke_context,
-            ),
-            Err(InstructionError::MissingRequiredSignature)
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account), (to, to_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: to,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
-        assert_eq!(from_account.borrow().lamports(), 100);
-        assert_eq!(*to_account.borrow(), AccountSharedData::default());
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1], AccountSharedData::default());
     }
 
     #[test]
     fn test_create_with_zero_lamports() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &Pubkey::new_unique())); // not from system account
-
+        let from_account = AccountSharedData::new(100, 0, &Pubkey::new_unique()); // not from system account
         let to = Pubkey::new_unique();
-        let to_account = RefCell::new(AccountSharedData::new(0, 0, &Pubkey::default()));
+        let to_account = AccountSharedData::new(0, 0, &Pubkey::default());
 
-        assert_eq!(
-            create_account(
-                &KeyedAccount::new(&from, true, &from_account),
-                &KeyedAccount::new(&to, true, &to_account),
-                &to.into(),
-                0,
-                2,
-                &new_owner,
-                &[from, to].iter().cloned().collect::<HashSet<_>>(),
-                &invoke_context,
-            ),
-            Ok(())
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 0,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account), (to, to_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: to,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+            super::process_instruction,
         );
-
-        let from_lamports = from_account.borrow().lamports();
-        let to_lamports = to_account.borrow().lamports();
-        let to_owner = *to_account.borrow().owner();
-        assert_eq!(from_lamports, 100);
-        assert_eq!(to_lamports, 0);
-        assert_eq!(to_owner, new_owner);
-        assert_eq!(to_account.borrow().data(), &[0, 0]);
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1].lamports(), 0);
+        assert_eq!(*accounts[1].owner(), new_owner);
+        assert_eq!(accounts[1].data(), &[0, 0]);
     }
 
     #[test]
     fn test_create_negative_lamports() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        // Attempt to create account with more lamports than remaining in from_account
+        // Attempt to create account with more lamports than from_account has
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
-
+        let from_account = AccountSharedData::new(100, 0, &Pubkey::new_unique());
         let to = Pubkey::new_unique();
-        let to_account = RefCell::new(AccountSharedData::new(0, 0, &Pubkey::default()));
+        let to_account = AccountSharedData::new(0, 0, &Pubkey::default());
 
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&from, false, &to_account),
-            &to.into(),
-            150,
-            2,
-            &new_owner,
-            &[from, to].iter().cloned().collect::<HashSet<_>>(),
-            &invoke_context,
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 150,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account), (to, to_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: to,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Err(SystemError::ResultWithNegativeLamports.into()),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
     }
 
     #[test]
     fn test_request_more_than_allowed_data_length() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
         let from = Pubkey::new_unique();
-        let to_account = RefCell::new(AccountSharedData::new(0, 0, &system_program::id()));
+        let from_account = AccountSharedData::new(100, 0, &Pubkey::new_unique());
         let to = Pubkey::new_unique();
-
-        let signers = &[from, to].iter().cloned().collect::<HashSet<_>>();
-        let address = &to.into();
+        let to_account = AccountSharedData::new(0, 0, &Pubkey::default());
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: from,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: to,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
 
         // Trying to request more data length than permitted will result in failure
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&to, false, &to_account),
-            address,
-            50,
-            MAX_PERMITTED_DATA_LENGTH + 1,
-            &system_program::id(),
-            signers,
-            &invoke_context,
-        );
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap(),
-            SystemError::InvalidAccountDataLength.into()
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: MAX_PERMITTED_DATA_LENGTH + 1,
+                owner: system_program::id(),
+            })
+            .unwrap(),
+            vec![(from, from_account.clone()), (to, to_account.clone())],
+            instruction_accounts.clone(),
+            Err(SystemError::InvalidAccountDataLength.into()),
+            super::process_instruction,
         );
 
         // Trying to request equal or less data length than permitted will be successful
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&to, false, &to_account),
-            address,
-            50,
-            MAX_PERMITTED_DATA_LENGTH,
-            &system_program::id(),
-            signers,
-            &invoke_context,
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: MAX_PERMITTED_DATA_LENGTH,
+                owner: system_program::id(),
+            })
+            .unwrap(),
+            vec![(from, from_account), (to, to_account)],
+            instruction_accounts,
+            Ok(()),
+            super::process_instruction,
         );
-        assert!(result.is_ok());
-        assert_eq!(to_account.borrow().lamports(), 50);
-        assert_eq!(
-            to_account.borrow().data().len() as u64,
-            MAX_PERMITTED_DATA_LENGTH
-        );
+        assert_eq!(accounts[1].lamports(), 50);
+        assert_eq!(accounts[1].data().len() as u64, MAX_PERMITTED_DATA_LENGTH);
     }
 
     #[test]
     fn test_create_already_in_use() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        // Attempt to create system account in account already owned by another program
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
-
-        let original_program_owner = Pubkey::new(&[5; 32]);
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let owned_key = Pubkey::new_unique();
-        let owned_account = RefCell::new(AccountSharedData::new(0, 0, &original_program_owner));
+
+        // Attempt to create system account in account already owned by another program
+        let original_program_owner = Pubkey::new(&[5; 32]);
+        let owned_account = AccountSharedData::new(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
-
-        let signers = &[from, owned_key].iter().cloned().collect::<HashSet<_>>();
-        let owned_address = owned_key.into();
-
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&owned_key, false, &owned_account),
-            &owned_address,
-            50,
-            2,
-            &new_owner,
-            signers,
-            &invoke_context,
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account.clone()), (owned_key, owned_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: owned_key,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Err(SystemError::AccountAlreadyInUse.into()),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
-
-        let from_lamports = from_account.borrow().lamports();
-        assert_eq!(from_lamports, 100);
-        assert_eq!(owned_account, unchanged_account);
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1], unchanged_account);
 
         // Attempt to create system account in account that already has data
-        let owned_account = RefCell::new(AccountSharedData::new(0, 1, &Pubkey::default()));
-        let unchanged_account = owned_account.borrow().clone();
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&owned_key, false, &owned_account),
-            &owned_address,
-            50,
-            2,
-            &new_owner,
-            signers,
-            &invoke_context,
+        let owned_account = AccountSharedData::new(0, 1, &Pubkey::default());
+        let unchanged_account = owned_account.clone();
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account.clone()), (owned_key, owned_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: owned_key,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Err(SystemError::AccountAlreadyInUse.into()),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
-        let from_lamports = from_account.borrow().lamports();
-        assert_eq!(from_lamports, 100);
-        assert_eq!(*owned_account.borrow(), unchanged_account);
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1], unchanged_account);
 
         // Attempt to create an account that already has lamports
-        let owned_account = RefCell::new(AccountSharedData::new(1, 0, &Pubkey::default()));
-        let unchanged_account = owned_account.borrow().clone();
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&owned_key, false, &owned_account),
-            &owned_address,
-            50,
-            2,
-            &new_owner,
-            signers,
-            &invoke_context,
+        let owned_account = AccountSharedData::new(1, 0, &Pubkey::default());
+        let unchanged_account = owned_account.clone();
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account), (owned_key, owned_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: owned_key,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Err(SystemError::AccountAlreadyInUse.into()),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
-        assert_eq!(from_lamports, 100);
-        assert_eq!(*owned_account.borrow(), unchanged_account);
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1], unchanged_account);
     }
 
     #[test]
     fn test_create_unsigned() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create an account without signing the transfer
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
-
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let owned_key = Pubkey::new_unique();
-        let owned_account = RefCell::new(AccountSharedData::new(0, 0, &Pubkey::default()));
-
-        let owned_address = owned_key.into();
+        let owned_account = AccountSharedData::new(0, 0, &Pubkey::default());
 
         // Haven't signed from account
-        let result = create_account(
-            &KeyedAccount::new(&from, false, &from_account),
-            &KeyedAccount::new(&owned_key, false, &owned_account),
-            &owned_address,
-            50,
-            2,
-            &new_owner,
-            &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &invoke_context,
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![
+                (from, from_account.clone()),
+                (owned_key, owned_account.clone()),
+            ],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: owned_key,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
         // Haven't signed to account
-        let owned_account = RefCell::new(AccountSharedData::new(0, 0, &Pubkey::default()));
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&owned_key, true, &owned_account),
-            &owned_address,
-            50,
-            2,
-            &new_owner,
-            &[from].iter().cloned().collect::<HashSet<_>>(),
-            &invoke_context,
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account.clone()), (owned_key, owned_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: owned_key,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
         // Don't support unsigned creation with zero lamports (ephemeral account)
-        let owned_account = RefCell::new(AccountSharedData::new(0, 0, &Pubkey::default()));
-        let result = create_account(
-            &KeyedAccount::new(&from, false, &from_account),
-            &KeyedAccount::new(&owned_key, true, &owned_account),
-            &owned_address,
-            0,
-            2,
-            &new_owner,
-            &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &invoke_context,
+        let owned_account = AccountSharedData::new(0, 0, &Pubkey::default());
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account), (owned_key, owned_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: owned_key,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
     }
 
     #[test]
     fn test_create_sysvar_invalid_id_with_feature() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
-
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new_unique();
-        let to_account = RefCell::new(AccountSharedData::new(0, 0, &system_program::id()));
-
-        let signers = [from, to].iter().cloned().collect::<HashSet<_>>();
-        let to_address = to.into();
+        let to_account = AccountSharedData::new(0, 0, &system_program::id());
 
         // fail to create a sysvar::id() owned account
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&to, false, &to_account),
-            &to_address,
-            50,
-            2,
-            &sysvar::id(),
-            &signers,
-            &invoke_context,
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: sysvar::id(),
+            })
+            .unwrap(),
+            vec![(from, from_account), (to, to_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: to,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+            super::process_instruction,
         );
-        assert_eq!(result, Ok(()));
     }
 
     #[test]
     fn test_create_data_populated() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create system account in account with populated data
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
-
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let populated_key = Pubkey::new_unique();
-        let populated_account = RefCell::new(AccountSharedData::from(Account {
+        let populated_account = AccountSharedData::from(Account {
             data: vec![0, 1, 2, 3],
             ..Account::default()
-        }));
+        });
 
-        let signers = [from, populated_key]
-            .iter()
-            .cloned()
-            .collect::<HashSet<_>>();
-        let populated_address = populated_key.into();
-
-        let result = create_account(
-            &KeyedAccount::new(&from, true, &from_account),
-            &KeyedAccount::new(&populated_key, false, &populated_account),
-            &populated_address,
-            50,
-            2,
-            &new_owner,
-            &signers,
-            &invoke_context,
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 50,
+                space: 2,
+                owner: new_owner,
+            })
+            .unwrap(),
+            vec![(from, from_account), (populated_key, populated_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: populated_key,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Err(SystemError::AccountAlreadyInUse.into()),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
     }
 
     #[test]
     fn test_create_from_account_is_nonce_fail() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let nonce = Pubkey::new_unique();
-        let nonce_account = RefCell::new(
-            AccountSharedData::new_data(
-                42,
-                &nonce::state::Versions::new_current(nonce::State::Initialized(
-                    nonce::state::Data::default(),
-                )),
-                &system_program::id(),
-            )
-            .unwrap(),
-        );
-        let from = KeyedAccount::new(&nonce, true, &nonce_account);
+        let nonce_account = AccountSharedData::new_data(
+            42,
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
+            &system_program::id(),
+        )
+        .unwrap();
         let new = Pubkey::new_unique();
+        let new_account = AccountSharedData::new(0, 0, &system_program::id());
 
-        let new_account = RefCell::new(AccountSharedData::new(0, 0, &system_program::id()));
-
-        let signers = [nonce, new].iter().cloned().collect::<HashSet<_>>();
-        let new_address = new.into();
-        let new_keyed_account = KeyedAccount::new(&new, false, &new_account);
-
-        assert_eq!(
-            create_account(
-                &from,
-                &new_keyed_account,
-                &new_address,
-                42,
-                0,
-                &Pubkey::new_unique(),
-                &signers,
-                &invoke_context,
-            ),
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::CreateAccount {
+                lamports: 42,
+                space: 0,
+                owner: Pubkey::new_unique(),
+            })
+            .unwrap(),
+            vec![(nonce, nonce_account), (new, new_account)],
+            vec![
+                AccountMeta {
+                    pubkey: nonce,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: new,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
             Err(InstructionError::InvalidArgument),
+            super::process_instruction,
         );
     }
 
@@ -1138,138 +1226,196 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32]))); // account owner should not matter
+        let from_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new(&[3; 32]);
-        let to_account = RefCell::new(AccountSharedData::new(1, 0, &to)); // account owner should not matter
-        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
-        transfer(&from_keyed_account, &to_keyed_account, 50, &invoke_context).unwrap();
-        let from_lamports = from_keyed_account.account.borrow().lamports();
-        let to_lamports = to_keyed_account.account.borrow().lamports();
-        assert_eq!(from_lamports, 50);
-        assert_eq!(to_lamports, 51);
+        let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
+        let transaction_accounts = vec![(from, from_account), (to, to_account)];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: from,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: to,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
 
-        // Attempt to move more lamports than remaining in from_account
-        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        let result = transfer(&from_keyed_account, &to_keyed_account, 100, &invoke_context);
-        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+        // Success case
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::Transfer { lamports: 50 }).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts[0].lamports(), 50);
+        assert_eq!(accounts[1].lamports(), 51);
+
+        // Attempt to move more lamports than from_account has
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::Transfer { lamports: 101 }).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(SystemError::ResultWithNegativeLamports.into()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1].lamports(), 1);
 
         // test signed transfer of zero
-        assert!(transfer(&from_keyed_account, &to_keyed_account, 0, &invoke_context).is_ok());
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::Transfer { lamports: 0 }).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts,
+            Ok(()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1].lamports(), 1);
 
         // test unsigned transfer of zero
-        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
-
-        assert_eq!(
-            transfer(&from_keyed_account, &to_keyed_account, 0, &invoke_context),
-            Err(InstructionError::MissingRequiredSignature)
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::Transfer { lamports: 0 }).unwrap(),
+            transaction_accounts,
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: to,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[1].lamports(), 1);
     }
 
     #[test]
     fn test_transfer_with_seed() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let base = Pubkey::new_unique();
-        let base_account = RefCell::new(AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32]))); // account owner should not matter
-        let from_base_keyed_account = KeyedAccount::new(&base, true, &base_account);
-        let from_seed = "42";
+        let base_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_seed = "42".to_string();
         let from_owner = system_program::id();
-        let from = Pubkey::create_with_seed(&base, from_seed, &from_owner).unwrap();
-        let from_account = RefCell::new(AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32]))); // account owner should not matter
+        let from = Pubkey::create_with_seed(&base, from_seed.as_str(), &from_owner).unwrap();
+        let from_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new(&[3; 32]);
-        let to_account = RefCell::new(AccountSharedData::new(1, 0, &to)); // account owner should not matter
-        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
-        transfer_with_seed(
-            &from_keyed_account,
-            &from_base_keyed_account,
-            from_seed,
-            &from_owner,
-            &to_keyed_account,
-            50,
-            &invoke_context,
-        )
-        .unwrap();
-        let from_lamports = from_keyed_account.account.borrow().lamports();
-        let to_lamports = to_keyed_account.account.borrow().lamports();
-        assert_eq!(from_lamports, 50);
-        assert_eq!(to_lamports, 51);
+        let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
+        let transaction_accounts =
+            vec![(from, from_account), (base, base_account), (to, to_account)];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: from,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: base,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: to,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
 
-        // Attempt to move more lamports than remaining in from_account
-        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        let result = transfer_with_seed(
-            &from_keyed_account,
-            &from_base_keyed_account,
-            from_seed,
-            &from_owner,
-            &to_keyed_account,
-            100,
-            &invoke_context,
+        // Success case
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::TransferWithSeed {
+                lamports: 50,
+                from_seed: from_seed.clone(),
+                from_owner,
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+            super::process_instruction,
         );
-        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+        assert_eq!(accounts[0].lamports(), 50);
+        assert_eq!(accounts[2].lamports(), 51);
 
-        // test unsigned transfer of zero
-        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
-        assert!(transfer_with_seed(
-            &from_keyed_account,
-            &from_base_keyed_account,
-            from_seed,
-            &from_owner,
-            &to_keyed_account,
-            0,
-            &invoke_context,
-        )
-        .is_ok());
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+        // Attempt to move more lamports than from_account has
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::TransferWithSeed {
+                lamports: 101,
+                from_seed: from_seed.clone(),
+                from_owner,
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(SystemError::ResultWithNegativeLamports.into()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[2].lamports(), 1);
+
+        // Test unsigned transfer of zero
+        let accounts = process_instruction(
+            &bincode::serialize(&SystemInstruction::TransferWithSeed {
+                lamports: 0,
+                from_seed,
+                from_owner,
+            })
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts[0].lamports(), 100);
+        assert_eq!(accounts[2].lamports(), 1);
     }
 
     #[test]
     fn test_transfer_lamports_from_nonce_account_fail() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
-        let from_account = RefCell::new(
-            AccountSharedData::new_data(
-                100,
-                &nonce::state::Versions::new_current(nonce::State::Initialized(
-                    nonce::state::Data {
-                        authority: from,
-                        ..nonce::state::Data::default()
-                    },
-                )),
-                &system_program::id(),
-            )
-            .unwrap(),
-        );
+        let from_account = AccountSharedData::new_data(
+            100,
+            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: from,
+                ..nonce::state::Data::default()
+            })),
+            &system_program::id(),
+        )
+        .unwrap();
         assert_eq!(
-            get_system_account_kind(&from_account.borrow()),
+            get_system_account_kind(&from_account),
             Some(SystemAccountKind::Nonce)
         );
-
         let to = Pubkey::new(&[3; 32]);
-        let to_account = RefCell::new(AccountSharedData::new(1, 0, &to)); // account owner should not matter
-        assert_eq!(
-            transfer(
-                &KeyedAccount::new(&from, true, &from_account),
-                &KeyedAccount::new(&to, false, &to_account),
-                50,
-                &invoke_context,
-            ),
+        let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
+
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Transfer { lamports: 50 }).unwrap(),
+            vec![(from, from_account), (to, to_account)],
+            vec![
+                AccountMeta {
+                    pubkey: from,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: to,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
             Err(InstructionError::InvalidArgument),
-        )
+            super::process_instruction,
+        );
     }
 
     #[test]
