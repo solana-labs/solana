@@ -16,6 +16,7 @@ use {
     solana_faucet::faucet::run_local_faucet,
     solana_sdk::{
         commitment_config::CommitmentConfig,
+        fee::FeeStructure,
         native_token::sol_to_lamports,
         nonce::State as NonceState,
         pubkey::Pubkey,
@@ -29,6 +30,8 @@ use {
 #[test]
 fn test_transfer() {
     solana_logger::setup();
+    let fee_one_sig = FeeStructure::default().get_max_fee(1, 0);
+    let fee_two_sig = FeeStructure::default().get_max_fee(2, 0);
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -77,7 +80,11 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_balance!(sol_to_lamports(4.0) - 1, &rpc_client, &sender_pubkey);
+    check_balance!(
+        sol_to_lamports(4.0) - fee_one_sig,
+        &rpc_client,
+        &sender_pubkey
+    );
     check_balance!(sol_to_lamports(1.0), &rpc_client, &recipient_pubkey);
 
     // Plain ole transfer, failure due to InsufficientFundsForSpendAndFee
@@ -98,7 +105,11 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     assert!(process_command(&config).is_err());
-    check_balance!(sol_to_lamports(4.0) - 1, &rpc_client, &sender_pubkey);
+    check_balance!(
+        sol_to_lamports(4.0) - fee_one_sig,
+        &rpc_client,
+        &sender_pubkey
+    );
     check_balance!(sol_to_lamports(1.0), &rpc_client, &recipient_pubkey);
 
     let mut offline = CliConfig::recent_for_tests();
@@ -154,7 +165,11 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_balance!(sol_to_lamports(0.5) - 1, &rpc_client, &offline_pubkey);
+    check_balance!(
+        sol_to_lamports(0.5) - fee_one_sig,
+        &rpc_client,
+        &offline_pubkey
+    );
     check_balance!(sol_to_lamports(1.5), &rpc_client, &recipient_pubkey);
 
     // Create nonce account
@@ -172,7 +187,7 @@ fn test_transfer() {
     };
     process_command(&config).unwrap();
     check_balance!(
-        sol_to_lamports(4.0) - 3 - minimum_nonce_balance,
+        sol_to_lamports(4.0) - fee_one_sig - fee_two_sig - minimum_nonce_balance,
         &rpc_client,
         &sender_pubkey,
     );
@@ -210,7 +225,7 @@ fn test_transfer() {
     };
     process_command(&config).unwrap();
     check_balance!(
-        sol_to_lamports(3.0) - 4 - minimum_nonce_balance,
+        sol_to_lamports(3.0) - 2 * fee_one_sig - fee_two_sig - minimum_nonce_balance,
         &rpc_client,
         &sender_pubkey,
     );
@@ -235,7 +250,7 @@ fn test_transfer() {
     };
     process_command(&config).unwrap();
     check_balance!(
-        sol_to_lamports(3.0) - 5 - minimum_nonce_balance,
+        sol_to_lamports(3.0) - 3 * fee_one_sig - fee_two_sig - minimum_nonce_balance,
         &rpc_client,
         &sender_pubkey,
     );
@@ -293,13 +308,18 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_balance!(sol_to_lamports(0.1) - 2, &rpc_client, &offline_pubkey);
+    check_balance!(
+        sol_to_lamports(0.1) - 2 * fee_one_sig,
+        &rpc_client,
+        &offline_pubkey
+    );
     check_balance!(sol_to_lamports(2.9), &rpc_client, &recipient_pubkey);
 }
 
 #[test]
 fn test_transfer_multisession_signing() {
     solana_logger::setup();
+    let fee = FeeStructure::default().get_max_fee(2, 0);
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -329,7 +349,7 @@ fn test_transfer_multisession_signing() {
         &rpc_client,
         &CliConfig::recent_for_tests(),
         &offline_fee_payer_signer.pubkey(),
-        sol_to_lamports(1.0) + 3,
+        sol_to_lamports(1.0) + 2 * fee,
     )
     .unwrap();
     check_balance!(
@@ -338,7 +358,7 @@ fn test_transfer_multisession_signing() {
         &offline_from_signer.pubkey(),
     );
     check_balance!(
-        sol_to_lamports(1.0) + 3,
+        sol_to_lamports(1.0) + 2 * fee,
         &rpc_client,
         &offline_fee_payer_signer.pubkey(),
     );
@@ -438,7 +458,7 @@ fn test_transfer_multisession_signing() {
         &offline_from_signer.pubkey(),
     );
     check_balance!(
-        sol_to_lamports(1.0) + 1,
+        sol_to_lamports(1.0) + fee,
         &rpc_client,
         &offline_fee_payer_signer.pubkey(),
     );
@@ -448,6 +468,7 @@ fn test_transfer_multisession_signing() {
 #[test]
 fn test_transfer_all() {
     solana_logger::setup();
+    let fee = FeeStructure::default().get_max_fee(1, 0);
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -470,8 +491,8 @@ fn test_transfer_all() {
     let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
 
-    request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 50_000).unwrap();
-    check_balance!(50_000, &rpc_client, &sender_pubkey);
+    request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 500_000).unwrap();
+    check_balance!(500_000, &rpc_client, &sender_pubkey);
     check_balance!(0, &rpc_client, &recipient_pubkey);
 
     check_ready(&rpc_client);
@@ -495,7 +516,7 @@ fn test_transfer_all() {
     };
     process_command(&config).unwrap();
     check_balance!(0, &rpc_client, &sender_pubkey);
-    check_balance!(49_999, &rpc_client, &recipient_pubkey);
+    check_balance!(500_000 - fee, &rpc_client, &recipient_pubkey);
 }
 
 #[test]
@@ -554,6 +575,7 @@ fn test_transfer_unfunded_recipient() {
 #[test]
 fn test_transfer_with_seed() {
     solana_logger::setup();
+    let fee = FeeStructure::default().get_max_fee(1, 0);
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -612,7 +634,7 @@ fn test_transfer_with_seed() {
         derived_address_program_id: Some(derived_address_program_id),
     };
     process_command(&config).unwrap();
-    check_balance!(sol_to_lamports(1.0) - 1, &rpc_client, &sender_pubkey);
+    check_balance!(sol_to_lamports(1.0) - fee, &rpc_client, &sender_pubkey);
     check_balance!(sol_to_lamports(5.0), &rpc_client, &recipient_pubkey);
     check_balance!(0, &rpc_client, &derived_address);
 }

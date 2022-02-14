@@ -38,8 +38,8 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessedMessageInfo {
-    /// The new accounts data len
-    pub accounts_data_len: u64,
+    /// The change in accounts data len
+    pub accounts_data_len_delta: i64,
 }
 
 impl MessageProcessor {
@@ -149,7 +149,7 @@ impl MessageProcessor {
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(ProcessedMessageInfo {
-            accounts_data_len: invoke_context.get_accounts_data_meter().current(),
+            accounts_data_len_delta: invoke_context.get_accounts_data_meter().delta(),
         })
     }
 }
@@ -272,7 +272,7 @@ mod tests {
             None,
             executors.clone(),
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
@@ -314,7 +314,7 @@ mod tests {
             None,
             executors.clone(),
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
@@ -346,7 +346,7 @@ mod tests {
             None,
             executors,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
@@ -481,7 +481,7 @@ mod tests {
             None,
             executors.clone(),
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
@@ -514,7 +514,7 @@ mod tests {
             None,
             executors.clone(),
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
@@ -544,7 +544,7 @@ mod tests {
             None,
             executors,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
@@ -623,7 +623,7 @@ mod tests {
             None,
             Rc::new(RefCell::new(Executors::default())),
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),

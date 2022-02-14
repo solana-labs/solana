@@ -238,6 +238,7 @@ fn full_battery_tests(
 #[test]
 #[allow(clippy::redundant_closure)]
 fn test_create_account_with_seed() {
+    const ONE_SIG_FEE: f64 = 0.000005;
     solana_logger::setup();
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -310,7 +311,7 @@ fn test_create_account_with_seed() {
         &offline_nonce_authority_signer.pubkey(),
     );
     check_balance!(
-        sol_to_lamports(4000.999999999),
+        sol_to_lamports(4001.0 - ONE_SIG_FEE),
         &rpc_client,
         &online_nonce_creator_signer.pubkey(),
     );
@@ -381,12 +382,12 @@ fn test_create_account_with_seed() {
     process_command(&submit_config).unwrap();
     check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);
     check_balance!(
-        sol_to_lamports(31.999999999),
+        sol_to_lamports(32.0 - ONE_SIG_FEE),
         &rpc_client,
         &offline_nonce_authority_signer.pubkey(),
     );
     check_balance!(
-        sol_to_lamports(4000.999999999),
+        sol_to_lamports(4001.0 - ONE_SIG_FEE),
         &rpc_client,
         &online_nonce_creator_signer.pubkey(),
     );

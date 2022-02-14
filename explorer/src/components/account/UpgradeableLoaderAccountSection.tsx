@@ -135,8 +135,12 @@ export function UpgradeableProgramSection({
               <CheckingBadge />
             ) : (
               <>
-                {verifiableBuilds.map((b) => (
-                  <VerifiedBadge verifiableBuild={b} />
+                {verifiableBuilds.map((b, i) => (
+                  <VerifiedBadge
+                    key={i}
+                    verifiableBuild={b}
+                    deploySlot={programData.slot}
+                  />
                 ))}
               </>
             )}

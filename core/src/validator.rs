@@ -1505,7 +1505,6 @@ fn initialize_rpc_transaction_history_services(
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
     let transaction_status_sender = Some(TransactionStatusSender {
         sender: transaction_status_sender,
-        enable_cpi_and_log_storage,
     });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
@@ -1513,6 +1512,7 @@ fn initialize_rpc_transaction_history_services(
         enable_rpc_transaction_history,
         transaction_notifier.clone(),
         blockstore.clone(),
+        enable_cpi_and_log_storage,
         exit,
     ));
 

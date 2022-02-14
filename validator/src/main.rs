@@ -795,7 +795,20 @@ pub fn main() {
             Arg::with_name("incremental_snapshots")
                 .long("incremental-snapshots")
                 .takes_value(false)
+                .hidden(true)
+                .conflicts_with("no_incremental_snapshots")
+                .help("Enable incremental snapshots")
                 .long_help("Enable incremental snapshots by setting this flag. \
+                   When enabled, --snapshot-interval-slots will set the \
+                   incremental snapshot interval. To set the full snapshot \
+                   interval, use --full-snapshot-interval-slots.")
+         )
+        .arg(
+            Arg::with_name("no_incremental_snapshots")
+                .long("no-incremental-snapshots")
+                .takes_value(false)
+                .help("Disable incremental snapshots")
+                .long_help("Disable incremental snapshots by setting this flag. \
                    When enabled, --snapshot-interval-slots will set the \
                    incremental snapshot interval. To set the full snapshot \
                    interval, use --full-snapshot-interval-slots.")
@@ -1910,7 +1923,7 @@ pub fn main() {
             "max_genesis_archive_unpacked_size",
             u64
         ),
-        incremental_snapshot_fetch: matches.is_present("incremental_snapshots"),
+        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots"),
     };
 
     let private_rpc = matches.is_present("private_rpc");
@@ -2373,7 +2386,7 @@ pub fn main() {
         value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);
     let (full_snapshot_archive_interval_slots, incremental_snapshot_archive_interval_slots) =
         if incremental_snapshot_interval_slots > 0 {
-            if matches.is_present("incremental_snapshots") {
+            if !matches.is_present("no_incremental_snapshots") {
                 (
                     value_t_or_exit!(matches, "full_snapshot_interval_slots", u64),
                     incremental_snapshot_interval_slots,
@@ -2420,6 +2433,9 @@ pub fn main() {
 
         exit(1);
     }
+    if matches.is_present("incremental_snapshots") {
+        warn!("--incremental-snapshots is now the default behavior. This flag is deprecated and can be removed from the launch args")
+    }
 
     if matches.is_present("limit_ledger_size") {
         let limit_ledger_size = match matches.value_of("limit_ledger_size") {
@@ -2452,6 +2468,7 @@ pub fn main() {
             info!("OS network limits test passed.");
         } else {
             eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+            exit(1);
         }
     }
 
@@ -2564,8 +2581,10 @@ pub fn main() {
 
     solana_metrics::set_is_canary_validator(env::var("SOLANA_CANARY_VALIDATOR").is_ok());
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    solana_metrics::set_panic_hook("validator");
-
+    solana_metrics::set_panic_hook("validator", {
+        let version = format!("{:?}", solana_version::version!());
+        Some(version)
+    });
     solana_entry::entry::init_poh();
     snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
 

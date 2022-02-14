@@ -1585,13 +1585,10 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_single_payer() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
-
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
@@ -1600,6 +1597,11 @@ mod tests {
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let allocation_amount = 1000.0;
 
@@ -1678,18 +1680,21 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1802,17 +1807,20 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_single_payer() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1925,18 +1933,21 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
