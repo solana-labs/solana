@@ -4283,8 +4283,7 @@ impl Bank {
 
     fn get_num_write_locks_in_message(message: &SanitizedMessage) -> u64 {
         message
-            .account_keys()
-            .len()
+            .account_keys_len()
             .saturating_sub(message.num_readonly_accounts()) as u64
     }
 
@@ -16831,19 +16830,8 @@ pub(crate) mod tests {
             &FeeStructure::default(),
         );
 
-<<<<<<< HEAD
         let account_refcells =
             Bank::accounts_to_refcells(&mut loaded_txs[0].0.as_ref().unwrap().accounts.clone());
-=======
-        let compute_budget = bank
-            .compute_budget
-            .unwrap_or_else(|| ComputeBudget::new(false));
-        let transaction_context = TransactionContext::new(
-            loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
-            compute_budget.max_invoke_depth.saturating_add(1),
-            number_of_instructions_at_transaction_level,
-        );
->>>>>>> 3d9874b95 (Add fees to tx-wide caps (#22081))
 
         assert_eq!(
             bank.get_transaction_account_state_info(&account_refcells, sanitized_tx.message())
