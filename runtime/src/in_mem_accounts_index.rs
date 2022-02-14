@@ -504,7 +504,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Arc::new(AccountMapEntryInner::new(
             slot_list,
             ref_count,
-            AccountMapEntryMeta::new_dirty(&self.storage),
+            AccountMapEntryMeta::new_clean(&self.storage),
         ))
     }
 
