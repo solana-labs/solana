@@ -294,6 +294,7 @@ pub struct Validator {
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
+    pub bank_forks: Arc<RwLock<BankForks>>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     accountsdb_plugin_service: Option<AccountsDbPluginService>,
 }
@@ -911,7 +912,7 @@ impl Validator {
             &exit,
             node.info.shred_version,
             vote_tracker,
-            bank_forks,
+            bank_forks.clone(),
             verified_vote_sender,
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
@@ -947,6 +948,7 @@ impl Validator {
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
             cluster_info,
+            bank_forks,
             accountsdb_repl_service,
             accountsdb_plugin_service,
         }
@@ -988,6 +990,7 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.bank_forks);
         drop(self.cluster_info);
 
         self.poh_service.join().expect("poh_service");
