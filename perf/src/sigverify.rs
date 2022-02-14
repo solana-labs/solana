@@ -1492,11 +1492,32 @@ mod tests {
                     .iter_mut()
                     .for_each(|p| p.meta.set_discard(thread_rng().gen()))
             });
+            //find all the non discarded packets
+            let mut start = vec![];
+            batches.iter_mut().for_each(|b| {
+                b.packets
+                    .iter_mut()
+                    .filter(|p| !p.meta.discard())
+                    .for_each(|p| start.push(p.clone()))
+            });
+            start.sort_by_key(|p| p.data);
+
             let packet_count = count_valid_packets(&batches);
             let res = shrink_batches(&mut batches);
             batches.truncate(res);
+
+            //make sure all the non discarded packets are the same
+            let mut end = vec![];
+            batches.iter_mut().for_each(|b| {
+                b.packets
+                    .iter_mut()
+                    .filter(|p| !p.meta.discard())
+                    .for_each(|p| end.push(p.clone()))
+            });
+            end.sort_by_key(|p| p.data);
             let packet_count2 = count_valid_packets(&batches);
             assert_eq!(packet_count, packet_count2);
+            assert_eq!(start, end);
         }
     }
 }
