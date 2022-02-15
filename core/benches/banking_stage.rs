@@ -12,6 +12,7 @@ use {
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
+        unprocessed_packet_batches::*,
     },
     solana_entry::entry::{next_hash, Entry},
     solana_gossip::cluster_info::{ClusterInfo, Node},
@@ -82,7 +83,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let mut packet_batches = VecDeque::new();
         for batch in batches {
             let batch_len = batch.packets.len();
-            packet_batches.push_back((batch, vec![0usize; batch_len], false));
+            packet_batches.push_back(DeserializedPacketBatch::new(
+                batch,
+                vec![0usize; batch_len],
+                false,
+            ));
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
