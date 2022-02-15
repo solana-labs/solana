@@ -5,6 +5,10 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
+<<<<<<< HEAD
+=======
+        tower_storage::FileTowerStorage,
+>>>>>>> ab92578b0 (Fix the flaky test test_restart_tower_rollback (#23129))
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,
@@ -387,6 +391,10 @@ pub fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 
     let cluster = LocalCluster::new(&mut cluster_config, SocketAddrSpace::Unspecified);
 
+<<<<<<< HEAD
     // Check for new roots
     cluster.check_for_new_roots(16, "test_faulty_node", SocketAddrSpace::Unspecified);
+=======
+    (cluster, validator_keys)
+>>>>>>> ab92578b0 (Fix the flaky test test_restart_tower_rollback (#23129))
 }

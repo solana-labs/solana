@@ -60,6 +60,11 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
+<<<<<<< HEAD
+=======
+        accounts_db_config: config.accounts_db_config.clone(),
+        wait_to_vote_slot: config.wait_to_vote_slot,
+>>>>>>> ab92578b0 (Fix the flaky test test_restart_tower_rollback (#23129))
     }
 }
 

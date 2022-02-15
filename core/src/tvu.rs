@@ -138,6 +138,13 @@ impl Tvu {
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
         cost_model: &Arc<RwLock<CostModel>>,
+<<<<<<< HEAD
+=======
+        accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
+        last_full_snapshot_slot: Option<Slot>,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        wait_to_vote_slot: Option<Slot>,
+>>>>>>> ab92578b0 (Fix the flaky test test_restart_tower_rollback (#23129))
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
 
@@ -281,6 +288,12 @@ impl Tvu {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
+<<<<<<< HEAD
+=======
+            ancestor_hashes_replay_update_sender,
+            tower_storage: tower_storage.clone(),
+            wait_to_vote_slot,
+>>>>>>> ab92578b0 (Fix the flaky test test_restart_tower_rollback (#23129))
         };
 
         let (voting_sender, voting_receiver) = channel();
@@ -481,6 +494,13 @@ pub mod tests {
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
+<<<<<<< HEAD
+=======
+            accounts_package_channel,
+            None,
+            None,
+            None,
+>>>>>>> ab92578b0 (Fix the flaky test test_restart_tower_rollback (#23129))
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
