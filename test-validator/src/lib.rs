@@ -117,10 +117,7 @@ impl Default for TestValidatorGenesis {
             ledger_path: Option::<PathBuf>::default(),
             tower_storage: Option::<Arc<dyn TowerStorage>>::default(),
             rent: Rent::default(),
-            rpc_config: JsonRpcConfig {
-                full_api: true,
-                ..JsonRpcConfig::default()
-            },
+            rpc_config: JsonRpcConfig::default_for_test(),
             pubsub_config: PubSubConfig::default(),
             rpc_ports: Option::<(u16, u16)>::default(),
             warp_slot: Option::<Slot>::default(),
