@@ -166,7 +166,8 @@ pub fn run_kill_partition_switch_threshold<C>(
         .flat_map(|stakes_and_slots| stakes_and_slots.iter().map(|(_, num_slots)| *num_slots))
         .collect();
 
-    let (leader_schedule, validator_keys) = create_custom_leader_schedule(&num_slots_per_validator);
+    let (leader_schedule, validator_keys) =
+        create_custom_leader_schedule_with_random_keys(&num_slots_per_validator);
 
     info!(
         "Validator ids: {:?}",
@@ -206,23 +207,32 @@ pub fn run_kill_partition_switch_threshold<C>(
 }
 
 pub fn create_custom_leader_schedule(
-    validator_num_slots: &[usize],
-) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
+    validator_key_to_slots: impl Iterator<Item = (Pubkey, usize)>,
+) -> LeaderSchedule {
     let mut leader_schedule = vec![];
-    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
-        .take(validator_num_slots.len())
-        .collect();
-    for (k, num_slots) in validator_keys.iter().zip(validator_num_slots.iter()) {
-        for _ in 0..*num_slots {
-            leader_schedule.push(k.pubkey())
+    for (k, num_slots) in validator_key_to_slots {
+        for _ in 0..num_slots {
+            leader_schedule.push(k)
         }
     }
 
     info!("leader_schedule: {}", leader_schedule.len());
-    (
-        LeaderSchedule::new_from_schedule(leader_schedule),
-        validator_keys,
-    )
+    LeaderSchedule::new_from_schedule(leader_schedule)
+}
+
+pub fn create_custom_leader_schedule_with_random_keys(
+    validator_num_slots: &[usize],
+) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+        .take(validator_num_slots.len())
+        .collect();
+    let leader_schedule = create_custom_leader_schedule(
+        validator_keys
+            .iter()
+            .map(|k| k.pubkey())
+            .zip(validator_num_slots.iter().cloned()),
+    );
+    (leader_schedule, validator_keys)
 }
 
 /// This function runs a network, initiates a partition based on a

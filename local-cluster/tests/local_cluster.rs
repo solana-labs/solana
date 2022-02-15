@@ -2,9 +2,9 @@
 use {
     assert_matches::assert_matches,
     common::{
-        copy_blocks, create_custom_leader_schedule, last_vote_in_tower, ms_for_n_slots,
-        open_blockstore, purge_slots, remove_tower, restore_tower, run_cluster_partition,
-        run_kill_partition_switch_threshold, test_faulty_node,
+        copy_blocks, create_custom_leader_schedule_with_random_keys, last_vote_in_tower,
+        ms_for_n_slots, open_blockstore, purge_slots, remove_tower, restore_tower,
+        run_cluster_partition, run_kill_partition_switch_threshold, test_faulty_node,
         wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
     },
     crossbeam_channel::{unbounded, Receiver},
@@ -2489,8 +2489,10 @@ fn test_run_test_load_program_accounts_partition_root() {
 fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     let num_slots_per_validator = 8;
     let partitions: [Vec<usize>; 2] = [vec![1], vec![1]];
-    let (leader_schedule, validator_keys) =
-        create_custom_leader_schedule(&[num_slots_per_validator, num_slots_per_validator]);
+    let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
+        num_slots_per_validator,
+        num_slots_per_validator,
+    ]);
 
     let (update_client_sender, update_client_receiver) = unbounded();
     let (scan_client_sender, scan_client_receiver) = unbounded();

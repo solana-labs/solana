@@ -439,6 +439,7 @@ impl ReplayStage {
                     let mut generate_new_bank_forks_time =
                         Measure::start("generate_new_bank_forks_time");
                     Self::generate_new_bank_forks(
+                        &my_pubkey,
                         &blockstore,
                         &bank_forks,
                         &leader_schedule_cache,
@@ -701,8 +702,9 @@ impl ReplayStage {
                     // Reset onto a fork
                     if let Some(reset_bank) = reset_bank {
                         if last_reset != reset_bank.last_blockhash() {
-                            info!(
-                                "vote bank: {:?} reset bank: {:?}",
+                            println!(
+                                "{} vote bank: {:?} reset bank: {:?}",
+                                my_pubkey,
                                 vote_bank.as_ref().map(|(b, switch_fork_decision)| (
                                     b.slot(),
                                     switch_fork_decision
@@ -1573,9 +1575,9 @@ impl ReplayStage {
 
             let root_slot = bank_forks.read().unwrap().root();
             datapoint_info!("replay_stage-my_leader_slot", ("slot", poh_slot, i64),);
-            info!(
-                "new fork:{} parent:{} (leader) root:{}",
-                poh_slot, parent_slot, root_slot
+            println!(
+                "{} new fork:{} parent:{} (leader) root:{}",
+                my_pubkey, poh_slot, parent_slot, root_slot
             );
 
             let root_distance = poh_slot - root_slot;
@@ -2969,6 +2971,7 @@ impl ReplayStage {
     }
 
     fn generate_new_bank_forks(
+        my_pubkey: &Pubkey,
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -3017,7 +3020,8 @@ impl ReplayStage {
                     .slot_leader_at(child_slot, Some(&parent_bank))
                     .unwrap();
                 info!(
-                    "new fork:{} parent:{} root:{}",
+                    "{} new fork:{} parent:{} root:{}",
+                    my_pubkey,
                     child_slot,
                     parent_slot,
                     forks.root()
@@ -3343,6 +3347,7 @@ pub mod tests {
             .is_none());
         let mut replay_timing = ReplayTiming::default();
         ReplayStage::generate_new_bank_forks(
+            &Pubkey::default(),
             &blockstore,
             &bank_forks,
             &leader_schedule_cache,
@@ -3366,6 +3371,7 @@ pub mod tests {
             .get(2 * NUM_CONSECUTIVE_LEADER_SLOTS)
             .is_none());
         ReplayStage::generate_new_bank_forks(
+            &Pubkey::default(),
             &blockstore,
             &bank_forks,
             &leader_schedule_cache,
