@@ -181,21 +181,21 @@ To track all the deposit accounts for your exchange, poll for each confirmed
 block and inspect for addresses of interest, using the JSON-RPC service of your
 Solana API node.
 
-- To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
+- To identify which blocks are available, send a [`getBlocks` request](developing/clients/jsonrpc-api.md#getblocks),
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlocks","params":[5]}' localhost:8899
 
 {"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
 ```
 
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-- For each block, request its contents with a [`getConfirmedBlock` request](developing/clients/jsonrpc-api.md#getconfirmedblock):
+- For each block, request its contents with a [`getBlock` request](developing/clients/jsonrpc-api.md#getblock):
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlock","params":[5, "json"]}' localhost:8899
 
 {
   "jsonrpc": "2.0",
@@ -278,11 +278,11 @@ generally _not_ a viable method for tracking all your deposit addresses over all
 slots, but may be useful for examining a few accounts for a specific period of
 time.
 
-- Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2)
+- Send a [`getSignaturesForAddress`](developing/clients/jsonrpc-api.md#getsignaturesforaddress)
   request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
 
 {
   "jsonrpc": "2.0",
@@ -311,10 +311,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ```
 
 - For each signature returned, get the transaction details by sending a
-  [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
+  [`getTransaction`](developing/clients/jsonrpc-api.md#gettransaction) request:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
 
 // Result
 {
