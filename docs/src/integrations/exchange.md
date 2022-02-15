@@ -714,14 +714,12 @@ wallets using the
 scheme and that _only_ deposits from ATA addresses be accepted.
 
 Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
-method described above. Each new block should be scanned for successful transactions
-issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/fc0d6a2db79bd6499f04b9be7ead0c400283845e/token/program/src/instruction.rs#L105)
-or [TransferChecked](https://github.com/solana-labs/solana-program-library/blob/fc0d6a2db79bd6499f04b9be7ead0c400283845e/token/program/src/instruction.rs#L268)
-instructions referencing user accounts. It is possible that a transfer is initiated
-by a smart contract via [Cross Program Invocation](/developing/programming-model/calling-between-programs#cross-program-invocations),
-so [inner instructions](/terminology#inner-instruction) must be checked as well.
-The `preTokenBalance` and `postTokenBalance` fields from the transaction's metadata
-must then be used to determine the effective balance change.
+method described above. Each new block should be scanned for successful
+transactions referencing user token-account derived addresses. The
+`preTokenBalance` and `postTokenBalance` fields from the transaction's metadata
+must then be used to determine the effective balance change. These fields will
+identify the token mint and account owner (main wallet address) of the affected
+account.
 
 ### Withdrawing
 
@@ -730,7 +728,10 @@ The withdrawal address a user provides must be the that of their SOL wallet.
 Before executing a withdrawal [transfer](#token-transfers),
 the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
-Additionally this address must be owned by the System Program and have no account data.  If the address has no SOL balance, user confirmation should be obtained before proceeding with the withdrawal.  All other withdrawal addresses must be rejected.
+Additionally this address must be owned by the System Program and have no
+account data. If the address has no SOL balance, user confirmation should be
+obtained before proceeding with the withdrawal.  All other withdrawal addresses
+must be rejected.
 
 From the withdrawal address, the [Associated Token Account](https://spl.solana.com/associated-token-account)
 (ATA) for the correct mint is derived and the transfer issued to that account via a
