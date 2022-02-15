@@ -115,6 +115,7 @@ fn wait_for_restart_window(
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
     max_delinquency_percentage: u8,
+    skip_new_snapshot_check: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
 
@@ -291,6 +292,9 @@ fn wait_for_restart_window(
                 });
                 match in_leader_schedule_hole {
                     Ok(_) => {
+                        if skip_new_snapshot_check {
+                            break; // Restart!
+                        }
                         if restart_snapshot == None {
                             restart_snapshot = snapshot_slot;
                         }
@@ -1597,6 +1601,11 @@ pub fn main() {
                     .value_name("PERCENT")
                     .help("The maximum delinquent stake % permitted for an exit")
             )
+            .arg(
+                Arg::with_name("skip_new_snapshot_check")
+                    .long("skip-new-snapshot-check")
+                    .help("Skip check for a new snapshot")
+            )
         )
         .subcommand(
             SubCommand::with_name("authorized-voter")
@@ -1680,7 +1689,6 @@ pub fn main() {
                 Arg::with_name("min_idle_time")
                     .long("min-idle-time")
                     .takes_value(true)
-                    .index(1)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
                     .default_value("10")
@@ -1702,6 +1710,11 @@ pub fn main() {
                     .default_value("5")
                     .value_name("PERCENT")
                     .help("The maximum delinquent stake % permitted for a restart")
+            )
+            .arg(
+                Arg::with_name("skip_new_snapshot_check")
+                    .long("skip-new-snapshot-check")
+                    .help("Skip check for a new snapshot")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -1789,15 +1802,22 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
+            let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time, max_delinquent_stake)
-                    .unwrap_or_else(|err| {
-                        println!("{}", err);
-                        exit(1);
-                    });
+                wait_for_restart_window(
+                    &ledger_path,
+                    None,
+                    min_idle_time,
+                    max_delinquent_stake,
+                    skip_new_snapshot_check,
+                )
+                .unwrap_or_else(|err| {
+                    println!("{}", err);
+                    exit(1);
+                });
             }
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -1857,12 +1877,19 @@ pub fn main() {
             let identity = pubkey_of(subcommand_matches, "identity");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
+            let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
 
-            wait_for_restart_window(&ledger_path, identity, min_idle_time, max_delinquent_stake)
-                .unwrap_or_else(|err| {
-                    println!("{}", err);
-                    exit(1);
-                });
+            wait_for_restart_window(
+                &ledger_path,
+                identity,
+                min_idle_time,
+                max_delinquent_stake,
+                skip_new_snapshot_check,
+            )
+            .unwrap_or_else(|err| {
+                println!("{}", err);
+                exit(1);
+            });
             return;
         }
         _ => unreachable!(),
