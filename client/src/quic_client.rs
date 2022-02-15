@@ -46,9 +46,13 @@ pub enum ConnectionState {
     Connected(Arc<NewConnection>),
 }
 
-pub struct QuicClient {
+struct QuicClient {
     runtime: Runtime,
     endpoint: Endpoint,
+    // todo: this may block, and while at least 1 thread should always make progress
+    // since we don't await while holding the lock (and the mutex shouldn't be held for long)
+    // this still seems like a bad idea with asyncs
+    // Find a better to safely mutate the connection state
     connection: Arc<Mutex<ConnectionState>>,
     tpu_addr: SocketAddr,
 }
@@ -75,7 +79,7 @@ impl QuicTpuConnection {
         self.client.runtime.block_on(send_transaction)
     }
 
-    pub fn send_wire_transaction_sync(&self, data: &Vec<u8>) -> Result<(), WriteError> {
+    pub fn send_wire_transaction_sync(&self, data: &[u8]) -> Result<(), WriteError> {
         let _guard = self.client.runtime.enter();
         let send_transaction = self.client.send_wire_transaction(data);
         self.client.runtime.block_on(send_transaction)
@@ -108,7 +112,6 @@ impl QuicTpuConnection {
     }
 }
 
-//todo: make this struct private
 impl QuicClient {
     pub fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -162,7 +165,7 @@ impl QuicClient {
         if (!reconnect && matches!(conn, ConnectionState::Disconnected))
             || (reconnect && matches!(conn, ConnectionState::Connected(_)))
         {
-            let connecting = self.endpoint.connect(tpu_addr.clone(), "connect").unwrap();
+            let connecting = self.endpoint.connect(*tpu_addr, "connect").unwrap();
 
             match connecting.await {
                 Ok(conn) => {
@@ -179,7 +182,7 @@ impl QuicClient {
         }
     }
 
-    async fn _send_transaction(&self, data: &Vec<u8>) -> Result<(), WriteError> {
+    async fn _send_transaction(&self, data: &[u8]) -> Result<(), WriteError> {
         let mut send_stream = {
             // todo: make ConnectionState::Connecting contain a future
             // and get rid of this ad-hoc polling
@@ -191,7 +194,7 @@ impl QuicClient {
                         let conn = conn_guard.clone();
                         match conn {
                             ConnectionState::Connected(conn) => {
-                                return Ok(conn.clone());
+                                return Ok(conn);
                             }
                             ConnectionState::Disconnected => {
                                 return Err(ConnectionError::LocallyClosed);
@@ -217,7 +220,7 @@ impl QuicClient {
         self.send_wire_transaction(&serialized_tx).await
     }
 
-    pub async fn send_wire_transaction(&self, data: &Vec<u8>) -> Result<(), WriteError> {
+    pub async fn send_wire_transaction(&self, data: &[u8]) -> Result<(), WriteError> {
         // if we have not attempted to connect yet, or the last connection attempt
         // failed, attempt to connect,
         // otherwise, this is a no-op. Notably, if the connection is e.g.

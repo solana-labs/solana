@@ -379,7 +379,7 @@ impl SendTransactionService {
             };
 
             trace!("sending transaction.");
-            if let Err(e) = send.write_all(&wire_transaction).await {
+            if let Err(e) = send.write_all(wire_transaction).await {
                 warn!("error {:?}", e);
             }
             if let Err(e) = send.finish().await {
