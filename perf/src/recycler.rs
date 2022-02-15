@@ -22,6 +22,7 @@ const RECYCLER_SHRINK_WINDOW: usize = 16384;
 struct RecyclerStats {
     total: AtomicUsize,
     reuse: AtomicUsize,
+    freed: AtomicUsize,
     max_gc: AtomicUsize,
 }
 
@@ -150,6 +151,7 @@ impl<T: Default + Reset> RecyclerX<T> {
             {
                 for mut x in gc.drain(RECYCLER_SHRINK_SIZE..) {
                     x.set_recycler(Weak::default());
+                    self.stats.freed.fetch_add(1, Ordering::Relaxed);
                 }
                 self.size_factor
                     .store(SIZE_FACTOR_AFTER_SHRINK, Ordering::Release);
@@ -169,7 +171,7 @@ impl<T: Default + Reset> RecyclerX<T> {
         }
         let total = self.stats.total.load(Ordering::Relaxed);
         let reuse = self.stats.reuse.load(Ordering::Relaxed);
-        let freed = self.stats.total.fetch_add(1, Ordering::Relaxed);
+        let freed = self.stats.freed.load(Ordering::Relaxed);
         datapoint_debug!(
             "recycler",
             ("gc_len", len as i64, i64),
