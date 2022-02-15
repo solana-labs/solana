@@ -809,7 +809,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn random_chance_of_eviction() -> bool {
         // random eviction
-        const N: usize = 1000;
+        const N: usize = 2; // 50%
         // 1/N chance of eviction
         thread_rng().gen_range(0, N) == 0
     }
