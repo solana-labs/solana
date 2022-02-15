@@ -164,6 +164,7 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub wait_to_vote_slot: Option<Slot>,
 }
 
 impl Default for ValidatorConfig {
@@ -223,6 +224,7 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
+            wait_to_vote_slot: None,
         }
     }
 }
@@ -873,6 +875,7 @@ impl Validator {
             accounts_package_channel,
             last_full_snapshot_slot,
             block_metadata_notifier,
+            config.wait_to_vote_slot,
         );
 
         let tpu = Tpu::new(
