@@ -338,7 +338,7 @@ where
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
-        accounts_db_config,
+        accounts_db_config.clone(),
         accounts_update_notifier,
     )?;
 
@@ -354,6 +354,7 @@ where
         additional_builtins,
         debug_do_not_add_builtins,
         reconstructed_accounts_db_info.accounts_data_len,
+        &accounts_db_config,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());

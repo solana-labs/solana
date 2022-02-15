@@ -3,7 +3,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+            BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, Rewrites, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
@@ -42,7 +42,7 @@ use {
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
         system_program,
-        sysvar::{self, instructions::construct_instructions_data},
+        sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
         transaction::{
             AddressLookupError, Result, SanitizedTransaction, TransactionAccountLocks,
             TransactionError,
@@ -744,6 +744,8 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
+        epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &Option<&RentCollector>,
     ) -> u64 {
         let use_index = false;
         let is_startup = false; // there may be conditions where this is called at startup.
@@ -755,7 +757,8 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
-                None,
+                epoch_schedule,
+                rent_collector,
                 is_startup,
             )
             .1
@@ -769,12 +772,16 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+        epoch_schedule: Option<&EpochSchedule>,
+        rent_collector: &Option<&RentCollector>,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
+        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
             ancestors,
             total_lamports,
             test_hash_calculation,
+            epoch_schedule,
+            rent_collector,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
@@ -1025,12 +1032,12 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_at(&self, slot: Slot) -> Hash {
-        self.bank_hash_info_at(slot).hash
+    pub fn bank_hash_at(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
+        self.bank_hash_info_at(slot, rewrites).hash
     }
 
-    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
-        let delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
+    pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
+        let delta_hash = self.accounts_db.get_accounts_delta_hash_new(slot, rewrites);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         let mut hash_info = bank_hashes
             .get(&slot)
@@ -2390,7 +2397,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_at(1);
+        accounts.bank_hash_at(1, &Rewrites::default());
     }
 
     #[test]

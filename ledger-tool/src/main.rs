@@ -2026,6 +2026,7 @@ fn main() {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_account_count,
+                    skip_rewrites: Some(true),
                     ..AccountsDbConfig::default()
                 });
 

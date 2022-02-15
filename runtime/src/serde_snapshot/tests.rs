@@ -3,7 +3,7 @@ use {
     super::*,
     crate::{
         accounts::{create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, Rewrites},
         bank::{Bank, StatusCacheRc},
         hardened_unpack::UnpackedAppendVecMap,
     },
@@ -175,7 +175,10 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         .unwrap(),
     );
     check_accounts(&daccounts, &pubkeys, 100);
-    assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
+    assert_eq!(
+        accounts.bank_hash_at(0, &Rewrites::default()),
+        daccounts.bank_hash_at(0, &Rewrites::default())
+    );
 }
 
 fn test_bank_serialize_style(serde_style: SerdeStyle) {

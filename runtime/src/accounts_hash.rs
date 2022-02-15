@@ -33,6 +33,7 @@ pub struct HashStats {
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
     pub max_bin_size: usize,
+    pub rehash: usize,
 }
 impl HashStats {
     fn log(&mut self) {
@@ -65,6 +66,7 @@ impl HashStats {
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             ("total", total_time_us as i64, i64),
+            ("rehashed", self.rehash as i64, i64),
         );
     }
 }
@@ -765,6 +767,11 @@ impl AccountsHash {
 
             hash_total -= left_over_hashes; // this is enough to cause the hashes at the end of the data set to be ignored
         }
+        /*
+        hashes.iter().flatten().take(hash_total).for_each(|hash| {
+            error!("h1:{}",hash);
+        });
+        */
 
         // if we have raw hashes to process and
         //   we are not the last pass (we already modded against target_fanout) OR

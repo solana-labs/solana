@@ -85,6 +85,10 @@ impl Ancestors {
         self.len() == 0
     }
 
+    pub fn min_slot(&self) -> Slot {
+        self.ancestors.min().unwrap_or_default()
+    }
+
     pub fn max_slot(&self) -> Slot {
         self.ancestors.max_exclusive().saturating_sub(1)
     }

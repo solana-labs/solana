@@ -241,7 +241,16 @@ impl CacheHashData {
     }
 
     /// save 'data' to 'file_name'
-    pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
+    pub fn save(
+        &self,
+        file_name: &Path,
+        data: &SavedTypeSlice,
+        enable: bool,
+    ) -> Result<(), std::io::Error> {
+        if !enable {
+            // don't save hash calc file since we're not doing rewrites
+            return Ok(());
+        }
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
         self.stats.lock().unwrap().merge(&stats);
@@ -345,7 +354,7 @@ pub mod tests {
                         let cache = CacheHashData::new(&tmpdir);
                         let file_name = "test";
                         let file = Path::new(file_name).to_path_buf();
-                        cache.save(&file, &data_this_pass).unwrap();
+                        cache.save(&file, &data_this_pass, true).unwrap();
                         cache.get_cache_files();
                         assert_eq!(
                             cache
