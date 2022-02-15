@@ -19,7 +19,7 @@ log = "0.4.14"
 nix = "0.23.1"
 quinn = "0.8.0"
 rand = "0.7.0"
-rcgen = "0.8.14"
+rcgen = "0.9.1"
 rustls = { version = "0.20.2", features = ["dangerous_configuration"] }
 pem = "1.0.2"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
