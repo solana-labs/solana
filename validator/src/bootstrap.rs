@@ -47,7 +47,7 @@ pub struct RpcBootstrapConfig {
     pub no_snapshot_fetch: bool,
     pub only_known_rpc: bool,
     pub max_genesis_archive_unpacked_size: u64,
-    pub no_check_vote_account: bool,
+    pub check_vote_account: Option<String>,
     pub incremental_snapshot_fetch: bool,
 }
 
@@ -602,7 +602,8 @@ mod without_incremental_snapshots {
             }
         })
         .map(|_| {
-            if !validator_config.voting_disabled && !bootstrap_config.no_check_vote_account {
+            if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
+                let rpc_client = RpcClient::new(url);
                 check_vote_account(
                     &rpc_client,
                     &identity_keypair.pubkey(),
@@ -942,7 +943,8 @@ mod with_incremental_snapshots {
                 )
             })
             .map(|_| {
-                if !validator_config.voting_disabled && !bootstrap_config.no_check_vote_account {
+                if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
+                    let rpc_client = RpcClient::new(url);
                     check_vote_account(
                         &rpc_client,
                         &identity_keypair.pubkey(),
