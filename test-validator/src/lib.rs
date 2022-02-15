@@ -380,7 +380,15 @@ impl TestValidatorGenesis {
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self, socket_addr_space)
+        TestValidator::start(mint_address, self, socket_addr_space).map(|test_validator| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .unwrap();
+            runtime.block_on(test_validator.wait_for_nonzero_fees());
+            test_validator
+        })
     }
 
     /// Start a test validator
@@ -404,18 +412,9 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
-            Ok(test_validator) => {
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_io()
-                    .enable_time()
-                    .build()
-                    .unwrap();
-                runtime.block_on(test_validator.wait_for_nonzero_fees());
-                (test_validator, mint_keypair)
-            }
-            Err(err) => panic!("Test validator failed to start: {}", err),
-        }
+        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
+            .map(|test_validator| (test_validator, mint_keypair))
+            .unwrap_or_else(|err| panic!("Test validator failed to start: {}", err))
     }
 
     pub async fn start_async(&self) -> (TestValidator, Keypair) {
