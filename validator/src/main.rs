@@ -547,7 +547,17 @@ pub fn main() {
                 .takes_value(false)
                 .conflicts_with("no_voting")
                 .requires("entrypoint")
+                .hidden(true)
                 .help("Skip the RPC vote account sanity check")
+        )
+        .arg(
+            Arg::with_name("check_vote_account")
+                .long("check-vote-account")
+                .takes_value(true)
+                .value_name("RPC_URL")
+                .requires("entrypoint")
+                .conflicts_with_all(&["no_check_vote_account", "no_voting"])
+                .help("Sanity check vote account state at startup. The JSON RPC endpoint at RPC_URL must expose `--full-rpc-api`")
         )
         .arg(
             Arg::with_name("restricted_repair_only_mode")
@@ -1948,10 +1958,15 @@ pub fn main() {
 
     let init_complete_file = matches.value_of("init_complete_file");
 
+    if matches.is_present("no_check_vote_account") {
+        info!("vote account sanity checks are no longer performed by default. --no-check-vote-account is deprecated and can be removed from the command line");
+    }
     let rpc_bootstrap_config = bootstrap::RpcBootstrapConfig {
         no_genesis_fetch: matches.is_present("no_genesis_fetch"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
-        no_check_vote_account: matches.is_present("no_check_vote_account"),
+        check_vote_account: matches
+            .value_of("check_vote_account")
+            .map(|url| url.to_string()),
         only_known_rpc: matches.is_present("only_known_rpc"),
         max_genesis_archive_unpacked_size: value_t_or_exit!(
             matches,
