@@ -43,8 +43,8 @@ export function TransactionSignatures({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 id="txSignatures" className="card-header-title">
-          <a href="#txSignatures">Signatures</a>
+        <h3 id="signatures" className="card-header-title">
+          <a href="#signatures">Signatures</a>
         </h3>
       </div>
       <div className="table-responsive mb-0">

@@ -105,7 +105,9 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">{title}</h3>
+        <h3 id="transactions" className="card-header-title">
+          <a href="#transactions">{title}</a>
+        </h3>
         <FilterDropdown
           filter={filter}
           toggle={() => setDropdown((show) => !show)}

@@ -66,7 +66,9 @@ const renderHeader = () => {
     <div className="card-header">
       <div className="row align-items-center">
         <div className="col">
-          <h4 className="card-header-title">Supply Overview</h4>
+          <h4 id="overview" className="card-header-title">
+            <a href="#overview">Supply Overview</a>
+          </h4>
         </div>
       </div>
     </div>

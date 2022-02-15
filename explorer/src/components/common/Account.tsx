@@ -15,7 +15,9 @@ type AccountProps = {
 export function AccountHeader({ title, refresh }: AccountHeaderProps) {
   return (
     <div className="card-header align-items-center">
-      <h3 className="card-header-title">{title}</h3>
+      <h3 id={title} className="card-header-title">
+        <a href={`#${title}`}>{title}</a>
+      </h3>
       <button className="btn btn-white btn-sm" onClick={() => refresh()}>
         <span className="fe fe-refresh-cw me-2"></span>
         Refresh

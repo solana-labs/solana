@@ -204,8 +204,8 @@ function StatusCard({
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 id="txOverview" className="card-header-title">
-          <a href="#txOverview">Overview</a>
+        <h3 id="overview" className="card-header-title">
+          <a href="#overview">Overview</a>
         </h3>
         <Link
           to={clusterPath(`/tx/${signature}/inspect`)}

@@ -51,8 +51,11 @@ export function BlockOverviewCard({
     <>
       <div className="card">
         <div className="card-header">
-          <h3 className="card-header-title mb-0 d-flex align-items-center">
-            Overview
+          <h3
+            id="overview"
+            className="card-header-title mb-0 d-flex align-items-center"
+          >
+            <a href="#overview">Overview</a>
           </h3>
         </div>
         <TableCardBody>

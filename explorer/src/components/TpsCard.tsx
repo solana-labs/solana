@@ -16,7 +16,9 @@ export function TpsCard() {
   return (
     <div className="card">
       <div className="card-header">
-        <h4 className="card-header-title">Live Transaction Stats</h4>
+        <h4 id="txStats" className="card-header-title">
+          <a href="#txStats">Live Transaction Stats</a>
+        </h4>
       </div>
       <TpsCardBody />
     </div>

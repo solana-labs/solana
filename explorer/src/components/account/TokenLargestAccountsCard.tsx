@@ -79,7 +79,9 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h4 className="card-header-title">Largest Accounts</h4>
+              <h4 id="largestAccounts" className="card-header-title">
+                <a href="#largestAccounts">Largest Accounts</a>
+              </h4>
             </div>
           </div>
         </div>

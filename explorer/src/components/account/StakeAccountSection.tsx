@@ -104,8 +104,11 @@ function OverviewCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Stake Account
+        <h3
+          id="stakeAccount"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#stakeAccount">Stake Account</a>
         </h3>
         <button
           className="btn btn-white btn-sm"
@@ -174,8 +177,11 @@ function DelegationCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Stake Delegation
+        <h3
+          id="stakeDelegation"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#stakeDelegation">Stake Delegation</a>
         </h3>
       </div>
       <TableCardBody>
@@ -254,8 +260,11 @@ function AuthoritiesCard({ meta }: { meta: StakeMeta }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Authorities
+        <h3
+          id="authorities"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#authorities">Authorities</a>
         </h3>
       </div>
       <TableCardBody>

@@ -17,7 +17,9 @@ export function UnknownAccountCard({ account }: { account: Account }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Overview</h3>
+        <h3 id="overview" className="card-header-title">
+          <a href="#overview">Overview</a>
+        </h3>
       </div>
 
       <TableCardBody>

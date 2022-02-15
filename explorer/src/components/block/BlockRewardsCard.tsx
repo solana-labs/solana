@@ -15,7 +15,9 @@ export function BlockRewardsCard({ block }: { block: BlockResponse }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Block Rewards</h3>
+        <h3 id="blockRewards" className="card-header-title">
+          <a href="#blockRewards">Block Rewards</a>
+        </h3>
       </div>
 
       <div className="table-responsive mb-0">

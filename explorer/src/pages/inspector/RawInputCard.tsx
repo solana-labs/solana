@@ -132,7 +132,9 @@ export function RawInput({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title">Encoded Transaction Message</h3>
+        <h3 id="encodedMsg" className="card-header-title">
+          <a href="#encodedMsg">Encoded Transaction Message</a>
+        </h3>
       </div>
       <div className="card-body">
         <textarea

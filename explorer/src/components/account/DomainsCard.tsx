@@ -21,7 +21,9 @@ export function DomainsCard({ pubkey }: { pubkey: PublicKey }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Domain Names Owned</h3>
+        <h3 id="domainNamesOwned" className="card-header-title">
+          <a href="#domainNamesOwned">Domain Names Owned</a>
+        </h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">

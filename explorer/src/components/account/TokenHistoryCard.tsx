@@ -228,7 +228,9 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Token History</h3>
+        <h3 id="tokenHistory" className="card-header-title">
+          <a href="#tokenHistory">Token History</a>
+        </h3>
         <FilterDropdown
           filter={filter}
           toggle={() => setDropdown((show) => !show)}

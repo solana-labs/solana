@@ -74,7 +74,9 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
 
       <div className="card">
         <div className="card-header align-items-center">
-          <h3 className="card-header-title">Token Holdings</h3>
+          <h3 id="holdings" className="card-header-title">
+            <a href="#holdings">Token Holdings</a>
+          </h3>
           <DisplayDropdown
             display={display}
             toggle={() => setDropdown((show) => !show)}

@@ -22,7 +22,9 @@ export function HistoryCardHeader({
 }) {
   return (
     <div className="card-header align-items-center">
-      <h3 className="card-header-title">{title}</h3>
+      <h3 id="history" className="card-header-title">
+        <a href="#history">{title}</a>
+      </h3>
       <button
         className="btn btn-white btn-sm"
         disabled={fetching}

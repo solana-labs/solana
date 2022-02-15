@@ -15,7 +15,9 @@ export function BlockhashesCard({
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h3 className="card-header-title">Blockhashes</h3>
+              <h3 id="#blockhashes" className="card-header-title">
+                <a href="#blockhashes">Blockhashes</a>
+              </h3>
             </div>
           </div>
         </div>

@@ -9,7 +9,9 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h3 className="card-header-title">Vote History</h3>
+              <h3 id="voteHistory" className="card-header-title">
+                <a href="#voteHistory">Vote History</a>
+              </h3>
             </div>
           </div>
         </div>

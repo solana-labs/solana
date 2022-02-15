@@ -186,8 +186,13 @@ function FungibleTokenMintAccountCard({
       )}
       <div className="card">
         <div className="card-header">
-          <h3 className="card-header-title mb-0 d-flex align-items-center">
-            {tokenInfo ? "Overview" : "Token Mint"}
+          <h3
+            id={tokenInfo ? "overview" : "tokenMint"}
+            className="card-header-title mb-0 d-flex align-items-center"
+          >
+            <a href={tokenInfo ? "#overview" : "#tokenMint"}>
+              {tokenInfo ? "Overview" : "Token Mint"}
+            </a>
           </h3>
           <button className="btn btn-white btn-sm" onClick={refresh}>
             <span className="fe fe-refresh-cw me-2"></span>
@@ -308,8 +313,11 @@ function NonFungibleTokenMintAccountCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Overview
+        <h3
+          id="overview"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#overview">Overview</a>
         </h3>
         <button className="btn btn-white btn-sm" onClick={refresh}>
           <span className="fe fe-refresh-cw me-2"></span>
@@ -420,8 +428,11 @@ function TokenAccountCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Token Account
+        <h3
+          id="tokenAccount"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#tokenAccount">Token Account</a>
         </h3>
         <button
           className="btn btn-white btn-sm"
@@ -499,8 +510,11 @@ function MultisigAccountCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Multisig Account
+        <h3
+          id="multisigAccount"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#multisigAccount">Multisig Account</a>
         </h3>
         <button
           className="btn btn-white btn-sm"

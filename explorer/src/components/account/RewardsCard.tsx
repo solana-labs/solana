@@ -74,7 +74,9 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h3 className="card-header-title">Rewards</h3>
+              <h3 id="rewards" className="card-header-title">
+                <a href="#rewards">Rewards</a>
+              </h3>
             </div>
           </div>
         </div>

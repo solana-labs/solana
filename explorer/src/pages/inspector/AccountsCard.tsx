@@ -70,8 +70,8 @@ export function AccountsCard({ message }: { message: Message }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 id="txAccountList" className="card-header-title">
-          <a href="#txAccountList">
+        <h3 id="accountList" className="card-header-title">
+          <a href="#accountList">
             {`Account List (${message.accountKeys.length})`}
           </a>
         </h3>

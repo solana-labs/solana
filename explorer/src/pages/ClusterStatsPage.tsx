@@ -29,7 +29,9 @@ export function ClusterStatsPage() {
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h4 className="card-header-title">Live Cluster Stats</h4>
+              <h4 id="clusterStats" className="card-header-title">
+                <a href="#clusterStats">Live Cluster Stats</a>
+              </h4>
             </div>
           </div>
         </div>

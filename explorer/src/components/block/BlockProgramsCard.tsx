@@ -57,7 +57,9 @@ export function BlockProgramsCard({ block }: { block: BlockResponse }) {
     <>
       <div className="card">
         <div className="card-header align-items-center">
-          <h3 className="card-header-title">Block Program Stats</h3>
+          <h3 id="stats" className="card-header-title">
+            <a href="#stats">Block Program Stats</a>
+          </h3>
         </div>
         <TableCardBody>
           <tr>
@@ -74,7 +76,9 @@ export function BlockProgramsCard({ block }: { block: BlockResponse }) {
       </div>
       <div className="card">
         <div className="card-header align-items-center">
-          <h3 className="card-header-title">Block Programs</h3>
+          <h3 id="blockPrograms" className="card-header-title">
+            <a href="#blockPrograms">Block Programs</a>
+          </h3>
         </div>
 
         <div className="table-responsive mb-0">

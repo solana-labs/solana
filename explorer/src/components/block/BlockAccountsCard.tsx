@@ -55,7 +55,9 @@ export function BlockAccountsCard({ block }: { block: BlockResponse }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Block Account Usage</h3>
+        <h3 id="accountUsage" className="card-header-title">
+          <a href="#accountUsage">Block Account Usage</a>
+        </h3>
       </div>
 
       <div className="table-responsive mb-0">

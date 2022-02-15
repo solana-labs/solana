@@ -17,7 +17,9 @@ export function SlotHashesCard({
       <div className="card-header">
         <div className="row align-items-center">
           <div className="col">
-            <h3 className="card-header-title">Slot Hashes</h3>
+            <h3 id="slotHashes" className="card-header-title">
+              <a href="#slotHashes">Slot Hashes</a>
+            </h3>
           </div>
         </div>
       </div>

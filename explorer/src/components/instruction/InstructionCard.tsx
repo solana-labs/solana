@@ -59,7 +59,9 @@ export function InstructionCard({
     <div className="card">
       <div className="card-header">
         <h3
-          id={`instruction${index + 1}`}
+          id={childIndex === undefined
+            ? `instruction${index + 1}`
+            : `instruction${index + 1}.${childIndex + 1}`}
           className="card-header-title mb-0 d-flex align-items-center"
         >
           <span className={`badge bg-${resultClass}-soft me-2`}>

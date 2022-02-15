@@ -19,7 +19,9 @@ export function StakeHistoryCard({
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h3 className="card-header-title">Stake History</h3>
+              <h3 id="stakeHistory" className="card-header-title">
+                <a href="#stakeHistory">Stake History</a>
+              </h3>
             </div>
           </div>
         </div>

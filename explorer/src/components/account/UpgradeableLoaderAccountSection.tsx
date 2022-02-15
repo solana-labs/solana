@@ -79,8 +79,11 @@ export function UpgradeableProgramSection({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Program Account
+        <h3
+          id="account"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#account">Program Account</a>
         </h3>
         <button
           className="btn btn-white btn-sm"
@@ -184,8 +187,11 @@ export function UpgradeableProgramDataSection({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Program Executable Data Account
+        <h3
+          id="executableDataAccount"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#executableDataAccount">Program Executable Data Account</a>
         </h3>
         <button
           className="btn btn-white btn-sm"
@@ -258,8 +264,11 @@ export function UpgradeableProgramBufferSection({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Program Deploy Buffer Account
+        <h3
+          id="deployBufferAccount"
+          className="card-header-title mb-0 d-flex align-items-center"
+        >
+          <a href="#deployBufferAccount">Program Deploy Buffer Account</a>
         </h3>
         <button
           className="btn btn-white btn-sm"

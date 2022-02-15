@@ -8,7 +8,9 @@ export function MetaplexMetadataCard({ nftData }: { nftData: NFTData }) {
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h3 className="card-header-title">Metaplex Metadata</h3>
+              <h3 id="metadata" className="card-header-title">
+                <a href="#metadata">Metaplex Metadata</a>
+              </h3>
             </div>
           </div>
         </div>
