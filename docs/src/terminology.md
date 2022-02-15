@@ -70,7 +70,7 @@ A gossip network connecting all [nodes](#node) of a [cluster](#cluster).
 
 ## cooldown period
 
-Some number of [epochs](#epoch) after [stake](#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](#epoch) after [stake](#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
 
 ## credit
 
