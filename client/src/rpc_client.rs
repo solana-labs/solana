@@ -197,7 +197,7 @@ impl RpcClient {
     /// let url = "http://localhost:8899".to_string();
     /// let client = RpcClient::new(url);
     /// ```
-    pub fn new(url: String) -> Self {
+    pub fn new<U: ToString>(url: U) -> Self {
         Self::new_with_commitment(url, CommitmentConfig::default())
     }
 
@@ -220,7 +220,7 @@ impl RpcClient {
     /// let commitment_config = CommitmentConfig::processed();
     /// let client = RpcClient::new_with_commitment(url, commitment_config);
     /// ```
-    pub fn new_with_commitment(url: String, commitment_config: CommitmentConfig) -> Self {
+    pub fn new_with_commitment<U: ToString>(url: U, commitment_config: CommitmentConfig) -> Self {
         Self::new_sender(
             HttpSender::new(url),
             RpcClientConfig::with_commitment(commitment_config),
@@ -246,7 +246,7 @@ impl RpcClient {
     /// let timeout = Duration::from_secs(1);
     /// let client = RpcClient::new_with_timeout(url, timeout);
     /// ```
-    pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
+    pub fn new_with_timeout<U: ToString>(url: U, timeout: Duration) -> Self {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
             RpcClientConfig::with_commitment(CommitmentConfig::default()),
@@ -275,8 +275,8 @@ impl RpcClient {
     ///     commitment_config,
     /// );
     /// ```
-    pub fn new_with_timeout_and_commitment(
-        url: String,
+    pub fn new_with_timeout_and_commitment<U: ToString>(
+        url: U,
         timeout: Duration,
         commitment_config: CommitmentConfig,
     ) -> Self {
@@ -318,8 +318,8 @@ impl RpcClient {
     ///     confirm_transaction_initial_timeout,
     /// );
     /// ```
-    pub fn new_with_timeouts_and_commitment(
-        url: String,
+    pub fn new_with_timeouts_and_commitment<U: ToString>(
+        url: U,
         timeout: Duration,
         commitment_config: CommitmentConfig,
         confirm_transaction_initial_timeout: Duration,
@@ -353,7 +353,7 @@ impl RpcClient {
     /// let url = "fails".to_string();
     /// let successful_client = RpcClient::new_mock(url);
     /// ```
-    pub fn new_mock(url: String) -> Self {
+    pub fn new_mock<U: ToString>(url: U) -> Self {
         Self::new_sender(
             MockSender::new(url),
             RpcClientConfig::with_commitment(CommitmentConfig::default()),
@@ -387,7 +387,7 @@ impl RpcClient {
     /// let url = "succeeds".to_string();
     /// let client = RpcClient::new_mock_with_mocks(url, mocks);
     /// ```
-    pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
+    pub fn new_mock_with_mocks<U: ToString>(url: U, mocks: Mocks) -> Self {
         Self::new_sender(
             MockSender::new_with_mocks(url, mocks),
             RpcClientConfig::with_commitment(CommitmentConfig::default()),

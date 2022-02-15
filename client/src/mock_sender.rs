@@ -74,13 +74,13 @@ pub struct MockSender {
 ///    from [`RpcRequest`] to a JSON [`Value`] response, Any entries in this map
 ///    override the default behavior for the given request.
 impl MockSender {
-    pub fn new(url: String) -> Self {
+    pub fn new<U: ToString>(url: U) -> Self {
         Self::new_with_mocks(url, Mocks::default())
     }
 
-    pub fn new_with_mocks(url: String, mocks: Mocks) -> Self {
+    pub fn new_with_mocks<U: ToString>(url: U, mocks: Mocks) -> Self {
         Self {
-            url,
+            url: url.to_string(),
             mocks: RwLock::new(mocks),
         }
     }
