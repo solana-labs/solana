@@ -136,7 +136,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let validator_to_slots = vec![
         // Ensure validator b is leader for slots <= `next_slot_on_a`
         (validator_b_pubkey, next_slot_on_a as usize + 1),
-        (validator_c_pubkey, 1),
+        (validator_c_pubkey, next_slot_on_a as usize + 1),
     ];
 
     let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
