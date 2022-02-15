@@ -108,9 +108,12 @@ pub fn port_range_validator(port_range: String) -> Result<(), String> {
     }
 }
 
+pub fn format_name_value(name: &str, value: &str) -> String {
+    format!("{} {}", style(name).bold(), value)
+}
 /// Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
-    println!("{} {}", style(name).bold(), value);
+    format_name_value(name, value);
 }
 
 /// Creates a new process bar for processing that will take an unknown amount of time
@@ -139,6 +142,10 @@ impl ProgressBar {
         } else {
             println!("{}", msg);
         }
+    }
+
+    pub fn println<I: AsRef<str>>(&self, msg: I) {
+        self.progress_bar.println(msg);
     }
 
     pub fn abandon_with_message<T: Into<Cow<'static, str>> + Display>(&self, msg: T) {
