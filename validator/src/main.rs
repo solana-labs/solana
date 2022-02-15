@@ -1581,8 +1581,8 @@ pub fn main() {
             )
             .arg(
                 Arg::with_name("min_idle_time")
-                    .takes_value(true)
                     .long("min-idle-time")
+                    .takes_value(true)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
                     .default_value("10")
@@ -1678,6 +1678,7 @@ pub fn main() {
             .about("Monitor the validator for a good time to restart")
             .arg(
                 Arg::with_name("min_idle_time")
+                    .long("min-idle-time")
                     .takes_value(true)
                     .index(1)
                     .validator(is_parsable::<usize>)
