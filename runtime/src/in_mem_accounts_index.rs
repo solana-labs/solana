@@ -44,6 +44,8 @@ pub struct InMemAccountsIndex<T: IndexValue> {
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
     pub(crate) cache_ranges_held: CacheRangesHeld,
+    // incremented each time stop_flush is changed
+    stop_flush_changes: AtomicU64,
     // true while ranges are being manipulated. Used to keep an async flush from removing things while a range is being held.
     stop_flush: AtomicU64,
     // set to true when any entry in this bin is marked dirty
@@ -77,6 +79,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 .map(|disk| disk.get_bucket_from_index(bin))
                 .map(Arc::clone),
             cache_ranges_held: CacheRangesHeld::default(),
+            stop_flush_changes: AtomicU64::default(),
             stop_flush: AtomicU64::default(),
             bin_dirty: AtomicBool::default(),
             flushing_active: AtomicBool::default(),
@@ -724,6 +727,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             // stop_flush went to 0, so this bucket could now be ready to be aged
             self.storage.wait_dirty_or_aged.notify_one();
         }
+        self.stop_flush_changes.fetch_add(1, Ordering::Release);
     }
 
     pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
@@ -779,6 +783,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn get_stop_flush(&self) -> bool {
         self.stop_flush.load(Ordering::Relaxed) > 0
+    }
+
+    fn get_stop_flush_changes(&self) -> u64 {
+        self.stop_flush_changes.load(Ordering::Relaxed)
     }
 
     pub(crate) fn flush(&self) {
@@ -970,7 +978,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             return completed_scan; // completed, don't need to get lock or do other work
         }
 
+        let flush_changes = self.get_stop_flush_changes();
         let ranges = self.cache_ranges_held.read().unwrap().clone();
+        let mut ranges_later;
 
         let mut removed = 0;
         // consider chunking these so we don't hold the write lock too long
@@ -1008,6 +1018,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if self.get_stop_flush() {
                     return false; // did NOT complete, told to stop
+                }
+
+                if flush_changes != self.get_stop_flush_changes() {
+                    ranges_later = self.cache_ranges_held.read().unwrap().clone();
+                    if ranges_later.iter().any(|range| range.contains(&k)) {
+                        // this item is held in mem by range, so don't remove
+                        panic!(
+                            "we would have thrown away: {}, {:?}, {:?}",
+                            k, ranges, ranges_later
+                        );
+                    }
                 }
 
                 // all conditions for removing succeeded, so really remove item from in-mem cache
