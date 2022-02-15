@@ -1035,6 +1035,18 @@ pub trait DropCallback: fmt::Debug {
     fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync>;
 }
 
+/// Noop callback on dropping banks is useful for simulation banks, which are
+/// new banks created from a frozen bank, but should not be purged in the same
+/// way.
+#[derive(Debug, Clone)]
+struct NoopDropCallback;
+impl DropCallback for NoopDropCallback {
+    fn callback(&self, _b: &Bank) {}
+    fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync> {
+        Box::new(self.clone())
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
@@ -1253,6 +1265,7 @@ struct LoadVoteAndStakeAccountsResult {
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
+    pub simulation_bank: bool,
 }
 
 impl Bank {
@@ -1527,7 +1540,10 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions { vote_only_bank } = new_bank_options;
+        let NewBankOptions {
+            vote_only_bank,
+            simulation_bank,
+        } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -1541,6 +1557,7 @@ impl Bank {
                     &parent.rc.accounts,
                     slot,
                     parent.slot(),
+                    simulation_bank,
                 )),
                 parent: RwLock::new(Some(parent.clone())),
                 slot,
@@ -1630,6 +1647,20 @@ impl Bank {
         let (feature_set, feature_set_time) =
             Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
 
+        let drop_callback = if simulation_bank {
+            RwLock::new(OptionalDropCallback(Some(Box::new(NoopDropCallback))))
+        } else {
+            RwLock::new(OptionalDropCallback(
+                parent
+                    .drop_callback
+                    .read()
+                    .unwrap()
+                    .0
+                    .as_ref()
+                    .map(|drop_callback| drop_callback.clone_box()),
+            ))
+        };
+
         let mut new = Bank {
             rc,
             src,
@@ -1683,15 +1714,7 @@ impl Bank {
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
             feature_set,
-            drop_callback: RwLock::new(OptionalDropCallback(
-                parent
-                    .drop_callback
-                    .read()
-                    .unwrap()
-                    .0
-                    .as_ref()
-                    .map(|drop_callback| drop_callback.clone_box()),
-            )),
+            drop_callback,
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(SysvarCache::default()),
@@ -3472,12 +3495,26 @@ impl Bank {
 
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
-        &self,
+        self: &Arc<Bank>,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        // Simulation detection countermeasure 1: Create a new child bank for the simulation. This
+        // ensures comparing the slot values between the Clock and SlotHistory sysvars does not
+        // reveal that the program is running in simulation.
+        //
+        // Reference: https://opcodes.fr/en/publications/2022-01/detecting-transaction-simulation/
+        let bank = Bank::new_from_parent_with_options(
+            self,
+            &Pubkey::default(),
+            self.slot().saturating_add(1),
+            NewBankOptions {
+                simulation_bank: true,
+                ..NewBankOptions::default()
+            },
+        );
+        bank.simulate_transaction_unchecked(transaction)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank

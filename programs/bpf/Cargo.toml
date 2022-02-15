@@ -26,6 +26,7 @@ itertools = "0.10.1"
 log = "0.4.11"
 miow = "0.3.6"
 net2 = "0.2.37"
+solana-account-decoder = { path = "../../account-decoder", version = "=1.10.0" }
 solana-bpf-rust-invoke = { path = "rust/invoke", version = "=1.10.0"}
 solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.10.0"}
 solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.10.0"}
@@ -38,7 +39,6 @@ solana-runtime = { path = "../../runtime", version = "=1.10.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.10.0" }
 solana-sdk = { path = "../../sdk", version = "=1.10.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.10.0" }
-solana-account-decoder = { path = "../../account-decoder", version = "=1.10.0" }
 
 [[bench]]
 name = "bpf_loader"
@@ -83,6 +83,7 @@ members = [
     "rust/sha",
     "rust/sibling_inner_instruction",
     "rust/sibling_instruction",
+    "rust/simulation",
     "rust/spoof1",
     "rust/spoof1_system",
     "rust/sysvar",
