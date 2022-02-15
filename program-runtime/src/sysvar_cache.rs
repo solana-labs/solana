@@ -239,11 +239,12 @@ pub mod get_sysvar_with_account_check2 {
     fn check_sysvar_account<S: Sysvar>(
         transaction_context: &TransactionContext,
         instruction_context: &InstructionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<(), InstructionError> {
-        let index_in_transaction =
-            instruction_context.get_index_in_transaction(index_in_instruction)?;
-        if !S::check_id(transaction_context.get_key_of_account_at_index(index_in_transaction)?) {
+        if !S::check_id(
+            instruction_context
+                .get_instruction_account_key(transaction_context, instruction_account_index)?,
+        ) {
             return Err(InstructionError::InvalidArgument);
         }
         Ok(())

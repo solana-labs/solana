@@ -283,6 +283,7 @@ pub fn process_instruction(
             space,
             owner,
         } => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
@@ -304,6 +305,7 @@ pub fn process_instruction(
             space,
             owner,
         } => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to_address = Address::create(
@@ -329,6 +331,7 @@ pub fn process_instruction(
             assign(&mut account, &address, &owner, &signers, invoke_context)
         }
         SystemInstruction::Transfer { lamports } => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             transfer(from, to, lamports, invoke_context)
@@ -338,6 +341,7 @@ pub fn process_instruction(
             from_seed,
             from_owner,
         } => {
+            instruction_context.check_number_of_instruction_accounts(3)?;
             let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let base = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
@@ -352,12 +356,12 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AdvanceNonceAccount => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            instruction_context.check_number_of_instruction_accounts(1)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 1,
+                1,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -374,19 +378,15 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let _to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            instruction_context.check_number_of_instruction_accounts(2)?;
             #[allow(deprecated)]
             let _recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 2,
+                2,
             )?;
-            let rent = get_sysvar_with_account_check2::rent(
-                invoke_context,
-                instruction_context,
-                first_instruction_account + 3,
-            )?;
+            let rent =
+                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 3)?;
             withdraw_nonce_account(
                 invoke_context,
                 instruction_context,
@@ -398,12 +398,12 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            instruction_context.check_number_of_instruction_accounts(1)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 1,
+                1,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -412,11 +412,8 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            let rent = get_sysvar_with_account_check2::rent(
-                invoke_context,
-                instruction_context,
-                first_instruction_account + 2,
-            )?;
+            let rent =
+                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 2)?;
             initialize_nonce_account(
                 invoke_context,
                 instruction_context,
@@ -426,7 +423,7 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            instruction_context.check_number_of_instruction_accounts(1)?;
             authorize_nonce_account(
                 invoke_context,
                 instruction_context,
