@@ -2403,6 +2403,9 @@ pub mod rpc_minimal {
             commitment: Option<CommitmentConfig>,
         ) -> Result<EpochInfo>;
 
+        #[rpc(meta, name = "getGenesisHash")]
+        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
+
         #[rpc(meta, name = "getHealth")]
         fn get_health(&self, meta: Self::Metadata) -> Result<String>;
 
@@ -2479,6 +2482,11 @@ pub mod rpc_minimal {
             debug!("get_epoch_info rpc request received");
             let bank = meta.bank(commitment);
             Ok(bank.get_epoch_info())
+        }
+
+        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String> {
+            debug!("get_genesis_hash rpc request received");
+            Ok(meta.genesis_hash.to_string())
         }
 
         fn get_health(&self, meta: Self::Metadata) -> Result<String> {
@@ -3155,9 +3163,6 @@ pub mod rpc_full {
             limit: Option<usize>,
         ) -> Result<Vec<RpcPerfSample>>;
 
-        #[rpc(meta, name = "getGenesisHash")]
-        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
-
         #[rpc(meta, name = "getSignatureStatuses")]
         fn get_signature_statuses(
             &self,
@@ -3353,11 +3358,6 @@ pub mod rpc_full {
                     }
                 })
                 .collect())
-        }
-
-        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String> {
-            debug!("get_genesis_hash rpc request received");
-            Ok(meta.genesis_hash.to_string())
         }
 
         fn get_signature_statuses(
