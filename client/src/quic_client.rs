@@ -2,12 +2,13 @@
 //! an interface for sending transactions which is restricted by the servers flow control.
 
 use {
+    async_mutex::Mutex,
     quinn::{ClientConfig, ConnectionError, Endpoint, EndpointConfig, NewConnection, WriteError},
     rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     solana_sdk::{transaction::Transaction, transport::Result as TransportResult},
     std::{
         net::{SocketAddr, UdpSocket},
-        sync::{Arc, Mutex},
+        sync::Arc,
     },
     tokio::{runtime::Runtime, task::yield_now, task::JoinHandle},
 };
@@ -49,10 +50,10 @@ pub enum ConnectionState {
 struct QuicClient {
     runtime: Runtime,
     endpoint: Endpoint,
-    // todo: this may block, and while at least 1 thread should always make progress
-    // since we don't await while holding the lock (and the mutex shouldn't be held for long)
-    // this still seems like a bad idea with asyncs
-    // Find a better to safely mutate the connection state
+    // todo: we've switched away from normal mutexes to async mutexes - does this
+    // have any implications for how we use them? For example, can you now await while holding
+    // the lock? If so, we could get rid of some of the cumbersome polling
+    // and the ConnectionState::Connecting state
     connection: Arc<Mutex<ConnectionState>>,
     tpu_addr: SocketAddr,
 }
@@ -152,7 +153,7 @@ impl QuicClient {
     // Disconnected is taken to mean we've recently tried connecting and failed.
     pub async fn connect(&self, tpu_addr: &SocketAddr, reconnect: bool) {
         let conn = {
-            let mut conn_guard = self.connection.lock().unwrap();
+            let mut conn_guard = self.connection.lock().await;
             let prev_conn = conn_guard.clone();
             if (!reconnect && matches!(*conn_guard, ConnectionState::Disconnected))
                 || (reconnect && matches!(*conn_guard, ConnectionState::Connected(_)))
@@ -169,12 +170,12 @@ impl QuicClient {
 
             match connecting.await {
                 Ok(conn) => {
-                    let mut conn_guard = self.connection.lock().unwrap();
+                    let mut conn_guard = self.connection.lock().await;
 
                     *conn_guard = ConnectionState::Connected(Arc::new(conn));
                 }
                 _ => {
-                    let mut conn_guard = self.connection.lock().unwrap();
+                    let mut conn_guard = self.connection.lock().await;
 
                     *conn_guard = ConnectionState::Disconnected;
                 }
@@ -190,7 +191,7 @@ impl QuicClient {
             let connection = tokio::spawn(async move {
                 loop {
                     {
-                        let conn_guard = mutex.lock().unwrap();
+                        let conn_guard = mutex.lock().await;
                         let conn = conn_guard.clone();
                         match conn {
                             ConnectionState::Connected(conn) => {
