@@ -89,6 +89,12 @@ fn main() {
             "sanity",
             "secp256k1_recover",
             "sha",
+<<<<<<< HEAD
+=======
+            "sibling_inner_instruction",
+            "sibling_instruction",
+            "simulation",
+>>>>>>> c42b80f09 (Add simulation detection countermeasure (#22880))
             "spoof1",
             "spoof1_system",
             "upgradeable",
