@@ -4027,9 +4027,10 @@ pub mod tests {
         );
     }
 
-    fn run_test_secondary_indexes<
+    fn run_test_spl_token_secondary_indexes<
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     >(
+        token_id: &Pubkey,
         index: &AccountsIndex<bool>,
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
@@ -4060,7 +4061,7 @@ pub mod tests {
         index.upsert(
             0,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data[1..],
             &secondary_indexes,
             true,
@@ -4076,7 +4077,7 @@ pub mod tests {
         for _ in 0..2 {
             index.update_secondary_indexes(
                 &account_key,
-                &inline_spl_token::id(),
+                token_id,
                 &account_data,
                 &secondary_indexes,
             );
@@ -4093,12 +4094,7 @@ pub mod tests {
         });
         secondary_index.index.clear();
         secondary_index.reverse_index.clear();
-        index.update_secondary_indexes(
-            &account_key,
-            &inline_spl_token::id(),
-            &account_data,
-            &secondary_indexes,
-        );
+        index.update_secondary_indexes(&account_key, token_id, &account_data, &secondary_indexes);
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
         check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4110,12 +4106,7 @@ pub mod tests {
         });
         secondary_index.index.clear();
         secondary_index.reverse_index.clear();
-        index.update_secondary_indexes(
-            &account_key,
-            &inline_spl_token::id(),
-            &account_data,
-            &secondary_indexes,
-        );
+        index.update_secondary_indexes(&account_key, token_id, &account_data, &secondary_indexes);
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
         check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4134,31 +4125,38 @@ pub mod tests {
     fn test_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_spl_token_secondary_indexes(
+                &token_id,
+                &index,
+                &index.spl_token_mint_index,
+                key_start,
+                key_end,
+                &secondary_indexes,
+            );
+        }
     }
 
     #[test]
     fn test_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_spl_token_secondary_indexes(
+                &token_id,
+                &index,
+                &index.spl_token_owner_index,
+                key_start,
+                key_end,
+                &secondary_indexes,
+            );
+        }
     }
 
     fn run_test_secondary_indexes_same_slot_and_forks<
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     >(
+        token_id: &Pubkey,
         index: &AccountsIndex<bool>,
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key_start: usize,
@@ -4180,7 +4178,7 @@ pub mod tests {
         index.upsert(
             slot,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data1,
             secondary_indexes,
             true,
@@ -4192,7 +4190,7 @@ pub mod tests {
         index.upsert(
             slot,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data2,
             secondary_indexes,
             true,
@@ -4212,7 +4210,7 @@ pub mod tests {
         index.upsert(
             later_slot,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data1,
             secondary_indexes,
             true,
@@ -4248,26 +4246,32 @@ pub mod tests {
     fn test_dashmap_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes_same_slot_and_forks(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &account_index,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_secondary_indexes_same_slot_and_forks(
+                &token_id,
+                &index,
+                &index.spl_token_mint_index,
+                key_start,
+                key_end,
+                &account_index,
+            );
+        }
     }
 
     #[test]
     fn test_rwlock_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes_same_slot_and_forks(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &account_index,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_secondary_indexes_same_slot_and_forks(
+                &token_id,
+                &index,
+                &index.spl_token_owner_index,
+                key_start,
+                key_end,
+                &account_index,
+            );
+        }
     }
 
     impl IndexValue for bool {}
