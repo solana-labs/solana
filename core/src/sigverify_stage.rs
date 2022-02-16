@@ -370,6 +370,11 @@ impl SigVerifyStage {
 
 #[cfg(test)]
 mod tests {
+    use crate::sigverify::TransactionSigVerifier;
+    use crate::sigverify_stage::timing::duration_as_ms;
+    use crossbeam_channel::unbounded;
+    use solana_perf::packet::to_packet_batches;
+    use solana_perf::test_tx::test_tx;
     use {super::*, solana_perf::packet::Packet};
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
@@ -400,5 +405,62 @@ mod tests {
         assert!(!batches[0].packets[0].meta.discard());
         assert!(batches[0].packets[3].meta.discard());
         assert!(!batches[0].packets[4].meta.discard());
+    }
+    fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
+        let len = 4096;
+        let chunk_size = 1024;
+        if use_same_tx {
+            let tx = test_tx();
+            to_packet_batches(&vec![tx; len], chunk_size)
+        } else {
+            let txs: Vec<_> = (0..len)
+                .map(|_| {
+                    test_tx()
+                })
+                .collect();
+            to_packet_batches(&txs, chunk_size)
+        }
+    }
+
+    #[test]
+    fn test_sigverify_stage() {
+        solana_logger::setup();
+        println!("start");
+        let (packet_s, packet_r) = unbounded();
+        let (verified_s, verified_r) = unbounded();
+        let verifier = TransactionSigVerifier::default();
+        let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
+
+        let use_same_tx = true;
+        let now = Instant::now();
+        let mut batches = gen_batches(use_same_tx);
+        println!(
+            "starting... generation took: {} ms batches: {}",
+            duration_as_ms(&now.elapsed()),
+            batches.len()
+        );
+
+        let mut sent_len = 0;
+        for _ in 0..batches.len() {
+            if let Some(batch) = batches.pop() {
+                sent_len += batch.packets.len();
+                packet_s.send(batch).unwrap();
+            }
+        }
+        let mut received = 0;
+        println!("sent: {}", sent_len);
+        loop {
+            if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
+                while let Some(v) = verifieds.pop() {
+                    received += v.packets.len();
+                    batches.push(v);
+                }
+                if received >= sent_len {
+                    break;
+                }
+            }
+        }
+        println!("received: {}", received);
+        stage.join().unwrap();
     }
 }
