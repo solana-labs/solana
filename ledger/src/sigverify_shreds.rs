@@ -51,10 +51,12 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
     if packet.meta.discard {
+        error!("discard packet");
         return Some(0);
     }
     trace!("slot start and end {} {}", slot_start, slot_end);
     if packet.meta.size < slot_end {
+        error!("packet meta too small for slot");
         return Some(0);
     }
     let slot: u64 = limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
@@ -65,12 +67,18 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
     };
     trace!("slot {}", slot);
     let pubkey = slot_leaders.get(&slot)?;
+    {
+        let pubkey = Pubkey::new_from_array(*pubkey);
+        trace!("pubkey {}", pubkey);
+    }
     if packet.meta.size < sig_end {
+        error!("packet meta too small for ");
         return Some(0);
     }
     let signature = Signature::new(&packet.data[sig_start..sig_end]);
     trace!("signature {}", signature);
     if !signature.verify(pubkey, &packet.data[msg_start..msg_end]) {
+        error!("sigverify failed");
         return Some(0);
     }
     Some(1)
@@ -363,6 +371,7 @@ pub fn sign_shreds_gpu(
     let api = perf_libs::api();
     let packet_count = count_packets_in_batches(batches);
     if api.is_none() || packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
+        panic!("sign with cpu");
         return sign_shreds_cpu(keypair, batches);
     }
     let api = api.unwrap();
@@ -403,7 +412,7 @@ pub fn sign_shreds_gpu(
         num_packets += batch.packets.len();
     }
 
-    trace!("Starting verify num packets: {}", num_packets);
+    trace!("Starting sign num packets: {}", num_packets);
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
     const USE_NON_DEFAULT_STREAM: u8 = 1;
@@ -650,6 +659,7 @@ pub mod tests {
         }
         let mut batches = vec![packet_batch; num_batches];
         let keypair = Keypair::new();
+        info!("test pubkey: {}", keypair.pubkey());
         let pinned_keypair = sign_shreds_gpu_pinned_keypair(&keypair, &recycler_cache);
         let pinned_keypair = Some(Arc::new(pinned_keypair));
         let pubkeys = [
