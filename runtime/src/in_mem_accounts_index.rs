@@ -44,10 +44,10 @@ pub struct InMemAccountsIndex<T: IndexValue> {
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
     pub(crate) cache_ranges_held: CacheRangesHeld,
-    // incremented each time stop_flush is changed
-    stop_flush_changes: AtomicU64,
+    // incremented each time stop_evictions is changed
+    stop_evictions_changes: AtomicU64,
     // true while ranges are being manipulated. Used to keep an async flush from removing things while a range is being held.
-    stop_flush: AtomicU64,
+    stop_evictions: AtomicU64,
     // set to true when any entry in this bin is marked dirty
     bin_dirty: AtomicBool,
     // set to true while this bin is being actively flushed
@@ -79,8 +79,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 .map(|disk| disk.get_bucket_from_index(bin))
                 .map(Arc::clone),
             cache_ranges_held: CacheRangesHeld::default(),
-            stop_flush_changes: AtomicU64::default(),
-            stop_flush: AtomicU64::default(),
+            stop_evictions_changes: AtomicU64::default(),
+            stop_evictions: AtomicU64::default(),
             bin_dirty: AtomicBool::default(),
             flushing_active: AtomicBool::default(),
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
@@ -142,10 +142,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn keys(&self) -> Vec<Pubkey> {
         Self::update_stat(&self.stats().keys, 1);
         // easiest implementation is to load evrything from disk into cache and return the keys
-        self.start_stop_flush(true);
+        self.start_stop_evictions(true);
         self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>);
         let keys = self.map().read().unwrap().keys().cloned().collect();
-        self.start_stop_flush(false);
+        self.start_stop_evictions(false);
         keys
     }
 
@@ -720,17 +720,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         already_held
     }
 
-    /// called with 'stop'=true to stop bg flusher from removing any entries from in-mem idx
-    /// called with 'stop'=false to allow bg flusher to remove eligible (not in held ranges) entries from in-mem idx
-    fn start_stop_flush(&self, stop: bool) {
+    /// called with 'stop'=true to stop bg flusher from evicting any entries from in-mem idx
+    /// called with 'stop'=false to allow bg flusher to evict eligible (not in held ranges) entries from in-mem idx
+    fn start_stop_evictions(&self, stop: bool) {
         if stop {
-            self.stop_flush.fetch_add(1, Ordering::Release);
-        } else if 1 == self.stop_flush.fetch_sub(1, Ordering::Release) {
-            // stop_flush went to 0, so this bucket could now be ready to be aged
+            self.stop_evictions.fetch_add(1, Ordering::Release);
+        } else if 1 == self.stop_evictions.fetch_sub(1, Ordering::Release) {
+            // stop_evictions went to 0, so this bucket could now be ready to be aged
             self.storage.wait_dirty_or_aged.notify_one();
         }
         // note that this value has changed
-        self.stop_flush_changes.fetch_add(1, Ordering::Release);
+        self.stop_evictions_changes.fetch_add(1, Ordering::Release);
     }
 
     /// if 'start_holding'=true, then:
@@ -744,7 +744,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     where
         R: RangeBounds<Pubkey> + Debug,
     {
-        self.start_stop_flush(true);
+        self.start_stop_evictions(true);
 
         if !start_holding || !self.add_hold_range_in_memory_if_already_held(range) {
             if start_holding {
@@ -755,14 +755,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             self.just_set_hold_range_in_memory(range, start_holding);
         }
 
-        self.start_stop_flush(false);
+        self.start_stop_evictions(false);
     }
 
     fn put_range_in_cache<R>(&self, range: &Option<&R>)
     where
         R: RangeBounds<Pubkey>,
     {
-        assert!(self.get_stop_flush()); // caller should be controlling the lifetime of how long this needs to be present
+        assert!(self.get_stop_evictions()); // caller should be controlling the lifetime of how long this needs to be present
         let m = Measure::start("range");
 
         let mut added_to_mem = 0;
@@ -791,12 +791,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
 
-    fn get_stop_flush(&self) -> bool {
-        self.stop_flush.load(Ordering::Acquire) > 0
+    /// returns true if there are active requests to stop evictions
+    fn get_stop_evictions(&self) -> bool {
+        self.stop_evictions.load(Ordering::Acquire) > 0
     }
 
-    fn get_stop_flush_changes(&self) -> u64 {
-        self.stop_flush_changes.load(Ordering::Acquire)
+    /// return count of calls to 'start_stop_evictions', indicating changes could have been made to eviction strategy
+    fn get_stop_evictions_changes(&self) -> u64 {
+        self.stop_evictions_changes.load(Ordering::Acquire)
     }
 
     pub(crate) fn flush(&self) {
@@ -817,6 +819,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.storage.wait_dirty_or_aged.notify_one();
     }
 
+    /// returns true if a dice roll indicates this call should result in a random eviction.
+    /// This causes non-determinism in cache contents per validator.
     fn random_chance_of_eviction() -> bool {
         // random eviction
         const N: usize = 1000;
@@ -831,8 +835,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             + std::mem::size_of::<AccountMapEntry<T>>()
     }
 
-    /// return true if 'entry' should be removed from the in-mem index
-    fn should_remove_from_mem(
+    /// return true if 'entry' should be evicted from the in-mem index
+    fn should_evict_from_mem(
         &self,
         current_age: Age,
         entry: &AccountMapEntry<T>,
@@ -856,11 +860,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
                 } else {
                     // keep items with slot lists that contained cached items
-                    let remove = !slot_list.iter().any(|(_, info)| info.is_cached());
-                    if !remove && update_stats {
+                    let evict = !slot_list.iter().any(|(_, info)| info.is_cached());
+                    if !evict && update_stats {
                         Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
                     }
-                    remove
+                    evict
                 }
             }
         } else {
@@ -887,8 +891,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         // may have to loop if disk has to grow and we have to restart
         loop {
-            let mut removes;
-            let mut removes_random = Vec::default();
+            let mut evictions;
+            let mut evictions_random = Vec::default();
             let disk = self.bucket.as_ref().unwrap();
 
             let mut flush_entries_updated_on_disk = 0;
@@ -897,13 +901,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             // holds read lock
             {
                 let map = self.map().read().unwrap();
-                removes = Vec::with_capacity(map.len());
+                evictions = Vec::with_capacity(map.len());
                 let m = Measure::start("flush_scan_and_update"); // we don't care about lock time in this metric - bg threads can wait
                 for (k, v) in map.iter() {
-                    if self.should_remove_from_mem(current_age, v, startup, true, exceeds_budget) {
-                        removes.push(*k);
+                    if self.should_evict_from_mem(current_age, v, startup, true, exceeds_budget) {
+                        evictions.push(*k);
                     } else if Self::random_chance_of_eviction() {
-                        removes_random.push(*k);
+                        evictions_random.push(*k);
                     } else {
                         // not planning to remove this item from memory now, so don't write it to disk yet
                         continue;
@@ -936,17 +940,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 flush_entries_updated_on_disk,
             );
 
-            let m = Measure::start("flush_remove_or_grow");
+            let m = Measure::start("flush_evict_or_grow");
             match disk_resize {
                 Ok(_) => {
-                    if !self.flush_remove_from_cache(
-                        removes,
+                    if !self.evict_from_cache(
+                        evictions,
                         current_age,
                         startup,
                         false,
                         exceeds_budget,
-                    ) || !self.flush_remove_from_cache(
-                        removes_random,
+                    ) || !self.evict_from_cache(
+                        evictions_random,
                         current_age,
                         startup,
                         true,
@@ -973,23 +977,23 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    // remove keys in 'removes' from in-mem cache due to age
+    // remove keys in 'evictions' from in-mem cache, likely due to age
     // return true if the removal was completed
-    fn flush_remove_from_cache(
+    fn evict_from_cache(
         &self,
-        removes: Vec<Pubkey>,
+        evictions: Vec<Pubkey>,
         current_age: Age,
         startup: bool,
         randomly_evicted: bool,
         exceeds_budget: bool,
     ) -> bool {
         let mut completed_scan = true;
-        if removes.is_empty() {
+        if evictions.is_empty() {
             return completed_scan; // completed, don't need to get lock or do other work
         }
 
-        let stop_flush_changes_at_start = self.get_stop_flush_changes();
-        if self.get_stop_flush() {
+        let stop_evictions_changes_at_start = self.get_stop_evictions_changes();
+        if self.get_stop_evictions() {
             return false; // did NOT complete, ranges were changed, so have to restart
         }
         let ranges = self.cache_ranges_held.read().unwrap().clone();
@@ -997,7 +1001,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut removed = 0;
         // consider chunking these so we don't hold the write lock too long
         let mut map = self.map().write().unwrap();
-        for k in removes {
+        for k in evictions {
             if let Entry::Occupied(occupied) = map.entry(k) {
                 let v = occupied.get();
                 if Arc::strong_count(v) > 1 {
@@ -1008,7 +1012,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if v.dirty()
                     || (!randomly_evicted
-                        && !self.should_remove_from_mem(
+                        && !self.should_evict_from_mem(
                             current_age,
                             v,
                             startup,
@@ -1028,7 +1032,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if stop_flush_changes_at_start != self.get_stop_flush_changes() {
+                if stop_evictions_changes_at_start != self.get_stop_evictions_changes() {
                     return false; // did NOT complete, ranges were changed, so have to restart
                 }
 
@@ -1098,7 +1102,7 @@ mod tests {
     }
 
     #[test]
-    fn test_should_remove_from_mem() {
+    fn test_should_evict_from_mem() {
         solana_logger::setup();
         let bucket = new_for_test::<u64>();
         let mut startup = false;
@@ -1112,7 +1116,7 @@ mod tests {
         ));
 
         // exceeded budget
-        assert!(bucket.should_remove_from_mem(
+        assert!(bucket.should_evict_from_mem(
             current_age,
             &Arc::new(AccountMapEntryInner::new(
                 vec![],
@@ -1124,7 +1128,7 @@ mod tests {
             true,
         ));
         // empty slot list
-        assert!(!bucket.should_remove_from_mem(
+        assert!(!bucket.should_evict_from_mem(
             current_age,
             &Arc::new(AccountMapEntryInner::new(
                 vec![],
@@ -1136,7 +1140,7 @@ mod tests {
             false,
         ));
         // 1 element slot list
-        assert!(bucket.should_remove_from_mem(
+        assert!(bucket.should_evict_from_mem(
             current_age,
             &one_element_slot_list_entry,
             startup,
@@ -1144,7 +1148,7 @@ mod tests {
             false,
         ));
         // 2 element slot list
-        assert!(!bucket.should_remove_from_mem(
+        assert!(!bucket.should_evict_from_mem(
             current_age,
             &Arc::new(AccountMapEntryInner::new(
                 vec![(0, 0), (1, 1)],
@@ -1159,7 +1163,7 @@ mod tests {
         {
             let bucket = new_for_test::<f64>();
             // 1 element slot list with a CACHED item - f64 acts like cached
-            assert!(!bucket.should_remove_from_mem(
+            assert!(!bucket.should_evict_from_mem(
                 current_age,
                 &Arc::new(AccountMapEntryInner::new(
                     vec![(0, 0.0)],
@@ -1173,7 +1177,7 @@ mod tests {
         }
 
         // 1 element slot list, age is now
-        assert!(bucket.should_remove_from_mem(
+        assert!(bucket.should_evict_from_mem(
             current_age,
             &one_element_slot_list_entry,
             startup,
@@ -1183,7 +1187,7 @@ mod tests {
 
         // 1 element slot list, but not current age
         current_age = 1;
-        assert!(!bucket.should_remove_from_mem(
+        assert!(!bucket.should_evict_from_mem(
             current_age,
             &one_element_slot_list_entry,
             startup,
@@ -1193,7 +1197,7 @@ mod tests {
 
         // 1 element slot list, but at startup and age not current
         startup = true;
-        assert!(bucket.should_remove_from_mem(
+        assert!(bucket.should_evict_from_mem(
             current_age,
             &one_element_slot_list_entry,
             startup,
