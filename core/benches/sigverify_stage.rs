@@ -9,7 +9,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
-    solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+    solana_perf::{packet::to_packet_batches, packet::PacketBatch, test_tx::test_tx},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signer},
@@ -109,19 +109,10 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     });
 }
 
-#[bench]
-fn bench_sigverify_stage(bencher: &mut Bencher) {
-    solana_logger::setup();
-    let (packet_s, packet_r) = unbounded();
-    let (verified_s, verified_r) = unbounded();
-    let verifier = TransactionSigVerifier::default();
-    let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
-
-    let now = Instant::now();
+fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
     let len = 4096;
-    let use_same_tx = true;
     let chunk_size = 1024;
-    let mut batches = if use_same_tx {
+    if use_same_tx {
         let tx = test_tx();
         to_packet_batches(&vec![tx; len], chunk_size)
     } else {
@@ -139,14 +130,28 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
             })
             .collect();
         to_packet_batches(&txs, chunk_size)
-    };
+    }
+}
 
-    trace!(
-        "starting... generation took: {} ms batches: {}",
-        duration_as_ms(&now.elapsed()),
-        batches.len()
-    );
+#[bench]
+fn bench_sigverify_stage(bencher: &mut Bencher) {
+    solana_logger::setup();
+    trace!("start");
+    let (packet_s, packet_r) = unbounded();
+    let (verified_s, verified_r) = unbounded();
+    let verifier = TransactionSigVerifier::default();
+    let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
+
+    let use_same_tx = true;
     bencher.iter(move || {
+        let now = Instant::now();
+        let mut batches = gen_batches(use_same_tx);
+        trace!(
+            "starting... generation took: {} ms batches: {}",
+            duration_as_ms(&now.elapsed()),
+            batches.len()
+        );
+
         let mut sent_len = 0;
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
@@ -162,7 +167,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                     received += v.packets.len();
                     batches.push(v);
                 }
-                if received >= sent_len {
+                if use_same_tx || received >= sent_len {
                     break;
                 }
             }

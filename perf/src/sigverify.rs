@@ -167,6 +167,13 @@ pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
     batches.iter().map(|batch| batch.packets.len()).sum()
 }
 
+pub fn count_valid_packets(batches: &[PacketBatch]) -> usize {
+    batches
+        .iter()
+        .map(|batch| batch.packets.iter().filter(|p| !p.meta.discard()).count())
+        .sum()
+}
+
 // internal function to be unit-tested; should be used only by get_packet_offsets
 fn do_get_packet_offsets(
     packet: &Packet,
@@ -496,6 +503,43 @@ impl Deduper {
     }
 }
 
+//inplace shrink a batch of packets
+pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
+    let mut valid_batch_ix = 0;
+    let mut valid_packet_ix = 0;
+    let mut last_valid_batch = 0;
+    for batch_ix in 0..batches.len() {
+        for packet_ix in 0..batches[batch_ix].packets.len() {
+            if batches[batch_ix].packets[packet_ix].meta.discard() {
+                continue;
+            }
+            last_valid_batch = batch_ix.saturating_add(1);
+            let mut found_spot = false;
+            while valid_batch_ix < batch_ix && !found_spot {
+                while valid_packet_ix < batches[valid_batch_ix].packets.len() {
+                    if batches[valid_batch_ix].packets[valid_packet_ix]
+                        .meta
+                        .discard()
+                    {
+                        batches[valid_batch_ix].packets[valid_packet_ix] =
+                            batches[batch_ix].packets[packet_ix].clone();
+                        batches[batch_ix].packets[packet_ix].meta.set_discard(true);
+                        last_valid_batch = valid_batch_ix.saturating_add(1);
+                        found_spot = true;
+                        break;
+                    }
+                    valid_packet_ix = valid_packet_ix.saturating_add(1);
+                }
+                if valid_packet_ix >= batches[valid_batch_ix].packets.len() {
+                    valid_packet_ix = 0;
+                    valid_batch_ix = valid_batch_ix.saturating_add(1);
+                }
+            }
+        }
+    }
+    last_valid_batch
+}
+
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
@@ -681,7 +725,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            packet::{to_packet_batches, Packet, PacketBatch},
+            packet::{to_packet_batches, Packet, PacketBatch, PACKETS_PER_BATCH},
             sigverify::{self, PacketOffsets},
             test_tx::{new_test_vote_tx, test_multisig_tx, test_tx},
         },
@@ -1432,5 +1476,224 @@ mod tests {
         }
         //allow for 1 false positive even if extremely unlikely
         assert!(discard < 2);
+    }
+
+    #[test]
+    fn test_shrink_fuzz() {
+        for _ in 0..5 {
+            let mut batches = to_packet_batches(
+                &(0..PACKETS_PER_BATCH * 3)
+                    .map(|_| test_tx())
+                    .collect::<Vec<_>>(),
+                PACKETS_PER_BATCH,
+            );
+            batches.iter_mut().for_each(|b| {
+                b.packets
+                    .iter_mut()
+                    .for_each(|p| p.meta.set_discard(thread_rng().gen()))
+            });
+            //find all the non discarded packets
+            let mut start = vec![];
+            batches.iter_mut().for_each(|b| {
+                b.packets
+                    .iter_mut()
+                    .filter(|p| !p.meta.discard())
+                    .for_each(|p| start.push(p.clone()))
+            });
+            start.sort_by_key(|p| p.data);
+
+            let packet_count = count_valid_packets(&batches);
+            let res = shrink_batches(&mut batches);
+            batches.truncate(res);
+
+            //make sure all the non discarded packets are the same
+            let mut end = vec![];
+            batches.iter_mut().for_each(|b| {
+                b.packets
+                    .iter_mut()
+                    .filter(|p| !p.meta.discard())
+                    .for_each(|p| end.push(p.clone()))
+            });
+            end.sort_by_key(|p| p.data);
+            let packet_count2 = count_valid_packets(&batches);
+            assert_eq!(packet_count, packet_count2);
+            assert_eq!(start, end);
+        }
+    }
+
+    #[test]
+    fn test_shrink_empty() {
+        const PACKET_COUNT: usize = 1024;
+        const BATCH_COUNT: usize = PACKET_COUNT / PACKETS_PER_BATCH;
+
+        // No batches
+        // truncate of 1 on len 0 is a noop
+        assert_eq!(shrink_batches(&mut vec![]), 0);
+        // One empty batch
+        assert_eq!(shrink_batches(&mut vec![PacketBatch::with_capacity(0)]), 0);
+        // Many empty batches
+        let mut batches = (0..BATCH_COUNT)
+            .map(|_| PacketBatch::with_capacity(0))
+            .collect::<Vec<_>>();
+        assert_eq!(shrink_batches(&mut batches), 0);
+    }
+
+    #[test]
+    fn test_shrink_vectors() {
+        const PACKET_COUNT: usize = 1024;
+        const BATCH_COUNT: usize = PACKET_COUNT / PACKETS_PER_BATCH;
+
+        let set_discards = [
+            // contiguous
+            // 0
+            // No discards
+            |_, _| false,
+            // All discards
+            |_, _| true,
+            // single partitions
+            // discard last half of packets
+            |b, p| ((b * PACKETS_PER_BATCH) + p) >= (PACKET_COUNT / 2),
+            // discard first half of packets
+            |b, p| ((b * PACKETS_PER_BATCH) + p) < (PACKET_COUNT / 2),
+            // discard last half of each batch
+            |_, p| p >= (PACKETS_PER_BATCH / 2),
+            // 5
+            // discard first half of each batch
+            |_, p| p < (PACKETS_PER_BATCH / 2),
+            // uniform sparse
+            // discard even packets
+            |b, p| ((b * PACKETS_PER_BATCH) + p) % 2 == 0,
+            // discard odd packets
+            |b, p| ((b * PACKETS_PER_BATCH) + p) % 2 == 1,
+            // discard even batches
+            |b, _| b % 2 == 0,
+            // discard odd batches
+            |b, _| b % 2 == 1,
+            // edges
+            // 10
+            // discard first batch
+            |b, _| b == 0,
+            // discard last batch
+            |b, _| b == BATCH_COUNT - 1,
+            // discard first and last batches
+            |b, _| b == 0 || b == BATCH_COUNT - 1,
+            // discard all but first and last batches
+            |b, _| b != 0 && b != BATCH_COUNT - 1,
+            // discard first packet
+            |b, p| ((b * PACKETS_PER_BATCH) + p) == 0,
+            // 15
+            // discard all but first packet
+            |b, p| ((b * PACKETS_PER_BATCH) + p) != 0,
+            // discard last packet
+            |b, p| ((b * PACKETS_PER_BATCH) + p) == PACKET_COUNT - 1,
+            // discard all but last packet
+            |b, p| ((b * PACKETS_PER_BATCH) + p) != PACKET_COUNT - 1,
+            // discard first packet of each batch
+            |_, p| p == 0,
+            // discard all but first packet of each batch
+            |_, p| p != 0,
+            // 20
+            // discard last packet of each batch
+            |_, p| p == PACKETS_PER_BATCH - 1,
+            // discard all but last packet of each batch
+            |_, p| p != PACKETS_PER_BATCH - 1,
+            // discard first and last packet of each batch
+            |_, p| p == 0 || p == PACKETS_PER_BATCH - 1,
+            // discard all but first and last packet of each batch
+            |_, p| p != 0 && p != PACKETS_PER_BATCH - 1,
+            // discard all after first packet in second to last batch
+            |b, p| (b == BATCH_COUNT - 2 && p > 0) || b == BATCH_COUNT - 1,
+            // 25
+        ];
+
+        let expect_valids = [
+            // (expected_batches, expected_valid_packets)
+            //
+            // contiguous
+            // 0
+            (BATCH_COUNT, PACKET_COUNT),
+            (0, 0),
+            // single partitions
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            // 5
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            // uniform sparse
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            (BATCH_COUNT / 2, PACKET_COUNT / 2),
+            // edges
+            // 10
+            (BATCH_COUNT - 1, PACKET_COUNT - PACKETS_PER_BATCH),
+            (BATCH_COUNT - 1, PACKET_COUNT - PACKETS_PER_BATCH),
+            (BATCH_COUNT - 2, PACKET_COUNT - 2 * PACKETS_PER_BATCH),
+            (2, 2 * PACKETS_PER_BATCH),
+            (BATCH_COUNT, PACKET_COUNT - 1),
+            // 15
+            (1, 1),
+            (BATCH_COUNT, PACKET_COUNT - 1),
+            (1, 1),
+            (
+                (BATCH_COUNT * (PACKETS_PER_BATCH - 1) + PACKETS_PER_BATCH) / PACKETS_PER_BATCH,
+                (PACKETS_PER_BATCH - 1) * BATCH_COUNT,
+            ),
+            (
+                (BATCH_COUNT + PACKETS_PER_BATCH) / PACKETS_PER_BATCH,
+                BATCH_COUNT,
+            ),
+            // 20
+            (
+                (BATCH_COUNT * (PACKETS_PER_BATCH - 1) + PACKETS_PER_BATCH) / PACKETS_PER_BATCH,
+                (PACKETS_PER_BATCH - 1) * BATCH_COUNT,
+            ),
+            (
+                (BATCH_COUNT + PACKETS_PER_BATCH) / PACKETS_PER_BATCH,
+                BATCH_COUNT,
+            ),
+            (
+                (BATCH_COUNT * (PACKETS_PER_BATCH - 2) + PACKETS_PER_BATCH) / PACKETS_PER_BATCH,
+                (PACKETS_PER_BATCH - 2) * BATCH_COUNT,
+            ),
+            (
+                (2 * BATCH_COUNT + PACKETS_PER_BATCH) / PACKETS_PER_BATCH,
+                PACKET_COUNT - (PACKETS_PER_BATCH - 2) * BATCH_COUNT,
+            ),
+            (BATCH_COUNT - 1, PACKET_COUNT - 2 * PACKETS_PER_BATCH + 1),
+            // 25
+        ];
+
+        let test_cases = set_discards.iter().zip(&expect_valids).enumerate();
+        for (i, (set_discard, (expect_batch_count, expect_valid_packets))) in test_cases {
+            println!("test_shrink case: {}", i);
+            let mut batches = to_packet_batches(
+                &(0..PACKET_COUNT).map(|_| test_tx()).collect::<Vec<_>>(),
+                PACKETS_PER_BATCH,
+            );
+            assert_eq!(batches.len(), BATCH_COUNT);
+            assert_eq!(count_valid_packets(&batches), PACKET_COUNT);
+            batches.iter_mut().enumerate().for_each(|(i, b)| {
+                b.packets
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(j, p)| p.meta.set_discard(set_discard(i, j)))
+            });
+            assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
+            println!("show valid packets for case {}", i);
+            batches.iter_mut().enumerate().for_each(|(i, b)| {
+                b.packets.iter_mut().enumerate().for_each(|(j, p)| {
+                    if !p.meta.discard() {
+                        println!("{} {}", i, j)
+                    }
+                })
+            });
+            println!("done show valid packets for case {}", i);
+            let shrunken_batch_count = shrink_batches(&mut batches);
+            println!("shrunk batch test {} count: {}", i, shrunken_batch_count);
+            assert_eq!(shrunken_batch_count, *expect_batch_count);
+            batches.truncate(shrunken_batch_count);
+            assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
+        }
     }
 }
