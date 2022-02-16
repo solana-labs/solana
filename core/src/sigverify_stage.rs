@@ -413,11 +413,7 @@ mod tests {
             let tx = test_tx();
             to_packet_batches(&vec![tx; len], chunk_size)
         } else {
-            let txs: Vec<_> = (0..len)
-                .map(|_| {
-                    test_tx()
-                })
-                .collect();
+            let txs: Vec<_> = (0..len).map(|_| test_tx()).collect();
             to_packet_batches(&txs, chunk_size)
         }
     }
