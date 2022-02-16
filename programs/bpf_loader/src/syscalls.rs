@@ -3061,6 +3061,28 @@ mod tests {
         };
     }
 
+    macro_rules! prepare_mockup {
+        ($invoke_context:ident,
+         $transaction_context:ident,
+         $program_key:ident,
+         $loader_key:expr $(,)?) => {
+            let $program_key = Pubkey::new_unique();
+            let mut $transaction_context = TransactionContext::new(
+                vec![
+                    (
+                        $loader_key,
+                        AccountSharedData::new(0, 0, &native_loader::id()),
+                    ),
+                    ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
+                ],
+                1,
+                1,
+            );
+            let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
+            $invoke_context.push(&[], &[0, 1], &[]).unwrap();
+        };
+    }
+
     #[allow(dead_code)]
     struct MockSlice {
         pub vm_addr: u64,
@@ -3355,14 +3377,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
     fn test_syscall_sol_panic() {
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
         let mut syscall_panic = SyscallPanic {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3429,14 +3449,12 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log() {
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
         let mut syscall_sol_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3530,14 +3548,12 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log_u64() {
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
         let cost = invoke_context.get_compute_budget().log_64_units;
         let mut syscall_sol_log_u64 = SyscallLogU64 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3569,14 +3585,12 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_pubkey() {
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3778,17 +3792,12 @@ mod tests {
     #[test]
     fn test_syscall_sha256() {
         let config = Config::default();
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(
-                program_id,
-                AccountSharedData::new(0, 0, &bpf_loader_deprecated::id()),
-            )],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader_deprecated::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
 
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
@@ -3939,15 +3948,13 @@ mod tests {
         sysvar_cache.set_fees(src_fees.clone());
         sysvar_cache.set_rent(src_rent);
 
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
-        invoke_context.push(&[], &[0], &[]).unwrap();
 
         // Test clock sysvar
         {
@@ -4190,14 +4197,12 @@ mod tests {
     fn test_create_program_address() {
         // These tests duplicate the direct tests in solana_program::pubkey
 
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
@@ -4303,14 +4308,12 @@ mod tests {
 
     #[test]
     fn test_find_program_address() {
-        let program_id = Pubkey::new_unique();
-        let mut transaction_context = TransactionContext::new(
-            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
-            1,
-            1,
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
         );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0], &[]).unwrap();
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
