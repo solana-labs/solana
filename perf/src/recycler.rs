@@ -14,8 +14,12 @@ use {
 // cushion against *normal* variations in the workload while bounding the
 // number of redundant garbage collected objects after temporary bursts.
 const RECYCLER_SHRINK_SIZE: usize = 1024;
-// Lookback window for averaging number of garbage collected objects in terms
-// of number of allocations.
+
+// Lookback window for exponential moving averaging number of garbage collected
+// objects in terms of number of allocations. The half-life of the decaying
+// factor based on the window size defined below is 11356. This means a sample
+// of gc.size() that is 11356 allocations ago has half of the weight as the most
+// recent sample of gc.size() at current allocation.
 const RECYCLER_SHRINK_WINDOW: usize = 16384;
 
 #[derive(Debug, Default)]
