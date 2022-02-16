@@ -98,7 +98,7 @@ Unstable methods may see breaking changes in patch releases and may not be suppo
 - [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
 - [getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit)
 - [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
-- [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransact)
+- [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 - [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
 - [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
 - [getFees](jsonrpc-api.md#getfees)
@@ -5093,7 +5093,7 @@ Result:
 
 ### getRecentBlockhash
 
-**DEPRECATED: Please use [getFeeForMessage](jsonrpc-api.md#getfeeformessage) instead**
+**DEPRECATED: Please use [getLatestBlockhash](jsonrpc-api.md#getlatestblockhash) instead**
 This method is expected to be removed in solana-core v2.0
 
 Returns a recent block hash from the ledger, and a fee schedule that can be used to compute the cost of submitting a transaction using it.
