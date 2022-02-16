@@ -7,11 +7,15 @@ use {
     solana_core::serve_repair::RepairProtocol,
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::pubkey::Pubkey,
-    solana_sdk::timing::timestamp,
-    // TODO(klykov): maybe later will move to test_tx.rs
     solana_sdk::{
-        hash::Hash, instruction::CompiledInstruction, signature::Keypair, stake,
-        system_instruction::SystemInstruction, system_program, transaction::Transaction,
+        hash::Hash,
+        instruction::CompiledInstruction,
+        instruction::{AccountMeta, Instruction},
+        signature::{read_keypair_file, Keypair, Signer},
+        stake,
+        system_instruction::SystemInstruction,
+        system_program,
+        transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -29,69 +33,119 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     contact
 }
 
-fn test_multisig_tx(
-    transaction_params: &TransactionParams,
-    rpc_client: &Option<RpcClient>,
-    blockhash_time: &mut (Hash, Instant), // blockhash together with the time of generation
-) -> Transaction {
-    // generate a new blockhash every 0.5sec
-    if blockhash_time.1.elapsed().as_millis() > 500 {
-        *blockhash_time = if transaction_params.valid_block_hash {
-            (
-                rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap(),
-                Instant::now(),
-            )
-        } else {
-            (Hash::default(), Instant::now())
-        };
-    }
-
-    let lamports = 5;
-    let transfer_instruction = SystemInstruction::Transfer { lamports };
-
-    let program_ids = vec![system_program::id(), stake::program::id()];
-
-    let instructions = vec![CompiledInstruction::new(
-        0,
-        &transfer_instruction,
-        vec![0, 1],
-    )];
-
-    if transaction_params.valid_signatures {
-        let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
-            .map(|_| Keypair::new())
-            .collect();
-        let keypairs: Vec<&Keypair> = kpvals.iter().collect();
-
-        Transaction::new_with_compiled_instructions(
-            &keypairs,
-            &[],
-            blockhash_time.0,
-            program_ids,
-            instructions,
-        )
-    } else {
-        let mut tx = Transaction::new_with_compiled_instructions(
-            &[] as &[&Keypair; 0],
-            &[],
-            blockhash_time.0,
-            program_ids,
-            instructions,
-        );
-        tx.signatures = vec![Transaction::get_invalid_signature(); transaction_params.num_sign];
-        tx
-    }
-}
-
 /// Options for data_type=transaction
 struct TransactionParams {
     unique_transactions: bool, // use unique transactions
-    num_sign: usize,          // number of signatures in a transaction
-    valid_block_hash: bool,   // use valid blockhash or random
-    valid_signatures: bool,   // use valid signatures or not
+    num_sign: usize,           // number of signatures in a transaction
+    valid_block_hash: bool,    // use valid blockhash or random
+    valid_signatures: bool,    // use valid signatures or not
+    with_payer: bool,          // provide a valid payer
+}
+
+struct TransactionGenerator {
+    blockhash: Hash,
+    last_generated: Instant,
+    transaction_params: TransactionParams,
+    cached_transaction: Option<Transaction>,
+}
+
+impl TransactionGenerator {
+    fn new(transaction_params: TransactionParams) -> Self {
+        TransactionGenerator {
+            blockhash: Hash::default(),
+            last_generated: (Instant::now() - Duration::from_secs(100)),
+            transaction_params,
+            cached_transaction: None,
+        }
+    }
+
+    fn generate(&mut self, payer: &Keypair, rpc_client: &Option<RpcClient>) -> Transaction {
+        if !self.transaction_params.unique_transactions && self.cached_transaction != None {
+            return self.cached_transaction.as_ref().unwrap().clone();
+        }
+
+        // generate a new blockhash every 1sec
+        if self.transaction_params.valid_block_hash
+            && self.last_generated.elapsed().as_millis() > 1000
+        {
+            self.blockhash = rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap();
+            self.last_generated = Instant::now();
+        }
+
+        let lamports = 5;
+        let transfer_instruction = SystemInstruction::Transfer { lamports };
+        let program_ids = vec![system_program::id(), stake::program::id()];
+
+        // transaction with payer, in this case signatures are valid and num_sign is irrelevant
+        // random payer will cause error "attempt to debit an account but found not record of a prior credit"
+        // if payer is correct, it will trigger error with not enough signatures
+        let transaction = if self.transaction_params.with_payer {
+            let instruction = Instruction::new_with_bincode(
+                program_ids[0],
+                &transfer_instruction,
+                vec![
+                    AccountMeta::new(program_ids[0], false),
+                    AccountMeta::new(program_ids[1], false),
+                ],
+            );
+            Transaction::new_signed_with_payer(
+                &[instruction],
+                Some(&payer.pubkey()),
+                &[payer],
+                self.blockhash,
+            )
+        } else if self.transaction_params.valid_signatures {
+            // this way it wil end up filtered at legacy.rs#L217 (banking_stage)
+            // with error "a program cannot be payer"
+            let kpvals: Vec<Keypair> = (0..self.transaction_params.num_sign)
+                .map(|_| Keypair::new())
+                .collect();
+            let keypairs: Vec<&Keypair> = kpvals.iter().collect();
+
+            let instructions = vec![CompiledInstruction::new(
+                0,
+                &transfer_instruction,
+                vec![0, 1],
+            )];
+
+            Transaction::new_with_compiled_instructions(
+                &keypairs,
+                &[],
+                self.blockhash,
+                program_ids,
+                instructions,
+            )
+        } else {
+            // it will be filtered on the sigverify_stage
+            let instructions = vec![CompiledInstruction::new(
+                0,
+                &transfer_instruction,
+                vec![0, 1],
+            )];
+
+            let mut tx = Transaction::new_with_compiled_instructions(
+                &[] as &[&Keypair; 0],
+                &[],
+                self.blockhash,
+                program_ids,
+                instructions,
+            );
+            tx.signatures =
+                vec![Transaction::get_invalid_signature(); self.transaction_params.num_sign];
+            tx
+        };
+
+        // if we need to generate only ony transaction, we cache it to reuse later
+        if !self.transaction_params.unique_transactions {
+            self.cached_transaction = Some(transaction.clone());
+        }
+
+        transaction
+    }
 }
 
 fn run_dos(
+    payer: &Keypair,
     nodes: &[ContactInfo],
     iterations: usize,
     entrypoint_addr: SocketAddr,
@@ -134,11 +188,11 @@ fn run_dos(
     }
     let target = target.expect("should have target");
 
-    info!("Targetting {}", target);
+    info!("Targeting {}", target);
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let mut data = Vec::new();
-    let mut blockhash_time = (Hash::default(), Instant::now() - Duration::from_secs(100));
+    let mut trans_gen = None;
 
     match data_type.as_str() {
         "repair_highest" => {
@@ -164,12 +218,11 @@ fn run_dos(
             if transaction_params.is_none() {
                 panic!("transaction parameters are not specified");
             }
-            let tp = transaction_params.as_ref().unwrap();
-            if tp.unique_transactions {
-                let tx = test_multisig_tx(tp, &rpc_client, &mut blockhash_time);
-                info!("{:?}", tx);
-                data = bincode::serialize(&tx).unwrap();
-            }
+            let tp = transaction_params.unwrap();
+            trans_gen = Some(TransactionGenerator::new(tp));
+            let tx = trans_gen.as_mut().unwrap().generate(payer, &rpc_client);
+            info!("{:?}", tx);
+            data = bincode::serialize(&tx).unwrap();
         }
         "get_account_info" => {}
         "get_program_accounts" => {}
@@ -209,12 +262,10 @@ fn run_dos(
             if data_type == "random" {
                 thread_rng().fill(&mut data[..]);
             }
-            if let Some(tp) = transaction_params.as_ref() {
-                if tp.unique_transactions {
-                    let tx = test_multisig_tx(tp, &rpc_client, &mut blockhash_time);
-                    info!("{:?}", tx);
-                    data = bincode::serialize(&tx).unwrap();
-                }
+            if let Some(tg) = trans_gen.as_mut() {
+                let tx = tg.generate(payer, &rpc_client);
+                info!("{:?}", tx);
+                data = bincode::serialize(&tx).unwrap();
             }
             let res = socket.send_to(&data, target);
             if res.is_err() {
@@ -308,7 +359,6 @@ fn main() {
             Arg::with_name("num_sign")
                 .long("number-of-signatures")
                 .takes_value(true)
-                .value_name("NSIGN")
                 .help("Number of signatures in transaction"),
         )
         .arg(
@@ -330,6 +380,14 @@ fn main() {
                 .long("generate-unique-transactions")
                 .takes_value(false)
                 .help("Generate unique transaction")
+                .hidden(true),
+        )
+        .arg(
+            Arg::with_name("payer")
+                .long("payer")
+                .takes_value(false)
+                .value_name("FILE")
+                .help("Payer's keypair to fund transactions")
                 .hidden(true),
         )
         .get_matches();
@@ -354,6 +412,7 @@ fn main() {
             num_sign: value_t!(matches, "num_sign", usize).unwrap_or(2),
             valid_block_hash: matches.is_present("valid_blockhash"),
             valid_signatures: matches.is_present("valid_sign"),
+            with_payer: matches.is_present("payer"),
         }),
         _ => None,
     };
@@ -380,9 +439,17 @@ fn main() {
         nodes = gossip_nodes;
     }
 
-    info!("done found {} nodes", nodes.len());
+    let payer = if transaction_params.is_some() && transaction_params.as_ref().unwrap().with_payer {
+        let keypair_file_name = value_t_or_exit!(matches, "payer", String);
+        read_keypair_file(&keypair_file_name)
+            .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_file_name))
+    } else {
+        Keypair::new()
+    };
 
+    info!("done found {} nodes", nodes.len());
     run_dos(
+        &payer,
         &nodes,
         0,
         entrypoint_addr,
@@ -409,7 +476,11 @@ pub mod test {
             timestamp(),
         )];
         let entrypoint_addr = nodes[0].gossip;
+
+        let payer = Keypair::new();
+
         run_dos(
+            &payer,
             &nodes,
             1,
             entrypoint_addr,
@@ -421,6 +492,7 @@ pub mod test {
         );
 
         run_dos(
+            &payer,
             &nodes,
             1,
             entrypoint_addr,
@@ -432,6 +504,7 @@ pub mod test {
         );
 
         run_dos(
+            &payer,
             &nodes,
             1,
             entrypoint_addr,
@@ -456,15 +529,17 @@ pub mod test {
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
 
         let tp = Some(TransactionParams {
-            unique_transactions: false,
+            unique_transactions: true,
             num_sign: 2,
-            valid_block_hash: false, // use valid blockhash or random
-            valid_signatures: false, // use valid signatures or not
+            valid_block_hash: true, // use valid blockhash or random
+            valid_signatures: true, // use valid signatures or not
+            with_payer: true,
         });
 
         run_dos(
+            &cluster.funding_keypair,
             &[node],
-            1_000_000, // was 10_000_000
+            10_000_000,
             cluster.entry_point_info.gossip,
             "transaction".to_string(),
             1000,
