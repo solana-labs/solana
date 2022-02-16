@@ -273,7 +273,9 @@ fn process_instruction_common(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let program_id = invoke_context
+        .transaction_context
+        .get_current_program_key()?;
 
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -350,7 +352,9 @@ fn process_instruction_common(
                     use_jit,
                     false,
                 )?;
-                let program_id = invoke_context.transaction_context.get_program_key()?;
+                let program_id = invoke_context
+                    .transaction_context
+                    .get_current_program_key()?;
                 invoke_context.add_executor(program_id, executor.clone());
                 executor
             }
@@ -397,7 +401,9 @@ fn process_loader_upgradeable_instruction(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let program_id = invoke_context
+        .transaction_context
+        .get_current_program_key()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
@@ -550,7 +556,9 @@ fn process_loader_upgradeable_instruction(
                 .accounts
                 .push(AccountMeta::new(*buffer.unsigned_key(), false));
 
-            let caller_program_id = invoke_context.transaction_context.get_program_key()?;
+            let caller_program_id = invoke_context
+                .transaction_context
+                .get_current_program_key()?;
             let signers = [&[new_program_id.as_ref(), &[bump_seed]]]
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
@@ -947,7 +955,9 @@ fn process_loader_instruction(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let program_id = invoke_context
+        .transaction_context
+        .get_current_program_key()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if program.owner()? != *program_id {
@@ -1038,7 +1048,9 @@ impl Executor for BpfExecutor {
         let stack_height = invoke_context.get_stack_height();
 
         let mut serialize_time = Measure::start("serialize");
-        let program_id = *invoke_context.transaction_context.get_program_key()?;
+        let program_id = *invoke_context
+            .transaction_context
+            .get_current_program_key()?;
         let (mut parameter_bytes, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             invoke_context

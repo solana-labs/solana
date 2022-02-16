@@ -101,7 +101,7 @@ pub fn builtin_process_instruction(
         ..instruction_context.get_number_of_accounts();
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = transaction_context.get_program_key()?;
+    let program_id = transaction_context.get_current_program_key()?;
     stable_log::program_invoke(
         &log_collector,
         program_id,
@@ -249,7 +249,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         let caller = *invoke_context
             .transaction_context
-            .get_program_key()
+            .get_current_program_key()
             .unwrap();
 
         stable_log::program_invoke(
@@ -372,7 +372,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let invoke_context = get_invoke_context();
         let caller = *invoke_context
             .transaction_context
-            .get_program_key()
+            .get_current_program_key()
             .unwrap();
         invoke_context
             .transaction_context

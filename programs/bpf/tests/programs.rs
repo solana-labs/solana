@@ -234,7 +234,7 @@ fn run_program(name: &str) -> u64 {
                 .set_return_data(
                     *invoke_context
                         .transaction_context
-                        .get_program_key()
+                        .get_current_program_key()
                         .unwrap(),
                     Vec::new(),
                 )

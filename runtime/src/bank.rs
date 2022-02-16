@@ -11212,7 +11212,9 @@ pub(crate) mod tests {
             _instruction_data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            let program_id = invoke_context.transaction_context.get_program_key()?;
+            let program_id = invoke_context
+                .transaction_context
+                .get_current_program_key()?;
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }

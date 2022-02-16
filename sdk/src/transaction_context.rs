@@ -229,14 +229,14 @@ impl TransactionContext {
     }
 
     /// Returns the key of the current InstructionContexts program account
-    pub fn get_program_key(&self) -> Result<&Pubkey, InstructionError> {
+    pub fn get_current_program_key(&self) -> Result<&Pubkey, InstructionError> {
         let instruction_context = self.get_current_instruction_context()?;
         let program_account = instruction_context.try_borrow_program_account(self)?;
         Ok(&self.account_keys[program_account.index_in_transaction])
     }
 
     /// Returns the owner of the current InstructionContexts program account
-    pub fn get_loader_key(&self) -> Result<Pubkey, InstructionError> {
+    pub fn get_current_loader_key(&self) -> Result<Pubkey, InstructionError> {
         let instruction_context = self.get_current_instruction_context()?;
         let program_account = instruction_context.try_borrow_program_account(self)?;
         Ok(*program_account.get_owner())
