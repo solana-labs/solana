@@ -455,12 +455,13 @@ mod tests {
                     received += v.packets.len();
                     batches.push(v);
                 }
-                if received >= sent_len {
+                if use_same_tx || received >= sent_len {
                     break;
                 }
             }
         }
         println!("received: {}", received);
+        drop(packet_s);
         stage.join().unwrap();
     }
 }

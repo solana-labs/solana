@@ -136,7 +136,7 @@ fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
 #[bench]
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
-    println!("start");
+    trace!("start");
     let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::default();
@@ -146,7 +146,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     bencher.iter(move || {
         let now = Instant::now();
         let mut batches = gen_batches(use_same_tx);
-        println!(
+        trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
             batches.len()
@@ -160,19 +160,19 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
             }
         }
         let mut received = 0;
-        println!("sent: {}", sent_len);
+        trace!("sent: {}", sent_len);
         loop {
             if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 while let Some(v) = verifieds.pop() {
                     received += v.packets.len();
                     batches.push(v);
                 }
-                if received >= sent_len {
+                if use_same_tx || received >= sent_len {
                     break;
                 }
             }
         }
-        println!("received: {}", received);
+        trace!("received: {}", received);
     });
     stage.join().unwrap();
 }
