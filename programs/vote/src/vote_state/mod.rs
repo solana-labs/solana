@@ -531,6 +531,10 @@ impl VoteState {
                             vote_state_update_indexes_to_filter.push(vote_state_update_index);
                         }
                         if check_root.is_some() {
+                            // If the vote state update has a root < earliest_slot_hash_in_history
+                            // then we use the current root. The only case where this can happen
+                            // is if the current root itself is not in slot hashes.
+                            assert!(self.root_slot.unwrap() < earliest_slot_hash_in_history);
                             check_root = None;
                         } else {
                             vote_state_update_index += 1;
