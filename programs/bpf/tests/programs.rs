@@ -50,7 +50,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
+    TransactionStatusMeta, TransactionWithOptionalMetadata, UiTransactionEncoding,
 };
 use std::{
     cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
@@ -403,7 +403,7 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
 
             ConfirmedTransaction {
                 slot: bank.slot(),
-                transaction: TransactionWithStatusMeta {
+                transaction: TransactionWithOptionalMetadata {
                     transaction: tx.clone(),
                     meta: Some(tx_status_meta),
                 },

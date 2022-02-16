@@ -627,7 +627,7 @@ pub mod tests {
     }
 
     fn run_test_sigverify_shreds_sign_gpu(slot: Slot) {
-        solana_logger::setup();
+        solana_logger::setup_with_default("trace");
         let recycler_cache = RecyclerCache::default();
 
         let mut packet_batch = PacketBatch::default();
