@@ -5071,6 +5071,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ed25519-program-tests"
+version = "1.10.0"
+dependencies = [
+ "assert_matches",
+ "ed25519-dalek",
+ "rand 0.7.3",
+ "solana-program-test",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-entry"
 version = "1.10.0"
 dependencies = [
