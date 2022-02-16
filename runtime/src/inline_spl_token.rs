@@ -21,41 +21,53 @@ pub(crate) mod new_token_program {
 */
 pub const SPL_TOKEN_ACCOUNT_MINT_OFFSET: usize = 0;
 pub const SPL_TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
+const SPL_TOKEN_ACCOUNT_LENGTH: usize = 165;
 
-pub mod state {
-    use super::*;
+pub(crate) trait GenericTokenAccount {
+    fn valid_account_data(account_data: &[u8]) -> bool;
 
-    pub(crate) const ACCOUNT_LENGTH: usize = 165;
+    // Call after account length has already been verified
+    fn unpack_account_owner_unchecked(account_data: &[u8]) -> &Pubkey {
+        Self::unpack_pubkey_unchecked(account_data, SPL_TOKEN_ACCOUNT_OWNER_OFFSET)
+    }
 
-    #[cfg(test)]
-    pub struct Account;
-    #[cfg(test)]
-    impl Account {
-        pub fn get_packed_len() -> usize {
-            ACCOUNT_LENGTH
+    // Call after account length has already been verified
+    fn unpack_account_mint_unchecked(account_data: &[u8]) -> &Pubkey {
+        Self::unpack_pubkey_unchecked(account_data, SPL_TOKEN_ACCOUNT_MINT_OFFSET)
+    }
+
+    // Call after account length has already been verified
+    fn unpack_pubkey_unchecked(account_data: &[u8], offset: usize) -> &Pubkey {
+        bytemuck::from_bytes(&account_data[offset..offset + PUBKEY_BYTES])
+    }
+
+    fn unpack_account_owner(account_data: &[u8]) -> Option<&Pubkey> {
+        if Self::valid_account_data(account_data) {
+            Some(Self::unpack_account_owner_unchecked(account_data))
+        } else {
+            None
         }
     }
 
-    pub fn unpack_account_owner(account_data: &[u8]) -> Option<&Pubkey> {
-        if account_data.len() != ACCOUNT_LENGTH {
-            None
+    fn unpack_account_mint(account_data: &[u8]) -> Option<&Pubkey> {
+        if Self::valid_account_data(account_data) {
+            Some(Self::unpack_account_mint_unchecked(account_data))
         } else {
-            Some(bytemuck::from_bytes(
-                &account_data
-                    [SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
-            ))
+            None
         }
     }
+}
 
-    pub fn unpack_account_mint(account_data: &[u8]) -> Option<&Pubkey> {
-        if account_data.len() != ACCOUNT_LENGTH {
-            None
-        } else {
-            Some(bytemuck::from_bytes(
-                &account_data
-                    [SPL_TOKEN_ACCOUNT_MINT_OFFSET..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
-            ))
-        }
+pub struct Account;
+impl Account {
+    pub fn get_packed_len() -> usize {
+        SPL_TOKEN_ACCOUNT_LENGTH
+    }
+}
+
+impl GenericTokenAccount for Account {
+    fn valid_account_data(account_data: &[u8]) -> bool {
+        account_data.len() == SPL_TOKEN_ACCOUNT_LENGTH
     }
 }
 

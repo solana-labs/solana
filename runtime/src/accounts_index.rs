@@ -5,7 +5,8 @@ use {
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
         in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
-        inline_spl_token, inline_spl_token_2022,
+        inline_spl_token::{self, GenericTokenAccount},
+        inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
         secondary_index::*,
     },
@@ -1573,6 +1574,33 @@ impl<T: IndexValue> AccountsIndex<T> {
         max_root
     }
 
+    fn update_spl_token_secondary_indexes<G: GenericTokenAccount>(
+        &self,
+        token_id: &Pubkey,
+        pubkey: &Pubkey,
+        account_owner: &Pubkey,
+        account_data: &[u8],
+        account_indexes: &AccountSecondaryIndexes,
+    ) {
+        if *account_owner == *token_id {
+            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
+                if let Some(owner_key) = G::unpack_account_owner(account_data) {
+                    if account_indexes.include_key(owner_key) {
+                        self.spl_token_owner_index.insert(owner_key, pubkey);
+                    }
+                }
+            }
+
+            if account_indexes.contains(&AccountIndex::SplTokenMint) {
+                if let Some(mint_key) = G::unpack_account_mint(account_data) {
+                    if account_indexes.include_key(mint_key) {
+                        self.spl_token_mint_index.insert(mint_key, pubkey);
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn update_secondary_indexes(
         &self,
         pubkey: &Pubkey,
@@ -1602,45 +1630,21 @@ impl<T: IndexValue> AccountsIndex<T> {
         // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
-        if *account_owner == inline_spl_token::id() {
-            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                if let Some(owner_key) = inline_spl_token::state::unpack_account_owner(account_data)
-                {
-                    if account_indexes.include_key(owner_key) {
-                        self.spl_token_owner_index.insert(owner_key, pubkey);
-                    }
-                }
-            }
 
-            if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                if let Some(mint_key) = inline_spl_token::state::unpack_account_mint(account_data) {
-                    if account_indexes.include_key(mint_key) {
-                        self.spl_token_mint_index.insert(mint_key, pubkey);
-                    }
-                }
-            }
-        }
-        if *account_owner == inline_spl_token_2022::id() {
-            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                if let Some(owner_key) =
-                    inline_spl_token_2022::state::unpack_account_owner(account_data)
-                {
-                    if account_indexes.include_key(owner_key) {
-                        self.spl_token_owner_index.insert(owner_key, pubkey);
-                    }
-                }
-            }
-
-            if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                if let Some(mint_key) =
-                    inline_spl_token_2022::state::unpack_account_mint(account_data)
-                {
-                    if account_indexes.include_key(mint_key) {
-                        self.spl_token_mint_index.insert(mint_key, pubkey);
-                    }
-                }
-            }
-        }
+        self.update_spl_token_secondary_indexes::<inline_spl_token::Account>(
+            &inline_spl_token::id(),
+            pubkey,
+            account_owner,
+            account_data,
+            account_indexes,
+        );
+        self.update_spl_token_secondary_indexes::<inline_spl_token_2022::Account>(
+            &inline_spl_token_2022::id(),
+            pubkey,
+            account_owner,
+            account_data,
+            account_indexes,
+        );
     }
 
     fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<T> {
@@ -3860,7 +3864,7 @@ pub mod tests {
         let index_key = Pubkey::new_unique();
         let account_key = Pubkey::new_unique();
 
-        let mut account_data = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Insert slots into secondary index
@@ -4035,7 +4039,7 @@ pub mod tests {
         let mut secondary_indexes = secondary_indexes.clone();
         let account_key = Pubkey::new_unique();
         let index_key = Pubkey::new_unique();
-        let mut account_data = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Wrong program id
@@ -4165,10 +4169,10 @@ pub mod tests {
         let secondary_key1 = Pubkey::new_unique();
         let secondary_key2 = Pubkey::new_unique();
         let slot = 1;
-        let mut account_data1 = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data1 = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data1[index_key_start..index_key_end]
             .clone_from_slice(&(secondary_key1.to_bytes()));
-        let mut account_data2 = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data2 = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data2[index_key_start..index_key_end]
             .clone_from_slice(&(secondary_key2.to_bytes()));
 
