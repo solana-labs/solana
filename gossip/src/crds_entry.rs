@@ -84,7 +84,7 @@ mod tests {
         },
         rand::seq::SliceRandom,
         solana_sdk::signature::Keypair,
-        std::collections::HashMap,
+        std::{collections::HashMap, ops::Deref},
     };
 
     #[test]
@@ -115,20 +115,25 @@ mod tests {
             let key = entry.pubkey();
             match &entry.data {
                 CrdsData::ContactInfo(node) => {
-                    assert_eq!(crds.get::<&ContactInfo>(key), Some(node))
+                    assert_eq!(crds.get::<&ContactInfo>(key), Some(node.deref()))
                 }
                 CrdsData::LowestSlot(_, slot) => {
-                    assert_eq!(crds.get::<&LowestSlot>(key), Some(slot))
+                    assert_eq!(crds.get::<&LowestSlot>(key), Some(slot.deref()))
                 }
-                CrdsData::Version(version) => assert_eq!(crds.get::<&Version>(key), Some(version)),
+                CrdsData::Version(version) => {
+                    assert_eq!(crds.get::<&Version>(key), Some(version.deref()))
+                }
                 CrdsData::LegacyVersion(version) => {
-                    assert_eq!(crds.get::<&LegacyVersion>(key), Some(version))
+                    assert_eq!(crds.get::<&LegacyVersion>(key), Some(version.deref()))
                 }
                 CrdsData::SnapshotHashes(hash) => {
-                    assert_eq!(crds.get::<&SnapshotHashes>(key), Some(hash))
+                    assert_eq!(crds.get::<&SnapshotHashes>(key), Some(hash.deref()))
                 }
                 CrdsData::IncrementalSnapshotHashes(hash) => {
-                    assert_eq!(crds.get::<&IncrementalSnapshotHashes>(key), Some(hash))
+                    assert_eq!(
+                        crds.get::<&IncrementalSnapshotHashes>(key),
+                        Some(hash.deref())
+                    )
                 }
                 _ => (),
             }

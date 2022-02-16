@@ -146,7 +146,7 @@ impl CrdsGossip {
         };
         let entries = chunks.enumerate().map(|(k, chunk)| {
             let index = (offset + k as DuplicateShredIndex) % MAX_DUPLICATE_SHREDS;
-            let data = CrdsData::DuplicateShred(index, chunk);
+            let data = CrdsData::DuplicateShred(index, Box::new(chunk));
             CrdsValue::new_signed(data, keypair)
         });
         let now = timestamp();
@@ -383,7 +383,7 @@ mod test {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(ci.clone()))),
                 0,
                 GossipRoute::LocalMessage,
             )

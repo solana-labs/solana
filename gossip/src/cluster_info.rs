@@ -253,14 +253,17 @@ pub fn make_accounts_hashes_message(
     keypair: &Keypair,
     accounts_hashes: Vec<(Slot, Hash)>,
 ) -> Option<CrdsValue> {
-    let message = CrdsData::AccountsHashes(SnapshotHashes::new(keypair.pubkey(), accounts_hashes));
+    let message = CrdsData::AccountsHashes(Box::new(SnapshotHashes::new(
+        keypair.pubkey(),
+        accounts_hashes,
+    )));
     Some(CrdsValue::new_signed(message, keypair))
 }
 
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "C1nR7B7CgMyUYo6h3z2KXcS38JSwF6y8jmZ6Y9Cz7XEd")]
+#[frozen_abi(digest = "FgTdFjWACT3s4D6RxdQ4Tx5bh3yansMeZzbGmW1r1BaF")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -468,8 +471,8 @@ impl ClusterInfo {
         let now = timestamp();
         self.my_contact_info.write().unwrap().wallclock = now;
         let entries: Vec<_> = vec![
-            CrdsData::ContactInfo(self.my_contact_info()),
-            CrdsData::NodeInstance(self.instance.read().unwrap().with_wallclock(now)),
+            CrdsData::ContactInfo(Box::new(self.my_contact_info())),
+            CrdsData::NodeInstance(Box::new(self.instance.read().unwrap().with_wallclock(now))),
         ]
         .into_iter()
         .map(|v| CrdsValue::new_signed(v, &self.keypair()))
@@ -494,7 +497,10 @@ impl ClusterInfo {
 
     // TODO kill insert_info, only used by tests
     pub fn insert_info(&self, contact_info: ContactInfo) {
-        let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.keypair());
+        let value = CrdsValue::new_signed(
+            CrdsData::ContactInfo(Box::new(contact_info)),
+            &self.keypair(),
+        );
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         let _ = gossip_crds.insert(value, timestamp(), GossipRoute::LocalMessage);
     }
@@ -839,7 +845,7 @@ impl ClusterInfo {
         if min > last {
             let now = timestamp();
             let entry = CrdsValue::new_signed(
-                CrdsData::LowestSlot(0, LowestSlot::new(self_pubkey, min, now)),
+                CrdsData::LowestSlot(0, Box::new(LowestSlot::new(self_pubkey, min, now))),
                 &self.keypair(),
             );
             self.local_message_pending_push_queue
@@ -901,7 +907,7 @@ impl ClusterInfo {
             let n = slots.fill(update, now);
             update = &update[n..];
             if n > 0 {
-                let epoch_slots = CrdsData::EpochSlots(ix, slots);
+                let epoch_slots = CrdsData::EpochSlots(ix, Box::new(slots));
                 let entry = CrdsValue::new_signed(epoch_slots, &keypair);
                 entries.push(entry);
             }
@@ -941,7 +947,8 @@ impl ClusterInfo {
             return;
         }
 
-        let message = CrdsData::AccountsHashes(SnapshotHashes::new(self.id(), accounts_hashes));
+        let message =
+            CrdsData::AccountsHashes(Box::new(SnapshotHashes::new(self.id(), accounts_hashes)));
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
@@ -954,7 +961,8 @@ impl ClusterInfo {
             return;
         }
 
-        let message = CrdsData::SnapshotHashes(SnapshotHashes::new(self.id(), snapshot_hashes));
+        let message =
+            CrdsData::SnapshotHashes(Box::new(SnapshotHashes::new(self.id(), snapshot_hashes)));
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
@@ -967,12 +975,12 @@ impl ClusterInfo {
             return Err(ClusterInfoError::TooManyIncrementalSnapshotHashes);
         }
 
-        let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
+        let message = CrdsData::IncrementalSnapshotHashes(Box::new(IncrementalSnapshotHashes {
             from: self.id(),
             base,
             hashes,
             wallclock: timestamp(),
-        });
+        }));
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
 
         Ok(())
@@ -983,7 +991,7 @@ impl ClusterInfo {
         let self_pubkey = self.id();
         let now = timestamp();
         let vote = Vote::new(self_pubkey, vote, now).unwrap();
-        let vote = CrdsData::Vote(vote_index, vote);
+        let vote = CrdsData::Vote(vote_index, Box::new(vote));
         let vote = CrdsValue::new_signed(vote, &self.keypair());
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         if let Err(err) = gossip_crds.insert(vote, now, GossipRoute::LocalMessage) {
@@ -1188,7 +1196,7 @@ impl ClusterInfo {
                 gossip_crds.get_shred_version(&origin) == self_shred_version
             })
             .map(|entry| match &entry.value.data {
-                CrdsData::EpochSlots(_, slots) => slots.clone(),
+                CrdsData::EpochSlots(_, slots) => slots.deref().clone(),
                 _ => panic!("this should not happen!"),
             })
             .collect()
@@ -1347,7 +1355,7 @@ impl ClusterInfo {
 
     fn insert_self(&self) {
         let value = CrdsValue::new_signed(
-            CrdsData::ContactInfo(self.my_contact_info()),
+            CrdsData::ContactInfo(Box::new(self.my_contact_info())),
             &self.keypair(),
         );
         let mut gossip_crds = self.gossip.crds.write().unwrap();
@@ -1485,7 +1493,7 @@ impl ClusterInfo {
                 self.gossip.mark_pull_request_creation_time(peer.id, now);
             }
         }
-        let self_info = CrdsData::ContactInfo(self.my_contact_info());
+        let self_info = CrdsData::ContactInfo(Box::new(self.my_contact_info()));
         let self_info = CrdsValue::new_signed(self_info, &self.keypair());
         let pulls = pulls
             .into_iter()
@@ -1716,10 +1724,10 @@ impl ClusterInfo {
                 let mut entrypoints_processed = false;
                 let recycler = PacketBatchRecycler::default();
                 let crds_data = vec![
-                    CrdsData::Version(Version::new(self.id())),
-                    CrdsData::NodeInstance(
+                    CrdsData::Version(Box::new(Version::new(self.id()))),
+                    CrdsData::NodeInstance(Box::new(
                         self.instance.read().unwrap().with_wallclock(timestamp()),
-                    ),
+                    )),
                 ];
                 for value in crds_data {
                     let value = CrdsValue::new_signed(value, &self.keypair());
@@ -3260,7 +3268,8 @@ mod tests {
 
     fn test_crds_values(pubkey: Pubkey) -> Vec<CrdsValue> {
         let entrypoint = ContactInfo::new_localhost(&pubkey, timestamp());
-        let entrypoint_crdsvalue = CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint));
+        let entrypoint_crdsvalue =
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(entrypoint)));
         vec![entrypoint_crdsvalue]
     }
 
@@ -3269,8 +3278,10 @@ mod tests {
         let mut rng = rand::thread_rng();
         for _ in 0..256 {
             let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
-            let crds_value =
-                CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hash), &Keypair::new());
+            let crds_value = CrdsValue::new_signed(
+                CrdsData::SnapshotHashes(Box::new(snapshot_hash)),
+                &Keypair::new(),
+            );
             let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), message).is_ok());
@@ -3282,8 +3293,10 @@ mod tests {
         let mut rng = rand::thread_rng();
         for _ in 0..256 {
             let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
-            let crds_value =
-                CrdsValue::new_signed(CrdsData::AccountsHashes(snapshot_hash), &Keypair::new());
+            let crds_value = CrdsValue::new_signed(
+                CrdsData::AccountsHashes(Box::new(snapshot_hash)),
+                &Keypair::new(),
+            );
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), response).is_ok());
@@ -3300,7 +3313,7 @@ mod tests {
             wallclock: timestamp(),
         };
         let crds_value = CrdsValue::new_signed(
-            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            CrdsData::IncrementalSnapshotHashes(Box::new(incremental_snapshot_hashes)),
             &Keypair::new(),
         );
         let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
@@ -3318,7 +3331,7 @@ mod tests {
             wallclock: timestamp(),
         };
         let crds_value = CrdsValue::new_signed(
-            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            CrdsData::IncrementalSnapshotHashes(Box::new(incremental_snapshot_hashes)),
             &Keypair::new(),
         );
         let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
@@ -3384,7 +3397,7 @@ mod tests {
         .collect();
         assert!(chunks.len() > 1);
         for chunk in chunks {
-            let data = CrdsData::DuplicateShred(MAX_DUPLICATE_SHREDS - 1, chunk);
+            let data = CrdsData::DuplicateShred(MAX_DUPLICATE_SHREDS - 1, Box::new(chunk));
             let value = CrdsValue::new_signed(data, &keypair);
             let pull_response = Protocol::PullResponse(keypair.pubkey(), vec![value.clone()]);
             assert!(serialized_size(&pull_response).unwrap() < PACKET_DATA_SIZE as u64);
@@ -3828,8 +3841,8 @@ mod tests {
         node.shred_version = 42;
         let epoch_slots = EpochSlots::new_rand(&mut rng, Some(node_pubkey));
         let entries = vec![
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(node)),
-            CrdsValue::new_unsigned(CrdsData::EpochSlots(0, epoch_slots)),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(node))),
+            CrdsValue::new_unsigned(CrdsData::EpochSlots(0, Box::new(epoch_slots))),
         ];
         {
             let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
@@ -3888,7 +3901,7 @@ mod tests {
         }
         // now add this message back to the table and make sure after the next pull, the entrypoint is unset
         let entrypoint_crdsvalue =
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(entrypoint.clone())));
         let cluster_info = Arc::new(cluster_info);
         let timeouts = cluster_info.gossip.make_timeouts(
             cluster_info.id(),
@@ -3909,7 +3922,8 @@ mod tests {
 
     #[test]
     fn test_split_messages_small() {
-        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
+        let value =
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(ContactInfo::default())));
         test_split_messages(value);
     }
 
@@ -3917,7 +3931,7 @@ mod tests {
     fn test_split_messages_large() {
         let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
             0,
-            LowestSlot::new(Pubkey::default(), 0, 0),
+            Box::new(LowestSlot::new(Pubkey::default(), 0, 0)),
         ));
         test_split_messages(value);
     }
@@ -3965,19 +3979,20 @@ mod tests {
     fn test_split_messages_packet_size() {
         // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped
-        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHashes(SnapshotHashes {
-            from: Pubkey::default(),
-            hashes: vec![],
-            wallclock: 0,
-        }));
+        let mut value =
+            CrdsValue::new_unsigned(CrdsData::SnapshotHashes(Box::new(SnapshotHashes {
+                from: Pubkey::default(),
+                hashes: vec![],
+                wallclock: 0,
+            })));
 
         let mut i = 0;
         while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
-            value.data = CrdsData::SnapshotHashes(SnapshotHashes {
+            value.data = CrdsData::SnapshotHashes(Box::new(SnapshotHashes {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
                 wallclock: 0,
-            });
+            }));
             i += 1;
         }
         let split: Vec<_> =
@@ -4011,7 +4026,8 @@ mod tests {
     }
 
     fn check_pull_request_size(filter: CrdsFilter) {
-        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
+        let value =
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(ContactInfo::default())));
         let protocol = Protocol::PullRequest(filter, value);
         assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
     }
@@ -4130,7 +4146,7 @@ mod tests {
             cluster_info.insert_info(other_node.clone());
             let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
                 0,
-                LowestSlot::new(other_node_pubkey, peer_lowest, timestamp()),
+                Box::new(LowestSlot::new(other_node_pubkey, peer_lowest, timestamp())),
             ));
             let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
             let _ = gossip_crds.insert(value, timestamp(), GossipRoute::LocalMessage);
@@ -4178,7 +4194,7 @@ mod tests {
             .expect("unable to serialize default filter") as usize;
         let protocol = Protocol::PullRequest(
             CrdsFilter::default(),
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default())),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(ContactInfo::default()))),
         );
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
@@ -4231,7 +4247,7 @@ mod tests {
             0, // wallclock
         )
         .unwrap();
-        let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
+        let vote = CrdsValue::new_signed(CrdsData::Vote(1, Box::new(vote)), &Keypair::new());
         assert!(bincode::serialized_size(&vote).unwrap() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64);
     }
 
@@ -4517,7 +4533,7 @@ mod tests {
             let mut rand_ci = ContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
             rand_ci.shred_version = shred_version;
             rand_ci.wallclock = timestamp();
-            CrdsValue::new_signed(CrdsData::ContactInfo(rand_ci), &keypair)
+            CrdsValue::new_signed(CrdsData::ContactInfo(Box::new(rand_ci)), &keypair)
         })
         .take(NO_ENTRIES)
         .collect();

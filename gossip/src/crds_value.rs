@@ -78,20 +78,19 @@ impl Signable for CrdsValue {
 /// CrdsData that defines the different types of items CrdsValues can hold
 /// * Merge Strategy - Latest wallclock is picked
 /// * LowestSlot index is deprecated
-#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample, AbiEnumVisitor)]
 pub enum CrdsData {
-    ContactInfo(ContactInfo),
-    Vote(VoteIndex, Vote),
-    LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
-    SnapshotHashes(SnapshotHashes),
-    AccountsHashes(SnapshotHashes),
-    EpochSlots(EpochSlotsIndex, EpochSlots),
-    LegacyVersion(LegacyVersion),
-    Version(Version),
-    NodeInstance(NodeInstance),
-    DuplicateShred(DuplicateShredIndex, DuplicateShred),
-    IncrementalSnapshotHashes(IncrementalSnapshotHashes),
+    ContactInfo(Box<ContactInfo>),
+    Vote(VoteIndex, Box<Vote>),
+    LowestSlot(/*DEPRECATED:*/ u8, Box<LowestSlot>),
+    SnapshotHashes(Box<SnapshotHashes>),
+    AccountsHashes(Box<SnapshotHashes>),
+    EpochSlots(EpochSlotsIndex, Box<EpochSlots>),
+    LegacyVersion(Box<LegacyVersion>),
+    Version(Box<Version>),
+    NodeInstance(Box<NodeInstance>),
+    DuplicateShred(DuplicateShredIndex, Box<DuplicateShred>),
+    IncrementalSnapshotHashes(Box<IncrementalSnapshotHashes>),
 }
 
 impl Sanitize for CrdsData {
@@ -147,15 +146,18 @@ impl CrdsData {
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
         match kind {
-            0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
-            1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
-            2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
-            3 => CrdsData::AccountsHashes(SnapshotHashes::new_rand(rng, pubkey)),
-            4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
-            5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            0 => CrdsData::ContactInfo(Box::new(ContactInfo::new_rand(rng, pubkey))),
+            1 => CrdsData::LowestSlot(rng.gen(), Box::new(LowestSlot::new_rand(rng, pubkey))),
+            2 => CrdsData::SnapshotHashes(Box::new(SnapshotHashes::new_rand(rng, pubkey))),
+            3 => CrdsData::AccountsHashes(Box::new(SnapshotHashes::new_rand(rng, pubkey))),
+            4 => CrdsData::Version(Box::new(Version::new_rand(rng, pubkey))),
+            5 => CrdsData::Vote(
+                rng.gen_range(0, MAX_VOTES),
+                Box::new(Vote::new_rand(rng, pubkey)),
+            ),
             _ => CrdsData::EpochSlots(
                 rng.gen_range(0, MAX_EPOCH_SLOTS),
-                EpochSlots::new_rand(rng, pubkey),
+                Box::new(EpochSlots::new_rand(rng, pubkey)),
             ),
         }
     }
@@ -698,13 +700,13 @@ mod test {
     #[test]
     fn test_keys_and_values() {
         let mut rng = rand::thread_rng();
-        let v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
+        let v = CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(ContactInfo::default())));
         assert_eq!(v.wallclock(), 0);
         let key = v.contact_info().unwrap().id;
         assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
 
         let v = Vote::new(Pubkey::default(), new_test_vote_tx(&mut rng), 0).unwrap();
-        let v = CrdsValue::new_unsigned(CrdsData::Vote(0, v));
+        let v = CrdsValue::new_unsigned(CrdsData::Vote(0, Box::new(v)));
         assert_eq!(v.wallclock(), 0);
         let key = match &v.data {
             CrdsData::Vote(_, vote) => vote.from,
@@ -714,7 +716,7 @@ mod test {
 
         let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
             0,
-            LowestSlot::new(Pubkey::default(), 0, 0),
+            Box::new(LowestSlot::new(Pubkey::default(), 0, 0)),
         ));
         assert_eq!(v.wallclock(), 0);
         let key = match &v.data {
@@ -727,26 +729,26 @@ mod test {
     #[test]
     fn test_lowest_slot_sanitize() {
         let ls = LowestSlot::new(Pubkey::default(), 0, 0);
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, ls.clone()));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, Box::new(ls.clone())));
         assert_eq!(v.sanitize(), Ok(()));
 
         let mut o = ls.clone();
         o.root = 1;
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, Box::new(o)));
         assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
 
         let o = ls.clone();
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, o));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, Box::new(o)));
         assert_eq!(v.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut o = ls.clone();
         o.slots.insert(1);
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, Box::new(o)));
         assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
 
         let mut o = ls;
         o.stash.push(deprecated::EpochIncompleteSlots::default());
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, Box::new(o)));
         assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
     }
 
@@ -755,17 +757,16 @@ mod test {
         let mut rng = rand::thread_rng();
         let keypair = Keypair::new();
         let wrong_keypair = Keypair::new();
-        let mut v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &keypair.pubkey(),
-            timestamp(),
+        let mut v = CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(
+            ContactInfo::new_localhost(&keypair.pubkey(), timestamp()),
         )));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
         let v = Vote::new(keypair.pubkey(), new_test_vote_tx(&mut rng), timestamp()).unwrap();
-        let mut v = CrdsValue::new_unsigned(CrdsData::Vote(0, v));
+        let mut v = CrdsValue::new_unsigned(CrdsData::Vote(0, Box::new(v)));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
         v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
             0,
-            LowestSlot::new(keypair.pubkey(), 0, timestamp()),
+            Box::new(LowestSlot::new(keypair.pubkey(), 0, timestamp())),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
@@ -775,7 +776,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let keypair = Keypair::new();
         let vote = Vote::new(keypair.pubkey(), new_test_vote_tx(&mut rng), timestamp()).unwrap();
-        let vote = CrdsValue::new_signed(CrdsData::Vote(MAX_VOTES, vote), &keypair);
+        let vote = CrdsValue::new_signed(CrdsData::Vote(MAX_VOTES, Box::new(vote)), &keypair);
         assert!(vote.sanitize().is_err());
     }
 
@@ -818,7 +819,7 @@ mod test {
         let item = CrdsValue::new_signed(
             CrdsData::EpochSlots(
                 MAX_EPOCH_SLOTS,
-                EpochSlots::new(keypair.pubkey(), timestamp()),
+                Box::new(EpochSlots::new(keypair.pubkey(), timestamp())),
             ),
             &keypair,
         );
@@ -897,7 +898,7 @@ mod test {
     #[test]
     fn test_node_instance_crds_lable() {
         fn make_crds_value(node: NodeInstance) -> CrdsValue {
-            CrdsValue::new_unsigned(CrdsData::NodeInstance(node))
+            CrdsValue::new_unsigned(CrdsData::NodeInstance(Box::new(node)))
         }
         let mut rng = rand::thread_rng();
         let now = timestamp();
@@ -944,7 +945,7 @@ mod test {
     #[test]
     fn test_check_duplicate_instance() {
         fn make_crds_value(node: NodeInstance) -> CrdsValue {
-            CrdsValue::new_unsigned(CrdsData::NodeInstance(node))
+            CrdsValue::new_unsigned(CrdsData::NodeInstance(Box::new(node)))
         }
         let now = timestamp();
         let mut rng = rand::thread_rng();
@@ -1033,7 +1034,7 @@ mod test {
         assert_eq!(other.overrides(&node_crds), None);
         // Differnt crds value is not a duplicate.
         let other = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        let other = CrdsValue::new_unsigned(CrdsData::ContactInfo(other));
+        let other = CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(other)));
         assert!(!node.check_duplicate(&other));
         assert_eq!(node.overrides(&other), None);
     }
@@ -1043,17 +1044,17 @@ mod test {
         let mut rng = rand::thread_rng();
         let pubkey = Pubkey::new_unique();
         assert!(
-            !CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_rand(
+            !CrdsValue::new_unsigned(CrdsData::ContactInfo(Box::new(ContactInfo::new_rand(
                 &mut rng,
                 Some(pubkey),
-            )))
+            ))))
             .should_force_push(&pubkey)
         );
-        let node = CrdsValue::new_unsigned(CrdsData::NodeInstance(NodeInstance::new(
+        let node = CrdsValue::new_unsigned(CrdsData::NodeInstance(Box::new(NodeInstance::new(
             &mut rng,
             pubkey,
             timestamp(),
-        )));
+        ))));
         assert!(node.should_force_push(&pubkey));
         assert!(!node.should_force_push(&Pubkey::new_unique()));
     }

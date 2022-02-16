@@ -796,14 +796,14 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(Box::new(SnapshotHashes::new(
                     known_validators[0],
                     vec![
                         (1, Hash::default()),
                         (1001, Hash::default()),
                         (2, Hash::default()),
                     ],
-                ))),
+                )))),
                 1,
                 GossipRoute::LocalMessage,
             )
@@ -817,10 +817,10 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(Box::new(SnapshotHashes::new(
                     known_validators[1],
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
-                ))),
+                )))),
                 1,
                 GossipRoute::LocalMessage,
             )
@@ -834,10 +834,10 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(Box::new(SnapshotHashes::new(
                     known_validators[2],
                     vec![(1000 + health_check_slot_distance, Hash::default())],
-                ))),
+                )))),
                 1,
                 GossipRoute::LocalMessage,
             )
