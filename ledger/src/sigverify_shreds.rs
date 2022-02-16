@@ -372,7 +372,7 @@ pub fn sign_shreds_gpu(
     let packet_count = count_packets_in_batches(batches);
     if api.is_none() || packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
         panic!("sign with cpu");
-        return sign_shreds_cpu(keypair, batches);
+        // return sign_shreds_cpu(keypair, batches);
     }
     let api = api.unwrap();
     let pinned_keypair = pinned_keypair.as_ref().unwrap();
@@ -670,8 +670,8 @@ pub mod tests {
         .cloned()
         .collect();
         //unsigned
-        let rv = verify_shreds_gpu(&batches, &pubkeys, &recycler_cache);
-        assert_eq!(rv, vec![vec![0; num_packets]; num_batches]);
+        // let rv = verify_shreds_gpu(&batches, &pubkeys, &recycler_cache);
+        // assert_eq!(rv, vec![vec![0; num_packets]; num_batches]);
         //signed
         sign_shreds_gpu(&keypair, &pinned_keypair, &mut batches, &recycler_cache);
         let rv = verify_shreds_cpu(&batches, &pubkeys);
