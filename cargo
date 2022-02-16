@@ -3,6 +3,11 @@
 # shellcheck source=ci/rust-version.sh
 here=$(dirname "$0")
 
+export CI_COMMIT=$(git rev-parse --short HEAD)
+# TODO does the CI use this file?
+export SOLANA_DEVBUILD=1
+git diff --quiet || export SOLANA_WORKING_TREE_DIRTY=1
+
 toolchain=
 case "$1" in
   stable)

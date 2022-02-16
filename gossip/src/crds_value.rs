@@ -403,6 +403,8 @@ impl Version {
                 minor: rng.gen(),
                 patch: rng.gen(),
                 commit: Some(rng.gen()),
+                devbuild: false,
+                working_tree_dirty: false,
                 feature_set: rng.gen(),
             },
         }

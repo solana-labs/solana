@@ -26,6 +26,8 @@ pub struct Version {
     pub minor: u16,
     pub patch: u16,
     pub commit: Option<u32>, // first 4 bytes of the sha1 commit hash
+    pub devbuild: bool,
+    pub working_tree_dirty: bool,
     pub feature_set: u32,    // first 4 bytes of the FeatureSet identifier
 }
 
@@ -36,6 +38,8 @@ impl From<LegacyVersion> for Version {
             minor: legacy_version.minor,
             patch: legacy_version.patch,
             commit: legacy_version.commit,
+            devbuild: false,
+            working_tree_dirty: false,
             feature_set: 0,
         }
     }
@@ -62,6 +66,8 @@ impl Default for Version {
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
             patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
             commit: compute_commit(option_env!("CI_COMMIT")),
+            devbuild: option_env!("SOLANA_DEVBUILD").is_some(),
+            working_tree_dirty: option_env!("SOLANA_WORKING_TREE_DIRTY").is_some(),
             feature_set,
         }
     }
@@ -83,7 +89,12 @@ impl fmt::Debug for Version {
             self.patch,
             match self.commit {
                 None => "devbuild".to_string(),
-                Some(commit) => format!("{:08x}", commit),
+                Some(commit) => {
+                    // TODO cleaner way to do this?
+                    let d = if self.devbuild {"devbuild-"} else {""};
+                    let dirty = if self.working_tree_dirty {"-dirty"} else {""};
+                    format!("{}{:08x}{}", d, commit, dirty)
+                },
             },
             self.feature_set,
         )
