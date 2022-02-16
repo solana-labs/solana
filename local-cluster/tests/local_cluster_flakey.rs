@@ -10,14 +10,8 @@ use {
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
     solana_ledger::{
-<<<<<<< HEAD
         ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db::AccessType,
-=======
-        ancestor_iterator::AncestorIterator,
-        blockstore::Blockstore,
-        blockstore_db::{AccessType, BlockstoreOptions},
         leader_schedule::FixedSchedule,
->>>>>>> bca1d5173 (Fix flaky optimistic confirmation tests (#23178))
     },
     solana_local_cluster::{
         cluster::Cluster,

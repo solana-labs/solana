@@ -2,16 +2,9 @@
 use {
     assert_matches::assert_matches,
     common::{
-<<<<<<< HEAD
-        create_custom_leader_schedule, last_vote_in_tower, ms_for_n_slots, open_blockstore,
-        purge_slots, remove_tower, restore_tower, run_cluster_partition,
+        create_custom_leader_schedule_with_random_keys, last_vote_in_tower, ms_for_n_slots,
+        open_blockstore, purge_slots, remove_tower, restore_tower, run_cluster_partition,
         run_kill_partition_switch_threshold, test_faulty_node, RUST_LOG_FILTER,
-=======
-        copy_blocks, create_custom_leader_schedule_with_random_keys, last_vote_in_tower,
-        ms_for_n_slots, open_blockstore, purge_slots, remove_tower, restore_tower,
-        run_cluster_partition, run_kill_partition_switch_threshold, test_faulty_node,
-        wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
->>>>>>> bca1d5173 (Fix flaky optimistic confirmation tests (#23178))
     },
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
