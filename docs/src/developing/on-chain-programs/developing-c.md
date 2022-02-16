@@ -140,7 +140,7 @@ the [runtime enforcement
 policy](developing/programming-model/accounts.md#policy). When an instruction
 reference the same account multiple times there may be duplicate
 `SolAccountInfo` entries in the array but they both point back to the original
-input byte array. A program should handle these case delicately to avoid
+input byte array. A program should handle these cases delicately to avoid
 overlapping read/writes to the same buffer. If a program implements their own
 deserialization function care should be taken to handle duplicate accounts
 appropriately.
