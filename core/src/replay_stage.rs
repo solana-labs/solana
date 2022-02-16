@@ -139,6 +139,9 @@ pub struct ReplayStageConfig {
     pub wait_for_vote_to_start_leader: bool,
     pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
     pub tower_storage: Arc<dyn TowerStorage>,
+    // Stops voting until this slot has been reached. Should be used to avoid
+    // duplicate voting which can lead to slashing.
+    pub wait_to_vote_slot: Option<Slot>,
 }
 
 #[derive(Default)]
@@ -382,6 +385,7 @@ impl ReplayStage {
             wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
             tower_storage,
+            wait_to_vote_slot,
         } = config;
 
         trace!("replay stage");
@@ -604,6 +608,7 @@ impl ReplayStage {
                                                     has_new_vote_been_rooted, &mut
                                                     last_vote_refresh_time,
                                                     &voting_sender,
+                                                    wait_to_vote_slot,
                                                     );
                         }
                     }
@@ -687,6 +692,7 @@ impl ReplayStage {
                             &voting_sender,
                             &mut epoch_slots_frozen_slots,
                             &drop_bank_sender,
+                            wait_to_vote_slot,
                         );
                     };
                     voting_time.stop();
@@ -1587,7 +1593,10 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions { vote_only_bank },
+                NewBankOptions {
+                    vote_only_bank,
+                    simulation_bank: false,
+                },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
@@ -1728,6 +1737,7 @@ impl ReplayStage {
         voting_sender: &Sender<VoteOp>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         bank_drop_sender: &Sender<Vec<Arc<Bank>>>,
+        wait_to_vote_slot: Option<Slot>,
     ) {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1816,6 +1826,7 @@ impl ReplayStage {
             *has_new_vote_been_rooted,
             replay_timing,
             voting_sender,
+            wait_to_vote_slot,
         );
     }
 
@@ -1828,9 +1839,15 @@ impl ReplayStage {
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
+        wait_to_vote_slot: Option<Slot>,
     ) -> Option<Transaction> {
         if authorized_voter_keypairs.is_empty() {
             return None;
+        }
+        if let Some(slot) = wait_to_vote_slot {
+            if bank.slot() < slot {
+                return None;
+            }
         }
         let vote_account = match bank.get_vote_account(vote_account_pubkey) {
             None => {
@@ -1926,6 +1943,7 @@ impl ReplayStage {
         has_new_vote_been_rooted: bool,
         last_vote_refresh_time: &mut LastVoteRefreshTime,
         voting_sender: &Sender<VoteOp>,
+        wait_to_vote_slot: Option<Slot>,
     ) {
         let last_voted_slot = tower.last_voted_slot();
         if last_voted_slot.is_none() {
@@ -1968,6 +1986,7 @@ impl ReplayStage {
             &SwitchForkDecision::SameFork,
             vote_signatures,
             has_new_vote_been_rooted,
+            wait_to_vote_slot,
         );
 
         if let Some(vote_tx) = vote_tx {
@@ -2005,6 +2024,7 @@ impl ReplayStage {
         has_new_vote_been_rooted: bool,
         replay_timing: &mut ReplayTiming,
         voting_sender: &Sender<VoteOp>,
+        wait_to_vote_slot: Option<Slot>,
     ) {
         let mut generate_time = Measure::start("generate_vote");
         let vote_tx = Self::generate_vote_tx(
@@ -2016,6 +2036,7 @@ impl ReplayStage {
             switch_fork_decision,
             vote_signatures,
             has_new_vote_been_rooted,
+            wait_to_vote_slot,
         );
         generate_time.stop();
         replay_timing.generate_vote_us += generate_time.as_us();
@@ -5865,6 +5886,7 @@ pub mod tests {
             has_new_vote_been_rooted,
             &mut ReplayTiming::default(),
             &voting_sender,
+            None,
         );
         let vote_info = voting_receiver
             .recv_timeout(Duration::from_secs(1))
@@ -5904,6 +5926,7 @@ pub mod tests {
                 has_new_vote_been_rooted,
                 &mut last_vote_refresh_time,
                 &voting_sender,
+                None,
             );
 
             // No new votes have been submitted to gossip
@@ -5929,6 +5952,7 @@ pub mod tests {
             has_new_vote_been_rooted,
             &mut ReplayTiming::default(),
             &voting_sender,
+            None,
         );
         let vote_info = voting_receiver
             .recv_timeout(Duration::from_secs(1))
@@ -5960,6 +5984,7 @@ pub mod tests {
             has_new_vote_been_rooted,
             &mut last_vote_refresh_time,
             &voting_sender,
+            None,
         );
 
         // No new votes have been submitted to gossip
@@ -5997,6 +6022,7 @@ pub mod tests {
             has_new_vote_been_rooted,
             &mut last_vote_refresh_time,
             &voting_sender,
+            None,
         );
         let vote_info = voting_receiver
             .recv_timeout(Duration::from_secs(1))
@@ -6064,6 +6090,7 @@ pub mod tests {
             has_new_vote_been_rooted,
             &mut last_vote_refresh_time,
             &voting_sender,
+            None,
         );
 
         let votes = cluster_info.get_votes(&mut cursor);

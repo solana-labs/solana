@@ -473,17 +473,12 @@ impl VoteState {
             // to the current vote state root for safety.
             if earliest_slot_hash_in_history > new_proposed_root {
                 vote_state_update.root = self.root_slot;
-            } else if !slot_hashes
-                // Verify that the root is in slot hashes
-                .iter()
-                .any(|&(slot, _)| slot == new_proposed_root)
-            {
-                return Err(VoteError::RootOnDifferentFork);
             }
         }
 
-        // index into the new proposed vote state's slots, starting at the oldest
-        // slot
+        // index into the new proposed vote state's slots, starting with the root if it exists then
+        // we use this mutable root to fold the root slot case into this loop for performance
+        let mut check_root = vote_state_update.root;
         let mut vote_state_update_index = 0;
 
         // index into the slot_hashes, starting at the oldest known
@@ -505,8 +500,13 @@ impl VoteState {
         // because have to ensure that every slot is actually part of the history, not just the most
         // recent ones
         while vote_state_update_index < vote_state_update.lockouts.len() && slot_hashes_index > 0 {
-            let proposed_vote_slot = vote_state_update.lockouts[vote_state_update_index].slot;
-            if vote_state_update_index > 0
+            let proposed_vote_slot = if let Some(root) = check_root {
+                root
+            } else {
+                vote_state_update.lockouts[vote_state_update_index].slot
+            };
+            if check_root.is_none()
+                && vote_state_update_index > 0
                 && proposed_vote_slot
                     <= vote_state_update.lockouts[vote_state_update_index - 1].slot
             {
@@ -522,7 +522,7 @@ impl VoteState {
                         // The vote slot does not exist in the SlotHashes history because it's too old,
                         // i.e. older than the oldest slot in the history.
                         assert!(proposed_vote_slot < earliest_slot_hash_in_history);
-                        if !self.contains_slot(proposed_vote_slot) {
+                        if !self.contains_slot(proposed_vote_slot) && check_root.is_none() {
                             // If the vote slot is both:
                             // 1) Too old
                             // 2) Doesn't already exist in vote state
@@ -530,13 +530,25 @@ impl VoteState {
                             // Then filter it out
                             vote_state_update_indexes_to_filter.push(vote_state_update_index);
                         }
-                        vote_state_update_index += 1;
+                        if check_root.is_some() {
+                            // If the vote state update has a root < earliest_slot_hash_in_history
+                            // then we use the current root. The only case where this can happen
+                            // is if the current root itself is not in slot hashes.
+                            assert!(self.root_slot.unwrap() < earliest_slot_hash_in_history);
+                            check_root = None;
+                        } else {
+                            vote_state_update_index += 1;
+                        }
                         continue;
                     } else {
                         // If the vote slot is new enough to be in the slot history,
                         // but is not part of the slot history, then it must belong to another fork,
                         // which means this vote state update is invalid.
-                        return Err(VoteError::SlotsMismatch);
+                        if check_root.is_some() {
+                            return Err(VoteError::RootOnDifferentFork);
+                        } else {
+                            return Err(VoteError::SlotsMismatch);
+                        }
                     }
                 }
                 Ordering::Greater => {
@@ -546,9 +558,14 @@ impl VoteState {
                 }
                 Ordering::Equal => {
                     // Once the slot in `vote_state_update.lockouts` is found, bump to the next slot
-                    // in `vote_state_update.lockouts` and continue.
-                    vote_state_update_index += 1;
-                    slot_hashes_index -= 1;
+                    // in `vote_state_update.lockouts` and continue. If we were checking the root,
+                    // start checking the vote state instead.
+                    if check_root.is_some() {
+                        check_root = None;
+                    } else {
+                        vote_state_update_index += 1;
+                        slot_hashes_index -= 1;
+                    }
                 }
             }
         }
@@ -4167,6 +4184,36 @@ mod tests {
             vote_state
                 .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
             Err(VoteError::SlotsMismatch),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_root_on_different_fork() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8]);
+        let vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where:
+        // 1) The root is not present in slot hashes history
+        // 2) The slot is greater than the earliest slot in the history
+        // Thus this slot is not part of the fork and the update should be rejected
+        // with error `RootOnDifferentFork`
+        let new_root = 3;
+
+        // Have to vote for a slot greater than the last vote in the vote state to avoid VoteTooOld
+        // errors
+        let vote_slot = vote_state.votes.back().unwrap().slot + 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let mut vote_state_update = VoteStateUpdate::from(vec![(vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state_update.root = Some(new_root);
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::RootOnDifferentFork),
         );
     }
 

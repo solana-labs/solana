@@ -115,6 +115,7 @@ fn wait_for_restart_window(
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
     max_delinquency_percentage: u8,
+    skip_new_snapshot_check: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
 
@@ -291,6 +292,9 @@ fn wait_for_restart_window(
                 });
                 match in_leader_schedule_hole {
                     Ok(_) => {
+                        if skip_new_snapshot_check {
+                            break; // Restart!
+                        }
                         if restart_snapshot == None {
                             restart_snapshot = snapshot_slot;
                         }
@@ -1581,8 +1585,8 @@ pub fn main() {
             )
             .arg(
                 Arg::with_name("min_idle_time")
-                    .takes_value(true)
                     .long("min-idle-time")
+                    .takes_value(true)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
                     .default_value("10")
@@ -1596,6 +1600,11 @@ pub fn main() {
                     .default_value("5")
                     .value_name("PERCENT")
                     .help("The maximum delinquent stake % permitted for an exit")
+            )
+            .arg(
+                Arg::with_name("skip_new_snapshot_check")
+                    .long("skip-new-snapshot-check")
+                    .help("Skip check for a new snapshot")
             )
         )
         .subcommand(
@@ -1659,6 +1668,12 @@ pub fn main() {
                     .validator(is_keypair)
                     .help("Validator identity keypair")
             )
+            .arg(
+                clap::Arg::with_name("require_tower")
+                    .long("require-tower")
+                    .takes_value(false)
+                    .help("Refuse to set the validator identity if saved tower state is not found"),
+            )
             .after_help("Note: the new identity only applies to the \
                          currently running validator instance")
         )
@@ -1678,8 +1693,8 @@ pub fn main() {
             .about("Monitor the validator for a good time to restart")
             .arg(
                 Arg::with_name("min_idle_time")
+                    .long("min-idle-time")
                     .takes_value(true)
-                    .index(1)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
                     .default_value("10")
@@ -1701,6 +1716,11 @@ pub fn main() {
                     .default_value("5")
                     .value_name("PERCENT")
                     .help("The maximum delinquent stake % permitted for a restart")
+            )
+            .arg(
+                Arg::with_name("skip_new_snapshot_check")
+                    .long("skip-new-snapshot-check")
+                    .help("Skip check for a new snapshot")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -1788,15 +1808,22 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
+            let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time, max_delinquent_stake)
-                    .unwrap_or_else(|err| {
-                        println!("{}", err);
-                        exit(1);
-                    });
+                wait_for_restart_window(
+                    &ledger_path,
+                    None,
+                    min_idle_time,
+                    max_delinquent_stake,
+                    skip_new_snapshot_check,
+                )
+                .unwrap_or_else(|err| {
+                    println!("{}", err);
+                    exit(1);
+                });
             }
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -1818,6 +1845,7 @@ pub fn main() {
             return;
         }
         ("set-identity", Some(subcommand_matches)) => {
+            let require_tower = subcommand_matches.is_present("require_tower");
             let identity_keypair = value_t_or_exit!(subcommand_matches, "identity", String);
 
             let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
@@ -1831,7 +1859,7 @@ pub fn main() {
                 .block_on(async move {
                     admin_client
                         .await?
-                        .set_identity(identity_keypair.display().to_string())
+                        .set_identity(identity_keypair.display().to_string(), require_tower)
                         .await
                 })
                 .unwrap_or_else(|err| {
@@ -1856,12 +1884,19 @@ pub fn main() {
             let identity = pubkey_of(subcommand_matches, "identity");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
+            let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
 
-            wait_for_restart_window(&ledger_path, identity, min_idle_time, max_delinquent_stake)
-                .unwrap_or_else(|err| {
-                    println!("{}", err);
-                    exit(1);
-                });
+            wait_for_restart_window(
+                &ledger_path,
+                identity,
+                min_idle_time,
+                max_delinquent_stake,
+                skip_new_snapshot_check,
+            )
+            .unwrap_or_else(|err| {
+                println!("{}", err);
+                exit(1);
+            });
             return;
         }
         _ => unreachable!(),
@@ -2468,6 +2503,7 @@ pub fn main() {
             info!("OS network limits test passed.");
         } else {
             eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+            exit(1);
         }
     }
 
@@ -2475,7 +2511,7 @@ pub fn main() {
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
-    let admin_service_cluster_info = Arc::new(RwLock::new(None));
+    let admin_service_post_init = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -2484,7 +2520,7 @@ pub fn main() {
             validator_exit: validator_config.validator_exit.clone(),
             start_progress: start_progress.clone(),
             authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            cluster_info: admin_service_cluster_info.clone(),
+            post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
         },
     );
@@ -2629,7 +2665,12 @@ pub fn main() {
         start_progress,
         socket_addr_space,
     );
-    *admin_service_cluster_info.write().unwrap() = Some(validator.cluster_info.clone());
+    *admin_service_post_init.write().unwrap() =
+        Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
+            bank_forks: validator.bank_forks.clone(),
+            cluster_info: validator.cluster_info.clone(),
+            vote_account,
+        });
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
