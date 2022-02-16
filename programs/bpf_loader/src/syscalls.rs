@@ -287,9 +287,13 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         .feature_set
         .is_active(&add_get_processed_sibling_instruction_syscall::id());
 
-    let loader_id = *invoke_context
+    let loader_id = invoke_context
         .transaction_context
-        .get_current_loader_key()
+        .get_current_instruction_context()
+        .and_then(|instruction_context| {
+            instruction_context.try_borrow_program_account(invoke_context.transaction_context)
+        })
+        .map(|program_account| *program_account.get_owner())
         .map_err(SyscallError::InstructionError)?;
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
@@ -617,6 +621,18 @@ fn translate_string_and_do(
     }
 }
 
+/// Returns the owner of the program account in the current InstructionContext
+fn get_current_loader_key(invoke_context: &InvokeContext) -> Result<Pubkey, SyscallError> {
+    invoke_context
+        .transaction_context
+        .get_current_instruction_context()
+        .and_then(|instruction_context| {
+            instruction_context.try_borrow_program_account(invoke_context.transaction_context)
+        })
+        .map(|program_account| *program_account.get_owner())
+        .map_err(SyscallError::InstructionError)
+}
+
 /// Abort syscall functions, called when the BPF program calls `abort()`
 /// LLVM will insert calls to `abort()` if it detects an untenable situation,
 /// `abort()` is not intended to be called explicitly by the program.
@@ -666,13 +682,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
         {
             question_mark!(invoke_context.get_compute_meter().consume(len), result);
         }
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         *result =
             translate_string_and_do(memory_mapping, file, len, loader_id, &mut |string: &str| {
                 Err(SyscallError::Panic(string.to_string(), line, column).into())
@@ -714,18 +724,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLog<'a, 'b> {
         };
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         question_mark!(
             translate_string_and_do(memory_mapping, addr, len, loader_id, &mut |string: &str| {
                 stable_log::program_log(&invoke_context.get_log_collector(), string);
                 Ok(0)
-            },),
+            }),
             result
         );
         *result = Ok(0);
@@ -831,13 +835,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let pubkey = question_mark!(
             translate_type::<Pubkey>(memory_mapping, pubkey_addr, loader_id),
             result
@@ -948,13 +946,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
             .create_program_address_units;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let (seeds, program_id) = question_mark!(
             translate_and_check_program_address_inputs(
                 seeds_addr,
@@ -1008,13 +1000,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
             .create_program_address_units;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let (seeds, program_id) = question_mark!(
             translate_and_check_program_address_inputs(
                 seeds_addr,
@@ -1085,13 +1071,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
             result
         );
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, result_addr, HASH_BYTES as u64, loader_id),
             result
@@ -1161,17 +1141,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = *question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
-            &loader_id,
+            loader_id,
             memory_mapping,
             &mut invoke_context,
         );
@@ -1198,17 +1172,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = *question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
-            &loader_id,
+            loader_id,
             memory_mapping,
             &mut invoke_context,
         );
@@ -1236,17 +1204,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = *question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_fees(),
             var_addr,
-            &loader_id,
+            loader_id,
             memory_mapping,
             &mut invoke_context,
         );
@@ -1273,17 +1235,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = *question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_rent(),
             var_addr,
-            &loader_id,
+            loader_id,
             memory_mapping,
             &mut invoke_context,
         );
@@ -1319,13 +1275,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
             result
         );
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(
                 memory_mapping,
@@ -1442,13 +1392,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
             question_mark!(invoke_context.get_compute_meter().consume(cost), result);
         };
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let dst = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, dst_addr, n, loader_id),
             result
@@ -1486,13 +1430,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
         );
         question_mark!(mem_op_consume(&invoke_context, n), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let dst = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, dst_addr, n, loader_id),
             result
@@ -1530,13 +1468,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
         );
         question_mark!(mem_op_consume(&invoke_context, n), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let s1 = question_mark!(
             translate_slice::<u8>(memory_mapping, s1_addr, n, loader_id),
             result
@@ -1587,13 +1519,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
         );
         question_mark!(mem_op_consume(&invoke_context, n), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let s = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, s_addr, n, loader_id),
             result
@@ -1630,13 +1556,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
         let cost = invoke_context.get_compute_budget().secp256k1_recover_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let hash = question_mark!(
             translate_slice::<u8>(
                 memory_mapping,
@@ -1735,14 +1655,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
         let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let ct_0 = question_mark!(
             translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_0_addr, loader_id),
             result
@@ -1798,14 +1711,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b>
         let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let ct_0 = question_mark!(
             translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_0_addr, loader_id),
             result
@@ -1865,14 +1771,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, '
         let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let ct = question_mark!(
             translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_addr, loader_id),
             result
@@ -1927,13 +1826,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
             result
         );
 
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(
                 memory_mapping,
@@ -2665,9 +2558,13 @@ fn call<'a, 'b: 'a>(
         .is_active(&do_support_realloc::id());
 
     // Translate and verify caller's data
-    let loader_id = *invoke_context
+    let loader_id = invoke_context
         .transaction_context
-        .get_current_loader_key()
+        .get_current_instruction_context()
+        .and_then(|instruction_context| {
+            instruction_context.try_borrow_program_account(invoke_context.transaction_context)
+        })
+        .map(|program_account| *program_account.get_owner())
         .map_err(SyscallError::InstructionError)?;
     let instruction = syscall.translate_instruction(
         &loader_id,
@@ -2795,14 +2692,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let budget = invoke_context.get_compute_budget();
 
         question_mark!(
@@ -2867,14 +2757,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let budget = invoke_context.get_compute_budget();
 
         question_mark!(
@@ -2935,14 +2818,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let budget = invoke_context.get_compute_budget();
 
         question_mark!(
@@ -3016,14 +2892,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let loader_id = question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_loader_key()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let budget = invoke_context.get_compute_budget();
         question_mark!(
             invoke_context
