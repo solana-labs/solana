@@ -484,9 +484,9 @@ impl BankingStage {
 
         if !packet_vec.is_empty() {
             inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
-            if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec)
+            if let Err(SendPktsError::IoError(ioerr, num_failed)) = batch_send(socket, &packet_vec)
             {
-                return (Err(ioerr), 0);
+                return (Err(ioerr), packet_vec.len().saturating_sub(num_failed));
             }
         }
 
