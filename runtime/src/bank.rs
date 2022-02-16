@@ -7101,7 +7101,7 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_and_builtin_program_delta0 = 11;
+        let sysvar_and_builtin_program_delta0 = 12;
         assert_eq!(
             bank0.capitalization(),
             42 * 42 + sysvar_and_builtin_program_delta0
@@ -8856,7 +8856,7 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank0.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_builtin_program_delta0 = 11;
+        let sysvar_and_builtin_program_delta0 = 12;
         assert_eq!(
             bank0.capitalization(),
             42 * 1_000_000_000 + sysvar_and_builtin_program_delta0
@@ -8991,7 +8991,7 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_builtin_program_delta = 11;
+        let sysvar_and_builtin_program_delta = 12;
         assert_eq!(
             bank.capitalization(),
             42 * 1_000_000_000 + sysvar_and_builtin_program_delta

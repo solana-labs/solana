@@ -278,7 +278,7 @@ mod tests {
             ..GenesisConfig::default()
         };
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let sysvar_and_native_program_delta = 11;
+        let sysvar_and_native_program_delta = 12;
         assert_eq!(
             bank.capitalization(),
             (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance
