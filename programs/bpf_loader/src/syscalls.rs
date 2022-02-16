@@ -2684,9 +2684,12 @@ fn call<'a, 'b: 'a>(
         memory_mapping,
         *invoke_context,
     )?;
-    let caller_program_id = invoke_context
-        .transaction_context
-        .get_current_program_key()
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .map_err(SyscallError::InstructionError)?;
+    let caller_program_id = instruction_context
+        .get_program_key(transaction_context)
         .map_err(SyscallError::InstructionError)?;
     let signers = syscall.translate_signers(
         &loader_id,
@@ -2832,16 +2835,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
             )
             .to_vec()
         };
+        let transaction_context = &mut invoke_context.transaction_context;
         let program_id = *question_mark!(
-            invoke_context
-                .transaction_context
-                .get_current_program_key()
+            transaction_context
+                .get_current_instruction_context()
+                .and_then(
+                    |instruction_context| instruction_context.get_program_key(transaction_context)
+                )
                 .map_err(SyscallError::InstructionError),
             result
         );
         question_mark!(
-            invoke_context
-                .transaction_context
+            transaction_context
                 .set_return_data(program_id, return_data)
                 .map_err(SyscallError::InstructionError),
             result
