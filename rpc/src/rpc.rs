@@ -76,14 +76,9 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-<<<<<<< HEAD
-        ConfirmedBlock, ConfirmedTransactionStatusWithSignature, EncodedConfirmedTransaction,
-=======
-        ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, Encodable, EncodedConfirmedTransactionWithStatusMeta,
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
-        Reward, RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
-        UiTransactionEncoding,
+        ConfirmedBlockWithOptionalMetadata, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithOptionalMetadata, EncodedConfirmedTransaction, Reward, RewardType,
+        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token::{
@@ -1003,15 +998,9 @@ impl JsonRpcRequestProcessor {
                 self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
-                let configure_block = |confirmed_block: ConfirmedBlock| {
-<<<<<<< HEAD
-=======
-                    let legacy_block = confirmed_block
-                        .into_legacy_block()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+                let configure_block = |confirmed_block: ConfirmedBlockWithOptionalMetadata| {
                     let mut confirmed_block =
-                        legacy_block.configure(encoding, transaction_details, show_rewards);
+                        confirmed_block.configure(encoding, transaction_details, show_rewards);
                     if slot == 0 {
                         confirmed_block.block_time = Some(self.genesis_creation_time());
                         confirmed_block.block_height = Some(0);
@@ -1027,22 +1016,16 @@ impl JsonRpcRequestProcessor {
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-<<<<<<< HEAD
-                return Ok(result.ok().map(configure_block));
-=======
-                return result
+                return Ok(result
                     .ok()
-                    .map(ConfirmedBlock::from)
-                    .map(configure_block)
-                    .transpose();
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+                    .map(ConfirmedBlockWithOptionalMetadata::from)
+                    .map(configure_block));
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
                 if confirmed_bank.status_cache_ancestors().contains(&slot) {
                     self.check_status_is_complete(slot)?;
                     let result = self.blockstore.get_complete_block(slot, true);
-<<<<<<< HEAD
                     return Ok(result.ok().map(|mut confirmed_block| {
                         if confirmed_block.block_time.is_none()
                             || confirmed_block.block_height.is_none()
@@ -1058,36 +1041,12 @@ impl JsonRpcRequestProcessor {
                                 }
                             }
                         }
-                        confirmed_block.configure(encoding, transaction_details, show_rewards)
+                        ConfirmedBlockWithOptionalMetadata::from(confirmed_block).configure(
+                            encoding,
+                            transaction_details,
+                            show_rewards,
+                        )
                     }));
-=======
-                    return result
-                        .ok()
-                        .map(ConfirmedBlock::from)
-                        .map(|confirmed_block| -> Result<UiConfirmedBlock> {
-                            let mut legacy_block = confirmed_block
-                                .into_legacy_block()
-                                .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                            if legacy_block.block_time.is_none()
-                                || legacy_block.block_height.is_none()
-                            {
-                                let r_bank_forks = self.bank_forks.read().unwrap();
-                                let bank = r_bank_forks.get(slot).cloned();
-                                if let Some(bank) = bank {
-                                    if legacy_block.block_time.is_none() {
-                                        legacy_block.block_time = Some(bank.clock().unix_timestamp);
-                                    }
-                                    if legacy_block.block_height.is_none() {
-                                        legacy_block.block_height = Some(bank.block_height());
-                                    }
-                                }
-                            }
-
-                            Ok(legacy_block.configure(encoding, transaction_details, show_rewards))
-                        })
-                        .transpose();
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                 }
             }
         } else {
@@ -1412,31 +1371,14 @@ impl JsonRpcRequestProcessor {
 
         if self.config.enable_rpc_transaction_history {
             let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
-<<<<<<< HEAD
             let transaction = if commitment.is_confirmed() {
-=======
-            let confirmed_transaction = if commitment.is_confirmed() {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                 let highest_confirmed_slot = confirmed_bank.slot();
                 self.blockstore
                     .get_complete_transaction(signature, highest_confirmed_slot)
             } else {
                 self.blockstore.get_rooted_transaction(signature)
             };
-<<<<<<< HEAD
             match transaction.unwrap_or(None) {
-=======
-
-            let encode_transaction =
-                |confirmed_tx_with_meta: ConfirmedTransactionWithStatusMeta| -> Result<EncodedConfirmedTransactionWithStatusMeta> {
-                    let legacy_tx_with_meta = confirmed_tx_with_meta.into_legacy_confirmed_transaction()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                    Ok(legacy_tx_with_meta.encode(encoding))
-                };
-
-            match confirmed_transaction.unwrap_or(None) {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                 Some(mut confirmed_transaction) => {
                     if commitment.is_confirmed()
                         && confirmed_bank // should be redundant
@@ -1449,9 +1391,11 @@ impl JsonRpcRequestProcessor {
                                 .get(confirmed_transaction.slot)
                                 .map(|bank| bank.clock().unix_timestamp);
                         }
-                        return Ok(Some(encode_transaction(confirmed_transaction)?));
+                        return Ok(Some(
+                            ConfirmedTransactionWithOptionalMetadata::from(confirmed_transaction)
+                                .encode(encoding),
+                        ));
                     }
-
                     if confirmed_transaction.slot
                         <= self
                             .block_commitment_cache
@@ -1459,7 +1403,10 @@ impl JsonRpcRequestProcessor {
                             .unwrap()
                             .highest_confirmed_root()
                     {
-                        return Ok(Some(encode_transaction(confirmed_transaction)?));
+                        return Ok(Some(
+                            ConfirmedTransactionWithOptionalMetadata::from(confirmed_transaction)
+                                .encode(encoding),
+                        ));
                     }
                 }
                 None => {
@@ -1468,12 +1415,7 @@ impl JsonRpcRequestProcessor {
                             .get_confirmed_transaction(&signature)
                             .await
                             .unwrap_or(None)
-<<<<<<< HEAD
                             .map(|confirmed| confirmed.encode(encoding)));
-=======
-                            .map(encode_transaction)
-                            .transpose();
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                     }
                 }
             }

@@ -57,16 +57,12 @@ use solana_sdk::{
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     system_program, sysvar,
     sysvar::{clock, rent},
-    transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
+    transaction::{SanitizedTransaction, Transaction, TransactionError},
 };
 use solana_transaction_status::{
-<<<<<<< HEAD
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta,
-=======
-    token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+    TransactionStatusMeta,
+    TransactionWithMetadata,
 };
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -425,12 +421,10 @@ fn execute_transactions(
 
                     Ok(ConfirmedTransaction {
                         slot: bank.slot(),
-                        tx_with_meta: TransactionWithStatusMeta::Complete(
-                            VersionedTransactionWithStatusMeta {
-                                transaction: VersionedTransaction::from(tx.clone()),
-                                meta: tx_status_meta,
-                            },
-                        ),
+                        transaction: TransactionWithMetadata {
+                            transaction: tx.clone(),
+                            meta: tx_status_meta,
+                        },
                         block_time: None,
                     })
                 }
@@ -2472,17 +2466,11 @@ fn test_program_upgradeable_locks() {
 
     assert!(matches!(
         results1[0],
-<<<<<<< HEAD
         Ok(ConfirmedTransaction {
-            transaction: TransactionWithStatusMeta {
-                meta: Some(TransactionStatusMeta { status: Ok(()), .. }),
-=======
-        Ok(ConfirmedTransactionWithStatusMeta {
-            tx_with_meta: TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+            transaction: TransactionWithMetadata {
                 meta: TransactionStatusMeta { status: Ok(()), .. },
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                 ..
-            }),
+            },
             ..
         })
     ));
@@ -2490,15 +2478,9 @@ fn test_program_upgradeable_locks() {
 
     assert!(matches!(
         results2[0],
-<<<<<<< HEAD
         Ok(ConfirmedTransaction {
-            transaction: TransactionWithStatusMeta {
-                meta: Some(TransactionStatusMeta {
-=======
-        Ok(ConfirmedTransactionWithStatusMeta {
-            tx_with_meta: TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+            transaction: TransactionWithMetadata {
                 meta: TransactionStatusMeta {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                     status: Err(TransactionError::InstructionError(
                         0,
                         InstructionError::ProgramFailedToComplete
@@ -2506,7 +2488,7 @@ fn test_program_upgradeable_locks() {
                     ..
                 },
                 ..
-            }),
+            },
             ..
         })
     ));

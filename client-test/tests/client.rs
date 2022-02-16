@@ -34,7 +34,9 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    solana_transaction_status::{ConfirmedBlock, TransactionDetails, UiTransactionEncoding},
+    solana_transaction_status::{
+        ConfirmedBlockWithOptionalMetadata, TransactionDetails, UiTransactionEncoding,
+    },
     std::{
         collections::HashSet,
         net::{IpAddr, SocketAddr},
@@ -278,26 +280,8 @@ fn test_block_subscription() {
     let maybe_actual = receiver.recv_timeout(Duration::from_millis(400));
     match maybe_actual {
         Ok(actual) => {
-<<<<<<< HEAD
             let complete_block = blockstore.get_complete_block(slot, false).unwrap();
-            let block = complete_block.clone().configure(
-                UiTransactionEncoding::Json,
-                TransactionDetails::Signatures,
-                false,
-            );
-            let expected = RpcBlockUpdate {
-                slot,
-                block: Some(block),
-                err: None,
-            };
-            let block = complete_block.configure(
-=======
-            let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
-            let legacy_block = ConfirmedBlock::from(versioned_block)
-                .into_legacy_block()
-                .unwrap();
-            let block = legacy_block.configure(
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+            let block = ConfirmedBlockWithOptionalMetadata::from(complete_block).configure(
                 UiTransactionEncoding::Json,
                 TransactionDetails::Signatures,
                 false,

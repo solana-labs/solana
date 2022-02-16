@@ -355,83 +355,35 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-=======
 #[derive(Clone, Debug, PartialEq)]
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
 pub struct ConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
     pub parent_slot: Slot,
-    pub transactions: Vec<TransactionWithStatusMeta>,
+    pub transactions: Vec<TransactionWithMetadata>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
 
-<<<<<<< HEAD
-impl ConfirmedBlock {
-    pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedBlock {
-        EncodedConfirmedBlock {
-=======
-// Confirmed block with type guarantees that transaction metadata
-// is always present. Used for uploading to BigTable.
 #[derive(Clone, Debug, PartialEq)]
-pub struct VersionedConfirmedBlock {
+pub struct ConfirmedBlockWithOptionalMetadata {
     pub previous_blockhash: String,
     pub blockhash: String,
     pub parent_slot: Slot,
-    pub transactions: Vec<VersionedTransactionWithStatusMeta>,
+    pub transactions: Vec<TransactionWithOptionalMetadata>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
 
-// Confirmed block which only supports legacy transactions. Used
-// until migration to versioned transactions is completed.
-pub struct LegacyConfirmedBlock {
-    pub previous_blockhash: String,
-    pub blockhash: String,
-    pub parent_slot: Slot,
-    pub transactions: Vec<LegacyTransactionWithStatusMeta>,
-    pub rewards: Rewards,
-    pub block_time: Option<UnixTimestamp>,
-    pub block_height: Option<u64>,
-}
-
-impl ConfirmedBlock {
-    /// Downgrades a versioned block into a legacy block type
-    /// if it only contains legacy transactions
-    pub fn into_legacy_block(self) -> Option<LegacyConfirmedBlock> {
-        Some(LegacyConfirmedBlock {
-            previous_blockhash: self.previous_blockhash,
-            blockhash: self.blockhash,
-            parent_slot: self.parent_slot,
-            transactions: self
-                .transactions
-                .into_iter()
-                .map(|tx_with_meta| tx_with_meta.into_legacy_transaction_with_meta())
-                .collect::<Option<Vec<_>>>()?,
-            rewards: self.rewards,
-            block_time: self.block_time,
-            block_height: self.block_height,
-        })
-    }
-}
-
-impl From<VersionedConfirmedBlock> for ConfirmedBlock {
-    fn from(block: VersionedConfirmedBlock) -> Self {
+impl From<ConfirmedBlock> for ConfirmedBlockWithOptionalMetadata {
+    fn from(block: ConfirmedBlock) -> Self {
         Self {
             previous_blockhash: block.previous_blockhash,
             blockhash: block.blockhash,
             parent_slot: block.parent_slot,
-            transactions: block
-                .transactions
-                .into_iter()
-                .map(TransactionWithStatusMeta::Complete)
-                .collect(),
+            transactions: block.transactions.into_iter().map(Into::into).collect(),
             rewards: block.rewards,
             block_time: block.block_time,
             block_height: block.block_height,
@@ -439,11 +391,9 @@ impl From<VersionedConfirmedBlock> for ConfirmedBlock {
     }
 }
 
-impl Encodable for LegacyConfirmedBlock {
-    type Encoded = EncodedConfirmedBlock;
-    fn encode(self, encoding: UiTransactionEncoding) -> Self::Encoded {
-        Self::Encoded {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+impl ConfirmedBlockWithOptionalMetadata {
+    pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedBlock {
+        EncodedConfirmedBlock {
             previous_blockhash: self.previous_blockhash,
             blockhash: self.blockhash,
             parent_slot: self.parent_slot,
@@ -458,10 +408,6 @@ impl Encodable for LegacyConfirmedBlock {
         }
     }
 
-<<<<<<< HEAD
-=======
-impl LegacyConfirmedBlock {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
     pub fn configure(
         self,
         encoding: UiTransactionEncoding,
@@ -549,7 +495,6 @@ impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
     }
 }
 
-<<<<<<< HEAD
 impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
     fn from(block: UiConfirmedBlock) -> Self {
         Self {
@@ -578,16 +523,31 @@ impl Default for TransactionDetails {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmedTransaction {
     pub slot: Slot,
-    #[serde(flatten)]
-    pub transaction: TransactionWithStatusMeta,
+    pub transaction: TransactionWithMetadata,
     pub block_time: Option<UnixTimestamp>,
 }
 
-impl ConfirmedTransaction {
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfirmedTransactionWithOptionalMetadata {
+    pub slot: Slot,
+    pub transaction: TransactionWithOptionalMetadata,
+    pub block_time: Option<UnixTimestamp>,
+}
+
+impl From<ConfirmedTransaction> for ConfirmedTransactionWithOptionalMetadata {
+    fn from(confirmed_tx: ConfirmedTransaction) -> Self {
+        Self {
+            slot: confirmed_tx.slot,
+            transaction: confirmed_tx.transaction.into(),
+            block_time: confirmed_tx.block_time,
+        }
+    }
+}
+
+impl ConfirmedTransactionWithOptionalMetadata {
     pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedTransaction {
         EncodedConfirmedTransaction {
             slot: self.slot,
@@ -640,92 +600,34 @@ pub struct UiParsedMessage {
     pub instructions: Vec<UiInstruction>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionWithStatusMeta {
-=======
 #[derive(Clone, Debug, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum TransactionWithStatusMeta {
-    // Very old transactions may be missing metadata
-    MissingMetadata(Transaction),
-    // Versioned stored transaction always have metadata
-    Complete(VersionedTransactionWithStatusMeta),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct VersionedTransactionWithStatusMeta {
-    pub transaction: VersionedTransaction,
+pub struct TransactionWithMetadata {
+    pub transaction: Transaction,
     pub meta: TransactionStatusMeta,
 }
 
-pub struct LegacyTransactionWithStatusMeta {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionWithOptionalMetadata {
     pub transaction: Transaction,
     pub meta: Option<TransactionStatusMeta>,
 }
 
-impl TransactionWithStatusMeta {
-<<<<<<< HEAD
+impl From<TransactionWithMetadata> for TransactionWithOptionalMetadata {
+    fn from(tx_with_meta: TransactionWithMetadata) -> Self {
+        Self {
+            transaction: tx_with_meta.transaction,
+            meta: Some(tx_with_meta.meta),
+        }
+    }
+}
+
+impl TransactionWithOptionalMetadata {
     fn encode(self, encoding: UiTransactionEncoding) -> EncodedTransactionWithStatusMeta {
         let message = self.transaction.message();
         let meta = self.meta.map(|meta| meta.encode(encoding, message));
         EncodedTransactionWithStatusMeta {
             transaction: EncodedTransaction::encode(self.transaction, encoding),
             meta,
-=======
-    pub fn transaction_signature(&self) -> &Signature {
-        match self {
-            Self::MissingMetadata(transaction) => &transaction.signatures[0],
-            Self::Complete(VersionedTransactionWithStatusMeta { transaction, .. }) => {
-                &transaction.signatures[0]
-            }
-        }
-    }
-
-    pub fn into_legacy_transaction_with_meta(self) -> Option<LegacyTransactionWithStatusMeta> {
-        match self {
-            TransactionWithStatusMeta::MissingMetadata(transaction) => {
-                Some(LegacyTransactionWithStatusMeta {
-                    transaction,
-                    meta: None,
-                })
-            }
-            TransactionWithStatusMeta::Complete(tx_with_meta) => {
-                tx_with_meta.into_legacy_transaction_with_meta()
-            }
-        }
-    }
-}
-
-impl VersionedTransactionWithStatusMeta {
-    pub fn account_keys(&self) -> AccountKeys {
-        AccountKeys::new(
-            self.transaction.message.static_account_keys(),
-            Some(&self.meta.loaded_addresses),
-        )
-    }
-
-    pub fn into_legacy_transaction_with_meta(self) -> Option<LegacyTransactionWithStatusMeta> {
-        Some(LegacyTransactionWithStatusMeta {
-            transaction: self.transaction.into_legacy_transaction()?,
-            meta: Some(self.meta),
-        })
-    }
-}
-
-impl Encodable for LegacyTransactionWithStatusMeta {
-    type Encoded = EncodedTransactionWithStatusMeta;
-    fn encode(self, encoding: UiTransactionEncoding) -> Self::Encoded {
-        Self::Encoded {
-            transaction: self.transaction.encode(encoding),
-            meta: self.meta.map(|meta| match encoding {
-                UiTransactionEncoding::JsonParsed => {
-                    UiTransactionStatusMeta::parse(meta, &self.transaction.message)
-                }
-                _ => UiTransactionStatusMeta::from(meta),
-            }),
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
         }
     }
 }
@@ -737,64 +639,16 @@ pub struct EncodedTransactionWithStatusMeta {
     pub meta: Option<UiTransactionStatusMeta>,
 }
 
-<<<<<<< HEAD
 impl TransactionStatusMeta {
     fn encode(self, encoding: UiTransactionEncoding, message: &Message) -> UiTransactionStatusMeta {
         match encoding {
             UiTransactionEncoding::JsonParsed => UiTransactionStatusMeta::parse(self, message),
             _ => self.into(),
-=======
-#[derive(Debug, Clone, PartialEq)]
-pub struct ConfirmedTransactionWithStatusMeta {
-    pub slot: Slot,
-    pub tx_with_meta: TransactionWithStatusMeta,
-    pub block_time: Option<UnixTimestamp>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct VersionedConfirmedTransactionWithStatusMeta {
-    pub slot: Slot,
-    pub tx_with_meta: VersionedTransactionWithStatusMeta,
-    pub block_time: Option<UnixTimestamp>,
-}
-
-pub struct LegacyConfirmedTransactionWithStatusMeta {
-    pub slot: Slot,
-    pub tx_with_meta: LegacyTransactionWithStatusMeta,
-    pub block_time: Option<UnixTimestamp>,
-}
-
-impl Encodable for LegacyConfirmedTransactionWithStatusMeta {
-    type Encoded = EncodedConfirmedTransactionWithStatusMeta;
-    fn encode(self, encoding: UiTransactionEncoding) -> Self::Encoded {
-        Self::Encoded {
-            slot: self.slot,
-            transaction: self.tx_with_meta.encode(encoding),
-            block_time: self.block_time,
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
         }
     }
 }
 
-<<<<<<< HEAD
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
-=======
-impl ConfirmedTransactionWithStatusMeta {
-    /// Downgrades a versioned confirmed transaction into a legacy
-    /// confirmed transaction if it contains a legacy transaction.
-    pub fn into_legacy_confirmed_transaction(
-        self,
-    ) -> Option<LegacyConfirmedTransactionWithStatusMeta> {
-        Some(LegacyConfirmedTransactionWithStatusMeta {
-            tx_with_meta: self.tx_with_meta.into_legacy_transaction_with_meta()?,
-            block_time: self.block_time,
-            slot: self.slot,
-        })
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
     Binary, // Legacy. Retained for RPC backwards compatibility

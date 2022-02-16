@@ -39,12 +39,8 @@ use {
         timing::timestamp,
         transaction,
     },
-<<<<<<< HEAD
-    solana_transaction_status::ConfirmedBlock,
+    solana_transaction_status::{ConfirmedBlock, ConfirmedBlockWithOptionalMetadata},
     solana_vote_program::vote_state::Vote,
-=======
-    solana_transaction_status::{ConfirmedBlock, LegacyConfirmedBlock},
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
@@ -282,7 +278,7 @@ impl RpcNotifier {
 }
 
 fn filter_block_result_txs(
-    mut block: LegacyConfirmedBlock,
+    mut block: ConfirmedBlock,
     last_modified_slot: Slot,
     params: &BlockSubscriptionParams,
 ) -> Option<RpcBlockUpdate> {
@@ -301,7 +297,7 @@ fn filter_block_result_txs(
         }
     }
 
-    let block = block.configure(
+    let block = ConfirmedBlockWithOptionalMetadata::from(block).configure(
         params.encoding,
         params.transaction_details,
         params.show_rewards,
@@ -962,31 +958,10 @@ impl RpcSubscriptions {
                                 if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
                                     break;
                                 }
-<<<<<<< HEAD
                                 match blockstore.get_complete_block(s, false) {
                                     Ok(block) => {
-                                        if let Some(res) = filter_block_result_txs(block, s, params)
-=======
-
-                                let block_update_result = blockstore
-                                    .get_complete_block(s, false)
-                                    .map_err(|e| {
-                                        error!("get_complete_block error: {}", e);
-                                        RpcBlockUpdateError::BlockStoreError
-                                    })
-                                    .and_then(|versioned_block| {
-                                        ConfirmedBlock::from(versioned_block)
-                                            .into_legacy_block()
-                                            .ok_or(
-                                                RpcBlockUpdateError::UnsupportedTransactionVersion,
-                                            )
-                                    });
-
-                                match block_update_result {
-                                    Ok(block_update) => {
                                         if let Some(block_update) =
-                                            filter_block_result_txs(block_update, s, params)
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+                                            filter_block_result_txs(block, s, params)
                                         {
                                             notifier.notify(
                                                 Response {
@@ -1431,15 +1406,12 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
-<<<<<<< HEAD
         let block = blockstore.get_complete_block(slot, false).unwrap();
-        let block = block.configure(params.encoding, params.transaction_details, false);
-=======
-        let confirmed_block =
-            ConfirmedBlock::from(blockstore.get_complete_block(slot, false).unwrap());
-        let legacy_block = confirmed_block.into_legacy_block().unwrap();
-        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+        let block = ConfirmedBlockWithOptionalMetadata::from(block).configure(
+            params.encoding,
+            params.transaction_details,
+            false,
+        );
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1543,23 +1515,18 @@ pub(crate) mod tests {
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
         // make sure it filtered out the other keypairs
-<<<<<<< HEAD
         let mut block = blockstore.get_complete_block(slot, false).unwrap();
         block.transactions.retain(|tx| {
             tx.transaction
-=======
-        let confirmed_block =
-            ConfirmedBlock::from(blockstore.get_complete_block(slot, false).unwrap());
-        let mut legacy_block = confirmed_block.into_legacy_block().unwrap();
-        legacy_block.transactions.retain(|tx_with_meta| {
-            tx_with_meta
-                .transaction
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
                 .message
                 .account_keys
                 .contains(&keypair1.pubkey())
         });
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let block = ConfirmedBlockWithOptionalMetadata::from(block).configure(
+            params.encoding,
+            params.transaction_details,
+            false,
+        );
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1655,15 +1622,12 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
-<<<<<<< HEAD
         let block = blockstore.get_complete_block(slot, false).unwrap();
-        let block = block.configure(params.encoding, params.transaction_details, false);
-=======
-        let confirmed_block =
-            ConfirmedBlock::from(blockstore.get_complete_block(slot, false).unwrap());
-        let legacy_block = confirmed_block.into_legacy_block().unwrap();
-        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
+        let block = ConfirmedBlockWithOptionalMetadata::from(block).configure(
+            params.encoding,
+            params.transaction_details,
+            false,
+        );
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),

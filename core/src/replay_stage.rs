@@ -3024,7 +3024,7 @@ pub mod tests {
             transaction::TransactionError,
         },
         solana_streamer::socket::SocketAddrSpace,
-        solana_transaction_status::TransactionWithStatusMeta,
+        solana_transaction_status::TransactionWithMetadata,
         solana_vote_program::{
             vote_state::{VoteState, VoteStateVersions},
             vote_transaction,
@@ -3884,33 +3884,10 @@ pub mod tests {
             .into_iter();
 
             let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
-<<<<<<< HEAD
-            assert_eq!(confirmed_block.transactions.len(), 3);
-
-            for TransactionWithStatusMeta { transaction, meta } in
-                confirmed_block.transactions.into_iter()
-            {
-                if transaction.signatures[0] == signatures[0] {
-                    let meta = meta.unwrap();
-                    assert_eq!(meta.status, Ok(()));
-                } else if transaction.signatures[0] == signatures[1] {
-                    let meta = meta.unwrap();
-                    assert_eq!(
-                        meta.status,
-                        Err(TransactionError::InstructionError(
-                            0,
-                            InstructionError::Custom(1)
-                        ))
-                    );
-                } else {
-                    assert_eq!(meta, None);
-                }
-            }
-=======
             let actual_tx_results: Vec<_> = confirmed_block
                 .transactions
                 .into_iter()
-                .map(|VersionedTransactionWithStatusMeta { transaction, meta }| {
+                .map(|TransactionWithMetadata { transaction, meta }| {
                     (transaction.signatures[0], meta.status)
                 })
                 .collect();
@@ -3926,7 +3903,6 @@ pub mod tests {
             ];
             assert_eq!(actual_tx_results, expected_tx_results);
             assert!(test_signatures_iter.next().is_none());
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }

@@ -10,8 +10,9 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_transaction_status::{
-        ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
-        TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
+        ConfirmedBlock, ConfirmedBlockWithOptionalMetadata, InnerInstructions, Reward, RewardType,
+        TransactionByAddrInfo, TransactionStatusMeta, TransactionTokenBalance,
+        TransactionWithMetadata, TransactionWithOptionalMetadata,
     },
     std::{
         convert::{TryFrom, TryInto},
@@ -111,15 +112,9 @@ impl From<generated::Reward> for Reward {
     }
 }
 
-<<<<<<< HEAD
 impl From<ConfirmedBlock> for generated::ConfirmedBlock {
     fn from(confirmed_block: ConfirmedBlock) -> Self {
         let ConfirmedBlock {
-=======
-impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
-    fn from(confirmed_block: VersionedConfirmedBlock) -> Self {
-        let VersionedConfirmedBlock {
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
             previous_blockhash,
             blockhash,
             parent_slot,
@@ -141,7 +136,7 @@ impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
     }
 }
 
-impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
+impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlockWithOptionalMetadata {
     type Error = bincode::Error;
     fn try_from(
         confirmed_block: generated::ConfirmedBlock,
@@ -163,7 +158,8 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
             transactions: transactions
                 .into_iter()
                 .map(|tx| tx.try_into())
-                .collect::<std::result::Result<Vec<TransactionWithStatusMeta>, Self::Error>>()?,
+                .collect::<std::result::Result<Vec<TransactionWithOptionalMetadata>, Self::Error>>(
+                )?,
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
             block_time: block_time.map(|generated::UnixTimestamp { timestamp }| timestamp),
             block_height: block_height.map(|generated::BlockHeight { block_height }| block_height),
@@ -171,22 +167,8 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
     }
 }
 
-impl From<TransactionWithStatusMeta> for generated::ConfirmedTransaction {
-    fn from(tx_with_meta: TransactionWithStatusMeta) -> Self {
-        match tx_with_meta {
-            TransactionWithStatusMeta::MissingMetadata(transaction) => Self {
-                transaction: Some(generated::Transaction::from(transaction)),
-                meta: None,
-            },
-            TransactionWithStatusMeta::Complete(tx_with_meta) => Self::from(tx_with_meta),
-        }
-    }
-}
-
-<<<<<<< HEAD
-=======
-impl From<VersionedTransactionWithStatusMeta> for generated::ConfirmedTransaction {
-    fn from(value: VersionedTransactionWithStatusMeta) -> Self {
+impl From<TransactionWithMetadata> for generated::ConfirmedTransaction {
+    fn from(value: TransactionWithMetadata) -> Self {
         Self {
             transaction: Some(value.transaction.into()),
             meta: Some(value.meta.into()),
@@ -194,19 +176,13 @@ impl From<VersionedTransactionWithStatusMeta> for generated::ConfirmedTransactio
     }
 }
 
->>>>>>> d5dec989b9 (Enforce tx metadata upload with static types (#23028))
-impl TryFrom<generated::ConfirmedTransaction> for TransactionWithStatusMeta {
+impl TryFrom<generated::ConfirmedTransaction> for TransactionWithOptionalMetadata {
     type Error = bincode::Error;
     fn try_from(value: generated::ConfirmedTransaction) -> std::result::Result<Self, Self::Error> {
         let meta = value.meta.map(|meta| meta.try_into()).transpose()?;
-        let transaction = value.transaction.expect("transaction is required").into();
-        Ok(match meta {
-            Some(meta) => Self::Complete(VersionedTransactionWithStatusMeta { transaction, meta }),
-            None => Self::MissingMetadata(
-                transaction
-                    .into_legacy_transaction()
-                    .expect("meta is required for versioned transactions"),
-            ),
+        Ok(Self {
+            transaction: value.transaction.expect("transaction is required").into(),
+            meta,
         })
     }
 }
