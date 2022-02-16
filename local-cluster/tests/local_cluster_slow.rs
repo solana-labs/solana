@@ -725,13 +725,19 @@ fn find_latest_replayed_slot_from_ledger(
                 // Wait for the slot to be replayed
                 loop {
                     info!("Waiting for slot {} to be replayed", latest_slot);
-                    if !blockstore
+                    let replayed_transactions = blockstore
                         .map_transactions_to_statuses(
                             latest_slot,
                             non_tick_entry.transactions.clone().into_iter(),
                         )
-                        .is_empty()
-                    {
+                        .unwrap_or_else(|_| {
+                            info!(
+                                "Transaction statuses for slot {} haven't been written yet",
+                                latest_slot
+                            );
+                            Vec::new()
+                        });
+                    if !replayed_transactions.is_empty() {
                         return (
                             latest_slot,
                             AncestorIterator::new(latest_slot, &blockstore).collect(),

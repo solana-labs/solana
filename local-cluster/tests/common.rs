@@ -250,6 +250,10 @@ pub fn run_cluster_partition<C>(
         ..ValidatorConfig::default_for_test()
     };
 
+    // Enabled so that transaction statuses are written to blockstore which enables
+    // tests to detect when a block has been replayed.
+    validator_config.rpc_config.enable_rpc_transaction_history = true;
+
     // Returns:
     // 1) The keys for the validators
     // 2) The amount of time it would take to iterate through one full iteration of the given
