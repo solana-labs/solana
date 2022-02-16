@@ -452,6 +452,17 @@ impl BankingStage {
                         break;
                     }
                 }
+<<<<<<< HEAD
+=======
+            })
+            .collect();
+
+        if !packet_vec.is_empty() {
+            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
+            if let Err(SendPktsError::IoError(ioerr, num_failed)) = batch_send(socket, &packet_vec)
+            {
+                return (Err(ioerr), packet_vec.len().saturating_sub(num_failed));
+>>>>>>> 115d71536 (forward_buffered_packets return packet count in error path (#23167))
             }
         }
 
