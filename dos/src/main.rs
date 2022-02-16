@@ -6,12 +6,18 @@ use {
     solana_client::rpc_client::RpcClient,
     solana_core::serve_repair::RepairProtocol,
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
+    //solana_sdk::example_mocks::solana_client,
     solana_sdk::pubkey::Pubkey,
-    solana_sdk::timing::timestamp,
     // TODO(klykov): maybe later will move to test_tx.rs
     solana_sdk::{
-        hash::Hash, instruction::CompiledInstruction, signature::Keypair, stake,
-        system_instruction::SystemInstruction, system_program, transaction::Transaction,
+        hash::Hash,
+        instruction::CompiledInstruction,
+        instruction::{AccountMeta, Instruction},
+        signature::{Keypair, Signer},
+        stake,
+        system_instruction::SystemInstruction,
+        system_program,
+        transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -58,18 +64,39 @@ fn test_multisig_tx(
     )];
 
     if transaction_params.valid_signatures {
-        let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
-            .map(|_| Keypair::new())
-            .collect();
-        let keypairs: Vec<&Keypair> = kpvals.iter().collect();
+        if transaction_params.with_payer {
+            let payer = Keypair::new();
+            let instruction = Instruction::new_with_bincode(
+                program_ids[0],
+                &transfer_instruction,
+                vec![
+                    AccountMeta::new(program_ids[0], true),
+                    AccountMeta::new(program_ids[1], false),
+                ],
+            );
+            let tx = Transaction::new_signed_with_payer(
+                &[instruction],
+                Some(&payer.pubkey()),
+                &[&payer],
+                blockhash_time.0,
+            );
+            tx
+        } else {
+            // this way it wil end up filtered at legacy.rs#L217 (banking_stage)
+            // because "a program cannot be payer"
+            let kpvals: Vec<Keypair> = (0..transaction_params.num_sign)
+                .map(|_| Keypair::new())
+                .collect();
+            let keypairs: Vec<&Keypair> = kpvals.iter().collect();
 
-        Transaction::new_with_compiled_instructions(
-            &keypairs,
-            &[],
-            blockhash_time.0,
-            program_ids,
-            instructions,
-        )
+            Transaction::new_with_compiled_instructions(
+                &keypairs,
+                &[],
+                blockhash_time.0,
+                program_ids,
+                instructions,
+            )
+        }
     } else {
         let mut tx = Transaction::new_with_compiled_instructions(
             &[] as &[&Keypair; 0],
@@ -86,9 +113,10 @@ fn test_multisig_tx(
 /// Options for data_type=transaction
 struct TransactionParams {
     unique_transactions: bool, // use unique transactions
-    num_sign: usize,          // number of signatures in a transaction
-    valid_block_hash: bool,   // use valid blockhash or random
-    valid_signatures: bool,   // use valid signatures or not
+    num_sign: usize,           // number of signatures in a transaction
+    valid_block_hash: bool,    // use valid blockhash or random
+    valid_signatures: bool,    // use valid signatures or not
+    with_payer: bool,          // provide a valid payer
 }
 
 fn run_dos(
@@ -332,6 +360,13 @@ fn main() {
                 .help("Generate unique transaction")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("with_payer")
+                .long("provide-valid-payer")
+                .takes_value(false)
+                .help("Pass a valid payer to each transaction")
+                .hidden(true),
+        )
         .get_matches();
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
@@ -354,6 +389,7 @@ fn main() {
             num_sign: value_t!(matches, "num_sign", usize).unwrap_or(2),
             valid_block_hash: matches.is_present("valid_blockhash"),
             valid_signatures: matches.is_present("valid_sign"),
+            with_payer: matches.is_present("with_payer"),
         }),
         _ => None,
     };
@@ -381,7 +417,6 @@ fn main() {
     }
 
     info!("done found {} nodes", nodes.len());
-
     run_dos(
         &nodes,
         0,
@@ -457,6 +492,7 @@ pub mod test {
             num_sign: 2,
             valid_block_hash: false, // use valid blockhash or random
             valid_signatures: false, // use valid signatures or not
+            with_payer: false,
         });
 
         run_dos(
