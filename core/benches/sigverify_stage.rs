@@ -112,19 +112,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     });
 }
 
-<<<<<<< HEAD
-#[bench]
-fn bench_sigverify_stage(bencher: &mut Bencher) {
-    solana_logger::setup();
-    let (packet_s, packet_r) = channel();
-    let (verified_s, verified_r) = unbounded();
-    let verifier = TransactionSigVerifier::default();
-    let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
-
-    let now = Instant::now();
-=======
 fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
->>>>>>> 83d31c9e6 (shrink batches when over 80% of the space is wasted (#23066))
     let len = 4096;
     let chunk_size = 1024;
     if use_same_tx {
@@ -152,7 +140,7 @@ fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
     trace!("start");
-    let (packet_s, packet_r) = unbounded();
+    let (packet_s, packet_r) = channel();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::default();
     let stage = SigVerifyStage::new(packet_r, verified_s, verifier);

@@ -248,10 +248,7 @@ impl SigVerifyStage {
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-<<<<<<< HEAD
-        let batches = verifier.verify_batches(batches);
-=======
-        let mut batches = verifier.verify_batches(batches, num_valid_packets);
+        let mut batches = verifier.verify_batches(batches);
         verify_batch_time.stop();
 
         let mut shrink_time = Measure::start("sigverify_shrink_time");
@@ -265,7 +262,6 @@ impl SigVerifyStage {
         let total_shrinks = start_len.saturating_sub(batches.len());
         shrink_time.stop();
 
->>>>>>> 83d31c9e6 (shrink batches when over 80% of the space is wasted (#23066))
         sendr.send(batches)?;
         verify_batch_time.stop();
 
@@ -373,6 +369,7 @@ mod tests {
     use crossbeam_channel::unbounded;
     use solana_perf::packet::to_packet_batches;
     use solana_perf::test_tx::test_tx;
+    use std::sync::mpsc::channel;
     use {super::*, solana_perf::packet::Packet};
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
@@ -417,7 +414,7 @@ mod tests {
     fn test_sigverify_stage() {
         solana_logger::setup();
         trace!("start");
-        let (packet_s, packet_r) = unbounded();
+        let (packet_s, packet_r) = channel();
         let (verified_s, verified_r) = unbounded();
         let verifier = TransactionSigVerifier::default();
         let stage = SigVerifyStage::new(packet_r, verified_s, verifier);

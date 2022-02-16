@@ -499,9 +499,6 @@ impl Deduper {
     }
 }
 
-<<<<<<< HEAD
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
-=======
 //inplace shrink a batch of packets
 pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
     let mut valid_batch_ix = 0;
@@ -539,8 +536,7 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
     last_valid_batch
 }
 
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
->>>>>>> 83d31c9e6 (shrink batches when over 80% of the space is wasted (#23066))
+pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("CPU ECDSA for {}", packet_count);
