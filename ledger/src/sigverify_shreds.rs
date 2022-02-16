@@ -371,8 +371,8 @@ pub fn sign_shreds_gpu(
     let api = perf_libs::api();
     let packet_count = count_packets_in_batches(batches);
     if api.is_none() || packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
-        panic!("sign with cpu");
-        // return sign_shreds_cpu(keypair, batches);
+        error!("sign with cpu");
+        return sign_shreds_cpu(keypair, batches);
     }
     let api = api.unwrap();
     let pinned_keypair = pinned_keypair.as_ref().unwrap();
