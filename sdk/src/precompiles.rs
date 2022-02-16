@@ -86,7 +86,8 @@ lazy_static! {
         ),
         Precompile::new(
             crate::ed25519_program::id(),
-            Some(prevent_calling_precompiles_as_programs::id()), crate::ed25519_instruction::verify,
+            Some(prevent_calling_precompiles_as_programs::id()),
+            crate::ed25519_instruction::verify,
         ),
     ];
 }
