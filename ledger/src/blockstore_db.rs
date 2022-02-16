@@ -318,40 +318,18 @@ impl Rocks {
             new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
             new_cf_descriptor::<Root>(&access_type, &oldest_slot),
             new_cf_descriptor::<Index>(&access_type, &oldest_slot),
-            match options.shred_storage_type {
-                ShredStorageType::RocksLevel => {
-                    new_cf_descriptor::<ShredData>(&access_type, &oldest_slot)
-                }
-                ShredStorageType::RocksFifo => {
-                    if options.shred_data_cf_size > FIFO_WRITE_BUFFER_SIZE {
-                        new_cf_descriptor_fifo::<ShredData>(&options.shred_data_cf_size)
-                    } else {
-                        warn!(
-                            "shred_data_cf_size is must be greater than {} for RocksFifo.",
-                            FIFO_WRITE_BUFFER_SIZE
-                        );
-                        warn!("Fall back to ShredStorageType::RocksLevel for cf::ShredData.");
-                        new_cf_descriptor::<ShredData>(&access_type, &oldest_slot)
-                    }
-                }
-            },
-            match options.shred_storage_type {
-                ShredStorageType::RocksLevel => {
-                    new_cf_descriptor::<ShredCode>(&access_type, &oldest_slot)
-                }
-                ShredStorageType::RocksFifo => {
-                    if options.shred_code_cf_size > FIFO_WRITE_BUFFER_SIZE {
-                        new_cf_descriptor_fifo::<ShredCode>(&options.shred_code_cf_size)
-                    } else {
-                        warn!(
-                            "shred_code_cf_size is must be greater than {} for RocksFifo.",
-                            FIFO_WRITE_BUFFER_SIZE
-                        );
-                        warn!("Fall back to ShredStorageType::RocksLevel for cf::ShredCode.");
-                        new_cf_descriptor::<ShredCode>(&access_type, &oldest_slot)
-                    }
-                }
-            },
+            new_cf_descriptor_shreds::<ShredData>(
+                &options.shred_storage_type,
+                &access_type,
+                &oldest_slot,
+                &options.shred_data_cf_size,
+            ),
+            new_cf_descriptor_shreds::<ShredCode>(
+                &options.shred_storage_type,
+                &access_type,
+                &oldest_slot,
+                &options.shred_code_cf_size,
+            ),
             new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
             new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
             new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
@@ -1435,6 +1413,35 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     }
 
     options
+}
+
+/// Constructs and returns a ColumnFamilyDescriptor based on the
+/// specified ShredStorageType.
+fn new_cf_descriptor_shreds<C: 'static + Column + ColumnName>(
+    storage_type: &ShredStorageType,
+    access_type: &AccessType,
+    oldest_slot: &OldestSlot,
+    max_cf_size: &u64,
+) -> ColumnFamilyDescriptor {
+    match storage_type {
+        ShredStorageType::RocksLevel => new_cf_descriptor::<C>(access_type, oldest_slot),
+        ShredStorageType::RocksFifo => {
+            if *max_cf_size > FIFO_WRITE_BUFFER_SIZE {
+                new_cf_descriptor_fifo::<C>(max_cf_size)
+            } else {
+                warn!(
+                    "{} cf_size must be greater than {} when using ShredStorageType::RocksFifo.",
+                    C::NAME,
+                    FIFO_WRITE_BUFFER_SIZE
+                );
+                warn!(
+                    "Fall back to ShredStorageType::RocksLevel for cf::{}.",
+                    C::NAME
+                );
+                new_cf_descriptor::<C>(access_type, oldest_slot)
+            }
+        }
+    }
 }
 
 fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(
