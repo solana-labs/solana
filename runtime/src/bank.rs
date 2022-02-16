@@ -13041,25 +13041,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "DqaWg7EVKzb5Fpe92zNBtXAWqLwcedgHDicYrCBnf3QK"
+                    "CMCWTWsU67zjmayMhSMGBTzHbW1WMCtkM5m7xk9qSnY5"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "AYdhzhKrM74r9XuZBDGcHeFzg2DEtp1boggnEnzDjZSq"
+                    "4kbXeShX8vMnRuuADCkxSEir1oc2PrBNbx6vPkWcDtJU"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "EsbPVYzo1qz5reEUH5okKW4ExB6WbcidkVdW5mzpFn7C"
+                    "CSZ8QCDF8qhqKDxafPzjNJpHcRAXmQzAb8eUi1Emt35E"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "H3DWrQ6FqbLkFNDxbWQ62UKRbw2dbuxf3oVF2VpBk6Ga"
+                    "Ewh1SYKy8eiSE77sEvjav33SznfWYSwa5TwqbiYWseG2"
                 );
                 break;
             }
@@ -13287,7 +13287,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![10, 1, 7]);
+        assert_eq!(alive_counts, vec![11, 1, 7]);
     }
 
     #[test]
@@ -13335,7 +13335,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 11);
+        assert_eq!(consumed_budgets, 12);
     }
 
     #[test]
