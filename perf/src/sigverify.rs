@@ -508,22 +508,22 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
     let mut valid_batch_ix = 0;
     let mut valid_packet_ix = 0;
     let mut last_valid_batch = 0;
-    for j in 0..batches.len() {
-        for jj in 0..batches[j].packets.len() {
-            if batches[j].packets[jj].meta.discard() {
+    for batch_ix in 0..batches.len() {
+        for packet_ix in 0..batches[batch_ix].packets.len() {
+            if batches[batch_ix].packets[packet_ix].meta.discard() {
                 continue;
             }
-            last_valid_batch = j.saturating_add(1);
+            last_valid_batch = batch_ix.saturating_add(1);
             let mut found_spot = false;
-            while valid_batch_ix < j && !found_spot {
+            while valid_batch_ix < batch_ix && !found_spot {
                 while valid_packet_ix < batches[valid_batch_ix].packets.len() {
                     if batches[valid_batch_ix].packets[valid_packet_ix]
                         .meta
                         .discard()
                     {
                         batches[valid_batch_ix].packets[valid_packet_ix] =
-                            batches[j].packets[jj].clone();
-                        batches[j].packets[jj].meta.set_discard(true);
+                            batches[batch_ix].packets[packet_ix].clone();
+                        batches[batch_ix].packets[packet_ix].meta.set_discard(true);
                         last_valid_batch = valid_batch_ix.saturating_add(1);
                         found_spot = true;
                         break;

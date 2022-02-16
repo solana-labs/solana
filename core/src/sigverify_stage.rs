@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn test_sigverify_stage() {
         solana_logger::setup();
-        println!("start");
+        trace!("start");
         let (packet_s, packet_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
         let verifier = TransactionSigVerifier::default();
@@ -430,7 +430,7 @@ mod tests {
         let use_same_tx = true;
         let now = Instant::now();
         let mut batches = gen_batches(use_same_tx);
-        println!(
+        trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
             batches.len()
@@ -444,7 +444,7 @@ mod tests {
             }
         }
         let mut received = 0;
-        println!("sent: {}", sent_len);
+        trace!("sent: {}", sent_len);
         loop {
             if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 while let Some(v) = verifieds.pop() {
@@ -456,7 +456,7 @@ mod tests {
                 }
             }
         }
-        println!("received: {}", received);
+        trace!("received: {}", received);
         drop(packet_s);
         stage.join().unwrap();
     }
