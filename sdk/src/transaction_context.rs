@@ -229,10 +229,9 @@ impl TransactionContext {
     }
 
     /// Returns the owner of the current InstructionContexts program account
-    pub fn get_current_loader_key(&self) -> Result<Pubkey, InstructionError> {
+    pub fn get_current_loader_key(&self) -> Result<&Pubkey, InstructionError> {
         let instruction_context = self.get_current_instruction_context()?;
-        let program_account = instruction_context.try_borrow_program_account(self)?;
-        Ok(*program_account.get_owner())
+        instruction_context.get_loader_key(self)
     }
 
     /// Gets the return data of the current InstructionContext or any above
@@ -399,6 +398,18 @@ impl InstructionContext {
             index_in_instruction,
             account,
         })
+    }
+
+    /// Gets the key of the second last program account of this Instruction
+    ///
+    /// This is the owner of the last program account.
+    pub fn get_loader_key<'a, 'b: 'a>(
+        &'a self,
+        transaction_context: &'b TransactionContext,
+    ) -> Result<&'b Pubkey, InstructionError> {
+        let index_in_transaction =
+            self.get_index_in_transaction(self.program_accounts.len().saturating_sub(2))?;
+        transaction_context.get_key_of_account_at_index(index_in_transaction)
     }
 
     /// Gets the key of the last program account of this Instruction
