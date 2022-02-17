@@ -5,9 +5,7 @@
 use {
     crate::{
         decode_error::DecodeError,
-        feature_set::{
-            ed25519_program_enabled, prevent_calling_precompiles_as_programs, FeatureSet,
-        },
+        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         instruction::CompiledInstruction,
         pubkey::Pubkey,
     },
@@ -88,7 +86,7 @@ lazy_static! {
         ),
         Precompile::new(
             crate::ed25519_program::id(),
-            Some(ed25519_program_enabled::id()),
+            Some(prevent_calling_precompiles_as_programs::id()),
             crate::ed25519_instruction::verify,
         ),
     ];
