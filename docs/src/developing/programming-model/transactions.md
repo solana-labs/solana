@@ -43,7 +43,7 @@ not requiring signatures.
 #### Account Addresses Format
 
 The addresses that require signatures appear at the beginning of the account
-address array, with addresses requesting write access first and read-only
+address array, with addresses requesting read-write access first, and read-only
 accounts following. The addresses that do not require signatures follow the
 addresses that do, again with read-write accounts first and read-only accounts
 following.
@@ -130,7 +130,7 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 The instruction's [program id](terminology.md#program-id) specifies which
 program will process this instruction. The program's account's owner specifies
-which loader should be used to load and execute the program and the data
+which loader should be used to load and execute the program, and the data
 contains information about how the runtime should execute the program.
 
 In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md),
@@ -145,7 +145,7 @@ are handled differently in that they are built directly into the Solana runtime.
 ### Accounts
 
 The accounts referenced by an instruction represent on-chain state and serve as
-both the inputs and outputs of a program. More information about Accounts can be
+both the inputs and outputs of a program. More information about accounts can be
 found in the [Accounts](accounts.md) section.
 
 ### Instruction data
@@ -157,8 +157,8 @@ perform, and any additional information those operations may need above and
 beyond what the accounts contain.
 
 Programs are free to specify how information is encoded into the instruction
-data byte array. The choice of how data is encoded should take into account the
-overhead of decoding since that step is performed by the program on-chain. It's
+data byte array. The choice of how data is encoded should take into calculate the
+overhead of decoding, since that step is performed by the program on-chain. It's
 been observed that some common encodings (Rust's bincode for example) are very
 inefficient.
 
