@@ -83,7 +83,7 @@ operation the program controls or performs.
 A created account is initialized to be _owned_ by a built-in program called the
 System program and is called a _system account_ aptly. An account includes
 "owner" metadata. The owner is a program id. The runtime grants the program
-write access to the account if it's id matches the owner. For the case of the
+write access to the account if its id matches the owner. For the case of the
 System program, the runtime allows clients to transfer lamports and importantly
 _assign_ account ownership, meaning changing the owner to a different program id. If
 an account is not owned by a program, the program is only permitted to read its
