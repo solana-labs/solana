@@ -95,10 +95,7 @@ impl Default for TestValidatorGenesis {
             fee_rate_governor: FeeRateGovernor::default(),
             ledger_path: Option::<PathBuf>::default(),
             rent: Rent::default(),
-            rpc_config: JsonRpcConfig {
-                full_api: true,
-                ..JsonRpcConfig::default()
-            },
+            rpc_config: JsonRpcConfig::default_for_test(),
             rpc_ports: Option::<(u16, u16)>::default(),
             warp_slot: Option::<Slot>::default(),
             no_bpf_jit: bool::default(),
