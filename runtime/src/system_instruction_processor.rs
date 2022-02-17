@@ -20,6 +20,7 @@ use {
             NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
         },
         system_program,
+        transaction_context::InstructionContext,
     },
     std::collections::HashSet,
 };
@@ -70,11 +71,11 @@ impl Address {
 }
 
 fn allocate(
+    invoke_context: &InvokeContext,
+    signers: &HashSet<Pubkey>,
     account: &mut AccountSharedData,
     address: &Address,
     space: u64,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !address.is_signer(signers) {
         ic_msg!(
@@ -112,11 +113,11 @@ fn allocate(
 }
 
 fn assign(
+    invoke_context: &InvokeContext,
+    signers: &HashSet<Pubkey>,
     account: &mut AccountSharedData,
     address: &Address,
     owner: &Pubkey,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
     if account.owner() == owner {
@@ -133,26 +134,27 @@ fn assign(
 }
 
 fn allocate_and_assign(
+    invoke_context: &InvokeContext,
+    signers: &HashSet<Pubkey>,
     to: &mut AccountSharedData,
     to_address: &Address,
     space: u64,
     owner: &Pubkey,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    allocate(to, to_address, space, signers, invoke_context)?;
-    assign(to, to_address, owner, signers, invoke_context)
+    allocate(invoke_context, signers, to, to_address, space)?;
+    assign(invoke_context, signers, to, to_address, owner)
 }
 
 fn create_account(
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    signers: &HashSet<Pubkey>,
     from: &KeyedAccount,
     to: &KeyedAccount,
     to_address: &Address,
     lamports: u64,
     space: u64,
     owner: &Pubkey,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
@@ -166,16 +168,17 @@ fn create_account(
             return Err(SystemError::AccountAlreadyInUse.into());
         }
 
-        allocate_and_assign(to, to_address, space, owner, signers, invoke_context)?;
+        allocate_and_assign(invoke_context, signers, to, to_address, space, owner)?;
     }
-    transfer(from, to, lamports, invoke_context)
+    transfer(invoke_context, instruction_context, from, to, lamports)
 }
 
 fn transfer_verified(
+    invoke_context: &InvokeContext,
+    _instruction_context: &InstructionContext,
     from: &KeyedAccount,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !from.data_is_empty()? {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
@@ -197,10 +200,11 @@ fn transfer_verified(
 }
 
 fn transfer(
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     from: &KeyedAccount,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !invoke_context
         .feature_set
@@ -219,17 +223,18 @@ fn transfer(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    transfer_verified(from, to, lamports, invoke_context)
+    transfer_verified(invoke_context, instruction_context, from, to, lamports)
 }
 
 fn transfer_with_seed(
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     from: &KeyedAccount,
     from_base: &KeyedAccount,
+    to: &KeyedAccount,
     from_seed: &str,
     from_owner: &Pubkey,
-    to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !invoke_context
         .feature_set
@@ -260,7 +265,7 @@ fn transfer_with_seed(
         return Err(SystemError::AddressWithSeedMismatch.into());
     }
 
-    transfer_verified(from, to, lamports, invoke_context)
+    transfer_verified(invoke_context, instruction_context, from, to, lamports)
 }
 
 pub mod instruction_account_indices {
@@ -356,14 +361,15 @@ pub fn process_instruction(
             )?;
             let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
             create_account(
+                invoke_context,
+                instruction_context,
+                &signers,
                 from,
                 to,
                 &to_address,
                 lamports,
                 space,
                 &owner,
-                &signers,
-                invoke_context,
             )
         }
         SystemInstruction::CreateAccountWithSeed {
@@ -390,14 +396,15 @@ pub fn process_instruction(
                 invoke_context,
             )?;
             create_account(
+                invoke_context,
+                instruction_context,
+                &signers,
                 from,
                 to,
                 &to_address,
                 lamports,
                 space,
                 &owner,
-                &signers,
-                invoke_context,
             )
         }
         SystemInstruction::Assign { owner } => {
@@ -407,7 +414,7 @@ pub fn process_instruction(
             )?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
-            assign(&mut account, &address, &owner, &signers, invoke_context)
+            assign(invoke_context, &signers, &mut account, &address, &owner)
         }
         SystemInstruction::Transfer { lamports } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
@@ -419,7 +426,7 @@ pub fn process_instruction(
                 keyed_accounts,
                 first_instruction_account + instruction_account_indices::Transfer::To as usize,
             )?;
-            transfer(from, to, lamports, invoke_context)
+            transfer(invoke_context, instruction_context, from, to, lamports)
         }
         SystemInstruction::TransferWithSeed {
             lamports,
@@ -443,13 +450,14 @@ pub fn process_instruction(
                     + instruction_account_indices::TransferWithSeed::To as usize,
             )?;
             transfer_with_seed(
+                invoke_context,
+                instruction_context,
                 from,
                 base,
+                to,
                 &from_seed,
                 &from_owner,
-                to,
                 lamports,
-                invoke_context,
             )
         }
         SystemInstruction::AdvanceNonceAccount => {
@@ -542,7 +550,7 @@ pub fn process_instruction(
             )?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
-            allocate(&mut account, &address, space, &signers, invoke_context)
+            allocate(invoke_context, &signers, &mut account, &address, space)
         }
         SystemInstruction::AllocateWithSeed {
             base,
@@ -562,12 +570,12 @@ pub fn process_instruction(
                 invoke_context,
             )?;
             allocate_and_assign(
+                invoke_context,
+                &signers,
                 &mut account,
                 &address,
                 space,
                 &owner,
-                &signers,
-                invoke_context,
             )
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
@@ -582,7 +590,7 @@ pub fn process_instruction(
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
-            assign(&mut account, &address, &owner, &signers, invoke_context)
+            assign(invoke_context, &signers, &mut account, &address, &owner)
         }
     }
 }
@@ -1282,11 +1290,11 @@ mod tests {
 
         assert_eq!(
             assign(
+                &invoke_context,
+                &HashSet::new(),
                 &mut account,
                 &pubkey.into(),
                 &new_owner,
-                &HashSet::new(),
-                &invoke_context,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -1294,11 +1302,11 @@ mod tests {
         // no change, no signature needed
         assert_eq!(
             assign(
+                &invoke_context,
+                &HashSet::new(),
                 &mut account,
                 &pubkey.into(),
                 &system_program::id(),
-                &HashSet::new(),
-                &invoke_context,
             ),
             Ok(())
         );
@@ -1326,11 +1334,11 @@ mod tests {
 
         assert_eq!(
             assign(
+                &invoke_context,
+                &[from].iter().cloned().collect::<HashSet<_>>(),
                 &mut from_account,
                 &from.into(),
                 &new_owner,
-                &[from].iter().cloned().collect::<HashSet<_>>(),
-                &invoke_context,
             ),
             Ok(())
         );
