@@ -19,6 +19,7 @@ use {
     std::convert::TryInto,
 };
 
+#[cfg(not(target_arch = "bpf"))]
 const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
 
 /// This struct includes the cryptographic proof *and* the account data information needed to verify

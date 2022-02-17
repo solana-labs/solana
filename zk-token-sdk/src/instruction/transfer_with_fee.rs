@@ -32,11 +32,16 @@ use {
     subtle::{ConditionallySelectable, ConstantTimeGreater},
 };
 
+#[cfg(not(target_arch = "bpf"))]
 const MAX_FEE_BASIS_POINTS: u64 = 10000;
 
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH: usize = 32;
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH: usize = 32;
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_DELTA_BIT_LENGTH: usize = 64;
 
 #[cfg(not(target_arch = "bpf"))]

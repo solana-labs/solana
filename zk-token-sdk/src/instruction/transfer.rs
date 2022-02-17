@@ -25,8 +25,11 @@ use {
     std::convert::TryInto,
 };
 
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_AMOUNT_LO_BIT_LENGTH: usize = 32;
+#[cfg(not(target_arch = "bpf"))]
 const TRANSFER_AMOUNT_HI_BIT_LENGTH: usize = 32;
 
 #[derive(Clone)]
