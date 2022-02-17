@@ -256,7 +256,7 @@ impl AncestorHashesService {
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
-                        Err(err) => info!("ancestors hashes reponses listener error: {:?}", err),
+                        Err(err) => info!("ancestors hashes responses listener error: {:?}", err),
                     };
                     if exit.load(Ordering::Relaxed) {
                         return;
