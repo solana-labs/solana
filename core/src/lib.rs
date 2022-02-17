@@ -29,6 +29,7 @@ pub mod gen_keys;
 pub mod heaviest_subtree_fork_choice;
 pub mod latest_validator_votes_for_frozen_banks;
 pub mod leader_slot_banking_stage_metrics;
+pub mod leader_slot_banking_stage_timing_metrics;
 pub mod ledger_cleanup_service;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
