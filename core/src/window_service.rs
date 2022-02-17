@@ -293,6 +293,7 @@ fn run_insert<F>(
     completed_data_sets_sender: &CompletedDataSetsSender,
     retransmit_sender: &Sender<Vec<Shred>>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
+    dist_notify_sender: &Sender<Slot>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -328,6 +329,7 @@ where
         Some(retransmit_sender),
         &handle_duplicate,
         metrics,
+        Some(dist_notify_sender),
     )?;
     for index in inserted_indices {
         if repair_infos[index].is_some() {
@@ -460,6 +462,7 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
+        dist_notify_sender: Sender<Slot>,
     ) -> WindowService
     where
         F: 'static
@@ -504,6 +507,7 @@ impl WindowService {
             completed_data_sets_sender,
             retransmit_sender.clone(),
             outstanding_requests,
+            dist_notify_sender,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -566,6 +570,7 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<Shred>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
+        dist_notify_sender: Sender<Slot>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
         let handle_error = || {
@@ -596,6 +601,7 @@ impl WindowService {
                         &completed_data_sets_sender,
                         &retransmit_sender,
                         &outstanding_requests,
+                        &dist_notify_sender,
                     ) {
                         ws_metrics.record_error(&e);
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {

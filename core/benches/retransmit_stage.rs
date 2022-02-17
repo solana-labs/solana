@@ -6,7 +6,13 @@ extern crate test;
 use {
     crossbeam_channel::unbounded,
     log::*,
-    solana_core::retransmit_stage::retransmitter,
+    solana_core::{
+        cluster_nodes::ClusterNodesCache,
+        retransmit_stage::{
+            retransmitter, RetransmitStage, CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        },
+    },
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -108,6 +114,11 @@ fn bench_retransmitter(bencher: &mut Bencher) {
 
     let num_packets = data_shreds.len();
 
+    let cluster_nodes_cache = Arc::new(ClusterNodesCache::<RetransmitStage>::new(
+        CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+        CLUSTER_NODES_CACHE_TTL,
+    ));
+
     let retransmitter_handles = retransmitter(
         Arc::new(sockets),
         bank_forks,
@@ -116,6 +127,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         shreds_receiver,
         Arc::default(), // solana_rpc::max_slots::MaxSlots
         None,
+        cluster_nodes_cache,
     );
 
     let mut index = 0;

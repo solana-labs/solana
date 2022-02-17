@@ -49,8 +49,8 @@ use {
 const MAX_DUPLICATE_COUNT: usize = 2;
 const DEFAULT_LRU_SIZE: usize = 10_000;
 
-const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
-const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
+pub const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
+pub const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
 #[derive(Default)]
 struct RetransmitSlotStats {
@@ -371,11 +371,8 @@ pub fn retransmitter(
     shreds_receiver: Receiver<Vec<Shred>>,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
+    cluster_nodes_cache: Arc<ClusterNodesCache<RetransmitStage>>,
 ) -> JoinHandle<()> {
-    let cluster_nodes_cache = ClusterNodesCache::<RetransmitStage>::new(
-        CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
-        CLUSTER_NODES_CACHE_TTL,
-    );
     let mut hasher_reset_ts = Instant::now();
     let mut stats = RetransmitStats::default();
     let shreds_received = Mutex::new((LruCache::new(DEFAULT_LRU_SIZE), PacketHasher::default()));
@@ -386,6 +383,7 @@ pub fn retransmitter(
         .thread_name(|i| format!("retransmit-{}", i))
         .build()
         .unwrap();
+
     Builder::new()
         .name("solana-retransmitter".to_string())
         .spawn(move || {
@@ -416,8 +414,78 @@ pub fn retransmitter(
         .unwrap()
 }
 
-pub(crate) struct RetransmitStage {
+pub fn shred_stake_notifier(
+    bank_forks: Arc<RwLock<BankForks>>,
+    leader_schedule_cache: Arc<LeaderScheduleCache>,
+    cluster_info: Arc<ClusterInfo>,
+    dist_notify_receiver: Receiver<Slot>,
+    blockstore: Arc<Blockstore>,
+    cluster_nodes_cache: Arc<ClusterNodesCache<RetransmitStage>>,
+) -> JoinHandle<()> {
+    Builder::new()
+        .name("solana-shred-stake-notifier".to_string())
+        .spawn(move || loop {
+            match notify_shred_stake_info(
+                &leader_schedule_cache,
+                &cluster_nodes_cache,
+                &dist_notify_receiver,
+                &blockstore,
+                &cluster_info,
+                &bank_forks,
+            ) {
+                Ok(()) => (),
+                Err(RecvTimeoutError::Timeout) => (),
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        })
+        .unwrap()
+}
+
+fn notify_shred_stake_info(
+    leader_schedule_cache: &LeaderScheduleCache,
+    cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
+    dist_notify_receiver: &Receiver<Slot>,
+    blockstore: &Blockstore,
+    cluster_info: &ClusterInfo,
+    bank_forks: &RwLock<BankForks>,
+) -> Result<(), RecvTimeoutError> {
+    const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+    let slot = dist_notify_receiver.recv_timeout(RECV_TIMEOUT)?;
+
+    let mut start = Measure::start("notify shred stake info");
+
+    let shreds = blockstore.get_data_shreds_for_slot(slot, 0).unwrap();
+
+    let (working_bank, root_bank) = {
+        let bank_forks = bank_forks.read().unwrap();
+        (bank_forks.working_bank(), bank_forks.root_bank())
+    };
+
+    let cluster_nodes = cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
+
+    let pct = cluster_nodes.get_shred_distribution_stakes_pct(
+        &shreds,
+        &root_bank,
+        DATA_PLANE_FANOUT,
+        leader_schedule_cache,
+    );
+
+    start.stop();
+
+    datapoint_info!(
+        "notify_shred_stake_info",
+        ("slot", slot, i64),
+        ("total_time_us", start.as_us(), i64),
+        ("num_shreds", shreds.len(), i64),
+        ("distribution_pct", pct, f64),
+    );
+
+    Ok(())
+}
+
+pub struct RetransmitStage {
     retransmit_thread_handle: JoinHandle<()>,
+    shred_stake_notifier_handle: JoinHandle<()>,
     window_service: WindowService,
     cluster_slots_service: ClusterSlotsService,
 }
@@ -450,6 +518,12 @@ impl RetransmitStage {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = unbounded();
+        let (dist_notify_sender, dist_notify_receiver) = unbounded();
+
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<RetransmitStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
 
         let retransmit_thread_handle = retransmitter(
             retransmit_sockets,
@@ -459,6 +533,16 @@ impl RetransmitStage {
             retransmit_receiver,
             max_slots,
             rpc_subscriptions,
+            cluster_nodes_cache.clone(),
+        );
+
+        let shred_stake_notifier_handle = shred_stake_notifier(
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
+            cluster_info.clone(),
+            dist_notify_receiver,
+            blockstore.clone(),
+            cluster_nodes_cache,
         );
 
         let cluster_slots_service = ClusterSlotsService::new(
@@ -507,10 +591,12 @@ impl RetransmitStage {
             completed_data_sets_sender,
             duplicate_slots_sender,
             ancestor_hashes_replay_update_receiver,
+            dist_notify_sender,
         );
 
         Self {
             retransmit_thread_handle,
+            shred_stake_notifier_handle,
             window_service,
             cluster_slots_service,
         }
@@ -518,6 +604,7 @@ impl RetransmitStage {
 
     pub(crate) fn join(self) -> thread::Result<()> {
         self.retransmit_thread_handle.join()?;
+        self.shred_stake_notifier_handle.join()?;
         self.window_service.join()?;
         self.cluster_slots_service.join()
     }
@@ -596,6 +683,12 @@ mod tests {
 
         let (retransmit_sender, retransmit_receiver) = unbounded();
         let _retransmit_sender = retransmit_sender.clone();
+
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<RetransmitStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
+
         let _t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
@@ -604,6 +697,7 @@ mod tests {
             retransmit_receiver,
             Arc::default(), // MaxSlots
             None,
+            cluster_nodes_cache,
         );
 
         let shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);

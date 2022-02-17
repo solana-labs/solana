@@ -855,6 +855,7 @@ impl Blockstore {
         retransmit_sender: Option<&Sender<Vec<Shred>>>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
+        dist_notify_sender: Option<&Sender<Slot>>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
@@ -899,6 +900,7 @@ impl Blockstore {
                         handle_duplicate,
                         leader_schedule,
                         shred_source,
+                        dist_notify_sender,
                     ) {
                         Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
                         Err(InsertDataShredError::InvalidShred) => {
@@ -965,6 +967,7 @@ impl Blockstore {
                         &handle_duplicate,
                         leader_schedule,
                         ShredSource::Recovered,
+                        dist_notify_sender,
                     ) {
                         Err(InsertDataShredError::Exists) => {
                             metrics.num_recovered_exists += 1;
@@ -1090,6 +1093,7 @@ impl Blockstore {
             None,    // retransmit-sender
             &|_| {}, // handle-duplicates
             &mut BlockstoreInsertionMetrics::default(),
+            None,
         )
     }
 
@@ -1282,6 +1286,7 @@ impl Blockstore {
         handle_duplicate: &F,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
+        dist_notify_sender: Option<&Sender<Slot>>,
     ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError>
     where
         F: Fn(Shred),
@@ -1343,6 +1348,7 @@ impl Blockstore {
             &shred,
             write_batch,
             shred_source,
+            dist_notify_sender,
         )?;
         just_inserted_shreds.insert(shred.id(), shred);
         index_meta_working_set_entry.did_insert_occur = true;
@@ -1545,6 +1551,7 @@ impl Blockstore {
         shred: &Shred,
         write_batch: &mut WriteBatch,
         shred_source: ShredSource,
+        dist_notify_sender: Option<&Sender<Slot>>,
     ) -> Result<Vec<CompletedDataSetInfo>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
@@ -1645,6 +1652,14 @@ impl Blockstore {
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
             );
+
+            // send notification for slot completed without repair
+            if num_repaired == 0 {
+                // TODO reconcile with send_signals?
+                if let Some(sender) = dist_notify_sender {
+                    sender.send(slot_meta.slot).unwrap();
+                }
+            }
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
         Ok(newly_completed_data_sets)
