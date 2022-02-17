@@ -148,6 +148,18 @@ export type SplitStakeParams = {
 };
 
 /**
+ * Split with seed transaction params
+ */
+export type SplitStakeWithSeedParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  splitStakePubkey: PublicKey;
+  basePubkey: PublicKey;
+  seed: string;
+  lamports: number;
+};
+
+/**
  * Withdraw stake instruction params
  */
 export type WithdrawStakeParams = {
@@ -706,25 +718,13 @@ export class StakeProgram {
   }
 
   /**
-   * Generate a Transaction that splits Stake tokens into another stake account
+   * @internal
    */
-  static split(params: SplitStakeParams): Transaction {
+  static splitInstruction(params: SplitStakeParams): TransactionInstruction {
     const {stakePubkey, authorizedPubkey, splitStakePubkey, lamports} = params;
-
-    const transaction = new Transaction();
-    transaction.add(
-      SystemProgram.createAccount({
-        fromPubkey: authorizedPubkey,
-        newAccountPubkey: splitStakePubkey,
-        lamports: 0,
-        space: this.space,
-        programId: this.programId,
-      }),
-    );
     const type = STAKE_INSTRUCTION_LAYOUTS.Split;
     const data = encodeData(type, {lamports});
-
-    return transaction.add({
+    return new TransactionInstruction({
       keys: [
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: splitStakePubkey, isSigner: false, isWritable: true},
@@ -733,6 +733,56 @@ export class StakeProgram {
       programId: this.programId,
       data,
     });
+  }
+
+  /**
+   * Generate a Transaction that splits Stake tokens into another stake account
+   */
+  static split(params: SplitStakeParams): Transaction {
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.createAccount({
+        fromPubkey: params.authorizedPubkey,
+        newAccountPubkey: params.splitStakePubkey,
+        lamports: 0,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
+    return transaction.add(this.splitInstruction(params));
+  }
+
+  /**
+   * Generate a Transaction that splits Stake tokens into another account
+   * derived from a base public key and seed
+   */
+  static splitWithSeed(params: SplitStakeWithSeedParams): Transaction {
+    const {
+      stakePubkey,
+      authorizedPubkey,
+      splitStakePubkey,
+      basePubkey,
+      seed,
+      lamports,
+    } = params;
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.allocate({
+        accountPubkey: splitStakePubkey,
+        basePubkey,
+        seed,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
+    return transaction.add(
+      this.splitInstruction({
+        stakePubkey,
+        authorizedPubkey,
+        splitStakePubkey,
+        lamports,
+      }),
+    );
   }
 
   /**
