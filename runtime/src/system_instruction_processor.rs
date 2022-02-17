@@ -1,7 +1,7 @@
 use {
     crate::nonce_keyed_account::{
         advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
-        withdraw_nonce_account, NONCE_ACCOUNT_INDEX, WITHDRAW_TO_ACCOUNT_INDEX,
+        withdraw_nonce_account,
     },
     log::*,
     solana_program_runtime::{
@@ -263,6 +263,67 @@ fn transfer_with_seed(
     transfer_verified(from, to, lamports, invoke_context)
 }
 
+pub mod instruction_account_indices {
+    pub enum CreateAccount {
+        From = 0,
+        To = 1,
+    }
+
+    pub enum CreateAccountWithSeed {
+        From = 0,
+        To = 1,
+    }
+
+    pub enum Assign {
+        Account = 0,
+    }
+
+    pub enum Transfer {
+        From = 0,
+        To = 1,
+    }
+
+    pub enum TransferWithSeed {
+        From = 0,
+        Base = 1,
+        To = 2,
+    }
+
+    pub enum AdvanceNonceAccount {
+        Nonce = 0,
+        RecentBlockhashes = 1,
+    }
+
+    pub enum WithdrawNonceAccount {
+        From = 0,
+        To = 1,
+        RecentBlockhashes = 2,
+        Rent = 3,
+    }
+
+    pub enum InitializeNonceAccount {
+        Nonce = 0,
+        RecentBlockhashes = 1,
+        Rent = 2,
+    }
+
+    pub enum AuthorizeNonceAccount {
+        Nonce = 0,
+    }
+
+    pub enum Allocate {
+        Account = 0,
+    }
+
+    pub enum AllocateWithSeed {
+        Account = 0,
+    }
+
+    pub enum AssignWithSeed {
+        Account = 0,
+    }
+}
+
 pub fn process_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
@@ -284,8 +345,15 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let from = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::CreateAccount::From as usize,
+            )?;
+            let to = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + instruction_account_indices::CreateAccount::To as usize,
+            )?;
             let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
             create_account(
                 from,
@@ -306,8 +374,16 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let from = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::CreateAccountWithSeed::From as usize,
+            )?;
+            let to = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::CreateAccountWithSeed::To as usize,
+            )?;
             let to_address = Address::create(
                 to.unsigned_key(),
                 Some((&base, &seed, &owner)),
@@ -325,15 +401,24 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::Assign { owner } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let keyed_account = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + instruction_account_indices::Assign::Account as usize,
+            )?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             assign(&mut account, &address, &owner, &signers, invoke_context)
         }
         SystemInstruction::Transfer { lamports } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let from = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + instruction_account_indices::Transfer::From as usize,
+            )?;
+            let to = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + instruction_account_indices::Transfer::To as usize,
+            )?;
             transfer(from, to, lamports, invoke_context)
         }
         SystemInstruction::TransferWithSeed {
@@ -342,9 +427,21 @@ pub fn process_instruction(
             from_owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(3)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let base = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+            let from = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::TransferWithSeed::From as usize,
+            )?;
+            let base = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::TransferWithSeed::Base as usize,
+            )?;
+            let to = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::TransferWithSeed::To as usize,
+            )?;
             transfer_with_seed(
                 from,
                 base,
@@ -361,7 +458,7 @@ pub fn process_instruction(
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                1,
+                instruction_account_indices::AdvanceNonceAccount::RecentBlockhashes as usize,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -374,7 +471,7 @@ pub fn process_instruction(
                 invoke_context,
                 instruction_context,
                 &signers,
-                NONCE_ACCOUNT_INDEX,
+                instruction_account_indices::AdvanceNonceAccount::Nonce as usize,
             )
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
@@ -383,16 +480,19 @@ pub fn process_instruction(
             let _recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                2,
+                instruction_account_indices::WithdrawNonceAccount::RecentBlockhashes as usize,
             )?;
-            let rent =
-                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 3)?;
+            let rent = get_sysvar_with_account_check2::rent(
+                invoke_context,
+                instruction_context,
+                instruction_account_indices::WithdrawNonceAccount::Rent as usize,
+            )?;
             withdraw_nonce_account(
                 invoke_context,
                 instruction_context,
                 &signers,
-                NONCE_ACCOUNT_INDEX,
-                WITHDRAW_TO_ACCOUNT_INDEX,
+                instruction_account_indices::WithdrawNonceAccount::From as usize,
+                instruction_account_indices::WithdrawNonceAccount::To as usize,
                 lamports,
                 &rent,
             )
@@ -403,7 +503,7 @@ pub fn process_instruction(
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                1,
+                instruction_account_indices::InitializeNonceAccount::RecentBlockhashes as usize,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -412,12 +512,15 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            let rent =
-                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 2)?;
+            let rent = get_sysvar_with_account_check2::rent(
+                invoke_context,
+                instruction_context,
+                instruction_account_indices::InitializeNonceAccount::Rent as usize,
+            )?;
             initialize_nonce_account(
                 invoke_context,
                 instruction_context,
-                NONCE_ACCOUNT_INDEX,
+                instruction_account_indices::InitializeNonceAccount::Nonce as usize,
                 &authorized,
                 &rent,
             )
@@ -428,12 +531,15 @@ pub fn process_instruction(
                 invoke_context,
                 instruction_context,
                 &signers,
-                NONCE_ACCOUNT_INDEX,
+                instruction_account_indices::AuthorizeNonceAccount::Nonce as usize,
                 &nonce_authority,
             )
         }
         SystemInstruction::Allocate { space } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let keyed_account = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + instruction_account_indices::Allocate::Account as usize,
+            )?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             allocate(&mut account, &address, space, &signers, invoke_context)
@@ -444,7 +550,11 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let keyed_account = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::AllocateWithSeed::Account as usize,
+            )?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
@@ -461,7 +571,11 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let keyed_account = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account
+                    + instruction_account_indices::AssignWithSeed::Account as usize,
+            )?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
