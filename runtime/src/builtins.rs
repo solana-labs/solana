@@ -129,11 +129,6 @@ fn genesis_builtins() -> Vec<Builtin> {
             solana_sdk::secp256k1_program::id(),
             dummy_process_instruction,
         ),
-        Builtin::new(
-            "ed25519_program",
-            solana_sdk::ed25519_program::id(),
-            dummy_process_instruction,
-        ),
     ]
 }
 
@@ -177,9 +172,15 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
             feature_set::prevent_calling_precompiles_as_programs::id(),
             ActivationType::RemoveProgram,
         ),
-        // TODO when feature `prevent_calling_precompiles_as_programs` is
-        // cleaned up also remove "ed25519_program" from the main builtins
-        // list
+        (
+            Builtin::new(
+                "ed25519_program",
+                solana_sdk::ed25519_program::id(),
+                dummy_process_instruction,
+            ),
+            feature_set::fix_ed25519_program_owner::id(),
+            ActivationType::NewProgram,
+        ),
         (
             Builtin::new(
                 "ed25519_program",

@@ -299,6 +299,10 @@ pub mod add_get_processed_sibling_instruction_syscall {
     solana_sdk::declare_id!("CFK1hRCNy8JJuAAY8Pb2GjLFNdCThS2qwZNe3izzBMgn");
 }
 
+pub mod fix_ed25519_program_owner {
+    solana_sdk::declare_id!("J2bcyU6gyhVBASNT3ZwaMkd5dPFyi83vrT42JhLjJfm7");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -368,6 +372,7 @@ lazy_static! {
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
+        (fix_ed25519_program_owner::id(), "fix ed25519 program owner"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
