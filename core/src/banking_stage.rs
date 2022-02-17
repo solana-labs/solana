@@ -79,7 +79,7 @@ pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 4;
 
-const TOTAL_BUFFERED_PACKETS: usize = 500_000;
+pub const TOTAL_BUFFERED_PACKETS: usize = 500_000;
 
 const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
@@ -505,6 +505,36 @@ impl BankingStage {
         (Ok(()), packet_vec.len())
     }
 
+    /* TODO TAO -
+    pub fn consume_buffered_packets_2(
+        my_pubkey: &Pubkey,
+        max_tx_ingestion_ns: u128,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        test_fn: Option<impl Fn()>,
+        banking_stage_stats: &BankingStageStats,
+        recorder: &TransactionRecorder,
+        qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+    ) {
+        // 1. scan buffer to collect current locators, stakes,
+        // // TODO TAO - and its fee+CU
+
+        // 2. weight shuffle -> shuffled locators
+
+        // 3. TODO TAO - sort by fee functino -> sorted and shuffled locators
+
+        // 4. using above locators to create sanitized transaction chunks
+        // 5. passing chunks for process
+        // 6. handle retries, invlaid and committed to update buffer:
+        //    chunk --sanitize--> subset of [txs] --process--> subset of retryable txs.
+        //    from original chunk, all locator *not* in retryable TXS are to be removed from
+        //    buffer.
+    }
+    // */
+
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
@@ -538,15 +568,14 @@ impl BankingStage {
                 // if the working_bank is available
                 let mut end_of_slot_filtering_time = Measure::start("end_of_slot_filtering");
                 let should_retain = if let Some(bank) = &end_of_slot.working_bank {
-                    let new_unprocessed_indexes =
-                        Self::filter_unprocessed_packets_at_end_of_slot(
-                            bank,
-                            packet_batch,
-                            &original_unprocessed_indexes,
-                            my_pubkey,
-                            end_of_slot.next_slot_leader,
-                            banking_stage_stats,
-                        );
+                    let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
+                        bank,
+                        packet_batch,
+                        &original_unprocessed_indexes,
+                        my_pubkey,
+                        end_of_slot.next_slot_leader,
+                        banking_stage_stats,
+                    );
 
                     let end_of_slot_filtered_invalid_count = original_unprocessed_indexes
                         .len()
