@@ -212,7 +212,7 @@ export class PublicKey extends Struct {
    * Async version of findProgramAddressSync
    * For backwards compatibility
    */
-   static async findProgramAddress(
+  static async findProgramAddress(
     seeds: Array<Buffer | Uint8Array>,
     programId: PublicKey,
   ): Promise<[PublicKey, number]> {
