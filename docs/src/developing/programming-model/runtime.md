@@ -12,18 +12,18 @@ signed the transaction using the keypair's _private key_, it knows the client
 authorized the token transfer.
 
 In other words, the entire set of accounts owned by a given program can be
-regarded as a key-value store where a key is the account address and value is
+regarded as a key-value store, where a key is the account address and value is
 program-specific arbitrary binary data. A program author can decide how to
-manage the program's whole state as possibly many accounts.
+manage the program's whole state, possibly as many accounts.
 
 After the runtime executes each of the transaction's instructions, it uses the
 account metadata to verify that the access policy was not violated. If a program
 violates the policy, the runtime discards all account changes made by all
-instructions in the transaction and marks the transaction as failed.
+instructions in the transaction, and marks the transaction as failed.
 
 ### Policy
 
-After a program has processed an instruction the runtime verifies that the
+After a program has processed an instruction, the runtime verifies that the
 program only performed operations it was permitted to, and that the results
 adhere to the runtime policy.
 
@@ -31,7 +31,7 @@ The policy is as follows:
 
 - Only the owner of the account may change owner.
   - And only if the account is writable.
-  - And only if the account is not executable
+  - And only if the account is not executable.
   - And only if the data is zero-initialized or empty.
 - An account not assigned to the program cannot have its balance decrease.
 - The balance of read-only and executable accounts may not change.
@@ -45,15 +45,11 @@ The policy is as follows:
 
 ## Compute Budget
 
-To prevent a program from abusing computation resources each instruction in a
+To prevent a program from abusing computation resources, each instruction in a
 transaction is given a compute budget. The budget consists of computation units
 that are consumed as the program performs various operations and bounds that the
-program may not exceed. When the program consumes its entire budget or exceeds a
-bound then the runtime halts the program and returns an error.
-
-Note: The compute budget currently applies per-instruction but is moving toward
-a per-transaction model.  For more information see [Transaction-wide Compute
-Budget](#transaction-wide-compute-buget).
+program may not exceed. When the program consumes its entire budget or exceeds
+a bound, then the runtime halts the program and returns an error.
 
 The following operations incur a compute cost:
 
@@ -65,8 +61,8 @@ The following operations incur a compute cost:
   - ...
 
 For cross-program invocations, the programs invoked inherit the budget of their
-parent. If an invoked program consume the budget or exceeds a bound the entire
-invocation chain is halted.
+parent. If an invoked program consumes the budget or exceeds a bound, the entire
+invocation chain and the parent are halted.
 
 The current [compute
 budget](https://github.com/solana-labs/solana/blob/0224a8b127ace4c6453dd6492a38c66cb999abd2/sdk/src/compute_budget.rs#L102)
@@ -89,10 +85,10 @@ log_pubkey_units: 100,
 
 Then the program
 
-- Could execute 200,000 BPF instructions if it does nothing else
-- Could log 2,000 log messages
-- Can not exceed 4k of stack usage
-- Can not exceed a BPF call depth of 64
+- Could execute 200,000 BPF instructions, if it does nothing else.
+- Could log 2,000 log messages.
+- Can not exceed 4k of stack usage.
+- Can not exceed a BPF call depth of 64.
 - Cannot exceed 4 levels of cross-program invocations.
 
 Since the compute budget is consumed incrementally as the program executes, the
@@ -106,7 +102,7 @@ for more information.
 ## Transaction-wide Compute Budget
 
 Transactions are processed as a single entity and are the primary unit of block
-scheduling.  In order to facilitate better block scheduling and account for the
+scheduling. In order to facilitate better block scheduling and account for the
 computational cost of each transaction, the compute budget is moving to a
 transaction-wide budget rather than per-instruction.
 
@@ -114,16 +110,16 @@ For information on what the compute budget is and how it is applied see [Compute
 Budget](#compute-budget).
 
 With a transaction-wide compute budget the `max_units` cap is applied to the
-entire transaction rather than to each instruction within the transaction.  The
+entire transaction rather than to each instruction within the transaction. The
 default number of maximum units remains at 200k which means the sum of the
 compute units used by each instruction in the transaction must not exceed that
 value. The number of maximum units allows is intentionally kept small to
 facilitate optimized programs and form the bases for a minimum fee level.
 
 There are a lot of uses cases that require more than 200k units
-transaction-wide.  To enable these uses cases transactions can include a
+transaction-wide. To enable these uses cases transactions can include a
 [``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/0224a8b127ace4c6453dd6492a38c66cb999abd2/sdk/src/compute_budget.rs#L44)
-requesting a higher compute unit cap.  Higher compute caps will be charged
+requesting a higher compute unit cap. Higher compute caps will be charged
 higher fees.
 
 Compute Budget instructions don't require any accounts and must lie in the first
@@ -140,7 +136,7 @@ let instruction = ComputeBudgetInstruction::request_units(300_000);
 
 As Solana evolves, new features or patches may be introduced that changes the
 behavior of the cluster and how programs run. Changes in behavior must be
-coordinated between the various nodes of the cluster, if nodes do not coordinate
+coordinated between the various nodes of the cluster. If nodes do not coordinate,
 then these changes can result in a break-down of consensus. Solana supports a
 mechanism called runtime features to facilitate the smooth adoption of changes.
 
@@ -157,6 +153,6 @@ tools](cli/install-solana-cli-tools.md):
 solana feature status
 ```
 
-If you encounter problems first ensure that the Solana tools version you are
+If you encounter problems, first ensure that the Solana tools version you are
 using match the version returned by `solana cluster-version`. If they do not
-match [install the correct tool suite](cli/install-solana-cli-tools.md).
+match, [install the correct tool suite](cli/install-solana-cli-tools.md).
