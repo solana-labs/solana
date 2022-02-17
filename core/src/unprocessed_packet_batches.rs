@@ -3,6 +3,7 @@ use {
         banking_stage::TOTAL_BUFFERED_PACKETS,
         packet_sender_info::{PacketSenderInfo, SenderDetailInfo},
     },
+    solana_gossip::weighted_shuffle::WeightedShuffle,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_sdk::{
         hash::Hash, message::Message, short_vec::decode_shortu16_len, signature::Signature,
@@ -11,11 +12,12 @@ use {
     std::{
         collections::{HashMap, VecDeque},
         mem::size_of,
+        net::IpAddr,
     },
 };
 
 // To locate a packet in banking_stage's buffered packet batches.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PacketLocator {
     #[allow(dead_code)]
     batch_index: usize,
@@ -162,6 +164,33 @@ pub fn get_stakes_and_locators(
     (stakes, locators)
 }
 
+#[allow(clippy::needless_collect)]
+pub fn weighted_shuffle(
+    stakes: &[u64],
+    locators: &[PacketLocator],
+    packet_sender_info: &mut Option<PacketSenderInfo>,
+) -> Vec<PacketLocator> {
+    let need_to_shuffle_sender_ips = packet_sender_info.is_some();
+    let mut shuffled_packet_senders_ip = Vec::<IpAddr>::new();
+
+    let mut rng = rand::thread_rng();
+    let shuffled_locators: Vec<PacketLocator> = WeightedShuffle::new(stakes)
+        .unwrap()
+        .shuffle(&mut rng)
+        .map(|i| {
+            if need_to_shuffle_sender_ips {
+                let packet_sender_info = packet_sender_info.as_ref().unwrap();
+                shuffled_packet_senders_ip.push(packet_sender_info.packet_senders_ip[i]);
+            }
+            locators[i].clone()
+        })
+        .collect();
+    if let Some(packet_sender_info) = packet_sender_info {
+        packet_sender_info.packet_senders_ip = shuffled_packet_senders_ip;
+    }
+    shuffled_locators
+}
+
 fn update_packet_sender_info(packet_sender_info: &mut PacketSenderInfo, packet: &Packet) {
     let ip = packet.meta.addr;
     packet_sender_info.packet_senders_ip.push(ip);
@@ -180,7 +209,6 @@ mod tests {
     use {
         super::*,
         solana_sdk::{signature::Keypair, system_transaction},
-        std::net::IpAddr,
     };
 
     fn packet_with_weight(weight: u64, ip: IpAddr) -> Packet {
@@ -256,6 +284,78 @@ mod tests {
                     .0
             );
         });
+        assert_eq!(senders.len(), packet_sender_info.senders_detail.len());
+        senders.into_iter().for_each(|(ip, stake)| {
+            let sender_detail = packet_sender_info.senders_detail.get(&ip).unwrap();
+            assert_eq!(stake, sender_detail.stake);
+            assert_eq!(2u64, sender_detail.packet_count);
+        });
+    }
+
+    #[test]
+    fn test_weighted_shuffle_with_sender_info() {
+        solana_logger::setup();
+
+        // setup senders' addr and stake
+        let senders: Vec<(IpAddr, u64)> = vec![
+            (IpAddr::from([127, 0, 0, 1]), 100),
+            (IpAddr::from([127, 0, 0, 2]), 200),
+            (IpAddr::from([127, 0, 0, 3]), 0),
+        ];
+        // create a buffer with 3 batches, each has 2 packet from above sender.
+        // so: [1, 2] [3, 1] [2, 3]
+        let batch_size = 2usize;
+        let batch_count = 3usize;
+        let unprocessed_packets = (0..batch_count)
+            .map(|batch_index| {
+                DeserializedPacketBatch::new(
+                    PacketBatch::new(
+                        (0..batch_size)
+                            .map(|packet_index| {
+                                let n = (batch_index * batch_size + packet_index) % senders.len();
+                                packet_with_weight(senders[n].1, senders[n].0)
+                            })
+                            .collect(),
+                    ),
+                    (0..batch_size).collect(),
+                    false,
+                )
+            })
+            .collect();
+        debug!("unprocessed batches: {:?}", unprocessed_packets);
+
+        let mut packet_sender_info = Some(PacketSenderInfo::default());
+
+        let (stakes, locators) =
+            get_stakes_and_locators(&unprocessed_packets, &mut packet_sender_info);
+        debug!("stakes: {:?}, locators: {:?}", stakes, locators);
+        let shuffled_packet_locators =
+            weighted_shuffle(&stakes, &locators, &mut packet_sender_info);
+        debug!(
+            "shuffled locators: {:?}, shuffled sender_ips: {:?}",
+            shuffled_packet_locators,
+            packet_sender_info.as_ref().unwrap().packet_senders_ip
+        );
+
+        // verify after shuffle, each locator:(batch_index, packet_index) still in sync with
+        // sender_info
+        let packet_sender_info = packet_sender_info.unwrap();
+        assert_eq!(
+            batch_size * batch_count,
+            packet_sender_info.packet_senders_ip.len()
+        );
+        shuffled_packet_locators
+            .iter()
+            .enumerate()
+            .for_each(|(index, locator)| {
+                assert_eq!(
+                    packet_sender_info.packet_senders_ip[index],
+                    senders
+                        [(locator.batch_index * batch_size + locator.packet_index) % senders.len()]
+                    .0
+                );
+            });
+
         assert_eq!(senders.len(), packet_sender_info.senders_detail.len());
         senders.into_iter().for_each(|(ip, stake)| {
             let sender_detail = packet_sender_info.senders_detail.get(&ip).unwrap();
