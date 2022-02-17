@@ -273,7 +273,9 @@ fn process_instruction_common(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
 
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -350,7 +352,9 @@ fn process_instruction_common(
                     use_jit,
                     false,
                 )?;
-                let program_id = invoke_context.transaction_context.get_program_key()?;
+                let transaction_context = &invoke_context.transaction_context;
+                let instruction_context = transaction_context.get_current_instruction_context()?;
+                let program_id = instruction_context.get_program_key(transaction_context)?;
                 invoke_context.add_executor(program_id, executor.clone());
                 executor
             }
@@ -397,7 +401,9 @@ fn process_loader_upgradeable_instruction(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
@@ -550,7 +556,9 @@ fn process_loader_upgradeable_instruction(
                 .accounts
                 .push(AccountMeta::new(*buffer.unsigned_key(), false));
 
-            let caller_program_id = invoke_context.transaction_context.get_program_key()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let caller_program_id = instruction_context.get_program_key(transaction_context)?;
             let signers = [&[new_program_id.as_ref(), &[bump_seed]]]
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
@@ -947,7 +955,9 @@ fn process_loader_instruction(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if program.owner()? != *program_id {
@@ -1036,15 +1046,13 @@ impl Executor for BpfExecutor {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
         let stack_height = invoke_context.get_stack_height();
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let program_id = *instruction_context.get_program_key(transaction_context)?;
 
         let mut serialize_time = Measure::start("serialize");
-        let program_id = *invoke_context.transaction_context.get_program_key()?;
-        let (mut parameter_bytes, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()?,
-        )?;
+        let (mut parameter_bytes, account_lengths) =
+            serialize_parameters(invoke_context.transaction_context, instruction_context)?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;

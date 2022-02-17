@@ -229,13 +229,12 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-            invoke_context
-                .transaction_context
+            let transaction_context = &mut invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context().unwrap();
+            let caller = *instruction_context.get_program_key(transaction_context).unwrap();
+            transaction_context
                 .set_return_data(
-                    *invoke_context
-                        .transaction_context
-                        .get_program_key()
-                        .unwrap(),
+                    caller,
                     Vec::new(),
                 )
                 .unwrap();

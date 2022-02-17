@@ -443,9 +443,12 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
-        let program_id = self
+        let instruction_context = self
             .transaction_context
-            .get_program_key()
+            .get_current_instruction_context()
+            .map_err(|_| InstructionError::CallDepth)?;
+        let program_id = instruction_context
+            .get_program_key(self.transaction_context)
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify all executable accounts have zero outstanding refs
@@ -530,8 +533,8 @@ impl<'a> InvokeContext<'a> {
         let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let transaction_context = &self.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let program_id = transaction_context
-            .get_program_key()
+        let program_id = instruction_context
+            .get_program_key(transaction_context)
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify the per-account instruction results
@@ -1268,7 +1271,7 @@ mod tests {
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let program_id = transaction_context.get_program_key()?;
+        let program_id = instruction_context.get_program_key(transaction_context)?;
         assert_eq!(
             program_id,
             instruction_context

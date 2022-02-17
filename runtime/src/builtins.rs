@@ -19,12 +19,16 @@ fn process_instruction_with_program_logging(
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_log_collector();
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
     stable_log::program_invoke(&logger, program_id, invoke_context.get_stack_height());
 
     let result = process_instruction(first_instruction_account, instruction_data, invoke_context);
 
-    let program_id = invoke_context.transaction_context.get_program_key()?;
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
     match &result {
         Ok(()) => stable_log::program_success(&logger, program_id),
         Err(err) => stable_log::program_failure(&logger, program_id, err),

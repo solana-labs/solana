@@ -105,7 +105,7 @@ pub fn builtin_process_instruction(
         ..instruction_context.get_number_of_accounts();
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = transaction_context.get_program_key()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
     stable_log::program_invoke(
         &log_collector,
         program_id,
@@ -250,10 +250,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     ) -> ProgramResult {
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
-
-        let caller = *invoke_context
-            .transaction_context
-            .get_program_key()
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+        let caller = instruction_context
+            .get_program_key(transaction_context)
             .unwrap();
 
         stable_log::program_invoke(
@@ -264,7 +266,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         let signers = signers_seeds
             .iter()
-            .map(|seeds| Pubkey::create_program_address(seeds, &caller).unwrap())
+            .map(|seeds| Pubkey::create_program_address(seeds, caller).unwrap())
             .collect::<Vec<_>>();
         let (instruction_accounts, program_indices) = invoke_context
             .prepare_instruction(instruction, &signers)
@@ -374,12 +376,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     fn sol_set_return_data(&self, data: &[u8]) {
         let invoke_context = get_invoke_context();
-        let caller = *invoke_context
-            .transaction_context
-            .get_program_key()
+        let transaction_context = &mut invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
             .unwrap();
-        invoke_context
-            .transaction_context
+        let caller = *instruction_context
+            .get_program_key(transaction_context)
+            .unwrap();
+        transaction_context
             .set_return_data(caller, data.to_vec())
             .unwrap();
     }
