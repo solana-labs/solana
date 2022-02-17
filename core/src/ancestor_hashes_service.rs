@@ -136,6 +136,40 @@ pub struct AncestorHashesService {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
+enum PacketThresholdUpdate {
+    Increase,
+    Decrease,
+}
+
+struct DynamicPacketToProcessThreshold {
+    max_packets: usize,
+}
+
+impl Default for DynamicPacketToProcessThreshold {
+    fn default() -> Self {
+        Self {
+            max_packets: Self::DEFAULT_MAX_PACKETS,
+        }
+    }
+}
+
+impl DynamicPacketToProcessThreshold {
+    const DEFAULT_MAX_PACKETS: usize = 1024;
+    const TIME_THRESHOLD_MS: u64 = 1000;
+    const FACTOR: f64 = 0.9;
+
+    fn update(&mut self, update: PacketThresholdUpdate) {
+        self.max_packets = match update {
+            PacketThresholdUpdate::Increase => {
+                (self.max_packets as f64) / DynamicPacketToProcessThreshold::FACTOR
+            }
+            PacketThresholdUpdate::Decrease => {
+                (self.max_packets as f64) * DynamicPacketToProcessThreshold::FACTOR
+            }
+        } as usize;
+    }
+}
+
 impl AncestorHashesService {
     pub fn new(
         exit: Arc<AtomicBool>,
@@ -208,7 +242,7 @@ impl AncestorHashesService {
             .spawn(move || {
                 let mut last_stats_report = Instant::now();
                 let mut stats = AncestorHashesResponsesStats::default();
-                let mut max_packets = 1024;
+                let mut packet_threshold = DynamicPacketToProcessThreshold::default();
                 loop {
                     let result = Self::process_new_packets_from_channel(
                         &ancestor_hashes_request_statuses,
@@ -216,7 +250,7 @@ impl AncestorHashesService {
                         &blockstore,
                         &outstanding_requests,
                         &mut stats,
-                        &mut max_packets,
+                        &mut packet_threshold,
                         &duplicate_slots_reset_sender,
                         &retryable_slots_sender,
                     );
@@ -243,7 +277,7 @@ impl AncestorHashesService {
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
-        max_packets: &mut usize,
+        packet_threshold: &mut DynamicPacketToProcessThreshold,
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         retryable_slots_sender: &RetryableSlotsSender,
     ) -> Result<()> {
@@ -254,7 +288,7 @@ impl AncestorHashesService {
         let mut dropped_packets = 0;
         while let Ok(batch) = response_receiver.try_recv() {
             total_packets += batch.packets.len();
-            if total_packets < *max_packets {
+            if total_packets < packet_threshold.max_packets {
                 // Drop the rest in the channel in case of DOS
                 packet_batches.push(batch);
             } else {
@@ -278,12 +312,14 @@ impl AncestorHashesService {
             );
         }
         time.stop();
-        if total_packets >= *max_packets {
-            if time.as_ms() > 1000 {
-                *max_packets = (*max_packets * 9) / 10;
-            } else {
-                *max_packets = (*max_packets * 10) / 9;
-            }
+        if total_packets >= packet_threshold.max_packets {
+            let threshold_update =
+                if time.as_ms() > DynamicPacketToProcessThreshold::TIME_THRESHOLD_MS {
+                    PacketThresholdUpdate::Decrease
+                } else {
+                    PacketThresholdUpdate::Increase
+                };
+            packet_threshold.update(threshold_update)
         }
         Ok(())
     }
@@ -1562,5 +1598,21 @@ mod test {
 
         assert!(dead_slot_pool.is_empty());
         assert!(repairable_dead_slot_pool.contains(&request_slot));
+    }
+
+    #[test]
+    fn test_dynamic_packet_threshold() {
+        let mut threshold = DynamicPacketToProcessThreshold::default();
+        assert_eq!(
+            threshold.max_packets,
+            DynamicPacketToProcessThreshold::DEFAULT_MAX_PACKETS
+        );
+
+        let old = threshold.max_packets;
+        threshold.update(PacketThresholdUpdate::Increase);
+        assert!(threshold.max_packets > old);
+
+        threshold.update(PacketThresholdUpdate::Decrease);
+        assert_eq!(threshold.max_packets, old - 1); // due to rounding error, there is a difference of 1
     }
 }
