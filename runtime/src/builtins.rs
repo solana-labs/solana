@@ -107,7 +107,7 @@ pub enum BuiltinAction {
 
 /// State transition enum used for adding and removing builtin programs through
 /// feature activations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AbiExample)]
 pub enum BuiltinFeatureTransition {
     /// Add a builtin program if a feature is activated.
     Add {
