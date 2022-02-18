@@ -12,7 +12,6 @@ use {
         account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
-        keyed_account::keyed_account_at_index,
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -157,7 +156,7 @@ fn create_account(
     owner: &Pubkey,
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
-    {
+    let index_in_transaction = {
         let to_account = instruction_context
             .try_borrow_instruction_account(invoke_context.transaction_context, to_account_index)?;
         if to_account.get_lamports() > 0 {
@@ -168,15 +167,13 @@ fn create_account(
             );
             return Err(SystemError::AccountAlreadyInUse.into());
         }
-    }
+        to_account.get_index_in_transaction()
+    };
     {
-        // TODO
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let mut to = keyed_account_at_index(
-            keyed_accounts,
-            instruction_context.get_number_of_program_accounts() + to_account_index,
-        )?
-        .try_account_ref_mut()?;
+        let mut to = invoke_context
+            .transaction_context
+            .get_account_at_index(index_in_transaction)?
+            .borrow_mut();
         allocate_and_assign(invoke_context, signers, &mut to, to_address, space, owner)?;
     }
     transfer(
@@ -371,7 +368,7 @@ pub mod instruction_account_indices {
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -434,12 +431,19 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::Assign { owner } => {
-            let keyed_account = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + instruction_account_indices::Assign::Account as usize,
-            )?;
-            let mut account = keyed_account.try_account_ref_mut()?;
-            let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
+            let (index_in_transaction, address) = {
+                let account = instruction_context.try_borrow_instruction_account(
+                    invoke_context.transaction_context,
+                    instruction_account_indices::Assign::Account as usize,
+                )?;
+                (
+                    account.get_index_in_transaction(),
+                    Address::create(account.get_key(), None, invoke_context)?,
+                )
+            };
+            let mut account = transaction_context
+                .get_account_at_index(index_in_transaction)?
+                .borrow_mut();
             assign(invoke_context, &signers, &mut account, &address, &owner)
         }
         SystemInstruction::Transfer { lamports } => {
@@ -553,12 +557,19 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::Allocate { space } => {
-            let keyed_account = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + instruction_account_indices::Allocate::Account as usize,
-            )?;
-            let mut account = keyed_account.try_account_ref_mut()?;
-            let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
+            let (index_in_transaction, address) = {
+                let account = instruction_context.try_borrow_instruction_account(
+                    invoke_context.transaction_context,
+                    instruction_account_indices::Allocate::Account as usize,
+                )?;
+                (
+                    account.get_index_in_transaction(),
+                    Address::create(account.get_key(), None, invoke_context)?,
+                )
+            };
+            let mut account = transaction_context
+                .get_account_at_index(index_in_transaction)?
+                .borrow_mut();
             allocate(invoke_context, &signers, &mut account, &address, space)
         }
         SystemInstruction::AllocateWithSeed {
@@ -567,17 +578,23 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let keyed_account = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account
-                    + instruction_account_indices::AllocateWithSeed::Account as usize,
-            )?;
-            let mut account = keyed_account.try_account_ref_mut()?;
-            let address = Address::create(
-                keyed_account.unsigned_key(),
-                Some((&base, &seed, &owner)),
-                invoke_context,
-            )?;
+            let (index_in_transaction, address) = {
+                let account = instruction_context.try_borrow_instruction_account(
+                    invoke_context.transaction_context,
+                    instruction_account_indices::AllocateWithSeed::Account as usize,
+                )?;
+                (
+                    account.get_index_in_transaction(),
+                    Address::create(
+                        account.get_key(),
+                        Some((&base, &seed, &owner)),
+                        invoke_context,
+                    )?,
+                )
+            };
+            let mut account = transaction_context
+                .get_account_at_index(index_in_transaction)?
+                .borrow_mut();
             allocate_and_assign(
                 invoke_context,
                 &signers,
@@ -588,17 +605,23 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
-            let keyed_account = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account
-                    + instruction_account_indices::AssignWithSeed::Account as usize,
-            )?;
-            let mut account = keyed_account.try_account_ref_mut()?;
-            let address = Address::create(
-                keyed_account.unsigned_key(),
-                Some((&base, &seed, &owner)),
-                invoke_context,
-            )?;
+            let (index_in_transaction, address) = {
+                let account = instruction_context.try_borrow_instruction_account(
+                    invoke_context.transaction_context,
+                    instruction_account_indices::AssignWithSeed::Account as usize,
+                )?;
+                (
+                    account.get_index_in_transaction(),
+                    Address::create(
+                        account.get_key(),
+                        Some((&base, &seed, &owner)),
+                        invoke_context,
+                    )?,
+                )
+            };
+            let mut account = transaction_context
+                .get_account_at_index(index_in_transaction)?
+                .borrow_mut();
             assign(invoke_context, &signers, &mut account, &address, &owner)
         }
     }
