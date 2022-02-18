@@ -53,7 +53,7 @@ function downsample(points: PingInfo[], bucketSize: number): PingInfo[] {
   const buckets = [];
 
   for (let start = 0; start < points.length; start += bucketSize) {
-    let summary: PingInfo = {
+    const summary: PingInfo = {
       submitted: 0,
       confirmed: 0,
       loss: 0,

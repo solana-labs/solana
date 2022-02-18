@@ -178,13 +178,13 @@ function PingBarChart({ pingInfo }: { pingInfo: PingRollupInfo }) {
   const chartData: Chart.ChartData = {
     labels: seriesData.map((val, i) => {
       return `
-      ${val.confirmed} of ${val.submitted} confirmed<br />
+      <p class="mb-0">${val.confirmed} of ${val.submitted} confirmed</p>
       ${
         val.loss
-          ? `${val.loss.toLocaleString(undefined, {
+          ? `<p class="mb-0">${val.loss.toLocaleString(undefined, {
               style: "percent",
               minimumFractionDigits: 2,
-            })} loss<br />`
+            })} loss</p>`
           : ""
       }
       ${SERIES_INFO[series].label(seriesLength - i)}min ago
