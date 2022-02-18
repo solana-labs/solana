@@ -6432,9 +6432,9 @@ impl Bank {
         }
 
         if !debug_do_not_add_builtins {
-            let apply_transitions_for_old_features = init_finish_or_warp;
+            let apply_transitions_for_new_features = !init_finish_or_warp;
             self.apply_builtin_program_feature_transitions(
-                apply_transitions_for_old_features,
+                apply_transitions_for_new_features,
                 &new_feature_activations,
             );
             self.reconfigure_token2_native_mint();
@@ -6495,15 +6495,15 @@ impl Bank {
 
     fn apply_builtin_program_feature_transitions(
         &mut self,
-        apply_transitions_for_old_features: bool,
+        apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         let feature_set = self.feature_set.clone();
         let should_apply_action_for_feature = |feature_id: &Pubkey| -> bool {
-            if apply_transitions_for_old_features {
-                feature_set.is_active(feature_id)
-            } else {
+            if apply_transitions_for_new_features {
                 new_feature_activations.contains(feature_id)
+            } else {
+                feature_set.is_active(feature_id)
             }
         };
 
@@ -6516,7 +6516,7 @@ impl Bank {
                         &builtin.id,
                         builtin.process_instruction_with_context,
                     ),
-                    BuiltinAction::Remove { program_id } => self.remove_builtin(&program_id),
+                    BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }
             }
         }

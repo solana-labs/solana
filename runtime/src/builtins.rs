@@ -51,63 +51,6 @@ macro_rules! with_program_logging {
     };
 }
 
-/// State transition enum used for adding and removing builtin programs through
-/// feature activations.
-#[derive(Debug, Clone)]
-pub enum BuiltinFeatureTransition {
-    /// Add a builtin program if a feature is activated.
-    Add {
-        builtin: Builtin,
-        feature_id: Pubkey,
-    },
-    /// Remove a builtin program if a feature is activated or
-    /// retain a previously added builtin.
-    RemoveOrRetain {
-        previous_builtin: Builtin,
-        removal_feature_id: Pubkey,
-    },
-}
-
-/// Actions taken by a bank when managing the list of active builtin programs.
-#[derive(Debug, Clone)]
-pub enum BuiltinAction {
-    Add(Builtin),
-    Remove { program_id: Pubkey },
-}
-
-impl BuiltinFeatureTransition {
-    pub fn to_action(
-        &self,
-        should_apply_action_for_feature: &impl Fn(&Pubkey) -> bool,
-    ) -> Option<BuiltinAction> {
-        match self {
-            Self::Add {
-                builtin,
-                feature_id,
-            } => {
-                if should_apply_action_for_feature(feature_id) {
-                    Some(BuiltinAction::Add(builtin.clone()))
-                } else {
-                    None
-                }
-            }
-            Self::RemoveOrRetain {
-                previous_builtin,
-                removal_feature_id,
-            } => {
-                if should_apply_action_for_feature(removal_feature_id) {
-                    Some(BuiltinAction::Remove {
-                        program_id: previous_builtin.id,
-                    })
-                } else {
-                    // Retaining is no different from adding a new builtin.
-                    Some(BuiltinAction::Add(previous_builtin.clone()))
-                }
-            }
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Builtin {
     pub name: String,
@@ -153,6 +96,61 @@ pub struct Builtins {
 
     /// Dynamic feature transitions for builtin programs
     pub feature_transitions: Vec<BuiltinFeatureTransition>,
+}
+
+/// Actions taken by a bank when managing the list of active builtin programs.
+#[derive(Debug, Clone)]
+pub enum BuiltinAction {
+    Add(Builtin),
+    Remove(Pubkey),
+}
+
+/// State transition enum used for adding and removing builtin programs through
+/// feature activations.
+#[derive(Debug, Clone)]
+pub enum BuiltinFeatureTransition {
+    /// Add a builtin program if a feature is activated.
+    Add {
+        builtin: Builtin,
+        feature_id: Pubkey,
+    },
+    /// Remove a builtin program if a feature is activated or
+    /// retain a previously added builtin.
+    RemoveOrRetain {
+        previous_builtin: Builtin,
+        removal_feature_id: Pubkey,
+    },
+}
+
+impl BuiltinFeatureTransition {
+    pub fn to_action(
+        &self,
+        should_apply_action_for_feature: &impl Fn(&Pubkey) -> bool,
+    ) -> Option<BuiltinAction> {
+        match self {
+            Self::Add {
+                builtin,
+                feature_id,
+            } => {
+                if should_apply_action_for_feature(feature_id) {
+                    Some(BuiltinAction::Add(builtin.clone()))
+                } else {
+                    None
+                }
+            }
+            Self::RemoveOrRetain {
+                previous_builtin,
+                removal_feature_id,
+            } => {
+                if should_apply_action_for_feature(removal_feature_id) {
+                    Some(BuiltinAction::Remove(previous_builtin.id))
+                } else {
+                    // Retaining is no different from adding a new builtin.
+                    Some(BuiltinAction::Add(previous_builtin.clone()))
+                }
+            }
+        }
+    }
 }
 
 /// Builtin programs that are always available
@@ -201,9 +199,6 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             feature_id: feature_set::add_compute_budget_program::id(),
         },
-        // TODO when feature `prevent_calling_precompiles_as_programs` is
-        // cleaned up also remove "secp256k1_program" from the main builtins
-        // list
         BuiltinFeatureTransition::RemoveOrRetain {
             previous_builtin: Builtin::new(
                 "secp256k1_program",
@@ -212,9 +207,6 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
         },
-        // TODO when feature `prevent_calling_precompiles_as_programs` is
-        // cleaned up also remove "ed25519_program" from the main builtins
-        // list
         BuiltinFeatureTransition::RemoveOrRetain {
             previous_builtin: Builtin::new(
                 "ed25519_program",
