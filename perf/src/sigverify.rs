@@ -540,18 +540,30 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
     last_valid_batch
 }
 
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
+/// return number of packets that failed signature validation
+pub fn ed25519_verify_cpu(
+    batches: &mut [PacketBatch],
+    reject_non_vote: bool,
+    packet_count: usize,
+) -> usize {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
-    PAR_THREAD_POOL.install(|| {
-        batches.into_par_iter().for_each(|batch| {
-            batch
-                .packets
-                .par_iter_mut()
-                .for_each(|p| verify_packet(p, reject_non_vote))
-        });
-    });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
+    PAR_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|batch| {
+                batch
+                    .packets
+                    .par_iter_mut()
+                    .map(|p| {
+                        verify_packet(p, reject_non_vote);
+                        p.meta.discard() as usize
+                    })
+                    .sum::<usize>() as usize
+            })
+            .sum::<usize>()
+    })
 }
 
 pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
@@ -618,14 +630,17 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
     Ok(out)
 }
 
-pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) {
+pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) -> usize {
+    let mut count_discarded = 0;
     for (batch, v) in batches.iter_mut().zip(r) {
         for (pkt, f) in batch.packets.iter_mut().zip(v) {
             if !pkt.meta.discard() {
                 pkt.meta.set_discard(*f == 0);
+                count_discarded += pkt.meta.discard() as usize;
             }
         }
     }
+    count_discarded
 }
 
 pub fn ed25519_verify(
@@ -634,7 +649,7 @@ pub fn ed25519_verify(
     recycler_out: &Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
     valid_packet_count: usize,
-) {
+) -> usize {
     let api = perf_libs::api();
     if api.is_none() {
         return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
@@ -704,8 +719,8 @@ pub fn ed25519_verify(
     }
     trace!("done verify");
     copy_return_values(&sig_lens, &out, &mut rvs);
-    mark_disabled(batches, &rvs);
     inc_new_counter_debug!("ed25519_verify_gpu", valid_packet_count);
+    mark_disabled(batches, &rvs)
 }
 
 #[cfg(test)]

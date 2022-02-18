@@ -40,7 +40,13 @@ pub struct SigVerifyStage {
 }
 
 pub trait SigVerifier {
-    fn verify_batches(&self, batches: Vec<PacketBatch>, valid_packets: usize) -> Vec<PacketBatch>;
+    /// Returns marked packets and number of discarded packets
+    /// a returned packet is marked as discarded if it fails verification
+    fn verify_batches(
+        &self,
+        batches: Vec<PacketBatch>,
+        valid_packets: usize,
+    ) -> (Vec<PacketBatch>, usize);
 }
 
 #[derive(Default, Clone)]
@@ -61,6 +67,7 @@ struct SigVerifierStats {
     total_shrink_time: usize,
     total_shrinks: usize,
     total_valid_packets: usize,
+    total_discarded: usize,
 }
 
 impl SigVerifierStats {
@@ -172,6 +179,7 @@ impl SigVerifierStats {
             ("total_shrink_time", self.total_shrink_time, i64),
             ("total_shrinks", self.total_shrinks, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
+            ("total_discarded", self.total_discarded, i64),
         );
     }
 }
@@ -181,9 +189,9 @@ impl SigVerifier for DisabledSigVerifier {
         &self,
         mut batches: Vec<PacketBatch>,
         _valid_packets: usize,
-    ) -> Vec<PacketBatch> {
+    ) -> (Vec<PacketBatch>, usize) {
         sigverify::ed25519_verify_disabled(&mut batches);
-        batches
+        (batches, 0)
     }
 }
 
@@ -254,8 +262,13 @@ impl SigVerifyStage {
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches, num_valid_packets);
+        let (mut batches, count_discarded) = verifier.verify_batches(batches, num_valid_packets);
         verify_batch_time.stop();
+
+        debug!(
+            "discarded packages: {}, dedup failed packages: {}",
+            count_discarded, dedup_fail
+        );
 
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_valid_packets = count_valid_packets(&batches);
@@ -305,6 +318,7 @@ impl SigVerifyStage {
         stats.total_excess_fail += excess_fail;
         stats.total_shrink_time += shrink_time.as_us() as usize;
         stats.total_shrinks += total_shrinks;
+        stats.total_discarded += count_discarded;
 
         Ok(())
     }
