@@ -157,6 +157,7 @@ use {
 };
 
 mod address_lookup_table;
+mod builtin_programs;
 mod sysvar_cache;
 mod transaction_account_state_info;
 
