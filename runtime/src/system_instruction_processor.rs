@@ -12,7 +12,7 @@ use {
         account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
-        keyed_account::{keyed_account_at_index, KeyedAccount},
+        keyed_account::keyed_account_at_index,
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -149,8 +149,8 @@ fn create_account(
     invoke_context: &InvokeContext,
     instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey>,
-    _from: &KeyedAccount,
-    to: &KeyedAccount,
+    from_account_index: usize,
+    to_account_index: usize,
     to_address: &Address,
     lamports: u64,
     space: u64,
@@ -158,8 +158,9 @@ fn create_account(
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
-        let to = &mut to.try_account_ref_mut()?;
-        if to.lamports() > 0 {
+        let to_account = instruction_context
+            .try_borrow_instruction_account(invoke_context.transaction_context, to_account_index)?;
+        if to_account.get_lamports() > 0 {
             ic_msg!(
                 invoke_context,
                 "Create Account: account {:?} already in use",
@@ -167,10 +168,24 @@ fn create_account(
             );
             return Err(SystemError::AccountAlreadyInUse.into());
         }
-
-        allocate_and_assign(invoke_context, signers, to, to_address, space, owner)?;
     }
-    transfer(invoke_context, instruction_context, 0, 1, lamports) // TODO
+    {
+        // TODO
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        let mut to = keyed_account_at_index(
+            keyed_accounts,
+            instruction_context.get_number_of_program_accounts() + to_account_index,
+        )?
+        .try_account_ref_mut()?;
+        allocate_and_assign(invoke_context, signers, &mut to, to_address, space, owner)?;
+    }
+    transfer(
+        invoke_context,
+        instruction_context,
+        from_account_index,
+        to_account_index,
+        lamports,
+    )
 }
 
 fn transfer_verified(
@@ -376,22 +391,17 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account
-                    + instruction_account_indices::CreateAccount::From as usize,
+            let to_key = instruction_context.get_instruction_account_key(
+                invoke_context.transaction_context,
+                instruction_account_indices::CreateAccount::To as usize,
             )?;
-            let to = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account + instruction_account_indices::CreateAccount::To as usize,
-            )?;
-            let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
+            let to_address = Address::create(to_key, None, invoke_context)?;
             create_account(
                 invoke_context,
                 instruction_context,
                 &signers,
-                from,
-                to,
+                instruction_account_indices::CreateAccount::From as usize,
+                instruction_account_indices::CreateAccount::To as usize,
                 &to_address,
                 lamports,
                 space,
@@ -406,27 +416,17 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account
-                    + instruction_account_indices::CreateAccountWithSeed::From as usize,
+            let to_key = instruction_context.get_instruction_account_key(
+                invoke_context.transaction_context,
+                instruction_account_indices::CreateAccountWithSeed::To as usize,
             )?;
-            let to = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account
-                    + instruction_account_indices::CreateAccountWithSeed::To as usize,
-            )?;
-            let to_address = Address::create(
-                to.unsigned_key(),
-                Some((&base, &seed, &owner)),
-                invoke_context,
-            )?;
+            let to_address = Address::create(to_key, Some((&base, &seed, &owner)), invoke_context)?;
             create_account(
                 invoke_context,
                 instruction_context,
                 &signers,
-                from,
-                to,
+                instruction_account_indices::CreateAccountWithSeed::From as usize,
+                instruction_account_indices::CreateAccountWithSeed::To as usize,
                 &to_address,
                 lamports,
                 space,
