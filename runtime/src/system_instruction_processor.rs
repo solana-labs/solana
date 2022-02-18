@@ -1291,38 +1291,42 @@ mod tests {
 
     #[test]
     fn test_assign() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let pubkey = Pubkey::new_unique();
-        let mut account = AccountSharedData::new(100, 0, &system_program::id());
+        let account = AccountSharedData::new(100, 0, &system_program::id());
 
-        assert_eq!(
-            assign(
-                &invoke_context,
-                &HashSet::new(),
-                &mut account,
-                &pubkey.into(),
-                &new_owner,
-            ),
-            Err(InstructionError::MissingRequiredSignature)
+        // owner does not change, no signature needed
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Assign {
+                owner: system_program::id(),
+            })
+            .unwrap(),
+            vec![(pubkey, account.clone())],
+            vec![AccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: false,
+            }],
+            Ok(()),
+            super::process_instruction,
         );
 
-        // no change, no signature needed
-        assert_eq!(
-            assign(
-                &invoke_context,
-                &HashSet::new(),
-                &mut account,
-                &pubkey.into(),
-                &system_program::id(),
-            ),
-            Ok(())
+        // owner does change, signature needed
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap(),
+            vec![(pubkey, account.clone())],
+            vec![AccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: false,
+            }],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
 
         process_instruction(
             &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap(),
-            vec![(pubkey, account)],
+            vec![(pubkey, account.clone())],
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
@@ -1331,25 +1335,21 @@ mod tests {
             Ok(()),
             super::process_instruction,
         );
-    }
 
-    #[test]
-    fn test_assign_to_sysvar_with_feature() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let new_owner = sysvar::id();
-        let from = Pubkey::new_unique();
-        let mut from_account = AccountSharedData::new(100, 0, &system_program::id());
-
-        assert_eq!(
-            assign(
-                &invoke_context,
-                &[from].iter().cloned().collect::<HashSet<_>>(),
-                &mut from_account,
-                &from.into(),
-                &new_owner,
-            ),
-            Ok(())
+        // assign to sysvar instead of system_program
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Assign {
+                owner: sysvar::id(),
+            })
+            .unwrap(),
+            vec![(pubkey, account)],
+            vec![AccountMeta {
+                pubkey,
+                is_signer: true,
+                is_writable: false,
+            }],
+            Ok(()),
+            super::process_instruction,
         );
     }
 
