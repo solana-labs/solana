@@ -44,14 +44,14 @@ impl SigVerifier for TransactionSigVerifier {
         &self,
         mut batches: Vec<PacketBatch>,
         valid_packets: usize,
-    ) -> Vec<PacketBatch> {
-        sigverify::ed25519_verify(
+    ) -> (Vec<PacketBatch>, usize) {
+        let count_invalid_packages = sigverify::ed25519_verify(
             &mut batches,
             &self.recycler,
             &self.recycler_out,
             self.reject_non_vote,
             valid_packets,
         );
-        batches
+        (batches, count_invalid_packages)
     }
 }
