@@ -35,6 +35,7 @@ use {
 };
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
+pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 1;
 
 pub struct TpuSockets {
     pub transactions: Vec<UdpSocket>,
@@ -108,6 +109,7 @@ impl Tpu {
             cluster_info.my_contact_info().tpu.ip(),
             packet_sender,
             exit.clone(),
+            MAX_QUIC_CONNECTIONS_PER_IP,
         )
         .unwrap();
 

@@ -11,14 +11,15 @@ use {
         signature::Keypair,
     },
     std::{
+        collections::{hash_map::Entry, HashMap},
         error::Error,
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            Arc, Mutex,
         },
         thread,
-        time::Duration,
+        time::{Duration, Instant},
     },
     tokio::{
         runtime::{Builder, Runtime},
@@ -120,8 +121,12 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
     cert_params
 }
 
-pub fn rt() -> Runtime {
-    Builder::new_current_thread().enable_all().build().unwrap()
+fn rt() -> Runtime {
+    Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -190,12 +195,52 @@ fn handle_chunk(
     false
 }
 
+struct ConnectionEntry {
+    count: usize,
+    exit: Arc<AtomicBool>,
+    start: Instant,
+}
+
+impl ConnectionEntry {
+    fn new(exit: Arc<AtomicBool>, start: Instant) -> Self {
+        Self {
+            count: 0,
+            exit,
+            start,
+        }
+    }
+}
+
+impl Drop for ConnectionEntry {
+    fn drop(&mut self) {
+        self.exit.store(true, Ordering::Relaxed);
+    }
+}
+
+fn prune_oldest_from_connection_table(
+    table: &mut HashMap<IpAddr, ConnectionEntry>,
+    max_size: usize,
+) {
+    while table.len() > max_size {
+        let mut oldest = 0;
+        let mut oldest_ip = None;
+        for (ip, entry) in table.iter() {
+            if (entry.start.elapsed().as_micros() as u64) > oldest {
+                oldest = entry.start.elapsed().as_micros() as u64;
+                oldest_ip = Some(*ip);
+            }
+        }
+        table.remove(&oldest_ip.unwrap());
+    }
+}
+
 pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
+    max_connections_per_ip: usize,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -206,8 +251,16 @@ pub fn spawn_server(
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
 
+    let total_streams = Arc::new(AtomicUsize::new(0));
+    let total_new_streams = Arc::new(AtomicUsize::new(0));
     let handle = thread::spawn(move || {
         let handle = runtime.spawn(async move {
+            debug!("spawn quic server");
+            let total_connections = Arc::new(AtomicUsize::new(0));
+            let total_new_connections = Arc::new(AtomicUsize::new(0));
+            let mut last_datapoint = Instant::now();
+            let connection_table: Arc<Mutex<HashMap<IpAddr, ConnectionEntry>>> =
+                Arc::new(Mutex::new(HashMap::new()));
             while !exit.load(Ordering::Relaxed) {
                 const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
                 let timeout_connection = timeout(
@@ -216,9 +269,34 @@ pub fn spawn_server(
                 )
                 .await;
 
+                if last_datapoint.elapsed().as_secs() >= 5 {
+                    datapoint_info!(
+                        "quic-connections",
+                        (
+                            "active_connections",
+                            total_connections.load(Ordering::Relaxed),
+                            i64
+                        ),
+                        ("active_streams", total_streams.load(Ordering::Relaxed), i64),
+                        (
+                            "new_connections",
+                            total_new_connections.swap(0, Ordering::Relaxed),
+                            i64
+                        ),
+                        (
+                            "new_streams",
+                            total_new_streams.swap(0, Ordering::Relaxed),
+                            i64
+                        ),
+                    );
+                    last_datapoint = Instant::now();
+                }
+
                 if let Ok(Some(connection)) = timeout_connection {
                     if let Ok(new_connection) = connection.await {
-                        let exit = exit.clone();
+                        let total_connections = total_connections.clone();
+                        total_connections.fetch_add(1, Ordering::Relaxed);
+                        total_new_connections.fetch_add(1, Ordering::Relaxed);
                         let quinn::NewConnection {
                             connection,
                             mut uni_streams,
@@ -226,23 +304,84 @@ pub fn spawn_server(
                         } = new_connection;
 
                         let remote_addr = connection.remote_address();
-                        let packet_sender = packet_sender.clone();
-                        tokio::spawn(async move {
-                            debug!("new connection {}", remote_addr);
-                            while let Some(Ok(mut stream)) = uni_streams.next().await {
-                                let mut maybe_batch = None;
-                                while !exit.load(Ordering::Relaxed) {
-                                    if handle_chunk(
-                                        &stream.read_chunk(PACKET_DATA_SIZE, false).await,
-                                        &mut maybe_batch,
-                                        &remote_addr,
-                                        &packet_sender,
-                                    ) {
-                                        break;
+
+                        let mut connection_table_l = connection_table.lock().unwrap();
+                        const MAX_CONNECTION_TABLE_SIZE: usize = 5000;
+                        prune_oldest_from_connection_table(
+                            &mut connection_table_l,
+                            MAX_CONNECTION_TABLE_SIZE,
+                        );
+                        let connection_entry = connection_table_l
+                            .entry(remote_addr.ip())
+                            .or_insert_with(|| {
+                                ConnectionEntry::new(
+                                    Arc::new(AtomicBool::new(false)),
+                                    Instant::now(),
+                                )
+                            });
+                        if (connection_entry.count + 1) <= max_connections_per_ip {
+                            connection_entry.count += 1;
+                            let stream_exit = connection_entry.exit.clone();
+                            drop(connection_table_l);
+                            let packet_sender = packet_sender.clone();
+                            let total_streams = total_streams.clone();
+                            let total_new_streams = total_new_streams.clone();
+                            let total_connections1 = total_connections.clone();
+                            let connection_table1 = connection_table.clone();
+                            tokio::spawn(async move {
+                                debug!(
+                                    "quic new connection {} streams: {} connections: {}",
+                                    remote_addr,
+                                    total_streams.load(Ordering::Relaxed),
+                                    total_connections1.load(Ordering::Relaxed),
+                                );
+                                while !stream_exit.load(Ordering::Relaxed) {
+                                    match uni_streams.next().await {
+                                        Some(stream_result) => match stream_result {
+                                            Ok(mut stream) => {
+                                                total_streams.fetch_add(1, Ordering::Relaxed);
+                                                total_new_streams.fetch_add(1, Ordering::Relaxed);
+                                                let mut maybe_batch = None;
+                                                while !stream_exit.load(Ordering::Relaxed) {
+                                                    if handle_chunk(
+                                                        &stream
+                                                            .read_chunk(PACKET_DATA_SIZE, false)
+                                                            .await,
+                                                        &mut maybe_batch,
+                                                        &remote_addr,
+                                                        &packet_sender,
+                                                    ) {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                debug!("stream error: {:?}", e);
+                                                total_streams.fetch_sub(1, Ordering::Relaxed);
+                                                break;
+                                            }
+                                        },
+                                        None => {
+                                            total_streams.fetch_sub(1, Ordering::Relaxed);
+                                            break;
+                                        }
                                     }
                                 }
-                            }
-                        });
+                                {
+                                    let mut connection_table_l = connection_table1.lock().unwrap();
+                                    if let Entry::Occupied(mut e) =
+                                        connection_table_l.entry(remote_addr.ip())
+                                    {
+                                        let e_ref = e.get_mut();
+                                        e_ref.count -= 1;
+                                        if e_ref.count == 0 {
+                                            e.remove_entry();
+                                        }
+                                    }
+                                }
+                                total_connections.fetch_sub(1, Ordering::Relaxed);
+                            });
+                        }
                     }
                 }
             }
@@ -300,7 +439,7 @@ mod test {
         let (sender, _receiver) = unbounded();
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
     }
@@ -317,6 +456,35 @@ mod test {
     }
 
     #[test]
+    fn test_quic_server_block_multiple_connections() {
+        solana_logger::setup();
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, _receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
+
+        let runtime = rt();
+        let _rt_guard = runtime.enter();
+        let conn1 = make_client_endpoint(&runtime, &server_address);
+        let conn2 = make_client_endpoint(&runtime, &server_address);
+        let handle = runtime.spawn(async move {
+            let mut s1 = conn1.connection.open_uni().await.unwrap();
+            let mut s2 = conn2.connection.open_uni().await.unwrap();
+            s1.write_all(&[0u8]).await.unwrap();
+            s1.finish().await.unwrap();
+            s2.write_all(&[0u8])
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
+        });
+        runtime.block_on(handle).unwrap();
+        exit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
+    }
+
+    #[test]
     fn test_quic_server_multiple_streams() {
         solana_logger::setup();
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -325,7 +493,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 2).unwrap();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();
@@ -380,7 +548,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();
@@ -419,5 +587,29 @@ mod test {
 
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
+    }
+
+    #[test]
+    fn test_prune_table() {
+        use std::net::Ipv4Addr;
+        solana_logger::setup();
+        let mut table = HashMap::new();
+        let exit = Arc::new(AtomicBool::new(false));
+        let now = Instant::now();
+        for i in 0..5 {
+            table.insert(
+                IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)),
+                ConnectionEntry::new(
+                    exit.clone(),
+                    now.checked_sub(Duration::from_secs((i + 1) as u64))
+                        .unwrap(),
+                ),
+            );
+        }
+        prune_oldest_from_connection_table(&mut table, 3);
+        for v in table.values() {
+            assert!(now.duration_since(v.start).as_secs() <= 3);
+        }
+        assert_eq!(table.len(), 3);
     }
 }
