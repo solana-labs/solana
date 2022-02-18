@@ -12,7 +12,6 @@ use {
     crossbeam_channel::{unbounded, Receiver, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE},
-    solana_measure::measure::Measure,
     solana_perf::{
         packet::{limited_deserialize, Packet, PacketBatch},
         recycler::Recycler,
@@ -141,6 +140,19 @@ enum PacketThresholdUpdate {
     Decrease,
 }
 
+impl PacketThresholdUpdate {
+    fn calculate(&self, current: usize) -> usize {
+        match *self {
+            PacketThresholdUpdate::Increase => current
+                .saturating_mul(100)
+                .saturating_div(DynamicPacketToProcessThreshold::PERCENTAGE),
+            PacketThresholdUpdate::Decrease => current
+                .saturating_mul(DynamicPacketToProcessThreshold::PERCENTAGE)
+                .saturating_div(100),
+        }
+    }
+}
+
 struct DynamicPacketToProcessThreshold {
     max_packets: usize,
 }
@@ -155,18 +167,23 @@ impl Default for DynamicPacketToProcessThreshold {
 
 impl DynamicPacketToProcessThreshold {
     const DEFAULT_MAX_PACKETS: usize = 1024;
-    const TIME_THRESHOLD_MS: u64 = 1000;
-    const FACTOR: f64 = 0.9;
+    const TIME_THRESHOLD: Duration = Duration::from_secs(1);
+    const PERCENTAGE: usize = 90;
 
-    fn update(&mut self, update: PacketThresholdUpdate) {
-        self.max_packets = match update {
-            PacketThresholdUpdate::Increase => {
-                (self.max_packets as f64) / DynamicPacketToProcessThreshold::FACTOR
-            }
-            PacketThresholdUpdate::Decrease => {
-                (self.max_packets as f64) * DynamicPacketToProcessThreshold::FACTOR
-            }
-        } as usize;
+    fn update(&mut self, total_packets: usize, compute_time: Duration) {
+        if total_packets >= self.max_packets {
+            let threshold_update = if compute_time > DynamicPacketToProcessThreshold::TIME_THRESHOLD
+            {
+                PacketThresholdUpdate::Decrease
+            } else {
+                PacketThresholdUpdate::Increase
+            };
+            self.max_packets = threshold_update.calculate(self.max_packets);
+        }
+    }
+
+    fn should_drop(&self, total: usize) -> bool {
+        total >= self.max_packets
     }
 }
 
@@ -288,18 +305,17 @@ impl AncestorHashesService {
         let mut dropped_packets = 0;
         while let Ok(batch) = response_receiver.try_recv() {
             total_packets += batch.packets.len();
-            if total_packets < packet_threshold.max_packets {
-                // Drop the rest in the channel in case of DOS
-                packet_batches.push(batch);
-            } else {
+            if packet_threshold.should_drop(total_packets) {
                 dropped_packets += batch.packets.len();
+            } else {
+                packet_batches.push(batch);
             }
         }
 
         stats.dropped_packets += dropped_packets;
         stats.total_packets += total_packets;
 
-        let mut time = Measure::start("ancestor_hashes::handle_packets");
+        let timer = Instant::now();
         for packet_batch in packet_batches {
             Self::process_packet_batch(
                 ancestor_hashes_request_statuses,
@@ -311,16 +327,7 @@ impl AncestorHashesService {
                 retryable_slots_sender,
             );
         }
-        time.stop();
-        if total_packets >= packet_threshold.max_packets {
-            let threshold_update =
-                if time.as_ms() > DynamicPacketToProcessThreshold::TIME_THRESHOLD_MS {
-                    PacketThresholdUpdate::Decrease
-                } else {
-                    PacketThresholdUpdate::Increase
-                };
-            packet_threshold.update(threshold_update)
-        }
+        packet_threshold.update(total_packets, timer.elapsed());
         Ok(())
     }
 
@@ -1608,11 +1615,20 @@ mod test {
             DynamicPacketToProcessThreshold::DEFAULT_MAX_PACKETS
         );
 
+        assert!(!threshold.should_drop(10));
+        assert!(threshold.should_drop(2000));
+
         let old = threshold.max_packets;
-        threshold.update(PacketThresholdUpdate::Increase);
+
+        // Increase
+        let total = 2000;
+        let compute_time = Duration::from_millis(500);
+        threshold.update(total, compute_time);
         assert!(threshold.max_packets > old);
 
-        threshold.update(PacketThresholdUpdate::Decrease);
+        // Decrease
+        let compute_time = Duration::from_millis(2000);
+        threshold.update(total, compute_time);
         assert_eq!(threshold.max_packets, old - 1); // due to rounding error, there is a difference of 1
     }
 }
