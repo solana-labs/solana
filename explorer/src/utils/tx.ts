@@ -15,6 +15,7 @@ import {
   PartiallyDecodedInstruction,
   ParsedInstruction,
   Secp256k1Program,
+  Ed25519Program,
 } from "@solana/web3.js";
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
@@ -30,7 +31,10 @@ export enum PROGRAM_NAMES {
   STAKE = "Stake Program",
   SYSTEM = "System Program",
   VOTE = "Vote Program",
-  SECP256K1 = "Secp256k1 Program",
+
+  // native precompiles
+  SECP256K1 = "Secp256k1 SigVerify Precompile",
+  ED25519 = "Ed25519 SigVerify Precompile",
 
   // spl
   ASSOCIATED_TOKEN = "Associated Token Program",
@@ -104,7 +108,10 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.STAKE]: ALL_CLUSTERS,
   [PROGRAM_NAMES.SYSTEM]: ALL_CLUSTERS,
   [PROGRAM_NAMES.VOTE]: ALL_CLUSTERS,
+
+  // native precompiles
   [PROGRAM_NAMES.SECP256K1]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.ED25519]: ALL_CLUSTERS,
 
   // spl
   [PROGRAM_NAMES.ASSOCIATED_TOKEN]: ALL_CLUSTERS,
@@ -174,7 +181,10 @@ export const PROGRAM_NAME_BY_ID = {
   [StakeProgram.programId.toBase58()]: PROGRAM_NAMES.STAKE,
   [SystemProgram.programId.toBase58()]: PROGRAM_NAMES.SYSTEM,
   [VOTE_PROGRAM_ID.toBase58()]: PROGRAM_NAMES.VOTE,
+
+  // native precompiles
   [Secp256k1Program.programId.toBase58()]: PROGRAM_NAMES.SECP256K1,
+  [Ed25519Program.programId.toBase58()]: PROGRAM_NAMES.ED25519,
 
   // spl
   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: PROGRAM_NAMES.ASSOCIATED_TOKEN,
