@@ -44,6 +44,8 @@ echo --- build environment
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings -A incomplete_features"
 
+_ "$cargo" stable clean
+
 # Only force up-to-date lock files on edge
 if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
   # Exclude --benches as it's not available in rust stable yet
