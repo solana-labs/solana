@@ -45,7 +45,7 @@ impl SigVerifier for ShredSigVerifier {
         &self,
         mut batches: Vec<PacketBatch>,
         _valid_packets: usize,
-    ) -> Vec<PacketBatch> {
+    ) -> (Vec<PacketBatch>, usize) {
         let r_bank = self.bank_forks.read().unwrap().working_bank();
         let slots: HashSet<u64> = Self::read_slots(&batches);
         let mut leader_slots: HashMap<u64, [u8; 32]> = slots
@@ -60,8 +60,8 @@ impl SigVerifier for ShredSigVerifier {
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
 
         let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
-        solana_perf::sigverify::mark_disabled(&mut batches, &r);
-        batches
+        let count_discarded = solana_perf::sigverify::mark_disabled(&mut batches, &r);
+        (batches, count_discarded)
     }
 }
 
