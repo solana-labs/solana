@@ -6,18 +6,23 @@ use {
     solana_gossip::weighted_shuffle::WeightedShuffle,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_sdk::{
-        hash::Hash, message::Message, short_vec::decode_shortu16_len, signature::Signature,
-        transaction::VersionedTransaction,
+        feature_set,
+        hash::Hash,
+        message::Message,
+        short_vec::decode_shortu16_len,
+        signature::Signature,
+        transaction::{AddressLoader, SanitizedTransaction, VersionedTransaction},
     },
     std::{
         collections::{HashMap, VecDeque},
         mem::size_of,
         net::IpAddr,
+        sync::Arc,
     },
 };
 
 // To locate a packet in banking_stage's buffered packet batches.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PacketLocator {
     #[allow(dead_code)]
     batch_index: usize,
@@ -30,13 +35,13 @@ pub struct PacketLocator {
 #[derive(Debug, Default)]
 pub struct DeserializedPacket {
     #[allow(dead_code)]
-    versioned_transaction: VersionedTransaction,
+    pub versioned_transaction: VersionedTransaction,
 
     #[allow(dead_code)]
-    message_hash: Hash,
+    pub message_hash: Hash,
 
     #[allow(dead_code)]
-    is_simple_vote: bool,
+    pub is_simple_vote: bool,
 }
 
 #[derive(Debug, Default)]
@@ -141,12 +146,7 @@ pub fn get_stakes_and_locators(
             deserialized_packet_batch
                 .unprocessed_packets
                 .keys()
-                //                    .cloned()
-                //                    .collect::<Vec<usize>>();
-                //                original_unprocessed_indexes
-                //                    .iter()
                 .for_each(|packet_index| {
-                    debug!("----- packet index {}", packet_index);
                     let p = &packet_batch.packets[*packet_index];
                     stakes.push(p.meta.weight);
                     locators.push(PacketLocator {
@@ -164,7 +164,6 @@ pub fn get_stakes_and_locators(
     (stakes, locators)
 }
 
-#[allow(clippy::needless_collect)]
 pub fn weighted_shuffle(
     stakes: &[u64],
     locators: &[PacketLocator],
@@ -191,6 +190,41 @@ pub fn weighted_shuffle(
     shuffled_locators
 }
 
+// This function creates SanitizedTransactions from deseralized VersionedTransactions.i
+// A list of sanitized transactions are returned
+// with their packet locators.
+pub fn sanitize_transactions(
+    unprocessed_packet_batches: &UnprocessedPacketBatches,
+    packet_locators: &[PacketLocator],
+    feature_set: &Arc<feature_set::FeatureSet>,
+    votes_only: bool,
+    address_loader: &impl AddressLoader,
+) -> (Vec<SanitizedTransaction>, Vec<PacketLocator>) {
+    packet_locators
+        .iter()
+        .filter_map(|locator| {
+            let deserialized_packet_batch = unprocessed_packet_batches.get(locator.batch_index)?;
+            let deserialized_packet = deserialized_packet_batch
+                .unprocessed_packets
+                .get(&locator.packet_index)?;
+
+            if votes_only && !deserialized_packet.is_simple_vote {
+                return None;
+            }
+
+            let tx = SanitizedTransaction::try_create(
+                deserialized_packet.versioned_transaction.clone(),
+                deserialized_packet.message_hash,
+                Some(deserialized_packet.is_simple_vote),
+                address_loader,
+            )
+            .ok()?;
+            tx.verify_precompiles(feature_set).ok()?;
+            Some((tx, locator.clone()))
+        })
+        .unzip()
+}
+
 fn update_packet_sender_info(packet_sender_info: &mut PacketSenderInfo, packet: &Packet) {
     let ip = packet.meta.addr;
     packet_sender_info.packet_senders_ip.push(ip);
@@ -208,7 +242,13 @@ fn update_packet_sender_info(packet_sender_info: &mut PacketSenderInfo, packet: 
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_perf::packet::PacketFlags,
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::DisabledAddressLoader,
+        },
+        solana_vote_program::vote_transaction,
     };
 
     fn packet_with_weight(weight: u64, ip: IpAddr) -> Packet {
@@ -362,5 +402,64 @@ mod tests {
             assert_eq!(stake, sender_detail.stake);
             assert_eq!(2u64, sender_detail.packet_count);
         });
+    }
+
+    #[test]
+    fn test_sanitize_transactions() {
+        solana_logger::setup();
+        use solana_sdk::feature_set::FeatureSet;
+        let keypair = Keypair::new();
+        let transfer_tx =
+            system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default());
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
+            Hash::default(),
+            Hash::default(),
+            &keypair,
+            &keypair,
+            &keypair,
+            None,
+        );
+
+        let transfer_packet = Packet::from_data(None, &transfer_tx).unwrap();
+        let mut vote_packet = Packet::from_data(None, &vote_tx).unwrap();
+        vote_packet.meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
+
+        // packet_batch with one votes, one transfer txs
+        // two such batches in the buffer
+        let packets = vec![transfer_packet, vote_packet];
+        let packet_batch = PacketBatch::new(packets);
+        let unprocessed_packets = (0..2usize)
+            .map(|_| {
+                DeserializedPacketBatch::new(packet_batch.clone(), (0..2usize).collect(), false)
+            })
+            .collect();
+        let (_, locators) = get_stakes_and_locators(&unprocessed_packets, &mut None);
+        {
+            let votes_only = false;
+            let (txs, tx_locators) = sanitize_transactions(
+                &unprocessed_packets,
+                &locators,
+                &Arc::new(FeatureSet::default()),
+                votes_only,
+                &DisabledAddressLoader,
+            );
+            assert_eq!(4, txs.len());
+            assert_eq!(locators, tx_locators);
+        }
+
+        {
+            let votes_only = true;
+            let (txs, tx_locators) = sanitize_transactions(
+                &unprocessed_packets,
+                &locators,
+                &Arc::new(FeatureSet::default()),
+                votes_only,
+                &DisabledAddressLoader,
+            );
+            assert_eq!(2, txs.len());
+            assert_eq!(locators[1], tx_locators[0]);
+            assert_eq!(locators[3], tx_locators[1]);
+        }
     }
 }

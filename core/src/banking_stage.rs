@@ -7,6 +7,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
+        packet_sender_info::{PacketSenderInfo, SenderDetailInfo},
         qos_service::QosService,
         unprocessed_packet_batches::*,
     },
@@ -519,19 +520,104 @@ impl BankingStage {
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
+        // TODO - add cli option to enable/disable PacketSender info logging
+        let mut packet_sender_info = Some(PacketSenderInfo::default());
+
         // 1. scan buffer to collect current locators, stakes,
         // // TODO TAO - and its fee+CU
+        let mut buffer_scan_start = Measure::start("get_stakes_and_locators");
+        let (stakes, locators) =
+            get_stakes_and_locators(buffered_packet_batches, &mut packet_sender_info);
+        buffer_scan_start.stop();
 
         // 2. weight shuffle -> shuffled locators
+        let mut buffer_shuffle_start = Measure::start("weighted_shuffle");
+        let shuffled_packet_locators =
+            weighted_shuffle(&stakes, &locators, &mut packet_sender_info);
+        buffer_shuffle_start.stop();
 
-        // 3. TODO TAO - sort by fee functino -> sorted and shuffled locators
+        let mut report_sender_info_start = Measure::start("packet_sender_info_report");
+        if let Some(packet_sender_info) = packet_sender_info {
+            packet_sender_info.report(banking_stage_stats.id);
+        }
+        report_sender_info_start.stop();
+
+        // 3. TODO TAO - sort by fee function -> sorted and shuffled locators
+        //    where to get the "base_fee"?
 
         // 4. using above locators to create sanitized transaction chunks
+        // We do NOT want to sanitize all buffered transactions, as part of them will not be
+        // processed.
         // 5. passing chunks for process
         // 6. handle retries, invlaid and committed to update buffer:
         //    chunk --sanitize--> subset of [txs] --process--> subset of retryable txs.
         //    from original chunk, all locator *not* in retryable TXS are to be removed from
         //    buffer.
+
+        let mut chunk_start = 0;
+        let mut reached_end_of_slot: Option<EndOfSlot> = None;
+        let mut evictable_packets_locators = Vec::<PacketLocator>::new();
+        while chunk_start != shuffled_packet_locators.len() {
+
+            if let Some(end_of_slot) = &reached_end_of_slot {
+                // filter too_old unprocessed packets if have a bank, otherwise keep buffer as is
+                if let Some(bank) = &end_of_slot.working_bank {
+                    evictable_packets_locators.extend(
+                        filter_unprocessed_packets_at_and_of_slot(
+                            bank,
+                            buffered_packet_batch,
+                            &shuffled_packet_locators[chunk_start..shuffled_packet_locators.len()],
+                            my_pubkey,
+                            end_of_slot.next_slot_leader,
+                            banking_stage_stats,
+                        )
+                    );
+                }
+                break;
+            }
+            else {
+                let bank_start = poh_recorder.lock().unwrap().bank_start()
+                if let Some(BankStart {bank, bank_creation_time,}) = bank_start {
+                    let chunk_end = std::cmp::min(shuffled_packet_locators.len(), chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH, );
+                    let (transactions, sanitized_locators) = sanitize_transactions(
+                        &buffered_packet_batches,
+                        &shuffled_packet_locators[chunk_start..chunk_end],
+                        &bank.feature_set,
+                        bank.vote_only_bank(),
+                        bank.as_ref(),
+                        );
+                    let process_transaction_summary = Self::process_transactions(
+                        bank,
+                        bank_creation_time,
+                        &transactions,
+                        poh,
+                        transaction_status_sender,
+                        gossip_vote_sender,
+                        qos_service,
+                    );
+                    if summary sais it's end of slot {
+                        set end_of_slot
+                    }
+                    // now handling result of this processed chunk
+
+                    let retryable_packet_locator = foo(process_transaction_summary);
+                    // remove attempted_packet_locators - retryable_packet_locators from buffer, as they
+                    // are either committed or invalid during sanitization.
+                    evictable_packets_locators.extend(attempted_packet_locators - retryable_packet_locators);
+
+                    chunk_start = chunk_end;
+                } else {
+                    set end of slot;
+                }
+            }
+
+
+            // if reached end-of-slot, break the loop. can scan through remaining locators to
+            // filter out old or other invalid packets.
+            // otherwise:
+            // continue to next chunk
+        }
+        purge_evictale_packets;
     }
     // */
 
