@@ -469,7 +469,7 @@ export type SimulatedTransactionAccountInfo = {
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
-  accounts?: SimulatedTransactionAccountInfo[] | null;
+  accounts?: (SimulatedTransactionAccountInfo | null)[] | null;
   unitsConsumed?: number;
 };
 
@@ -480,13 +480,15 @@ const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
     accounts: optional(
       nullable(
         array(
-          pick({
-            executable: boolean(),
-            owner: string(),
-            lamports: number(),
-            data: array(string()),
-            rentEpoch: optional(number()),
-          }),
+          nullable(
+            pick({
+              executable: boolean(),
+              owner: string(),
+              lamports: number(),
+              data: array(string()),
+              rentEpoch: optional(number()),
+            }),
+          ),
         ),
       ),
     ),

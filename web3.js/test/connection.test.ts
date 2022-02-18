@@ -3044,10 +3044,16 @@ describe('Connection', () => {
       const results2 = await connection.simulateTransaction(
         message,
         [account1],
-        [account1.publicKey],
+        [
+          account1.publicKey,
+          new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        ],
       );
 
-      expect(results2.value.accounts).lengthOf(1);
+      expect(results2.value.accounts).lengthOf(2);
+      if (results2.value.accounts) {
+        expect(results2.value.accounts[1]).to.be.null;
+      }
     }).timeout(10000);
 
     it('transaction', async () => {
