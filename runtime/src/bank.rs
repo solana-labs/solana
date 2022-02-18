@@ -3219,7 +3219,7 @@ impl Bank {
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
         let account = AccountSharedData::from(Account {
             lamports,
-            owner: solana_sdk::system_program::id(),
+            owner: native_loader::id(),
             data: vec![],
             executable: true,
             rent_epoch,
