@@ -25,10 +25,13 @@ use {
         short_vec::decode_shortu16_len,
         signature::Signature,
     },
-    std::hash::Hasher,
-    std::sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    std::time::{Duration, Instant},
-    std::{convert::TryFrom, mem::size_of},
+    std::{
+        convert::TryFrom,
+        hash::Hasher,
+        mem::size_of,
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        time::{Duration, Instant},
+    },
 };
 
 // Representing key tKeYE4wtowRb8yRroZShTipE18YVnqwXjsSAoNsFU6g

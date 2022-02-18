@@ -88,12 +88,16 @@ fn parse_vote_instruction_data(
 
 #[cfg(test)]
 mod test {
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_vote_program::{
-        vote_instruction, vote_state::Vote, vote_transaction::new_vote_transaction,
+    use {
+        super::*,
+        solana_sdk::{
+            hash::hash,
+            signature::{Keypair, Signer},
+        },
+        solana_vote_program::{
+            vote_instruction, vote_state::Vote, vote_transaction::new_vote_transaction,
+        },
     };
-
-    use {super::*, solana_sdk::hash::hash};
 
     fn run_test_parse_vote_transaction(input_hash: Option<Hash>) {
         let node_keypair = Keypair::new();

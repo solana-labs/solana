@@ -1,9 +1,9 @@
-use crate::tower1_7_14::Tower1_7_14;
 use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{LockoutIntervals, ProgressMap},
+        tower1_7_14::Tower1_7_14,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
     },
     chrono::prelude::*,

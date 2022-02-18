@@ -448,8 +448,10 @@ impl CtxtCtxtEqualityProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::{elgamal::ElGamalSecretKey, pedersen::Pedersen};
+    use {
+        super::*,
+        crate::encryption::{elgamal::ElGamalSecretKey, pedersen::Pedersen},
+    };
 
     #[test]
     fn test_ciphertext_commitment_equality_proof_correctness() {

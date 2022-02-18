@@ -1,6 +1,5 @@
 //! Errors related to proving and verifying sigma proofs.
-use crate::errors::TranscriptError;
-use thiserror::Error;
+use {crate::errors::TranscriptError, thiserror::Error};
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum EqualityProofError {

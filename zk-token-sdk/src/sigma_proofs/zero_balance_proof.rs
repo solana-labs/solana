@@ -166,10 +166,12 @@ impl ZeroBalanceProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::{
-        elgamal::{DecryptHandle, ElGamalKeypair, ElGamalSecretKey},
-        pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+    use {
+        super::*,
+        crate::encryption::{
+            elgamal::{DecryptHandle, ElGamalKeypair, ElGamalSecretKey},
+            pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+        },
     };
 
     #[test]
