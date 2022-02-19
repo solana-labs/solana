@@ -39,9 +39,7 @@ function InstructionCard({
           className="card-header-title mb-0 d-flex align-items-center"
         >
           <span className={`badge bg-info-soft me-2`}>#{index + 1}</span>
-          <a href={`#instruction${index + 1}`}>
-            {programName} Instruction
-          </a>
+          <a href={`#instruction${index + 1}`}>{programName} Instruction</a>
         </h3>
 
         <button
