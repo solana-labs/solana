@@ -49,7 +49,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
-        builtins::{self, ActivationType, Builtin, Builtins},
+        builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
@@ -162,6 +162,7 @@ use {
     },
 };
 
+mod builtin_programs;
 mod sysvar_cache;
 mod transaction_account_state_info;
 
@@ -1181,9 +1182,9 @@ pub struct Bank {
 
     compute_budget: Option<ComputeBudget>,
 
-    /// Builtin programs activated dynamically by feature
+    /// Dynamic feature transitions for builtin programs
     #[allow(clippy::rc_buffer)]
-    feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
+    builtin_feature_transitions: Arc<Vec<BuiltinFeatureTransition>>,
 
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
@@ -1352,7 +1353,7 @@ impl Bank {
             is_delta: AtomicBool::default(),
             builtin_programs: BuiltinPrograms::default(),
             compute_budget: Option::<ComputeBudget>::default(),
-            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
+            builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
@@ -1684,7 +1685,7 @@ impl Bank {
             signature_count: AtomicU64::new(0),
             builtin_programs,
             compute_budget: parent.compute_budget,
-            feature_builtins: parent.feature_builtins.clone(),
+            builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
@@ -1970,7 +1971,7 @@ impl Bank {
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
             compute_budget: None,
-            feature_builtins: new(),
+            builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
@@ -5472,8 +5473,8 @@ impl Bank {
                 .genesis_builtins
                 .extend_from_slice(&additional_builtins.genesis_builtins);
             builtins
-                .feature_builtins
-                .extend_from_slice(&additional_builtins.feature_builtins);
+                .feature_transitions
+                .extend_from_slice(&additional_builtins.feature_transitions);
         }
         if !debug_do_not_add_builtins {
             for builtin in builtins.genesis_builtins {
@@ -5489,7 +5490,7 @@ impl Bank {
                 }
             }
         }
-        self.feature_builtins = Arc::new(builtins.feature_builtins);
+        self.builtin_feature_transitions = Arc::new(builtins.feature_transitions);
 
         self.apply_feature_activations(true, debug_do_not_add_builtins);
     }
@@ -6224,29 +6225,9 @@ impl Bank {
         debug!("Added program {} under {:?}", name, program_id);
     }
 
-    /// Replace a builtin instruction processor if it already exists
-    pub fn replace_builtin(
-        &mut self,
-        name: &str,
-        program_id: &Pubkey,
-        process_instruction: ProcessInstructionWithContext,
-    ) {
-        debug!("Replacing program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, program_id, true);
-        if let Some(entry) = self
-            .builtin_programs
-            .vec
-            .iter_mut()
-            .find(|entry| entry.program_id == *program_id)
-        {
-            entry.process_instruction = process_instruction;
-        }
-        debug!("Replaced program {} under {:?}", name, program_id);
-    }
-
     /// Remove a builtin instruction processor if it already exists
-    pub fn remove_builtin(&mut self, name: &str, program_id: &Pubkey) {
-        debug!("Removing program {} under {:?}", name, program_id);
+    pub fn remove_builtin(&mut self, program_id: &Pubkey) {
+        debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
         if let Some(position) = self
@@ -6257,7 +6238,7 @@ impl Bank {
         {
             self.builtin_programs.vec.remove(position);
         }
-        debug!("Removed program {} under {:?}", name, program_id);
+        debug!("Removed program {}", program_id);
     }
 
     pub fn add_precompile(&mut self, program_id: &Pubkey) {
@@ -6455,7 +6436,11 @@ impl Bank {
         }
 
         if !debug_do_not_add_builtins {
-            self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
+            let apply_transitions_for_new_features = !init_finish_or_warp;
+            self.apply_builtin_program_feature_transitions(
+                apply_transitions_for_new_features,
+                &new_feature_activations,
+            );
             self.reconfigure_token2_native_mint();
         }
         self.ensure_no_storage_rewards_pool();
@@ -6542,33 +6527,34 @@ impl Bank {
         newly_activated
     }
 
-    fn ensure_feature_builtins(
+    fn apply_builtin_program_feature_transitions(
         &mut self,
-        init_or_warp: bool,
+        apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        let feature_builtins = self.feature_builtins.clone();
-        for (builtin, feature, activation_type) in feature_builtins.iter() {
-            let should_populate = init_or_warp && self.feature_set.is_active(feature)
-                || !init_or_warp && new_feature_activations.contains(feature);
-            if should_populate {
-                match activation_type {
-                    ActivationType::NewProgram => self.add_builtin(
+        let feature_set = self.feature_set.clone();
+        let should_apply_action_for_feature = |feature_id: &Pubkey| -> bool {
+            if apply_transitions_for_new_features {
+                new_feature_activations.contains(feature_id)
+            } else {
+                feature_set.is_active(feature_id)
+            }
+        };
+
+        let builtin_feature_transitions = self.builtin_feature_transitions.clone();
+        for transition in builtin_feature_transitions.iter() {
+            if let Some(builtin_action) = transition.to_action(&should_apply_action_for_feature) {
+                match builtin_action {
+                    BuiltinAction::Add(builtin) => self.add_builtin(
                         &builtin.name,
                         &builtin.id,
                         builtin.process_instruction_with_context,
                     ),
-                    ActivationType::NewVersion => self.replace_builtin(
-                        &builtin.name,
-                        &builtin.id,
-                        builtin.process_instruction_with_context,
-                    ),
-                    ActivationType::RemoveProgram => {
-                        self.remove_builtin(&builtin.name, &builtin.id)
-                    }
+                    BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }
             }
         }
+
         for precompile in get_precompiles() {
             #[allow(clippy::blocks_in_if_conditions)]
             if precompile.feature.map_or(false, |ref feature_id| {
@@ -6786,6 +6772,7 @@ pub(crate) mod tests {
             accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
             accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
             ancestors::Ancestors,
+            builtins::{Builtin, Builtins},
             genesis_utils::{
                 activate_all_features, bootstrap_validator_stake_lamports,
                 create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -13412,16 +13399,6 @@ pub(crate) mod tests {
             mock_ix_processor,
         );
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
-
-        Arc::get_mut(&mut bank).unwrap().replace_builtin(
-            "mock_program v2",
-            &program_id,
-            mock_ix_processor,
-        );
-        assert_eq!(
-            bank.get_account_modified_slot(&program_id).unwrap().1,
-            bank.slot()
-        );
     }
 
     #[test]
@@ -14388,7 +14365,7 @@ pub(crate) mod tests {
                     mock_process_instruction,
                 ),
             ],
-            feature_builtins: (vec![]),
+            feature_transitions: (vec![]),
         };
 
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(
