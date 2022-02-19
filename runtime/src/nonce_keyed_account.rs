@@ -12,9 +12,6 @@ use {
     std::collections::HashSet,
 };
 
-pub const NONCE_ACCOUNT_INDEX: usize = 0;
-pub const WITHDRAW_TO_ACCOUNT_INDEX: usize = 1;
-
 pub fn advance_nonce_account(
     invoke_context: &InvokeContext,
     instruction_context: &InstructionContext,
@@ -352,6 +349,9 @@ mod test {
             let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         };
     }
+
+    const NONCE_ACCOUNT_INDEX: usize = 0;
+    const WITHDRAW_TO_ACCOUNT_INDEX: usize = 1;
 
     macro_rules! set_invoke_context_blockhash {
         ($invoke_context:expr, $seed:expr) => {
