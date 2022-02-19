@@ -3,22 +3,22 @@
 #![cfg(feature = "program")]
 
 extern crate solana_program;
-use crate::instructions::*;
-use solana_bpf_rust_realloc::instructions::*;
-use solana_program::{
-    account_info::AccountInfo,
-    entrypoint,
-    entrypoint::ProgramResult,
-    entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    instruction::{AccountMeta, Instruction},
-    msg,
-    program::invoke,
-    pubkey::Pubkey,
-    system_instruction, system_program,
+use {
+    crate::instructions::*,
+    solana_bpf_rust_realloc::instructions::*,
+    solana_program::{
+        account_info::AccountInfo,
+        entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
+        instruction::{AccountMeta, Instruction},
+        msg,
+        program::invoke,
+        pubkey::Pubkey,
+        system_instruction, system_program,
+    },
+    std::convert::TryInto,
 };
-use std::convert::TryInto;
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     program_id: &Pubkey,

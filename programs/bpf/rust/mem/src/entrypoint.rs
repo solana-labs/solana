@@ -1,15 +1,16 @@
 //! Test mem functions
 
-use crate::{run_mem_tests, MemOps};
-use solana_program::{
-    account_info::AccountInfo,
-    entrypoint,
-    entrypoint::ProgramResult,
-    program_memory::{sol_memcmp, sol_memcpy, sol_memmove, sol_memset},
-    pubkey::Pubkey,
+use {
+    crate::{run_mem_tests, MemOps},
+    solana_program::{
+        account_info::AccountInfo,
+        entrypoint::ProgramResult,
+        program_memory::{sol_memcmp, sol_memcpy, sol_memmove, sol_memset},
+        pubkey::Pubkey,
+    },
 };
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 pub fn process_instruction(
     _program_id: &Pubkey,
