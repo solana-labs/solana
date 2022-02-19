@@ -245,8 +245,7 @@ pub struct SquashTiming {
 type EpochCount = u64;
 
 mod executor_cache {
-    use super::*;
-    use log;
+    use {super::*, log};
 
     #[derive(Debug, Default)]
     pub struct Stats {
@@ -16162,8 +16161,10 @@ pub(crate) mod tests {
     /// Test exceeding the accounts data budget by creating accounts in a loop
     #[test]
     fn test_accounts_data_budget_exceeded() {
-        use solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN;
-        use solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
+        use {
+            solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
+            solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        };
 
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);

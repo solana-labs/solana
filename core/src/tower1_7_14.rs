@@ -1,11 +1,13 @@
-use crate::consensus::{SwitchForkDecision, TowerError};
-use solana_sdk::{
-    clock::Slot,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Signature, Signer},
+use {
+    crate::consensus::{SwitchForkDecision, TowerError},
+    solana_sdk::{
+        clock::Slot,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Signature, Signer},
+    },
+    solana_vote_program::vote_state::{BlockTimestamp, Vote, VoteState},
 };
-use solana_vote_program::vote_state::{BlockTimestamp, Vote, VoteState};
 
 #[frozen_abi(digest = "7phMrqmBo2D3rXPdhBj8CpjRvvmx9qgpcU4cDGkL3W9q")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]

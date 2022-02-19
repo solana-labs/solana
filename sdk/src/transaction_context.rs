@@ -1,15 +1,17 @@
 //! Successors of instruction_context_context::StackFrame, KeyedAccount and AccountInfo
 
-use crate::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::InstructionError,
-    lamports::LamportsError,
-    pubkey::Pubkey,
-};
-use std::{
-    cell::{RefCell, RefMut},
-    collections::HashSet,
-    pin::Pin,
+use {
+    crate::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        instruction::InstructionError,
+        lamports::LamportsError,
+        pubkey::Pubkey,
+    },
+    std::{
+        cell::{RefCell, RefMut},
+        collections::HashSet,
+        pin::Pin,
+    },
 };
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);

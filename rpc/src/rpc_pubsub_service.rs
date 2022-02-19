@@ -200,8 +200,7 @@ impl TestBroadcastReceiver {
     }
 
     pub fn recv_timeout(&mut self, timeout: std::time::Duration) -> Result<String, String> {
-        use std::thread::sleep;
-        use tokio::sync::broadcast::error::TryRecvError;
+        use {std::thread::sleep, tokio::sync::broadcast::error::TryRecvError};
 
         let started = std::time::Instant::now();
 

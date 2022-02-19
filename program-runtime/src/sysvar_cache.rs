@@ -1,7 +1,7 @@
-use crate::invoke_context::InvokeContext;
 #[allow(deprecated)]
 use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use {
+    crate::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
