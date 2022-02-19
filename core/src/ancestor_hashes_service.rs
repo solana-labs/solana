@@ -173,8 +173,7 @@ impl DynamicPacketToProcessThreshold {
 
     fn update(&mut self, total_packets: usize, compute_time: Duration) {
         if total_packets >= self.max_packets {
-            let threshold_update = if compute_time > DynamicPacketToProcessThreshold::TIME_THRESHOLD
-            {
+            let threshold_update = if compute_time > Self::TIME_THRESHOLD {
                 PacketThresholdUpdate::Decrease
             } else {
                 PacketThresholdUpdate::Increase
