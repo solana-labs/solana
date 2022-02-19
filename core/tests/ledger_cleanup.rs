@@ -9,7 +9,7 @@ mod tests {
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
-            blockstore_db::{BlockstoreOptions, ShredStorageType},
+            blockstore_db::{BlockstoreOptions, BlockstoreRocksFifoOptions, ShredStorageType},
             get_tmp_ledger_path,
         },
         solana_measure::measure::Measure,
@@ -348,8 +348,10 @@ mod tests {
             &ledger_path,
             if config.fifo_compaction {
                 BlockstoreOptions {
-                    shred_storage_type: ShredStorageType::RocksFifo,
-                    shred_data_cf_size: config.shred_data_cf_size,
+                    shred_storage_type: ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+                        shred_data_cf_size: config.shred_data_cf_size,
+                        ..BlockstoreRocksFifoOptions::default()
+                    }),
                     ..BlockstoreOptions::default()
                 }
             } else {
