@@ -141,13 +141,15 @@ enum PacketThresholdUpdate {
 }
 
 impl PacketThresholdUpdate {
+    const PERCENTAGE: usize = 90;
+
     fn calculate(&self, current: usize) -> usize {
         match *self {
             PacketThresholdUpdate::Increase => current
                 .saturating_mul(100)
-                .saturating_div(DynamicPacketToProcessThreshold::PERCENTAGE),
+                .saturating_div(Self::PERCENTAGE),
             PacketThresholdUpdate::Decrease => current
-                .saturating_mul(DynamicPacketToProcessThreshold::PERCENTAGE)
+                .saturating_mul(Self::PERCENTAGE)
                 .saturating_div(100),
         }
     }
@@ -168,7 +170,6 @@ impl Default for DynamicPacketToProcessThreshold {
 impl DynamicPacketToProcessThreshold {
     const DEFAULT_MAX_PACKETS: usize = 1024;
     const TIME_THRESHOLD: Duration = Duration::from_secs(1);
-    const PERCENTAGE: usize = 90;
 
     fn update(&mut self, total_packets: usize, compute_time: Duration) {
         if total_packets >= self.max_packets {
