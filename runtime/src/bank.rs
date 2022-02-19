@@ -162,11 +162,7 @@ use {
     },
 };
 
-<<<<<<< HEAD
-=======
-mod address_lookup_table;
 mod builtin_programs;
->>>>>>> 1719d2349 (Skip adding builtins if they will be removed (#23233))
 mod sysvar_cache;
 mod transaction_account_state_info;
 
@@ -6776,6 +6772,7 @@ pub(crate) mod tests {
             accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
             accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
             ancestors::Ancestors,
+            builtins::{Builtin, Builtins},
             genesis_utils::{
                 activate_all_features, bootstrap_validator_stake_lamports,
                 create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -14368,7 +14365,7 @@ pub(crate) mod tests {
                     mock_process_instruction,
                 ),
             ],
-            feature_builtins: (vec![]),
+            feature_transitions: (vec![]),
         };
 
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(

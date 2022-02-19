@@ -217,22 +217,8 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 solana_address_lookup_table_program::id(),
                 solana_address_lookup_table_program::processor::process_instruction,
             ),
-<<<<<<< HEAD
-            feature_set::versioned_tx_message_enabled::id(),
-            ActivationType::NewProgram,
-        ),
-=======
             feature_id: feature_set::versioned_tx_message_enabled::id(),
         },
-        BuiltinFeatureTransition::Add {
-            builtin: Builtin::new(
-                "zk_token_proof_program",
-                solana_zk_token_sdk::zk_token_proof_program::id(),
-                with_program_logging!(solana_zk_token_proof_program::process_instruction),
-            ),
-            feature_id: feature_set::zk_token_sdk_enabled::id(),
-        },
->>>>>>> 1719d2349 (Skip adding builtins if they will be removed (#23233))
     ]
 }
 
