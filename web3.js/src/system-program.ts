@@ -238,7 +238,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a create account system instruction and retrieve the instruction params.
+   * Decode a CreateAccount system instruction and retrieve the instruction params.
    */
   static decodeCreateAccount(
     instruction: TransactionInstruction,
@@ -280,7 +280,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a transfer with seed system instruction and retrieve the instruction params.
+   * Decode a TransferWithSeed system instruction and retrieve the instruction params.
    */
   static decodeTransferWithSeed(
     instruction: TransactionInstruction,
@@ -322,7 +322,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode an allocate with seed system instruction and retrieve the instruction params.
+   * Decode an AllocateWithSeed system instruction and retrieve the instruction params.
    */
   static decodeAllocateWithSeed(
     instruction: TransactionInstruction,
@@ -363,7 +363,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode an assign with seed system instruction and retrieve the instruction params.
+   * Decode an AssignWithSeed system instruction and retrieve the instruction params.
    */
   static decodeAssignWithSeed(
     instruction: TransactionInstruction,
@@ -385,7 +385,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a create account with seed system instruction and retrieve the instruction params.
+   * Decode a CreatedAccountWithSeed system instruction and retrieve the instruction params.
    */
   static decodeCreateWithSeed(
     instruction: TransactionInstruction,
@@ -410,7 +410,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a nonce initialize system instruction and retrieve the instruction params.
+   * Decode a InitializeNonce system instruction and retrieve the instruction params.
    */
   static decodeNonceInitialize(
     instruction: TransactionInstruction,
@@ -430,7 +430,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a nonce advance system instruction and retrieve the instruction params.
+   * Decode a AdvanceNonce system instruction and retrieve the instruction params.
    */
   static decodeNonceAdvance(
     instruction: TransactionInstruction,
@@ -450,7 +450,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a nonce withdraw system instruction and retrieve the instruction params.
+   * Decode a WithDrawNonce system instruction and retrieve the instruction params.
    */
   static decodeNonceWithdraw(
     instruction: TransactionInstruction,
@@ -472,7 +472,7 @@ export class SystemInstruction {
   }
 
   /**
-   * Decode a nonce authorize system instruction and retrieve the instruction params.
+   * Decode a AuthorizeNonce system instruction and retrieve the instruction params.
    */
   static decodeNonceAuthorize(
     instruction: TransactionInstruction,
