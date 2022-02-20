@@ -3046,7 +3046,7 @@ describe('Connection', () => {
         [account1],
         [
           account1.publicKey,
-          new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+          new PublicKey('Missing111111111111111111111111111111111111'),
         ],
       );
 
