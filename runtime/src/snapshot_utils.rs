@@ -1259,9 +1259,7 @@ pub fn purge_old_snapshot_archives<P>(
     let mut snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
     snapshot_archives.sort_unstable();
     snapshot_archives.reverse();
-    // Keep the oldest snapshot so we can always play the ledger from it.
-    snapshot_archives.pop();
-    let max_snaps = max(1, maximum_full_snapshot_archives_to_retain);
+    let max_snaps = max(1, maximum_full_snapshot_archives_to_retain); // Always keep at least one snapshot
     for old_archive in snapshot_archives.into_iter().skip(max_snaps) {
         trace!(
             "Purging old full snapshot archive: {}",
@@ -2427,20 +2425,24 @@ mod tests {
         }
 
         for snap_name in expected_snapshots {
-            assert!(retained_snaps.contains(snap_name.as_str()));
+            assert!(
+                retained_snaps.contains(snap_name.as_str()),
+                "{} not found",
+                snap_name
+            );
         }
         assert!(retained_snaps.len() == expected_snapshots.len());
     }
 
     #[test]
     fn test_purge_old_full_snapshot_archives() {
-        // Create 3 snapshots, retaining 1,
-        // expecting the oldest 1 and the newest 1 are retained
         let snap1_name = format!("snapshot-1-{}.tar.zst", Hash::default());
         let snap2_name = format!("snapshot-3-{}.tar.zst", Hash::default());
         let snap3_name = format!("snapshot-50-{}.tar.zst", Hash::default());
         let snapshot_names = vec![&snap1_name, &snap2_name, &snap3_name];
-        let expected_snapshots = vec![&snap1_name, &snap3_name];
+
+        // expecting only the newest to be retained
+        let expected_snapshots = vec![&snap3_name];
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
             1,
@@ -2448,7 +2450,7 @@ mod tests {
             &expected_snapshots,
         );
 
-        // retaining 0, the expectation is the same as for 1, as at least 1 newest is expected to be retained
+        // retaining 0, but minimum to retain is 1
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
             0,
@@ -2456,11 +2458,20 @@ mod tests {
             &expected_snapshots,
         );
 
-        // retaining 2, all three should be retained
-        let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
+        // retaiing 2, expecting the 2 newest to be retained
+        let expected_snapshots = vec![&snap2_name, &snap3_name];
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
             2,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            &expected_snapshots,
+        );
+
+        // retaining 3, all three should be retained
+        let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
+        common_test_purge_old_snapshot_archives(
+            &snapshot_names,
+            3,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             &expected_snapshots,
         );
@@ -2500,18 +2511,9 @@ mod tests {
             );
             let mut full_snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
             full_snapshot_archives.sort_unstable();
-            assert_eq!(
-                full_snapshot_archives.len(),
-                maximum_snapshots_to_retain + 1
-            );
-            assert_eq!(
-                full_snapshot_archives.first().unwrap().slot(),
-                starting_slot
-            );
+            assert_eq!(full_snapshot_archives.len(), maximum_snapshots_to_retain,);
             assert_eq!(full_snapshot_archives.last().unwrap().slot(), slot);
-            for (i, full_snapshot_archive) in
-                full_snapshot_archives.iter().skip(1).rev().enumerate()
-            {
+            for (i, full_snapshot_archive) in full_snapshot_archives.iter().rev().enumerate() {
                 assert_eq!(full_snapshot_archive.slot(), slot - i as Slot);
             }
         }
@@ -2572,7 +2574,7 @@ mod tests {
             get_full_snapshot_archives(snapshot_archives_dir.path());
         assert_eq!(
             remaining_full_snapshot_archives.len(),
-            maximum_full_snapshot_archives_to_retain + 1,
+            maximum_full_snapshot_archives_to_retain,
         );
         remaining_full_snapshot_archives.sort_unstable();
 
