@@ -132,6 +132,9 @@ fn make_dos_message(
     Message::new(&instructions, Some(&keypair.pubkey()))
 }
 
+/// creates large transactions that all touch the same set of accounts, 
+/// so they can't be parallelized
+/// 
 #[allow(clippy::too_many_arguments)]
 fn run_transactions_dos(
     entrypoint_addr: SocketAddr,
@@ -701,7 +704,6 @@ pub mod test {
             .collect();
         let account_keypair_refs: Vec<_> = account_keypairs.iter().collect();
         let mut start = Measure::start("total accounts run");
-
         run_transactions_dos(
             cluster.entry_point_info.rpc,
             faucet_addr,
