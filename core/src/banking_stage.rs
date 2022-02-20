@@ -7,14 +7,13 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_sender_info::{PacketSenderInfo, SenderDetailInfo},
+        packet_sender_info::PacketSenderInfo,
         qos_service::QosService,
         unprocessed_packet_batches::*,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
     itertools::Itertools,
-    retain_mut::RetainMut,
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::blockstore_processor::TransactionStatusSender,
@@ -506,122 +505,6 @@ impl BankingStage {
         (Ok(()), packet_vec.len())
     }
 
-    /* TODO TAO -
-    pub fn consume_buffered_packets_2(
-        my_pubkey: &Pubkey,
-        max_tx_ingestion_ns: u128,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
-        transaction_status_sender: Option<TransactionStatusSender>,
-        gossip_vote_sender: &ReplayVoteSender,
-        test_fn: Option<impl Fn()>,
-        banking_stage_stats: &BankingStageStats,
-        recorder: &TransactionRecorder,
-        qos_service: &QosService,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-    ) {
-        // TODO - add cli option to enable/disable PacketSender info logging
-        let mut packet_sender_info = Some(PacketSenderInfo::default());
-
-        // 1. scan buffer to collect current locators, stakes,
-        // // TODO TAO - and its fee+CU
-        let mut buffer_scan_start = Measure::start("get_stakes_and_locators");
-        let (stakes, locators) =
-            get_stakes_and_locators(buffered_packet_batches, &mut packet_sender_info);
-        buffer_scan_start.stop();
-
-        // 2. weight shuffle -> shuffled locators
-        let mut buffer_shuffle_start = Measure::start("weighted_shuffle");
-        let shuffled_packet_locators =
-            weighted_shuffle(&stakes, &locators, &mut packet_sender_info);
-        buffer_shuffle_start.stop();
-
-        let mut report_sender_info_start = Measure::start("packet_sender_info_report");
-        if let Some(packet_sender_info) = packet_sender_info {
-            packet_sender_info.report(banking_stage_stats.id);
-        }
-        report_sender_info_start.stop();
-
-        // 3. TODO TAO - sort by fee function -> sorted and shuffled locators
-        //    where to get the "base_fee"?
-
-        // 4. using above locators to create sanitized transaction chunks
-        // We do NOT want to sanitize all buffered transactions, as part of them will not be
-        // processed.
-        // 5. passing chunks for process
-        // 6. handle retries, invlaid and committed to update buffer:
-        //    chunk --sanitize--> subset of [txs] --process--> subset of retryable txs.
-        //    from original chunk, all locator *not* in retryable TXS are to be removed from
-        //    buffer.
-
-        let mut chunk_start = 0;
-        let mut reached_end_of_slot: Option<EndOfSlot> = None;
-        let mut evictable_packets_locators = Vec::<PacketLocator>::new();
-        while chunk_start != shuffled_packet_locators.len() {
-
-            if let Some(end_of_slot) = &reached_end_of_slot {
-                // filter too_old unprocessed packets if have a bank, otherwise keep buffer as is
-                if let Some(bank) = &end_of_slot.working_bank {
-                    evictable_packets_locators.extend(
-                        filter_unprocessed_packets_at_and_of_slot(
-                            bank,
-                            buffered_packet_batch,
-                            &shuffled_packet_locators[chunk_start..shuffled_packet_locators.len()],
-                            my_pubkey,
-                            end_of_slot.next_slot_leader,
-                            banking_stage_stats,
-                        )
-                    );
-                }
-                break;
-            }
-            else {
-                let bank_start = poh_recorder.lock().unwrap().bank_start()
-                if let Some(BankStart {bank, bank_creation_time,}) = bank_start {
-                    let chunk_end = std::cmp::min(shuffled_packet_locators.len(), chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH, );
-                    let (transactions, sanitized_locators) = sanitize_transactions(
-                        &buffered_packet_batches,
-                        &shuffled_packet_locators[chunk_start..chunk_end],
-                        &bank.feature_set,
-                        bank.vote_only_bank(),
-                        bank.as_ref(),
-                        );
-                    let process_transaction_summary = Self::process_transactions(
-                        bank,
-                        bank_creation_time,
-                        &transactions,
-                        poh,
-                        transaction_status_sender,
-                        gossip_vote_sender,
-                        qos_service,
-                    );
-                    if summary sais it's end of slot {
-                        set end_of_slot
-                    }
-                    // now handling result of this processed chunk
-
-                    let retryable_packet_locator = foo(process_transaction_summary);
-                    // remove attempted_packet_locators - retryable_packet_locators from buffer, as they
-                    // are either committed or invalid during sanitization.
-                    evictable_packets_locators.extend(attempted_packet_locators - retryable_packet_locators);
-
-                    chunk_start = chunk_end;
-                } else {
-                    set end of slot;
-                }
-            }
-
-
-            // if reached end-of-slot, break the loop. can scan through remaining locators to
-            // filter out old or other invalid packets.
-            // otherwise:
-            // continue to next chunk
-        }
-        purge_evictale_packets;
-    }
-    // */
-
-    #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
@@ -633,203 +516,127 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         qos_service: &QosService,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        // TODO - add back metrics_tracker with new dta points
+        _slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
-        let mut rebuffered_packet_count = 0;
-        let mut consumed_buffered_packets_count = 0;
-        let buffered_packet_batches_len = buffered_packet_batches.len();
-        let mut proc_start = Measure::start("consume_buffered_process");
+        // TODO - add cli option to enable/disable PacketSender info logging
+        let mut packet_sender_info = Some(PacketSenderInfo::default());
+
+        let prioritized_packet_locators = prioritize_by_fee_then_stakes(
+            buffered_packet_batches,
+            &mut packet_sender_info);
+
+        let mut report_sender_info_start = Measure::start("packet_sender_info_report");
+        if let Some(packet_sender_info) = packet_sender_info {
+            packet_sender_info.report(banking_stage_stats.id);
+        }
+        report_sender_info_start.stop();
+
+        let mut chunk_start = 0;
         let mut reached_end_of_slot: Option<EndOfSlot> = None;
-
-        RetainMut::retain_mut(buffered_packet_batches, |deserialized_packet_batch| {
-            let packet_batch = &deserialized_packet_batch.packet_batch;
-            let original_unprocessed_indexes = deserialized_packet_batch
-                .unprocessed_packets
-                .keys()
-                .cloned()
-                .collect::<Vec<usize>>();
+        let mut retryable_packets_locators = Vec::<PacketLocator>::new();
+        while chunk_start != prioritized_packet_locators.len() {
             if let Some(end_of_slot) = &reached_end_of_slot {
-                // We've hit the end of this slot, no need to perform more processing,
-                // just filter the remaining packets for the invalid (e.g. too old) ones
-                // if the working_bank is available
-                let mut end_of_slot_filtering_time = Measure::start("end_of_slot_filtering");
-                let should_retain = if let Some(bank) = &end_of_slot.working_bank {
-                    let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
-                        bank,
-                        packet_batch,
-                        &original_unprocessed_indexes,
-                        my_pubkey,
-                        end_of_slot.next_slot_leader,
-                        banking_stage_stats,
-                    );
-
-                    let end_of_slot_filtered_invalid_count = original_unprocessed_indexes
-                        .len()
-                        .saturating_sub(new_unprocessed_indexes.len());
-
-                    slot_metrics_tracker.increment_end_of_slot_filtered_invalid_count(
-                        end_of_slot_filtered_invalid_count as u64,
-                    );
-
-                    banking_stage_stats
-                        .end_of_slot_filtered_invalid_count
-                        .fetch_add(end_of_slot_filtered_invalid_count, Ordering::Relaxed);
-
-                    deserialized_packet_batch.update_buffered_packets_with_new_unprocessed(
-                        &original_unprocessed_indexes,
-                        &new_unprocessed_indexes,
-                    )
-                } else {
-                    true
-                };
-                end_of_slot_filtering_time.stop();
-                slot_metrics_tracker
-                    .increment_end_of_slot_filtering_us(end_of_slot_filtering_time.as_us());
-                should_retain
+                // if we are the next leader, skip the filtering logic now as buffer will be filter
+                // again.
+                if is_next_leader(my_pubkey, end_of_slot.next_slot_leader) {
+                    retryable_packets_locators.extend_from_slice(&prioritized_packet_locators[chunk_start..prioritized_packet_locators.len()]);
+                    break;
+                }
+                // filter too_old unprocessed packets if have a bank, otherwise keep buffer as is
+                if let Some(bank) = &end_of_slot.working_bank {
+                    let (transactions, sanitized_locators) = sanitize_transactions(
+                        &buffered_packet_batches,
+                        &prioritized_packet_locators[chunk_start..prioritized_packet_locators.len()],
+                        &bank.feature_set,
+                        bank.vote_only_bank(),
+                        bank.as_ref(),
+                        );
+                    let retryable_transaction_indexes = (0..transactions.len()).collect_vec();
+                    let filtered_retryable_transaction_locators =
+                        filter_retryable_transactions(
+                            bank,
+                            &transactions,
+                            &sanitized_locators,
+                            &retryable_transaction_indexes,
+                        );
+                    retryable_packets_locators.extend(filtered_retryable_transaction_locators);
+                }
+                else {
+                    // not filtering, just add remaining packet locators to retryable list
+                    retryable_packets_locators.extend_from_slice(&prioritized_packet_locators[chunk_start..prioritized_packet_locators.len()]);
+                }
+                break;
             } else {
-                let (bank_start, poh_recorder_lock_time) = Measure::this(
-                    |_| poh_recorder.lock().unwrap().bank_start(),
-                    (),
-                    "poh_recorder_lock",
-                );
-                slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                    poh_recorder_lock_time.as_us(),
-                );
-
+                let bank_start = poh_recorder.lock().unwrap().bank_start();
                 if let Some(BankStart {
                     working_bank,
                     bank_creation_time,
                 }) = bank_start
                 {
-                    let (process_transactions_summary, process_packets_transactions_time) =
-                        Measure::this(
-                            |_| {
-                                Self::process_packets_transactions(
-                                    &working_bank,
-                                    &bank_creation_time,
-                                    recorder,
-                                    packet_batch,
-                                    original_unprocessed_indexes.to_owned(),
-                                    transaction_status_sender.clone(),
-                                    gossip_vote_sender,
-                                    banking_stage_stats,
-                                    qos_service,
-                                    slot_metrics_tracker,
-                                )
-                            },
-                            (),
-                            "process_packets_transactions",
-                        );
-                    slot_metrics_tracker.increment_process_packets_transactions_us(
-                        process_packets_transactions_time.as_us(),
+                    let chunk_end = std::cmp::min(
+                        prioritized_packet_locators.len(),
+                        chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
                     );
-
+                    let (transactions, sanitized_locators) = sanitize_transactions(
+                        &buffered_packet_batches,
+                        &prioritized_packet_locators[chunk_start..chunk_end],
+                        &working_bank.feature_set,
+                        working_bank.vote_only_bank(),
+                        working_bank.as_ref(),
+                    );
+                    let process_transaction_summary = Self::process_transactions(
+                        &working_bank,
+                        &bank_creation_time,
+                        &transactions,
+                        recorder,
+                        transaction_status_sender.clone(),
+                        gossip_vote_sender,
+                        qos_service,
+                    );
                     let ProcessTransactionsSummary {
                         reached_max_poh_height,
-                        retryable_transaction_indexes,
+                        ref retryable_transaction_indexes,
                         ..
-                    } = process_transactions_summary;
+                    } = process_transaction_summary;
+
+                    // filter out transactions that can't be retried
+                    let filtered_retryable_transaction_locators = filter_retryable_transactions(
+                        &working_bank,
+                        &transactions,
+                        &sanitized_locators,
+                        retryable_transaction_indexes,
+                    );
+                    retryable_packets_locators.extend(filtered_retryable_transaction_locators);
 
                     if reached_max_poh_height
-                            // TODO adding timing metrics here from when bank was added to now
-                            || !Bank::should_bank_still_be_processing_txs(
-                                &bank_creation_time,
-                                max_tx_ingestion_ns,
-                            )
+                        || !Bank::should_bank_still_be_processing_txs(
+                            &bank_creation_time,
+                            max_tx_ingestion_ns,
+                        )
                     {
-                        let poh_recorder_lock_time = {
-                            let (poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
-                                |_| poh_recorder.lock().unwrap(),
-                                (),
-                                "poh_recorder_lock",
-                            );
-
-                            reached_end_of_slot = Some(EndOfSlot {
-                                next_slot_leader: poh_recorder_locked.next_slot_leader(),
-                                working_bank: Some(working_bank),
-                            });
-                            poh_recorder_lock_time
-                        };
-
-                        slot_metrics_tracker
-                            .increment_consume_buffered_packets_poh_recorder_lock_us(
-                                poh_recorder_lock_time.as_us(),
-                            );
+                        reached_end_of_slot = Some(EndOfSlot {
+                            next_slot_leader: poh_recorder.lock().unwrap().next_slot_leader(),
+                            working_bank: Some(working_bank),
+                        });
                     }
 
-                    // The difference between all transactions passed to execution and the ones that
-                    // are retryable were the ones that were either:
-                    // 1) Committed into the block
-                    // 2) Dropped without being committed because they had some fatal error (too old,
-                    // duplicate signature, etc.)
-                    //
-                    // Note: This assumes that every packet deserializes into one transaction!
-                    consumed_buffered_packets_count += original_unprocessed_indexes
-                        .len()
-                        .saturating_sub(retryable_transaction_indexes.len());
+                    chunk_start = chunk_end;
 
-                    // Out of the buffered packets just retried, collect any still unprocessed
-                    // transactions in this batch for forwarding
-                    rebuffered_packet_count += retryable_transaction_indexes.len();
-                    let has_more_unprocessed_transactions = deserialized_packet_batch
-                        .update_buffered_packets_with_new_unprocessed(
-                            &original_unprocessed_indexes,
-                            &retryable_transaction_indexes,
-                        );
                     if let Some(test_fn) = &test_fn {
                         test_fn();
                     }
-                    has_more_unprocessed_transactions
                 } else {
-                    // mark as end-of-slot to avoid aggressively lock poh for the remaining for
-                    // packet batches in buffer
-                    let poh_recorder_lock_time = {
-                        let (poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
-                            |_| poh_recorder.lock().unwrap(),
-                            (),
-                            "poh_recorder_lock",
-                        );
-
-                        reached_end_of_slot = Some(EndOfSlot {
-                            next_slot_leader: poh_recorder_locked.next_slot_leader(),
-                            working_bank: None,
-                        });
-                        poh_recorder_lock_time
-                    };
-                    slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                        poh_recorder_lock_time.as_us(),
-                    );
-
-                    // `original_unprocessed_indexes` must have remaining packets to process
-                    // if not yet processed.
-                    assert!(Self::packet_has_more_unprocessed_transactions(
-                        &original_unprocessed_indexes
-                    ));
-                    true
+                    reached_end_of_slot = Some(EndOfSlot {
+                        next_slot_leader: poh_recorder.lock().unwrap().next_slot_leader(),
+                        working_bank: None,
+                    });
                 }
             }
-        });
+        }
 
-        proc_start.stop();
-
-        debug!(
-            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
-            timestamp(),
-            buffered_packet_batches_len,
-            proc_start.as_ms(),
-            consumed_buffered_packets_count,
-            (consumed_buffered_packets_count as f32) / (proc_start.as_s())
-        );
-
-        banking_stage_stats
-            .consume_buffered_packets_elapsed
-            .fetch_add(proc_start.as_us(), Ordering::Relaxed);
-        banking_stage_stats
-            .rebuffered_packets_count
-            .fetch_add(rebuffered_packet_count, Ordering::Relaxed);
-        banking_stage_stats
-            .consumed_buffered_packets_count
-            .fetch_add(consumed_buffered_packets_count, Ordering::Relaxed);
+        // shrink unprocessed buffer to retryable packets
+        shrink_to(buffered_packet_batches, &retryable_packets_locators);
     }
 
     fn consume_or_forward_packets(
@@ -2074,12 +1881,13 @@ impl BankingStage {
         unprocessed_packet_batches: &mut UnprocessedPacketBatches,
         packet_batch: PacketBatch,
         packet_indexes: Vec<usize>,
-        dropped_packet_batches_count: &mut usize,
-        dropped_packets_count: &mut usize,
+        // TODO - add back metrcs with new data points
+        _dropped_packet_batches_count: &mut usize,
+        _dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         batch_limit: usize,
         banking_stage_stats: &mut BankingStageStats,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        _slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
             let _ = banking_stage_stats

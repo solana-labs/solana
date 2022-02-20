@@ -1,20 +1,31 @@
 use {
     crate::{
-        banking_stage::TOTAL_BUFFERED_PACKETS,
+        banking_stage::{FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, TOTAL_BUFFERED_PACKETS},
         packet_sender_info::{PacketSenderInfo, SenderDetailInfo},
     },
     solana_gossip::weighted_shuffle::WeightedShuffle,
-    solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
+    solana_perf::{
+        packet::{limited_deserialize, Packet, PacketBatch},
+        perf_libs,
+    },
+    solana_runtime::{accounts_db::ErrorCounters, bank::Bank},
     solana_sdk::{
+        clock::{
+            MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU,
+        },
         feature_set,
         hash::Hash,
         message::Message,
+        pubkey::Pubkey,
         short_vec::decode_shortu16_len,
         signature::Signature,
-        transaction::{AddressLoader, SanitizedTransaction, VersionedTransaction},
+        transaction::{
+            AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
+        },
     },
     std::{
-        collections::{HashMap, VecDeque},
+        collections::{BTreeMap, HashMap, VecDeque},
         mem::size_of,
         net::IpAddr,
         sync::Arc,
@@ -25,9 +36,9 @@ use {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PacketLocator {
     #[allow(dead_code)]
-    batch_index: usize,
+    pub batch_index: usize,
     #[allow(dead_code)]
-    packet_index: usize,
+    pub packet_index: usize,
 }
 
 // hold deserialized messages, as well as computed message_hash and other things needed to create
@@ -131,9 +142,25 @@ impl DeserializedPacketBatch {
 // TODO TAO - refactor type into struct
 pub type UnprocessedPacketBatches = VecDeque<DeserializedPacketBatch>;
 
+// prioritize unprocessed packets in buffered packet_batches by its fee/CU then by its sender's
+// stakes
+pub fn prioritize_by_fee_then_stakes(
+    unprocessed_packet_batches: &UnprocessedPacketBatches,
+    packet_sender_info: &mut Option<PacketSenderInfo>,
+) -> Vec<PacketLocator> {
+    let (stakes, locators) =
+        get_stakes_and_locators(unprocessed_packet_batches, packet_sender_info);
+
+    // 2. weight shuffle -> shuffled locators
+    let shuffled_packet_locators = weighted_shuffle(&stakes, &locators, packet_sender_info);
+
+    // 3. TODO TAO - sort by fee function -> sorted and shuffled locators
+    prioritize_by_fee(unprocessed_packet_batches, &shuffled_packet_locators)
+}
+
 // Iterates packets in buffered batches, returns all unprocessed packet's stake,
 // and its location (batch_index plus packet_index within batch)
-pub fn get_stakes_and_locators(
+fn get_stakes_and_locators(
     unprocessed_packet_batches: &UnprocessedPacketBatches,
     packet_sender_info: &mut Option<PacketSenderInfo>,
 ) -> (Vec<u64>, Vec<PacketLocator>) {
@@ -164,7 +191,7 @@ pub fn get_stakes_and_locators(
     (stakes, locators)
 }
 
-pub fn weighted_shuffle(
+fn weighted_shuffle(
     stakes: &[u64],
     locators: &[PacketLocator],
     packet_sender_info: &mut Option<PacketSenderInfo>,
@@ -188,6 +215,39 @@ pub fn weighted_shuffle(
         packet_sender_info.packet_senders_ip = shuffled_packet_senders_ip;
     }
     shuffled_locators
+}
+
+fn prioritize_by_fee(
+    unprocessed_packet_batches: &UnprocessedPacketBatches,
+    locators: &Vec<PacketLocator>,
+) -> Vec<PacketLocator> {
+    let mut fee_buckets = BTreeMap::<u64, Vec<PacketLocator>>::new();
+    for locator in locators {
+        let fee_per_cu =
+            if let Some(fee_per_cu) = compute_fee_per_cu(unprocessed_packet_batches, locator) {
+                fee_per_cu
+            } else {
+                // if unable to compute fee-per-cu for the packet, put it to the `0` bucket
+                0u64
+            };
+        let bucket = fee_buckets
+            .entry(fee_per_cu)
+            .or_insert(Vec::<PacketLocator>::new());
+        bucket.push(locator.clone());
+    }
+    fee_buckets
+        .iter()
+        .flat_map(|(_key, bucket)| bucket.iter().map(|x| x.clone()))
+        .collect()
+}
+
+// to comute (addition_fee + base_fee / requested_cu) for packet identified by `locator`
+fn compute_fee_per_cu(
+    unprocessed_packet_batches: &UnprocessedPacketBatches,
+    locator: &PacketLocator,
+) -> Option<u64> {
+    // TODO - how to get base_fee
+    None
 }
 
 // This function creates SanitizedTransactions from deseralized VersionedTransactions.i
@@ -327,6 +387,97 @@ fn create_evictioin_locators(
     // prioritization later
     let (stakes, locators) = get_stakes_and_locators(buffered_packet_batches, &mut None);
     weighted_shuffle(&stakes, &locators, &mut None)
+}
+
+/// This function filters pending packets that are still valid
+/// # Arguments
+/// * `transactions` - a batch of transactions attempted for banking executing
+/// * `transaction_locators` - packet locators of transactions
+/// * `transaction_indexes` - indexes in the `transactions` list are to be filtered
+/// # Returns:
+/// * filtered retryable transaction locators
+pub fn filter_retryable_transactions(
+    bank: &Arc<Bank>,
+    transactions: &[SanitizedTransaction],
+    transaction_locators: &[PacketLocator],
+    transaction_indexes: &[usize],
+) -> Vec<PacketLocator> {
+    if transaction_indexes.len() == 0 {
+        return Vec::<PacketLocator>::new();
+    }
+
+    // prepare bank filter from transaction_indexes that need to be filtered
+    let mut filter = vec![Err(TransactionError::BlockhashNotFound); transactions.len()];
+    transaction_indexes.iter().for_each(|x| filter[*x] = Ok(()));
+
+    let mut error_counters = ErrorCounters::default();
+    // The following code also checks if the blockhash for a transaction is too old
+    // The check accounts for
+    //  1. Transaction forwarding delay
+    //  2. The slot at which the next leader will actually process the transaction
+    // Drop the transaction if it will expire by the time the next node receives and processes it
+    let api = perf_libs::api();
+    let max_tx_fwd_delay = if api.is_none() {
+        MAX_TRANSACTION_FORWARDING_DELAY
+    } else {
+        MAX_TRANSACTION_FORWARDING_DELAY_GPU
+    };
+
+    let results = bank.check_transactions(
+        transactions,
+        &filter,
+        (MAX_PROCESSING_AGE)
+            .saturating_sub(max_tx_fwd_delay)
+            .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
+        &mut error_counters,
+    );
+
+    // returns bank filtered packet locators
+    results
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (result, _))| if result.is_ok() { Some(index) } else { None })
+        .map(|index| transaction_locators[index].clone())
+        .collect()
+}
+
+pub fn is_next_leader(my_pubkey: &Pubkey, next_leader: Option<Pubkey>) -> bool {
+    if let Some(next_leader) = next_leader {
+        next_leader == *my_pubkey
+    } else {
+        false
+    }
+}
+
+// To remove no-longer-needed packets from buffer, shrink buffer packets identified in `locators`
+pub fn shrink_to(
+    buffered_packet_batches: &mut UnprocessedPacketBatches,
+    locators: &[PacketLocator],
+) {
+    let mut retained_batches = HashMap::<usize, Vec<usize>>::new();
+    for locator in locators.iter() {
+        let packet_indexes = retained_batches
+            .entry(locator.batch_index)
+            .or_insert(vec![]);
+        packet_indexes.push(locator.packet_index);
+    }
+    buffered_packet_batches
+        .iter_mut()
+        .enumerate()
+        .for_each(|(index, batch)| {
+            if retained_batches.contains_key(&index) {
+                let retained_packets = retained_batches.get(&index).unwrap();
+                batch
+                    .unprocessed_packets
+                    .retain(|packet_index, _| retained_packets.contains(packet_index));
+            } else {
+                batch.unprocessed_packets.clear();
+            }
+        });
+
+    buffered_packet_batches.retain(|deserialized_packet_batch| {
+        deserialized_packet_batch.unprocessed_packets.len() > 0
+    });
 }
 
 fn update_packet_sender_info(packet_sender_info: &mut PacketSenderInfo, packet: &Packet) {
@@ -668,6 +819,197 @@ mod tests {
                 unprocessed_packets[2].packet_batch.packets[0].meta.weight
             );
             assert_eq!(1, unprocessed_packets[2].unprocessed_packets.len());
+        }
+    }
+
+    #[test]
+    fn test_shrink_to() {
+        solana_logger::setup();
+        // case: only first packet in all batches are to be retained
+        {
+            let mut unprocessed_packets = build_unprocessed_packets_buffer();
+            let retryable_locators = vec![
+                PacketLocator {
+                    batch_index: 0,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 0,
+                },
+            ];
+            shrink_to(&mut unprocessed_packets, &retryable_locators);
+            // expect 4 batches left
+            assert_eq!(retryable_locators.len(), unprocessed_packets.len());
+            unprocessed_packets
+                .iter()
+                .enumerate()
+                .for_each(|(index, batch)| {
+                    // each batch has 1 packet remain unprocessed.
+                    assert_eq!(1, batch.unprocessed_packets.len());
+                    assert!(batch
+                        .unprocessed_packets
+                        .contains_key(&retryable_locators[index].packet_index));
+                });
+        }
+
+        // case: only last packet in all batches are to be retained
+        {
+            let mut unprocessed_packets = build_unprocessed_packets_buffer();
+            let retryable_locators = vec![
+                PacketLocator {
+                    batch_index: 0,
+                    packet_index: 1,
+                },
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 2,
+                },
+            ];
+            shrink_to(&mut unprocessed_packets, &retryable_locators);
+            // expect 4 batches left
+            assert_eq!(retryable_locators.len(), unprocessed_packets.len());
+            unprocessed_packets
+                .iter()
+                .enumerate()
+                .for_each(|(index, batch)| {
+                    // each batch has 1 packet remain unprocessed.
+                    assert_eq!(1, batch.unprocessed_packets.len());
+                    assert!(batch
+                        .unprocessed_packets
+                        .contains_key(&retryable_locators[index].packet_index));
+                });
+        }
+
+        // case: only last three batches' middle packet are to be retained
+        {
+            let mut unprocessed_packets = build_unprocessed_packets_buffer();
+            let retryable_locators = vec![
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 1,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 1,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 1,
+                },
+            ];
+            shrink_to(&mut unprocessed_packets, &retryable_locators);
+            // expect 3 batches left
+            assert_eq!(retryable_locators.len(), unprocessed_packets.len());
+            unprocessed_packets
+                .iter()
+                .enumerate()
+                .for_each(|(index, batch)| {
+                    // each batch has 1 packet remain unprocessed.
+                    assert_eq!(1, batch.unprocessed_packets.len());
+                    assert!(batch
+                        .unprocessed_packets
+                        .contains_key(&retryable_locators[index].packet_index));
+                });
+        }
+
+        // case: retain 2 packets from last three batches
+        {
+            let mut unprocessed_packets = build_unprocessed_packets_buffer();
+            let retryable_locators = vec![
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 1,
+                },
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 2,
+                },
+            ];
+            shrink_to(&mut unprocessed_packets, &retryable_locators);
+            // expect 3 batches left
+            assert_eq!(retryable_locators.len() / 2, unprocessed_packets.len());
+            unprocessed_packets
+                .iter()
+                .enumerate()
+                .for_each(|(index, batch)| {
+                    // each batch has 2 packet remain unprocessed.
+                    assert_eq!(2, batch.unprocessed_packets.len());
+                    assert!(batch
+                        .unprocessed_packets
+                        .contains_key(&retryable_locators[index * 2usize].packet_index));
+                    assert!(batch
+                        .unprocessed_packets
+                        .contains_key(&retryable_locators[index * 2usize + 1].packet_index));
+                });
+        }
+    }
+
+    #[test]
+    fn test_prioritize_by_fee() {
+        {
+            let unprocessed_packets = build_unprocessed_packets_buffer();
+            let locators = vec![
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 1,
+                },
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 2,
+                },
+            ];
+            let prioritized_locators = prioritize_by_fee(&unprocessed_packets, &locators);
+            // TODO rn fee-per-cu is not calculated, should expect output is same as input
+            assert_eq!(locators, prioritized_locators);
         }
     }
 }
