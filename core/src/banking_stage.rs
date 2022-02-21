@@ -3223,6 +3223,7 @@ mod tests {
         genesis_config.rent.lamports_per_byte_year = 50;
         genesis_config.rent.exemption_threshold = 2.0;
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let rent_exempt_minimum = bank.get_minimum_balance_for_rent_exemption(0);
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
@@ -3238,7 +3239,8 @@ mod tests {
         let entries = vec![entry_1, entry_2];
 
         let transactions = sanitize_transactions(vec![success_tx, ix_error_tx]);
-        bank.transfer(1, &mint_keypair, &keypair1.pubkey()).unwrap();
+        bank.transfer(rent_exempt_minimum, &mint_keypair, &keypair1.pubkey())
+            .unwrap();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
