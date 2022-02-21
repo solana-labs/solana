@@ -132,9 +132,9 @@ fn make_dos_message(
     Message::new(&instructions, Some(&keypair.pubkey()))
 }
 
-/// creates large transactions that all touch the same set of accounts, 
+/// creates large transactions that all touch the same set of accounts,
 /// so they can't be parallelized
-/// 
+///
 #[allow(clippy::too_many_arguments)]
 fn run_transactions_dos(
     entrypoint_addr: SocketAddr,
