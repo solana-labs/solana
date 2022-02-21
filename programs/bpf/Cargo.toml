@@ -83,7 +83,6 @@ members = [
     "rust/sha",
     "rust/sibling_inner_instruction",
     "rust/sibling_instruction",
-    "rust/simulation",
     "rust/spoof1",
     "rust/spoof1_system",
     "rust/sysvar",
