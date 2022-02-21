@@ -3127,7 +3127,7 @@ mod tests {
         let clock = Clock::default();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake = 42;
+        let stake = 7 * MINIMUM_STAKE_DELEGATION;
         let stake_account = AccountSharedData::new_ref_data_with_space(
             stake + rent_exempt_reserve,
             &StakeState::Initialized(Meta {
@@ -3147,7 +3147,7 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                stake - 1,
+                stake - MINIMUM_STAKE_DELEGATION,
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
@@ -3160,7 +3160,7 @@ mod tests {
         // Withdrawing account down to only rent-exempt reserve should fail
         stake_account
             .borrow_mut()
-            .checked_add_lamports(stake - 1)
+            .checked_add_lamports(stake - MINIMUM_STAKE_DELEGATION)
             .unwrap(); // top up account
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
@@ -3179,7 +3179,7 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                stake + 1,
+                stake + MINIMUM_STAKE_DELEGATION,
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
@@ -3191,7 +3191,7 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                stake + 1,
+                stake + MINIMUM_STAKE_DELEGATION,
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
@@ -4721,7 +4721,7 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve + 1;
+        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
