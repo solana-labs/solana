@@ -2117,7 +2117,10 @@ pub fn main() {
             _ => unreachable!(),
         };
 
-    let mut accounts_index_config = AccountsIndexConfig::default();
+    let mut accounts_index_config = AccountsIndexConfig {
+        started_from_validator: true, // this is the only place this is set
+        ..AccountsIndexConfig::default()
+    };
     if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
         accounts_index_config.bins = Some(bins);
     }

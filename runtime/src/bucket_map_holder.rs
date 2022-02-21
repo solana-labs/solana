@@ -154,9 +154,15 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let mut bucket_config = BucketMapConfig::new(bins);
         bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
         let mut mem_budget_mb = config.as_ref().and_then(|config| config.index_limit_mb);
-        if mem_budget_mb.is_none() {
+        if mem_budget_mb.is_none()
+            && !config
+                .as_ref()
+                .map(|config| config.started_from_validator)
+                .unwrap_or_default()
+        {
             if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
-                // allocate with disk buckets
+                // allocate with disk buckets if mem budget was not set, we were NOT started from validator, and env var was set
+                // we do not want the env var to have an effect when running the validator (only tests, benches, etc.)
                 mem_budget_mb = Some(limit.parse::<usize>().unwrap());
             }
         }
