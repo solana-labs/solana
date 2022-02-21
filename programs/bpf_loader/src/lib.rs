@@ -37,10 +37,8 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             add_missing_program_error_mappings, close_upgradeable_program_accounts,
-            fix_write_privs, reduce_required_deploy_balance, reject_all_elf_rw,
-            reject_deployment_of_unresolved_syscalls,
-            reject_section_virtual_address_file_offset_mismatch, start_verify_shift32_imm,
-            stop_verify_mul64_imm_nonzero, upgradeable_close_instruction,
+            disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
+            fix_write_privs, reduce_required_deploy_balance, upgradeable_close_instruction,
         },
         ic_logger_msg, ic_msg,
         instruction::{AccountMeta, InstructionError},
@@ -127,15 +125,11 @@ pub fn create_executor(
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
-        reject_unresolved_syscalls: reject_deployment_of_broken_elfs
-            && invoke_context.is_feature_active(&reject_deployment_of_unresolved_syscalls::id()),
-        reject_section_virtual_address_file_offset_mismatch: reject_deployment_of_broken_elfs
-            && invoke_context
-                .is_feature_active(&reject_section_virtual_address_file_offset_mismatch::id()),
-        verify_mul64_imm_nonzero: !invoke_context
-            .is_feature_active(&stop_verify_mul64_imm_nonzero::id()),
-        verify_shift32_imm: invoke_context.is_feature_active(&start_verify_shift32_imm::id()),
-        reject_all_writable_sections: invoke_context.is_feature_active(&reject_all_elf_rw::id()),
+        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
+            && invoke_context.is_feature_active(&disable_bpf_deprecated_load_instructions::id()),
+        disable_unresolved_symbols_at_runtime: invoke_context
+            .is_feature_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
+        reject_broken_elfs: reject_deployment_of_broken_elfs,
         ..Config::default()
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
