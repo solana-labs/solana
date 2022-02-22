@@ -4550,7 +4550,7 @@ impl AccountsDb {
     }
 
     pub fn flush_accounts_cache_slot(&self, slot: Slot) {
-        self.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+        self.flush_slot_cache(slot, None::<&mut fn(&_, &_, _) -> bool>);
     }
 
     /// true if write cache is too big
@@ -4618,7 +4618,7 @@ impl AccountsDb {
                 if old_slot > max_flushed_root {
                     if self.should_aggressively_flush_cache() {
                         if let Some(stats) =
-                            self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>)
+                            self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_, _) -> bool>)
                         {
                             flush_stats.num_flushed += stats.num_flushed;
                             flush_stats.num_purged += stats.num_purged;
@@ -4673,7 +4673,7 @@ impl AccountsDb {
             let rand_slot = frozen_slots.choose(&mut thread_rng());
             if let Some(rand_slot) = rand_slot {
                 let random_flush_stats =
-                    self.flush_slot_cache(*rand_slot, None::<&mut fn(&_, &_) -> bool>);
+                    self.flush_slot_cache(*rand_slot, None::<&mut fn(&_, &_, _) -> bool>);
                 info!(
                     "Flushed random slot: num_remaining: {} {:?}",
                     num_slots_remaining, random_flush_stats,
@@ -4699,7 +4699,7 @@ impl AccountsDb {
         // If `should_clean` is None, then`should_flush_f` is also None, which will cause
         // `flush_slot_cache` to flush all accounts to storage without cleaning any accounts.
         let mut should_flush_f = should_clean.map(|(account_bytes_saved, num_accounts_saved)| {
-            move |&pubkey: &Pubkey, account: &AccountSharedData| {
+            move |&pubkey: &Pubkey, account: &AccountSharedData, _slot: Slot| {
                 use std::collections::hash_map::Entry::{Occupied, Vacant};
                 let should_flush = match written_accounts.entry(pubkey) {
                     Vacant(vacant_entry) => {
@@ -4764,7 +4764,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         slot_cache: &SlotCache,
-        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData, Slot) -> bool>,
     ) -> FlushStats {
         let mut num_purged = 0;
         let mut total_size = 0;
@@ -4772,20 +4772,20 @@ impl AccountsDb {
         let iter_items: Vec<_> = slot_cache.iter().collect();
         let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
         let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
-        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
+        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData, Slot)>, Vec<Hash>) = iter_items
             .iter()
             .filter_map(|iter_item| {
                 let key = iter_item.key();
                 let account = &iter_item.value().account;
                 let should_flush = should_flush_f
                     .as_mut()
-                    .map(|should_flush_f| should_flush_f(key, account))
+                    .map(|should_flush_f| should_flush_f(key, account, slot))
                     .unwrap_or(true);
                 if should_flush {
                     let hash = iter_item.value().hash();
                     total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
                     num_flushed += 1;
-                    Some(((key, account), hash))
+                    Some(((key, account, slot), hash))
                 } else {
                     // If we don't flush, we have to remove the entry from the
                     // index, since it's equivalent to purging
@@ -4847,7 +4847,7 @@ impl AccountsDb {
     fn flush_slot_cache(
         &self,
         slot: Slot,
-        should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData, Slot) -> bool>,
     ) -> Option<FlushStats> {
         let is_being_purged = {
             let mut slots_under_contention = self
@@ -12821,7 +12821,7 @@ pub mod tests {
                     if flush_trial_start_receiver.recv().is_err() {
                         return;
                     }
-                    db.flush_slot_cache(10, None::<&mut fn(&_, &_) -> bool>);
+                    db.flush_slot_cache(10, None::<&mut fn(&_, &_, _) -> bool>);
                     flush_done_sender.send(()).unwrap();
                 })
                 .unwrap()
@@ -12890,7 +12890,7 @@ pub mod tests {
                         return;
                     }
                     for slot in 0..num_cached_slots {
-                        db.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+                        db.flush_slot_cache(slot, None::<&mut fn(&_, &_, _) -> bool>);
                     }
                     flush_done_sender.send(()).unwrap();
                 })
