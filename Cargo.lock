@@ -18,7 +18,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e61f2b7f93d2c7d2b08263acaa4a363b3e276806c68af6134c44f523bf1aacd"
 dependencies = [
- "gimli",
+ "gimli 0.25.0",
 ]
 
 [[package]]
@@ -1439,6 +1439,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 
 [[package]]
+name = "fallible-iterator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
+
+[[package]]
 name = "fast-math"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1763,6 +1769,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0a01e0497841a3b2db4f8afa483cce65f7e96a3498bd6c541734792aeac8fe7"
 
 [[package]]
+name = "gimli"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
+dependencies = [
+ "fallible-iterator",
+ "indexmap",
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1808,7 +1825,18 @@ checksum = "32401e89c6446dcd28185931a01b1093726d0356820ac744023e6850689bf926"
 dependencies = [
  "log 0.4.14",
  "plain",
- "scroll",
+ "scroll 0.10.2",
+]
+
+[[package]]
+name = "goblin"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c955ab4e0ad8c843ea653a3d143048b87490d9be56bd7132a435c2407846ac8f"
+dependencies = [
+ "log 0.4.14",
+ "plain",
+ "scroll 0.11.0",
 ]
 
 [[package]]
@@ -3764,11 +3792,15 @@ dependencies = [
 name = "rbpf-cli"
 version = "1.10.0"
 dependencies = [
+ "bv",
  "clap 3.0.0-beta.5",
+ "gimli 0.26.1",
+ "goblin 0.5.1",
+ "itertools 0.10.3",
+ "log 0.4.14",
  "serde",
  "serde_json",
  "solana-bpf-loader-program",
- "solana-logger 1.10.0",
  "solana-program-runtime",
  "solana-sdk",
  "solana_rbpf",
@@ -4106,7 +4138,16 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fda28d4b4830b807a8b43f7b0e6b5df875311b3e7621d84577188c175b6ec1ec"
 dependencies = [
- "scroll_derive",
+ "scroll_derive 0.10.5",
+]
+
+[[package]]
+name = "scroll"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
+dependencies = [
+ "scroll_derive 0.11.0",
 ]
 
 [[package]]
@@ -4114,6 +4155,17 @@ name = "scroll_derive"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aaaae8f38bb311444cfb7f1979af0bc9240d95795f75f9ceddf6a59b79ceffa0"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.81",
+]
+
+[[package]]
+name = "scroll_derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdbda6ac5cd1321e724fa9cee216f3a61885889b896f073b8f82322789c5250e"
 dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
@@ -6430,13 +6482,13 @@ checksum = "41e138f6d6d4eb6a65f8e9f01ca620bc9907d79648d5038a69dd3f07b6ed3f1f"
 dependencies = [
  "byteorder",
  "combine",
- "goblin",
+ "goblin 0.4.3",
  "hash32",
  "libc",
  "log 0.4.14",
  "rand 0.7.3",
  "rustc-demangle",
- "scroll",
+ "scroll 0.10.2",
  "thiserror",
  "time 0.1.43",
 ]
