@@ -1740,9 +1740,11 @@ impl<T: IndexValue> AccountsIndex<T> {
     // Updates the given pubkey at the given slot with the new account information.
     // Returns true if the pubkey was newly inserted into the index, otherwise, if the
     // pubkey updates an existing entry in the index, returns false.
+    #[allow(clippy::too_many_arguments)]
     pub fn upsert(
         &self,
-        slot: Slot,
+        new_slot: Slot,
+        old_slot: Slot,
         pubkey: &Pubkey,
         account: &impl ReadableAccount,
         account_indexes: &AccountSecondaryIndexes,
@@ -1764,13 +1766,23 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  - The secondary index is never consulted as primary source of truth for gets/stores.
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
-        let new_item =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage, store_raw);
+        let new_item = PreAllocatedAccountMapEntry::new(
+            new_slot,
+            account_info,
+            &self.storage.storage,
+            store_raw,
+        );
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         {
             let r_account_maps = map.read().unwrap();
-            r_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
+            r_account_maps.upsert(
+                pubkey,
+                new_item,
+                Some(old_slot),
+                reclaims,
+                previous_slot_entry_was_cached,
+            );
         }
         self.update_secondary_indexes(pubkey, account, account_indexes);
     }
@@ -2860,6 +2872,7 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3071,6 +3084,7 @@ pub mod tests {
             // insert first entry for pubkey. This will use new_entry_after_update and not call update.
             index.upsert(
                 slot0,
+                slot0,
                 &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
@@ -3106,6 +3120,7 @@ pub mod tests {
         // insert second entry for pubkey. This will use update and NOT use new_entry_after_update.
         if upsert {
             index.upsert(
+                slot1,
                 slot1,
                 &key,
                 &AccountSharedData::default(),
@@ -3179,6 +3194,7 @@ pub mod tests {
         w_account_maps.upsert(
             &key.pubkey(),
             new_entry,
+            None,
             &mut SlotList::default(),
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
@@ -3219,6 +3235,7 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3249,6 +3266,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
+            0,
             0,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3290,6 +3308,7 @@ pub mod tests {
             let new_pubkey = solana_sdk::pubkey::new_rand();
             index.upsert(
                 root_slot,
+                root_slot,
                 &new_pubkey,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
@@ -3305,6 +3324,7 @@ pub mod tests {
         if num_pubkeys != 0 {
             pubkeys.push(Pubkey::default());
             index.upsert(
+                root_slot,
                 root_slot,
                 &Pubkey::default(),
                 &AccountSharedData::default(),
@@ -3448,6 +3468,7 @@ pub mod tests {
         let mut gc = vec![];
         index.upsert(
             0,
+            0,
             &solana_sdk::pubkey::new_rand(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3472,6 +3493,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
+            0,
             0,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3587,6 +3609,7 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3603,6 +3626,7 @@ pub mod tests {
 
         let mut gc = Vec::new();
         index.upsert(
+            0,
             0,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3627,6 +3651,7 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3636,6 +3661,7 @@ pub mod tests {
         );
         assert!(gc.is_empty());
         index.upsert(
+            1,
             1,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3663,6 +3689,7 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3673,6 +3700,7 @@ pub mod tests {
         assert!(gc.is_empty());
         index.upsert(
             1,
+            1,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3682,6 +3710,7 @@ pub mod tests {
         );
         index.upsert(
             2,
+            2,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3690,6 +3719,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         index.upsert(
+            3,
             3,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3702,6 +3732,7 @@ pub mod tests {
         index.add_root(1, false);
         index.add_root(3, false);
         index.upsert(
+            4,
             4,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3747,6 +3778,7 @@ pub mod tests {
         assert_eq!(0, account_maps_stats_len(&index));
         index.upsert(
             1,
+            1,
             &key.pubkey(),
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
@@ -3757,6 +3789,7 @@ pub mod tests {
         assert_eq!(1, account_maps_stats_len(&index));
 
         index.upsert(
+            1,
             1,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3776,6 +3809,7 @@ pub mod tests {
 
         assert_eq!(1, account_maps_stats_len(&index));
         index.upsert(
+            1,
             1,
             &key.pubkey(),
             &AccountSharedData::default(),
@@ -3850,6 +3884,7 @@ pub mod tests {
         // Insert slots into secondary index
         for slot in &slots {
             index.upsert(
+                *slot,
                 *slot,
                 &account_key,
                 // Make sure these accounts are added to secondary index
@@ -4031,6 +4066,7 @@ pub mod tests {
         // Wrong program id
         index.upsert(
             0,
+            0,
             &account_key,
             &AccountSharedData::create(0, account_data.to_vec(), Pubkey::default(), false, 0),
             &secondary_indexes,
@@ -4043,6 +4079,7 @@ pub mod tests {
 
         // Wrong account data size
         index.upsert(
+            0,
             0,
             &account_key,
             &AccountSharedData::create(0, account_data[1..].to_vec(), *token_id, false, 0),
@@ -4167,6 +4204,7 @@ pub mod tests {
         // First write one mint index
         index.upsert(
             slot,
+            slot,
             &account_key,
             &AccountSharedData::create(0, account_data1.to_vec(), *token_id, false, 0),
             secondary_indexes,
@@ -4177,6 +4215,7 @@ pub mod tests {
 
         // Now write a different mint index for the same account
         index.upsert(
+            slot,
             slot,
             &account_key,
             &AccountSharedData::create(0, account_data2.to_vec(), *token_id, false, 0),
@@ -4196,6 +4235,7 @@ pub mod tests {
         // If a later slot also introduces secondary_key1, then it should still exist in the index
         let later_slot = slot + 1;
         index.upsert(
+            later_slot,
             later_slot,
             &account_key,
             &AccountSharedData::create(0, account_data1.to_vec(), *token_id, false, 0),
