@@ -7095,7 +7095,7 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_and_builtin_program_delta0 = 12;
+        let sysvar_and_builtin_program_delta0 = 10;
         assert_eq!(
             bank0.capitalization(),
             42 * 42 + sysvar_and_builtin_program_delta0
@@ -8850,7 +8850,7 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank0.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_builtin_program_delta0 = 12;
+        let sysvar_and_builtin_program_delta0 = 10;
         assert_eq!(
             bank0.capitalization(),
             42 * 1_000_000_000 + sysvar_and_builtin_program_delta0
@@ -8985,7 +8985,7 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_builtin_program_delta = 12;
+        let sysvar_and_builtin_program_delta = 10;
         assert_eq!(
             bank.capitalization(),
             42 * 1_000_000_000 + sysvar_and_builtin_program_delta
@@ -13035,41 +13035,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "CMCWTWsU67zjmayMhSMGBTzHbW1WMCtkM5m7xk9qSnY5"
-=======
-                    "9tLrxkBoNE7zEUZ2g72ZwE4fTfhUQnhC8A4Xt4EmYhP1"
->>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
+                    "7jRygKXT3WYoJWigqwHvnEHY2MGtCpV9DicY51kGjzKW"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "4kbXeShX8vMnRuuADCkxSEir1oc2PrBNbx6vPkWcDtJU"
-=======
-                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
->>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
+                    "B8qZwsyx9h9NeUcVTG7uWFLCgxVQBca5fVmziWjNwfec"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "CSZ8QCDF8qhqKDxafPzjNJpHcRAXmQzAb8eUi1Emt35E"
-=======
-                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
->>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
+                    "A893DSezmoRuEAWPQdHNEzShx4AtaY2VFFRKEeh9sx42"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "Ewh1SYKy8eiSE77sEvjav33SznfWYSwa5TwqbiYWseG2"
-=======
-                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
->>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
+                    "9qHRKxR56VhJ49rHiCpXcw6AyvYh7r2JT5jDxJyeqDnT"
                 );
                 break;
             }
