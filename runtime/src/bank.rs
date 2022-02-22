@@ -3181,6 +3181,11 @@ impl Bank {
 
     /// Add a precompiled program account
     pub fn add_precompiled_account(&self, program_id: &Pubkey) {
+        self.add_precompiled_account_with_owner(program_id, native_loader::id())
+    }
+
+    // Used by tests to simulate clusters with precompiles that aren't owned by the native loader
+    fn add_precompiled_account_with_owner(&self, program_id: &Pubkey, owner: Pubkey) {
         if let Some(account) = self.get_account_with_fixed_root(program_id) {
             if account.executable() {
                 // The account is already executable, that's all we need
@@ -3202,7 +3207,7 @@ impl Bank {
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
         let account = AccountSharedData::from(Account {
             lamports,
-            owner: native_loader::id(),
+            owner,
             data: vec![],
             executable: true,
             rent_epoch,
@@ -6492,12 +6497,12 @@ impl Bank {
 
     fn apply_builtin_program_feature_transitions(
         &mut self,
-        apply_transitions_for_new_features: bool,
+        only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         let feature_set = self.feature_set.clone();
-        let should_apply_action_for_feature = |feature_id: &Pubkey| -> bool {
-            if apply_transitions_for_new_features {
+        let should_apply_action_for_feature_transition = |feature_id: &Pubkey| -> bool {
+            if only_apply_transitions_for_new_features {
                 new_feature_activations.contains(feature_id)
             } else {
                 feature_set.is_active(feature_id)
@@ -6506,7 +6511,9 @@ impl Bank {
 
         let builtin_feature_transitions = self.builtin_feature_transitions.clone();
         for transition in builtin_feature_transitions.iter() {
-            if let Some(builtin_action) = transition.to_action(&should_apply_action_for_feature) {
+            if let Some(builtin_action) =
+                transition.to_action(&should_apply_action_for_feature_transition)
+            {
                 match builtin_action {
                     BuiltinAction::Add(builtin) => self.add_builtin(
                         &builtin.name,
@@ -13028,25 +13035,41 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "CMCWTWsU67zjmayMhSMGBTzHbW1WMCtkM5m7xk9qSnY5"
+=======
+                    "9tLrxkBoNE7zEUZ2g72ZwE4fTfhUQnhC8A4Xt4EmYhP1"
+>>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "4kbXeShX8vMnRuuADCkxSEir1oc2PrBNbx6vPkWcDtJU"
+=======
+                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
+>>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "CSZ8QCDF8qhqKDxafPzjNJpHcRAXmQzAb8eUi1Emt35E"
+=======
+                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
+>>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "Ewh1SYKy8eiSE77sEvjav33SznfWYSwa5TwqbiYWseG2"
+=======
+                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
+>>>>>>> bcda74f42 (Fix builtin handling on epoch boundaries (#23256))
                 );
                 break;
             }
@@ -13274,7 +13297,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![11, 1, 7]);
+        assert_eq!(alive_counts, vec![9, 1, 7]);
     }
 
     #[test]
@@ -13322,7 +13345,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 12);
+        assert_eq!(consumed_budgets, 10);
     }
 
     #[test]

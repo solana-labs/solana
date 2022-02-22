@@ -113,7 +113,8 @@ pub enum BuiltinFeatureTransition {
     /// Remove a builtin program if a feature is activated or
     /// retain a previously added builtin.
     RemoveOrRetain {
-        previous_builtin: Builtin,
+        previously_added_builtin: Builtin,
+        addition_feature_id: Pubkey,
         removal_feature_id: Pubkey,
     },
 }
@@ -135,14 +136,17 @@ impl BuiltinFeatureTransition {
                 }
             }
             Self::RemoveOrRetain {
-                previous_builtin,
+                previously_added_builtin,
+                addition_feature_id,
                 removal_feature_id,
             } => {
                 if should_apply_action_for_feature(removal_feature_id) {
-                    Some(BuiltinAction::Remove(previous_builtin.id))
-                } else {
+                    Some(BuiltinAction::Remove(previously_added_builtin.id))
+                } else if should_apply_action_for_feature(addition_feature_id) {
                     // Retaining is no different from adding a new builtin.
-                    Some(BuiltinAction::Add(previous_builtin.clone()))
+                    Some(BuiltinAction::Add(previously_added_builtin.clone()))
+                } else {
+                    None
                 }
             }
         }
@@ -196,19 +200,21 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             feature_id: feature_set::add_compute_budget_program::id(),
         },
         BuiltinFeatureTransition::RemoveOrRetain {
-            previous_builtin: Builtin::new(
+            previously_added_builtin: Builtin::new(
                 "secp256k1_program",
                 solana_sdk::secp256k1_program::id(),
                 dummy_process_instruction,
             ),
+            addition_feature_id: feature_set::secp256k1_program_enabled::id(),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
         },
         BuiltinFeatureTransition::RemoveOrRetain {
-            previous_builtin: Builtin::new(
+            previously_added_builtin: Builtin::new(
                 "ed25519_program",
                 solana_sdk::ed25519_program::id(),
                 dummy_process_instruction,
             ),
+            addition_feature_id: feature_set::ed25519_program_enabled::id(),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
         },
         BuiltinFeatureTransition::Add {
