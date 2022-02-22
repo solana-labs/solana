@@ -317,7 +317,7 @@ fn main() {
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .hidden(true)
+                .hidden(false)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
