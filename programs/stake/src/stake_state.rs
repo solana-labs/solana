@@ -6474,7 +6474,7 @@ mod tests {
     /// NOTE: Even though new stake accounts must have a minimum balance that is at least
     /// MINIMUM_STAKE_DELEGATION (plus rent exempt reserve), the current behavior allows
     /// withdrawing below the minimum delegation, then re-delegating successfully (see
-    /// `test_behavior_withdrawl_then_redelegate_with_less_than_minimum_stake_delegation()` for
+    /// `test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation()` for
     /// more information.)
     #[test]
     fn test_delegate_minimum_stake_delegation() {
