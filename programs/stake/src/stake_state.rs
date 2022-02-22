@@ -6734,7 +6734,7 @@ mod tests {
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
     /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
     #[test]
-    fn test_behavior_withdrawl_then_redelegate_with_less_than_minimum_stake_delegation() {
+    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_pubkey = Pubkey::new_unique();
