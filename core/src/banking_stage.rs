@@ -77,9 +77,9 @@ pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
 pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
 
 // Fixed thread size seems to be fastest on GCP setup
-pub const NUM_THREADS: u32 = 4;
+pub const NUM_THREADS: u32 = 8;
 
-pub const TOTAL_BUFFERED_PACKETS: usize = 500_000;
+pub const TOTAL_BUFFERED_PACKETS: usize = 250_000;
 
 const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
@@ -398,7 +398,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
     ) -> Self {
-        let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
+        let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 2) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
