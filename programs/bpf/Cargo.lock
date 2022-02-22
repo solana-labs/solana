@@ -3445,6 +3445,7 @@ version = "1.10.0"
 dependencies = [
  "base64 0.13.0",
  "bincode",
+ "enum-iterator",
  "itertools 0.10.3",
  "libc",
  "libloading",

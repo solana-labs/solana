@@ -1,3 +1,7 @@
+use core::fmt;
+use enum_iterator::IntoEnumIterator;
+use std::ops::{Index, IndexMut};
+
 use {
     solana_sdk::{pubkey::Pubkey, saturating_add_assign},
     std::collections::HashMap,
@@ -34,33 +38,72 @@ impl ProgramTiming {
     }
 }
 
-#[derive(Default, Debug)]
+/// Used as an index for `Metrics`.
+#[derive(Debug, IntoEnumIterator)]
+pub enum ExecuteTimingType {
+    CheckUs,
+    LoadUs,
+    ExecuteUs,
+    StoreUs,
+    UpdateStakesCacheUs,
+    NumExecuteBatches,
+    CollectLogsUs,
+    TotalBatchesLen,
+}
+
+pub struct Metrics([u64; ExecuteTimingType::VARIANT_COUNT]);
+
+impl Index<ExecuteTimingType> for Metrics {
+    type Output = u64;
+    fn index(&self, index: ExecuteTimingType) -> &Self::Output {
+        self.0.index(index as usize)
+    }
+}
+
+impl IndexMut<ExecuteTimingType> for Metrics {
+    fn index_mut(&mut self, index: ExecuteTimingType) -> &mut Self::Output {
+        self.0.index_mut(index as usize)
+    }
+}
+
+impl Default for Metrics {
+    fn default() -> Self {
+        Metrics([0; ExecuteTimingType::VARIANT_COUNT])
+    }
+}
+
+impl core::fmt::Debug for Metrics {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct ExecuteTimings {
-    pub check_us: u64,
-    pub load_us: u64,
-    pub execute_us: u64,
-    pub store_us: u64,
-    pub update_stakes_cache_us: u64,
-    pub total_batches_len: usize,
-    pub num_execute_batches: u64,
-    pub collect_logs_us: u64,
+    pub metrics: Metrics,
     pub details: ExecuteDetailsTimings,
     pub execute_accessories: ExecuteAccessoryTimings,
 }
 
 impl ExecuteTimings {
     pub fn accumulate(&mut self, other: &ExecuteTimings) {
-        saturating_add_assign!(self.check_us, other.check_us);
-        saturating_add_assign!(self.load_us, other.load_us);
-        saturating_add_assign!(self.execute_us, other.execute_us);
-        saturating_add_assign!(self.store_us, other.store_us);
-        saturating_add_assign!(self.update_stakes_cache_us, other.update_stakes_cache_us);
-        saturating_add_assign!(self.total_batches_len, other.total_batches_len);
-        saturating_add_assign!(self.num_execute_batches, other.num_execute_batches);
-        saturating_add_assign!(self.collect_logs_us, other.collect_logs_us);
+        for (t1, t2) in self.metrics.0.iter_mut().zip(other.metrics.0.iter()) {
+            saturating_add_assign!(*t1, *t2);
+        }
         self.details.accumulate(&other.details);
         self.execute_accessories
             .accumulate(&other.execute_accessories);
+    }
+
+    pub fn saturating_add_in_place(&mut self, timing_type: ExecuteTimingType, value_to_add: u64) {
+        let idx = timing_type as usize;
+        match self.metrics.0.get_mut(idx) {
+            Some(elem) => *elem = elem.saturating_add(value_to_add),
+            None => debug_assert!(
+                idx < ExecuteTimingType::VARIANT_COUNT,
+                "Index out of bounds"
+            ),
+        }
     }
 }
 
@@ -274,5 +317,17 @@ mod tests {
 
         // Check that the two instances are equal
         assert_eq!(execute_details_timings, other_execute_details_timings);
+    }
+
+    #[test]
+    fn execute_timings_saturating_add_in_place() {
+        let mut timings = ExecuteTimings::default();
+        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, 1);
+        let check_us = timings.metrics.index(ExecuteTimingType::CheckUs);
+        assert_eq!(1, *check_us);
+
+        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, 2);
+        let check_us = timings.metrics.index(ExecuteTimingType::CheckUs);
+        assert_eq!(3, *check_us);
     }
 }
