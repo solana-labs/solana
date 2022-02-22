@@ -140,11 +140,12 @@ const VideoArtContent = ({
     likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
       <div className={"d-block"}>
         <Stream
+          // @ts-ignore
           streamRef={(e: any) => playerRef(e)}
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
           loop={true}
-          height={180}
-          width={320}
+          height={"180"}
+          width={"320"}
           controls={false}
           style={{ borderRadius: 12 }}
           videoDimensions={{

@@ -43,6 +43,7 @@ function App() {
             exact
             path={["/tx/inspector", "/tx/:signature/inspect"]}
             render={({ match }) => (
+              // @ts-ignore
               <TransactionInspectorPage signature={match.params.signature} />
             )}
           />
@@ -62,6 +63,7 @@ function App() {
             exact
             path={["/block/:id", "/block/:id/:tab"]}
             render={({ match }) => (
+              // @ts-ignore
               <BlockDetailsPage slot={match.params.id} tab={match.params.tab} />
             )}
           />
@@ -85,6 +87,7 @@ function App() {
             render={({ match }) => (
               <AccountDetailsPage
                 address={match.params.address}
+                // @ts-ignore
                 tab={match.params.tab}
               />
             )}
