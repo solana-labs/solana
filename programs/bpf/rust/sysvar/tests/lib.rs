@@ -1,14 +1,16 @@
-use solana_bpf_rust_sysvar::process_instruction;
-use solana_program_test::*;
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::Signer,
-    sysvar::{
-        clock, epoch_schedule, instructions, recent_blockhashes, rent, slot_hashes, slot_history,
-        stake_history,
+use {
+    solana_bpf_rust_sysvar::process_instruction,
+    solana_program_test::*,
+    solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        pubkey::Pubkey,
+        signature::Signer,
+        sysvar::{
+            clock, epoch_schedule, instructions, recent_blockhashes, rent, slot_hashes,
+            slot_history, stake_history,
+        },
+        transaction::Transaction,
     },
-    transaction::Transaction,
 };
 
 #[tokio::test]

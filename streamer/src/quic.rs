@@ -256,9 +256,11 @@ pub fn spawn_server(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use quinn::{ClientConfig, NewConnection};
-    use std::{net::SocketAddr, sync::mpsc::channel, time::Instant};
+    use {
+        super::*,
+        quinn::{ClientConfig, NewConnection},
+        std::{net::SocketAddr, sync::mpsc::channel, time::Instant},
+    };
 
     struct SkipServerVerification;
 

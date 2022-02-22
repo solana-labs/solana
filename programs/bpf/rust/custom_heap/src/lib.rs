@@ -1,17 +1,18 @@
 //! Example Rust-based BPF that tests out using a custom heap
 
-use solana_program::{
-    account_info::AccountInfo,
-    entrypoint,
-    entrypoint::{ProgramResult, HEAP_LENGTH, HEAP_START_ADDRESS},
-    msg,
-    pubkey::Pubkey,
-};
-use std::{
-    alloc::{alloc, Layout},
-    mem::{align_of, size_of},
-    ptr::null_mut,
-    usize,
+use {
+    solana_program::{
+        account_info::AccountInfo,
+        entrypoint::{ProgramResult, HEAP_LENGTH, HEAP_START_ADDRESS},
+        msg,
+        pubkey::Pubkey,
+    },
+    std::{
+        alloc::{alloc, Layout},
+        mem::{align_of, size_of},
+        ptr::null_mut,
+        usize,
+    },
 };
 
 /// Developers can implement their own heap by defining their own
@@ -52,7 +53,7 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static A: BumpAllocator = BumpAllocator;
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 pub fn process_instruction(
     _program_id: &Pubkey,

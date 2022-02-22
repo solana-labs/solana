@@ -1182,8 +1182,8 @@ pub(crate) mod tests {
         },
         serial_test::serial,
         solana_client::rpc_config::{
-            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-            RpcTransactionLogsFilter, {RpcBlockSubscribeConfig, RpcBlockSubscribeFilter},
+            RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
+            RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsFilter,
         },
         solana_runtime::{
             commitment::BlockCommitment,

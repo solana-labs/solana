@@ -4,8 +4,7 @@
 
 extern crate solana_program;
 use solana_program::{
-    account_info::AccountInfo, bpf_loader, entrypoint, entrypoint::ProgramResult, log::*, msg,
-    pubkey::Pubkey,
+    account_info::AccountInfo, bpf_loader, entrypoint::ProgramResult, log::*, msg, pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -20,7 +19,7 @@ fn return_sstruct() -> SStruct {
     SStruct { x: 1, y: 2, z: 3 }
 }
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 pub fn process_instruction(
     program_id: &Pubkey,

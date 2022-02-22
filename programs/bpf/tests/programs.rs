@@ -3,68 +3,69 @@
 #[macro_use]
 extern crate solana_bpf_loader_program;
 
-use itertools::izip;
-use log::{log_enabled, trace, Level::Trace};
-use solana_account_decoder::parse_bpf_loader::{
-    parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
-};
-use solana_bpf_loader_program::{
-    create_vm,
-    serialization::{deserialize_parameters, serialize_parameters},
-    syscalls::register_syscalls,
-    BpfError, ThisInstructionMeter,
-};
-use solana_bpf_rust_invoke::instructions::*;
-use solana_bpf_rust_realloc::instructions::*;
-use solana_bpf_rust_realloc_invoke::instructions::*;
-use solana_program_runtime::{
-    compute_budget::ComputeBudget, invoke_context::with_mock_invoke_context,
-    timings::ExecuteTimings,
-};
-use solana_rbpf::{
-    elf::Executable,
-    static_analysis::Analysis,
-    vm::{Config, Tracer},
-};
-use solana_runtime::{
-    bank::{
-        Bank, DurableNonceFee, TransactionBalancesSet, TransactionExecutionDetails,
-        TransactionExecutionResult, TransactionResults,
+use {
+    itertools::izip,
+    log::{log_enabled, trace, Level::Trace},
+    solana_account_decoder::parse_bpf_loader::{
+        parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
-    bank_client::BankClient,
-    genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    loader_utils::{
-        load_buffer_account, load_program, load_upgradeable_program, set_upgrade_authority,
-        upgrade_program,
+    solana_bpf_loader_program::{
+        create_vm,
+        serialization::{deserialize_parameters, serialize_parameters},
+        syscalls::register_syscalls,
+        BpfError, ThisInstructionMeter,
     },
+    solana_bpf_rust_invoke::instructions::*,
+    solana_bpf_rust_realloc::instructions::*,
+    solana_bpf_rust_realloc_invoke::instructions::*,
+    solana_program_runtime::{
+        compute_budget::ComputeBudget, invoke_context::with_mock_invoke_context,
+        timings::ExecuteTimings,
+    },
+    solana_rbpf::{
+        elf::Executable,
+        static_analysis::Analysis,
+        vm::{Config, Tracer},
+    },
+    solana_runtime::{
+        bank::{
+            Bank, DurableNonceFee, TransactionBalancesSet, TransactionExecutionDetails,
+            TransactionExecutionResult, TransactionResults,
+        },
+        bank_client::BankClient,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        loader_utils::{
+            load_buffer_account, load_program, load_upgradeable_program, set_upgrade_authority,
+            upgrade_program,
+        },
+    },
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        account_utils::StateMut,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        client::SyncClient,
+        clock::MAX_PROCESSING_AGE,
+        compute_budget::ComputeBudgetInstruction,
+        entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+        feature_set::FeatureSet,
+        fee::FeeStructure,
+        fee_calculator::FeeRateGovernor,
+        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+        loader_instruction,
+        message::{Message, SanitizedMessage},
+        pubkey::Pubkey,
+        signature::{keypair_from_seed, Keypair, Signer},
+        system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
+        system_program,
+        sysvar::{self, clock, rent},
+        transaction::{SanitizedTransaction, Transaction, TransactionError},
+    },
+    solana_transaction_status::{
+        token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
+        TransactionStatusMeta, TransactionWithMetadata,
+    },
+    std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc},
 };
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
-    account_utils::StateMut,
-    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-    client::SyncClient,
-    clock::MAX_PROCESSING_AGE,
-    compute_budget::ComputeBudgetInstruction,
-    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    feature_set::FeatureSet,
-    fee::FeeStructure,
-    fee_calculator::FeeRateGovernor,
-    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
-    loader_instruction,
-    message::{Message, SanitizedMessage},
-    pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, Signer},
-    system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
-    system_program, sysvar,
-    sysvar::{clock, rent},
-    transaction::{SanitizedTransaction, Transaction, TransactionError},
-};
-use solana_transaction_status::{
-    token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta,
-    TransactionWithMetadata,
-};
-use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
 /// BPF program file extension
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
