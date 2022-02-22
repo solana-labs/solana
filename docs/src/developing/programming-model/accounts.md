@@ -24,9 +24,9 @@ uses an _address_ to look up an account. The address is a 256-bit public key.
 ## Signers
 
 Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. Such
+corresponding to the account's public keys referenced by the transaction. Such
 signatures signify that the holder of the
-account's private key signed and thus "authorized" the transaction.  In this case,
+account's private key signed, and thus, "authorized" the transaction. In this case,
 the account is referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
@@ -71,7 +71,7 @@ previously created, the program will be passed an account with no data and zero 
 that is owned by the system program.
 
 Such newly created accounts reflect
-whether they sign the transaction and therefore can be used as an
+whether they sign the transaction, and therefore, can be used as an
 authority. Authorities in this context convey to the program that the holder of
 the private key associated with the account's public key signed the transaction.
 The account's public key may be known to the program or recorded in another
@@ -85,14 +85,14 @@ System program and is called a _system account_ aptly. An account includes
 "owner" metadata. The owner is a program id. The runtime grants the program
 write access to the account if its id matches the owner. For the case of the
 System program, the runtime allows clients to transfer lamports and importantly
-_assign_ account ownership, meaning changing owner to different program id. If
+_assign_ account ownership, meaning changing the owner to a different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
 
 ## Verifying validity of unmodified, reference-only accounts
 
 For security purposes, it is recommended that programs check the validity of any
-account it reads but does not modify.
+account it reads, but does not modify.
 
 This is because a malicious user
 could create accounts with arbitrary data and then pass these accounts to the
@@ -101,17 +101,17 @@ a way that leads to unexpected or harmful program behavior.
 
 The security model enforces that an account's data can only be modified by the
 account's `Owner` program. This allows the program to trust that the data
-passed to them via accounts they own. The
+is passed to them via accounts they own. The
 runtime enforces this by rejecting any transaction containing a program that
 attempts to write to an account it does not own.
 
 If a program were to not check account validity, it might read an account
-it thinks it owns but doesn't.  Anyone can
+it thinks it owns, but doesn't. Anyone can
 issue instructions to a program, and the runtime does not know that those
 accounts are expected to be owned by the program.
 
 To check an account's validity, the program should either check the account's
-address against a known value or check that the account is indeed owned
+address against a known value, or check that the account is indeed owned
 correctly (usually owned by the program itself).
 
 One example is when programs use a sysvar account. Unless the program checks the
@@ -120,7 +120,7 @@ valid sysvar account merely by successful deserialization of the account's data.
 
 Accordingly, the Solana SDK [checks the sysvar account's validity during
 deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
-A alternative and safer way to read a sysvar is via the sysvar's [`get()`
+An alternative and safer way to read a sysvar is via the sysvar's [`get()`
 function](https://github.com/solana-labs/solana/blob/64bfc14a75671e4ec3fe969ded01a599645080eb/sdk/program/src/sysvar/mod.rs#L73)
 which doesn't require these checks.
 

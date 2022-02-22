@@ -30,8 +30,8 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-Given two on-chain programs `token` and `acme`, each implementing instructions
-`pay()` and `launch_missiles()` respectively, acme can be implemented with a
+Given two on-chain programs, `token` and `acme`, each implementing instructions
+`pay()` and `launch_missiles()` respectively, `acme` can be implemented with a
 call to a function defined in the `token` module by issuing a cross-program
 invocation:
 
@@ -66,12 +66,12 @@ state of the accounts at the beginning of the `acme`'s instruction. After
 `pay()` completes, the runtime must again ensure that `token` didn't modify any
 accounts owned by `acme` by again applying the runtime's policy, but this time
 with the `token` program ID. Lastly, after `pay_and_launch_missiles()`
-completes, the runtime must apply the runtime policy one more time, where it
+completes, the runtime must apply the runtime policy one more time where it
 normally would, but using all updated `pre_*` variables. If executing
 `pay_and_launch_missiles()` up to `pay()` made no invalid account changes,
 `pay()` made no invalid changes, and executing from `pay()` until
 `pay_and_launch_missiles()` returns made no invalid changes, then the runtime
-can transitively assume `pay_and_launch_missiles()` as whole made no invalid
+can transitively assume `pay_and_launch_missiles()` as a whole made no invalid
 account changes, and therefore commit all these account modifications.
 
 ### Instructions that require privileges
@@ -111,12 +111,12 @@ To sign an account with program derived addresses, a program may
 
 ### Call Depth
 
-Cross-program invocations allow programs to invoke other programs directly but
+Cross-program invocations allow programs to invoke other programs directly, but
 the depth is constrained currently to 4.
 
 ### Reentrancy
 
-Reentrancy is currently limited to direct self recursion capped at a fixed
+Reentrancy is currently limited to direct self recursion, capped at a fixed
 depth. This restriction prevents situations where a program might invoke another
 from an intermediary state without the knowledge that it might later be called
 back into. Direct recursion gives the program full control of its state at the
@@ -159,22 +159,22 @@ Program derived address:
    present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Given the two conditions, users can securely transfer or assign the authority of
-on-chain assets to program addresses and the program can then assign that
+on-chain assets to program addresses, and the program can then assign that
 authority elsewhere at its discretion.
 
 ### Private keys for program addresses
 
-A Program address does not lie on the ed25519 curve and therefore has no valid
+A program address does not lie on the ed25519 curve and therefore has no valid
 private key associated with it, and thus generating a signature for it is
 impossible. While it has no private key of its own, it can be used by a program
-to issue an instruction that includes the Program address as a signer.
+to issue an instruction that includes the program address as a signer.
 
 ### Hash-based generated program addresses
 
 Program addresses are deterministically derived from a collection of seeds and a
 program id using a 256-bit pre-image resistant hash function. Program address
 must not lie on the ed25519 curve to ensure there is no associated private key.
-During generation an error will be returned if the address is found to lie on
+During generation, an error will be returned if the address is found to lie on
 the curve. There is about a 50/50 chance of this happening for a given
 collection of seeds and program id. If this occurs a different set of seeds or
 a seed bump (additional 8 bit seed) can be used to find a valid program address
@@ -184,7 +184,7 @@ Deterministic program addresses for programs follow a similar derivation path as
 Accounts created with `SystemInstruction::CreateAccountWithSeed` which is
 implemented with `Pubkey::create_with_seed`.
 
-For reference that implementation is as follows:
+For reference, that implementation is as follows:
 
 ```rust,ignore
 pub fn create_with_seed(
