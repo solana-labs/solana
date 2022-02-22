@@ -52,6 +52,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
@@ -60,6 +61,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -162,6 +164,8 @@ pub struct AccountsIndexConfig {
     pub index_limit_mb: Option<usize>,
     pub ages_to_stay_in_cache: Option<Age>,
     pub scan_results_limit_bytes: Option<usize>,
+    /// true if the accounts index is being created as a result of being started as a validator (as opposed to test, etc.)
+    pub started_from_validator: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -858,13 +862,7 @@ pub struct AccountsIndex<T: IndexValue> {
 
 impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
-        if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
-            // allocate with disk buckets
-            config.index_limit_mb = Some(limit.parse::<usize>().unwrap());
-        }
-
-        Self::new(Some(config))
+        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
