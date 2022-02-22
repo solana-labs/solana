@@ -4,6 +4,32 @@
 #
 # https://doc.mergify.io/
 pull_request_rules:
+  - name: add stale label
+    conditions:
+      - label≠security
+      - label≠blocked
+      - label≠stale
+      - updated-at<7 days ago
+    actions:
+      label:
+        add:
+          - stale
+      comment:
+        message:
+          This pull request has been automatically marked as stale because it has not had
+          recent activity. It will be closed if no further activity occurs.
+          Remove the `stale` label to reset.
+  - name: close stale pull request
+    conditions:
+      - label≠security
+      - label≠blocked
+      - label=stale
+      - updated-at<7 days ago
+    actions:
+      close:
+        message:
+          This stale pull request has been automatically closed.
+          Thank you for your contributions.
   - name: label changes from community
     conditions:
       - author≠@core-contributors
