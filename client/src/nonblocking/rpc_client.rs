@@ -52,10 +52,9 @@ use {
         cmp::min,
         net::SocketAddr,
         str::FromStr,
-        sync::RwLock,
         time::{Duration, Instant},
     },
-    tokio::time::sleep,
+    tokio::{sync::RwLock, time::sleep},
 };
 
 /// A client of a remote Solana node.
@@ -442,12 +441,12 @@ impl RpcClient {
     }
 
     async fn get_node_version(&self) -> Result<semver::Version, RpcError> {
-        let r_node_version = self.node_version.read().unwrap();
+        let r_node_version = self.node_version.read().await;
         if let Some(version) = &*r_node_version {
             Ok(version.clone())
         } else {
             drop(r_node_version);
-            let mut w_node_version = self.node_version.write().unwrap();
+            let mut w_node_version = self.node_version.write().await;
             let node_version = self.get_version().await.map_err(|e| {
                 RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
             })?;
