@@ -853,11 +853,10 @@ impl Blockstore {
                     };
                 }
                 ShredType::Code => {
-                    self.check_insert_coding_shred(
+                    self.check_cache_coding_shred(
                         shred,
                         &mut erasure_metas,
                         &mut index_working_set,
-                        &mut write_batch,
                         &mut just_inserted_shreds,
                         &mut index_meta_time,
                         handle_duplicate,
@@ -1030,12 +1029,11 @@ impl Blockstore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn check_insert_coding_shred<F>(
+    fn check_cache_coding_shred<F>(
         &self,
         shred: Shred,
         erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
         index_meta_time: &mut u64,
         handle_duplicate: &F,
@@ -1114,22 +1112,18 @@ impl Blockstore {
             e.num_repaired += 1;
         }
 
-        // insert coding shred into rocks
-        let result = self
-            .insert_coding_shred(index_meta, &shred, write_batch)
-            .is_ok();
-
-        if result {
-            index_meta_working_set_entry.did_insert_occur = true;
-            metrics.num_inserted += 1;
-        }
+        // Should be safe to modify index_meta here. Two cases
+        // 1) Recovery happens: Then all inserted erasure metas are removed
+        // from just_received_coding_shreds, and nothing will be committed by
+        // `check_insert_coding_shred`, so the coding index meta will not be
+        // committed
+        index_meta.coding_mut().insert(shred_index);
 
         if let HashMapEntry::Vacant(entry) = just_received_shreds.entry(shred.id()) {
             metrics.num_coding_shreds_inserted += 1;
             entry.insert(shred);
         }
-
-        result
+        true
     }
 
     fn find_conflicting_coding_shred(
@@ -1249,27 +1243,6 @@ impl Blockstore {
 
     fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
         shred.is_code() && shred.sanitize() && shred.slot() > *last_root.read().unwrap()
-    }
-
-    fn insert_coding_shred(
-        &self,
-        index_meta: &mut Index,
-        shred: &Shred,
-        write_batch: &mut WriteBatch,
-    ) -> Result<()> {
-        let slot = shred.slot();
-        let shred_index = u64::from(shred.index());
-
-        // Assert guaranteed by integrity checks on the shred that happen before
-        // `insert_coding_shred` is called
-        assert!(shred.is_code() && shred.sanitize());
-
-        // Commit step: commit all changes to the mutable structures at once, or none at all.
-        // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &shred.payload)?;
-        index_meta.coding_mut().insert(shred_index);
-
-        Ok(())
     }
 
     fn is_data_shred_present(shred: &Shred, slot_meta: &SlotMeta, data_index: &ShredIndex) -> bool {
@@ -5574,7 +5547,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_check_insert_coding_shred() {
+    pub fn test_check_cache_coding_shred() {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -5594,13 +5567,11 @@ pub mod tests {
             let mut erasure_metas = HashMap::new();
             let mut index_working_set = HashMap::new();
             let mut just_received_coding_shreds = HashMap::new();
-            let mut write_batch = blockstore.db.batch().unwrap();
             let mut index_meta_time = 0;
-            assert!(blockstore.check_insert_coding_shred(
+            assert!(blockstore.check_cache_coding_shred(
                 coding_shred.clone(),
                 &mut erasure_metas,
                 &mut index_working_set,
-                &mut write_batch,
                 &mut just_received_coding_shreds,
                 &mut index_meta_time,
                 &|_shred| {
@@ -5614,11 +5585,10 @@ pub mod tests {
             // insert again fails on dupe
             use std::sync::atomic::{AtomicUsize, Ordering};
             let counter = AtomicUsize::new(0);
-            assert!(!blockstore.check_insert_coding_shred(
+            assert!(!blockstore.check_cache_coding_shred(
                 coding_shred,
                 &mut erasure_metas,
                 &mut index_working_set,
-                &mut write_batch,
                 &mut just_received_coding_shreds,
                 &mut index_meta_time,
                 &|_shred| {
