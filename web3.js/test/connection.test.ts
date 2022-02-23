@@ -1513,6 +1513,128 @@ describe('Connection', function () {
     expect(result).to.be.empty;
   });
 
+  it('get block height', async () => {
+    const commitment: Commitment = 'confirmed';
+
+    await mockRpcResponse({
+      method: 'getBlockHeight',
+      params: [{commitment: commitment}],
+      value: 10,
+    });
+
+    const blockHeight = await connection.getBlockHeight(commitment);
+    expect(blockHeight).to.be.a('number');
+  });
+
+  it('get block production', async () => {
+    const commitment: Commitment = 'processed';
+
+    // Find slot of the lowest confirmed block
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 1,
+    });
+    let firstSlot = await connection.getFirstAvailableBlock();
+
+    // Find current block height
+    await mockRpcResponse({
+      method: 'getBlockHeight',
+      params: [{commitment: commitment}],
+      value: 10,
+    });
+    let lastSlot = await connection.getBlockHeight(commitment);
+
+    const blockProductionConfig = {
+      commitment: commitment,
+      range: {
+        firstSlot,
+        lastSlot,
+      },
+    };
+
+    const blockProductionRet = {
+      byIdentity: {
+        '85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr': [12, 10],
+      },
+      range: {
+        firstSlot,
+        lastSlot,
+      },
+    };
+
+    //mock RPC call with config specified
+    await mockRpcResponse({
+      method: 'getBlockProduction',
+      params: [blockProductionConfig],
+      value: blockProductionRet,
+      withContext: true,
+    });
+
+    //mock RPC call with commitment only
+    await mockRpcResponse({
+      method: 'getBlockProduction',
+      params: [{commitment: commitment}],
+      value: blockProductionRet,
+      withContext: true,
+    });
+
+    const result = await connection.getBlockProduction(blockProductionConfig);
+
+    if (!result) {
+      expect(result).to.be.ok;
+      return;
+    }
+
+    expect(result.context).to.be.ok;
+    expect(result.value).to.be.ok;
+
+    const resultContextSlot = result.context.slot;
+    expect(resultContextSlot).to.be.a('number');
+
+    const resultIdentityDictionary = result.value.byIdentity;
+    expect(resultIdentityDictionary).to.be.a('object');
+
+    for (var key in resultIdentityDictionary) {
+      expect(key).to.be.a('string');
+      expect(resultIdentityDictionary[key]).to.be.a('array');
+      expect(resultIdentityDictionary[key][0]).to.be.a('number');
+      expect(resultIdentityDictionary[key][1]).to.be.a('number');
+    }
+
+    const resultSlotRange = result.value.range;
+    expect(resultSlotRange.firstSlot).to.equal(firstSlot);
+    expect(resultSlotRange.lastSlot).to.equal(lastSlot);
+
+    const resultCommitmentOnly = await connection.getBlockProduction(
+      commitment,
+    );
+
+    if (!resultCommitmentOnly) {
+      expect(resultCommitmentOnly).to.be.ok;
+      return;
+    }
+    expect(resultCommitmentOnly.context).to.be.ok;
+    expect(resultCommitmentOnly.value).to.be.ok;
+
+    const resultCOContextSlot = result.context.slot;
+    expect(resultCOContextSlot).to.be.a('number');
+
+    const resultCOIdentityDictionary = result.value.byIdentity;
+    expect(resultCOIdentityDictionary).to.be.a('object');
+
+    for (var property in resultCOIdentityDictionary) {
+      expect(property).to.be.a('string');
+      expect(resultCOIdentityDictionary[property]).to.be.a('array');
+      expect(resultCOIdentityDictionary[property][0]).to.be.a('number');
+      expect(resultCOIdentityDictionary[property][1]).to.be.a('number');
+    }
+
+    const resultCOSlotRange = result.value.range;
+    expect(resultCOSlotRange.firstSlot).to.equal(firstSlot);
+    expect(resultCOSlotRange.lastSlot).to.equal(lastSlot);
+  });
+
   it('get transaction', async () => {
     await mockRpcResponse({
       method: 'getSlot',

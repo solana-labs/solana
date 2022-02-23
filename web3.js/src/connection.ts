@@ -755,6 +755,48 @@ export type BlockSignatures = {
 };
 
 /**
+ * recent block production information
+ */
+export type BlockProduction = Readonly<{
+  /** a dictionary of validator identities, as base-58 encoded strings. Value is a two element array containing the number of leader slots and the number of blocks produced */
+  byIdentity: Readonly<Record<string, ReadonlyArray<number>>>;
+  /** Block production slot range */
+  range: Readonly<{
+    /** first slot of the block production information (inclusive) */
+    firstSlot: number;
+    /** last slot of block production information (inclusive) */
+    lastSlot: number;
+  }>;
+}>;
+
+export type GetBlockProductionConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Slot range to return block production for. If parameter not provided, defaults to current epoch. */
+  range?: {
+    /** first slot to return block production information for (inclusive) */
+    firstSlot: number;
+    /** last slot to return block production information for (inclusive). If parameter not provided, defaults to the highest slot */
+    lastSlot?: number;
+  };
+  /** Only return results for this validator identity (base-58 encoded) */
+  identity?: string;
+};
+
+/**
+ * Expected JSON RPC response for the "getBlockProduction" message
+ */
+const BlockProductionResponseStruct = jsonRpcResultAndContext(
+  pick({
+    byIdentity: record(string(), array(number())),
+    range: pick({
+      firstSlot: number(),
+      lastSlot: number(),
+    }),
+  }),
+);
+
+/**
  * A performance sample
  */
 export type PerfSample = {
@@ -3228,6 +3270,51 @@ export class Connection {
         };
       }),
     };
+  }
+
+  /*
+   * Returns the current block height of the node
+   */
+  async getBlockHeight(commitment?: Commitment): Promise<number> {
+    const args = this._buildArgs([], commitment);
+    const unsafeRes = await this._rpcRequest('getBlockHeight', args);
+    const res = create(unsafeRes, jsonRpcResult(number()));
+    if ('error' in res) {
+      throw new Error(
+        'failed to get block height information: ' + res.error.message,
+      );
+    }
+
+    return res.result;
+  }
+
+  /*
+   * Returns recent block production information from the current or previous epoch
+   */
+  async getBlockProduction(
+    configOrCommitment?: GetBlockProductionConfig | Commitment,
+  ): Promise<RpcResponseAndContext<BlockProduction>> {
+    let extra: Omit<GetBlockProductionConfig, 'commitment'> | undefined;
+    let commitment: Commitment | undefined;
+
+    if (typeof configOrCommitment === 'string') {
+      commitment = configOrCommitment;
+    } else if (configOrCommitment) {
+      const {commitment: c, ...rest} = configOrCommitment;
+      commitment = c;
+      extra = rest;
+    }
+
+    const args = this._buildArgs([], commitment, 'base64', extra);
+    const unsafeRes = await this._rpcRequest('getBlockProduction', args);
+    const res = create(unsafeRes, BlockProductionResponseStruct);
+    if ('error' in res) {
+      throw new Error(
+        'failed to get block production information: ' + res.error.message,
+      );
+    }
+
+    return res.result;
   }
 
   /**
