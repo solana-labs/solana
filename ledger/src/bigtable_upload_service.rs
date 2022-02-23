@@ -1,6 +1,7 @@
 use {
     crate::{bigtable_upload, blockstore::Blockstore},
     solana_runtime::commitment::BlockCommitmentCache,
+    solana_measure::measure::Measure,
     std::{
         cmp::min,
         sync::{
@@ -67,6 +68,7 @@ impl BigTableUploadService {
                 continue;
             }
 
+            let mut measure_upload= Measure::start("block-upload");
             let result = runtime.block_on(bigtable_upload::upload_confirmed_blocks(
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
@@ -76,6 +78,13 @@ impl BigTableUploadService {
                 false,
                 exit.clone(),
             ));
+            measure_upload.stop();
+            datapoint_info!(
+                "block-upload",
+                ("time:", measure_upload.as_us() as i64, i64),
+                ("start_slot", start_slot as i64, i64),
+                ("end_slot", end_slot as i64, i64),
+            );
 
             match result {
                 Ok(()) => start_slot = end_slot,

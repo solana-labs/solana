@@ -2,6 +2,8 @@ use {
     enum_iterator::IntoEnumIterator,
     rayon::prelude::*,
     std::io::{self, BufReader, Read, Write},
+    std::time::Instant,
+    log::*,
 };
 
 #[derive(Debug, Serialize, Deserialize, IntoEnumIterator)]
@@ -82,11 +84,18 @@ pub fn compress(method: CompressionMethod, data: &[u8]) -> Result<Vec<u8>, io::E
 }
 
 pub fn compress_best(data: &[u8]) -> Result<Vec<u8>, io::Error> {
-    if data.len() < 128 {
+    let timer = Instant::now();
+    let ret = if data.len() < 128 {
         compress_best_vec(data)
     } else {
         compress_best_par(data)
-    }
+    };
+    info!(
+        "take {}us to compress {} bytes in block",
+        timer.elapsed().as_micros(),
+        data.len()
+    );
+    ret
 }
 
 pub fn compress_best_vec(data: &[u8]) -> Result<Vec<u8>, io::Error> {
