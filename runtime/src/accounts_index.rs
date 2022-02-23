@@ -1737,9 +1737,8 @@ impl<T: IndexValue> AccountsIndex<T> {
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
 
-    // Updates the given pubkey at the given slot with the new account information.
-    // Returns true if the pubkey was newly inserted into the index, otherwise, if the
-    // pubkey updates an existing entry in the index, returns false.
+    /// Updates the given pubkey at the given slot with the new account information.
+    /// on return, the index's previous account info may be returned in 'reclaims' depending on 'previous_slot_entry_was_cached'
     pub fn upsert(
         &self,
         slot: Slot,
