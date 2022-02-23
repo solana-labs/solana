@@ -107,7 +107,7 @@ Unstable methods may see breaking changes in patch releases and may not be suppo
 
 ## Request Formatting
 
-To make a JSON-RPC request, send an HTTP POST request with a `Content-Type: 
+To make a JSON-RPC request, send an HTTP POST request with a `Content-Type:
 application/json` header. The JSON request data should contain 4 fields:
 
 - `jsonrpc: <string>`, set to `"2.0"`
