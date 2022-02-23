@@ -355,19 +355,43 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
     pub parent_slot: Slot,
-    pub transactions: Vec<TransactionWithStatusMeta>,
+    pub transactions: Vec<TransactionWithMetadata>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
 
-impl ConfirmedBlock {
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConfirmedBlockWithOptionalMetadata {
+    pub previous_blockhash: String,
+    pub blockhash: String,
+    pub parent_slot: Slot,
+    pub transactions: Vec<TransactionWithOptionalMetadata>,
+    pub rewards: Rewards,
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
+}
+
+impl From<ConfirmedBlock> for ConfirmedBlockWithOptionalMetadata {
+    fn from(block: ConfirmedBlock) -> Self {
+        Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: block.transactions.into_iter().map(Into::into).collect(),
+            rewards: block.rewards,
+            block_time: block.block_time,
+            block_height: block.block_height,
+        }
+    }
+}
+
+impl ConfirmedBlockWithOptionalMetadata {
     pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedBlock {
         EncodedConfirmedBlock {
             previous_blockhash: self.previous_blockhash,
@@ -499,16 +523,31 @@ impl Default for TransactionDetails {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmedTransaction {
     pub slot: Slot,
-    #[serde(flatten)]
-    pub transaction: TransactionWithStatusMeta,
+    pub transaction: TransactionWithMetadata,
     pub block_time: Option<UnixTimestamp>,
 }
 
-impl ConfirmedTransaction {
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfirmedTransactionWithOptionalMetadata {
+    pub slot: Slot,
+    pub transaction: TransactionWithOptionalMetadata,
+    pub block_time: Option<UnixTimestamp>,
+}
+
+impl From<ConfirmedTransaction> for ConfirmedTransactionWithOptionalMetadata {
+    fn from(confirmed_tx: ConfirmedTransaction) -> Self {
+        Self {
+            slot: confirmed_tx.slot,
+            transaction: confirmed_tx.transaction.into(),
+            block_time: confirmed_tx.block_time,
+        }
+    }
+}
+
+impl ConfirmedTransactionWithOptionalMetadata {
     pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedTransaction {
         EncodedConfirmedTransaction {
             slot: self.slot,
@@ -561,14 +600,28 @@ pub struct UiParsedMessage {
     pub instructions: Vec<UiInstruction>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionWithStatusMeta {
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionWithMetadata {
+    pub transaction: Transaction,
+    pub meta: TransactionStatusMeta,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionWithOptionalMetadata {
     pub transaction: Transaction,
     pub meta: Option<TransactionStatusMeta>,
 }
 
-impl TransactionWithStatusMeta {
+impl From<TransactionWithMetadata> for TransactionWithOptionalMetadata {
+    fn from(tx_with_meta: TransactionWithMetadata) -> Self {
+        Self {
+            transaction: tx_with_meta.transaction,
+            meta: Some(tx_with_meta.meta),
+        }
+    }
+}
+
+impl TransactionWithOptionalMetadata {
     fn encode(self, encoding: UiTransactionEncoding) -> EncodedTransactionWithStatusMeta {
         let message = self.transaction.message();
         let meta = self.meta.map(|meta| meta.encode(encoding, message));

@@ -61,7 +61,8 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta,
+    TransactionStatusMeta,
+    TransactionWithMetadata,
 };
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -420,9 +421,9 @@ fn execute_transactions(
 
                     Ok(ConfirmedTransaction {
                         slot: bank.slot(),
-                        transaction: TransactionWithStatusMeta {
+                        transaction: TransactionWithMetadata {
                             transaction: tx.clone(),
-                            meta: Some(tx_status_meta),
+                            meta: tx_status_meta,
                         },
                         block_time: None,
                     })
@@ -2466,8 +2467,8 @@ fn test_program_upgradeable_locks() {
     assert!(matches!(
         results1[0],
         Ok(ConfirmedTransaction {
-            transaction: TransactionWithStatusMeta {
-                meta: Some(TransactionStatusMeta { status: Ok(()), .. }),
+            transaction: TransactionWithMetadata {
+                meta: TransactionStatusMeta { status: Ok(()), .. },
                 ..
             },
             ..
@@ -2478,14 +2479,14 @@ fn test_program_upgradeable_locks() {
     assert!(matches!(
         results2[0],
         Ok(ConfirmedTransaction {
-            transaction: TransactionWithStatusMeta {
-                meta: Some(TransactionStatusMeta {
+            transaction: TransactionWithMetadata {
+                meta: TransactionStatusMeta {
                     status: Err(TransactionError::InstructionError(
                         0,
                         InstructionError::ProgramFailedToComplete
                     )),
                     ..
-                }),
+                },
                 ..
             },
             ..

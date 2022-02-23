@@ -2067,7 +2067,7 @@ mod tests {
             transaction::{Transaction, TransactionError},
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
-        solana_transaction_status::TransactionWithStatusMeta,
+        solana_transaction_status::TransactionWithMetadata,
         solana_vote_program::vote_transaction,
         std::{
             net::SocketAddr,
@@ -3223,39 +3223,23 @@ mod tests {
         genesis_config.rent.lamports_per_byte_year = 50;
         genesis_config.rent.exemption_threshold = 2.0;
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let rent_exempt_minimum = bank.get_minimum_balance_for_rent_exemption(0);
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
 
-        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
-
-        let success_tx = system_transaction::transfer(
-            &mint_keypair,
-            &pubkey,
-            rent_exempt_amount,
-            genesis_config.hash(),
-        );
+        let success_tx =
+            system_transaction::transfer(&mint_keypair, &pubkey, 0, genesis_config.hash());
         let success_signature = success_tx.signatures[0];
         let entry_1 = next_entry(&genesis_config.hash(), 1, vec![success_tx.clone()]);
-        let ix_error_tx = system_transaction::transfer(
-            &keypair1,
-            &pubkey1,
-            2 * rent_exempt_amount,
-            genesis_config.hash(),
-        );
+        let ix_error_tx =
+            system_transaction::transfer(&keypair1, &pubkey1, std::u64::MAX, genesis_config.hash());
         let ix_error_signature = ix_error_tx.signatures[0];
         let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx.clone()]);
-        let fail_tx = system_transaction::transfer(
-            &mint_keypair,
-            &pubkey1,
-            rent_exempt_amount,
-            genesis_config.hash(),
-        );
-        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
-        let entries = vec![entry_1, entry_2, entry_3];
+        let entries = vec![entry_1, entry_2];
 
-        let transactions = sanitize_transactions(vec![success_tx, ix_error_tx, fail_tx]);
-        bank.transfer(rent_exempt_amount, &mint_keypair, &keypair1.pubkey())
+        let transactions = sanitize_transactions(vec![success_tx, ix_error_tx]);
+        bank.transfer(rent_exempt_minimum, &mint_keypair, &keypair1.pubkey())
             .unwrap();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -3314,27 +3298,24 @@ mod tests {
             transaction_status_service.join().unwrap();
 
             let confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
-            assert_eq!(confirmed_block.transactions.len(), 3);
-
-            for TransactionWithStatusMeta { transaction, meta } in
-                confirmed_block.transactions.into_iter()
-            {
-                if transaction.signatures[0] == success_signature {
-                    let meta = meta.unwrap();
-                    assert_eq!(meta.status, Ok(()));
-                } else if transaction.signatures[0] == ix_error_signature {
-                    let meta = meta.unwrap();
-                    assert_eq!(
-                        meta.status,
-                        Err(TransactionError::InstructionError(
-                            0,
-                            InstructionError::Custom(1)
-                        ))
-                    );
-                } else {
-                    assert_eq!(meta, None);
-                }
-            }
+            let actual_tx_results: Vec<_> = confirmed_block
+                .transactions
+                .into_iter()
+                .map(|TransactionWithMetadata { transaction, meta }| {
+                    (transaction.signatures[0], meta.status)
+                })
+                .collect();
+            let expected_tx_results = vec![
+                (success_signature, Ok(())),
+                (
+                    ix_error_signature,
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::Custom(1),
+                    )),
+                ),
+            ];
+            assert_eq!(actual_tx_results, expected_tx_results);
 
             poh_recorder
                 .lock()
