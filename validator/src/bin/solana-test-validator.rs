@@ -582,6 +582,8 @@ fn main() {
     }
 
     let mut genesis = TestValidatorGenesis::default();
+    // this startup path should act like we started from a validator
+    genesis.started_from_validator = true;
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
     genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
