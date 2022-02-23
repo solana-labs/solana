@@ -518,13 +518,18 @@ impl BankingStage {
         qos_service: &QosService,
         // TODO - add back metrics_tracker with new dta points
         _slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        last_working_bank: Option<Arc<Bank>>,
     ) {
         // TODO - add cli option to enable/disable PacketSender info logging
         let mut packet_sender_info = Some(PacketSenderInfo::default());
 
+        // we must have/had working_bank to start consume buffer. Using that bank to calculate
+        // transactino fees
         let prioritized_packet_locators = prioritize_by_fee_then_stakes(
             buffered_packet_batches,
-            &mut packet_sender_info);
+            last_working_bank,
+            &mut packet_sender_info,
+        );
 
         let mut report_sender_info_start = Measure::start("packet_sender_info_report");
         if let Some(packet_sender_info) = packet_sender_info {
@@ -540,31 +545,36 @@ impl BankingStage {
                 // if we are the next leader, skip the filtering logic now as buffer will be filter
                 // again.
                 if is_next_leader(my_pubkey, end_of_slot.next_slot_leader) {
-                    retryable_packets_locators.extend_from_slice(&prioritized_packet_locators[chunk_start..prioritized_packet_locators.len()]);
+                    retryable_packets_locators.extend_from_slice(
+                        &prioritized_packet_locators
+                            [chunk_start..prioritized_packet_locators.len()],
+                    );
                     break;
                 }
                 // filter too_old unprocessed packets if have a bank, otherwise keep buffer as is
                 if let Some(bank) = &end_of_slot.working_bank {
                     let (transactions, sanitized_locators) = sanitize_transactions(
                         &buffered_packet_batches,
-                        &prioritized_packet_locators[chunk_start..prioritized_packet_locators.len()],
+                        &prioritized_packet_locators
+                            [chunk_start..prioritized_packet_locators.len()],
                         &bank.feature_set,
                         bank.vote_only_bank(),
                         bank.as_ref(),
-                        );
+                    );
                     let retryable_transaction_indexes = (0..transactions.len()).collect_vec();
-                    let filtered_retryable_transaction_locators =
-                        filter_retryable_transactions(
-                            bank,
-                            &transactions,
-                            &sanitized_locators,
-                            &retryable_transaction_indexes,
-                        );
+                    let filtered_retryable_transaction_locators = filter_retryable_transactions(
+                        bank,
+                        &transactions,
+                        &sanitized_locators,
+                        &retryable_transaction_indexes,
+                    );
                     retryable_packets_locators.extend(filtered_retryable_transaction_locators);
-                }
-                else {
+                } else {
                     // not filtering, just add remaining packet locators to retryable list
-                    retryable_packets_locators.extend_from_slice(&prioritized_packet_locators[chunk_start..prioritized_packet_locators.len()]);
+                    retryable_packets_locators.extend_from_slice(
+                        &prioritized_packet_locators
+                            [chunk_start..prioritized_packet_locators.len()],
+                    );
                 }
                 break;
             } else {
@@ -688,7 +698,7 @@ impl BankingStage {
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> BufferedPacketsDecision {
-        let (decision, make_decision_time) = Measure::this(
+        let ((decision, working_bank), make_decision_time) = Measure::this(
             |_| {
                 let bank_start;
                 let (
@@ -710,12 +720,15 @@ impl BankingStage {
                     )
                 };
 
-                Self::consume_or_forward_packets(
-                    my_pubkey,
-                    leader_at_slot_offset,
-                    bank_still_processing_txs,
-                    would_be_leader,
-                    would_be_leader_shortly,
+                (
+                    Self::consume_or_forward_packets(
+                        my_pubkey,
+                        leader_at_slot_offset,
+                        bank_still_processing_txs,
+                        would_be_leader,
+                        would_be_leader_shortly,
+                    ),
+                    bank_still_processing_txs.map_or(None, |bank| Some(bank.clone())),
                 )
             },
             (),
@@ -739,6 +752,7 @@ impl BankingStage {
                             recorder,
                             qos_service,
                             slot_metrics_tracker,
+                            working_bank,
                         )
                     },
                     (),
@@ -3525,6 +3539,7 @@ mod tests {
                 &recorder,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 &mut LeaderSlotMetricsTracker::new(0),
+                None,
             );
             assert_eq!(
                 buffered_packet_batches[0].unprocessed_packets.len(),
@@ -3546,6 +3561,7 @@ mod tests {
                     &recorder,
                     &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                     &mut LeaderSlotMetricsTracker::new(0),
+                    None,
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packet_batches.is_empty())
@@ -3616,6 +3632,7 @@ mod tests {
                         &recorder,
                         &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                         &mut LeaderSlotMetricsTracker::new(0),
+                        None,
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`
