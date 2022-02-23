@@ -163,36 +163,26 @@ mod test {
     fn test_compress_bench() {
         println!("size, old, loop, par");
 
+        macro_rules! bench {
+            ($f: ident, $data: ident, $num_rounds: expr) => {{
+                let start = Instant::now();
+                for _ in 1..$num_rounds {
+                    assert!(
+                        $f(&$data).expect("compress_best").len()
+                            <= CompressionMethod::serialized_header_size() as usize + $data.len()
+                    );
+                }
+                start.elapsed()
+            }};
+        }
+
         for size in [16, 32, 64, 128, 256, 512, 1024, 2048, 4098, 8196] {
             let data: Vec<u8> = (0..size).map(|_| rand::random::<u8>()).collect();
-
-            let start = Instant::now();
             let num_rounds = 100;
-            for _ in 1..num_rounds {
-                assert!(
-                    compress_best_vec(&data).expect("compress_best").len()
-                        <= CompressionMethod::serialized_header_size() as usize + data.len()
-                );
-            }
-            let time_old = start.elapsed();
 
-            let start = Instant::now();
-            for _ in 1..num_rounds {
-                assert!(
-                    compress_best_loop(&data).expect("compress_best").len()
-                        <= CompressionMethod::serialized_header_size() as usize + data.len()
-                );
-            }
-            let time_loop = start.elapsed();
-
-            let start = Instant::now();
-            for _ in 1..num_rounds {
-                assert!(
-                    compress_best_par(&data).expect("compress_best").len()
-                        <= CompressionMethod::serialized_header_size() as usize + data.len()
-                );
-            }
-            let time_par = start.elapsed();
+            let time_old = bench!(compress_best_vec, data, num_rounds);
+            let time_loop = bench!(compress_best_loop, data, num_rounds);
+            let time_par = bench!(compress_best_par, data, num_rounds);
 
             println!(
                 "{}, {:?}, {:?}, {:?}, {}%",
