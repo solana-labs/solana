@@ -6666,6 +6666,120 @@ mod tests {
         }
     }
 
+    /// Ensure that `split()` correctly handles prefunded destination accounts.  When a destination
+    /// account already has funds, ensure the minimum split amount reduces accordingly.
+    #[test]
+    fn test_split_destination_minimum_stake_delegation() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let source_pubkey = Pubkey::new_unique();
+        let source_meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&source_pubkey)
+        };
+        // Set the source's starting balance to something large to ensure its post-split
+        // balance meets all the requirements
+        let source_starting_balance = u64::MAX;
+        let source_account = AccountSharedData::new_ref_data_with_space(
+            source_starting_balance,
+            &StakeState::Initialized(source_meta),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let source_keyed_account = KeyedAccount::new(&source_pubkey, true, &source_account);
+
+        for (dest_starting_balance, split_amount, expected_result) in [
+            // split amount must be non zero
+            (
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+                0,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // any split amount is OK when destination account is already fully funded
+            (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION, 1, Ok(())),
+            // if destination is only short by 1 lamport, then split amount can be 1 lamport
+            (
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+                1,
+                Ok(()),
+            ),
+            // dest short by 1 lamport, so 0 isn't enough
+            (
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+                0,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // dest short by 2 lamports, so 1 isn't enough (non-zero split amount)
+            (
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 2,
+                1,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // dest is rent exempt, so split enough for minimum delegation
+            (rent_exempt_reserve, MINIMUM_STAKE_DELEGATION, Ok(())),
+            // dest is rent exempt, but split amount less than minimum delegation
+            (
+                rent_exempt_reserve,
+                MINIMUM_STAKE_DELEGATION - 1,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // dest is not rent exempt, so split enough for rent and minimum delegation
+            (
+                rent_exempt_reserve - 1,
+                MINIMUM_STAKE_DELEGATION + 1,
+                Ok(()),
+            ),
+            // dest is not rent exempt, but split amount only for minimum delegation
+            (
+                rent_exempt_reserve - 1,
+                MINIMUM_STAKE_DELEGATION,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // dest has smallest non-zero balance, so can split the minimum balance requirements
+            // minus what dest already has
+            (
+                1,
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+                Ok(()),
+            ),
+            // dest has smallest non-zero balance, but cannot split less than the minimum balance
+            // requirements minus what dest already has
+            (
+                1,
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 2,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // dest has zero lamports, so split must be rent exempt reserve plus minimum delegation
+            (0, rent_exempt_reserve + MINIMUM_STAKE_DELEGATION, Ok(())),
+            // dest has zero lamports, but split less than rent exempt reserve plus minimum delegation
+            (
+                0,
+                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+                Err(InstructionError::InsufficientFunds),
+            ),
+        ] {
+            let dest_pubkey = Pubkey::new_unique();
+            let dest_account = AccountSharedData::new_ref_data_with_space(
+                dest_starting_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let dest_keyed_account = KeyedAccount::new(&dest_pubkey, true, &dest_account);
+
+            assert_eq!(
+                expected_result,
+                source_keyed_account.split(
+                    split_amount,
+                    &dest_keyed_account,
+                    &HashSet::from([source_pubkey]),
+                ),
+            );
+        }
+    }
+
     /// Ensure that `withdraw()` respects the MINIMUM_STAKE_DELEGATION requirements
     /// - Assert 1: withdrawing so remaining stake is equal-to the minimum is OK
     /// - Assert 2: withdrawing so remaining stake is less-than the minimum is not OK
