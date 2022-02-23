@@ -1,7 +1,7 @@
 use {
     crate::{bigtable_upload, blockstore::Blockstore},
-    solana_runtime::commitment::BlockCommitmentCache,
     solana_measure::measure::Measure,
+    solana_runtime::commitment::BlockCommitmentCache,
     std::{
         cmp::min,
         sync::{
@@ -68,7 +68,7 @@ impl BigTableUploadService {
                 continue;
             }
 
-            let mut measure_upload= Measure::start("block-upload");
+            let mut measure_upload = Measure::start("block-upload");
             let result = runtime.block_on(bigtable_upload::upload_confirmed_blocks(
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),

@@ -1,9 +1,11 @@
 use {
     enum_iterator::IntoEnumIterator,
-    rayon::prelude::*,
-    std::io::{self, BufReader, Read, Write},
-    std::time::Instant,
     log::*,
+    rayon::prelude::*,
+    std::{
+        io::{self, BufReader, Read, Write},
+        time::Instant,
+    },
 };
 
 #[derive(Debug, Serialize, Deserialize, IntoEnumIterator)]
@@ -137,8 +139,7 @@ pub fn compress_best_loop(data: &[u8]) -> Result<Vec<u8>, io::Error> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use std::time::Instant;
+    use {super::*, std::time::Instant};
 
     #[test]
     fn test_compress_uncompress() {
@@ -166,16 +167,17 @@ mod test {
             let data: Vec<u8> = (0..size).map(|_| rand::random::<u8>()).collect();
 
             let start = Instant::now();
-            for _ in 1..100 {
+            let num_rounds = 100;
+            for _ in 1..num_rounds {
                 assert!(
-                    compress_best(&data).expect("compress_best").len()
+                    compress_best_vec(&data).expect("compress_best").len()
                         <= CompressionMethod::serialized_header_size() as usize + data.len()
                 );
             }
             let time_old = start.elapsed();
 
             let start = Instant::now();
-            for _ in 1..100 {
+            for _ in 1..num_rounds {
                 assert!(
                     compress_best_loop(&data).expect("compress_best").len()
                         <= CompressionMethod::serialized_header_size() as usize + data.len()
@@ -184,7 +186,7 @@ mod test {
             let time_loop = start.elapsed();
 
             let start = Instant::now();
-            for _ in 1..100 {
+            for _ in 1..num_rounds {
                 assert!(
                     compress_best_par(&data).expect("compress_best").len()
                         <= CompressionMethod::serialized_header_size() as usize + data.len()
@@ -192,7 +194,14 @@ mod test {
             }
             let time_par = start.elapsed();
 
-            println!("{}, {:?}, {:?}, {:?}", size, time_old, time_loop, time_par);
+            println!(
+                "{}, {:?}, {:?}, {:?}, {}%",
+                size,
+                time_old.as_micros() / num_rounds,
+                time_loop.as_micros() / num_rounds,
+                time_par.as_micros() / num_rounds,
+                100 - 100 * time_par.as_micros() / time_old.as_micros()
+            );
         }
     }
 }
