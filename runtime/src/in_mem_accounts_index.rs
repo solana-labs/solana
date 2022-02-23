@@ -434,9 +434,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_stat(count, 1);
     }
 
-    // Try to update an item in the slot list the given `slot` If an item for the slot
-    // already exists in the list, remove the older item, add it to `reclaims`, and insert
-    // the new item.
+    /// Try to update an item in the slot list the given `slot` If an item for the slot
+    /// already exists in the list, remove the older item, add it to `reclaims`, and insert
+    /// the new item.
     pub fn lock_and_update_slot_list(
         current: &AccountMapEntryInner<T>,
         new_value: (Slot, T),
@@ -458,8 +458,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         current.set_dirty(true);
     }
 
-    // modifies slot_list
-    // returns true if caller should addref
+    /// modifies slot_list
+    /// any entry at 'slot' is replaced with 'account_info'.
+    /// or, 'account_info' is appended to the slot list if the slot did not exist previously.
+    /// returns true if caller should addref
     fn update_slot_list(
         list: &mut SlotList<T>,
         slot: Slot,
@@ -591,8 +593,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    /// return tuple:
-    /// true if item already existed in the index
+    /// return true if item already existed in the index
     fn upsert_on_disk(
         &self,
         vacant: VacantEntry<K, AccountMapEntry<T>>,
