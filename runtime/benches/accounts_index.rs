@@ -10,7 +10,7 @@ use {
             AccountSecondaryIndexes, AccountsIndex, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         },
     },
-    solana_sdk::pubkey::{self, Pubkey},
+    solana_sdk::{account::AccountSharedData, pubkey},
     test::Bencher,
 };
 
@@ -28,8 +28,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
             index.upsert(
                 f,
                 pubkey,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
@@ -46,8 +45,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
             index.upsert(
                 fork,
                 &pubkeys[pubkey],
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
