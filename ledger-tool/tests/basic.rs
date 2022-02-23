@@ -1,6 +1,8 @@
 use {
     assert_cmd::prelude::*,
-    solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config},
+    solana_ledger::{
+        create_new_tmp_ledger, create_new_tmp_ledger_fifo, genesis_utils::create_genesis_config,
+    },
     std::process::{Command, Output},
 };
 
@@ -27,27 +29,104 @@ fn bad_arguments() {
         .success());
 }
 
-#[test]
-fn nominal() {
-    let genesis_config = create_genesis_config(100).genesis_config;
-    let ticks_per_slot = genesis_config.ticks_per_slot;
+fn nominal_test_helper(
+    ledger_path: &str,
+    ticks: usize,
+    use_default_shred_compaction: bool,
+    compatible_shred_compaction: &str,
+    incompatible_shred_compaction: &str,
+) {
     let meta_lines = 2;
     let summary_lines = 1;
 
-    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-    let ticks = ticks_per_slot as usize;
-
-    let ledger_path = ledger_path.to_str().unwrap();
-
     // Basic validation
-    let output = run_ledger_tool(&["-l", ledger_path, "verify"]);
+    if use_default_shred_compaction {
+        let output = run_ledger_tool(&["-l", ledger_path, "verify"]);
+        assert!(output.status.success());
+    }
+
+    // Repeat by manually specifying rocksdb-shred-compaction
+    let output = run_ledger_tool(&[
+        "-l",
+        ledger_path,
+        "--rocksdb-shred-compaction",
+        compatible_shred_compaction,
+        "verify",
+    ]);
+    assert!(output.status.success());
+
+    // Repeat with an incompatible shred compaction setting and expect failure
+    let output = run_ledger_tool(&[
+        "-l",
+        ledger_path,
+        "--rocksdb-shred-compaction",
+        incompatible_shred_compaction,
+        "verify",
+    ]);
+    assert!(!output.status.success());
+
+    // Repeat the same verification with the correct rocksdb-shred-compaction
+    // to make sure opening with incompatible shred compaction previously
+    // will not ruin the existing blockstore.
+    let output = run_ledger_tool(&[
+        "-l",
+        ledger_path,
+        "--rocksdb-shred-compaction",
+        compatible_shred_compaction,
+        "verify",
+    ]);
     assert!(output.status.success());
 
     // Print everything
-    let output = run_ledger_tool(&["-l", ledger_path, "print", "-vvv"]);
+    if use_default_shred_compaction {
+        let output = run_ledger_tool(&["-l", ledger_path, "print", "-vvv"]);
+        assert!(output.status.success());
+        assert_eq!(
+            count_newlines(&output.stdout)
+                .saturating_sub(meta_lines)
+                .saturating_sub(summary_lines),
+            ticks
+        );
+    }
+    let output = run_ledger_tool(&[
+        "-l",
+        ledger_path,
+        "--rocksdb-shred-compaction",
+        compatible_shred_compaction,
+        "print",
+        "-vvv",
+    ]);
     assert!(output.status.success());
     assert_eq!(
-        count_newlines(&output.stdout),
-        ticks + meta_lines + summary_lines
+        count_newlines(&output.stdout)
+            .saturating_sub(meta_lines)
+            .saturating_sub(summary_lines),
+        ticks
+    );
+}
+
+#[test]
+fn nominal_default() {
+    let genesis_config = create_genesis_config(100).genesis_config;
+    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+    nominal_test_helper(
+        ledger_path.to_str().unwrap(),
+        genesis_config.ticks_per_slot as usize,
+        true, // use_default_shred_compaction
+        "level",
+        "fifo",
+    );
+}
+
+#[test]
+fn nominal_fifo() {
+    let genesis_config = create_genesis_config(100).genesis_config;
+    let (ledger_path, _blockhash) = create_new_tmp_ledger_fifo!(&genesis_config);
+    nominal_test_helper(
+        ledger_path.to_str().unwrap(),
+        genesis_config.ticks_per_slot as usize,
+        false, // use_default_shred_compaction
+        "fifo",
+        "level",
     );
 }
