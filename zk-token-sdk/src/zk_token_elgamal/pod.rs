@@ -1,6 +1,34 @@
 pub use bytemuck::{Pod, Zeroable};
 use std::fmt;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PodU16([u8; 2]);
+impl From<u16> for PodU16 {
+    fn from(n: u16) -> Self {
+        Self(n.to_le_bytes())
+    }
+}
+impl From<PodU16> for u16 {
+    fn from(pod: PodU16) -> Self {
+        Self::from_le_bytes(pod.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PodU64([u8; 8]);
+impl From<u64> for PodU64 {
+    fn from(n: u64) -> Self {
+        Self(n.to_le_bytes())
+    }
+}
+impl From<PodU64> for u64 {
+    fn from(pod: PodU64) -> Self {
+        Self::from_le_bytes(pod.0)
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct Scalar(pub [u8; 32]);
@@ -55,15 +83,25 @@ impl fmt::Debug for DecryptHandle {
     }
 }
 
-/// Serialization of equality proofs
+/// Serialization of `CtxtCommEqualityProof`
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct EqualityProof(pub [u8; 192]);
+pub struct CtxtCommEqualityProof(pub [u8; 192]);
 
-// `EqualityProof` is a Pod and Zeroable.
+// `CtxtCommEqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for EqualityProof {}
-unsafe impl Pod for EqualityProof {}
+unsafe impl Zeroable for CtxtCommEqualityProof {}
+unsafe impl Pod for CtxtCommEqualityProof {}
+
+/// Serialization of `CtxtCtxtEqualityProof`
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct CtxtCtxtEqualityProof(pub [u8; 224]);
+
+// `CtxtCtxtEqualityProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for CtxtCtxtEqualityProof {}
+unsafe impl Pod for CtxtCtxtEqualityProof {}
 
 /// Serialization of validity proofs
 #[derive(Clone, Copy)]
@@ -153,31 +191,45 @@ impl Default for AeCiphertext {
 }
 
 // TODO: refactor this code into the instruction module
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct TransferPubkeys(pub [u8; 96]);
-
-unsafe impl Zeroable for TransferPubkeys {}
-unsafe impl Pod for TransferPubkeys {}
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferPubkeys {
+    pub pubkey_source: ElGamalPubkey,
+    pub pubkey_dest: ElGamalPubkey,
+    pub pubkey_auditor: ElGamalPubkey,
+}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct TransferWithFeePubkeys(pub [u8; 128]);
+#[repr(C)]
+pub struct TransferWithFeePubkeys {
+    pub pubkey_source: ElGamalPubkey,
+    pub pubkey_dest: ElGamalPubkey,
+    pub pubkey_auditor: ElGamalPubkey,
+    pub pubkey_withdraw_withheld_authority: ElGamalPubkey,
+}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct TransferAmountEncryption(pub [u8; 128]);
+#[repr(C)]
+pub struct TransferAmountEncryption {
+    pub commitment: PedersenCommitment,
+    pub handle_source: DecryptHandle,
+    pub handle_dest: DecryptHandle,
+    pub handle_auditor: DecryptHandle,
+}
 
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct FeeEncryption(pub [u8; 96]);
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct FeeEncryption {
+    pub commitment: PedersenCommitment,
+    pub handle_dest: DecryptHandle,
+    pub handle_withdraw_withheld_authority: DecryptHandle,
+}
 
-unsafe impl Zeroable for FeeEncryption {}
-unsafe impl Pod for FeeEncryption {}
-
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct FeeParameters(pub [u8; 10]);
-
-unsafe impl Zeroable for FeeParameters {}
-unsafe impl Pod for FeeParameters {}
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct FeeParameters {
+    /// Fee rate expressed as basis points of the transfer amount, i.e. increments of 0.01%
+    pub fee_rate_basis_points: PodU16,
+    /// Maximum fee assessed on transfers, expressed as an amount of tokens
+    pub maximum_fee: PodU64,
+}

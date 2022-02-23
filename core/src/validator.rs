@@ -164,6 +164,7 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub wait_to_vote_slot: Option<Slot>,
 }
 
 impl Default for ValidatorConfig {
@@ -223,6 +224,7 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
+            wait_to_vote_slot: None,
         }
     }
 }
@@ -295,6 +297,7 @@ pub struct Validator {
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
+    pub bank_forks: Arc<RwLock<BankForks>>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     accountsdb_plugin_service: Option<AccountsDbPluginService>,
 }
@@ -873,6 +876,7 @@ impl Validator {
             accounts_package_channel,
             last_full_snapshot_slot,
             block_metadata_notifier,
+            config.wait_to_vote_slot,
         );
 
         let tpu = Tpu::new(
@@ -894,7 +898,7 @@ impl Validator {
             &exit,
             node.info.shred_version,
             vote_tracker,
-            bank_forks,
+            bank_forks.clone(),
             verified_vote_sender,
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
@@ -931,6 +935,7 @@ impl Validator {
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
             cluster_info,
+            bank_forks,
             accountsdb_repl_service,
             accountsdb_plugin_service,
         }
@@ -972,6 +977,7 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.bank_forks);
         drop(self.cluster_info);
 
         self.poh_service.join().expect("poh_service");
@@ -1505,7 +1511,6 @@ fn initialize_rpc_transaction_history_services(
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
     let transaction_status_sender = Some(TransactionStatusSender {
         sender: transaction_status_sender,
-        enable_cpi_and_log_storage,
     });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
@@ -1513,6 +1518,7 @@ fn initialize_rpc_transaction_history_services(
         enable_rpc_transaction_history,
         transaction_notifier.clone(),
         blockstore.clone(),
+        enable_cpi_and_log_storage,
         exit,
     ));
 

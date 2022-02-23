@@ -1,7 +1,4 @@
-use {
-    solana_runtime::builtins::{ActivationType, Builtin, Builtins},
-    solana_sdk::pubkey::Pubkey,
-};
+use solana_runtime::builtins::{Builtin, BuiltinFeatureTransition, Builtins};
 
 macro_rules! to_builtin {
     ($b:expr) => {
@@ -37,14 +34,14 @@ fn genesis_builtins(bpf_jit: bool) -> Vec<Builtin> {
     ]
 }
 
-/// Builtin programs activated dynamically by feature
-fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
+/// Dynamic feature transitions for builtin programs
+fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![]
 }
 
 pub(crate) fn get(bpf_jit: bool) -> Builtins {
     Builtins {
         genesis_builtins: genesis_builtins(bpf_jit),
-        feature_builtins: feature_builtins(),
+        feature_transitions: builtin_feature_transitions(),
     }
 }

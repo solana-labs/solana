@@ -25,6 +25,7 @@ use {
         account_info::AccountInfo,
         clock::Slot,
         entrypoint::{ProgramResult, SUCCESS},
+        feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -57,7 +58,10 @@ use {
     tokio::task::JoinHandle,
 };
 // Export types so test clients can limit their solana crate dependencies
-pub use {solana_banks_client::BanksClient, solana_program_runtime::invoke_context::InvokeContext};
+pub use {
+    solana_banks_client::{BanksClient, BanksClientError},
+    solana_program_runtime::invoke_context::InvokeContext,
+};
 
 pub mod programs;
 
@@ -101,7 +105,7 @@ pub fn builtin_process_instruction(
         ..instruction_context.get_number_of_accounts();
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = transaction_context.get_program_key()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
     stable_log::program_invoke(
         &log_collector,
         program_id,
@@ -246,10 +250,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     ) -> ProgramResult {
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
-
-        let caller = *invoke_context
-            .transaction_context
-            .get_program_key()
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+        let caller = instruction_context
+            .get_program_key(transaction_context)
             .unwrap();
 
         stable_log::program_invoke(
@@ -260,7 +266,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         let signers = signers_seeds
             .iter()
-            .map(|seeds| Pubkey::create_program_address(seeds, &caller).unwrap())
+            .map(|seeds| Pubkey::create_program_address(seeds, caller).unwrap())
             .collect::<Vec<_>>();
         let (instruction_accounts, program_indices) = invoke_context
             .prepare_instruction(instruction, &signers)
@@ -370,12 +376,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     fn sol_set_return_data(&self, data: &[u8]) {
         let invoke_context = get_invoke_context();
-        let caller = *invoke_context
-            .transaction_context
-            .get_program_key()
+        let transaction_context = &mut invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
             .unwrap();
-        invoke_context
-            .transaction_context
+        let caller = *instruction_context
+            .get_program_key(transaction_context)
+            .unwrap();
+        transaction_context
             .set_return_data(caller, data.to_vec())
             .unwrap();
     }
@@ -456,6 +464,7 @@ pub struct ProgramTest {
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
     use_bpf_jit: bool,
+    deactivate_feature_set: HashSet<Pubkey>,
 }
 
 impl Default for ProgramTest {
@@ -486,6 +495,7 @@ impl Default for ProgramTest {
             compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
+            deactivate_feature_set: HashSet::default(),
         }
     }
 }
@@ -715,6 +725,13 @@ impl ProgramTest {
             .push(Builtin::new(program_name, program_id, process_instruction));
     }
 
+    /// Deactivate a runtime feature.
+    ///
+    /// Note that all features are activated by default.
+    pub fn deactivate_feature(&mut self, feature_id: Pubkey) {
+        self.deactivate_feature_set.insert(feature_id);
+    }
+
     fn setup_bank(
         &self,
     ) -> (
@@ -754,6 +771,25 @@ impl ProgramTest {
             ClusterType::Development,
             vec![],
         );
+
+        // Remove features tagged to deactivate
+        for deactivate_feature_pk in &self.deactivate_feature_set {
+            if FEATURE_NAMES.contains_key(deactivate_feature_pk) {
+                match genesis_config.accounts.remove(deactivate_feature_pk) {
+                    Some(_) => debug!("Feature for {:?} deactivated", deactivate_feature_pk),
+                    None => warn!(
+                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
+                        deactivate_feature_pk
+                    ),
+                }
+            } else {
+                warn!(
+                    "Feature {:?} set for deactivation is not a known Feature public key",
+                    deactivate_feature_pk
+                );
+            }
+        }
+
         let target_tick_duration = Duration::from_micros(100);
         genesis_config.poh_config = PohConfig::new_sleep(target_tick_duration);
         debug!("Payer address: {}", mint_keypair.pubkey());

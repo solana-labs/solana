@@ -9,7 +9,7 @@ mod tests {
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
-            blockstore_db::BlockstoreOptions,
+            blockstore_db::{BlockstoreOptions, BlockstoreRocksFifoOptions, ShredStorageType},
             get_tmp_ledger_path,
         },
         solana_measure::measure::Measure,
@@ -32,6 +32,8 @@ mod tests {
     const DEFAULT_SHREDS_PER_SLOT: u64 = 25;
     const DEFAULT_STOP_SIZE_BYTES: u64 = 0;
     const DEFAULT_STOP_SIZE_ITERATIONS: u64 = 0;
+    const DEFAULT_STOP_SIZE_CF_DATA_BYTES: u64 = 0;
+    const DEFAULT_SHRED_DATA_CF_SIZE_BYTES: u64 = 125 * 1024 * 1024 * 1024;
 
     const ROCKSDB_FLUSH_GRACE_PERIOD_SECS: u64 = 20;
 
@@ -43,6 +45,7 @@ mod tests {
         shreds_per_slot: u64,
         stop_size_bytes: u64,
         stop_size_iterations: u64,
+        stop_size_cf_data_bytes: u64,
         pre_generate_data: bool,
         cleanup_blockstore: bool,
         assert_compaction: bool,
@@ -50,6 +53,8 @@ mod tests {
         no_compaction: bool,
         num_writers: u64,
         cleanup_service: bool,
+        fifo_compaction: bool,
+        shred_data_cf_size: u64,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -169,11 +174,14 @@ mod tests {
     /// Advanced benchmark settings:
     /// - `STOP_SIZE_BYTES`: if specified, the benchmark will count how
     ///   many times the ledger store size exceeds the specified threshold.
-    /// - `STOP_SIZE_ITERATIONS`: when `STOP_SIZE_BYTES` is specified, the
-    ///   benchmark will stop immediately when the number of times where the
-    ///   ledger store size exceeds the configured `STOP_SIZE_BYTES`.  These
-    ///   configs are used to make sure the benchmark runs successfully under
-    ///   the storage limitation.
+    /// - `STOP_SIZE_CF_DATA_BYTES`: if specified, the benchmark will count how
+    ///   many times the storage size of `cf::ShredData` which stores data shred
+    ///   exceeds the specified threshold.
+    /// - `STOP_SIZE_ITERATIONS`: when any of the stop size is specified, the
+    ///   benchmark will stop immediately when the number of consecutive times
+    ///   where the ledger store size exceeds the configured `STOP_SIZE_BYTES`.
+    ///   These configs are used to make sure the benchmark runs successfully
+    ///   under the storage limitation.
     /// - `CLEANUP_BLOCKSTORE`: if true, the ledger store created in the current
     ///   benchmark run will be deleted.  Default: true.
     /// - `NO_COMPACTION`: whether to stop rocksdb's background compaction
@@ -192,6 +200,12 @@ mod tests {
     /// - `CLEANUP_SERVICE`: whether to enable the background cleanup service.
     ///   If set to false, the ledger store in the benchmark will be purely relied
     ///   on RocksDB's compaction.  Default: true.
+    ///
+    /// Fifo-compaction settings:
+    /// - `FIFO_COMPACTION`: if true, then RocksDB's Fifo compaction will be
+    ///   used for storing data shreds.  Default: false.
+    /// - `SHRED_DATA_CF_SIZE_BYTES`: the maximum size of the data-shred column family.
+    ///   Default: 125 * 1024 * 1024 * 1024.
     fn get_benchmark_config() -> BenchmarkConfig {
         let benchmark_slots = read_env("BENCHMARK_SLOTS", DEFAULT_BENCHMARK_SLOTS);
         let batch_size_slots = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE_SLOTS);
@@ -199,6 +213,8 @@ mod tests {
         let shreds_per_slot = read_env("SHREDS_PER_SLOT", DEFAULT_SHREDS_PER_SLOT);
         let stop_size_bytes = read_env("STOP_SIZE_BYTES", DEFAULT_STOP_SIZE_BYTES);
         let stop_size_iterations = read_env("STOP_SIZE_ITERATIONS", DEFAULT_STOP_SIZE_ITERATIONS);
+        let stop_size_cf_data_bytes =
+            read_env("STOP_SIZE_CF_DATA_BYTES", DEFAULT_STOP_SIZE_CF_DATA_BYTES);
         let pre_generate_data = read_env("PRE_GENERATE_DATA", false);
         let cleanup_blockstore = read_env("CLEANUP_BLOCKSTORE", true);
         // set default to `true` once compaction is merged
@@ -213,6 +229,9 @@ mod tests {
         // If set to false, the ledger store will purely rely on RocksDB's
         // compaction to perform the clean-up.
         let cleanup_service = read_env("CLEANUP_SERVICE", true);
+        let fifo_compaction = read_env("FIFO_COMPACTION", false);
+        let shred_data_cf_size =
+            read_env("SHRED_DATA_CF_SIZE_BYTES", DEFAULT_SHRED_DATA_CF_SIZE_BYTES);
 
         BenchmarkConfig {
             benchmark_slots,
@@ -221,6 +240,7 @@ mod tests {
             shreds_per_slot,
             stop_size_bytes,
             stop_size_iterations,
+            stop_size_cf_data_bytes,
             pre_generate_data,
             cleanup_blockstore,
             assert_compaction,
@@ -228,6 +248,8 @@ mod tests {
             no_compaction,
             num_writers,
             cleanup_service,
+            fifo_compaction,
+            shred_data_cf_size,
         }
     }
 
@@ -275,6 +297,37 @@ mod tests {
         *data_shred_storage_previous = data_shred_storage_now;
     }
 
+    /// Helper function of the benchmark `test_ledger_cleanup_compaction` which
+    /// returns true if the benchmark fails the size limitation check.
+    fn is_exceeded_stop_size_iterations(
+        storage_size: u64,
+        stop_size: u64,
+        exceeded_iterations: &mut u64,
+        iteration_limit: u64,
+        storage_desc: &str,
+    ) -> bool {
+        if stop_size > 0 {
+            if storage_size >= stop_size {
+                *exceeded_iterations += 1;
+                warn!(
+                    "{} size {} exceeds the stop size {} for {} times!",
+                    storage_desc, storage_size, stop_size, exceeded_iterations
+                );
+            } else {
+                *exceeded_iterations = 0;
+            }
+
+            if *exceeded_iterations >= iteration_limit {
+                error!(
+                    "{} size exceeds the configured limit {} for {} times",
+                    storage_desc, stop_size, exceeded_iterations,
+                );
+                return true;
+            }
+        }
+        false
+    }
+
     /// The ledger cleanup compaction test which can also be used as a benchmark
     /// measuring shred insertion performance of the blockstore.
     ///
@@ -290,9 +343,22 @@ mod tests {
         solana_logger::setup_with("error,ledger_cleanup::tests=info");
 
         let ledger_path = get_tmp_ledger_path!();
-        let mut blockstore =
-            Blockstore::open_with_options(&ledger_path, BlockstoreOptions::default()).unwrap();
         let config = get_benchmark_config();
+        let mut blockstore = Blockstore::open_with_options(
+            &ledger_path,
+            if config.fifo_compaction {
+                BlockstoreOptions {
+                    shred_storage_type: ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+                        shred_data_cf_size: config.shred_data_cf_size,
+                        ..BlockstoreRocksFifoOptions::default()
+                    }),
+                    ..BlockstoreOptions::default()
+                }
+            } else {
+                BlockstoreOptions::default()
+            },
+        )
+        .unwrap();
         if config.no_compaction {
             blockstore.set_no_compaction(true);
         }
@@ -307,6 +373,7 @@ mod tests {
         let shreds_per_slot = config.shreds_per_slot;
         let stop_size_bytes = config.stop_size_bytes;
         let stop_size_iterations = config.stop_size_iterations;
+        let stop_size_cf_data_bytes = config.stop_size_cf_data_bytes;
         let pre_generate_data = config.pre_generate_data;
         let compaction_interval = config.compaction_interval;
         let num_writers = config.num_writers;
@@ -363,6 +430,7 @@ mod tests {
         let mut storage_previous = 0;
         let mut data_shred_storage_previous = 0;
         let mut stop_size_bytes_exceeded_iterations = 0;
+        let mut stop_size_cf_data_exceeded_iterations = 0;
 
         emit_header();
         emit_stats(
@@ -510,16 +578,24 @@ mod tests {
                 &sys.get_stats(),
             );
 
-            if stop_size_bytes > 0 {
-                if storage_previous >= stop_size_bytes {
-                    stop_size_bytes_exceeded_iterations += 1;
-                } else {
-                    stop_size_bytes_exceeded_iterations = 0;
-                }
+            if is_exceeded_stop_size_iterations(
+                storage_previous,
+                stop_size_bytes,
+                &mut stop_size_bytes_exceeded_iterations,
+                stop_size_iterations,
+                "Storage",
+            ) {
+                break;
+            }
 
-                if stop_size_bytes_exceeded_iterations > stop_size_iterations {
-                    break;
-                }
+            if is_exceeded_stop_size_iterations(
+                data_shred_storage_previous,
+                stop_size_cf_data_bytes,
+                &mut stop_size_cf_data_exceeded_iterations,
+                stop_size_iterations,
+                "cf::ShredData",
+            ) {
+                break;
             }
 
             if finished_batch >= num_batches {

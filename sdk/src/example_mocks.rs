@@ -24,8 +24,10 @@ pub mod solana_client {
     }
 
     pub mod rpc_client {
-        use super::client_error::Result as ClientResult;
-        use crate::{hash::Hash, signature::Signature, transaction::Transaction};
+        use {
+            super::client_error::Result as ClientResult,
+            crate::{hash::Hash, signature::Signature, transaction::Transaction},
+        };
 
         pub struct RpcClient;
 

@@ -53,6 +53,10 @@ pub mod full_inflation {
     }
 }
 
+pub mod secp256k1_program_enabled {
+    solana_sdk::declare_id!("E3PHP7w8kB7np3CTQ1qQ2tW3KCtjRSXBQgW9vM2mWv2Y");
+}
+
 pub mod spl_token_v2_multisig_fix {
     solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
 }
@@ -307,9 +311,14 @@ pub mod disable_bpf_unresolved_symbols_at_runtime {
     solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
 }
 
+pub mod record_instruction_in_transaction_context_push {
+    solana_sdk::declare_id!("3aJdcZqxoLpSBxgeYGjPwaYS1zzcByxUDqJkbzWAH1Zb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
+        (secp256k1_program_enabled::id(), "secp256k1 program"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
@@ -378,6 +387,7 @@ lazy_static! {
         (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
+        (record_instruction_in_transaction_context_push::id(), "Move the CPI stack overflow check to the end of push"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

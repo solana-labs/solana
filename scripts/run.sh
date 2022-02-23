@@ -103,6 +103,7 @@ args=(
   --vote-account "$validator_vote_account"
   --ledger "$ledgerDir"
   --gossip-port 8001
+  --full-rpc-api
   --rpc-port 8899
   --rpc-faucet-address 127.0.0.1:9900
   --log -
@@ -112,6 +113,7 @@ args=(
   --snapshot-compression none
   --require-tower
   --no-wait-for-vote-to-start-leader
+  --no-os-network-limits-test
 )
 # shellcheck disable=SC2086
 solana-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS &

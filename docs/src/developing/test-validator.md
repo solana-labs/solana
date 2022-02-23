@@ -151,3 +151,19 @@ JSON RPC URL: http://127.0.0.1:8899
   [commitment levels](clients/jsonrpc-api#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
   [voting authority](/running-validator/vote-accounts#vote-authority) balance
+
+## Appendix II: Runtime Features
+
+By default, the test validator runs with all [runtime features](programming-model/runtime#features) activated.
+
+You can verify this using the [Solana command-line tools](cli/install-solana-cli-tools.md):
+
+```bash
+solana feature status -ul
+```
+
+Since this may not always be desired, especially when testing programs meant for deployment to mainnet, the CLI provides an option to deactivate specific features:
+
+```bash
+solana-test-validator --deactivate-feature <FEATURE_PUBKEY_1> --deactivate-feature <FEATURE_PUBKEY_2>
+```

@@ -170,13 +170,24 @@ impl AccountsDbPluginService {
         let libpath = result["libpath"]
             .as_str()
             .ok_or(AccountsdbPluginServiceError::LibPathNotSet)?;
+        let mut libpath = PathBuf::from(libpath);
+        if libpath.is_relative() {
+            let config_dir = accountsdb_plugin_config_file.parent().ok_or_else(|| {
+                AccountsdbPluginServiceError::CannotOpenConfigFile(format!(
+                    "Failed to resolve parent of {:?}",
+                    accountsdb_plugin_config_file,
+                ))
+            })?;
+            libpath = config_dir.join(libpath);
+        }
+
         let config_file = accountsdb_plugin_config_file
             .as_os_str()
             .to_str()
             .ok_or(AccountsdbPluginServiceError::InvalidPluginPath)?;
 
         unsafe {
-            let result = plugin_manager.load_plugin(libpath, config_file);
+            let result = plugin_manager.load_plugin(libpath.to_str().unwrap(), config_file);
             if let Err(err) = result {
                 let msg = format!(
                     "Failed to load the plugin library: {:?}, error: {:?}",

@@ -1973,14 +1973,21 @@ describe('Connection', () => {
       },
     });
 
-    // Find a block that has a transaction, usually Block 1
+    // Find a block that has a transaction
+    // Compare data with parent
     let x = 1;
     while (x < 10) {
       const block1 = await connection.getBlock(x);
       if (block1 && block1.transactions.length >= 1) {
-        expect(block1.previousBlockhash).to.eq(blockhash0);
+        if (block1.parentSlot == 0) {
+          expect(block1.previousBlockhash).to.eq(blockhash0);
+        } else {
+          const parentBlock = await connection.getBlock(block1.parentSlot);
+          if (parentBlock) {
+            expect(block1.previousBlockhash).to.eq(parentBlock.blockhash);
+          }
+        }
         expect(block1.blockhash).not.to.be.null;
-        expect(block1.parentSlot).to.eq(0);
         expect(block1.transactions[0].transaction).not.to.be.null;
         break;
       }
@@ -2082,14 +2089,21 @@ describe('Connection', () => {
       },
     });
 
-    // Find a block that has a transaction, usually Block 1
+    // Find a block that has a transaction
+    // Compare data with parent
     let x = 1;
     while (x < 10) {
       const block1 = await connection.getConfirmedBlock(x);
       if (block1.transactions.length >= 1) {
-        expect(block1.previousBlockhash).to.eq(blockhash0);
+        if (block1.parentSlot == 0) {
+          expect(block1.previousBlockhash).to.eq(blockhash0);
+        } else {
+          const parentBlock = await connection.getBlock(block1.parentSlot);
+          if (parentBlock) {
+            expect(block1.previousBlockhash).to.eq(parentBlock.blockhash);
+          }
+        }
         expect(block1.blockhash).not.to.be.null;
-        expect(block1.parentSlot).to.eq(0);
         expect(block1.transactions[0].transaction).not.to.be.null;
         break;
       }
@@ -2219,14 +2233,21 @@ describe('Connection', () => {
       },
     });
 
-    // Find a block that has a transaction, usually Block 1
+    // Find a block that has a transaction
+    // Compare data with parent
     let x = 1;
     while (x < 10) {
       const block1 = await connection.getBlockSignatures(x);
       if (block1.signatures.length >= 1) {
-        expect(block1.previousBlockhash).to.eq(blockhash0);
+        if (block1.parentSlot == 0) {
+          expect(block1.previousBlockhash).to.eq(blockhash0);
+        } else {
+          const parentBlock = await connection.getBlock(block1.parentSlot);
+          if (parentBlock) {
+            expect(block1.previousBlockhash).to.eq(parentBlock.blockhash);
+          }
+        }
         expect(block1.blockhash).not.to.be.null;
-        expect(block1.parentSlot).to.eq(0);
         expect(block1.signatures[0]).not.to.be.null;
         expect(block1).to.not.have.property('rewards');
         break;
@@ -3023,10 +3044,16 @@ describe('Connection', () => {
       const results2 = await connection.simulateTransaction(
         message,
         [account1],
-        [account1.publicKey],
+        [
+          account1.publicKey,
+          new PublicKey('Missing111111111111111111111111111111111111'),
+        ],
       );
 
-      expect(results2.value.accounts).lengthOf(1);
+      expect(results2.value.accounts).lengthOf(2);
+      if (results2.value.accounts) {
+        expect(results2.value.accounts[1]).to.be.null;
+      }
     }).timeout(10000);
 
     it('transaction', async () => {

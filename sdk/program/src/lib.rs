@@ -19,6 +19,7 @@ pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
+pub mod example_mocks;
 pub mod feature;
 pub mod fee_calculator;
 pub mod hash;

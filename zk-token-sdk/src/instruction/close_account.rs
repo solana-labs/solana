@@ -98,7 +98,7 @@ impl CloseAccountProof {
     ) -> Self {
         let proof = ZeroBalanceProof::new(keypair, ciphertext, transcript);
 
-        CloseAccountProof {
+        Self {
             proof: proof.into(),
         }
     }

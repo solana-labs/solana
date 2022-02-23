@@ -140,31 +140,7 @@ impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
     }
 }
 
-impl From<ConfirmedBlock> for generated::ConfirmedBlock {
-    fn from(confirmed_block: ConfirmedBlock) -> Self {
-        let ConfirmedBlock {
-            previous_blockhash,
-            blockhash,
-            parent_slot,
-            transactions,
-            rewards,
-            block_time,
-            block_height,
-        } = confirmed_block;
-
-        Self {
-            previous_blockhash,
-            blockhash,
-            parent_slot,
-            transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
-            rewards: rewards.into_iter().map(|r| r.into()).collect(),
-            block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
-            block_height: block_height.map(|block_height| generated::BlockHeight { block_height }),
-        }
-    }
-}
-
-impl TryFrom<generated::ConfirmedBlock> for VersionedConfirmedBlock {
+impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
     type Error = bincode::Error;
     fn try_from(
         confirmed_block: generated::ConfirmedBlock,
@@ -195,32 +171,38 @@ impl TryFrom<generated::ConfirmedBlock> for VersionedConfirmedBlock {
 }
 
 impl From<TransactionWithStatusMeta> for generated::ConfirmedTransaction {
-    fn from(value: TransactionWithStatusMeta) -> Self {
-        let meta = value.meta.map(|meta| meta.into());
-        Self {
-            transaction: Some(value.transaction.into()),
-            meta,
+    fn from(tx_with_meta: TransactionWithStatusMeta) -> Self {
+        match tx_with_meta {
+            TransactionWithStatusMeta::MissingMetadata(transaction) => Self {
+                transaction: Some(generated::Transaction::from(transaction)),
+                meta: None,
+            },
+            TransactionWithStatusMeta::Complete(tx_with_meta) => Self::from(tx_with_meta),
         }
     }
 }
 
 impl From<VersionedTransactionWithStatusMeta> for generated::ConfirmedTransaction {
     fn from(value: VersionedTransactionWithStatusMeta) -> Self {
-        let meta = value.meta.map(|meta| meta.into());
         Self {
             transaction: Some(value.transaction.into()),
-            meta,
+            meta: Some(value.meta.into()),
         }
     }
 }
 
-impl TryFrom<generated::ConfirmedTransaction> for VersionedTransactionWithStatusMeta {
+impl TryFrom<generated::ConfirmedTransaction> for TransactionWithStatusMeta {
     type Error = bincode::Error;
     fn try_from(value: generated::ConfirmedTransaction) -> std::result::Result<Self, Self::Error> {
         let meta = value.meta.map(|meta| meta.try_into()).transpose()?;
-        Ok(Self {
-            transaction: value.transaction.expect("transaction is required").into(),
-            meta,
+        let transaction = value.transaction.expect("transaction is required").into();
+        Ok(match meta {
+            Some(meta) => Self::Complete(VersionedTransactionWithStatusMeta { transaction, meta }),
+            None => Self::MissingMetadata(
+                transaction
+                    .into_legacy_transaction()
+                    .expect("meta is required for versioned transactions"),
+            ),
         })
     }
 }

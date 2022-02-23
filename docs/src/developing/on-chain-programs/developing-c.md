@@ -95,7 +95,7 @@ parameters into C types:
 - [BPF Loader deprecated
   deserialization](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/deserialize_deprecated.h#L25)
 
-Some programs may want to perform deserialzaiton themselves and they can by
+Some programs may want to perform deserialization themselves, and they can by
 providing their own implementation of the [raw entrypoint](#program-entrypoint).
 Take note that the provided deserialization functions retain references back to
 the serialized byte array for variables that the program is allowed to modify
@@ -140,7 +140,7 @@ the [runtime enforcement
 policy](developing/programming-model/accounts.md#policy). When an instruction
 reference the same account multiple times there may be duplicate
 `SolAccountInfo` entries in the array but they both point back to the original
-input byte array. A program should handle these case delicately to avoid
+input byte array. A program should handle these cases delicately to avoid
 overlapping read/writes to the same buffer. If a program implements their own
 deserialization function care should be taken to handle duplicate accounts
 appropriately.

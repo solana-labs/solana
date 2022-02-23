@@ -429,7 +429,7 @@ pub fn flush() {
 }
 
 /// Hook the panic handler to generate a data point on each panic
-pub fn set_panic_hook(program: &'static str) {
+pub fn set_panic_hook(program: &'static str, version: Option<String>) {
     static SET_HOOK: Once = Once::new();
     SET_HOOK.call_once(|| {
         let default_hook = std::panic::take_hook();
@@ -448,6 +448,7 @@ pub fn set_panic_hook(program: &'static str) {
                     .add_field_i64("one", 1)
                     .add_field_str("message", &ono.to_string())
                     .add_field_str("location", &location)
+                    .add_field_str("version", version.as_ref().unwrap_or(&"".to_string()))
                     .to_owned(),
                 Level::Error,
             );

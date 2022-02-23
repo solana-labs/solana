@@ -117,8 +117,9 @@ impl QosService {
         txs_costs
     }
 
-    // Given a list of transactions and their costs, this function returns a corresponding
-    // list of Results that indicate if a transaction is selected to be included in the current block,
+    /// Given a list of transactions and their costs, this function returns a corresponding
+    /// list of Results that indicate if a transaction is selected to be included in the current block,
+    /// and a count of the number of transactions that would fit in the block
     pub fn select_transactions_per_cost<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -172,37 +173,6 @@ impl QosService {
         self.report_sender
             .send(QosMetrics::BlockBatchUpdate { bank })
             .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
-    }
-
-    // metrics accumulating apis
-    pub fn accumulate_tpu_ingested_packets_count(&self, count: u64) {
-        self.metrics
-            .tpu_ingested_packets_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulate_tpu_buffered_packets_count(&self, count: u64) {
-        self.metrics
-            .tpu_buffered_packets_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulated_verified_txs_count(&self, count: u64) {
-        self.metrics
-            .verified_txs_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulated_processed_txs_count(&self, count: u64) {
-        self.metrics
-            .processed_txs_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulated_retryable_txs_count(&self, count: u64) {
-        self.metrics
-            .retryable_txs_count
-            .fetch_add(count, Ordering::Relaxed);
     }
 
     pub fn accumulate_estimated_transaction_costs(
@@ -262,24 +232,6 @@ struct QosServiceMetrics {
 
     // aggregate metrics per slot
     slot: AtomicU64,
-
-    // accumulated number of live packets TPU received from verified receiver for processing.
-    tpu_ingested_packets_count: AtomicU64,
-
-    // accumulated number of live packets TPU put into buffer due to no active bank.
-    tpu_buffered_packets_count: AtomicU64,
-
-    // accumulated number of verified txs, which excludes unsanitized transactions and
-    // non-vote transactions when in vote-only mode from ingested packets
-    verified_txs_count: AtomicU64,
-
-    // accumulated number of transactions been processed, includes those landed and those to be
-    // returned (due to AccountInUse, and other QoS related reasons)
-    processed_txs_count: AtomicU64,
-
-    // accumulated number of transactions buffered for retry, often due to AccountInUse and QoS
-    // reasons, includes retried_txs_per_block_limit_count and retried_txs_per_account_limit_count
-    retryable_txs_count: AtomicU64,
 
     // accumulated time in micro-sec spent in computing transaction cost. It is the main performance
     // overhead introduced by cost_model
@@ -342,31 +294,6 @@ impl QosServiceMetrics {
                 "qos-service-stats",
                 ("id", self.id as i64, i64),
                 ("bank_slot", bank_slot as i64, i64),
-                (
-                    "tpu_ingested_packets_count",
-                    self.tpu_ingested_packets_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "tpu_buffered_packets_count",
-                    self.tpu_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "verified_txs_count",
-                    self.verified_txs_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "processed_txs_count",
-                    self.processed_txs_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "retryable_txs_count",
-                    self.retryable_txs_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
                 (
                     "compute_cost_time",
                     self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,

@@ -10,7 +10,7 @@ use {
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
             RpcProgramAccountsConfig,
         },
-        rpc_response::{RpcBlockUpdate, SlotInfo},
+        rpc_response::SlotInfo,
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_rpc::{
@@ -36,7 +36,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
+    solana_transaction_status::{ConfirmedBlock, TransactionDetails, UiTransactionEncoding},
     std::{
         collections::HashSet,
         net::{IpAddr, SocketAddr},
@@ -214,6 +214,7 @@ fn test_block_subscription() {
         ..
     } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
+    let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
     // setup Blockstore
@@ -227,6 +228,8 @@ fn test_block_subscription() {
     let keypair2 = Keypair::new();
     let keypair3 = Keypair::new();
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+    bank.transfer(rent_exempt_amount, &alice, &keypair2.pubkey())
+        .unwrap();
     let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
         vec![&alice, &keypair1, &keypair2, &keypair3],
         0,
@@ -278,23 +281,15 @@ fn test_block_subscription() {
     match maybe_actual {
         Ok(actual) => {
             let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
-            let legacy_block = versioned_block.into_legacy_block().unwrap();
-            let block = legacy_block.clone().configure(
-                UiTransactionEncoding::Json,
-                TransactionDetails::Signatures,
-                false,
-            );
-            let expected = RpcBlockUpdate {
-                slot,
-                block: Some(block),
-                err: None,
-            };
+            let legacy_block = ConfirmedBlock::from(versioned_block)
+                .into_legacy_block()
+                .unwrap();
             let block = legacy_block.configure(
                 UiTransactionEncoding::Json,
                 TransactionDetails::Signatures,
                 false,
             );
-            assert_eq!(actual.value.slot, expected.slot);
+            assert_eq!(actual.value.slot, slot);
             assert!(block.eq(&actual.value.block.unwrap()));
         }
         Err(e) => {

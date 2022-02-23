@@ -9015,8 +9015,7 @@ pub mod tests {
 
         // Set up account to be added to secondary index
         let mint_key = Pubkey::new_unique();
-        let mut account_data_with_mint =
-            vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data_with_mint = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.to_bytes()));
 
         let mut normal_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());

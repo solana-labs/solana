@@ -19,10 +19,11 @@ use {
         transaction_context::TransactionContext,
     },
     std::{
+        fmt::{Debug, Formatter},
         fs::File,
         io::{Read, Seek, SeekFrom},
         path::Path,
-        time::Instant,
+        time::{Duration, Instant},
     },
 };
 
@@ -43,10 +44,10 @@ struct Input {
 fn load_accounts(path: &Path) -> Result<Input> {
     let file = File::open(path).unwrap();
     let input: Input = serde_json::from_reader(file)?;
-    println!("Program input:");
-    println!("accounts {:?}", &input.accounts);
-    println!("instruction_data {:?}", &input.instruction_data);
-    println!("----------------------------------------");
+    eprintln!("Program input:");
+    eprintln!("accounts {:?}", &input.accounts);
+    eprintln!("instruction_data {:?}", &input.instruction_data);
+    eprintln!("----------------------------------------");
     Ok(input)
 }
 
@@ -157,6 +158,15 @@ native machine code before execting it in the virtual machine.",
                 .short('v')
                 .long("verify"),
         )
+        .arg(
+            Arg::new("output_format")
+                .about("Return information in specified output format")
+                .long("output")
+                .value_name("FORMAT")
+                .global(true)
+                .takes_value(true)
+                .possible_values(&["json", "json-compact"]),
+        )
         .get_matches();
 
     let config = Config {
@@ -263,17 +273,20 @@ native machine code before execting it in the virtual machine.",
         check(text_bytes, &config).unwrap();
     }
     Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
-    let analysis = Analysis::from_executable(&executable);
+    let mut analysis = LazyAnalysis::new(&executable);
 
     match matches.value_of("use") {
         Some("cfg") => {
             let mut file = File::create("cfg.dot").unwrap();
-            analysis.visualize_graphically(&mut file, None).unwrap();
+            analysis
+                .analyze()
+                .visualize_graphically(&mut file, None)
+                .unwrap();
             return;
         }
         Some("disassembler") => {
             let stdout = std::io::stdout();
-            analysis.disassemble(&mut stdout.lock()).unwrap();
+            analysis.analyze().disassemble(&mut stdout.lock()).unwrap();
             return;
         }
         _ => {}
@@ -286,7 +299,6 @@ native machine code before execting it in the virtual machine.",
         &account_lengths,
     )
     .unwrap();
-    println!("Program output:");
     let start_time = Instant::now();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)
@@ -294,22 +306,80 @@ native machine code before execting it in the virtual machine.",
         vm.execute_program_jit(&mut instruction_meter)
     };
     let duration = Instant::now() - start_time;
-    println!("Result: {:?}", result);
-    println!("Instruction Count: {}", vm.get_total_instruction_count());
-    println!("Execution time: {} us", duration.as_micros());
+
+    let output = Output {
+        result: format!("{:?}", result),
+        instruction_count: vm.get_total_instruction_count(),
+        execution_time: duration,
+    };
+    match matches.value_of("output_format") {
+        Some("json") => {
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        }
+        Some("json-compact") => {
+            println!("{}", serde_json::to_string(&output).unwrap());
+        }
+        _ => {
+            println!("Program output:");
+            println!("{:?}", output);
+        }
+    }
+
     if matches.is_present("trace") {
-        println!("Trace is saved in trace.out");
+        eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        let analysis = Analysis::from_executable(&executable);
-        vm.get_tracer().write(&mut file, &analysis).unwrap();
+        vm.get_tracer()
+            .write(&mut file, analysis.analyze())
+            .unwrap();
     }
     if matches.is_present("profile") {
-        println!("Profile is saved in profile.dot");
+        eprintln!("Profile is saved in profile.dot");
         let tracer = &vm.get_tracer();
-        let dynamic_analysis = DynamicAnalysis::new(tracer, &analysis);
+        let analysis = analysis.analyze();
+        let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();
         analysis
             .visualize_graphically(&mut file, Some(&dynamic_analysis))
             .unwrap();
+    }
+}
+
+#[derive(Serialize)]
+struct Output {
+    result: String,
+    instruction_count: u64,
+    execution_time: Duration,
+}
+
+impl Debug for Output {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Result: {}", self.result)?;
+        writeln!(f, "Instruction Count: {}", self.instruction_count)?;
+        writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
+        Ok(())
+    }
+}
+
+// Replace with std::lazy::Lazy when stabilized.
+// https://github.com/rust-lang/rust/issues/74465
+struct LazyAnalysis<'a> {
+    analysis: Option<Analysis<'a, BpfError, ThisInstructionMeter>>,
+    executable: &'a Executable<BpfError, ThisInstructionMeter>,
+}
+
+impl<'a> LazyAnalysis<'a> {
+    fn new(executable: &'a Executable<BpfError, ThisInstructionMeter>) -> Self {
+        Self {
+            analysis: None,
+            executable,
+        }
+    }
+
+    fn analyze(&mut self) -> &Analysis<BpfError, ThisInstructionMeter> {
+        if let Some(ref analysis) = self.analysis {
+            return analysis;
+        }
+        self.analysis
+            .insert(Analysis::from_executable(self.executable))
     }
 }

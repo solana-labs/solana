@@ -50,6 +50,17 @@ export type InitializeAccountParams = {
 };
 
 /**
+ * Authorize instruction params
+ */
+export type AuthorizeVoteParams = {
+  votePubkey: PublicKey;
+  /** Current vote or withdraw authority, depending on `voteAuthorizationType` */
+  authorizedPubkey: PublicKey;
+  newAuthorizedPubkey: PublicKey;
+  voteAuthorizationType: VoteAuthorizationType;
+};
+
+/**
  * Withdraw from vote account transaction params
  */
 export type WithdrawFromVoteAccountParams = {
@@ -121,6 +132,30 @@ export class VoteInstruction {
   }
 
   /**
+   * Decode an authorize instruction and retrieve the instruction params.
+   */
+  static decodeAuthorize(
+    instruction: TransactionInstruction,
+  ): AuthorizeVoteParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 3);
+
+    const {newAuthorized, voteAuthorizationType} = decodeData(
+      VOTE_INSTRUCTION_LAYOUTS.Authorize,
+      instruction.data,
+    );
+
+    return {
+      votePubkey: instruction.keys[0].pubkey,
+      authorizedPubkey: instruction.keys[2].pubkey,
+      newAuthorizedPubkey: new PublicKey(newAuthorized),
+      voteAuthorizationType: {
+        index: voteAuthorizationType,
+      },
+    };
+  }
+
+  /**
    * Decode a withdraw instruction and retrieve the instruction params.
    */
   static decodeWithdraw(
@@ -166,7 +201,10 @@ export class VoteInstruction {
 /**
  * An enumeration of valid VoteInstructionType's
  */
-export type VoteInstructionType = 'InitializeAccount' | 'Withdraw';
+export type VoteInstructionType =
+  | 'Authorize'
+  | 'InitializeAccount'
+  | 'Withdraw';
 
 const VOTE_INSTRUCTION_LAYOUTS: {
   [type in VoteInstructionType]: InstructionType;
@@ -178,12 +216,40 @@ const VOTE_INSTRUCTION_LAYOUTS: {
       Layout.voteInit(),
     ]),
   },
+  Authorize: {
+    index: 1,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('newAuthorized'),
+      BufferLayout.u32('voteAuthorizationType'),
+    ]),
+  },
   Withdraw: {
     index: 3,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),
+  },
+});
+
+/**
+ * VoteAuthorize type
+ */
+export type VoteAuthorizationType = {
+  /** The VoteAuthorize index (from solana-vote-program) */
+  index: number;
+};
+
+/**
+ * An enumeration of valid VoteAuthorization layouts.
+ */
+export const VoteAuthorizationLayout = Object.freeze({
+  Voter: {
+    index: 0,
+  },
+  Withdrawer: {
+    index: 1,
   },
 });
 
@@ -265,6 +331,36 @@ export class VoteProgram {
         voteInit: params.voteInit,
       }),
     );
+  }
+
+  /**
+   * Generate a transaction that authorizes a new Voter or Withdrawer on the Vote account.
+   */
+  static authorize(params: AuthorizeVoteParams): Transaction {
+    const {
+      votePubkey,
+      authorizedPubkey,
+      newAuthorizedPubkey,
+      voteAuthorizationType,
+    } = params;
+
+    const type = VOTE_INSTRUCTION_LAYOUTS.Authorize;
+    const data = encodeData(type, {
+      newAuthorized: toBuffer(newAuthorizedPubkey.toBuffer()),
+      voteAuthorizationType: voteAuthorizationType.index,
+    });
+
+    const keys = [
+      {pubkey: votePubkey, isSigner: false, isWritable: true},
+      {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
+      {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+    ];
+
+    return new Transaction().add({
+      keys,
+      programId: this.programId,
+      data,
+    });
   }
 
   /**

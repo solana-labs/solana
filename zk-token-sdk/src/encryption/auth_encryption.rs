@@ -97,7 +97,7 @@ pub type Nonce = [u8; 12];
 pub type Ciphertext = [u8; 24];
 
 /// Authenticated encryption nonce and ciphertext
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AeCiphertext {
     pub nonce: Nonce,
     pub ciphertext: Ciphertext,

@@ -123,6 +123,7 @@ args+=(
   --ledger "$ledger_dir"
   --rpc-port 8899
   --snapshot-interval-slots 200
+  --no-incremental-snapshots
   --identity "$identity"
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900

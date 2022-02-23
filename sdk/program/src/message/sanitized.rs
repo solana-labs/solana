@@ -18,8 +18,7 @@ use {
     thiserror::Error,
 };
 
-/// Sanitized message of a transaction which includes a set of atomic
-/// instructions to be executed on-chain
+/// Sanitized message of a transaction.
 #[derive(Debug, Clone)]
 pub enum SanitizedMessage {
     /// Sanitized legacy message

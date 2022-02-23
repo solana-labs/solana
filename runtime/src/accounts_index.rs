@@ -5,7 +5,8 @@ use {
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
         in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
-        inline_spl_token::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        inline_spl_token::{self, GenericTokenAccount},
+        inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
         secondary_index::*,
     },
@@ -20,7 +21,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{BankId, Slot},
-        pubkey::{Pubkey, PUBKEY_BYTES},
+        pubkey::Pubkey,
     },
     std::{
         collections::{btree_map::BTreeMap, HashSet},
@@ -51,6 +52,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
@@ -59,6 +61,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -161,6 +164,8 @@ pub struct AccountsIndexConfig {
     pub index_limit_mb: Option<usize>,
     pub ages_to_stay_in_cache: Option<Age>,
     pub scan_results_limit_bytes: Option<usize>,
+    /// true if the accounts index is being created as a result of being started as a validator (as opposed to test, etc.)
+    pub started_from_validator: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -600,6 +605,10 @@ impl RollingBitField {
         self.max_exclusive
     }
 
+    pub fn max_inclusive(&self) -> u64 {
+        self.max_exclusive.saturating_sub(1)
+    }
+
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| all.push(*slot));
@@ -615,7 +624,6 @@ impl RollingBitField {
 #[derive(Debug)]
 pub struct RootsTracker {
     roots: RollingBitField,
-    max_root_inclusive: Slot,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -633,7 +641,6 @@ impl RootsTracker {
     pub fn new(max_width: u64) -> Self {
         Self {
             roots: RollingBitField::new(max_width),
-            max_root_inclusive: 0,
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
@@ -855,13 +862,7 @@ pub struct AccountsIndex<T: IndexValue> {
 
 impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
-        if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
-            // allocate with disk buckets
-            config.index_limit_mb = Some(limit.parse::<usize>().unwrap());
-        }
-
-        Self::new(Some(config))
+        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
@@ -1571,6 +1572,33 @@ impl<T: IndexValue> AccountsIndex<T> {
         max_root
     }
 
+    fn update_spl_token_secondary_indexes<G: GenericTokenAccount>(
+        &self,
+        token_id: &Pubkey,
+        pubkey: &Pubkey,
+        account_owner: &Pubkey,
+        account_data: &[u8],
+        account_indexes: &AccountSecondaryIndexes,
+    ) {
+        if *account_owner == *token_id {
+            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
+                if let Some(owner_key) = G::unpack_account_owner(account_data) {
+                    if account_indexes.include_key(owner_key) {
+                        self.spl_token_owner_index.insert(owner_key, pubkey);
+                    }
+                }
+            }
+
+            if account_indexes.contains(&AccountIndex::SplTokenMint) {
+                if let Some(mint_key) = G::unpack_account_mint(account_data) {
+                    if account_indexes.include_key(mint_key) {
+                        self.spl_token_mint_index.insert(mint_key, pubkey);
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn update_secondary_indexes(
         &self,
         pubkey: &Pubkey,
@@ -1600,29 +1628,21 @@ impl<T: IndexValue> AccountsIndex<T> {
         // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
-        if *account_owner == inline_spl_token::id()
-            && account_data.len() == inline_spl_token::state::Account::get_packed_len()
-        {
-            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                let owner_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&owner_key) {
-                    self.spl_token_owner_index.insert(&owner_key, pubkey);
-                }
-            }
 
-            if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                let mint_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&mint_key) {
-                    self.spl_token_mint_index.insert(&mint_key, pubkey);
-                }
-            }
-        }
+        self.update_spl_token_secondary_indexes::<inline_spl_token::Account>(
+            &inline_spl_token::id(),
+            pubkey,
+            account_owner,
+            account_data,
+            account_indexes,
+        );
+        self.update_spl_token_secondary_indexes::<inline_spl_token_2022::Account>(
+            &inline_spl_token_2022::id(),
+            pubkey,
+            account_owner,
+            account_data,
+            account_indexes,
+        );
     }
 
     fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<T> {
@@ -1793,7 +1813,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let roots_tracker = &self.roots_tracker.read().unwrap();
         let newest_root_in_slot_list =
             Self::get_newest_root_in_slot_list(&roots_tracker.roots, slot_list, max_clean_root);
-        let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root_inclusive);
+        let max_clean_root = max_clean_root.unwrap_or_else(|| roots_tracker.roots.max_inclusive());
 
         slot_list.retain(|(slot, value)| {
             let should_purge =
@@ -1868,14 +1888,13 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
+        assert!(slot >= w_roots_tracker.roots.max_inclusive());
         w_roots_tracker.roots.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
         }
-        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
-        assert!(slot >= w_roots_tracker.max_root_inclusive);
-        w_roots_tracker.max_root_inclusive = slot;
     }
 
     pub fn add_uncleaned_roots<I>(&self, roots: I)
@@ -1887,7 +1906,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn max_root_inclusive(&self) -> Slot {
-        self.roots_tracker.read().unwrap().max_root_inclusive
+        self.roots_tracker.read().unwrap().roots.max_inclusive()
     }
 
     /// Remove the slot when the storage for the slot is freed
@@ -2009,7 +2028,11 @@ impl<T: IndexValue> AccountsIndex<T> {
 pub mod tests {
     use {
         super::*,
-        solana_sdk::signature::{Keypair, Signer},
+        crate::inline_spl_token::*,
+        solana_sdk::{
+            pubkey::PUBKEY_BYTES,
+            signature::{Keypair, Signer},
+        },
         std::ops::RangeInclusive,
     };
 
@@ -3839,7 +3862,7 @@ pub mod tests {
         let index_key = Pubkey::new_unique();
         let account_key = Pubkey::new_unique();
 
-        let mut account_data = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Insert slots into secondary index
@@ -4002,9 +4025,10 @@ pub mod tests {
         );
     }
 
-    fn run_test_secondary_indexes<
+    fn run_test_spl_token_secondary_indexes<
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     >(
+        token_id: &Pubkey,
         index: &AccountsIndex<bool>,
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
@@ -4014,7 +4038,7 @@ pub mod tests {
         let mut secondary_indexes = secondary_indexes.clone();
         let account_key = Pubkey::new_unique();
         let index_key = Pubkey::new_unique();
-        let mut account_data = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Wrong program id
@@ -4035,7 +4059,7 @@ pub mod tests {
         index.upsert(
             0,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data[1..],
             &secondary_indexes,
             true,
@@ -4051,7 +4075,7 @@ pub mod tests {
         for _ in 0..2 {
             index.update_secondary_indexes(
                 &account_key,
-                &inline_spl_token::id(),
+                token_id,
                 &account_data,
                 &secondary_indexes,
             );
@@ -4068,12 +4092,7 @@ pub mod tests {
         });
         secondary_index.index.clear();
         secondary_index.reverse_index.clear();
-        index.update_secondary_indexes(
-            &account_key,
-            &inline_spl_token::id(),
-            &account_data,
-            &secondary_indexes,
-        );
+        index.update_secondary_indexes(&account_key, token_id, &account_data, &secondary_indexes);
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
         check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4085,12 +4104,7 @@ pub mod tests {
         });
         secondary_index.index.clear();
         secondary_index.reverse_index.clear();
-        index.update_secondary_indexes(
-            &account_key,
-            &inline_spl_token::id(),
-            &account_data,
-            &secondary_indexes,
-        );
+        index.update_secondary_indexes(&account_key, token_id, &account_data, &secondary_indexes);
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
         check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4109,31 +4123,38 @@ pub mod tests {
     fn test_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_spl_token_secondary_indexes(
+                &token_id,
+                &index,
+                &index.spl_token_mint_index,
+                key_start,
+                key_end,
+                &secondary_indexes,
+            );
+        }
     }
 
     #[test]
     fn test_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_spl_token_secondary_indexes(
+                &token_id,
+                &index,
+                &index.spl_token_owner_index,
+                key_start,
+                key_end,
+                &secondary_indexes,
+            );
+        }
     }
 
     fn run_test_secondary_indexes_same_slot_and_forks<
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     >(
+        token_id: &Pubkey,
         index: &AccountsIndex<bool>,
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key_start: usize,
@@ -4144,10 +4165,10 @@ pub mod tests {
         let secondary_key1 = Pubkey::new_unique();
         let secondary_key2 = Pubkey::new_unique();
         let slot = 1;
-        let mut account_data1 = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data1 = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data1[index_key_start..index_key_end]
             .clone_from_slice(&(secondary_key1.to_bytes()));
-        let mut account_data2 = vec![0; inline_spl_token::state::Account::get_packed_len()];
+        let mut account_data2 = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data2[index_key_start..index_key_end]
             .clone_from_slice(&(secondary_key2.to_bytes()));
 
@@ -4155,7 +4176,7 @@ pub mod tests {
         index.upsert(
             slot,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data1,
             secondary_indexes,
             true,
@@ -4167,7 +4188,7 @@ pub mod tests {
         index.upsert(
             slot,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data2,
             secondary_indexes,
             true,
@@ -4187,7 +4208,7 @@ pub mod tests {
         index.upsert(
             later_slot,
             &account_key,
-            &inline_spl_token::id(),
+            token_id,
             &account_data1,
             secondary_indexes,
             true,
@@ -4223,26 +4244,32 @@ pub mod tests {
     fn test_dashmap_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes_same_slot_and_forks(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &account_index,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_secondary_indexes_same_slot_and_forks(
+                &token_id,
+                &index,
+                &index.spl_token_mint_index,
+                key_start,
+                key_end,
+                &account_index,
+            );
+        }
     }
 
     #[test]
     fn test_rwlock_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes_same_slot_and_forks(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &account_index,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_secondary_indexes_same_slot_and_forks(
+                &token_id,
+                &index,
+                &index.spl_token_owner_index,
+                key_start,
+                key_end,
+                &account_index,
+            );
+        }
     }
 
     impl IndexValue for bool {}

@@ -7,7 +7,7 @@ use {
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
     solana_runtime::bank::{
-        Bank, DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
+        DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
     },
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
@@ -34,6 +34,7 @@ impl TransactionStatusService {
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: Arc<Blockstore>,
+        enable_cpi_and_log_storage: bool,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let exit = exit.clone();
@@ -50,6 +51,7 @@ impl TransactionStatusService {
                     enable_rpc_transaction_history,
                     transaction_notifier.clone(),
                     &blockstore,
+                    enable_cpi_and_log_storage,
                 ) {
                     break;
                 }
@@ -64,6 +66,7 @@ impl TransactionStatusService {
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: &Arc<Blockstore>,
+        enable_cpi_and_log_storage: bool,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
@@ -109,7 +112,7 @@ impl TransactionStatusService {
                             ),
                         }
                         .expect("lamports_per_signature must be available");
-                        let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                        let fee = bank.get_fee_for_message_with_lamports_per_signature(
                             transaction.message(),
                             lamports_per_signature,
                         );
@@ -142,7 +145,7 @@ impl TransactionStatusService {
                                 .collect(),
                         );
                         let loaded_addresses = transaction.get_loaded_addresses();
-                        let transaction_status_meta = TransactionStatusMeta {
+                        let mut transaction_status_meta = TransactionStatusMeta {
                             status,
                             fee,
                             pre_balances,
@@ -163,6 +166,12 @@ impl TransactionStatusService {
                                 &transaction,
                             );
                         }
+
+                        if !(enable_cpi_and_log_storage || transaction_notifier.is_some()) {
+                            transaction_status_meta.log_messages.take();
+                            transaction_status_meta.inner_instructions.take();
+                        }
+
                         if enable_rpc_transaction_history {
                             if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
                                 blockstore
@@ -204,7 +213,7 @@ pub(crate) mod tests {
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
-        solana_runtime::bank::{NonceFull, NoncePartial, RentDebits, TransactionBalancesSet},
+        solana_runtime::bank::{Bank, NonceFull, NoncePartial, RentDebits, TransactionBalancesSet},
         solana_sdk::{
             account_utils::StateMut,
             clock::Slot,
@@ -385,6 +394,7 @@ pub(crate) mod tests {
             false,
             Some(test_notifier.clone()),
             blockstore,
+            false,
             &exit,
         );
 
