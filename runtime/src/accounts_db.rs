@@ -5962,8 +5962,7 @@ impl AccountsDb {
                     self.accounts_index.upsert(
                         slot,
                         pubkey,
-                        pubkey_account.1.owner(),
-                        pubkey_account.1.data(),
+                        pubkey_account.1,
                         &self.account_indexes,
                         *info,
                         &mut reclaims,
@@ -6722,8 +6721,7 @@ impl AccountsDb {
                 if secondary {
                     self.accounts_index.update_secondary_indexes(
                         &pubkey,
-                        &stored_account.account_meta.owner,
-                        stored_account.data,
+                        &stored_account,
                         &self.account_indexes,
                     );
                 }
@@ -11056,8 +11054,7 @@ pub mod tests {
         accounts_index.upsert(
             0,
             &key0,
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
@@ -11066,8 +11063,7 @@ pub mod tests {
         accounts_index.upsert(
             1,
             &key0,
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
@@ -11076,8 +11072,7 @@ pub mod tests {
         accounts_index.upsert(
             1,
             &key1,
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
@@ -11086,8 +11081,7 @@ pub mod tests {
         accounts_index.upsert(
             2,
             &key1,
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
@@ -11096,8 +11090,7 @@ pub mod tests {
         accounts_index.upsert(
             2,
             &key2,
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
@@ -11106,8 +11099,7 @@ pub mod tests {
         accounts_index.upsert(
             3,
             &key2,
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
