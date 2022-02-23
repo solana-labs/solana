@@ -6704,12 +6704,6 @@ mod tests {
                 1,
                 Ok(()),
             ),
-            // dest short by 1 lamport, so 0 isn't enough
-            (
-                rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
-                0,
-                Err(InstructionError::InsufficientFunds),
-            ),
             // dest short by 2 lamports, so 1 isn't enough (non-zero split amount)
             (
                 rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 2,
