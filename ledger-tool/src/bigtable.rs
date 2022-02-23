@@ -14,7 +14,10 @@ use {
         display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
         OutputFormat,
     },
-    solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
+    solana_ledger::{
+        blockstore::Blockstore,
+        blockstore_db::{AccessType, ShredStorageType},
+    },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_transaction_status::{Encodable, LegacyConfirmedBlock, UiTransactionEncoding},
     std::{
@@ -498,7 +501,11 @@ impl BigTableSubCommand for App<'_, '_> {
     }
 }
 
-pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
+pub fn bigtable_process_command(
+    ledger_path: &Path,
+    matches: &ArgMatches<'_>,
+    shred_storage_type: &ShredStorageType,
+) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");
@@ -513,6 +520,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 &canonicalize_ledger_path(ledger_path),
                 AccessType::TryPrimaryThenSecondary,
                 None,
+                shred_storage_type,
             );
 
             runtime.block_on(upload(
