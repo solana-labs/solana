@@ -23,11 +23,11 @@ uses an _address_ to look up an account. The address is a 256-bit public key.
 
 ## Signers
 
-Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the account's public keys referenced by the transaction. Such
-signatures signify that the holder of the
-account's private key signed, and thus, "authorized" the transaction. In this case,
-the account is referred to as a _signer_. Whether an account is a signer or not
+Transactions include one or more digital [signatures](terminology.md#signature)
+each corresponding to an account address referenced by the transaction. Each of these
+addresses must be the public key of an ed25519 keypair, and the signature signifies
+that the holder of the matching private key signed, and thus, "authorized" the transaction.
+In this case, the account is referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
 

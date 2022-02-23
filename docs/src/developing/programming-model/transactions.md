@@ -157,7 +157,7 @@ perform, and any additional information those operations may need above and
 beyond what the accounts contain.
 
 Programs are free to specify how information is encoded into the instruction
-data byte array. The choice of how data is encoded should take into calculate the
+data byte array. The choice of how data is encoded should consider the
 overhead of decoding, since that step is performed by the program on-chain. It's
 been observed that some common encodings (Rust's bincode for example) are very
 inefficient.

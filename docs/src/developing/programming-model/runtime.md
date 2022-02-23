@@ -51,6 +51,10 @@ that are consumed as the program performs various operations and bounds that the
 program may not exceed. When the program consumes its entire budget or exceeds
 a bound, then the runtime halts the program and returns an error.
 
+Note: The compute budget currently applies per-instruction but is moving toward
+a per-transaction model. For more information see [Transaction-wide Compute
+Budget](#transaction-wide-compute-budget).
+
 The following operations incur a compute cost:
 
 - Executing BPF instructions
@@ -87,8 +91,8 @@ Then the program
 
 - Could execute 200,000 BPF instructions, if it does nothing else.
 - Could log 2,000 log messages.
-- Can not exceed 4k of stack usage.
-- Can not exceed a BPF call depth of 64.
+- Cannot exceed 4k of stack usage.
+- Cannot exceed a BPF call depth of 64.
 - Cannot exceed 4 levels of cross-program invocations.
 
 Since the compute budget is consumed incrementally as the program executes, the
