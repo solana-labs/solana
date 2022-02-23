@@ -24,9 +24,10 @@ use {
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{self, Database},
+        blockstore_db::{self, Database, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
+            ShredStorageType,
         },
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -723,6 +724,7 @@ fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+    shred_storage_type: &ShredStorageType,
 ) -> Blockstore {
     match Blockstore::open_with_options(
         ledger_path,
@@ -730,7 +732,10 @@ fn open_blockstore(
             access_type,
             recovery_mode: wal_recovery_mode,
             enforce_ulimit_nofile: true,
-            ..BlockstoreOptions::default()
+            column_options: LedgerColumnOptions {
+                shred_storage_type: shred_storage_type.clone(),
+                ..LedgerColumnOptions::default()
+            },
         },
     ) {
         Ok(blockstore) => blockstore,
@@ -738,6 +743,31 @@ fn open_blockstore(
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
             exit(1);
         }
+    }
+}
+
+fn shred_storage_type_from_matches(
+    matches: &ArgMatches,
+    arg_rocksdb_shred_compaction: &str,
+    arg_rocksdb_fifo_shred_storage_size: &str,
+) -> ShredStorageType {
+    match matches.value_of(arg_rocksdb_shred_compaction) {
+        None => ShredStorageType::default(),
+        Some(shred_compaction_string) => match shred_compaction_string {
+            "level" => ShredStorageType::RocksLevel,
+            "fifo" => {
+                let shred_storage_size = match matches.value_of(arg_rocksdb_fifo_shred_storage_size)
+                {
+                    Some(_) => value_t_or_exit!(matches, arg_rocksdb_fifo_shred_storage_size, u64),
+                    None => DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+                };
+                ShredStorageType::rocks_fifo(shred_storage_size)
+            }
+            _ => panic!(
+                "Unrecognized rocksdb-shred-compaction: {}",
+                shred_compaction_string
+            ),
+        },
     }
 }
 
@@ -947,6 +977,8 @@ fn main() {
     const DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT: &str = "1";
     const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     solana_logger::setup_with_default("solana=info");
+    let default_rocksdb_fifo_shred_storage_size =
+        &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
 
     let starting_slot_arg = Arg::with_name("starting_slot")
         .long("starting-slot")
@@ -1135,6 +1167,31 @@ fn main() {
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
         .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
+    let target_rocksdb_shred_compaction_arg = Arg::with_name("target_rocksdb_shred_compaction")
+        .hidden(true)
+        .long("target-rocksdb-shred-compaction")
+        .value_name("TARGET_ROCKSDB_COMPACTION_STYLE")
+        .takes_value(true)
+        .possible_values(&["level", "fifo"])
+        .default_value("level")
+        .help(
+            "EXPERIMENTAL: How RocksDB compacts shreds in the target DB. \
+                       Possible values are: \
+                       'level': stores shreds using RocksDB's default (level) compaction. \
+                       'fifo': stores shreds under RocksDB's FIFO compaction. \
+                           This option is more efficient on disk-write-bytes of the ledger store.",
+        );
+    let target_fifo_shred_storage_size_arg = Arg::with_name("target_rocksdb_fifo_shred_storage_size")
+        .hidden(true)
+        .long("target-rocksdb-fifo-shred-storage-size")
+        .value_name("TARGET_SHRED_STORAGE_SIZE_BYTES")
+        .takes_value(true)
+        .validator(is_parsable::<u64>)
+        .default_value(default_rocksdb_fifo_shred_storage_size)
+        .help(
+            "The shred storage size in bytes in the target DB. \
+                       The suggested value is 50% of your ledger storage size in bytes.",
+        );
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -1151,6 +1208,32 @@ fn main() {
                 .global(true)
                 .default_value("ledger")
                 .help("Use DIR as ledger location"),
+        )
+        .arg(
+            Arg::with_name("rocksdb_shred_compaction")
+                .hidden(true)
+                .long("rocksdb-shred-compaction")
+                .value_name("ROCKSDB_COMPACTION_STYLE")
+                .takes_value(true)
+                .possible_values(&["level", "fifo"])
+                .default_value("level")
+                .help("EXPERIMENTAL: Controls how RocksDB compacts shreds. \
+                       *WARNING*: You will lose your ledger data when you switch between options. \
+                       Possible values are: \
+                       'level': stores shreds using RocksDB's default (level) compaction. \
+                       'fifo': stores shreds under RocksDB's FIFO compaction. \
+                           This option is more efficient on disk-write-bytes of the ledger store."),
+        )
+        .arg(
+            Arg::with_name("rocksdb_fifo_shred_storage_size")
+                .hidden(true)
+                .long("rocksdb-fifo-shred-storage-size")
+                .value_name("SHRED_STORAGE_SIZE_BYTES")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .default_value(default_rocksdb_fifo_shred_storage_size)
+                .help("The shred storage size in bytes. \
+                       The suggested value is 50% of your ledger storage size in bytes."),
         )
         .arg(
             Arg::with_name("wal_recovery_mode")
@@ -1229,6 +1312,8 @@ fn main() {
             .about("Copy the ledger")
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg)
+            .arg(&target_rocksdb_shred_compaction_arg)
+            .arg(&target_fifo_shred_storage_size_arg)
             .arg(
                 Arg::with_name("target_db")
                     .long("target-db")
@@ -1828,8 +1913,14 @@ fn main() {
         .map(BlockstoreRecoveryMode::from);
     let verbose_level = matches.occurrences_of("verbose");
 
+    let shred_storage_type = shred_storage_type_from_matches(
+        &matches,
+        "rocksdb_shred_compaction",
+        "rocksdb_fifo_shred_storage_size",
+    );
+
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
-        bigtable_process_command(&ledger_path, arg_matches)
+        bigtable_process_command(&ledger_path, arg_matches, &shred_storage_type)
     } else {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -1841,7 +1932,12 @@ fn main() {
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 let only_rooted = arg_matches.is_present("only_rooted");
                 output_ledger(
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode),
+                    open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                    ),
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
@@ -1855,8 +1951,25 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-                let source = open_blockstore(&ledger_path, AccessType::Secondary, None);
-                let target = open_blockstore(&target_db, AccessType::Primary, None);
+                let target_shred_storage_type = shred_storage_type_from_matches(
+                    &arg_matches,
+                    "target_rocksdb_shred_compaction",
+                    "target_rocksdb_fifo_shred_storage_size",
+                );
+                error!("Shred-Storage-Type: {:?}", shred_storage_type);
+                error!("Target-Shred-Storage-Type: {:?}", target_shred_storage_type);
+                let source = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    None,
+                    &shred_storage_type,
+                );
+                let target = open_blockstore(
+                    &target_db,
+                    AccessType::Primary,
+                    None,
+                    &target_shred_storage_type,
+                );
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -1929,8 +2042,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -1977,7 +2094,12 @@ fn main() {
                 }
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                let ledger = open_blockstore(&ledger_path, AccessType::Secondary, None);
+                let ledger = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    None,
+                    &shred_storage_type,
+                );
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
                     .unwrap()
@@ -2011,8 +2133,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2033,8 +2159,12 @@ fn main() {
             ("slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 for slot in slots {
                     println!("Slot {}", slot);
                     if let Err(err) = output_slot(
@@ -2053,7 +2183,12 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 output_ledger(
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode),
+                    open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                    ),
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
@@ -2064,16 +2199,24 @@ fn main() {
                 );
             }
             ("dead-slots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
                     println!("{}", slot);
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                     println!("{}", slot);
@@ -2081,8 +2224,12 @@ fn main() {
             }
             ("set-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
                         Ok(_) => println!("Slot {} dead", slot),
@@ -2092,8 +2239,12 @@ fn main() {
             }
             ("remove-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
                         Ok(_) => println!("Slot {} not longer marked dead", slot),
@@ -2106,8 +2257,12 @@ fn main() {
             ("parse_full_frozen", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let mut ancestors = BTreeSet::new();
                 assert!(
                     blockstore.meta(ending_slot).unwrap().is_some(),
@@ -2259,8 +2414,12 @@ fn main() {
                     open_genesis_config_by(&ledger_path, arg_matches).hash()
                 );
 
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
@@ -2291,8 +2450,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
 
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
@@ -2403,8 +2566,12 @@ fn main() {
                     usize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                     blockstore
@@ -2736,8 +2903,12 @@ fn main() {
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2796,8 +2967,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -3327,7 +3502,12 @@ fn main() {
                 } else {
                     AccessType::PrimaryForMaintenance
                 };
-                let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    access_type,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
 
                 let end_slot = match end_slot {
                     Some(end_slot) => end_slot,
@@ -3398,8 +3578,12 @@ fn main() {
                 }
             }
             ("list-roots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                     usize::from_str(height).expect("Maximum height must be a number")
                 } else {
@@ -3461,8 +3645,12 @@ fn main() {
                     });
             }
             ("latest-optimistic-slots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let slots = blockstore
                     .get_latest_optimistic_slots(num_slots)
@@ -3481,8 +3669,12 @@ fn main() {
                 }
             }
             ("repair-roots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
                     Slot::from_str(root).expect("Before root must be a number")
                 } else {
@@ -3530,8 +3722,12 @@ fn main() {
                 }
             }
             ("bounds", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
                         let all = arg_matches.is_present("all");
@@ -3592,13 +3788,23 @@ fn main() {
             }
             ("analyze-storage", _) => {
                 analyze_storage(
-                    &open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode).db(),
+                    &open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                    )
+                    .db(),
                 );
                 println!("Ok.");
             }
             ("compute-slot-cost", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
 
                 let mut slots: Vec<u64> = vec![];
                 if !arg_matches.is_present("slots") {
