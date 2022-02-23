@@ -7211,7 +7211,7 @@ pub(crate) mod tests {
 
     fn store_accounts_for_rent_test(
         bank: &Bank,
-        keypairs: &mut Vec<Keypair>,
+        keypairs: &mut [Keypair],
         mock_program_id: Pubkey,
         generic_rent_due_for_system_account: u64,
     ) {

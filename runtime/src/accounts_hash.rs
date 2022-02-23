@@ -562,7 +562,7 @@ impl AccountsHash {
         bin: usize,
         first_items: &'a mut Vec<Pubkey>,
         pubkey_division: &'b [Vec<Vec<CalculateHashIntermediate>>],
-        indexes: &'a mut Vec<usize>,
+        indexes: &'a mut [usize],
         first_item_to_pubkey_division: &'a mut Vec<usize>,
     ) -> &'b CalculateHashIntermediate {
         let first_item = first_items[min_index];
