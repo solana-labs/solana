@@ -33,7 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use solana_program_runtime::timings::ExecuteTimingType;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use {
@@ -82,7 +81,7 @@ use {
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::ExecuteTimings,
+        timings::{ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{
         account::{

@@ -1,10 +1,11 @@
-use core::fmt;
-use enum_iterator::IntoEnumIterator;
-use std::ops::{Index, IndexMut};
-
 use {
+    core::fmt,
+    enum_iterator::IntoEnumIterator,
     solana_sdk::{pubkey::Pubkey, saturating_add_assign},
-    std::collections::HashMap,
+    std::{
+        collections::HashMap,
+        ops::{Index, IndexMut},
+    },
 };
 
 #[derive(Default, Debug, PartialEq)]
