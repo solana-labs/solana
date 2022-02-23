@@ -2782,8 +2782,7 @@ impl AccountsDb {
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
             store_accounts_timing = self.store_accounts_frozen(
-                slot,
-                &accounts,
+                (slot, &accounts[..]),
                 Some(&hashes),
                 Some(Box::new(move |_, _| shrunken_store.clone())),
                 Some(Box::new(write_versions.into_iter())),
@@ -4811,8 +4810,7 @@ impl AccountsDb {
             let flushed_store =
                 self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
             self.store_accounts_frozen(
-                slot,
-                &accounts,
+                (slot, &accounts[..]),
                 Some(&hashes),
                 Some(Box::new(move |_, _| flushed_store.clone())),
                 None,
@@ -6447,8 +6445,7 @@ impl AccountsDb {
 
     fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
-        slot: Slot,
-        accounts: &[(&Pubkey, &T)],
+        accounts: impl StorableAccounts<'a, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
@@ -6459,7 +6456,7 @@ impl AccountsDb {
         let reset_accounts = false;
         let is_cached_store = false;
         self.store_accounts_custom(
-            (slot, accounts),
+            accounts,
             hashes,
             storage_finder,
             write_version_producer,
@@ -6893,7 +6890,7 @@ impl AccountsDb {
                     .map(|key| (key, &account))
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
-                self.store_accounts_frozen(*slot, &add[..], Some(&hashes[..]), None, None);
+                self.store_accounts_frozen((*slot, &add[..]), Some(&hashes[..]), None, None);
             });
             self.accounts_index.set_startup(false);
         }
