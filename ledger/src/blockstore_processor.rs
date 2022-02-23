@@ -1,5 +1,3 @@
-use solana_program_runtime::timings::ExecuteTimingType;
-
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -16,7 +14,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
