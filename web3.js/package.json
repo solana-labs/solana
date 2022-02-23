@@ -95,7 +95,7 @@
     "@types/chai": "^4.2.15",
     "@types/chai-as-promised": "^7.1.3",
     "@types/express-serve-static-core": "^4.17.21",
-    "@types/mocha": "^9.0.0",
+    "@types/mocha": "^9.1.0",
     "@types/mz": "^2.7.3",
     "@types/node": "^16.0.0",
     "@types/secp256k1": "^4.0.1",

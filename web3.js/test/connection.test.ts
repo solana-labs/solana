@@ -186,44 +186,41 @@ describe('Connection', () => {
   });
 
   it('get multiple accounts info', async () => {
-    const account1 = Keypair.generate();
-    const account2 = Keypair.generate();
 
-    {
+    const multipleAccounts = [];
+
+    for (let i = 0; i < 100; i++) {
+      multipleAccounts.push(Keypair.generate());
+    }
+
+    for (const account of multipleAccounts) {
       await helpers.airdrop({
         connection,
-        address: account1.publicKey,
-        amount: LAMPORTS_PER_SOL,
-      });
-
-      await helpers.airdrop({
-        connection,
-        address: account2.publicKey,
+        address: account.publicKey,
         amount: LAMPORTS_PER_SOL,
       });
     }
 
-    const value = [
-      {
-        owner: '11111111111111111111111111111111',
-        lamports: LAMPORTS_PER_SOL,
-        data: ['', 'base64'],
-        executable: false,
-        rentEpoch: 0,
-      },
-      {
-        owner: '11111111111111111111111111111111',
-        lamports: LAMPORTS_PER_SOL,
-        data: ['', 'base64'],
-        executable: false,
-        rentEpoch: 0,
-      },
-    ];
+    const base58Keys = [];
+    const publicKeys = [];
+
+    for (const account of multipleAccounts) {
+      base58Keys.push(account.publicKey.toBase58());
+      publicKeys.push(account.publicKey);
+    }
+
+    const value = Array(multipleAccounts.length).fill({
+      owner: '11111111111111111111111111111111',
+      lamports: LAMPORTS_PER_SOL,
+      data: ['', 'base64'],
+      executable: false,
+      rentEpoch: 0,
+    });
 
     await mockRpcResponse({
       method: 'getMultipleAccounts',
       params: [
-        [account1.publicKey.toBase58(), account2.publicKey.toBase58()],
+        base58Keys,
         {encoding: 'base64'},
       ],
       value: value,
@@ -231,26 +228,17 @@ describe('Connection', () => {
     });
 
     const res = await connection.getMultipleAccountsInfo(
-      [account1.publicKey, account2.publicKey],
+      publicKeys,
       'confirmed',
     );
 
-    const expectedValue = [
-      {
-        owner: new PublicKey('11111111111111111111111111111111'),
-        lamports: LAMPORTS_PER_SOL,
-        data: Buffer.from([]),
-        executable: false,
-        rentEpoch: 0,
-      },
-      {
-        owner: new PublicKey('11111111111111111111111111111111'),
-        lamports: LAMPORTS_PER_SOL,
-        data: Buffer.from([]),
-        executable: false,
-        rentEpoch: 0,
-      },
-    ];
+    const expectedValue = Array(multipleAccounts.length).fill({
+      owner: new PublicKey('11111111111111111111111111111111'),
+      lamports: LAMPORTS_PER_SOL,
+      data: Buffer.from([]),
+      executable: false,
+      rentEpoch: 0,
+    });
 
     expect(res).to.eql(expectedValue);
   });

@@ -36,6 +36,7 @@ import {Transaction} from './transaction';
 import {Message} from './message';
 import assert from './util/assert';
 import {sleep} from './util/sleep';
+import {sliceIntoChunks} from './util/chunks';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
 import {makeWebsocketUrl} from './util/url';
@@ -2557,31 +2558,40 @@ export class Connection {
     configOrCommitment?: GetMultipleAccountsConfig | Commitment,
   ): Promise<(AccountInfo<Buffer | ParsedAccountData> | null)[]> {
     const keys = publicKeys.map(key => key.toBase58());
+    const chunks = sliceIntoChunks(keys, 100);
 
-    let commitment;
-    let encoding: 'base64' | 'jsonParsed' = 'base64';
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-        encoding = 'base64';
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding || 'base64';
+    let accounts : (AccountInfo<Buffer | ParsedAccountData> | null)[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      let commitment;
+      let encoding: 'base64' | 'jsonParsed' = 'base64';
+      if (configOrCommitment) {
+        if (typeof configOrCommitment === 'string') {
+          commitment = configOrCommitment;
+          encoding = 'base64';
+        } else {
+          commitment = configOrCommitment.commitment;
+          encoding = configOrCommitment.encoding || 'base64';
+        }
       }
+      console.log(chunks[i].length, i);
+      const args = this._buildArgs([chunks[i]], commitment, encoding);
+      const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+      const res = create(
+        unsafeRes,
+        jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
+      );
+
+      if ('error' in res) {
+        throw new Error(
+          'failed to get info for accounts ' + chunks[i] + ': ' + res.error.message,
+        );
+      }
+
+      accounts = accounts.concat(res.result.value);
     }
 
-    const args = this._buildArgs([keys], commitment, encoding);
-    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
-    const res = create(
-      unsafeRes,
-      jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
-    );
-    if ('error' in res) {
-      throw new Error(
-        'failed to get info for accounts ' + keys + ': ' + res.error.message,
-      );
-    }
-    return res.result.value;
+    return accounts;
   }
 
   /**
