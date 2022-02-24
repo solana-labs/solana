@@ -433,7 +433,7 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let cost_model = cost_model.clone();
                 Builder::new()
-                    .name("solana-banking-stage-tx".to_string())
+                    .name(format!("solana-banking-stage-tx-{}", i).to_string())
                     .spawn(move || {
                         Self::process_loop(
                             &verified_receiver,
