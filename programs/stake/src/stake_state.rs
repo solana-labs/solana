@@ -6673,7 +6673,7 @@ mod tests {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
 
-        for (dest_starting_balance, split_amount, expected_result) in [
+        for (destination_starting_balance, split_amount, expected_result) in [
             // split amount must be non zero
             (
                 rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
@@ -6688,49 +6688,51 @@ mod tests {
                 1,
                 Ok(()),
             ),
-            // dest short by 2 lamports, so 1 isn't enough (non-zero split amount)
+            // destination short by 2 lamports, so 1 isn't enough (non-zero split amount)
             (
                 rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 2,
                 1,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // dest is rent exempt, so split enough for minimum delegation
+            // destination is rent exempt, so split enough for minimum delegation
             (rent_exempt_reserve, MINIMUM_STAKE_DELEGATION, Ok(())),
-            // dest is rent exempt, but split amount less than minimum delegation
+            // destination is rent exempt, but split amount less than minimum delegation
             (
                 rent_exempt_reserve,
                 MINIMUM_STAKE_DELEGATION - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // dest is not rent exempt, so split enough for rent and minimum delegation
+            // destination is not rent exempt, so split enough for rent and minimum delegation
             (
                 rent_exempt_reserve - 1,
                 MINIMUM_STAKE_DELEGATION + 1,
                 Ok(()),
             ),
-            // dest is not rent exempt, but split amount only for minimum delegation
+            // destination is not rent exempt, but split amount only for minimum delegation
             (
                 rent_exempt_reserve - 1,
                 MINIMUM_STAKE_DELEGATION,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // dest has smallest non-zero balance, so can split the minimum balance requirements
-            // minus what dest already has
+            // destination has smallest non-zero balance, so can split the minimum balance
+            // requirements minus what destination already has
             (
                 1,
                 rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
                 Ok(()),
             ),
-            // dest has smallest non-zero balance, but cannot split less than the minimum balance
-            // requirements minus what dest already has
+            // destination has smallest non-zero balance, but cannot split less than the minimum
+            // balance requirements minus what destination already has
             (
                 1,
                 rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 2,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // dest has zero lamports, so split must be rent exempt reserve plus minimum delegation
+            // destination has zero lamports, so split must be at least rent exempt reserve plus
+            // minimum delegation
             (0, rent_exempt_reserve + MINIMUM_STAKE_DELEGATION, Ok(())),
-            // dest has zero lamports, but split less than rent exempt reserve plus minimum delegation
+            // destination has zero lamports, but split amount is less than rent exempt reserve
+            // plus minimum delegation
             (
                 0,
                 rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
@@ -6761,41 +6763,45 @@ mod tests {
                 .unwrap();
                 let source_keyed_account = KeyedAccount::new(&source_pubkey, true, &source_account);
 
-                let dest_pubkey = Pubkey::new_unique();
-                let dest_account = AccountSharedData::new_ref_data_with_space(
-                    dest_starting_balance,
+                let destination_pubkey = Pubkey::new_unique();
+                let destination_account = AccountSharedData::new_ref_data_with_space(
+                    destination_starting_balance,
                     &StakeState::Uninitialized,
                     std::mem::size_of::<StakeState>(),
                     &id(),
                 )
                 .unwrap();
-                let dest_keyed_account = KeyedAccount::new(&dest_pubkey, true, &dest_account);
+                let destination_keyed_account =
+                    KeyedAccount::new(&destination_pubkey, true, &destination_account);
 
                 assert_eq!(
                     expected_result,
                     source_keyed_account.split(
                         split_amount,
-                        &dest_keyed_account,
+                        &destination_keyed_account,
                         &HashSet::from([source_pubkey]),
                     ),
                 );
 
                 // For the expected OK cases, when the source's StakeState is Stake, then the
-                // dest's StakeState *must* also end up as Stake as well.  Additionally, check to
-                // ensure the dest's delegation amount is correct.  If the dest is already rent
-                // exempt, then the dest's stake delegation *must* equal the split amount.
-                // Otherwise, the split amount must first be used to make the dest rent exempt, and
-                // then the leftover lamports are delegated.
+                // destination's StakeState *must* also end up as Stake as well.  Additionally,
+                // check to ensure the destination's delegation amount is correct.  If the
+                // destination is already rent exempt, then the destination's stake delegation
+                // *must* equal the split amount. Otherwise, the split amount must first be used to
+                // make the destination rent exempt, and then the leftover lamports are delegated.
                 if expected_result.is_ok() {
                     if let StakeState::Stake(_, _) = source_keyed_account.state().unwrap() {
-                        if let StakeState::Stake(_, dest_stake) =
-                            dest_keyed_account.state().unwrap()
+                        if let StakeState::Stake(_, destination_stake) =
+                            destination_keyed_account.state().unwrap()
                         {
-                            let dest_initial_rent_deficit =
-                                rent_exempt_reserve.saturating_sub(dest_starting_balance);
-                            let expected_dest_stake_delegation =
-                                split_amount - dest_initial_rent_deficit;
-                            assert_eq!(expected_dest_stake_delegation, dest_stake.delegation.stake);
+                            let destination_initial_rent_deficit =
+                                rent_exempt_reserve.saturating_sub(destination_starting_balance);
+                            let expected_destination_stake_delegation =
+                                split_amount - destination_initial_rent_deficit;
+                            assert_eq!(
+                                expected_destination_stake_delegation,
+                                destination_stake.delegation.stake
+                            );
                         } else {
                             panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
                         }
