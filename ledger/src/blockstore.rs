@@ -1,8 +1,6 @@
 //! The `blockstore` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
-pub use rocksdb::properties as RocksProperties;
 use {
     crate::{
         ancestor_iterator::AncestorIterator,
@@ -66,6 +64,10 @@ use {
     tempfile::{Builder, TempDir},
     thiserror::Error,
     trees::{Tree, TreeWalk},
+};
+pub use {
+    crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
+    rocksdb::properties as RocksProperties,
 };
 
 pub mod blockstore_purge;
