@@ -84,12 +84,12 @@ fn mmsghdr_for_packet(
 }
 
 #[cfg(target_os = "linux")]
-fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> Result<(), SendPktsError> {
+fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut [mmsghdr]) -> Result<(), SendPktsError> {
     let sock_fd = sock.as_raw_fd();
     let mut total_sent = 0;
     let mut erropt = None;
 
-    let mut pkts = &mut hdrs[..];
+    let mut pkts = &mut *hdrs;
     while !pkts.is_empty() {
         let npkts = match unsafe { libc::sendmmsg(sock_fd, &mut pkts[0], pkts.len() as u32, 0) } {
             -1 => {
