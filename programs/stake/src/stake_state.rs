@@ -6672,22 +6672,6 @@ mod tests {
     fn test_split_destination_minimum_stake_delegation() {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let source_pubkey = Pubkey::new_unique();
-        let source_meta = Meta {
-            rent_exempt_reserve,
-            ..Meta::auto(&source_pubkey)
-        };
-        // Set the source's starting balance to something large to ensure its post-split
-        // balance meets all the requirements
-        let source_starting_balance = u64::MAX;
-        let source_account = AccountSharedData::new_ref_data_with_space(
-            source_starting_balance,
-            &StakeState::Initialized(source_meta),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .unwrap();
-        let source_keyed_account = KeyedAccount::new(&source_pubkey, true, &source_account);
 
         for (dest_starting_balance, split_amount, expected_result) in [
             // split amount must be non zero
@@ -6753,24 +6737,71 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            let dest_pubkey = Pubkey::new_unique();
-            let dest_account = AccountSharedData::new_ref_data_with_space(
-                dest_starting_balance,
-                &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
-                &id(),
-            )
-            .unwrap();
-            let dest_keyed_account = KeyedAccount::new(&dest_pubkey, true, &dest_account);
+            let source_pubkey = Pubkey::new_unique();
+            let source_meta = Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&source_pubkey)
+            };
 
-            assert_eq!(
-                expected_result,
-                source_keyed_account.split(
-                    split_amount,
-                    &dest_keyed_account,
-                    &HashSet::from([source_pubkey]),
-                ),
-            );
+            // Set the source's starting balance and stake delegation amount to something large
+            // to ensure its post-split balance meets all the requirements
+            let source_balance = u64::MAX;
+            let source_stake_delegation = source_balance - rent_exempt_reserve;
+
+            for source_stake_state in &[
+                StakeState::Initialized(source_meta),
+                StakeState::Stake(source_meta, just_stake(source_stake_delegation)),
+            ] {
+                let source_account = AccountSharedData::new_ref_data_with_space(
+                    source_balance,
+                    &source_stake_state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .unwrap();
+                let source_keyed_account = KeyedAccount::new(&source_pubkey, true, &source_account);
+
+                let dest_pubkey = Pubkey::new_unique();
+                let dest_account = AccountSharedData::new_ref_data_with_space(
+                    dest_starting_balance,
+                    &StakeState::Uninitialized,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .unwrap();
+                let dest_keyed_account = KeyedAccount::new(&dest_pubkey, true, &dest_account);
+
+                assert_eq!(
+                    expected_result,
+                    source_keyed_account.split(
+                        split_amount,
+                        &dest_keyed_account,
+                        &HashSet::from([source_pubkey]),
+                    ),
+                );
+
+                // For the expected OK cases, when the source's StakeState is Stake, then the
+                // dest's StakeState *must* also end up as Stake as well.  Additionally, check to
+                // ensure the dest's delegation amount is correct.  If the dest is already rent
+                // exempt, then the dest's stake delegation *must* equal the split amount.
+                // Otherwise, the split amount must first be used to make the dest rent exempt, and
+                // then the leftover lamports are delegated.
+                if expected_result.is_ok() {
+                    if let StakeState::Stake(_, _) = source_keyed_account.state().unwrap() {
+                        if let StakeState::Stake(_, dest_stake) =
+                            dest_keyed_account.state().unwrap()
+                        {
+                            let dest_initial_rent_deficit =
+                                rent_exempt_reserve.saturating_sub(dest_starting_balance);
+                            let expected_dest_stake_delegation =
+                                split_amount - dest_initial_rent_deficit;
+                            assert_eq!(expected_dest_stake_delegation, dest_stake.delegation.stake,);
+                        } else {
+                            panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
+                        }
+                    }
+                }
+            }
         }
     }
 
