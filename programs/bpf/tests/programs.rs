@@ -1419,7 +1419,7 @@ fn assert_instruction_count() {
             ("sanity", 2378),
             ("sanity++", 2278),
             ("secp256k1_recover", 25383),
-            ("sha", 1328),
+            ("sha", 1895),
             ("struct_pass", 108),
             ("struct_ret", 122),
         ]);
@@ -1441,7 +1441,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_rand", 418),
             ("solana_bpf_rust_sanity", 9128),
             ("solana_bpf_rust_secp256k1_recover", 25707),
-            ("solana_bpf_rust_sha", 26467),
+            ("solana_bpf_rust_sha", 27033),
         ]);
     }
 

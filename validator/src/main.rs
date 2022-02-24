@@ -1334,7 +1334,6 @@ pub fn main() {
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .hidden(true)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
@@ -1479,6 +1478,12 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
                 .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
+        )
+        .arg(
+            Arg::with_name("disable_accounts_disk_index")
+                .long("disable-accounts-disk-index")
+                .help("Disable the disk-based accounts index if it is enabled by default.")
+                .conflicts_with("accounts_index_memory_limit_mb")
         )
         .arg(
             Arg::with_name("accounts_index_bins")
@@ -2127,6 +2132,8 @@ pub fn main() {
 
     if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
         accounts_index_config.index_limit_mb = Some(limit);
+    } else if matches.is_present("disable_accounts_disk_index") {
+        accounts_index_config.index_limit_mb = None;
     }
 
     {

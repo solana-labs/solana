@@ -13,6 +13,7 @@ use {
         commitment_config::CommitmentConfig,
         instruction::{AccountMeta, Instruction},
         message::Message,
+        packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         rpc_port::DEFAULT_RPC_PORT,
         signature::{read_keypair_file, Keypair, Signer},
@@ -131,6 +132,9 @@ fn make_dos_message(
     Message::new(&instructions, Some(&keypair.pubkey()))
 }
 
+/// creates large transactions that all touch the same set of accounts,
+/// so they can't be parallelized
+///
 #[allow(clippy::too_many_arguments)]
 fn run_transactions_dos(
     entrypoint_addr: SocketAddr,
@@ -174,7 +178,8 @@ fn run_transactions_dos(
 
     let program_account = client.get_account(&program_id);
 
-    let message = Message::new(
+    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
+    let mut message = Message::new_with_blockhash(
         &[
             Instruction::new_with_bytes(
                 Pubkey::new_unique(),
@@ -188,12 +193,12 @@ fn run_transactions_dos(
             ),
         ],
         None,
+        &blockhash,
     );
 
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
 
     if just_calculate_fees {
         let fee = client
@@ -267,6 +272,7 @@ fn run_transactions_dos(
     loop {
         if latest_blockhash.elapsed().as_secs() > 10 {
             blockhash = client.get_latest_blockhash().expect("blockhash");
+            message.recent_blockhash = blockhash;
             latest_blockhash = Instant::now();
         }
 
@@ -378,7 +384,7 @@ fn run_transactions_dos(
                         let tx = Transaction::new(&signers, message, blockhash);
                         if !tested_size.load(Ordering::Relaxed) {
                             let ser_size = bincode::serialized_size(&tx).unwrap();
-                            assert!(ser_size < 1200, "{}", ser_size);
+                            assert!(ser_size < PACKET_DATA_SIZE as u64, "{}", ser_size);
                             tested_size.store(true, Ordering::Relaxed);
                         }
                         tx
@@ -657,7 +663,7 @@ pub mod test {
         let tx = Transaction::new(&signers, message, blockhash);
         let size = bincode::serialized_size(&tx).unwrap();
         info!("size:{}", size);
-        assert!(size < 1200);
+        assert!(size < PACKET_DATA_SIZE as u64);
     }
 
     #[test]
@@ -711,7 +717,11 @@ pub mod test {
             program_keypair.pubkey(),
             Some((
                 program_keypair,
-                String::from("../programs/bpf/c/out/tuner.so"),
+                format!(
+                    "{}{}",
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../programs/bpf/c/out/tuner.so"
+                ),
             )),
             &account_keypair_refs,
             maybe_account_groups,

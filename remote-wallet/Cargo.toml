@@ -16,7 +16,7 @@ hidapi = { version = "1.3.2", default-features = false, optional = true}
 log = "0.4.14"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
-parking_lot = "0.11"
+parking_lot = "0.12"
 qstring = "0.7.2"
 semver = "1.0"
 solana-sdk = { path = "../sdk", version = "=1.10.0" }

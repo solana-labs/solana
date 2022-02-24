@@ -2,6 +2,7 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
+pub use rocksdb::properties as RocksProperties;
 use {
     crate::{
         ancestor_iterator::AncestorIterator,
@@ -70,7 +71,6 @@ use {
 pub mod blockstore_purge;
 
 pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
-pub const ROCKSDB_TOTAL_SST_FILES_SIZE: &str = "rocksdb.total-sst-files-size";
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -3184,7 +3184,7 @@ impl Blockstore {
     /// shreds that are still in memory.
     pub fn total_data_shred_storage_size(&self) -> Result<u64> {
         let shred_data_cf = self.db.column::<cf::ShredData>();
-        shred_data_cf.get_int_property(ROCKSDB_TOTAL_SST_FILES_SIZE)
+        shred_data_cf.get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
     }
 
     /// Returns the total physical storage size contributed by all coding shreds.
@@ -3193,7 +3193,7 @@ impl Blockstore {
     /// shreds that are still in memory.
     pub fn total_coding_shred_storage_size(&self) -> Result<u64> {
         let shred_code_cf = self.db.column::<cf::ShredCode>();
-        shred_code_cf.get_int_property(ROCKSDB_TOTAL_SST_FILES_SIZE)
+        shred_code_cf.get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
     }
 
     pub fn is_primary_access(&self) -> bool {

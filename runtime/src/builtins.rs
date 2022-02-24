@@ -123,6 +123,24 @@ pub enum BuiltinFeatureTransition {
     },
 }
 
+// https://github.com/solana-labs/solana/pull/23233 added `BuiltinFeatureTransition`
+// to `Bank` which triggers https://github.com/rust-lang/rust/issues/92987 while
+// attempting to resolve `Sync` on `BankRc` in `AccountsBackgroundService::new` ala,
+//
+// query stack during panic:
+// #0 [evaluate_obligation] evaluating trait selection obligation `bank::BankRc: core::marker::Sync`
+// #1 [typeck] type-checking `accounts_background_service::<impl at runtime/src/accounts_background_service.rs:358:1: 520:2>::new`
+// #2 [typeck_item_bodies] type-checking all item bodies
+// #3 [analysis] running analysis passes on this crate
+// end of query stack
+//
+// Yoloing a `Sync` onto it avoids the auto trait evaluation and thus the ICE.
+//
+// We should remove this when upgrading to Rust 1.60.0, where the bug has been
+// fixed by https://github.com/rust-lang/rust/pull/93064
+unsafe impl Send for BuiltinFeatureTransition {}
+unsafe impl Sync for BuiltinFeatureTransition {}
+
 impl BuiltinFeatureTransition {
     pub fn to_action(
         &self,
