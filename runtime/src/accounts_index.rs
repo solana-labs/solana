@@ -203,6 +203,12 @@ impl AccountMapEntryMeta {
             age: AtomicU8::new(storage.future_age_to_flush()),
         }
     }
+    pub fn new_clean<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
+        AccountMapEntryMeta {
+            dirty: AtomicBool::new(false),
+            age: AtomicU8::new(storage.future_age_to_flush()),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
