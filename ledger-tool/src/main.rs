@@ -889,6 +889,10 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let disable_disk_index = Arg::with_name("disable_accounts_disk_index")
+        .long("disable-accounts-disk-index")
+        .help("Disable the disk-based accounts index if it is enabled by default.")
+        .conflicts_with("accounts_index_memory_limit_mb");
     let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
         .long("accounts-db-skip-shrink")
         .help(
@@ -1239,6 +1243,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
@@ -1991,6 +1996,8 @@ fn main() {
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
                     accounts_index_config.index_limit_mb = Some(limit);
+                } else if arg_matches.is_present("disable_accounts_disk_index") {
+                    accounts_index_config.index_limit_mb = None;
                 }
 
                 {
