@@ -5,8 +5,7 @@ extern crate test;
 use {
     rand::{seq::SliceRandom, Rng},
     solana_core::{
-        cluster_nodes::{new_cluster_nodes, ClusterNodes},
-        cluster_nodes_utils::make_cluster,
+        cluster_nodes::{make_cluster, new_cluster_nodes, ClusterNodes},
         retransmit_stage::RetransmitStage,
     },
     solana_gossip::contact_info::ContactInfo,
