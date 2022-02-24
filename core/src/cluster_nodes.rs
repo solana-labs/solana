@@ -90,7 +90,7 @@ fn get_parent_index(index: usize, fanout: usize) -> Option<usize> {
     Some(parent_index)
 }
 
-fn get_neighborhood_stake(index: usize, fanout: usize, nodes: &Vec<&Node>) -> u64 {
+fn get_neighborhood_stake(index: usize, fanout: usize, nodes: &[&Node]) -> u64 {
     let offset = index % fanout;
     let anchor = index - offset;
     (anchor..)
@@ -373,8 +373,10 @@ impl ClusterNodes<RetransmitStage> {
             .position(|node| node.pubkey() == self.pubkey)
             .unwrap();
 
-        let mut stakes = ShredDistributionStakes::default();
-        stakes.neighborhood = get_neighborhood_stake(self_index, fanout, &nodes);
+        let mut stakes = ShredDistributionStakes {
+            neighborhood: get_neighborhood_stake(self_index, fanout, &nodes),
+            ..Default::default()
+        };
         if let Some(parent_index) = get_parent_index(self_index, fanout) {
             stakes.parent = nodes.get(parent_index).map(|n| n.stake).unwrap_or(0);
             stakes.parent_neighborhood = get_neighborhood_stake(parent_index, fanout, &nodes);
@@ -385,12 +387,12 @@ impl ClusterNodes<RetransmitStage> {
 
     pub fn get_shred_distribution_stakes_pct(
         &self,
-        shreds: &Vec<Shred>,
+        shreds: &[Shred],
         root_bank: &Bank,
         fanout: usize,
         leader_schedule_cache: &LeaderScheduleCache,
     ) -> f64 {
-        if shreds.len() == 0 || root_bank.total_epoch_stake() == 0 {
+        if shreds.is_empty() || root_bank.total_epoch_stake() == 0 {
             debug_assert!(
                 false,
                 "shreds.len={} total_epoch_stake={}",
@@ -402,7 +404,7 @@ impl ClusterNodes<RetransmitStage> {
         let mut stakes: u64 = 0;
         for shred in shreds {
             let shred_stakes = self.get_shred_distribution_stakes(
-                &shred,
+                shred,
                 root_bank,
                 fanout,
                 leader_schedule_cache,

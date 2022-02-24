@@ -283,6 +283,7 @@ fn prune_shreds_invalid_repair(
     assert_eq!(shreds.len(), repair_infos.len());
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_insert<F>(
     shred_receiver: &Receiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     blockstore: &Blockstore,
