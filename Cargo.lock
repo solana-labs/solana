@@ -5699,7 +5699,7 @@ dependencies = [
  "log 0.4.14",
  "num-derive",
  "num-traits",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
  "rand 0.7.3",
  "rustc_version 0.4.0",
  "rustversion",
