@@ -375,7 +375,8 @@ impl ClusterNodes<RetransmitStage> {
 
         let mut stakes = ShredDistributionStakes {
             neighborhood: get_neighborhood_stake(self_index, fanout, &nodes),
-            ..Default::default()
+            parent: u64::default(),
+            parent_neighborhood: u64::default(),
         };
         if let Some(parent_index) = get_parent_index(self_index, fanout) {
             stakes.parent = nodes.get(parent_index).map(|n| n.stake).unwrap_or(0);
@@ -403,12 +404,8 @@ impl ClusterNodes<RetransmitStage> {
         }
         let mut stakes: u64 = 0;
         for shred in shreds {
-            let shred_stakes = self.get_shred_distribution_stakes(
-                shred,
-                root_bank,
-                fanout,
-                leader_schedule_cache,
-            );
+            let shred_stakes =
+                self.get_shred_distribution_stakes(shred, root_bank, fanout, leader_schedule_cache);
             stakes += shred_stakes.total();
         }
         stakes as f64 / shreds.len() as f64 / root_bank.total_epoch_stake() as f64 * 100.0
