@@ -6795,7 +6795,7 @@ mod tests {
                                 rent_exempt_reserve.saturating_sub(dest_starting_balance);
                             let expected_dest_stake_delegation =
                                 split_amount - dest_initial_rent_deficit;
-                            assert_eq!(expected_dest_stake_delegation, dest_stake.delegation.stake,);
+                            assert_eq!(expected_dest_stake_delegation, dest_stake.delegation.stake);
                         } else {
                             panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
                         }
