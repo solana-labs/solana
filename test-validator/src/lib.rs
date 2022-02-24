@@ -109,7 +109,6 @@ pub struct TestValidatorGenesis {
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
-    pub started_from_validator: bool,
 }
 
 impl Default for TestValidatorGenesis {
@@ -137,7 +136,6 @@ impl Default for TestValidatorGenesis {
             accountsdb_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
-            started_from_validator: false,
         }
     }
 }
@@ -658,17 +656,13 @@ impl TestValidator {
             }
         }
 
-        let accounts_db_config = if config.started_from_validator {
-            Some(AccountsDbConfig {
-                index: Some(AccountsIndexConfig {
-                    started_from_validator: config.started_from_validator,
-                    ..AccountsIndexConfig::default()
-                }),
-                ..AccountsDbConfig::default()
-            })
-        } else {
-            None
-        };
+        let accounts_db_config = Some(AccountsDbConfig {
+            index: Some(AccountsIndexConfig {
+                started_from_validator: true,
+                ..AccountsIndexConfig::default()
+            }),
+            ..AccountsDbConfig::default()
+        });
 
         let mut validator_config = ValidatorConfig {
             accountsdb_plugin_config_files: config.accountsdb_plugin_config_files.clone(),
