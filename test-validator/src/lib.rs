@@ -16,7 +16,8 @@ use {
     solana_net_utils::PortRange,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
-        bank_forks::BankForks, genesis_utils::create_genesis_config_with_leader_ex,
+        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
+        genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
@@ -108,6 +109,7 @@ pub struct TestValidatorGenesis {
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+    pub started_from_validator: bool,
 }
 
 impl Default for TestValidatorGenesis {
@@ -135,6 +137,7 @@ impl Default for TestValidatorGenesis {
             accountsdb_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
+            started_from_validator: false,
         }
     }
 }
@@ -655,6 +658,18 @@ impl TestValidator {
             }
         }
 
+        let accounts_db_config = if config.started_from_validator {
+            Some(AccountsDbConfig {
+                index: Some(AccountsIndexConfig {
+                    started_from_validator: config.started_from_validator,
+                    ..AccountsIndexConfig::default()
+                }),
+                ..AccountsDbConfig::default()
+            })
+        } else {
+            None
+        };
+
         let mut validator_config = ValidatorConfig {
             accountsdb_plugin_config_files: config.accountsdb_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -684,6 +699,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
+            accounts_db_config,
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

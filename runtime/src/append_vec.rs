@@ -286,11 +286,11 @@ impl AppendVec {
         // This mutex forces append to be single threaded, but concurrent with reads
         // See UNSAFE usage in `append_ptr`
         let _lock = self.append_lock.lock().unwrap();
-        self.current_len.store(0, Ordering::Relaxed);
+        self.current_len.store(0, Ordering::Release);
     }
 
     pub fn len(&self) -> usize {
-        self.current_len.load(Ordering::Relaxed)
+        self.current_len.load(Ordering::Acquire)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -360,7 +360,7 @@ impl AppendVec {
             offset = next_offset;
             num_accounts += 1;
         }
-        let aligned_current_len = u64_align!(self.current_len.load(Ordering::Relaxed));
+        let aligned_current_len = u64_align!(self.current_len.load(Ordering::Acquire));
 
         (offset == aligned_current_len, num_accounts)
     }
@@ -419,7 +419,7 @@ impl AppendVec {
         for val in vals {
             self.append_ptr(offset, val.0, val.1)
         }
-        self.current_len.store(*offset, Ordering::Relaxed);
+        self.current_len.store(*offset, Ordering::Release);
         Some(pos)
     }
 

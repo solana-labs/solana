@@ -199,16 +199,9 @@ impl Accounts {
         }
     }
 
-    pub fn new_from_parent(
-        parent: &Accounts,
-        slot: Slot,
-        parent_slot: Slot,
-        simulation_bank: bool,
-    ) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
-        if !simulation_bank {
-            accounts_db.set_hash(slot, parent_slot);
-        }
+        accounts_db.set_hash(slot, parent_slot);
         Self {
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),

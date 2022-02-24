@@ -1,18 +1,19 @@
 //! Example Rust-based BPF program that exercises error handling
 
 extern crate solana_program;
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
-use solana_program::{
-    account_info::AccountInfo,
-    decode_error::DecodeError,
-    entrypoint,
-    entrypoint::ProgramResult,
-    msg,
-    program_error::{PrintProgramError, ProgramError},
-    pubkey::{Pubkey, PubkeyError},
+use {
+    num_derive::FromPrimitive,
+    num_traits::FromPrimitive,
+    solana_program::{
+        account_info::AccountInfo,
+        decode_error::DecodeError,
+        entrypoint::ProgramResult,
+        msg,
+        program_error::{PrintProgramError, ProgramError},
+        pubkey::{Pubkey, PubkeyError},
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 /// Custom program errors
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive)]
@@ -44,7 +45,7 @@ impl PrintProgramError for MyError {
     }
 }
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],

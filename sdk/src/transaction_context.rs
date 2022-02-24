@@ -1,15 +1,17 @@
 //! Successors of instruction_context_context::StackFrame, KeyedAccount and AccountInfo
 
-use crate::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::InstructionError,
-    lamports::LamportsError,
-    pubkey::Pubkey,
-};
-use std::{
-    cell::{RefCell, RefMut},
-    collections::HashSet,
-    pin::Pin,
+use {
+    crate::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        instruction::InstructionError,
+        lamports::LamportsError,
+        pubkey::Pubkey,
+    },
+    std::{
+        cell::{RefCell, RefMut},
+        collections::HashSet,
+        pin::Pin,
+    },
 };
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);
@@ -304,6 +306,18 @@ impl InstructionContext {
         self.instruction_accounts.len()
     }
 
+    /// Assert that enough account were supplied to this Instruction
+    pub fn check_number_of_instruction_accounts(
+        &self,
+        expected_at_least: usize,
+    ) -> Result<(), InstructionError> {
+        if self.get_number_of_instruction_accounts() < expected_at_least {
+            Err(InstructionError::NotEnoughAccountKeys)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Number of accounts in this Instruction
     pub fn get_number_of_accounts(&self) -> usize {
         self.program_accounts
@@ -360,6 +374,30 @@ impl InstructionContext {
         }
     }
 
+    /// Gets the key of the last program account of this Instruction
+    pub fn get_program_key<'a, 'b: 'a>(
+        &'a self,
+        transaction_context: &'b TransactionContext,
+    ) -> Result<&'b Pubkey, InstructionError> {
+        let index_in_transaction =
+            self.get_index_in_transaction(self.program_accounts.len().saturating_sub(1))?;
+        transaction_context.get_key_of_account_at_index(index_in_transaction)
+    }
+
+    /// Gets the key of an instruction account (skipping program accounts)
+    pub fn get_instruction_account_key<'a, 'b: 'a>(
+        &'a self,
+        transaction_context: &'b TransactionContext,
+        instruction_account_index: usize,
+    ) -> Result<&'b Pubkey, InstructionError> {
+        let index_in_transaction = self.get_index_in_transaction(
+            self.program_accounts
+                .len()
+                .saturating_add(instruction_account_index),
+        )?;
+        transaction_context.get_key_of_account_at_index(index_in_transaction)
+    }
+
     /// Tries to borrow an account from this Instruction
     pub fn try_borrow_account<'a, 'b: 'a>(
         &'a self,
@@ -382,16 +420,6 @@ impl InstructionContext {
         })
     }
 
-    /// Gets the key of the last program account of this Instruction
-    pub fn get_program_key<'a, 'b: 'a>(
-        &'a self,
-        transaction_context: &'b TransactionContext,
-    ) -> Result<&'b Pubkey, InstructionError> {
-        let index_in_transaction =
-            self.get_index_in_transaction(self.program_accounts.len().saturating_sub(1))?;
-        transaction_context.get_key_of_account_at_index(index_in_transaction)
-    }
-
     /// Gets the last program account of this Instruction
     pub fn try_borrow_program_account<'a, 'b: 'a>(
         &'a self,
@@ -407,13 +435,13 @@ impl InstructionContext {
     pub fn try_borrow_instruction_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         self.try_borrow_account(
             transaction_context,
             self.program_accounts
                 .len()
-                .saturating_add(index_in_instruction),
+                .saturating_add(instruction_account_index),
         )
     }
 

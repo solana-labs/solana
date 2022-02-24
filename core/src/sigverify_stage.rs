@@ -11,8 +11,10 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_measure::measure::Measure,
-    solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::{count_valid_packets, shrink_batches, Deduper},
+    solana_perf::{
+        packet::PacketBatch,
+        sigverify::{count_valid_packets, shrink_batches, Deduper},
+    },
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -370,12 +372,15 @@ impl SigVerifyStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::sigverify::TransactionSigVerifier;
-    use crate::sigverify_stage::timing::duration_as_ms;
-    use crossbeam_channel::unbounded;
-    use solana_perf::packet::to_packet_batches;
-    use solana_perf::test_tx::test_tx;
-    use {super::*, solana_perf::packet::Packet};
+    use {
+        super::*,
+        crate::{sigverify::TransactionSigVerifier, sigverify_stage::timing::duration_as_ms},
+        crossbeam_channel::unbounded,
+        solana_perf::{
+            packet::{to_packet_batches, Packet},
+            test_tx::test_tx,
+        },
+    };
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
         packet_batches

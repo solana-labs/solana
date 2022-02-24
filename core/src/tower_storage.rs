@@ -1,6 +1,8 @@
 use {
-    crate::consensus::{Result, Tower, TowerError, TowerVersions},
-    crate::tower1_7_14::SavedTower1_7_14,
+    crate::{
+        consensus::{Result, Tower, TowerError, TowerVersions},
+        tower1_7_14::SavedTower1_7_14,
+    },
     solana_sdk::{
         pubkey::Pubkey,
         signature::{Signature, Signer},

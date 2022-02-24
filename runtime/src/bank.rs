@@ -46,7 +46,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
-        builtins::{self, ActivationType, Builtin, Builtins},
+        builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
@@ -81,7 +81,7 @@ use {
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::ExecuteTimings,
+        timings::{ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{
         account::{
@@ -157,6 +157,7 @@ use {
 };
 
 mod address_lookup_table;
+mod builtin_programs;
 mod sysvar_cache;
 mod transaction_account_state_info;
 
@@ -244,8 +245,7 @@ pub struct SquashTiming {
 type EpochCount = u64;
 
 mod executor_cache {
-    use super::*;
-    use log;
+    use {super::*, log};
 
     #[derive(Debug, Default)]
     pub struct Stats {
@@ -1035,18 +1035,6 @@ pub trait DropCallback: fmt::Debug {
     fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync>;
 }
 
-/// Noop callback on dropping banks is useful for simulation banks, which are
-/// new banks created from a frozen bank, but should not be purged in the same
-/// way.
-#[derive(Debug, Clone)]
-struct NoopDropCallback;
-impl DropCallback for NoopDropCallback {
-    fn callback(&self, _b: &Bank) {}
-    fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync> {
-        Box::new(self.clone())
-    }
-}
-
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
@@ -1196,9 +1184,9 @@ pub struct Bank {
 
     compute_budget: Option<ComputeBudget>,
 
-    /// Builtin programs activated dynamically by feature
+    /// Dynamic feature transitions for builtin programs
     #[allow(clippy::rc_buffer)]
-    feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
+    builtin_feature_transitions: Arc<Vec<BuiltinFeatureTransition>>,
 
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
@@ -1265,7 +1253,6 @@ struct LoadVoteAndStakeAccountsResult {
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
-    pub simulation_bank: bool,
 }
 
 impl Bank {
@@ -1367,7 +1354,7 @@ impl Bank {
             is_delta: AtomicBool::default(),
             builtin_programs: BuiltinPrograms::default(),
             compute_budget: Option::<ComputeBudget>::default(),
-            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
+            builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
@@ -1540,10 +1527,7 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions {
-            vote_only_bank,
-            simulation_bank,
-        } = new_bank_options;
+        let NewBankOptions { vote_only_bank } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -1557,7 +1541,6 @@ impl Bank {
                     &parent.rc.accounts,
                     slot,
                     parent.slot(),
-                    simulation_bank,
                 )),
                 parent: RwLock::new(Some(parent.clone())),
                 slot,
@@ -1647,20 +1630,6 @@ impl Bank {
         let (feature_set, feature_set_time) =
             Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
 
-        let drop_callback = if simulation_bank {
-            RwLock::new(OptionalDropCallback(Some(Box::new(NoopDropCallback))))
-        } else {
-            RwLock::new(OptionalDropCallback(
-                parent
-                    .drop_callback
-                    .read()
-                    .unwrap()
-                    .0
-                    .as_ref()
-                    .map(|drop_callback| drop_callback.clone_box()),
-            ))
-        };
-
         let mut new = Bank {
             rc,
             src,
@@ -1703,7 +1672,7 @@ impl Bank {
             signature_count: AtomicU64::new(0),
             builtin_programs,
             compute_budget: parent.compute_budget,
-            feature_builtins: parent.feature_builtins.clone(),
+            builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
@@ -1714,7 +1683,15 @@ impl Bank {
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
             feature_set,
-            drop_callback,
+            drop_callback: RwLock::new(OptionalDropCallback(
+                parent
+                    .drop_callback
+                    .read()
+                    .unwrap()
+                    .0
+                    .as_ref()
+                    .map(|drop_callback| drop_callback.clone_box()),
+            )),
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(SysvarCache::default()),
@@ -1989,7 +1966,7 @@ impl Bank {
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
             compute_budget: None,
-            feature_builtins: new(),
+            builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
@@ -3198,6 +3175,11 @@ impl Bank {
 
     /// Add a precompiled program account
     pub fn add_precompiled_account(&self, program_id: &Pubkey) {
+        self.add_precompiled_account_with_owner(program_id, native_loader::id())
+    }
+
+    // Used by tests to simulate clusters with precompiles that aren't owned by the native loader
+    fn add_precompiled_account_with_owner(&self, program_id: &Pubkey, owner: Pubkey) {
         if let Some(account) = self.get_account_with_fixed_root(program_id) {
             if account.executable() {
                 // The account is already executable, that's all we need
@@ -3219,7 +3201,7 @@ impl Bank {
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
         let account = AccountSharedData::from(Account {
             lamports,
-            owner: solana_sdk::system_program::id(),
+            owner,
             data: vec![],
             executable: true,
             rent_epoch,
@@ -3495,26 +3477,12 @@ impl Bank {
 
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
-        self: &Arc<Bank>,
+        &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        // Simulation detection countermeasure 1: Create a new child bank for the simulation. This
-        // ensures comparing the slot values between the Clock and SlotHistory sysvars does not
-        // reveal that the program is running in simulation.
-        //
-        // Reference: https://opcodes.fr/en/publications/2022-01/detecting-transaction-simulation/
-        let bank = Bank::new_from_parent_with_options(
-            self,
-            &Pubkey::default(),
-            self.slot().saturating_add(1),
-            NewBankOptions {
-                simulation_bank: true,
-                ..NewBankOptions::default()
-            },
-        );
-        bank.simulate_transaction_unchecked(transaction)
+        self.simulate_transaction_unchecked(transaction)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
@@ -4098,9 +4066,10 @@ impl Bank {
             execution_time.as_us(),
             sanitized_txs.len(),
         );
-        timings.check_us = timings.check_us.saturating_add(check_time.as_us());
-        timings.load_us = timings.load_us.saturating_add(load_time.as_us());
-        timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
+
+        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
         let mut executed_transactions_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
@@ -4443,10 +4412,13 @@ impl Bank {
             write_time.as_us(),
             sanitized_txs.len()
         );
-        timings.store_us = timings.store_us.saturating_add(write_time.as_us());
-        timings.update_stakes_cache_us = timings
-            .update_stakes_cache_us
-            .saturating_add(update_stakes_cache_time.as_us());
+
+        timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
+        timings.saturating_add_in_place(
+            ExecuteTimingType::UpdateStakesCacheUs,
+            update_stakes_cache_time.as_us(),
+        );
+
         self.update_transaction_statuses(sanitized_txs, &execution_results);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results);
@@ -5514,8 +5486,8 @@ impl Bank {
                 .genesis_builtins
                 .extend_from_slice(&additional_builtins.genesis_builtins);
             builtins
-                .feature_builtins
-                .extend_from_slice(&additional_builtins.feature_builtins);
+                .feature_transitions
+                .extend_from_slice(&additional_builtins.feature_transitions);
         }
         if !debug_do_not_add_builtins {
             for builtin in builtins.genesis_builtins {
@@ -5531,7 +5503,7 @@ impl Bank {
                 }
             }
         }
-        self.feature_builtins = Arc::new(builtins.feature_builtins);
+        self.builtin_feature_transitions = Arc::new(builtins.feature_transitions);
 
         self.apply_feature_activations(true, debug_do_not_add_builtins);
     }
@@ -6238,29 +6210,9 @@ impl Bank {
         debug!("Added program {} under {:?}", name, program_id);
     }
 
-    /// Replace a builtin instruction processor if it already exists
-    pub fn replace_builtin(
-        &mut self,
-        name: &str,
-        program_id: &Pubkey,
-        process_instruction: ProcessInstructionWithContext,
-    ) {
-        debug!("Replacing program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, program_id, true);
-        if let Some(entry) = self
-            .builtin_programs
-            .vec
-            .iter_mut()
-            .find(|entry| entry.program_id == *program_id)
-        {
-            entry.process_instruction = process_instruction;
-        }
-        debug!("Replaced program {} under {:?}", name, program_id);
-    }
-
     /// Remove a builtin instruction processor if it already exists
-    pub fn remove_builtin(&mut self, name: &str, program_id: &Pubkey) {
-        debug!("Removing program {} under {:?}", name, program_id);
+    pub fn remove_builtin(&mut self, program_id: &Pubkey) {
+        debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
         if let Some(position) = self
@@ -6271,7 +6223,7 @@ impl Bank {
         {
             self.builtin_programs.vec.remove(position);
         }
-        debug!("Removed program {} under {:?}", name, program_id);
+        debug!("Removed program {}", program_id);
     }
 
     pub fn add_precompile(&mut self, program_id: &Pubkey) {
@@ -6451,7 +6403,11 @@ impl Bank {
         }
 
         if !debug_do_not_add_builtins {
-            self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
+            let apply_transitions_for_new_features = !init_finish_or_warp;
+            self.apply_builtin_program_feature_transitions(
+                apply_transitions_for_new_features,
+                &new_feature_activations,
+            );
             self.reconfigure_token2_native_mint();
         }
         self.ensure_no_storage_rewards_pool();
@@ -6508,33 +6464,36 @@ impl Bank {
         newly_activated
     }
 
-    fn ensure_feature_builtins(
+    fn apply_builtin_program_feature_transitions(
         &mut self,
-        init_or_warp: bool,
+        only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        let feature_builtins = self.feature_builtins.clone();
-        for (builtin, feature, activation_type) in feature_builtins.iter() {
-            let should_populate = init_or_warp && self.feature_set.is_active(feature)
-                || !init_or_warp && new_feature_activations.contains(feature);
-            if should_populate {
-                match activation_type {
-                    ActivationType::NewProgram => self.add_builtin(
+        let feature_set = self.feature_set.clone();
+        let should_apply_action_for_feature_transition = |feature_id: &Pubkey| -> bool {
+            if only_apply_transitions_for_new_features {
+                new_feature_activations.contains(feature_id)
+            } else {
+                feature_set.is_active(feature_id)
+            }
+        };
+
+        let builtin_feature_transitions = self.builtin_feature_transitions.clone();
+        for transition in builtin_feature_transitions.iter() {
+            if let Some(builtin_action) =
+                transition.to_action(&should_apply_action_for_feature_transition)
+            {
+                match builtin_action {
+                    BuiltinAction::Add(builtin) => self.add_builtin(
                         &builtin.name,
                         &builtin.id,
                         builtin.process_instruction_with_context,
                     ),
-                    ActivationType::NewVersion => self.replace_builtin(
-                        &builtin.name,
-                        &builtin.id,
-                        builtin.process_instruction_with_context,
-                    ),
-                    ActivationType::RemoveProgram => {
-                        self.remove_builtin(&builtin.name, &builtin.id)
-                    }
+                    BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }
             }
         }
+
         for precompile in get_precompiles() {
             #[allow(clippy::blocks_in_if_conditions)]
             if precompile.feature.map_or(false, |ref feature_id| {
@@ -7252,7 +7211,7 @@ pub(crate) mod tests {
 
     fn store_accounts_for_rent_test(
         bank: &Bank,
-        keypairs: &mut Vec<Keypair>,
+        keypairs: &mut [Keypair],
         mock_program_id: Pubkey,
         generic_rent_due_for_system_account: u64,
     ) {
@@ -13015,25 +12974,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "HREoNvUAuqqGdJxYTgnFqjTxsuuBVUFFDNLGR2cdrtMf"
+                    "9tLrxkBoNE7zEUZ2g72ZwE4fTfhUQnhC8A4Xt4EmYhP1"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "J8kjxLMMrpEVQUbX54zDALkXidjdXyFSL5wD2d7xUaWL"
+                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "yPCTEPtNi2DJb8KyqPKgBK7HCfiEpH2oS3Nn12LPBHm"
+                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "2oG1rmA59tmr457oK4oF6C6TcM2gyy2ZAKeJoUhMNb1L"
+                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
                 );
                 break;
             }
@@ -13262,7 +13221,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![11, 1, 7]);
+        assert_eq!(alive_counts, vec![9, 1, 7]);
     }
 
     #[test]
@@ -13310,7 +13269,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 12);
+        assert_eq!(consumed_budgets, 10);
     }
 
     #[test]
@@ -13350,16 +13309,6 @@ pub(crate) mod tests {
             mock_ix_processor,
         );
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
-
-        Arc::get_mut(&mut bank).unwrap().replace_builtin(
-            "mock_program v2",
-            &program_id,
-            mock_ix_processor,
-        );
-        assert_eq!(
-            bank.get_account_modified_slot(&program_id).unwrap().1,
-            bank.slot()
-        );
     }
 
     #[test]
@@ -16186,8 +16135,10 @@ pub(crate) mod tests {
     /// Test exceeding the accounts data budget by creating accounts in a loop
     #[test]
     fn test_accounts_data_budget_exceeded() {
-        use solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN;
-        use solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
+        use {
+            solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
+            solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        };
 
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);

@@ -20,6 +20,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_sdk::{
+        account::ReadableAccount,
         clock::{BankId, Slot},
         pubkey::Pubkey,
     },
@@ -52,6 +53,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
@@ -60,6 +62,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -162,6 +165,8 @@ pub struct AccountsIndexConfig {
     pub index_limit_mb: Option<usize>,
     pub ages_to_stay_in_cache: Option<Age>,
     pub scan_results_limit_bytes: Option<usize>,
+    /// true if the accounts index is being created as a result of being started as a validator (as opposed to test, etc.)
+    pub started_from_validator: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -858,13 +863,7 @@ pub struct AccountsIndex<T: IndexValue> {
 
 impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
-        if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
-            // allocate with disk buckets
-            config.index_limit_mb = Some(limit.parse::<usize>().unwrap());
-        }
-
-        Self::new(Some(config))
+        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
@@ -1604,13 +1603,15 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub(crate) fn update_secondary_indexes(
         &self,
         pubkey: &Pubkey,
-        account_owner: &Pubkey,
-        account_data: &[u8],
+        account: &impl ReadableAccount,
         account_indexes: &AccountSecondaryIndexes,
     ) {
         if account_indexes.is_empty() {
             return;
         }
+
+        let account_owner = account.owner();
+        let account_data = account.data();
 
         if account_indexes.contains(&AccountIndex::ProgramId)
             && account_indexes.include_key(account_owner)
@@ -1736,15 +1737,13 @@ impl<T: IndexValue> AccountsIndex<T> {
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
 
-    // Updates the given pubkey at the given slot with the new account information.
-    // Returns true if the pubkey was newly inserted into the index, otherwise, if the
-    // pubkey updates an existing entry in the index, returns false.
+    /// Updates the given pubkey at the given slot with the new account information.
+    /// on return, the index's previous account info may be returned in 'reclaims' depending on 'previous_slot_entry_was_cached'
     pub fn upsert(
         &self,
         slot: Slot,
         pubkey: &Pubkey,
-        account_owner: &Pubkey,
-        account_data: &[u8],
+        account: &impl ReadableAccount,
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
@@ -1772,7 +1771,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             let r_account_maps = map.read().unwrap();
             r_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
         }
-        self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
+        self.update_secondary_indexes(pubkey, account, account_indexes);
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
@@ -2032,6 +2031,7 @@ pub mod tests {
         super::*,
         crate::inline_spl_token::*,
         solana_sdk::{
+            account::{AccountSharedData, WritableAccount},
             pubkey::PUBKEY_BYTES,
             signature::{Keypair, Signer},
         },
@@ -2860,8 +2860,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3072,8 +3071,7 @@ pub mod tests {
             index.upsert(
                 slot0,
                 &key,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 account_infos[0],
                 &mut gc,
@@ -3109,8 +3107,7 @@ pub mod tests {
             index.upsert(
                 slot1,
                 &key,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 account_infos[1],
                 &mut gc,
@@ -3222,8 +3219,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3254,8 +3250,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3295,8 +3290,7 @@ pub mod tests {
             index.upsert(
                 root_slot,
                 &new_pubkey,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
@@ -3312,8 +3306,7 @@ pub mod tests {
             index.upsert(
                 root_slot,
                 &Pubkey::default(),
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
@@ -3455,8 +3448,7 @@ pub mod tests {
         index.upsert(
             0,
             &solana_sdk::pubkey::new_rand(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3481,8 +3473,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3596,8 +3587,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3614,8 +3604,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
@@ -3638,8 +3627,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3649,8 +3637,7 @@ pub mod tests {
         index.upsert(
             1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
@@ -3676,8 +3663,7 @@ pub mod tests {
         index.upsert(
             0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3687,8 +3673,7 @@ pub mod tests {
         index.upsert(
             1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
@@ -3697,8 +3682,7 @@ pub mod tests {
         index.upsert(
             2,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3707,8 +3691,7 @@ pub mod tests {
         index.upsert(
             3,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3720,8 +3703,7 @@ pub mod tests {
         index.upsert(
             4,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3765,8 +3747,7 @@ pub mod tests {
         index.upsert(
             1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             12,
             &mut gc,
@@ -3777,8 +3758,7 @@ pub mod tests {
         index.upsert(
             1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             10,
             &mut gc,
@@ -3797,8 +3777,7 @@ pub mod tests {
         index.upsert(
             1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             9,
             &mut gc,
@@ -3873,8 +3852,13 @@ pub mod tests {
                 *slot,
                 &account_key,
                 // Make sure these accounts are added to secondary index
-                &inline_spl_token::id(),
-                &account_data,
+                &AccountSharedData::create(
+                    0,
+                    account_data.to_vec(),
+                    inline_spl_token::id(),
+                    false,
+                    0,
+                ),
                 secondary_indexes,
                 true,
                 &mut vec![],
@@ -4047,8 +4031,7 @@ pub mod tests {
         index.upsert(
             0,
             &account_key,
-            &Pubkey::default(),
-            &account_data,
+            &AccountSharedData::create(0, account_data.to_vec(), Pubkey::default(), false, 0),
             &secondary_indexes,
             true,
             &mut vec![],
@@ -4061,8 +4044,7 @@ pub mod tests {
         index.upsert(
             0,
             &account_key,
-            token_id,
-            &account_data[1..],
+            &AccountSharedData::create(0, account_data[1..].to_vec(), *token_id, false, 0),
             &secondary_indexes,
             true,
             &mut vec![],
@@ -4077,8 +4059,7 @@ pub mod tests {
         for _ in 0..2 {
             index.update_secondary_indexes(
                 &account_key,
-                token_id,
-                &account_data,
+                &AccountSharedData::create(0, account_data.to_vec(), *token_id, false, 0),
                 &secondary_indexes,
             );
             check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4094,7 +4075,11 @@ pub mod tests {
         });
         secondary_index.index.clear();
         secondary_index.reverse_index.clear();
-        index.update_secondary_indexes(&account_key, token_id, &account_data, &secondary_indexes);
+        index.update_secondary_indexes(
+            &account_key,
+            &AccountSharedData::create(0, account_data.to_vec(), *token_id, false, 0),
+            &secondary_indexes,
+        );
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
         check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4106,7 +4091,11 @@ pub mod tests {
         });
         secondary_index.index.clear();
         secondary_index.reverse_index.clear();
-        index.update_secondary_indexes(&account_key, token_id, &account_data, &secondary_indexes);
+        index.update_secondary_indexes(
+            &account_key,
+            &AccountSharedData::create(0, account_data.to_vec(), *token_id, false, 0),
+            &secondary_indexes,
+        );
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
         check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -4178,8 +4167,7 @@ pub mod tests {
         index.upsert(
             slot,
             &account_key,
-            token_id,
-            &account_data1,
+            &AccountSharedData::create(0, account_data1.to_vec(), *token_id, false, 0),
             secondary_indexes,
             true,
             &mut vec![],
@@ -4190,8 +4178,7 @@ pub mod tests {
         index.upsert(
             slot,
             &account_key,
-            token_id,
-            &account_data2,
+            &AccountSharedData::create(0, account_data2.to_vec(), *token_id, false, 0),
             secondary_indexes,
             true,
             &mut vec![],
@@ -4210,8 +4197,7 @@ pub mod tests {
         index.upsert(
             later_slot,
             &account_key,
-            token_id,
-            &account_data1,
+            &AccountSharedData::create(0, account_data1.to_vec(), *token_id, false, 0),
             secondary_indexes,
             true,
             &mut vec![],

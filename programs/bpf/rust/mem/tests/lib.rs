@@ -1,7 +1,9 @@
-use solana_bpf_rust_mem::entrypoint::process_instruction;
-use solana_program_test::*;
-use solana_sdk::{
-    instruction::Instruction, pubkey::Pubkey, signature::Signer, transaction::Transaction,
+use {
+    solana_bpf_rust_mem::entrypoint::process_instruction,
+    solana_program_test::*,
+    solana_sdk::{
+        instruction::Instruction, pubkey::Pubkey, signature::Signer, transaction::Transaction,
+    },
 };
 
 #[tokio::test]

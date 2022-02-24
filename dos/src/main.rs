@@ -271,8 +271,11 @@ fn main() {
 
 #[cfg(test)]
 pub mod test {
-    use solana_local_cluster::{cluster::Cluster, local_cluster::LocalCluster};
-    use {super::*, solana_sdk::timing::timestamp};
+    use {
+        super::*,
+        solana_local_cluster::{cluster::Cluster, local_cluster::LocalCluster},
+        solana_sdk::timing::timestamp,
+    };
 
     #[test]
     fn test_dos() {

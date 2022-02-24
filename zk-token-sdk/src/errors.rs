@@ -1,6 +1,8 @@
 //! Errors related to proving and verifying proofs.
-use crate::{range_proof::errors::RangeProofError, sigma_proofs::errors::*};
-use thiserror::Error;
+use {
+    crate::{range_proof::errors::RangeProofError, sigma_proofs::errors::*},
+    thiserror::Error,
+};
 
 // TODO: clean up errors for encryption
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

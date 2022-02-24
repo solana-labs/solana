@@ -3,7 +3,6 @@
 extern crate solana_program;
 use solana_program::{
     account_info::AccountInfo,
-    entrypoint,
     entrypoint::ProgramResult,
     instruction::{AccountMeta, Instruction},
     msg,
@@ -13,7 +12,7 @@ use solana_program::{
     sysvar::instructions,
 };
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],

@@ -1,18 +1,17 @@
 use {
     crate::nonce_keyed_account::{
         advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
-        withdraw_nonce_account, NONCE_ACCOUNT_INDEX, WITHDRAW_TO_ACCOUNT_INDEX,
+        withdraw_nonce_account,
     },
     log::*,
     solana_program_runtime::{
         ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check2,
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
-        keyed_account::{keyed_account_at_index, KeyedAccount},
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -20,6 +19,7 @@ use {
             NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
         },
         system_program,
+        transaction_context::{BorrowedAccount, InstructionContext},
     },
     std::collections::HashSet,
 };
@@ -70,11 +70,11 @@ impl Address {
 }
 
 fn allocate(
-    account: &mut AccountSharedData,
+    invoke_context: &InvokeContext,
+    signers: &HashSet<Pubkey>,
+    account: &mut BorrowedAccount,
     address: &Address,
     space: u64,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !address.is_signer(signers) {
         ic_msg!(
@@ -87,7 +87,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data().is_empty() || !system_program::check_id(account.owner()) {
+    if !account.get_data().is_empty() || !system_program::check_id(account.get_owner()) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",
@@ -106,20 +106,20 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data(vec![0; space as usize]);
+    account.set_data(vec![0; space as usize].as_slice());
 
     Ok(())
 }
 
 fn assign(
-    account: &mut AccountSharedData,
+    invoke_context: &InvokeContext,
+    signers: &HashSet<Pubkey>,
+    account: &mut BorrowedAccount,
     address: &Address,
     owner: &Pubkey,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
-    if account.owner() == owner {
+    if account.get_owner() == owner {
         return Ok(());
     }
 
@@ -128,36 +128,38 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(*owner);
+    account.set_owner(&owner.to_bytes());
     Ok(())
 }
 
 fn allocate_and_assign(
-    to: &mut AccountSharedData,
+    invoke_context: &InvokeContext,
+    signers: &HashSet<Pubkey>,
+    to_account: &mut BorrowedAccount,
     to_address: &Address,
     space: u64,
     owner: &Pubkey,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    allocate(to, to_address, space, signers, invoke_context)?;
-    assign(to, to_address, owner, signers, invoke_context)
+    allocate(invoke_context, signers, to_account, to_address, space)?;
+    assign(invoke_context, signers, to_account, to_address, owner)
 }
 
 fn create_account(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    signers: &HashSet<Pubkey>,
+    from_account_index: usize,
+    to_account_index: usize,
     to_address: &Address,
     lamports: u64,
     space: u64,
     owner: &Pubkey,
-    signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
-        let to = &mut to.try_account_ref_mut()?;
-        if to.lamports() > 0 {
+        let mut to_account = instruction_context
+            .try_borrow_instruction_account(invoke_context.transaction_context, to_account_index)?;
+        if to_account.get_lamports() > 0 {
             ic_msg!(
                 invoke_context,
                 "Create Account: account {:?} already in use",
@@ -165,42 +167,60 @@ fn create_account(
             );
             return Err(SystemError::AccountAlreadyInUse.into());
         }
-
-        allocate_and_assign(to, to_address, space, owner, signers, invoke_context)?;
+        allocate_and_assign(
+            invoke_context,
+            signers,
+            &mut to_account,
+            to_address,
+            space,
+            owner,
+        )?;
     }
-    transfer(from, to, lamports, invoke_context)
+    transfer(
+        invoke_context,
+        instruction_context,
+        from_account_index,
+        to_account_index,
+        lamports,
+    )
 }
 
 fn transfer_verified(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
-    lamports: u64,
     invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    from_account_index: usize,
+    to_account_index: usize,
+    lamports: u64,
 ) -> Result<(), InstructionError> {
-    if !from.data_is_empty()? {
+    let mut from_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, from_account_index)?;
+    if !from_account.get_data().is_empty() {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
     }
-    if lamports > from.lamports()? {
+    if lamports > from_account.get_lamports() {
         ic_msg!(
             invoke_context,
             "Transfer: insufficient lamports {}, need {}",
-            from.lamports()?,
+            from_account.get_lamports(),
             lamports
         );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
-
-    from.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
-    to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
+    from_account.checked_sub_lamports(lamports)?;
+    drop(from_account);
+    let mut to_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, to_account_index)?;
+    to_account.checked_add_lamports(lamports)?;
     Ok(())
 }
 
 fn transfer(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
-    lamports: u64,
     invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    from_account_index: usize,
+    to_account_index: usize,
+    lamports: u64,
 ) -> Result<(), InstructionError> {
     if !invoke_context
         .feature_set
@@ -210,26 +230,38 @@ fn transfer(
         return Ok(());
     }
 
-    if from.signer_key().is_none() {
+    if !instruction_context
+        .is_signer(instruction_context.get_number_of_program_accounts() + from_account_index)?
+    {
         ic_msg!(
             invoke_context,
             "Transfer: `from` account {} must sign",
-            from.unsigned_key()
+            instruction_context.get_instruction_account_key(
+                invoke_context.transaction_context,
+                from_account_index
+            )?,
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    transfer_verified(from, to, lamports, invoke_context)
+    transfer_verified(
+        invoke_context,
+        instruction_context,
+        from_account_index,
+        to_account_index,
+        lamports,
+    )
 }
 
 fn transfer_with_seed(
-    from: &KeyedAccount,
-    from_base: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    from_account_index: usize,
+    from_base_account_index: usize,
+    to_account_index: usize,
     from_seed: &str,
     from_owner: &Pubkey,
-    to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !invoke_context
         .feature_set
@@ -239,42 +271,112 @@ fn transfer_with_seed(
         return Ok(());
     }
 
-    if from_base.signer_key().is_none() {
+    let from_base_key = instruction_context
+        .get_instruction_account_key(invoke_context.transaction_context, from_base_account_index)?;
+    if !instruction_context
+        .is_signer(instruction_context.get_number_of_program_accounts() + from_base_account_index)?
+    {
         ic_msg!(
             invoke_context,
             "Transfer: 'from' account {:?} must sign",
-            from_base
+            from_base_key,
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    let address_from_seed =
-        Pubkey::create_with_seed(from_base.unsigned_key(), from_seed, from_owner)?;
-    if *from.unsigned_key() != address_from_seed {
+    let from_key = instruction_context
+        .get_instruction_account_key(invoke_context.transaction_context, from_account_index)?;
+    let address_from_seed = Pubkey::create_with_seed(from_base_key, from_seed, from_owner)?;
+    if *from_key != address_from_seed {
         ic_msg!(
             invoke_context,
             "Transfer: 'from' address {} does not match derived address {}",
-            from.unsigned_key(),
-            address_from_seed
+            from_key,
+            address_from_seed,
         );
         return Err(SystemError::AddressWithSeedMismatch.into());
     }
 
-    transfer_verified(from, to, lamports, invoke_context)
+    transfer_verified(
+        invoke_context,
+        instruction_context,
+        from_account_index,
+        to_account_index,
+        lamports,
+    )
+}
+
+pub mod instruction_account_indices {
+    pub enum CreateAccount {
+        From = 0,
+        To = 1,
+    }
+
+    pub enum CreateAccountWithSeed {
+        From = 0,
+        To = 1,
+    }
+
+    pub enum Assign {
+        Account = 0,
+    }
+
+    pub enum Transfer {
+        From = 0,
+        To = 1,
+    }
+
+    pub enum TransferWithSeed {
+        From = 0,
+        Base = 1,
+        To = 2,
+    }
+
+    pub enum AdvanceNonceAccount {
+        Nonce = 0,
+        RecentBlockhashes = 1,
+    }
+
+    pub enum WithdrawNonceAccount {
+        From = 0,
+        To = 1,
+        RecentBlockhashes = 2,
+        Rent = 3,
+    }
+
+    pub enum InitializeNonceAccount {
+        Nonce = 0,
+        RecentBlockhashes = 1,
+        Rent = 2,
+    }
+
+    pub enum AuthorizeNonceAccount {
+        Nonce = 0,
+    }
+
+    pub enum Allocate {
+        Account = 0,
+    }
+
+    pub enum AllocateWithSeed {
+        Account = 0,
+    }
+
+    pub enum AssignWithSeed {
+        Account = 0,
+    }
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
-    trace!("keyed_accounts: {:?}", keyed_accounts);
 
     let signers = instruction_context.get_signers(transaction_context);
     match instruction {
@@ -283,18 +385,22 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
+            instruction_context.check_number_of_instruction_accounts(2)?;
+            let to_key = instruction_context.get_instruction_account_key(
+                invoke_context.transaction_context,
+                instruction_account_indices::CreateAccount::To as usize,
+            )?;
+            let to_address = Address::create(to_key, None, invoke_context)?;
             create_account(
-                from,
-                to,
+                invoke_context,
+                instruction_context,
+                &signers,
+                instruction_account_indices::CreateAccount::From as usize,
+                instruction_account_indices::CreateAccount::To as usize,
                 &to_address,
                 lamports,
                 space,
                 &owner,
-                &signers,
-                invoke_context,
             )
         }
         SystemInstruction::CreateAccountWithSeed {
@@ -304,60 +410,66 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let to_address = Address::create(
-                to.unsigned_key(),
-                Some((&base, &seed, &owner)),
-                invoke_context,
+            instruction_context.check_number_of_instruction_accounts(2)?;
+            let to_key = instruction_context.get_instruction_account_key(
+                invoke_context.transaction_context,
+                instruction_account_indices::CreateAccountWithSeed::To as usize,
             )?;
+            let to_address = Address::create(to_key, Some((&base, &seed, &owner)), invoke_context)?;
             create_account(
-                from,
-                to,
+                invoke_context,
+                instruction_context,
+                &signers,
+                instruction_account_indices::CreateAccountWithSeed::From as usize,
+                instruction_account_indices::CreateAccountWithSeed::To as usize,
                 &to_address,
                 lamports,
                 space,
                 &owner,
-                &signers,
-                invoke_context,
             )
         }
         SystemInstruction::Assign { owner } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
-            let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
-            assign(&mut account, &address, &owner, &signers, invoke_context)
+            let mut account = instruction_context.try_borrow_instruction_account(
+                invoke_context.transaction_context,
+                instruction_account_indices::Assign::Account as usize,
+            )?;
+            let address = Address::create(account.get_key(), None, invoke_context)?;
+            assign(invoke_context, &signers, &mut account, &address, &owner)
         }
         SystemInstruction::Transfer { lamports } => {
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            transfer(from, to, lamports, invoke_context)
+            instruction_context.check_number_of_instruction_accounts(2)?;
+            transfer(
+                invoke_context,
+                instruction_context,
+                instruction_account_indices::Transfer::From as usize,
+                instruction_account_indices::Transfer::To as usize,
+                lamports,
+            )
         }
         SystemInstruction::TransferWithSeed {
             lamports,
             from_seed,
             from_owner,
         } => {
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let base = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+            instruction_context.check_number_of_instruction_accounts(3)?;
             transfer_with_seed(
-                from,
-                base,
+                invoke_context,
+                instruction_context,
+                instruction_account_indices::TransferWithSeed::From as usize,
+                instruction_account_indices::TransferWithSeed::Base as usize,
+                instruction_account_indices::TransferWithSeed::To as usize,
                 &from_seed,
                 &from_owner,
-                to,
                 lamports,
-                invoke_context,
             )
         }
         SystemInstruction::AdvanceNonceAccount => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            instruction_context.check_number_of_instruction_accounts(1)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 1,
+                instruction_account_indices::AdvanceNonceAccount::RecentBlockhashes as usize,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -370,40 +482,39 @@ pub fn process_instruction(
                 invoke_context,
                 instruction_context,
                 &signers,
-                NONCE_ACCOUNT_INDEX,
+                instruction_account_indices::AdvanceNonceAccount::Nonce as usize,
             )
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let _to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            instruction_context.check_number_of_instruction_accounts(2)?;
             #[allow(deprecated)]
             let _recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 2,
+                instruction_account_indices::WithdrawNonceAccount::RecentBlockhashes as usize,
             )?;
             let rent = get_sysvar_with_account_check2::rent(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 3,
+                instruction_account_indices::WithdrawNonceAccount::Rent as usize,
             )?;
             withdraw_nonce_account(
                 invoke_context,
                 instruction_context,
                 &signers,
-                NONCE_ACCOUNT_INDEX,
-                WITHDRAW_TO_ACCOUNT_INDEX,
+                instruction_account_indices::WithdrawNonceAccount::From as usize,
+                instruction_account_indices::WithdrawNonceAccount::To as usize,
                 lamports,
                 &rent,
             )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            instruction_context.check_number_of_instruction_accounts(1)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 1,
+                instruction_account_indices::InitializeNonceAccount::RecentBlockhashes as usize,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -415,31 +526,33 @@ pub fn process_instruction(
             let rent = get_sysvar_with_account_check2::rent(
                 invoke_context,
                 instruction_context,
-                first_instruction_account + 2,
+                instruction_account_indices::InitializeNonceAccount::Rent as usize,
             )?;
             initialize_nonce_account(
                 invoke_context,
                 instruction_context,
-                NONCE_ACCOUNT_INDEX,
+                instruction_account_indices::InitializeNonceAccount::Nonce as usize,
                 &authorized,
                 &rent,
             )
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
-            let _me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            instruction_context.check_number_of_instruction_accounts(1)?;
             authorize_nonce_account(
                 invoke_context,
                 instruction_context,
                 &signers,
-                NONCE_ACCOUNT_INDEX,
+                instruction_account_indices::AuthorizeNonceAccount::Nonce as usize,
                 &nonce_authority,
             )
         }
         SystemInstruction::Allocate { space } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
-            let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
-            allocate(&mut account, &address, space, &signers, invoke_context)
+            let mut account = instruction_context.try_borrow_instruction_account(
+                invoke_context.transaction_context,
+                instruction_account_indices::Allocate::Account as usize,
+            )?;
+            let address = Address::create(account.get_key(), None, invoke_context)?;
+            allocate(invoke_context, &signers, &mut account, &address, space)
         }
         SystemInstruction::AllocateWithSeed {
             base,
@@ -447,31 +560,35 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
+            let mut account = instruction_context.try_borrow_instruction_account(
+                invoke_context.transaction_context,
+                instruction_account_indices::AllocateWithSeed::Account as usize,
+            )?;
             let address = Address::create(
-                keyed_account.unsigned_key(),
+                account.get_key(),
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
             allocate_and_assign(
+                invoke_context,
+                &signers,
                 &mut account,
                 &address,
                 space,
                 &owner,
-                &signers,
-                invoke_context,
             )
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
+            let mut account = instruction_context.try_borrow_instruction_account(
+                invoke_context.transaction_context,
+                instruction_account_indices::AssignWithSeed::Account as usize,
+            )?;
             let address = Address::create(
-                keyed_account.unsigned_key(),
+                account.get_key(),
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
-            assign(&mut account, &address, &owner, &signers, invoke_context)
+            assign(invoke_context, &signers, &mut account, &address, &owner)
         }
     }
 }
@@ -1163,38 +1280,42 @@ mod tests {
 
     #[test]
     fn test_assign() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let pubkey = Pubkey::new_unique();
-        let mut account = AccountSharedData::new(100, 0, &system_program::id());
+        let account = AccountSharedData::new(100, 0, &system_program::id());
 
-        assert_eq!(
-            assign(
-                &mut account,
-                &pubkey.into(),
-                &new_owner,
-                &HashSet::new(),
-                &invoke_context,
-            ),
-            Err(InstructionError::MissingRequiredSignature)
+        // owner does not change, no signature needed
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Assign {
+                owner: system_program::id(),
+            })
+            .unwrap(),
+            vec![(pubkey, account.clone())],
+            vec![AccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: false,
+            }],
+            Ok(()),
+            super::process_instruction,
         );
 
-        // no change, no signature needed
-        assert_eq!(
-            assign(
-                &mut account,
-                &pubkey.into(),
-                &system_program::id(),
-                &HashSet::new(),
-                &invoke_context,
-            ),
-            Ok(())
+        // owner does change, signature needed
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap(),
+            vec![(pubkey, account.clone())],
+            vec![AccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: false,
+            }],
+            Err(InstructionError::MissingRequiredSignature),
+            super::process_instruction,
         );
 
         process_instruction(
             &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap(),
-            vec![(pubkey, account)],
+            vec![(pubkey, account.clone())],
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
@@ -1203,25 +1324,21 @@ mod tests {
             Ok(()),
             super::process_instruction,
         );
-    }
 
-    #[test]
-    fn test_assign_to_sysvar_with_feature() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let new_owner = sysvar::id();
-        let from = Pubkey::new_unique();
-        let mut from_account = AccountSharedData::new(100, 0, &system_program::id());
-
-        assert_eq!(
-            assign(
-                &mut from_account,
-                &from.into(),
-                &new_owner,
-                &[from].iter().cloned().collect::<HashSet<_>>(),
-                &invoke_context,
-            ),
-            Ok(())
+        // assign to sysvar instead of system_program
+        process_instruction(
+            &bincode::serialize(&SystemInstruction::Assign {
+                owner: sysvar::id(),
+            })
+            .unwrap(),
+            vec![(pubkey, account)],
+            vec![AccountMeta {
+                pubkey,
+                is_signer: true,
+                is_writable: false,
+            }],
+            Ok(()),
+            super::process_instruction,
         );
     }
 

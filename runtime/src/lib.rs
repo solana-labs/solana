@@ -57,6 +57,7 @@ pub mod stake_history;
 pub mod stake_weighted_timestamp;
 pub mod stakes;
 pub mod status_cache;
+mod storable_accounts;
 mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod transaction_cost_metrics_sender;

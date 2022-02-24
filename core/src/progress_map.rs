@@ -6,10 +6,12 @@ use {
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
+    solana_program_runtime::timings::ExecuteTimingType,
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
+        ops::Index,
         sync::{Arc, RwLock},
         time::Instant,
     },
@@ -62,23 +64,60 @@ impl ReplaySlotStats {
             ),
             ("total_entries", num_entries as i64, i64),
             ("total_shreds", num_shreds as i64, i64),
-            ("check_us", self.execute_timings.check_us, i64),
-            ("load_us", self.execute_timings.load_us, i64),
-            ("execute_us", self.execute_timings.execute_us, i64),
-            ("store_us", self.execute_timings.store_us, i64),
+            (
+                "check_us",
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::CheckUs),
+                i64
+            ),
+            (
+                "load_us",
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::LoadUs),
+                i64
+            ),
+            (
+                "execute_us",
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::ExecuteUs),
+                i64
+            ),
+            (
+                "store_us",
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::StoreUs),
+                i64
+            ),
             (
                 "update_stakes_cache_us",
-                self.execute_timings.update_stakes_cache_us,
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::UpdateStakesCacheUs),
                 i64
             ),
             (
                 "total_batches_len",
-                self.execute_timings.total_batches_len,
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::TotalBatchesLen),
                 i64
             ),
             (
                 "num_execute_batches",
-                self.execute_timings.num_execute_batches,
+                *self
+                    .execute_timings
+                    .metrics
+                    .index(ExecuteTimingType::NumExecuteBatches),
                 i64
             ),
             (

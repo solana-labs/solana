@@ -90,6 +90,8 @@ pub enum SyscallError {
     CopyOverlapping,
     #[error("Return data too large ({0} > {1})")]
     ReturnDataTooLarge(u64, u64),
+    #[error("Hashing too many sequences")]
+    TooManySlices,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -1064,6 +1066,20 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
             result
         );
         let compute_budget = invoke_context.get_compute_budget();
+        if invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id())
+            && compute_budget.sha256_max_slices < vals_len
+        {
+            ic_msg!(
+                invoke_context,
+                "Sha256 hashing {} sequences in one syscall is over the limit {}",
+                vals_len,
+                compute_budget.sha256_max_slices,
+            );
+            *result = Err(SyscallError::TooManySlices.into());
+            return;
+        }
         question_mark!(
             invoke_context
                 .get_compute_meter()
@@ -1092,7 +1108,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                     ),
                     result
                 );
-                let cost = compute_budget.sha256_byte_cost * (val.len() as u64 / 2);
+                let cost = if invoke_context
+                    .feature_set
+                    .is_active(&update_syscall_base_costs::id())
+                {
+                    compute_budget.mem_op_base_cost.max(
+                        compute_budget
+                            .sha256_byte_cost
+                            .saturating_mul(val.len() as u64 / 2),
+                    )
+                } else {
+                    compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
             }
@@ -1268,6 +1295,20 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
             result
         );
         let compute_budget = invoke_context.get_compute_budget();
+        if invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id())
+            && compute_budget.sha256_max_slices < vals_len
+        {
+            ic_msg!(
+                invoke_context,
+                "Keccak256 hashing {} sequences in one syscall is over the limit {}",
+                vals_len,
+                compute_budget.sha256_max_slices,
+            );
+            *result = Err(SyscallError::TooManySlices.into());
+            return;
+        }
         question_mark!(
             invoke_context
                 .get_compute_meter()
@@ -1301,9 +1342,19 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                     ),
                     result
                 );
-                let cost = compute_budget.sha256_byte_cost * (val.len() as u64 / 2);
+                let cost = if invoke_context
+                    .feature_set
+                    .is_active(&update_syscall_base_costs::id())
+                {
+                    compute_budget.mem_op_base_cost.max(
+                        compute_budget
+                            .sha256_byte_cost
+                            .saturating_mul(val.len() as u64 / 2),
+                    )
+                } else {
+                    compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
                 hasher.hash(bytes);
             }
         }
@@ -1819,6 +1870,20 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
             result
         );
         let compute_budget = invoke_context.get_compute_budget();
+        if invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id())
+            && compute_budget.sha256_max_slices < vals_len
+        {
+            ic_msg!(
+                invoke_context,
+                "Blake3 hashing {} sequences in one syscall is over the limit {}",
+                vals_len,
+                compute_budget.sha256_max_slices,
+            );
+            *result = Err(SyscallError::TooManySlices.into());
+            return;
+        }
         question_mark!(
             invoke_context
                 .get_compute_meter()
@@ -1852,10 +1917,19 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                     ),
                     result
                 );
-
-                let cost = compute_budget.sha256_byte_cost * (val.len() as u64 / 2);
+                let cost = if invoke_context
+                    .feature_set
+                    .is_active(&update_syscall_base_costs::id())
+                {
+                    compute_budget.mem_op_base_cost.max(
+                        compute_budget
+                            .sha256_byte_cost
+                            .saturating_mul(val.len() as u64 / 2),
+                    )
+                } else {
+                    compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
                 hasher.hash(bytes);
             }
         }
@@ -3856,8 +3930,12 @@ mod tests {
             .borrow_mut()
             .mock_set_remaining(
                 (invoke_context.get_compute_budget().sha256_base_cost
-                    + ((bytes1.len() + bytes2.len()) as u64 / 2)
-                        * invoke_context.get_compute_budget().sha256_byte_cost)
+                    + invoke_context.get_compute_budget().mem_op_base_cost.max(
+                        invoke_context
+                            .get_compute_budget()
+                            .sha256_byte_cost
+                            .saturating_mul((bytes1.len() + bytes2.len()) as u64 / 2),
+                    ))
                     * 4,
             );
         let mut syscall = SyscallSha256 {
