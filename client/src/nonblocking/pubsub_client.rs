@@ -238,6 +238,7 @@ impl PubsubClient {
                         },
                         Message::Pong(_data) => continue,
                         Message::Close(_frame) => break,
+                        Message::Frame(_frame) => continue,
                     };
 
 
