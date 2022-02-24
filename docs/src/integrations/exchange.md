@@ -722,7 +722,7 @@ identify the token mint and account owner (main wallet address) of the affected
 account.
 
 Note that if a receiving account is created during the transaction, it will have no
-`preTokenBalance` entry as there is no data to decode the state from.  In this
+`preTokenBalance` entry as there is no existing account state.  In this
 case, the initial balance can be assumed to be zero.
 
 ### Withdrawing
