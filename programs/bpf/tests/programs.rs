@@ -1384,7 +1384,7 @@ fn assert_instruction_count() {
             ("sanity", 1255),
             ("sanity++", 1260),
             ("secp256k1_recover", 25383),
-            ("sha", 1328),
+            ("sha", 1895),
             ("struct_pass", 108),
             ("struct_ret", 28),
         ]);

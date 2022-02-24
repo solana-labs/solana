@@ -86,6 +86,8 @@ pub enum SyscallError {
     CopyOverlapping,
     #[error("Return data too large ({0} > {1})")]
     ReturnDataTooLarge(u64, u64),
+    #[error("Hashing too many sequences")]
+    TooManySlices,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -304,9 +306,13 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallSha256 {
             sha256_base_cost: bpf_compute_budget.sha256_base_cost,
             sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
+            sha256_max_slices: bpf_compute_budget.sha256_max_slices,
+            mem_op_base_cost: bpf_compute_budget.mem_op_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            update_syscall_base_costs: invoke_context
+                .is_feature_active(&update_syscall_base_costs::id()),
         }),
         None,
     )?;
@@ -317,8 +323,12 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallKeccak256 {
             base_cost: bpf_compute_budget.sha256_base_cost,
             byte_cost: bpf_compute_budget.sha256_byte_cost,
+            max_slices: bpf_compute_budget.sha256_max_slices,
+            mem_op_base_cost: bpf_compute_budget.mem_op_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            update_syscall_base_costs: invoke_context
+                .is_feature_active(&update_syscall_base_costs::id()),
         }),
     );
 
@@ -1109,9 +1119,12 @@ impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
 pub struct SyscallSha256<'a> {
     sha256_base_cost: u64,
     sha256_byte_cost: u64,
+    sha256_max_slices: u64,
+    mem_op_base_cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
     fn call(
@@ -1124,6 +1137,10 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        if self.update_syscall_base_costs && self.sha256_max_slices < vals_len {
+            *result = Err(SyscallError::TooManySlices.into());
+            return;
+        }
         question_mark!(self.compute_meter.consume(self.sha256_base_cost), result);
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(
@@ -1158,11 +1175,13 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
                     ),
                     result
                 );
-                question_mark!(
-                    self.compute_meter
-                        .consume(self.sha256_byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+                let cost = if self.update_syscall_base_costs {
+                    self.mem_op_base_cost
+                        .max(self.sha256_byte_cost.saturating_mul(val.len() as u64 / 2))
+                } else {
+                    self.sha256_byte_cost * (val.len() as u64 / 2)
+                };
+                question_mark!(self.compute_meter.consume(cost), result);
                 hasher.hash(bytes);
             }
         }
@@ -1323,8 +1342,11 @@ impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
 pub struct SyscallKeccak256<'a> {
     base_cost: u64,
     byte_cost: u64,
+    max_slices: u64,
+    mem_op_base_cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
     fn call(
@@ -1337,6 +1359,10 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        if self.update_syscall_base_costs && self.max_slices < vals_len {
+            *result = Err(SyscallError::TooManySlices.into());
+            return;
+        }
         question_mark!(self.compute_meter.consume(self.base_cost), result);
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(
@@ -1365,11 +1391,13 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
                     ),
                     result
                 );
-                question_mark!(
-                    self.compute_meter
-                        .consume(self.byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+                let cost = if self.update_syscall_base_costs {
+                    self.mem_op_base_cost
+                        .max(self.byte_cost.saturating_mul(val.len() as u64 / 2))
+                } else {
+                    self.byte_cost * (val.len() as u64 / 2)
+                };
+                question_mark!(self.compute_meter.consume(cost), result);
                 hasher.hash(bytes);
             }
         }
@@ -3646,14 +3674,17 @@ mod tests {
         .unwrap();
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (bytes1.len() + bytes2.len()) as u64,
+                remaining: (85 + 10u64.max((bytes1.len() + bytes2.len()) as u64 / 2)) * 4,
             }));
         let mut syscall = SyscallSha256 {
-            sha256_base_cost: 0,
-            sha256_byte_cost: 2,
+            sha256_base_cost: 85,
+            sha256_byte_cost: 1,
+            sha256_max_slices: 20_000,
+            mem_op_base_cost: 10,
             compute_meter,
             loader_id: &bpf_loader_deprecated::id(),
             enforce_aligned_host_addrs: true,
+            update_syscall_base_costs: true,
         };
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
