@@ -104,6 +104,11 @@ where
             account_paths,
             unpacked_append_vec_map,
         ),
+        SerdeStyle::Older => context_accountsdb_from_stream::<newer::Context, R>(
+            stream,
+            account_paths,
+            unpacked_append_vec_map,
+        ),
     }
 }
 
@@ -119,6 +124,15 @@ where
 {
     match serde_style {
         SerdeStyle::Newer => serialize_into(
+            stream,
+            &SerializableAccountsDb::<newer::Context> {
+                accounts_db,
+                slot,
+                account_storage_entries,
+                phantom: std::marker::PhantomData::default(),
+            },
+        ),
+        SerdeStyle::Older => serialize_into(
             stream,
             &SerializableAccountsDb::<newer::Context> {
                 accounts_db,
@@ -189,7 +203,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     let key1 = Keypair::new();
     bank1.deposit(&key1.pubkey(), 5).unwrap();
 
-    let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+    let mut bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
 
     // Test new account
     let key2 = Keypair::new();
@@ -202,6 +216,9 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
+    // Append a dummy `prior_roots` to test its cross-version compatibility.
+    let mut test_prior_roots = vec![0, 1, 2];
+    bank2.prior_roots.append(&mut test_prior_roots);
 
     let snapshot_storages = bank2.get_snapshot_storages(None);
     let mut buf = vec![];
@@ -250,6 +267,12 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
+    // In case we are using older version, we expect it does not understand
+    // `prior_roots` field.  Thus, we revert the dummy value we assign to
+    // `prior_roots` back to the `Vec::default` and expect the bank2 == dbank.
+    if serde_style == SerdeStyle::Older {
+        bank2.prior_roots = Vec::<Slot>::default();
+    }
     assert!(bank2 == dbank);
 }
 
@@ -260,7 +283,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     let mut writer = Cursor::new(vec![]);
     let snapshot_storages = accounts.get_snapshot_storages(slot, None, None).0;
     accountsdb_to_stream(
-        SerdeStyle::Newer,
+        SerdeStyle::Older, // TODO(yhchiang): switch to Newer once we bump to V1_3_0
         &mut writer,
         accounts,
         slot,
@@ -274,9 +297,13 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
     let unpacked_append_vec_map = copy_append_vecs(accounts, copied_accounts.path()).unwrap();
-    let mut accounts_db =
-        accountsdb_from_stream(SerdeStyle::Newer, &mut reader, &[], unpacked_append_vec_map)
-            .unwrap();
+    let mut accounts_db = accountsdb_from_stream(
+        SerdeStyle::Older, // TODO(yhchiang): switch to Newer once we bump to V1_3_0
+        &mut reader,
+        &[],
+        unpacked_append_vec_map,
+    )
+    .unwrap();
 
     // The append vecs will be used from `copied_accounts` directly by the new AccountsDb so keep
     // its TempDir alive
@@ -299,13 +326,24 @@ fn test_bank_serialize_newer() {
     test_bank_serialize_style(SerdeStyle::Newer)
 }
 
+#[test]
+fn test_accounts_serialize_older() {
+    test_accounts_serialize_style(SerdeStyle::Older)
+}
+
+#[test]
+fn test_bank_serialize_older() {
+    test_bank_serialize_style(SerdeStyle::Older)
+}
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
     use super::*;
 
     // This some what long test harness is required to freeze the ABI of
-    // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "HVyzePMkma8T54PymRW32FAgDXpSdom59K6RnPsCNJjj")]
+    // Bank's serialization due to versioned nature.
+    // The following hash is for snapshot V1_3_0
+    #[frozen_abi(digest = "3mV3i1yLMGyMfPxRXyXcZAKEtmMFrSXAW2pqLQ3uwgZP")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
@@ -326,6 +364,37 @@ mod test_bank_serialize {
         assert_eq!(snapshot_storages.len(), 1);
 
         (SerializableBankAndStorage::<newer::Context> {
+            bank,
+            snapshot_storages: &snapshot_storages,
+            phantom: std::marker::PhantomData::default(),
+        })
+        .serialize(s)
+    }
+
+    // This some what long test harness is required to freeze the ABI of
+    // Bank's serialization due to versioned nature.
+    // The following hash is for snapshot V1_2_0
+    #[frozen_abi(digest = "5zTpYmVsKjkvpJB8o95LJWyXe2rV7bnxRPmmfKk75brf")]
+    #[derive(Serialize, AbiExample)]
+    pub struct BankAbiTestWrapperOlder {
+        #[serde(serialize_with = "wrapper_older")]
+        bank: Bank,
+    }
+
+    pub fn wrapper_older<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let snapshot_storages = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_snapshot_storages(0, None, None)
+            .0;
+        // ensure there is a single snapshot storage example for ABI digesting
+        assert_eq!(snapshot_storages.len(), 1);
+
+        (SerializableBankAndStorage::<older::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),

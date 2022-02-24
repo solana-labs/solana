@@ -51,6 +51,7 @@ pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
+const VERSION_STRING_V1_3_0: &str = "1.3.0";
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 pub(crate) const TMP_BANK_SNAPSHOT_PREFIX: &str = "tmp-bank-snapshot-";
 pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
@@ -62,6 +63,7 @@ pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-sna
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
+    V1_3_0,
     V1_2_0,
 }
 
@@ -80,6 +82,7 @@ impl fmt::Display for SnapshotVersion {
 impl From<SnapshotVersion> for &'static str {
     fn from(snapshot_version: SnapshotVersion) -> &'static str {
         match snapshot_version {
+            SnapshotVersion::V1_3_0 => VERSION_STRING_V1_3_0,
             SnapshotVersion::V1_2_0 => VERSION_STRING_V1_2_0,
         }
     }
@@ -99,6 +102,7 @@ impl FromStr for SnapshotVersion {
             version_string
         };
         match version_string {
+            VERSION_STRING_V1_3_0 => Ok(SnapshotVersion::V1_3_0),
             VERSION_STRING_V1_2_0 => Ok(SnapshotVersion::V1_2_0),
             _ => Err("unsupported snapshot version"),
         }
@@ -622,7 +626,8 @@ pub fn add_bank_snapshot<P: AsRef<Path>>(
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
-            SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
+            SnapshotVersion::V1_3_0 => SerdeStyle::Newer,
+            SnapshotVersion::V1_2_0 => SerdeStyle::Older,
         };
         bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
         Ok(())
@@ -1470,8 +1475,24 @@ fn rebuild_bank_from_snapshots(
     let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
-                SnapshotVersion::V1_2_0 => bank_from_streams(
+                SnapshotVersion::V1_3_0 => bank_from_streams(
                     SerdeStyle::Newer,
+                    snapshot_streams,
+                    account_paths,
+                    unpacked_append_vec_map,
+                    genesis_config,
+                    debug_keys,
+                    additional_builtins,
+                    account_secondary_indexes,
+                    accounts_db_caching_enabled,
+                    limit_load_slot_count_from_snapshot,
+                    shrink_ratio,
+                    verify_index,
+                    accounts_db_config,
+                    accounts_update_notifier,
+                ),
+                SnapshotVersion::V1_2_0 => bank_from_streams(
+                    SerdeStyle::Older,
                     snapshot_streams,
                     account_paths,
                     unpacked_append_vec_map,

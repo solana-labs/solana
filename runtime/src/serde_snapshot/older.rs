@@ -6,11 +6,17 @@ use {
     },
     crate::{ancestors::AncestorsForSerialization, stakes::StakesCache},
     solana_measure::measure::Measure,
-    solana_sdk::deserialize_utils::default_on_eof,
-    std::{cell::RefCell, sync::RwLock},
+    std::{cell::RefCell, collections::HashSet, sync::RwLock},
 };
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
+
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
+struct UnusedAccounts {
+    unused1: HashSet<Pubkey>,
+    unused2: HashSet<Pubkey>,
+    unused3: HashMap<Pubkey, u64>,
+}
 
 // Deserializable version of Bank which need not be serializable,
 // because it's handled by SerializableVersionedBank.
@@ -33,6 +39,8 @@ struct DeserializableVersionedBank {
     ns_per_slot: u128,
     genesis_creation_time: UnixTimestamp,
     slots_per_year: f64,
+    #[allow(dead_code)]
+    unused: u64,
     slot: Slot,
     epoch: Epoch,
     block_height: u64,
@@ -45,10 +53,10 @@ struct DeserializableVersionedBank {
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
     stakes: Stakes,
+    #[allow(dead_code)]
+    unused_accounts: UnusedAccounts,
     epoch_stakes: HashMap<Epoch, EpochStakes>,
     is_delta: bool,
-    #[serde(deserialize_with = "default_on_eof")]
-    prior_roots: Vec<Slot>,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -84,7 +92,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             stakes: dvb.stakes,
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
-            prior_roots: dvb.prior_roots,
+            prior_roots: Vec::<Slot>::default(),
         }
     }
 }
@@ -109,6 +117,7 @@ struct SerializableVersionedBank<'a> {
     ns_per_slot: u128,
     genesis_creation_time: UnixTimestamp,
     slots_per_year: f64,
+    unused: u64,
     slot: Slot,
     epoch: Epoch,
     block_height: u64,
@@ -121,9 +130,9 @@ struct SerializableVersionedBank<'a> {
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
     stakes: &'a StakesCache,
+    unused_accounts: UnusedAccounts,
     epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     is_delta: bool,
-    prior_roots: Vec<Slot>,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
@@ -145,6 +154,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             ns_per_slot: rhs.ns_per_slot,
             genesis_creation_time: rhs.genesis_creation_time,
             slots_per_year: rhs.slots_per_year,
+            unused: u64::default(),
             slot: rhs.slot,
             epoch: rhs.epoch,
             block_height: rhs.block_height,
@@ -157,9 +167,9 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
             stakes: rhs.stakes,
+            unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
-            prior_roots: rhs.prior_roots,
         }
     }
 }

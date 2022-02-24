@@ -46,6 +46,7 @@ use {
 };
 
 mod newer;
+mod older;
 mod storage;
 mod tests;
 mod utils;
@@ -57,6 +58,7 @@ pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
     Newer,
+    Older,
 }
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
@@ -237,6 +239,7 @@ where
     }
     match serde_style {
         SerdeStyle::Newer => INTO!(newer),
+        SerdeStyle::Older => INTO!(older),
     }
     .map_err(|err| {
         warn!("bankrc_from_stream error: {:?}", err);
@@ -267,6 +270,7 @@ where
     }
     match serde_style {
         SerdeStyle::Newer => INTO!(newer),
+        SerdeStyle::Older => INTO!(older),
     }
     .map_err(|err| {
         warn!("bankrc_to_stream error: {:?}", err);
