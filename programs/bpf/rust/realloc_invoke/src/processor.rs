@@ -190,7 +190,7 @@ fn process_instruction(
                 &system_instruction::create_account(
                     accounts[0].key,
                     accounts[1].key,
-                    1,
+                    3000000, // large enough for rent exemption
                     pre_len as u64,
                     program_id,
                 ),
