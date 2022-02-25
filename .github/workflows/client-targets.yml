@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
      - master
+    paths:
+      - "client/**"
+      - "sdk/**"
+      - ".github/workflows/client-targets.yml"
 
 env:
   CARGO_TERM_COLOR: always
