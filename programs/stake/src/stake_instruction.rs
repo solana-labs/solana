@@ -133,16 +133,14 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
                 invoke_context,
             )?;
-            me.delegate(
-                vote,
-                &clock,
-                &stake_history,
-                &config::from_keyed_account(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 4,
-                )?)?,
-                &signers,
-            )
+            let config_account =
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?;
+            if !config::check_id(config_account.unsigned_key()) {
+                return Err(InstructionError::InvalidArgument);
+            }
+            let config = config::from(&*config_account.try_account_ref()?)
+                .ok_or(InstructionError::InvalidArgument)?;
+            me.delegate(vote, &clock, &stake_history, &config, &signers)
         }
         StakeInstruction::Split(lamports) => {
             let split_stake =
