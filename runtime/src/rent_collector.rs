@@ -117,6 +117,11 @@ impl RentCollector {
                 } else {
                     inc_new_counter_info!("rent-collector-rent-epoch-range-large-paying", 1);
                 }
+                panic!("rent_epoch gap is larger than expected. account.rent_epoch: {}, self.epoch: {}, due: {}",
+                    account.rent_epoch(),
+                    self.epoch,
+                    due
+                );
             }
 
             RentDue::Paying(due)
