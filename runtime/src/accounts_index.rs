@@ -1760,7 +1760,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub fn upsert(
         &self,
         new_slot: Slot,
-        _old_slot: Slot,
+        old_slot: Slot,
         pubkey: &Pubkey,
         account: &impl ReadableAccount,
         account_indexes: &AccountSecondaryIndexes,
@@ -1795,7 +1795,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             r_account_maps.upsert(
                 pubkey,
                 new_item,
-                None,
+                Some(old_slot),
                 reclaims,
                 previous_slot_entry_was_cached,
             );

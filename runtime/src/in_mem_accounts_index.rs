@@ -390,6 +390,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             let already_existed = self.upsert_on_disk(
                                 vacant,
                                 new_value,
+                                other_slot,
                                 reclaims,
                                 previous_slot_entry_was_cached,
                             );
@@ -441,6 +442,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// Try to update an item in the slot list the given `slot` If an item for the slot
     /// already exists in the list, remove the older item, add it to `reclaims`, and insert
     /// the new item.
+    /// if 'other_slot' is some, then also remove any entries in the slot list that are at 'other_slot'
     pub fn lock_and_update_slot_list(
         current: &AccountMapEntryInner<T>,
         new_value: (Slot, T),
@@ -465,46 +467,83 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     /// modifies slot_list
-    /// any entry at 'slot' is replaced with 'account_info'.
+    /// any entry at 'slot' or slot 'other_slot' is replaced with 'account_info'.
     /// or, 'account_info' is appended to the slot list if the slot did not exist previously.
     /// returns true if caller should addref
     /// conditions when caller should addref:
     ///   'account_info' does NOT represent a cached storage (the slot is being flushed from the cache)
     /// AND
     ///   previous slot_list entry AT 'slot' did not exist (this is the first time this account was modified in this "slot"), or was previously cached (the storage is now being flushed from the cache)
+    /// Note that even if entry DID exist at 'other_slot', the above conditions apply.
     fn update_slot_list(
         slot_list: &mut SlotList<T>,
         slot: Slot,
         account_info: T,
-        _other_slot: Option<Slot>,
+        mut other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) -> bool {
         let mut addref = !account_info.is_cached();
 
-        // find other dirty entries from the same slot
-        for list_index in 0..slot_list.len() {
-            let (s, previous_update_value) = &slot_list[list_index];
-            if *s == slot {
-                let previous_was_cached = previous_update_value.is_cached();
-                addref = addref && previous_was_cached;
-
-                let mut new_item = (slot, account_info);
-                std::mem::swap(&mut new_item, &mut slot_list[list_index]);
-                if previous_slot_entry_was_cached {
-                    assert!(previous_was_cached);
-                } else {
-                    reclaims.push(new_item);
-                }
-                slot_list[(list_index + 1)..]
-                    .iter()
-                    .for_each(|item| assert!(item.0 != slot));
-                return addref;
-            }
+        if other_slot == Some(slot) {
+            other_slot = None; // redundant info, so ignore
         }
 
-        // if we make it here, we did not find the slot in the list
-        slot_list.push((slot, account_info));
+        // There may be 0..=2 dirty accounts found (one at 'slot' and one at 'other_slot')
+        // that are already in the slot list.  Since the first one found will be swapped with the
+        // new account, if a second one is found, we cannot swap again. Instead, just remove it.
+        let mut found_slot = false;
+        let mut found_other_slot = false;
+        (0..slot_list.len())
+            .into_iter()
+            .rev() // rev since we delete from the list in some cases
+            .for_each(|slot_list_index| {
+                let (cur_slot, cur_account_info) = &slot_list[slot_list_index];
+                let matched_slot = *cur_slot == slot;
+                if matched_slot || Some(*cur_slot) == other_slot {
+                    // make sure neither 'slot' nor 'other_slot' are in the slot list more than once
+                    let matched_other_slot = !matched_slot;
+                    assert!(
+                        !(found_slot && matched_slot || matched_other_slot && found_other_slot),
+                        "{:?}, slot: {}, other_slot: {:?}",
+                        slot_list,
+                        slot,
+                        other_slot
+                    );
+
+                    let is_cur_account_cached = cur_account_info.is_cached();
+
+                    let reclaim_item = if !(found_slot || found_other_slot) {
+                        // first time we found an entry in 'slot' or 'other_slot', so replace it in-place.
+                        // this may be the only instance we find
+                        let mut new_item = (slot, account_info);
+                        std::mem::swap(&mut new_item, &mut slot_list[slot_list_index]);
+                        new_item
+                    } else {
+                        // already replaced one entry, so this one has to be removed
+                        slot_list.remove(slot_list_index)
+                    };
+                    if previous_slot_entry_was_cached {
+                        assert!(is_cur_account_cached);
+                    } else {
+                        reclaims.push(reclaim_item);
+                    }
+
+                    if matched_slot {
+                        found_slot = true;
+                        if !is_cur_account_cached {
+                            // current info at 'slot' is NOT cached, so we should NOT addref. This slot already has a ref count for this pubkey.
+                            addref = false;
+                        }
+                    } else {
+                        found_other_slot = true;
+                    }
+                }
+            });
+        if !found_slot && !found_other_slot {
+            // if we make it here, we did not find the slot in the list
+            slot_list.push((slot, account_info));
+        }
         addref
     }
 
@@ -542,7 +581,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 InMemAccountsIndex::lock_and_update_slot_list(
                     occupied.get(),
                     (slot, account_info),
-                    None,
+                    None, // should be None because we don't expect a different slot # during index generation
                     &mut Vec::default(),
                     false,
                 );
@@ -558,8 +597,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // This is more direct, but becomes too slow with very large acct #.
                     // disk buckets will be improved to make them more performant. Tuning the disks may also help.
                     // This may become a config tuning option.
-                    let already_existed =
-                        self.upsert_on_disk(vacant, new_entry, &mut Vec::default(), false);
+                    let already_existed = self.upsert_on_disk(
+                        vacant,
+                        new_entry,
+                        None, // not changing slots here since it doesn't exist in the index at all
+                        &mut Vec::default(),
+                        false,
+                    );
                     (false, already_existed)
                 } else {
                     let disk_entry = self.load_account_entry_from_disk(vacant.key());
@@ -569,6 +613,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         InMemAccountsIndex::lock_and_update_slot_list(
                             &disk_entry,
                             (slot, account_info),
+                            // None because we are inserting the first element in the slot list for this pubkey.
+                            // There can be no 'other' slot in the list.
                             None,
                             &mut Vec::default(),
                             false,
@@ -611,6 +657,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self,
         vacant: VacantEntry<K, AccountMapEntry<T>>,
         new_entry: PreAllocatedAccountMapEntry<T>,
+        other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) -> bool {
@@ -625,7 +672,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         &mut slot_list,
                         slot,
                         account_info,
-                        None,
+                        other_slot,
                         reclaims,
                         previous_slot_entry_was_cached,
                     );
@@ -1089,6 +1136,7 @@ mod tests {
     use {
         super::*,
         crate::accounts_index::{AccountsIndexConfig, BINS_FOR_TESTING},
+        itertools::Itertools,
     };
 
     fn new_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
@@ -1301,5 +1349,186 @@ mod tests {
         assert!(!test.storage.all_buckets_flushed_at_current_age());
         assert!(test.get_should_age(test.storage.current_age()));
         assert_eq!(test.storage.count_ages_flushed(), 0);
+    }
+
+    #[test]
+    fn test_update_slot_list_other() {
+        solana_logger::setup();
+        let previous_slot_entry_was_cached = false;
+        let new_slot = 0;
+        let info = 1;
+        let other_value = info + 1;
+        let at_new_slot = (new_slot, info);
+        let unique_other_slot = new_slot + 1;
+        for other_slot in [Some(new_slot), Some(unique_other_slot), None] {
+            let mut reclaims = Vec::default();
+            let mut slot_list = Vec::default();
+            // upserting into empty slot_list, so always addref
+            assert!(
+                InMemAccountsIndex::update_slot_list(
+                    &mut slot_list,
+                    new_slot,
+                    info,
+                    other_slot,
+                    &mut reclaims,
+                    previous_slot_entry_was_cached
+                ),
+                "other_slot: {:?}",
+                other_slot
+            );
+            assert_eq!(slot_list, vec![at_new_slot]);
+            assert!(reclaims.is_empty());
+        }
+
+        // replace other
+        let mut slot_list = vec![(unique_other_slot, other_value)];
+        let expected_reclaims = slot_list.clone();
+        let other_slot = Some(unique_other_slot);
+        let mut reclaims = Vec::default();
+        assert!(
+            // upserting into slot_list that does NOT contain an entry at 'new-slot', so always addref
+            InMemAccountsIndex::update_slot_list(
+                &mut slot_list,
+                new_slot,
+                info,
+                other_slot,
+                &mut reclaims,
+                previous_slot_entry_was_cached
+            ),
+            "other_slot: {:?}",
+            other_slot
+        );
+        assert_eq!(slot_list, vec![at_new_slot]);
+        assert_eq!(reclaims, expected_reclaims);
+
+        // replace other and new_slot
+        let mut slot_list = vec![(unique_other_slot, other_value), (new_slot, other_value)];
+        let expected_reclaims = slot_list.clone();
+        let other_slot = Some(unique_other_slot);
+        // upserting into slot_list that already contain an entry at 'new-slot', so do NOT addref
+        let mut reclaims = Vec::default();
+        assert!(
+            !InMemAccountsIndex::update_slot_list(
+                &mut slot_list,
+                new_slot,
+                info,
+                other_slot,
+                &mut reclaims,
+                previous_slot_entry_was_cached
+            ),
+            "other_slot: {:?}",
+            other_slot
+        );
+        assert_eq!(slot_list, vec![at_new_slot]);
+        assert_eq!(
+            reclaims,
+            expected_reclaims.into_iter().rev().collect::<Vec<_>>()
+        );
+
+        // nothing will exist at this slot
+        let missing_other_slot = unique_other_slot + 1;
+        let ignored_slot = 10; // bigger than is used elsewhere in the test
+        let ignored_value = info + 10;
+
+        let mut possible_initial_slot_list_contents;
+        // build a list of possible contents in the slot_list prior to calling 'update_slot_list'
+        {
+            // up to 3 ignored slot account_info (ignored means not 'new_slot', not 'other_slot', but different slot #s which could exist in the slot_list initially)
+            possible_initial_slot_list_contents = (0..3)
+                .into_iter()
+                .map(|i| (ignored_slot + i, ignored_value + i))
+                .collect::<Vec<_>>();
+            // account_info that already exists in the slot_list AT 'new_slot'
+            possible_initial_slot_list_contents.push(at_new_slot);
+            // account_info that already exists in the slot_list AT 'other_slot'
+            possible_initial_slot_list_contents.push((unique_other_slot, other_value));
+        }
+
+        /*
+         * loop over all possible permutations of 'possible_initial_slot_list_contents'
+         * some examples:
+         * []
+         * [other]
+         * [other, new_slot]
+         * [new_slot, other]
+         * [dummy0, new_slot, dummy1, other] (and all permutation of this order)
+         * [other, dummy1, new_slot] (and all permutation of this order)
+         * ...
+         * [dummy0, new_slot, dummy1, other_slot, dummy2] (and all permutation of this order)
+         */
+        let mut attempts = 0;
+        // loop over each initial size of 'slot_list'
+        for initial_slot_list_len in 0..=possible_initial_slot_list_contents.len() {
+            // loop over every permutation of possible_initial_slot_list_contents within a list of len 'initial_slot_list_len'
+            for content_source_indexes in
+                (0..possible_initial_slot_list_contents.len()).permutations(initial_slot_list_len)
+            {
+                // loop over each possible parameter for 'other_slot'
+                for other_slot in [
+                    Some(new_slot),
+                    Some(unique_other_slot),
+                    Some(missing_other_slot),
+                    None,
+                ] {
+                    attempts += 1;
+                    // initialize slot_list prior to call to 'InMemAccountsIndex::update_slot_list'
+                    // by inserting each possible entry at each possible position
+                    let mut slot_list = content_source_indexes
+                        .iter()
+                        .map(|i| possible_initial_slot_list_contents[*i])
+                        .collect::<Vec<_>>();
+                    let mut expected = slot_list.clone();
+                    let original = slot_list.clone();
+                    let mut reclaims = Vec::default();
+
+                    let result = InMemAccountsIndex::update_slot_list(
+                        &mut slot_list,
+                        new_slot,
+                        info,
+                        other_slot,
+                        &mut reclaims,
+                        previous_slot_entry_was_cached,
+                    );
+
+                    // calculate expected results
+                    let mut expected_reclaims = Vec::default();
+                    // addref iff the slot_list did NOT previously contain an entry at 'new_slot'
+                    let expected_result = !expected.iter().any(|(slot, _info)| slot == &new_slot);
+                    {
+                        // this is the logical equivalent of 'InMemAccountsIndex::update_slot_list', but slower (and ignoring addref)
+                        expected.retain(|(slot, info)| {
+                            let retain = slot != &new_slot && Some(*slot) != other_slot;
+                            if !retain {
+                                expected_reclaims.push((*slot, *info));
+                            }
+                            retain
+                        });
+                        expected.push((new_slot, info));
+                    }
+                    assert_eq!(
+                        expected_result, result,
+                        "return value different. other: {:?}, {:?}, {:?}, original: {:?}",
+                        other_slot, expected, slot_list, original
+                    );
+                    // sort for easy comparison
+                    expected_reclaims.sort_unstable();
+                    reclaims.sort_unstable();
+                    assert_eq!(
+                        expected_reclaims, reclaims,
+                        "reclaims different. other: {:?}, {:?}, {:?}, original: {:?}",
+                        other_slot, expected, slot_list, original
+                    );
+                    // sort for easy comparison
+                    slot_list.sort_unstable();
+                    expected.sort_unstable();
+                    assert_eq!(
+                        slot_list, expected,
+                        "slot_list different. other: {:?}, {:?}, {:?}, original: {:?}",
+                        other_slot, expected, slot_list, original
+                    );
+                }
+            }
+        }
+        assert_eq!(attempts, 1304); // complicated permutations, so make sure we ran the right #
     }
 }
