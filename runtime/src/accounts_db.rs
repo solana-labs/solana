@@ -6913,11 +6913,13 @@ impl AccountsDb {
         }
         let max_slot = slots.last().cloned().unwrap_or_default();
         let schedule = genesis_config.epoch_schedule;
+        let update_rent_epoch_on_exempt = true; // depends on feature activation
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
             &schedule,
             genesis_config.slots_per_year(),
             &genesis_config.rent,
+            update_rent_epoch_on_exempt,
         );
         let accounts_data_len = AtomicU64::new(0);
 

@@ -1637,6 +1637,7 @@ mod tests {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
+            true,
         );
         let min_balance = rent_collector.rent.minimum_balance(NonceState::size());
         let nonce = Keypair::new();

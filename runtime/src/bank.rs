@@ -1165,6 +1165,8 @@ pub struct Bank {
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
 
+    update_rent_epoch_on_exempt: bool,
+
     /// inflation specs
     inflation: Arc<RwLock<Inflation>>,
 
@@ -1316,6 +1318,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let bank = Self {
+            update_rent_epoch_on_exempt: true, // feature activation
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1631,6 +1634,7 @@ impl Bank {
             Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
 
         let mut new = Bank {
+            update_rent_epoch_on_exempt: true, // feature activation
             rc,
             src,
             slot,
@@ -1927,6 +1931,7 @@ impl Bank {
             T::default()
         }
         let mut bank = Self {
+            update_rent_epoch_on_exempt: true, // feature activation
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -3100,6 +3105,7 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
+            self.update_rent_epoch_on_exempt,
         );
 
         // Add additional builtin programs specified in the genesis config

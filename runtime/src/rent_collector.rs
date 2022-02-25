@@ -15,6 +15,7 @@ pub struct RentCollector {
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
     pub rent: Rent,
+    pub update_rent_epoch_on_exempt: bool,
 }
 
 impl Default for RentCollector {
@@ -25,6 +26,7 @@ impl Default for RentCollector {
             // derive default value using GenesisConfig::default()
             slots_per_year: GenesisConfig::default().slots_per_year(),
             rent: Rent::default(),
+            update_rent_epoch_on_exempt: true,
         }
     }
 }
@@ -45,12 +47,14 @@ impl RentCollector {
         epoch_schedule: &EpochSchedule,
         slots_per_year: f64,
         rent: &Rent,
+        update_rent_epoch_on_exempt: bool,
     ) -> Self {
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
             slots_per_year,
             rent: *rent,
+            update_rent_epoch_on_exempt,
         }
     }
 
@@ -147,14 +151,20 @@ impl RentCollector {
             return RentResult::LeaveAloneNoRent;
         }
 
-        let epoch_increment = match rent_due {
+        let new_rent_epoch = match rent_due {
             // Rent isn't collected for the next epoch
             // Make sure to check exempt status again later in current epoch
-            RentDue::Exempt => 0,
+            RentDue::Exempt => {
+                if self.update_rent_epoch_on_exempt {
+                    self.epoch
+                } else {
+                    account.rent_epoch() // leave unchanged
+                }
+            }
             // Rent is collected for next epoch
-            RentDue::Paying(_) => 1,
+            RentDue::Paying(_) => self.epoch + 1,
         };
-        RentResult::CollectRent((self.epoch + epoch_increment, rent_due.lamports()))
+        RentResult::CollectRent((new_rent_epoch, rent_due.lamports()))
     }
 
     #[must_use = "add to Bank::collected_rent"]
