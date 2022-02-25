@@ -296,9 +296,8 @@ struct Rocks(rocksdb::DB, ActualAccessType, OldestSlot);
 
 impl Rocks {
     fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
-        use columns::*;
-        let access_type = options.access_type;
-        let recovery_mode = options.recovery_mode;
+        let access_type = &options.access_type;
+        let recovery_mode = options.recovery_mode.clone();
 
         fs::create_dir_all(&path)?;
 
@@ -312,49 +311,18 @@ impl Rocks {
         }
 
         let oldest_slot = OldestSlot::default();
-
-        // Get column family descriptors and names
-        let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
-            new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(
-                &options.shred_storage_type,
-                &access_type,
-                &oldest_slot,
-            );
-        let cfs = vec![
-            new_cf_descriptor::<SlotMeta>(&access_type, &oldest_slot),
-            new_cf_descriptor::<DeadSlots>(&access_type, &oldest_slot),
-            new_cf_descriptor::<DuplicateSlots>(&access_type, &oldest_slot),
-            new_cf_descriptor::<ErasureMeta>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Orphans>(&access_type, &oldest_slot),
-            new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Root>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Index>(&access_type, &oldest_slot),
-            cf_descriptor_shred_data,
-            cf_descriptor_shred_code,
-            new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
-            new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
-            new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
-            new_cf_descriptor::<TransactionStatusIndex>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Rewards>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Blocktime>(&access_type, &oldest_slot),
-            new_cf_descriptor::<PerfSamples>(&access_type, &oldest_slot),
-            new_cf_descriptor::<BlockHeight>(&access_type, &oldest_slot),
-            new_cf_descriptor::<ProgramCosts>(&access_type, &oldest_slot),
-        ];
+        let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot);
         let cf_names = Self::columns();
-        // The names and descriptors don't have to be in the same
-        // order, but there should be the same number of each.
-        assert_eq!(cfs.len(), cf_names.len());
 
         // Open the database
         let db = match access_type {
             AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks(
-                DB::open_cf_descriptors(&db_options, path, cfs)?,
+                DB::open_cf_descriptors(&db_options, path, cf_descriptors)?,
                 ActualAccessType::Primary,
                 oldest_slot,
             ),
             AccessType::TryPrimaryThenSecondary => {
-                match DB::open_cf_descriptors(&db_options, path, cfs) {
+                match DB::open_cf_descriptors(&db_options, path, cf_descriptors) {
                     Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot),
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
@@ -435,6 +403,42 @@ impl Rocks {
         }
 
         Ok(db)
+    }
+
+    fn cf_descriptors(
+        options: &BlockstoreOptions,
+        oldest_slot: &OldestSlot,
+    ) -> Vec<ColumnFamilyDescriptor> {
+        use columns::*;
+        let access_type = &options.access_type;
+
+        let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
+            new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(
+                &options.shred_storage_type,
+                &access_type,
+                &oldest_slot,
+            );
+        vec![
+            new_cf_descriptor::<SlotMeta>(&access_type, &oldest_slot),
+            new_cf_descriptor::<DeadSlots>(&access_type, &oldest_slot),
+            new_cf_descriptor::<DuplicateSlots>(&access_type, &oldest_slot),
+            new_cf_descriptor::<ErasureMeta>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Orphans>(&access_type, &oldest_slot),
+            new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Root>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Index>(&access_type, &oldest_slot),
+            cf_descriptor_shred_data,
+            cf_descriptor_shred_code,
+            new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
+            new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
+            new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
+            new_cf_descriptor::<TransactionStatusIndex>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Rewards>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Blocktime>(&access_type, &oldest_slot),
+            new_cf_descriptor::<PerfSamples>(&access_type, &oldest_slot),
+            new_cf_descriptor::<BlockHeight>(&access_type, &oldest_slot),
+            new_cf_descriptor::<ProgramCosts>(&access_type, &oldest_slot),
+        ]
     }
 
     fn columns() -> Vec<&'static str> {
@@ -1607,6 +1611,16 @@ pub mod tests {
             compaction_filter.filter(dummy_level, &key, &dummy_value),
             CompactionDecision::Keep
         );
+    }
+
+    #[test]
+    fn test_cf_names_and_descriptors_equal_length() {
+        let options = BlockstoreOptions::default();
+        let oldest_slot = OldestSlot::default();
+        // The names and descriptors don't need to be in the same order for our use cases;
+        // however, there should be the same number of each. For example, adding a new column
+        // should update both lists.
+        assert_eq!(Rocks::columns().len(), Rocks::cf_descriptors(&options, &oldest_slot).len());
     }
 
     #[test]
