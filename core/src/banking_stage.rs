@@ -409,7 +409,8 @@ impl BankingStage {
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
         let data_budget = Arc::new(DataBudget::default());
-        let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 2) as usize * PACKETS_PER_BATCH);
+        let batch_limit = TOTAL_BUFFERED_PACKETS
+            / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize * PACKETS_PER_BATCH);
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
