@@ -27,6 +27,20 @@ pub fn create_account(
     Transaction::new(&[from_keypair, to_keypair], message, recent_blockhash)
 }
 
+/// Create and sign new SystemInstruction::Allocate transaction
+pub fn allocate(
+    payer_keypair: &Keypair,
+    account_keypair: &Keypair,
+    recent_blockhash: Hash,
+    space: u64,
+) -> Transaction {
+    let payer_pubkey = payer_keypair.pubkey();
+    let account_pubkey = account_keypair.pubkey();
+    let instruction = system_instruction::allocate(&account_pubkey, space);
+    let message = Message::new(&[instruction], Some(&payer_pubkey));
+    Transaction::new(&[payer_keypair, account_keypair], message, recent_blockhash)
+}
+
 /// Create and sign new system_instruction::Assign transaction
 pub fn assign(from_keypair: &Keypair, recent_blockhash: Hash, program_id: &Pubkey) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
