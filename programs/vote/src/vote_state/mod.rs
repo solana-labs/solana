@@ -5,19 +5,19 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        account_utils::State,
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
-        keyed_account::KeyedAccount,
         pubkey::Pubkey,
         rent::Rent,
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
+        transaction_context::{BorrowedAccount, InstructionContext},
     },
     std::{
         cmp::Ordering,
@@ -1165,19 +1165,24 @@ impl VoteState {
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
 pub fn authorize<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
-    signers: &HashSet<Pubkey, S>,
-    clock: &Clock,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     match vote_authorize {
         VoteAuthorize::Voter => {
-            let authorized_withdrawer_signer = if feature_set
+            let authorized_withdrawer_signer = if invoke_context
+                .feature_set
                 .is_active(&feature_set::vote_withdraw_authority_may_change_authorized_voter::id())
             {
                 verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok()
@@ -1211,12 +1216,17 @@ pub fn authorize<S: std::hash::BuildHasher>(
 
 /// Update the node_pubkey, requires signature of the authorized voter
 pub fn update_validator_identity<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    node_pubkey: &Pubkey,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
+    node_pubkey: &Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -1231,12 +1241,17 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
 /// Update the vote account's commission
 pub fn update_commission<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    commission: u8,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
+    commission: u8,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -1259,20 +1274,42 @@ fn verify_authorized_signer<S: std::hash::BuildHasher>(
 
 /// Withdraw funds from the vote account
 pub fn withdraw<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    lamports: u64,
-    to_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
-    rent_sysvar: Option<&Rent>,
-    clock: Option<&Clock>,
+    vote_account_index: usize,
+    recipient_account_index: usize,
+    lamports: u64,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+
+    let rent_sysvar = if invoke_context
+        .feature_set
+        .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
+    {
+        Some(invoke_context.get_sysvar_cache().get_rent()?)
+    } else {
+        None
+    };
+
+    let clock = if invoke_context
+        .feature_set
+        .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
+    {
+        Some(invoke_context.get_sysvar_cache().get_clock()?)
+    } else {
+        None
+    };
+
+    let vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
     let remaining_balance = vote_account
-        .lamports()?
+        .get_lamports()
         .checked_sub(lamports)
         .ok_or(InstructionError::InsufficientFunds)?;
 
@@ -1295,18 +1332,19 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
         }
     } else if let Some(rent_sysvar) = rent_sysvar {
-        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.data_len()?);
+        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.get_data().len());
         if remaining_balance < min_rent_exempt_balance {
             return Err(InstructionError::InsufficientFunds);
         }
     }
 
-    vote_account
-        .try_account_ref_mut()?
-        .checked_sub_lamports(lamports)?;
-    to_account
-        .try_account_ref_mut()?
-        .checked_add_lamports(lamports)?;
+    vote_account.checked_sub_lamports(lamports)?;
+    drop(vote_account);
+    let mut recipient_account = instruction_context.try_borrow_instruction_account(
+        invoke_context.transaction_context,
+        recipient_account_index,
+    )?;
+    recipient_account.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -1314,15 +1352,19 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    vote_init: &VoteInit,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
-    clock: &Clock,
+    vote_account_index: usize,
+    vote_init: &VoteInit,
 ) -> Result<(), InstructionError> {
-    if vote_account.data_len()? != VoteState::size_of() {
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+    if vote_account.get_data().len() != VoteState::size_of() {
         return Err(InstructionError::InvalidAccountData);
     }
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    let versioned = vote_account.get_state::<VoteStateVersions>()?;
 
     if !versioned.is_uninitialized() {
         return Err(InstructionError::AccountAlreadyInitialized);
@@ -1332,16 +1374,16 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     verify_authorized_signer(&vote_init.node_pubkey, signers)?;
 
     vote_account.set_state(&VoteStateVersions::new_current(VoteState::new(
-        vote_init, clock,
+        vote_init, &clock,
     )))
 }
 
 fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &BorrowedAccount,
     clock: &Clock,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<VoteState, InstructionError> {
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    let versioned = vote_account.get_state::<VoteStateVersions>()?;
 
     if versioned.is_uninitialized() {
         return Err(InstructionError::UninitializedAccount);
@@ -1355,16 +1397,25 @@ fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    slot_hashes: &[SlotHash],
-    clock: &Clock,
-    vote: &Vote,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
-    feature_set: &FeatureSet,
+    vote_account_index: usize,
+    vote: &Vote,
 ) -> Result<(), InstructionError> {
-    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let sysvar_cache = invoke_context.get_sysvar_cache();
+    let slot_hashes = sysvar_cache.get_slot_hashes()?;
+    let clock = sysvar_cache.get_clock()?;
+    let mut vote_state = verify_and_get_vote_state(&vote_account, &clock, signers)?;
 
-    vote_state.process_vote(vote, slot_hashes, clock.epoch, Some(feature_set))?;
+    vote_state.process_vote(
+        vote,
+        slot_hashes.slot_hashes(),
+        clock.epoch,
+        Some(&invoke_context.feature_set),
+    )?;
     if let Some(timestamp) = vote.timestamp {
         vote.slots
             .iter()
@@ -1376,14 +1427,19 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote_state_update<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    slot_hashes: &[SlotHash],
-    clock: &Clock,
-    mut vote_state_update: VoteStateUpdate,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
+    mut vote_state_update: VoteStateUpdate,
 ) -> Result<(), InstructionError> {
-    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
-    vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, slot_hashes)?;
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let sysvar_cache = invoke_context.get_sysvar_cache();
+    let slot_hashes = sysvar_cache.get_slot_hashes()?;
+    let clock = sysvar_cache.get_clock()?;
+    let mut vote_state = verify_and_get_vote_state(&vote_account, &clock, signers)?;
+    vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)?;
     vote_state.process_new_vote_state(
         vote_state_update.lockouts,
         vote_state_update.root,
