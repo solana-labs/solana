@@ -122,7 +122,6 @@ fn bench_process_vote_instruction(
 }
 
 #[bench]
-#[ignore]
 fn bench_process_vote(bencher: &mut Bencher) {
     let (num_initial_votes, slot_hashes, transaction_accounts, instruction_accounts) =
         create_accounts();
@@ -151,7 +150,6 @@ fn bench_process_vote(bencher: &mut Bencher) {
 }
 
 #[bench]
-#[ignore]
 fn bench_process_vote_state_update(bencher: &mut Bencher) {
     let (num_initial_votes, slot_hashes, transaction_accounts, instruction_accounts) =
         create_accounts();
