@@ -18,7 +18,7 @@ use {
         feature_set,
         hash::Hash,
         message::{
-            v0::{self, LoadedAddresses},
+            v0::{self},
             Message, SanitizedMessage, VersionedMessage,
         },
         pubkey::Pubkey,
@@ -75,6 +75,14 @@ impl DeserializedPacketBatch {
             packet_batch,
             unprocessed_packets,
             forwarded,
+        }
+    }
+
+    pub fn get_packet(&self, packet_index: usize) -> Option<&Packet> {
+        if self.unprocessed_packets.contains_key(&packet_index) {
+            Some(&self.packet_batch.packets[packet_index])
+        } else {
+            None
         }
     }
 
@@ -227,7 +235,7 @@ fn weighted_shuffle(
     shuffled_locators
 }
 
-fn prioritize_by_fee(
+pub fn prioritize_by_fee(
     unprocessed_packet_batches: &UnprocessedPacketBatches,
     locators: &Vec<PacketLocator>,
     bank: Option<Arc<Bank>>,
@@ -554,7 +562,7 @@ mod tests {
             genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
         },
         solana_sdk::{
-            compute_budget::{self, ComputeBudgetInstruction},
+            compute_budget::ComputeBudgetInstruction,
             signature::{Keypair, Signer},
             system_instruction::{self},
             system_transaction,
@@ -608,13 +616,11 @@ mod tests {
                 )
             })
             .collect();
-        debug!("unprocessed batches: {:?}", unprocessed_packets);
 
         let mut packet_sender_info = Some(PacketSenderInfo::default());
 
         let (stakes, locators) =
             get_stakes_and_locators(&unprocessed_packets, &mut packet_sender_info);
-        debug!("stakes: {:?}, locators: {:?}", stakes, locators);
         assert_eq!(batch_size * batch_count, stakes.len());
         assert_eq!(batch_size * batch_count, locators.len());
         locators.iter().enumerate().for_each(|(index, locator)| {
@@ -772,8 +778,20 @@ mod tests {
                 &DisabledAddressLoader,
             );
             assert_eq!(2, txs.len());
-            assert_eq!(locators[1], tx_locators[0]);
-            assert_eq!(locators[3], tx_locators[1]);
+            assert_eq!(
+                PacketLocator {
+                    batch_index: 0,
+                    packet_index: 1
+                },
+                tx_locators[0]
+            );
+            assert_eq!(
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 1
+                },
+                tx_locators[1]
+            );
         }
     }
 
@@ -851,7 +869,7 @@ mod tests {
         }
 
         // try to insert one with weight higher than anything in buffer.
-        // the new one should be rejected, and buffer should be unchanged
+        // the lest weight batch should be dropped, new one will take its palce.
         {
             let weight = 5000u64;
             let new_batch = DeserializedPacketBatch::new(
@@ -1050,10 +1068,8 @@ mod tests {
         genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        goto_end_of_slot(&mut bank);
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         goto_end_of_slot(&mut bank);
-        let mut unprocessed_packets = build_unprocessed_packets_buffer();
         // add a packet with 2 signatures to buffer that has doubled fee, and additional fee
         let key0 = Keypair::new();
         let key1 = Keypair::new();
@@ -1061,10 +1077,10 @@ mod tests {
         let ix1 = system_instruction::transfer(&key1.pubkey(), &key0.pubkey(), 1);
         let ix_cb = ComputeBudgetInstruction::request_units(1000, 20000);
         let mut message = Message::new(&[ix0, ix1, ix_cb], Some(&key0.pubkey()));
-        message.recent_blockhash = bank.last_blockhash();
         let tx = Transaction::new(&[&key0, &key1], message, bank.last_blockhash());
-
         let packet = Packet::from_data(None, &tx).unwrap();
+
+        let mut unprocessed_packets = build_unprocessed_packets_buffer();
         unprocessed_packets.push_back(DeserializedPacketBatch::new(
             PacketBatch::new(vec![packet]),
             vec![0],
@@ -1129,5 +1145,20 @@ mod tests {
                 prioritize_by_fee(&unprocessed_packets, &locators, Some(Arc::new(bank)));
             assert_eq!(expected_locators, prioritized_locators);
         }
+    }
+
+    #[test]
+    fn test_get_packet() {
+        let batch = DeserializedPacketBatch::new(
+            PacketBatch::new(vec![
+                packet_with_weight(10, None),
+                packet_with_weight(300, None),
+                packet_with_weight(200, None),
+            ]),
+            vec![0, 1],
+            false,
+        );
+        assert!(batch.get_packet(10).is_none());
+        assert_eq!(batch.get_packet(0).unwrap(), &batch.packet_batch.packets[0]);
     }
 }

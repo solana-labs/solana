@@ -33,6 +33,7 @@ pub mod leader_slot_banking_stage_timing_metrics;
 pub mod ledger_cleanup_service;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
+pub mod packet_forward_manager;
 pub mod packet_hasher;
 pub mod packet_sender_info;
 pub mod progress_map;
