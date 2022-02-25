@@ -856,7 +856,7 @@ mod tests {
         let fanout = 10;
         for shred in &data_shreds {
             let shred_stakes = cluster_nodes.get_shred_distribution_stakes(
-                &shred,
+                shred,
                 &bank,
                 fanout,
                 &leader_schedule_cache,
@@ -869,7 +869,7 @@ mod tests {
         let fanout = 200;
         for shred in &data_shreds {
             let shred_stakes = cluster_nodes.get_shred_distribution_stakes(
-                &shred,
+                shred,
                 &bank,
                 fanout,
                 &leader_schedule_cache,
