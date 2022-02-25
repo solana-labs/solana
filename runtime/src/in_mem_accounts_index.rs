@@ -343,6 +343,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         new_value: PreAllocatedAccountMapEntry<T>,
+        other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
@@ -352,6 +353,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 Self::lock_and_update_slot_list(
                     entry,
                     new_value.into(),
+                    other_slot,
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
@@ -368,6 +370,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         Self::lock_and_update_slot_list(
                             current,
                             new_value.into(),
+                            other_slot,
                             reclaims,
                             previous_slot_entry_was_cached,
                         );
@@ -401,6 +404,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 Self::lock_and_update_slot_list(
                                     &disk_entry,
                                     new_value.into(),
+                                    other_slot,
                                     reclaims,
                                     previous_slot_entry_was_cached,
                                 );
@@ -440,6 +444,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn lock_and_update_slot_list(
         current: &AccountMapEntryInner<T>,
         new_value: (Slot, T),
+        other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
@@ -449,6 +454,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             &mut slot_list,
             slot,
             new_entry,
+            other_slot,
             reclaims,
             previous_slot_entry_was_cached,
         );
@@ -466,6 +472,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         list: &mut SlotList<T>,
         slot: Slot,
         account_info: T,
+        _other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) -> bool {
@@ -531,6 +538,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 InMemAccountsIndex::lock_and_update_slot_list(
                     occupied.get(),
                     (slot, account_info),
+                    None,
                     &mut Vec::default(),
                     false,
                 );
@@ -557,6 +565,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         InMemAccountsIndex::lock_and_update_slot_list(
                             &disk_entry,
                             (slot, account_info),
+                            None,
                             &mut Vec::default(),
                             false,
                         );
@@ -612,6 +621,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         &mut slot_list,
                         slot,
                         account_info,
+                        None,
                         reclaims,
                         previous_slot_entry_was_cached,
                     );

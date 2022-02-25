@@ -27,6 +27,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
         for pubkey in pubkeys.iter().take(NUM_PUBKEYS) {
             index.upsert(
                 f,
+                f,
                 pubkey,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
@@ -43,6 +44,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
         for _p in 0..NUM_PUBKEYS {
             let pubkey = thread_rng().gen_range(0, NUM_PUBKEYS);
             index.upsert(
+                fork,
                 fork,
                 &pubkeys[pubkey],
                 &AccountSharedData::default(),
