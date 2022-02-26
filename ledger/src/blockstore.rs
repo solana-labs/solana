@@ -192,7 +192,7 @@ impl Default for SlotsStats {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SlotStats {
     pub num_repaired: usize,
     pub num_recovered: usize,
@@ -4932,7 +4932,15 @@ pub mod tests {
 
         // Insert first shred, slot should now be considered complete
         blockstore.insert_shreds(vec![shred0], None, false).unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![0]);
+        assert_eq!(
+            recvr
+                .try_recv()
+                .unwrap()
+                .iter()
+                .map(|x| x.0)
+                .collect::<Vec<_>>(),
+            vec![0]
+        );
     }
 
     #[test]
@@ -4964,7 +4972,15 @@ pub mod tests {
         blockstore
             .insert_shreds(vec![orphan_child0], None, false)
             .unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
+        assert_eq!(
+            recvr
+                .try_recv()
+                .unwrap()
+                .iter()
+                .map(|x| x.0)
+                .collect::<Vec<_>>(),
+            vec![slots[2]]
+        );
 
         // Insert the shreds for the orphan_slot
         let orphan_shred0 = orphan_shreds.remove(0);
@@ -4977,7 +4993,15 @@ pub mod tests {
         blockstore
             .insert_shreds(vec![orphan_shred0], None, false)
             .unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
+        assert_eq!(
+            recvr
+                .try_recv()
+                .unwrap()
+                .iter()
+                .map(|x| x.0)
+                .collect::<Vec<_>>(),
+            vec![slots[1]]
+        );
     }
 
     #[test]
@@ -5007,7 +5031,7 @@ pub mod tests {
 
         all_shreds.shuffle(&mut thread_rng());
         blockstore.insert_shreds(all_shreds, None, false).unwrap();
-        let mut result = recvr.try_recv().unwrap();
+        let mut result: Vec<_> = recvr.try_recv().unwrap().iter().map(|x| x.0).collect();
         result.sort_unstable();
         slots.push(disconnected_slot);
         slots.sort_unstable();

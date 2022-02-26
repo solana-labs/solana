@@ -24,7 +24,7 @@ impl RpcCompletedSlotsService {
                             num_shreds: stats.num_shreds as u64,
                             num_repaired: stats.num_repaired as u64,
                             num_recovered: stats.num_recovered as u64,
-                            turbine_indices: stats.turbine_index_set.iter().map(|ix| *ix).collect(),
+                            turbine_indices: stats.turbine_index_set.iter().copied().collect(),
                         });
                         rpc_subscriptions.notify_slot_update(SlotUpdate::Completed {
                             slot,
