@@ -16477,6 +16477,255 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_invalid_rent_state_changes_fee_payer() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(
+            solana_sdk::fee_calculator::DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE,
+            solana_sdk::fee_calculator::DEFAULT_TARGET_SIGNATURES_PER_SLOT,
+        );
+        let rent_exempt_minimum = genesis_config.rent.minimum_balance(0);
+
+        // Create legacy rent-paying System account
+        let rent_paying_fee_payer = Keypair::new();
+        genesis_config.accounts.insert(
+            rent_paying_fee_payer.pubkey(),
+            Account::new(rent_exempt_minimum - 1, 0, &system_program::id()),
+        );
+        // Create RentExempt recipient account
+        let recipient = Pubkey::new_unique();
+        genesis_config.accounts.insert(
+            recipient,
+            Account::new(rent_exempt_minimum, 0, &system_program::id()),
+        );
+
+        // Activate features, including require_rent_exempt_accounts
+        activate_all_features(&mut genesis_config);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        let recent_blockhash = bank.last_blockhash();
+
+        let check_account_is_rent_exempt = |pubkey: &Pubkey| -> bool {
+            let account = bank.get_account(pubkey).unwrap();
+            Rent::default().is_exempt(account.lamports(), account.data().len())
+        };
+
+        // Create just-rent-exempt fee-payer
+        let rent_exempt_fee_payer = Keypair::new();
+        bank.transfer(
+            rent_exempt_minimum,
+            &mint_keypair,
+            &rent_exempt_fee_payer.pubkey(),
+        )
+        .unwrap();
+
+        // Dummy message to determine fee amount
+        let dummy_message = SanitizedMessage::try_from(Message::new_with_blockhash(
+            &[system_instruction::transfer(
+                &rent_exempt_fee_payer.pubkey(),
+                &recipient,
+                sol_to_lamports(1.),
+            )],
+            Some(&rent_exempt_fee_payer.pubkey()),
+            &recent_blockhash,
+        ))
+        .unwrap();
+        let fee = bank.get_fee_for_message(&dummy_message).unwrap();
+
+        // RentPaying fee-payer can remain RentPaying
+        let tx = Transaction::new(
+            &[&rent_paying_fee_payer, &mint_keypair],
+            Message::new(
+                &[system_instruction::transfer(
+                    &mint_keypair.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_paying_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert!(!check_account_is_rent_exempt(
+            &rent_paying_fee_payer.pubkey()
+        ));
+
+        // RentPaying fee-payer can remain RentPaying on failed executed tx
+        let sender = Keypair::new();
+        let fee_payer_balance = bank.get_balance(&rent_paying_fee_payer.pubkey());
+        let tx = Transaction::new(
+            &[&rent_paying_fee_payer, &sender],
+            Message::new(
+                &[system_instruction::transfer(
+                    &sender.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_paying_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_ne!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert_ne!(
+            fee_payer_balance,
+            bank.get_balance(&rent_paying_fee_payer.pubkey())
+        );
+        assert!(!check_account_is_rent_exempt(
+            &rent_paying_fee_payer.pubkey()
+        ));
+
+        // RentPaying fee-payer can be emptied with fee and transaction
+        let tx = Transaction::new(
+            &[&rent_paying_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_paying_fee_payer.pubkey(),
+                    &recipient,
+                    bank.get_balance(&rent_paying_fee_payer.pubkey()) - fee,
+                )],
+                Some(&rent_paying_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(0, bank.get_balance(&rent_paying_fee_payer.pubkey()));
+
+        // RentExempt fee-payer cannot become RentPaying from transaction fee
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer, &mint_keypair],
+            Message::new(
+                &[system_instruction::transfer(
+                    &mint_keypair.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+
+        // RentExempt fee-payer cannot become RentPaying via failed executed tx
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer, &sender],
+            Message::new(
+                &[system_instruction::transfer(
+                    &sender.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+
+        // For good measure, show that a RentExempt fee-payer that is also debited by a transaction
+        // cannot become RentPaying by that debit, but can still be charged for the fee
+        bank.transfer(fee, &mint_keypair, &rent_exempt_fee_payer.pubkey())
+            .unwrap();
+        let fee_payer_balance = bank.get_balance(&rent_exempt_fee_payer.pubkey());
+        assert_eq!(fee_payer_balance, rent_exempt_minimum + fee);
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_exempt_fee_payer.pubkey(),
+                    &recipient,
+                    fee,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert_eq!(
+            fee_payer_balance - fee,
+            bank.get_balance(&rent_exempt_fee_payer.pubkey())
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+
+        // Also show that a RentExempt fee-payer can be completely emptied via fee and transaction
+        bank.transfer(fee + 1, &mint_keypair, &rent_exempt_fee_payer.pubkey())
+            .unwrap();
+        assert!(bank.get_balance(&rent_exempt_fee_payer.pubkey()) > rent_exempt_minimum + fee);
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_exempt_fee_payer.pubkey(),
+                    &recipient,
+                    bank.get_balance(&rent_exempt_fee_payer.pubkey()) - fee,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(0, bank.get_balance(&rent_exempt_fee_payer.pubkey()));
+
+        // ... but not if the fee alone would make it RentPaying
+        bank.transfer(
+            rent_exempt_minimum + 1,
+            &mint_keypair,
+            &rent_exempt_fee_payer.pubkey(),
+        )
+        .unwrap();
+        assert!(bank.get_balance(&rent_exempt_fee_payer.pubkey()) < rent_exempt_minimum + fee);
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_exempt_fee_payer.pubkey(),
+                    &recipient,
+                    bank.get_balance(&rent_exempt_fee_payer.pubkey()) - fee,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+    }
+
+    #[test]
     fn test_rent_state_list_len() {
         let GenesisConfigInfo {
             mut genesis_config,
