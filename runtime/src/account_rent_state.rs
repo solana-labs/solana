@@ -51,47 +51,15 @@ pub(crate) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_st
 pub(crate) fn check_rent_state(
     pre_rent_state: Option<&RentState>,
     post_rent_state: Option<&RentState>,
-    pubkey: &Pubkey,
+    address: &Pubkey,
     account: &AccountSharedData,
 ) -> Result<()> {
     if let Some((pre_rent_state, post_rent_state)) = pre_rent_state.zip(post_rent_state) {
-<<<<<<< HEAD
         submit_rent_state_metrics(pre_rent_state, post_rent_state);
         if !post_rent_state.transition_allowed_from(pre_rent_state) {
-            debug!("Account {:?} not rent exempt, state {:?}", pubkey, account,);
+            debug!("Account {:?} not rent exempt, state {:?}", address, account);
             return Err(TransactionError::InvalidRentPayingAccount);
         }
-=======
-        let expect_msg = "account must exist at TransactionContext index if rent-states are Some";
-        check_rent_state_with_account(
-            pre_rent_state,
-            post_rent_state,
-            transaction_context
-                .get_key_of_account_at_index(index)
-                .expect(expect_msg),
-            &transaction_context
-                .get_account_at_index(index)
-                .expect(expect_msg)
-                .borrow(),
-        )?;
-    }
-    Ok(())
-}
-
-pub(crate) fn check_rent_state_with_account(
-    pre_rent_state: &RentState,
-    post_rent_state: &RentState,
-    address: &Pubkey,
-    account_state: &AccountSharedData,
-) -> Result<()> {
-    submit_rent_state_metrics(pre_rent_state, post_rent_state);
-    if !post_rent_state.transition_allowed_from(pre_rent_state) {
-        debug!(
-            "Account {} not rent exempt, state {:?}",
-            address, account_state,
-        );
-        return Err(TransactionError::InvalidRentPayingAccount);
->>>>>>> 36484f4f0 (Prevent new RentPaying state created by paying fees (#23358))
     }
     Ok(())
 }
