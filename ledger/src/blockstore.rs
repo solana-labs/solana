@@ -95,8 +95,9 @@ pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_P
 // (32K shreds per slot * 4 TX per shred * 2.5 slots per sec)
 pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
-pub type CompletedSlotsSender = Sender<Vec<Slot>>;
-pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
+pub type CompletedSlotsMsg = Vec<(Slot, Option<SlotStats>)>;
+pub type CompletedSlotsSender = Sender<CompletedSlotsMsg>;
+pub type CompletedSlotsReceiver = Receiver<CompletedSlotsMsg>;
 type CompletedRanges = Vec<(u32, u32)>;
 
 #[derive(Default)]
@@ -191,10 +192,12 @@ impl Default for SlotsStats {
     }
 }
 
-#[derive(Default)]
-struct SlotStats {
-    num_repaired: usize,
-    num_recovered: usize,
+#[derive(Clone, Default)]
+pub struct SlotStats {
+    pub num_repaired: usize,
+    pub num_recovered: usize,
+    pub num_shreds: usize,
+    pub turbine_index_set: HashSet<u32>, // TODO replace with roaring bitset?
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -876,6 +879,7 @@ impl Blockstore {
         let mut erasure_metas = HashMap::new();
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
+        let mut completed_slots_stats = HashMap::new();
 
         metrics.num_shreds += shreds.len();
         let mut start = Measure::start("Shred insertion");
@@ -890,6 +894,7 @@ impl Blockstore {
                     } else {
                         ShredSource::Turbine
                     };
+                    let slot = shred.slot();
                     match self.check_insert_data_shred(
                         shred,
                         &mut erasure_metas,
@@ -912,7 +917,10 @@ impl Blockstore {
                             metrics.num_data_shreds_blockstore_error += 1;
                             error!("blockstore error: {}", err);
                         }
-                        Ok(completed_data_sets) => {
+                        Ok((completed_data_sets, slot_stats)) => {
+                            if let Some(stats) = slot_stats {
+                                completed_slots_stats.insert(slot, stats);
+                            }
                             newly_completed_data_sets.extend(completed_data_sets);
                             inserted_indices.push(i);
                             metrics.num_inserted += 1;
@@ -984,7 +992,10 @@ impl Blockstore {
                             error!("blockstore error: {}", err);
                             None
                         }
-                        Ok(completed_data_sets) => {
+                        Ok((completed_data_sets, slot_stats)) => {
+                            if let Some(stats) = slot_stats {
+                                completed_slots_stats.insert(shred.slot(), stats);
+                            }
                             newly_completed_data_sets.extend(completed_data_sets);
                             metrics.num_recovered_inserted += 1;
                             Some(shred)
@@ -1039,6 +1050,7 @@ impl Blockstore {
             &self.completed_slots_senders,
             should_signal,
             newly_completed_slots,
+            completed_slots_stats,
         );
 
         total_start.stop();
@@ -1289,7 +1301,7 @@ impl Blockstore {
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
         dist_notify_sender: Option<&Sender<Slot>>,
-    ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError>
+    ) -> std::result::Result<(Vec<CompletedDataSetInfo>, Option<SlotStats>), InsertDataShredError>
     where
         F: Fn(Shred),
     {
@@ -1344,7 +1356,7 @@ impl Blockstore {
         }
 
         let erasure_set = shred.erasure_set();
-        let newly_completed_data_sets = self.insert_data_shred(
+        let (newly_completed_data_sets, slot_stats) = self.insert_data_shred(
             slot_meta,
             index_meta.data_mut(),
             &shred,
@@ -1360,7 +1372,7 @@ impl Blockstore {
                 entry.insert(meta);
             }
         }
-        Ok(newly_completed_data_sets)
+        Ok((newly_completed_data_sets, slot_stats))
     }
 
     fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
@@ -1554,7 +1566,7 @@ impl Blockstore {
         write_batch: &mut WriteBatch,
         shred_source: ShredSource,
         dist_notify_sender: Option<&Sender<Slot>>,
-    ) -> Result<Vec<CompletedDataSetInfo>> {
+    ) -> Result<(Vec<CompletedDataSetInfo>, Option<SlotStats>)> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
 
@@ -1611,30 +1623,40 @@ impl Blockstore {
             end_index,
         })
         .collect();
-        if shred_source == ShredSource::Repaired || shred_source == ShredSource::Recovered {
+
+        {
             let mut slots_stats = self.slots_stats.lock().unwrap();
             let mut e = slots_stats.stats.entry(slot_meta.slot).or_default();
-            if shred_source == ShredSource::Repaired {
-                e.num_repaired += 1;
-            }
-            if shred_source == ShredSource::Recovered {
-                e.num_recovered += 1;
+            match shred_source {
+                ShredSource::Repaired => e.num_repaired += 1,
+                ShredSource::Recovered => e.num_recovered += 1,
+                ShredSource::Turbine => {
+                    e.turbine_index_set.insert(shred.index());
+                }
             }
         }
-        if slot_meta.is_full() {
-            let (num_repaired, num_recovered) = {
+
+        let slot_stats = if slot_meta.is_full() {
+            let mut slot_stats = {
                 let mut slots_stats = self.slots_stats.lock().unwrap();
-                if let Some(e) = slots_stats.stats.remove(&slot_meta.slot) {
-                    if slots_stats.last_cleanup_ts.elapsed().as_secs() > 30 {
-                        let root = self.last_root();
-                        slots_stats.stats = slots_stats.stats.split_off(&root);
-                        slots_stats.last_cleanup_ts = Instant::now();
-                    }
-                    (e.num_repaired, e.num_recovered)
-                } else {
-                    (0, 0)
+                let slot_stats = slots_stats.stats.remove(&slot_meta.slot);
+
+                if slots_stats.last_cleanup_ts.elapsed().as_secs() > 30 {
+                    let root = self.last_root();
+                    slots_stats.stats = slots_stats.stats.split_off(&root);
+                    slots_stats.last_cleanup_ts = Instant::now();
                 }
+
+                slot_stats
             };
+
+            let (num_repaired, num_recovered) = if let Some(ref mut stats) = slot_stats {
+                stats.num_shreds = slot_meta.last_index.unwrap_or(0) as usize;
+                (stats.num_repaired, stats.num_recovered)
+            } else {
+                (0, 0)
+            };
+
             datapoint_info!(
                 "shred_insert_is_full",
                 (
@@ -1662,9 +1684,13 @@ impl Blockstore {
                     sender.send(slot_meta.slot).unwrap();
                 }
             }
-        }
+            slot_stats
+        } else {
+            None
+        };
+
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-        Ok(newly_completed_data_sets)
+        Ok((newly_completed_data_sets, slot_stats))
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
@@ -3403,7 +3429,6 @@ fn get_slot_meta_entry<'a>(
         }
     })
 }
-
 fn get_last_hash<'a>(iterator: impl Iterator<Item = &'a Entry> + 'a) -> Option<Hash> {
     iterator.last().map(|entry| entry.hash)
 }
@@ -3414,9 +3439,10 @@ fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u6
 
 fn send_signals(
     new_shreds_signals: &[Sender<bool>],
-    completed_slots_senders: &[Sender<Vec<u64>>],
+    completed_slots_senders: &[CompletedSlotsSender],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
+    mut completed_slots_stats: HashMap<Slot, SlotStats>,
 ) {
     if should_signal {
         for signal in new_shreds_signals {
@@ -3425,14 +3451,30 @@ fn send_signals(
     }
 
     if !completed_slots_senders.is_empty() && !newly_completed_slots.is_empty() {
+        let slots_and_stats: Vec<(Slot, Option<SlotStats>)> = newly_completed_slots
+            .iter()
+            .map(|slot| (*slot, completed_slots_stats.remove(slot)))
+            .collect();
+
+        /*
         let mut slots: Vec<_> = (0..completed_slots_senders.len() - 1)
             .map(|_| newly_completed_slots.clone())
             .collect();
 
         slots.push(newly_completed_slots);
+        */
 
-        for (signal, slots) in completed_slots_senders.iter().zip(slots.into_iter()) {
-            let res = signal.try_send(slots);
+        let mut slot_data_copies: Vec<Vec<(Slot, Option<SlotStats>)>> = (0
+            ..completed_slots_senders.len() - 1)
+            .map(|_| slots_and_stats.clone())
+            .collect();
+        slot_data_copies.push(slots_and_stats);
+
+        for (signal, slots_and_stats) in completed_slots_senders
+            .iter()
+            .zip(slot_data_copies.into_iter())
+        {
+            let res = signal.try_send(slots_and_stats);
             if let Err(TrySendError::Full(_)) = res {
                 datapoint_error!(
                     "blockstore_error",
@@ -3466,9 +3508,9 @@ fn send_signals(
 ///    newly completed.
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
-    completed_slots_senders: &[Sender<Vec<u64>>],
+    completed_slots_senders: &[CompletedSlotsSender],
     write_batch: &mut WriteBatch,
-) -> Result<(bool, Vec<u64>)> {
+) -> Result<(bool, Vec<Slot>)> {
     let mut should_signal = false;
     let mut newly_completed_slots = vec![];
 

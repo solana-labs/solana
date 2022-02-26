@@ -140,6 +140,15 @@ pub struct SlotTransactionStats {
     pub max_transactions_per_entry: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SlotShredStats {
+    pub num_shreds: u64,
+    pub num_repaired: u64,
+    pub num_recovered: u64,
+    pub turbine_indices: Vec<u32>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum SlotUpdate {
@@ -150,6 +159,7 @@ pub enum SlotUpdate {
     Completed {
         slot: Slot,
         timestamp: u64,
+        stats: Option<SlotShredStats>,
     },
     CreatedBank {
         slot: Slot,
