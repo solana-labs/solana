@@ -11,7 +11,7 @@ use {
 };
 
 #[derive(Debug, PartialEq, IntoEnumIterator)]
-pub enum RentState {
+pub(crate) enum RentState {
     Uninitialized, // account.lamports == 0
     RentPaying,    // 0 < account.lamports < rent-exempt-minimum
     RentExempt,    // account.lamports >= rent-exempt-minimum
@@ -81,7 +81,7 @@ pub(crate) fn check_rent_state_with_account(
     submit_rent_state_metrics(pre_rent_state, post_rent_state);
     if !post_rent_state.transition_allowed_from(pre_rent_state) {
         debug!(
-            "Account {:?} not rent exempt, state {:?}",
+            "Account {} not rent exempt, state {:?}",
             address, account_state,
         );
         return Err(TransactionError::InvalidRentPayingAccount);

@@ -16600,7 +16600,7 @@ pub(crate) mod tests {
         assert!(result.is_ok());
         assert_eq!(0, bank.get_balance(&rent_paying_fee_payer.pubkey()));
 
-        // RentExempt fee-payer cannot become RentPaying via rent
+        // RentExempt fee-payer cannot become RentPaying from transaction fee
         let tx = Transaction::new(
             &[&rent_exempt_fee_payer, &mint_keypair],
             Message::new(

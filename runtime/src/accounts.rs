@@ -343,8 +343,7 @@ impl Accounts {
                 if payer_index != 0 {
                     warn!("Payer index should be 0! {:?}", tx);
                 }
-                let payer_address = accounts[payer_index].0;
-                let payer_account = &mut accounts[payer_index].1;
+                let (ref payer_address, ref mut payer_account) = accounts[payer_index];
                 if payer_account.lamports() == 0 {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::AccountNotFound);
@@ -371,10 +370,12 @@ impl Accounts {
                     .checked_sub_lamports(fee)
                     .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
+                let payer_post_rent_state =
+                    RentState::from_account(payer_account, &rent_collector.rent);
                 let rent_state_result = check_rent_state_with_account(
                     &payer_pre_rent_state,
-                    &RentState::from_account(payer_account, &rent_collector.rent),
-                    &payer_address,
+                    &payer_post_rent_state,
+                    payer_address,
                     payer_account,
                 );
                 // Feature gate only wraps the actual error return so that the metrics and debug
