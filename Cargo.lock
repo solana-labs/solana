@@ -13,15 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "addr2line"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e61f2b7f93d2c7d2b08263acaa4a363b3e276806c68af6134c44f523bf1aacd"
-dependencies = [
- "gimli",
-]
-
-[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -224,21 +215,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "backtrace"
-version = "0.3.62"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "091bcdf2da9950f96aa522681ce805e6857f6ca8df73833d35736ab2dc78e152"
-dependencies = [
- "addr2line",
- "cc",
- "cfg-if 1.0.0",
- "libc",
- "miniz_oxide",
- "object",
- "rustc-demangle",
-]
-
-[[package]]
 name = "base-x"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -353,7 +329,7 @@ dependencies = [
  "cc",
  "cfg-if 0.1.10",
  "constant_time_eq",
- "crypto-mac 0.8.0",
+ "crypto-mac",
  "digest 0.9.0",
 ]
 
@@ -1004,16 +980,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto-mac"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58bcd97a54c7ca5ce2f6eb16f6bede5b0ab5f0055fedc17d2f0b4466e21671ca"
-dependencies = [
- "generic-array 0.14.5",
- "subtle",
-]
-
-[[package]]
 name = "csv"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1103,12 +1069,9 @@ dependencies = [
 
 [[package]]
 name = "derivation-path"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193388a8c8c75a490b604ff61775e236541b8975e98e5ca1f6ea97d122b7e2db"
-dependencies = [
- "failure",
-]
+checksum = "6e5c37193a1db1d8ed868c03ec7b152175f26160a5b740e5e484143877e0adf0"
 
 [[package]]
 name = "derivative"
@@ -1271,15 +1234,14 @@ dependencies = [
 
 [[package]]
 name = "ed25519-dalek-bip32"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "057f328f31294b5ab432e6c39642f54afd1531677d6d4ba2905932844cc242f3"
+checksum = "9d2be62a4061b872c8c0873ee4fc6f101ce7b889d039f019c5fa2af471a59908"
 dependencies = [
  "derivation-path",
  "ed25519-dalek",
- "failure",
- "hmac 0.9.0",
- "sha2 0.9.8",
+ "hmac 0.12.0",
+ "sha2 0.10.2",
 ]
 
 [[package]]
@@ -1408,28 +1370,6 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tower-service",
-]
-
-[[package]]
-name = "failure"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
-dependencies = [
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.81",
- "synstructure",
 ]
 
 [[package]]
@@ -1757,12 +1697,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gimli"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0a01e0497841a3b2db4f8afa483cce65f7e96a3498bd6c541734792aeac8fe7"
-
-[[package]]
 name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1901,17 +1835,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "126888268dcc288495a26bf004b38c5fdbb31682f992c84ceb046a1f0fe38840"
 dependencies = [
- "crypto-mac 0.8.0",
- "digest 0.9.0",
-]
-
-[[package]]
-name = "hmac"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deae6d9dbb35ec2c502d62b8f7b1c000a0822c3b0794ba36b3149c0a1c840dff"
-dependencies = [
- "crypto-mac 0.9.1",
+ "crypto-mac",
  "digest 0.9.0",
 ]
 
@@ -2881,15 +2805,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
-name = "object"
-version = "0.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67ac1d3f9a1d3616fd9a60c8d74296f22406a238b6a72f5cc1e6f314df4ffbf9"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3094,7 +3009,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "216eaa586a190f0a738f2f918511eecfa90f13295abec0e457cdebcceda80cbd"
 dependencies = [
- "crypto-mac 0.8.0",
+ "crypto-mac",
 ]
 
 [[package]]
