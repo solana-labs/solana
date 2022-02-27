@@ -1,7 +1,7 @@
-use crate::invoke_context::InvokeContext;
 #[allow(deprecated)]
 use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use {
+    crate::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
@@ -11,6 +11,7 @@ use {
             clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
             stake_history::StakeHistory, Sysvar, SysvarId,
         },
+        transaction_context::{InstructionContext, TransactionContext},
     },
     std::sync::Arc,
 };
@@ -228,6 +229,90 @@ pub mod get_sysvar_with_account_check {
         invoke_context: &InvokeContext,
     ) -> Result<Arc<StakeHistory>, InstructionError> {
         check_sysvar_keyed_account::<StakeHistory>(keyed_account)?;
+        invoke_context.get_sysvar_cache().get_stake_history()
+    }
+}
+
+pub mod get_sysvar_with_account_check2 {
+    use super::*;
+
+    fn check_sysvar_account<S: Sysvar>(
+        transaction_context: &TransactionContext,
+        instruction_context: &InstructionContext,
+        instruction_account_index: usize,
+    ) -> Result<(), InstructionError> {
+        if !S::check_id(
+            instruction_context
+                .get_instruction_account_key(transaction_context, instruction_account_index)?,
+        ) {
+            return Err(InstructionError::InvalidArgument);
+        }
+        Ok(())
+    }
+
+    pub fn clock(
+        invoke_context: &InvokeContext,
+        instruction_context: &InstructionContext,
+        index_in_instruction: usize,
+    ) -> Result<Arc<Clock>, InstructionError> {
+        check_sysvar_account::<Clock>(
+            invoke_context.transaction_context,
+            instruction_context,
+            index_in_instruction,
+        )?;
+        invoke_context.get_sysvar_cache().get_clock()
+    }
+
+    pub fn rent(
+        invoke_context: &InvokeContext,
+        instruction_context: &InstructionContext,
+        index_in_instruction: usize,
+    ) -> Result<Arc<Rent>, InstructionError> {
+        check_sysvar_account::<Rent>(
+            invoke_context.transaction_context,
+            instruction_context,
+            index_in_instruction,
+        )?;
+        invoke_context.get_sysvar_cache().get_rent()
+    }
+
+    pub fn slot_hashes(
+        invoke_context: &InvokeContext,
+        instruction_context: &InstructionContext,
+        index_in_instruction: usize,
+    ) -> Result<Arc<SlotHashes>, InstructionError> {
+        check_sysvar_account::<SlotHashes>(
+            invoke_context.transaction_context,
+            instruction_context,
+            index_in_instruction,
+        )?;
+        invoke_context.get_sysvar_cache().get_slot_hashes()
+    }
+
+    #[allow(deprecated)]
+    pub fn recent_blockhashes(
+        invoke_context: &InvokeContext,
+        instruction_context: &InstructionContext,
+        index_in_instruction: usize,
+    ) -> Result<Arc<RecentBlockhashes>, InstructionError> {
+        check_sysvar_account::<RecentBlockhashes>(
+            invoke_context.transaction_context,
+            instruction_context,
+            index_in_instruction,
+        )?;
+        invoke_context.get_sysvar_cache().get_recent_blockhashes()
+    }
+
+    pub fn stake_history(
+        invoke_context: &InvokeContext,
+        instruction_context: &InstructionContext,
+        index_in_instruction: usize,
+    ) -> Result<Arc<StakeHistory>, InstructionError> {
+        check_sysvar_account::<StakeHistory>(
+            invoke_context.transaction_context,
+            instruction_context,
+            index_in_instruction,
+        )?;
         invoke_context.get_sysvar_cache().get_stake_history()
     }
 }

@@ -5,19 +5,19 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        account_utils::State,
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
-        keyed_account::KeyedAccount,
         pubkey::Pubkey,
         rent::Rent,
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
+        transaction_context::{BorrowedAccount, InstructionContext},
     },
     std::{
         cmp::Ordering,
@@ -317,7 +317,7 @@ pub struct VoteState {
 
     /// history of how many credits earned by the end of each epoch
     ///  each tuple is (Epoch, credits, prev_credits)
-    epoch_credits: Vec<(Epoch, u64, u64)>,
+    pub(crate) epoch_credits: Vec<(Epoch, u64, u64)>,
 
     /// most recent timestamp submitted with a vote
     pub last_timestamp: BlockTimestamp,
@@ -473,17 +473,12 @@ impl VoteState {
             // to the current vote state root for safety.
             if earliest_slot_hash_in_history > new_proposed_root {
                 vote_state_update.root = self.root_slot;
-            } else if !slot_hashes
-                // Verify that the root is in slot hashes
-                .iter()
-                .any(|&(slot, _)| slot == new_proposed_root)
-            {
-                return Err(VoteError::RootOnDifferentFork);
             }
         }
 
-        // index into the new proposed vote state's slots, starting at the oldest
-        // slot
+        // index into the new proposed vote state's slots, starting with the root if it exists then
+        // we use this mutable root to fold the root slot case into this loop for performance
+        let mut check_root = vote_state_update.root;
         let mut vote_state_update_index = 0;
 
         // index into the slot_hashes, starting at the oldest known
@@ -505,8 +500,13 @@ impl VoteState {
         // because have to ensure that every slot is actually part of the history, not just the most
         // recent ones
         while vote_state_update_index < vote_state_update.lockouts.len() && slot_hashes_index > 0 {
-            let proposed_vote_slot = vote_state_update.lockouts[vote_state_update_index].slot;
-            if vote_state_update_index > 0
+            let proposed_vote_slot = if let Some(root) = check_root {
+                root
+            } else {
+                vote_state_update.lockouts[vote_state_update_index].slot
+            };
+            if check_root.is_none()
+                && vote_state_update_index > 0
                 && proposed_vote_slot
                     <= vote_state_update.lockouts[vote_state_update_index - 1].slot
             {
@@ -522,7 +522,7 @@ impl VoteState {
                         // The vote slot does not exist in the SlotHashes history because it's too old,
                         // i.e. older than the oldest slot in the history.
                         assert!(proposed_vote_slot < earliest_slot_hash_in_history);
-                        if !self.contains_slot(proposed_vote_slot) {
+                        if !self.contains_slot(proposed_vote_slot) && check_root.is_none() {
                             // If the vote slot is both:
                             // 1) Too old
                             // 2) Doesn't already exist in vote state
@@ -530,13 +530,25 @@ impl VoteState {
                             // Then filter it out
                             vote_state_update_indexes_to_filter.push(vote_state_update_index);
                         }
-                        vote_state_update_index += 1;
+                        if check_root.is_some() {
+                            // If the vote state update has a root < earliest_slot_hash_in_history
+                            // then we use the current root. The only case where this can happen
+                            // is if the current root itself is not in slot hashes.
+                            assert!(self.root_slot.unwrap() < earliest_slot_hash_in_history);
+                            check_root = None;
+                        } else {
+                            vote_state_update_index += 1;
+                        }
                         continue;
                     } else {
                         // If the vote slot is new enough to be in the slot history,
                         // but is not part of the slot history, then it must belong to another fork,
                         // which means this vote state update is invalid.
-                        return Err(VoteError::SlotsMismatch);
+                        if check_root.is_some() {
+                            return Err(VoteError::RootOnDifferentFork);
+                        } else {
+                            return Err(VoteError::SlotsMismatch);
+                        }
                     }
                 }
                 Ordering::Greater => {
@@ -546,9 +558,14 @@ impl VoteState {
                 }
                 Ordering::Equal => {
                     // Once the slot in `vote_state_update.lockouts` is found, bump to the next slot
-                    // in `vote_state_update.lockouts` and continue.
-                    vote_state_update_index += 1;
-                    slot_hashes_index -= 1;
+                    // in `vote_state_update.lockouts` and continue. If we were checking the root,
+                    // start checking the vote state instead.
+                    if check_root.is_some() {
+                        check_root = None;
+                    } else {
+                        vote_state_update_index += 1;
+                        slot_hashes_index -= 1;
+                    }
                 }
             }
         }
@@ -1148,19 +1165,24 @@ impl VoteState {
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
 pub fn authorize<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
+    signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
-    signers: &HashSet<Pubkey, S>,
-    clock: &Clock,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     match vote_authorize {
         VoteAuthorize::Voter => {
-            let authorized_withdrawer_signer = if feature_set
+            let authorized_withdrawer_signer = if invoke_context
+                .feature_set
                 .is_active(&feature_set::vote_withdraw_authority_may_change_authorized_voter::id())
             {
                 verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok()
@@ -1194,12 +1216,17 @@ pub fn authorize<S: std::hash::BuildHasher>(
 
 /// Update the node_pubkey, requires signature of the authorized voter
 pub fn update_validator_identity<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    node_pubkey: &Pubkey,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
+    node_pubkey: &Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -1214,12 +1241,17 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
 /// Update the vote account's commission
 pub fn update_commission<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    commission: u8,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
+    commission: u8,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -1242,20 +1274,42 @@ fn verify_authorized_signer<S: std::hash::BuildHasher>(
 
 /// Withdraw funds from the vote account
 pub fn withdraw<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    lamports: u64,
-    to_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
-    rent_sysvar: Option<&Rent>,
-    clock: Option<&Clock>,
+    vote_account_index: usize,
+    recipient_account_index: usize,
+    lamports: u64,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+
+    let rent_sysvar = if invoke_context
+        .feature_set
+        .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
+    {
+        Some(invoke_context.get_sysvar_cache().get_rent()?)
+    } else {
+        None
+    };
+
+    let clock = if invoke_context
+        .feature_set
+        .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
+    {
+        Some(invoke_context.get_sysvar_cache().get_clock()?)
+    } else {
+        None
+    };
+
+    let vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
     let remaining_balance = vote_account
-        .lamports()?
+        .get_lamports()
         .checked_sub(lamports)
         .ok_or(InstructionError::InsufficientFunds)?;
 
@@ -1278,18 +1332,19 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
         }
     } else if let Some(rent_sysvar) = rent_sysvar {
-        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.data_len()?);
+        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.get_data().len());
         if remaining_balance < min_rent_exempt_balance {
             return Err(InstructionError::InsufficientFunds);
         }
     }
 
-    vote_account
-        .try_account_ref_mut()?
-        .checked_sub_lamports(lamports)?;
-    to_account
-        .try_account_ref_mut()?
-        .checked_add_lamports(lamports)?;
+    vote_account.checked_sub_lamports(lamports)?;
+    drop(vote_account);
+    let mut recipient_account = instruction_context.try_borrow_instruction_account(
+        invoke_context.transaction_context,
+        recipient_account_index,
+    )?;
+    recipient_account.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -1297,15 +1352,19 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    vote_init: &VoteInit,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
-    clock: &Clock,
+    vote_account_index: usize,
+    vote_init: &VoteInit,
 ) -> Result<(), InstructionError> {
-    if vote_account.data_len()? != VoteState::size_of() {
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+    if vote_account.get_data().len() != VoteState::size_of() {
         return Err(InstructionError::InvalidAccountData);
     }
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    let versioned = vote_account.get_state::<VoteStateVersions>()?;
 
     if !versioned.is_uninitialized() {
         return Err(InstructionError::AccountAlreadyInitialized);
@@ -1315,16 +1374,16 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     verify_authorized_signer(&vote_init.node_pubkey, signers)?;
 
     vote_account.set_state(&VoteStateVersions::new_current(VoteState::new(
-        vote_init, clock,
+        vote_init, &clock,
     )))
 }
 
 fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &BorrowedAccount,
     clock: &Clock,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<VoteState, InstructionError> {
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    let versioned = vote_account.get_state::<VoteStateVersions>()?;
 
     if versioned.is_uninitialized() {
         return Err(InstructionError::UninitializedAccount);
@@ -1338,16 +1397,25 @@ fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    slot_hashes: &[SlotHash],
-    clock: &Clock,
-    vote: &Vote,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
-    feature_set: &FeatureSet,
+    vote_account_index: usize,
+    vote: &Vote,
 ) -> Result<(), InstructionError> {
-    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let sysvar_cache = invoke_context.get_sysvar_cache();
+    let slot_hashes = sysvar_cache.get_slot_hashes()?;
+    let clock = sysvar_cache.get_clock()?;
+    let mut vote_state = verify_and_get_vote_state(&vote_account, &clock, signers)?;
 
-    vote_state.process_vote(vote, slot_hashes, clock.epoch, Some(feature_set))?;
+    vote_state.process_vote(
+        vote,
+        slot_hashes.slot_hashes(),
+        clock.epoch,
+        Some(&invoke_context.feature_set),
+    )?;
     if let Some(timestamp) = vote.timestamp {
         vote.slots
             .iter()
@@ -1359,14 +1427,19 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote_state_update<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
-    slot_hashes: &[SlotHash],
-    clock: &Clock,
-    mut vote_state_update: VoteStateUpdate,
+    invoke_context: &InvokeContext,
+    instruction_context: &InstructionContext,
     signers: &HashSet<Pubkey, S>,
+    vote_account_index: usize,
+    mut vote_state_update: VoteStateUpdate,
 ) -> Result<(), InstructionError> {
-    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
-    vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, slot_hashes)?;
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(invoke_context.transaction_context, vote_account_index)?;
+    let sysvar_cache = invoke_context.get_sysvar_cache();
+    let slot_hashes = sysvar_cache.get_slot_hashes()?;
+    let clock = sysvar_cache.get_clock()?;
+    let mut vote_state = verify_and_get_vote_state(&vote_account, &clock, signers)?;
+    vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes)?;
     vote_state.process_new_vote_state(
         vote_state_update.lockouts,
         vote_state_update.root,
@@ -1416,12 +1489,7 @@ mod tests {
     use {
         super::*,
         crate::vote_state,
-        solana_sdk::{
-            account::AccountSharedData,
-            account_utils::StateMut,
-            hash::hash,
-            keyed_account::{get_signers, keyed_account_at_index},
-        },
+        solana_sdk::{account::AccountSharedData, account_utils::StateMut, hash::hash},
         std::cell::RefCell,
     };
 
@@ -1441,80 +1509,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_initialize_vote_account() {
-        let vote_account_pubkey = solana_sdk::pubkey::new_rand();
-        let vote_account = AccountSharedData::new_ref(100, VoteState::size_of(), &id());
-        let vote_account = KeyedAccount::new(&vote_account_pubkey, false, &vote_account);
-
-        let node_pubkey = solana_sdk::pubkey::new_rand();
-        let node_account = RefCell::new(AccountSharedData::default());
-        let keyed_accounts = &[];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-
-        //init should fail, node_pubkey didn't sign the transaction
-        let res = initialize_account(
-            &vote_account,
-            &VoteInit {
-                node_pubkey,
-                authorized_voter: vote_account_pubkey,
-                authorized_withdrawer: vote_account_pubkey,
-                commission: 0,
-            },
-            &signers,
-            &Clock::default(),
-        );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        let keyed_accounts = &[KeyedAccount::new(&node_pubkey, true, &node_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-
-        //init should pass
-        let res = initialize_account(
-            &vote_account,
-            &VoteInit {
-                node_pubkey,
-                authorized_voter: vote_account_pubkey,
-                authorized_withdrawer: vote_account_pubkey,
-                commission: 0,
-            },
-            &signers,
-            &Clock::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // reinit should fail
-        let res = initialize_account(
-            &vote_account,
-            &VoteInit {
-                node_pubkey,
-                authorized_voter: vote_account_pubkey,
-                authorized_withdrawer: vote_account_pubkey,
-                commission: 0,
-            },
-            &signers,
-            &Clock::default(),
-        );
-        assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
-
-        //init should fail, account is too big
-        let large_vote_account = AccountSharedData::new_ref(100, 2 * VoteState::size_of(), &id());
-        let large_vote_account =
-            KeyedAccount::new(&vote_account_pubkey, false, &large_vote_account);
-        let res = initialize_account(
-            &large_vote_account,
-            &VoteInit {
-                node_pubkey,
-                authorized_voter: vote_account_pubkey,
-                authorized_withdrawer: vote_account_pubkey,
-                commission: 0,
-            },
-            &signers,
-            &Clock::default(),
-        );
-        assert_eq!(res, Err(InstructionError::InvalidAccountData));
-    }
-
     fn create_test_account() -> (Pubkey, RefCell<AccountSharedData>) {
         let rent = Rent::default();
         let balance = VoteState::get_rent_exempt_reserve(&rent);
@@ -1527,98 +1521,6 @@ mod tests {
                 0,
                 balance,
             )),
-        )
-    }
-
-    fn create_test_account_with_authorized() -> (Pubkey, Pubkey, Pubkey, RefCell<AccountSharedData>)
-    {
-        let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let authorized_voter = solana_sdk::pubkey::new_rand();
-        let authorized_withdrawer = solana_sdk::pubkey::new_rand();
-
-        (
-            vote_pubkey,
-            authorized_voter,
-            authorized_withdrawer,
-            RefCell::new(vote_state::create_account_with_authorized(
-                &solana_sdk::pubkey::new_rand(),
-                &authorized_voter,
-                &authorized_withdrawer,
-                0,
-                100,
-            )),
-        )
-    }
-
-    fn create_test_account_with_epoch_credits(
-        credits_to_append: &[u64],
-    ) -> (Pubkey, RefCell<AccountSharedData>) {
-        let (vote_pubkey, vote_account) = create_test_account();
-        let vote_account_space = vote_account.borrow().data().len();
-
-        let mut vote_state = VoteState::from(&*vote_account.borrow_mut()).unwrap();
-        vote_state.authorized_withdrawer = vote_pubkey;
-
-        vote_state.epoch_credits = Vec::new();
-
-        let mut current_epoch_credits = 0;
-        let mut previous_epoch_credits = 0;
-        for (epoch, credits) in credits_to_append.iter().enumerate() {
-            current_epoch_credits += credits;
-            vote_state.epoch_credits.push((
-                u64::try_from(epoch).unwrap(),
-                current_epoch_credits,
-                previous_epoch_credits,
-            ));
-            previous_epoch_credits = current_epoch_credits;
-        }
-
-        let lamports = vote_account.borrow().lamports();
-        let mut vote_account_with_epoch_credits =
-            AccountSharedData::new(lamports, vote_account_space, &vote_pubkey);
-        let versioned = VoteStateVersions::new_current(vote_state);
-        VoteState::to(&versioned, &mut vote_account_with_epoch_credits);
-        let ref_vote_account_with_epoch_credits = RefCell::new(vote_account_with_epoch_credits);
-
-        (vote_pubkey, ref_vote_account_with_epoch_credits)
-    }
-
-    fn simulate_process_vote(
-        vote_pubkey: &Pubkey,
-        vote_account: &RefCell<AccountSharedData>,
-        vote: &Vote,
-        slot_hashes: &[SlotHash],
-        epoch: Epoch,
-    ) -> Result<VoteState, InstructionError> {
-        let keyed_accounts = &[KeyedAccount::new(vote_pubkey, true, vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        process_vote(
-            &keyed_accounts[0],
-            slot_hashes,
-            &Clock {
-                epoch,
-                ..Clock::default()
-            },
-            vote,
-            &signers,
-            &FeatureSet::default(),
-        )?;
-        StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
-            .map(|versioned| versioned.convert_to_current())
-    }
-
-    /// exercises all the keyed accounts stuff
-    fn simulate_process_vote_unchecked(
-        vote_pubkey: &Pubkey,
-        vote_account: &RefCell<AccountSharedData>,
-        vote: &Vote,
-    ) -> Result<VoteState, InstructionError> {
-        simulate_process_vote(
-            vote_pubkey,
-            vote_account,
-            vote,
-            &[(*vote.slots.last().unwrap(), vote.hash)],
-            0,
         )
     }
 
@@ -1652,384 +1554,6 @@ mod tests {
             vote_pubkey
         );
         assert!(vote_state.votes.is_empty());
-    }
-
-    #[test]
-    fn test_vote() {
-        let (vote_pubkey, vote_account) = create_test_account();
-
-        let vote = Vote::new(vec![1], Hash::default());
-        let vote_state =
-            simulate_process_vote_unchecked(&vote_pubkey, &vote_account, &vote).unwrap();
-        assert_eq!(
-            vote_state.votes,
-            vec![Lockout::new(*vote.slots.last().unwrap())]
-        );
-        assert_eq!(vote_state.credits(), 0);
-    }
-
-    #[test]
-    fn test_vote_slot_hashes() {
-        let (vote_pubkey, vote_account) = create_test_account();
-
-        let hash = hash(&[0u8]);
-        let vote = Vote::new(vec![0], hash);
-
-        // wrong hash
-        assert_eq!(
-            simulate_process_vote(
-                &vote_pubkey,
-                &vote_account,
-                &vote,
-                &[(0, Hash::default())],
-                0,
-            ),
-            Err(VoteError::SlotHashMismatch.into())
-        );
-
-        // wrong slot
-        assert_eq!(
-            simulate_process_vote(&vote_pubkey, &vote_account, &vote, &[(1, hash)], 0),
-            Err(VoteError::SlotsMismatch.into())
-        );
-
-        // empty slot_hashes
-        assert_eq!(
-            simulate_process_vote(&vote_pubkey, &vote_account, &vote, &[], 0),
-            Err(VoteError::VoteTooOld.into())
-        );
-    }
-
-    #[test]
-    fn test_vote_update_validator_identity() {
-        let (vote_pubkey, _authorized_voter, authorized_withdrawer, vote_account) =
-            create_test_account_with_authorized();
-
-        let node_pubkey = solana_sdk::pubkey::new_rand();
-        let node_account = RefCell::new(AccountSharedData::default());
-        let authorized_withdrawer_account = RefCell::new(AccountSharedData::default());
-
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, true, &vote_account),
-            KeyedAccount::new(&node_pubkey, false, &node_account),
-            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_validator_identity(&keyed_accounts[0], &node_pubkey, &signers);
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, true, &vote_account),
-            KeyedAccount::new(&node_pubkey, true, &node_account),
-            KeyedAccount::new(
-                &authorized_withdrawer,
-                false,
-                &authorized_withdrawer_account,
-            ),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_validator_identity(&keyed_accounts[0], &node_pubkey, &signers);
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
-            .unwrap()
-            .convert_to_current();
-        assert!(vote_state.node_pubkey != node_pubkey);
-
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, true, &vote_account),
-            KeyedAccount::new(&node_pubkey, true, &node_account),
-            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_validator_identity(&keyed_accounts[0], &node_pubkey, &signers);
-        assert_eq!(res, Ok(()));
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
-            .unwrap()
-            .convert_to_current();
-        assert_eq!(vote_state.node_pubkey, node_pubkey);
-    }
-
-    #[test]
-    fn test_vote_update_commission() {
-        let (vote_pubkey, _authorized_voter, authorized_withdrawer, vote_account) =
-            create_test_account_with_authorized();
-
-        let authorized_withdrawer_account = RefCell::new(AccountSharedData::default());
-
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, true, &vote_account),
-            KeyedAccount::new(
-                &authorized_withdrawer,
-                false,
-                &authorized_withdrawer_account,
-            ),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_commission(&keyed_accounts[0], 42, &signers);
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, true, &vote_account),
-            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_commission(&keyed_accounts[0], 42, &signers);
-        assert_eq!(res, Ok(()));
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
-            .unwrap()
-            .convert_to_current();
-        assert_eq!(vote_state.commission, 42);
-
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, true, &vote_account),
-            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_commission(&keyed_accounts[0], u8::MAX, &signers);
-        assert_eq!(res, Ok(()));
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
-            .unwrap()
-            .convert_to_current();
-        assert_eq!(vote_state.commission, u8::MAX);
-    }
-
-    #[test]
-    fn test_vote_signature() {
-        let (vote_pubkey, vote_account) = create_test_account();
-        let vote = Vote::new(vec![1], Hash::default());
-
-        // unsigned
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = process_vote(
-            &keyed_accounts[0],
-            &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock {
-                epoch: 1,
-                leader_schedule_epoch: 2,
-                ..Clock::default()
-            },
-            &vote,
-            &signers,
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        // signed
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = process_vote(
-            &keyed_accounts[0],
-            &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock {
-                epoch: 1,
-                leader_schedule_epoch: 2,
-                ..Clock::default()
-            },
-            &vote,
-            &signers,
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // another voter, unsigned
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let authorized_voter_pubkey = solana_sdk::pubkey::new_rand();
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_voter_pubkey,
-            VoteAuthorize::Voter,
-            &signers,
-            &Clock {
-                epoch: 1,
-                leader_schedule_epoch: 2,
-                ..Clock::default()
-            },
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_voter_pubkey,
-            VoteAuthorize::Voter,
-            &signers,
-            &Clock {
-                epoch: 1,
-                leader_schedule_epoch: 2,
-                ..Clock::default()
-            },
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // Already set an authorized voter earlier for leader_schedule_epoch == 2
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_voter_pubkey,
-            VoteAuthorize::Voter,
-            &signers,
-            &Clock {
-                epoch: 1,
-                leader_schedule_epoch: 2,
-                ..Clock::default()
-            },
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
-
-        // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
-        let authorized_voter_account = RefCell::new(AccountSharedData::default());
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, false, &vote_account),
-            KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_voter_pubkey,
-            VoteAuthorize::Voter,
-            &signers,
-            &Clock {
-                // The authorized voter was set when leader_schedule_epoch == 2, so will
-                // take effect when epoch == 3
-                epoch: 3,
-                leader_schedule_epoch: 4,
-                ..Clock::default()
-            },
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // authorize another withdrawer
-        // another voter
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let authorized_withdrawer_pubkey = solana_sdk::pubkey::new_rand();
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_withdrawer_pubkey,
-            VoteAuthorize::Withdrawer,
-            &signers,
-            &Clock {
-                epoch: 3,
-                leader_schedule_epoch: 4,
-                ..Clock::default()
-            },
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // verify authorized_withdrawer can authorize authorized_withdrawer ;)
-        let withdrawer_account = RefCell::new(AccountSharedData::default());
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, false, &vote_account),
-            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_withdrawer_pubkey,
-            VoteAuthorize::Withdrawer,
-            &signers,
-            &Clock {
-                epoch: 3,
-                leader_schedule_epoch: 4,
-                ..Clock::default()
-            },
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // not signed by authorized voter
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let vote = Vote::new(vec![2], Hash::default());
-        let res = process_vote(
-            &keyed_accounts[0],
-            &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock {
-                epoch: 3,
-                leader_schedule_epoch: 4,
-                ..Clock::default()
-            },
-            &vote,
-            &signers,
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        // signed by authorized voter
-        let authorized_voter_account = RefCell::new(AccountSharedData::default());
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, false, &vote_account),
-            KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let vote = Vote::new(vec![2], Hash::default());
-        let res = process_vote(
-            &keyed_accounts[0],
-            &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock {
-                epoch: 3,
-                leader_schedule_epoch: 4,
-                ..Clock::default()
-            },
-            &vote,
-            &signers,
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // verify authorized_withdrawer can authorize a new authorized_voter when
-        // `feature_set::vote_withdraw_authority_may_change_authorized_voter` is enabled
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, false, &vote_account),
-            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
-        ];
-        let another_authorized_voter_pubkey = solana_sdk::pubkey::new_rand();
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-
-        for (feature_set, expected_res) in [
-            (
-                FeatureSet::default(),
-                Err(InstructionError::MissingRequiredSignature),
-            ),
-            (FeatureSet::all_enabled(), Ok(())),
-        ]
-        .into_iter()
-        {
-            let res = authorize(
-                &keyed_accounts[0],
-                &another_authorized_voter_pubkey,
-                VoteAuthorize::Voter,
-                &signers,
-                &Clock {
-                    epoch: 4,
-                    leader_schedule_epoch: 5,
-                    ..Clock::default()
-                },
-                &feature_set,
-            );
-            assert_eq!(res, expected_res)
-        }
-    }
-
-    #[test]
-    fn test_vote_without_initialization() {
-        let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let vote_account = RefCell::new(AccountSharedData::new(100, VoteState::size_of(), &id()));
-
-        let res = simulate_process_vote_unchecked(
-            &vote_pubkey,
-            &vote_account,
-            &Vote::new(vec![1], Hash::default()),
-        );
-        assert_eq!(res, Err(InstructionError::UninitializedAccount));
     }
 
     #[test]
@@ -2364,464 +1888,6 @@ mod tests {
         let (voter_portion, staker_portion, was_split) = vote_state.commission_split(10);
 
         assert_eq!((voter_portion, staker_portion, was_split), (5, 5, true));
-    }
-
-    #[test]
-    fn test_vote_state_withdraw() {
-        let (vote_pubkey, vote_account) = create_test_account();
-        let credits_through_epoch_1: Vec<u64> = vec![2, 1];
-        let credits_through_epoch_2: Vec<u64> = vec![2, 1, 3];
-
-        let clock_epoch_3 = &Clock {
-            epoch: 3,
-            ..Clock::default()
-        };
-
-        // unsigned request
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = withdraw(
-            &keyed_accounts[0],
-            0,
-            &KeyedAccount::new(
-                &solana_sdk::pubkey::new_rand(),
-                false,
-                &RefCell::new(AccountSharedData::default()),
-            ),
-            &signers,
-            None,
-            None,
-        );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-
-        // insufficient funds
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let lamports = vote_account.borrow().lamports();
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = withdraw(
-            &keyed_accounts[0],
-            lamports + 1,
-            &KeyedAccount::new(
-                &solana_sdk::pubkey::new_rand(),
-                false,
-                &RefCell::new(AccountSharedData::default()),
-            ),
-            &signers,
-            None,
-            Some(&Clock::default()),
-        );
-        assert_eq!(res, Err(InstructionError::InsufficientFunds));
-
-        // non rent exempt withdraw, before 7txXZZD6 feature activation
-        // without 0 credit epoch, before ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_2);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                None,
-                None,
-            );
-            assert_eq!(res, Ok(()));
-        }
-
-        // non rent exempt withdraw, before 7txXZZD6 feature activation
-        // with 0 credit epoch, before ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_1);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                None,
-                None,
-            );
-            assert_eq!(res, Ok(()));
-        }
-
-        // non rent exempt withdraw, before 7txXZZD6 feature activation
-        // without 0 credit epoch, after ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_2);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                None,
-                Some(clock_epoch_3),
-            );
-            assert_eq!(res, Ok(()));
-        }
-
-        // non rent exempt withdraw, before 7txXZZD6 feature activation
-        // with 0 credit epoch, after ALBk3EWd activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_1);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                None,
-                Some(clock_epoch_3),
-            );
-            assert_eq!(res, Ok(()));
-        }
-
-        // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // with 0 credit epoch, before ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_1);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                Some(&rent_sysvar),
-                None,
-            );
-            assert_eq!(res, Err(InstructionError::InsufficientFunds));
-        }
-
-        // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // without 0 credit epoch, before ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_2);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                Some(&rent_sysvar),
-                None,
-            );
-            assert_eq!(res, Err(InstructionError::InsufficientFunds));
-        }
-
-        // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // with 0 credit epoch, after ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_1);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                Some(&rent_sysvar),
-                Some(clock_epoch_3),
-            );
-            assert_eq!(res, Err(InstructionError::InsufficientFunds));
-        }
-
-        // non rent exempt withdraw, after 7txXZZD6 feature activation
-        // without 0 credit epoch, after ALBk3EWd feature activation
-        {
-            let (vote_pubkey, vote_account_with_epoch_credits) =
-                create_test_account_with_epoch_credits(&credits_through_epoch_2);
-            let keyed_accounts = &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &vote_account_with_epoch_credits,
-            )];
-            let lamports = vote_account_with_epoch_credits.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account_with_epoch_credits.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                lamports - minimum_balance + 1,
-                &KeyedAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
-                    false,
-                    &RefCell::new(AccountSharedData::default()),
-                ),
-                &signers,
-                Some(&rent_sysvar),
-                Some(clock_epoch_3),
-            );
-            assert_eq!(res, Err(InstructionError::InsufficientFunds));
-        }
-
-        // partial valid withdraw, after 7txXZZD6 feature activation
-        {
-            let to_account = RefCell::new(AccountSharedData::default());
-            let (vote_pubkey, vote_account) = create_test_account();
-            let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-            let lamports = vote_account.borrow().lamports();
-            let rent_sysvar = Rent::default();
-            let minimum_balance = rent_sysvar
-                .minimum_balance(vote_account.borrow().data().len())
-                .max(1);
-            assert!(minimum_balance <= lamports);
-            let withdraw_lamports = lamports - minimum_balance;
-            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-            let res = withdraw(
-                &keyed_accounts[0],
-                withdraw_lamports,
-                &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
-                &signers,
-                Some(&rent_sysvar),
-                Some(&Clock::default()),
-            );
-            assert_eq!(res, Ok(()));
-            assert_eq!(
-                vote_account.borrow().lamports(),
-                lamports - withdraw_lamports
-            );
-            assert_eq!(to_account.borrow().lamports(), withdraw_lamports);
-        }
-
-        // full withdraw, before/after 7txXZZD6 feature activation
-        // with/without 0 credit epoch, before ALBk3EWd feature activation
-        {
-            let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(&rent_sysvar)] {
-                for credits in [&credits_through_epoch_1, &credits_through_epoch_2] {
-                    let to_account = RefCell::new(AccountSharedData::default());
-                    let (vote_pubkey, vote_account) =
-                        create_test_account_with_epoch_credits(credits);
-                    let lamports = vote_account.borrow().lamports();
-                    let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-                    let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-                    let res = withdraw(
-                        &keyed_accounts[0],
-                        lamports,
-                        &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
-                        &signers,
-                        rent_sysvar,
-                        None,
-                    );
-                    assert_eq!(res, Ok(()));
-                    assert_eq!(vote_account.borrow().lamports(), 0);
-                    assert_eq!(to_account.borrow().lamports(), lamports);
-                    let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-                    // State has been deinitialized since balance is zero
-                    assert!(post_state.is_uninitialized());
-                }
-            }
-        }
-
-        // full withdraw, before/after 7txXZZD6 feature activation
-        // with 0 credit epoch, after ALBk3EWd feature activation
-        {
-            let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(&rent_sysvar)] {
-                let to_account = RefCell::new(AccountSharedData::default());
-                // let (vote_pubkey, vote_account) = create_test_account();
-                let (vote_pubkey, vote_account) =
-                    create_test_account_with_epoch_credits(&credits_through_epoch_1);
-                let lamports = vote_account.borrow().lamports();
-                let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-                let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-                let res = withdraw(
-                    &keyed_accounts[0],
-                    lamports,
-                    &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
-                    &signers,
-                    rent_sysvar,
-                    Some(clock_epoch_3),
-                );
-                assert_eq!(res, Ok(()));
-                assert_eq!(vote_account.borrow().lamports(), 0);
-                assert_eq!(to_account.borrow().lamports(), lamports);
-                let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-                // State has been deinitialized since balance is zero
-                assert!(post_state.is_uninitialized());
-            }
-        }
-
-        // full withdraw, before/after 7txXZZD6 feature activation
-        // without 0 credit epoch, after ALBk3EWd feature activation
-        {
-            let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(&rent_sysvar)] {
-                let to_account = RefCell::new(AccountSharedData::default());
-                // let (vote_pubkey, vote_account) = create_test_account();
-                let (vote_pubkey, vote_account) =
-                    create_test_account_with_epoch_credits(&credits_through_epoch_2);
-                let lamports = vote_account.borrow().lamports();
-                let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-                let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-                let res = withdraw(
-                    &keyed_accounts[0],
-                    lamports,
-                    &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
-                    &signers,
-                    rent_sysvar,
-                    Some(clock_epoch_3),
-                );
-                assert_eq!(res, Err(InstructionError::ActiveVoteAccountClose));
-                assert_eq!(vote_account.borrow().lamports(), lamports);
-                assert_eq!(to_account.borrow().lamports(), 0);
-                let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-                // State is still initialized
-                assert!(!post_state.is_uninitialized());
-            }
-        }
-
-        // authorize authorized_withdrawer
-        let authorized_withdrawer_pubkey = solana_sdk::pubkey::new_rand();
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = authorize(
-            &keyed_accounts[0],
-            &authorized_withdrawer_pubkey,
-            VoteAuthorize::Withdrawer,
-            &signers,
-            &Clock::default(),
-            &FeatureSet::default(),
-        );
-        assert_eq!(res, Ok(()));
-
-        // withdraw using authorized_withdrawer to authorized_withdrawer's account
-        let withdrawer_account = RefCell::new(AccountSharedData::default());
-        let keyed_accounts = &[
-            KeyedAccount::new(&vote_pubkey, false, &vote_account),
-            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
-        ];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let vote_keyed_account = keyed_account_at_index(keyed_accounts, 0).unwrap();
-        let withdrawer_keyed_account = keyed_account_at_index(keyed_accounts, 1).unwrap();
-        let res = withdraw(
-            vote_keyed_account,
-            lamports,
-            withdrawer_keyed_account,
-            &signers,
-            None,
-            None,
-        );
-        assert_eq!(res, Ok(()));
-        assert_eq!(vote_account.borrow().lamports(), 0);
-        assert_eq!(withdrawer_account.borrow().lamports(), lamports);
-        let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-        // State has been deinitialized since balance is zero
-        assert!(post_state.is_uninitialized());
     }
 
     #[test]
@@ -4167,6 +3233,36 @@ mod tests {
             vote_state
                 .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
             Err(VoteError::SlotsMismatch),
+        );
+    }
+
+    #[test]
+    fn test_check_update_vote_state_root_on_different_fork() {
+        let slot_hashes = build_slot_hashes(vec![2, 4, 6, 8]);
+        let vote_state = build_vote_state(vec![2, 4, 6], &slot_hashes);
+
+        // Test with a `vote_state_update` where:
+        // 1) The root is not present in slot hashes history
+        // 2) The slot is greater than the earliest slot in the history
+        // Thus this slot is not part of the fork and the update should be rejected
+        // with error `RootOnDifferentFork`
+        let new_root = 3;
+
+        // Have to vote for a slot greater than the last vote in the vote state to avoid VoteTooOld
+        // errors
+        let vote_slot = vote_state.votes.back().unwrap().slot + 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+        let mut vote_state_update = VoteStateUpdate::from(vec![(vote_slot, 1)]);
+        vote_state_update.hash = vote_slot_hash;
+        vote_state_update.root = Some(new_root);
+        assert_eq!(
+            vote_state
+                .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
+            Err(VoteError::RootOnDifferentFork),
         );
     }
 

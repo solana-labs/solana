@@ -2,6 +2,7 @@ pub mod close_account;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
+pub mod withdraw_withheld;
 
 #[cfg(not(target_arch = "bpf"))]
 use {
@@ -17,6 +18,7 @@ use {
 pub use {
     close_account::CloseAccountData, transfer::TransferData,
     transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
+    withdraw_withheld::WithdrawWithheldTokensData,
 };
 
 /// Constant for 2^32

@@ -5,7 +5,7 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
+        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,
@@ -166,7 +166,8 @@ pub fn run_kill_partition_switch_threshold<C>(
         .flat_map(|stakes_and_slots| stakes_and_slots.iter().map(|(_, num_slots)| *num_slots))
         .collect();
 
-    let (leader_schedule, validator_keys) = create_custom_leader_schedule(&num_slots_per_validator);
+    let (leader_schedule, validator_keys) =
+        create_custom_leader_schedule_with_random_keys(&num_slots_per_validator);
 
     info!(
         "Validator ids: {:?}",
@@ -206,23 +207,32 @@ pub fn run_kill_partition_switch_threshold<C>(
 }
 
 pub fn create_custom_leader_schedule(
-    validator_num_slots: &[usize],
-) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
+    validator_key_to_slots: impl Iterator<Item = (Pubkey, usize)>,
+) -> LeaderSchedule {
     let mut leader_schedule = vec![];
-    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
-        .take(validator_num_slots.len())
-        .collect();
-    for (k, num_slots) in validator_keys.iter().zip(validator_num_slots.iter()) {
-        for _ in 0..*num_slots {
-            leader_schedule.push(k.pubkey())
+    for (k, num_slots) in validator_key_to_slots {
+        for _ in 0..num_slots {
+            leader_schedule.push(k)
         }
     }
 
     info!("leader_schedule: {}", leader_schedule.len());
-    (
-        LeaderSchedule::new_from_schedule(leader_schedule),
-        validator_keys,
-    )
+    LeaderSchedule::new_from_schedule(leader_schedule)
+}
+
+pub fn create_custom_leader_schedule_with_random_keys(
+    validator_num_slots: &[usize],
+) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+        .take(validator_num_slots.len())
+        .collect();
+    let leader_schedule = create_custom_leader_schedule(
+        validator_keys
+            .iter()
+            .map(|k| k.pubkey())
+            .zip(validator_num_slots.iter().cloned()),
+    );
+    (leader_schedule, validator_keys)
 }
 
 /// This function runs a network, initiates a partition based on a
@@ -406,16 +416,4 @@ pub fn test_faulty_node(
         .collect();
 
     (cluster, validator_keys)
-}
-
-pub fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
-    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
-    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
-    file_tower_storage
-        .store(&SavedTowerVersions::from(saved_tower))
-        .unwrap();
-}
-
-pub fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
-    restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
 }

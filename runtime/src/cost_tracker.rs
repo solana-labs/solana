@@ -39,18 +39,16 @@ pub struct CostTracker {
 
 impl Default for CostTracker {
     fn default() -> Self {
-        CostTracker::new(MAX_WRITABLE_ACCOUNT_UNITS, MAX_BLOCK_UNITS, MAX_VOTE_UNITS)
-    }
-}
+        // Clippy doesn't like asserts in const contexts, so need to explicitly allow them.  For
+        // more info, see this issue: https://github.com/rust-lang/rust-clippy/issues/8159
+        #![allow(clippy::assertions_on_constants)]
+        const _: () = assert!(MAX_WRITABLE_ACCOUNT_UNITS <= MAX_BLOCK_UNITS);
+        const _: () = assert!(MAX_VOTE_UNITS <= MAX_BLOCK_UNITS);
 
-impl CostTracker {
-    pub fn new(account_cost_limit: u64, block_cost_limit: u64, vote_cost_limit: u64) -> Self {
-        assert!(account_cost_limit <= block_cost_limit);
-        assert!(vote_cost_limit <= block_cost_limit);
         Self {
-            account_cost_limit,
-            block_cost_limit,
-            vote_cost_limit,
+            account_cost_limit: MAX_WRITABLE_ACCOUNT_UNITS,
+            block_cost_limit: MAX_BLOCK_UNITS,
+            vote_cost_limit: MAX_VOTE_UNITS,
             cost_by_writable_accounts: HashMap::with_capacity(WRITABLE_ACCOUNTS_PER_BLOCK),
             block_cost: 0,
             vote_cost: 0,
@@ -58,7 +56,9 @@ impl CostTracker {
             account_data_size: 0,
         }
     }
+}
 
+impl CostTracker {
     // bench tests needs to reset limits
     pub fn set_limits(
         &mut self,
@@ -241,6 +241,19 @@ mod tests {
         solana_vote_program::vote_transaction,
         std::{cmp, sync::Arc},
     };
+
+    impl CostTracker {
+        fn new(account_cost_limit: u64, block_cost_limit: u64, vote_cost_limit: u64) -> Self {
+            assert!(account_cost_limit <= block_cost_limit);
+            assert!(vote_cost_limit <= block_cost_limit);
+            Self {
+                account_cost_limit,
+                block_cost_limit,
+                vote_cost_limit,
+                ..Self::default()
+            }
+        }
+    }
 
     fn test_setup() -> (Keypair, Hash) {
         solana_logger::setup();

@@ -46,7 +46,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
-        builtins::{self, ActivationType, Builtin, Builtins},
+        builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
@@ -81,7 +81,7 @@ use {
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::ExecuteTimings,
+        timings::{ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{
         account::{
@@ -157,6 +157,7 @@ use {
 };
 
 mod address_lookup_table;
+mod builtin_programs;
 mod sysvar_cache;
 mod transaction_account_state_info;
 
@@ -244,8 +245,7 @@ pub struct SquashTiming {
 type EpochCount = u64;
 
 mod executor_cache {
-    use super::*;
-    use log;
+    use {super::*, log};
 
     #[derive(Debug, Default)]
     pub struct Stats {
@@ -1184,9 +1184,9 @@ pub struct Bank {
 
     compute_budget: Option<ComputeBudget>,
 
-    /// Builtin programs activated dynamically by feature
+    /// Dynamic feature transitions for builtin programs
     #[allow(clippy::rc_buffer)]
-    feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
+    builtin_feature_transitions: Arc<Vec<BuiltinFeatureTransition>>,
 
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
@@ -1354,7 +1354,7 @@ impl Bank {
             is_delta: AtomicBool::default(),
             builtin_programs: BuiltinPrograms::default(),
             compute_budget: Option::<ComputeBudget>::default(),
-            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
+            builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
@@ -1672,7 +1672,7 @@ impl Bank {
             signature_count: AtomicU64::new(0),
             builtin_programs,
             compute_budget: parent.compute_budget,
-            feature_builtins: parent.feature_builtins.clone(),
+            builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
@@ -1966,7 +1966,7 @@ impl Bank {
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
             compute_budget: None,
-            feature_builtins: new(),
+            builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
@@ -3175,6 +3175,11 @@ impl Bank {
 
     /// Add a precompiled program account
     pub fn add_precompiled_account(&self, program_id: &Pubkey) {
+        self.add_precompiled_account_with_owner(program_id, native_loader::id())
+    }
+
+    // Used by tests to simulate clusters with precompiles that aren't owned by the native loader
+    fn add_precompiled_account_with_owner(&self, program_id: &Pubkey, owner: Pubkey) {
         if let Some(account) = self.get_account_with_fixed_root(program_id) {
             if account.executable() {
                 // The account is already executable, that's all we need
@@ -3196,7 +3201,7 @@ impl Bank {
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
         let account = AccountSharedData::from(Account {
             lamports,
-            owner: solana_sdk::system_program::id(),
+            owner,
             data: vec![],
             executable: true,
             rent_epoch,
@@ -4061,9 +4066,10 @@ impl Bank {
             execution_time.as_us(),
             sanitized_txs.len(),
         );
-        timings.check_us = timings.check_us.saturating_add(check_time.as_us());
-        timings.load_us = timings.load_us.saturating_add(load_time.as_us());
-        timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
+
+        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
         let mut executed_transactions_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
@@ -4406,10 +4412,13 @@ impl Bank {
             write_time.as_us(),
             sanitized_txs.len()
         );
-        timings.store_us = timings.store_us.saturating_add(write_time.as_us());
-        timings.update_stakes_cache_us = timings
-            .update_stakes_cache_us
-            .saturating_add(update_stakes_cache_time.as_us());
+
+        timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
+        timings.saturating_add_in_place(
+            ExecuteTimingType::UpdateStakesCacheUs,
+            update_stakes_cache_time.as_us(),
+        );
+
         self.update_transaction_statuses(sanitized_txs, &execution_results);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results);
@@ -5477,8 +5486,8 @@ impl Bank {
                 .genesis_builtins
                 .extend_from_slice(&additional_builtins.genesis_builtins);
             builtins
-                .feature_builtins
-                .extend_from_slice(&additional_builtins.feature_builtins);
+                .feature_transitions
+                .extend_from_slice(&additional_builtins.feature_transitions);
         }
         if !debug_do_not_add_builtins {
             for builtin in builtins.genesis_builtins {
@@ -5494,7 +5503,7 @@ impl Bank {
                 }
             }
         }
-        self.feature_builtins = Arc::new(builtins.feature_builtins);
+        self.builtin_feature_transitions = Arc::new(builtins.feature_transitions);
 
         self.apply_feature_activations(true, debug_do_not_add_builtins);
     }
@@ -6201,29 +6210,9 @@ impl Bank {
         debug!("Added program {} under {:?}", name, program_id);
     }
 
-    /// Replace a builtin instruction processor if it already exists
-    pub fn replace_builtin(
-        &mut self,
-        name: &str,
-        program_id: &Pubkey,
-        process_instruction: ProcessInstructionWithContext,
-    ) {
-        debug!("Replacing program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, program_id, true);
-        if let Some(entry) = self
-            .builtin_programs
-            .vec
-            .iter_mut()
-            .find(|entry| entry.program_id == *program_id)
-        {
-            entry.process_instruction = process_instruction;
-        }
-        debug!("Replaced program {} under {:?}", name, program_id);
-    }
-
     /// Remove a builtin instruction processor if it already exists
-    pub fn remove_builtin(&mut self, name: &str, program_id: &Pubkey) {
-        debug!("Removing program {} under {:?}", name, program_id);
+    pub fn remove_builtin(&mut self, program_id: &Pubkey) {
+        debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
         if let Some(position) = self
@@ -6234,7 +6223,7 @@ impl Bank {
         {
             self.builtin_programs.vec.remove(position);
         }
-        debug!("Removed program {} under {:?}", name, program_id);
+        debug!("Removed program {}", program_id);
     }
 
     pub fn add_precompile(&mut self, program_id: &Pubkey) {
@@ -6414,7 +6403,11 @@ impl Bank {
         }
 
         if !debug_do_not_add_builtins {
-            self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
+            let apply_transitions_for_new_features = !init_finish_or_warp;
+            self.apply_builtin_program_feature_transitions(
+                apply_transitions_for_new_features,
+                &new_feature_activations,
+            );
             self.reconfigure_token2_native_mint();
         }
         self.ensure_no_storage_rewards_pool();
@@ -6471,33 +6464,36 @@ impl Bank {
         newly_activated
     }
 
-    fn ensure_feature_builtins(
+    fn apply_builtin_program_feature_transitions(
         &mut self,
-        init_or_warp: bool,
+        only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        let feature_builtins = self.feature_builtins.clone();
-        for (builtin, feature, activation_type) in feature_builtins.iter() {
-            let should_populate = init_or_warp && self.feature_set.is_active(feature)
-                || !init_or_warp && new_feature_activations.contains(feature);
-            if should_populate {
-                match activation_type {
-                    ActivationType::NewProgram => self.add_builtin(
+        let feature_set = self.feature_set.clone();
+        let should_apply_action_for_feature_transition = |feature_id: &Pubkey| -> bool {
+            if only_apply_transitions_for_new_features {
+                new_feature_activations.contains(feature_id)
+            } else {
+                feature_set.is_active(feature_id)
+            }
+        };
+
+        let builtin_feature_transitions = self.builtin_feature_transitions.clone();
+        for transition in builtin_feature_transitions.iter() {
+            if let Some(builtin_action) =
+                transition.to_action(&should_apply_action_for_feature_transition)
+            {
+                match builtin_action {
+                    BuiltinAction::Add(builtin) => self.add_builtin(
                         &builtin.name,
                         &builtin.id,
                         builtin.process_instruction_with_context,
                     ),
-                    ActivationType::NewVersion => self.replace_builtin(
-                        &builtin.name,
-                        &builtin.id,
-                        builtin.process_instruction_with_context,
-                    ),
-                    ActivationType::RemoveProgram => {
-                        self.remove_builtin(&builtin.name, &builtin.id)
-                    }
+                    BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }
             }
         }
+
         for precompile in get_precompiles() {
             #[allow(clippy::blocks_in_if_conditions)]
             if precompile.feature.map_or(false, |ref feature_id| {
@@ -7215,7 +7211,7 @@ pub(crate) mod tests {
 
     fn store_accounts_for_rent_test(
         bank: &Bank,
-        keypairs: &mut Vec<Keypair>,
+        keypairs: &mut [Keypair],
         mock_program_id: Pubkey,
         generic_rent_due_for_system_account: u64,
     ) {
@@ -11175,7 +11171,9 @@ pub(crate) mod tests {
             _instruction_data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            let program_id = invoke_context.transaction_context.get_program_key()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let program_id = instruction_context.get_program_key(transaction_context)?;
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
@@ -12976,25 +12974,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "2VLeMNvmpPEDy7sWw48gUVzjMa3WmgoegjavyhLTCnq7"
+                    "9tLrxkBoNE7zEUZ2g72ZwE4fTfhUQnhC8A4Xt4EmYhP1"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "AYnKo6pV8WJy5yXiSkYk79LWnCUCG714fQG7Xq2EizLv"
+                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "37iX2uYecqAzxwyeWL8FCFeWg31B8u9hQhCRF76atrWy"
+                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4TDaCAvTJJg1YZ6aDhoM33Hk2cDzaraaxtGMJCmXG4wf"
+                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
                 );
                 break;
             }
@@ -13223,7 +13221,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![10, 1, 7]);
+        assert_eq!(alive_counts, vec![9, 1, 7]);
     }
 
     #[test]
@@ -13271,7 +13269,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 11);
+        assert_eq!(consumed_budgets, 10);
     }
 
     #[test]
@@ -13311,16 +13309,6 @@ pub(crate) mod tests {
             mock_ix_processor,
         );
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
-
-        Arc::get_mut(&mut bank).unwrap().replace_builtin(
-            "mock_program v2",
-            &program_id,
-            mock_ix_processor,
-        );
-        assert_eq!(
-            bank.get_account_modified_slot(&program_id).unwrap().1,
-            bank.slot()
-        );
     }
 
     #[test]
@@ -16147,8 +16135,10 @@ pub(crate) mod tests {
     /// Test exceeding the accounts data budget by creating accounts in a loop
     #[test]
     fn test_accounts_data_budget_exceeded() {
-        use solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN;
-        use solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
+        use {
+            solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
+            solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        };
 
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
@@ -16484,6 +16474,255 @@ pub(crate) mod tests {
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_invalid_rent_state_changes_fee_payer() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(
+            solana_sdk::fee_calculator::DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE,
+            solana_sdk::fee_calculator::DEFAULT_TARGET_SIGNATURES_PER_SLOT,
+        );
+        let rent_exempt_minimum = genesis_config.rent.minimum_balance(0);
+
+        // Create legacy rent-paying System account
+        let rent_paying_fee_payer = Keypair::new();
+        genesis_config.accounts.insert(
+            rent_paying_fee_payer.pubkey(),
+            Account::new(rent_exempt_minimum - 1, 0, &system_program::id()),
+        );
+        // Create RentExempt recipient account
+        let recipient = Pubkey::new_unique();
+        genesis_config.accounts.insert(
+            recipient,
+            Account::new(rent_exempt_minimum, 0, &system_program::id()),
+        );
+
+        // Activate features, including require_rent_exempt_accounts
+        activate_all_features(&mut genesis_config);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        let recent_blockhash = bank.last_blockhash();
+
+        let check_account_is_rent_exempt = |pubkey: &Pubkey| -> bool {
+            let account = bank.get_account(pubkey).unwrap();
+            Rent::default().is_exempt(account.lamports(), account.data().len())
+        };
+
+        // Create just-rent-exempt fee-payer
+        let rent_exempt_fee_payer = Keypair::new();
+        bank.transfer(
+            rent_exempt_minimum,
+            &mint_keypair,
+            &rent_exempt_fee_payer.pubkey(),
+        )
+        .unwrap();
+
+        // Dummy message to determine fee amount
+        let dummy_message = SanitizedMessage::try_from(Message::new_with_blockhash(
+            &[system_instruction::transfer(
+                &rent_exempt_fee_payer.pubkey(),
+                &recipient,
+                sol_to_lamports(1.),
+            )],
+            Some(&rent_exempt_fee_payer.pubkey()),
+            &recent_blockhash,
+        ))
+        .unwrap();
+        let fee = bank.get_fee_for_message(&dummy_message).unwrap();
+
+        // RentPaying fee-payer can remain RentPaying
+        let tx = Transaction::new(
+            &[&rent_paying_fee_payer, &mint_keypair],
+            Message::new(
+                &[system_instruction::transfer(
+                    &mint_keypair.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_paying_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert!(!check_account_is_rent_exempt(
+            &rent_paying_fee_payer.pubkey()
+        ));
+
+        // RentPaying fee-payer can remain RentPaying on failed executed tx
+        let sender = Keypair::new();
+        let fee_payer_balance = bank.get_balance(&rent_paying_fee_payer.pubkey());
+        let tx = Transaction::new(
+            &[&rent_paying_fee_payer, &sender],
+            Message::new(
+                &[system_instruction::transfer(
+                    &sender.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_paying_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_ne!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert_ne!(
+            fee_payer_balance,
+            bank.get_balance(&rent_paying_fee_payer.pubkey())
+        );
+        assert!(!check_account_is_rent_exempt(
+            &rent_paying_fee_payer.pubkey()
+        ));
+
+        // RentPaying fee-payer can be emptied with fee and transaction
+        let tx = Transaction::new(
+            &[&rent_paying_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_paying_fee_payer.pubkey(),
+                    &recipient,
+                    bank.get_balance(&rent_paying_fee_payer.pubkey()) - fee,
+                )],
+                Some(&rent_paying_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(0, bank.get_balance(&rent_paying_fee_payer.pubkey()));
+
+        // RentExempt fee-payer cannot become RentPaying from transaction fee
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer, &mint_keypair],
+            Message::new(
+                &[system_instruction::transfer(
+                    &mint_keypair.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+
+        // RentExempt fee-payer cannot become RentPaying via failed executed tx
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer, &sender],
+            Message::new(
+                &[system_instruction::transfer(
+                    &sender.pubkey(),
+                    &recipient,
+                    rent_exempt_minimum,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+
+        // For good measure, show that a RentExempt fee-payer that is also debited by a transaction
+        // cannot become RentPaying by that debit, but can still be charged for the fee
+        bank.transfer(fee, &mint_keypair, &rent_exempt_fee_payer.pubkey())
+            .unwrap();
+        let fee_payer_balance = bank.get_balance(&rent_exempt_fee_payer.pubkey());
+        assert_eq!(fee_payer_balance, rent_exempt_minimum + fee);
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_exempt_fee_payer.pubkey(),
+                    &recipient,
+                    fee,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert_eq!(
+            fee_payer_balance - fee,
+            bank.get_balance(&rent_exempt_fee_payer.pubkey())
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
+
+        // Also show that a RentExempt fee-payer can be completely emptied via fee and transaction
+        bank.transfer(fee + 1, &mint_keypair, &rent_exempt_fee_payer.pubkey())
+            .unwrap();
+        assert!(bank.get_balance(&rent_exempt_fee_payer.pubkey()) > rent_exempt_minimum + fee);
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_exempt_fee_payer.pubkey(),
+                    &recipient,
+                    bank.get_balance(&rent_exempt_fee_payer.pubkey()) - fee,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(0, bank.get_balance(&rent_exempt_fee_payer.pubkey()));
+
+        // ... but not if the fee alone would make it RentPaying
+        bank.transfer(
+            rent_exempt_minimum + 1,
+            &mint_keypair,
+            &rent_exempt_fee_payer.pubkey(),
+        )
+        .unwrap();
+        assert!(bank.get_balance(&rent_exempt_fee_payer.pubkey()) < rent_exempt_minimum + fee);
+        let tx = Transaction::new(
+            &[&rent_exempt_fee_payer],
+            Message::new(
+                &[system_instruction::transfer(
+                    &rent_exempt_fee_payer.pubkey(),
+                    &recipient,
+                    bank.get_balance(&rent_exempt_fee_payer.pubkey()) - fee,
+                )],
+                Some(&rent_exempt_fee_payer.pubkey()),
+            ),
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InvalidRentPayingAccount
+        );
+        assert!(check_account_is_rent_exempt(
+            &rent_exempt_fee_payer.pubkey()
+        ));
     }
 
     #[test]

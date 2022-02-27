@@ -13,7 +13,13 @@ export PS4="++"
 #
 eval "$(ci/channel-info.sh)"
 eval "$(ci/sbf-tools-info.sh)"
-export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"-"$SBF_TOOLS_VERSION"
+source "ci/rust-version.sh"
+HOST_RUST_VERSION="$rust_stable"
+pattern='^[0-9]+\.[0-9]+\.[0-9]+$'
+if [[ ${HOST_RUST_VERSION} =~ ${pattern} ]]; then
+    HOST_RUST_VERSION="${rust_stable%.*}"
+fi
+export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"-"$SBF_TOOLS_VERSION"-"$HOST_RUST_VERSION"
 (
   set -x
   MAX_CACHE_SIZE=18 # gigabytes

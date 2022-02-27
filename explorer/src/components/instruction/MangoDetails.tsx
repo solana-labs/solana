@@ -21,9 +21,11 @@ import {
   decodeCancelSpotOrder,
   decodeChangePerpMarketParams,
   decodePlacePerpOrder,
+  decodePlacePerpOrder2,
   decodePlaceSpotOrder,
   parseMangoInstructionTitle,
 } from "./mango/types";
+import { PlacePerpOrder2DetailsCard } from "./mango/PlacePerpOrder2DetailsCard";
 
 export function MangoDetailsCard(props: {
   ix: TransactionInstruction;
@@ -96,6 +98,13 @@ export function MangoDetailsCard(props: {
         return (
           <PlacePerpOrderDetailsCard
             info={decodePlacePerpOrder(ix)}
+            {...props}
+          />
+        );
+      case "PlacePerpOrder2":
+        return (
+          <PlacePerpOrder2DetailsCard
+            info={decodePlacePerpOrder2(ix)}
             {...props}
           />
         );

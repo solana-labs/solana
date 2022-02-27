@@ -126,9 +126,8 @@ A permissionless, persistent cluster for early token holders and launch partners
 - Tokens that are issued on Mainnet Beta are **real** SOL
 - If you have paid money to purchase/be issued tokens, such as through our
   CoinList auction, these tokens will be transferred on Mainnet Beta.
-  - Note: If you are using a non-command-line wallet such as
-    [Solflare](wallet-guide/solflare.md),
-    the wallet will always be connecting to Mainnet Beta.
+  - Note: If you are using a non-command-line wallet, the wallet will always be
+connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
 

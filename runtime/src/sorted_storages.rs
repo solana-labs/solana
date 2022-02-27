@@ -3,8 +3,7 @@ use {
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
-    std::ops::Range,
-    std::ops::{Bound, RangeBounds},
+    std::ops::{Bound, Range, RangeBounds},
 };
 
 /// Provide access to SnapshotStorages sorted by slot

@@ -30,6 +30,16 @@ pub enum ProofInstruction {
     ///
     VerifyWithdraw,
 
+    /// Verify a `WithdrawWithheldTokensData` struct
+    ///
+    /// Accounts expected by this instruction:
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `WithdrawWithheldTokensData`
+    ///
+    VerifyWithdrawWithheldTokens,
+
     /// Verify a `TransferData` struct
     ///
     /// Accounts expected by this instruction:
@@ -81,6 +91,10 @@ pub fn verify_close_account(proof_data: &CloseAccountData) -> Instruction {
 
 pub fn verify_withdraw(proof_data: &WithdrawData) -> Instruction {
     ProofInstruction::VerifyWithdraw.encode(proof_data)
+}
+
+pub fn verify_withdraw_withheld_tokens(proof_data: &WithdrawWithheldTokensData) -> Instruction {
+    ProofInstruction::VerifyWithdrawWithheldTokens.encode(proof_data)
 }
 
 pub fn verify_transfer(proof_data: &TransferData) -> Instruction {

@@ -1,5 +1,8 @@
 use {
-    crate::{admin_rpc_service, new_spinner_progress_bar, println_name_value, ProgressBar},
+    crate::{
+        admin_rpc_service, format_name_value, new_spinner_progress_bar, println_name_value,
+        ProgressBar,
+    },
     console::style,
     solana_client::{
         client_error, rpc_client::RpcClient, rpc_request, rpc_response::RpcContactInfo,
@@ -80,7 +83,7 @@ impl Dashboard {
             };
 
             let rpc_client = RpcClient::new_socket(rpc_addr);
-            let identity = match rpc_client.get_identity() {
+            let mut identity = match rpc_client.get_identity() {
                 Ok(identity) => identity,
                 Err(err) => {
                     println!("Failed to get validator identity over RPC: {}", err);
@@ -120,6 +123,12 @@ impl Dashboard {
                 }
                 if i % 10 == 0 {
                     snapshot_slot_info = rpc_client.get_highest_snapshot_slot().ok();
+                }
+
+                let new_identity = rpc_client.get_identity().unwrap_or(identity);
+                if identity != new_identity {
+                    identity = new_identity;
+                    progress_bar.println(&format_name_value("Identity:", &identity.to_string()));
                 }
 
                 match get_validator_stats(&rpc_client, &identity) {

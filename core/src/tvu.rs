@@ -145,6 +145,7 @@ impl Tvu {
         accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        wait_to_vote_slot: Option<Slot>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -293,6 +294,7 @@ impl Tvu {
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
             tower_storage: tower_storage.clone(),
+            wait_to_vote_slot,
         };
 
         let (voting_sender, voting_receiver) = unbounded();
@@ -415,8 +417,7 @@ pub mod tests {
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::AtomicU64,
-        std::sync::atomic::Ordering,
+        std::sync::atomic::{AtomicU64, Ordering},
     };
 
     #[ignore]
@@ -512,6 +513,7 @@ pub mod tests {
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
             accounts_package_channel,
+            None,
             None,
             None,
         );

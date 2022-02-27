@@ -3,9 +3,10 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     common::{
-        copy_blocks, create_custom_leader_schedule, last_vote_in_tower, ms_for_n_slots,
-        open_blockstore, restore_tower, run_cluster_partition, run_kill_partition_switch_threshold,
-        test_faulty_node, wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
+        copy_blocks, create_custom_leader_schedule_with_random_keys, last_vote_in_tower,
+        ms_for_n_slots, open_blockstore, restore_tower, run_cluster_partition,
+        run_kill_partition_switch_threshold, test_faulty_node,
+        wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
     },
     log::*,
     serial_test::serial,
@@ -279,7 +280,7 @@ fn test_kill_heaviest_partition() {
     // 4) Check for recovery
     let num_slots_per_validator = 8;
     let partitions: [Vec<usize>; 4] = [vec![11], vec![10], vec![10], vec![10]];
-    let (leader_schedule, validator_keys) = create_custom_leader_schedule(&[
+    let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
         num_slots_per_validator * (partitions.len() - 1),
         num_slots_per_validator,
         num_slots_per_validator,

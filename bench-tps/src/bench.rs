@@ -110,7 +110,7 @@ fn generate_chunked_transfers(
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
     source_keypair_chunks: Vec<Vec<&Keypair>>,
-    dest_keypair_chunks: &mut Vec<VecDeque<&Keypair>>,
+    dest_keypair_chunks: &mut [VecDeque<&Keypair>],
     threads: usize,
     duration: Duration,
     sustained: bool,

@@ -69,20 +69,14 @@ _ ci/order-crates-for-publishing.py
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
 _ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
 
-_ "$cargo" stable fmt --all -- --check
+_ "$cargo" nightly fmt --all -- --check
 
 _ ci/do-audit.sh
 
 {
   cd programs/bpf
-  for project in rust/*/ ; do
-    echo "+++ do_bpf_checks $project"
-    (
-      cd "$project"
-      _ "$cargo" nightly clippy -- --deny=warnings --allow=clippy::missing_safety_doc
-      _ "$cargo" stable fmt -- --check
-    )
-  done
+  _ "$cargo" nightly clippy --all -- --deny=warnings --allow=clippy::missing_safety_doc
+  _ "$cargo" nightly fmt --all -- --check
 }
 
 echo --- ok
