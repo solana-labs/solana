@@ -302,7 +302,7 @@ impl Rocks {
         fs::create_dir_all(&path)?;
 
         // Use default database options
-        if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
+        if disable_auto_compactions(&access_type) {
             warn!("Disabling rocksdb's auto compaction for maintenance bulk ledger update...");
         }
         let mut db_options = get_db_options(&access_type);
@@ -1420,17 +1420,17 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    if matches!(access_type, AccessType::PrimaryOnly) && !exclude_column_from_compaction(C::NAME) {
+    let disable_auto_compactions = disable_auto_compactions(&access_type);
+    if disable_auto_compactions {
+        options.set_disable_auto_compactions(true);
+    }
+
+    if !disable_auto_compactions && !exclude_column_from_compaction(C::NAME) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
             _phantom: PhantomData::default(),
         });
-    }
-
-    // Disable automatic compactions in maintenance mode to prevent accidental cleaning
-    if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
-        options.set_disable_auto_compactions(true);
     }
 
     options
@@ -1534,8 +1534,7 @@ fn get_db_options(access_type: &AccessType) -> Options {
     // Set max total wal size to 4G.
     options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
 
-    // Disable automatic compactions in maintenance mode to prevent accidental cleaning
-    if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
+    if disable_auto_compactions(&access_type) {
         options.set_disable_auto_compactions(true);
     }
 
@@ -1545,6 +1544,12 @@ fn get_db_options(access_type: &AccessType) -> Options {
     options.set_max_open_files(-1);
 
     options
+}
+
+// Returns whether automatic compactions should be disabled based upon access type
+fn disable_auto_compactions(access_type: &AccessType) -> bool {
+    // Disable automatic compactions in maintenance mode to prevent accidental cleaning
+    matches!(access_type, AccessType::PrimaryOnlyForMaintenance)
 }
 
 // Returns whether the supplied column (name) should be excluded from compaction
