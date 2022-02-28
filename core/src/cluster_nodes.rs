@@ -4,6 +4,7 @@ use {
     lru::LruCache,
     rand::SeedableRng,
     rand_chacha::ChaChaRng,
+    rayon::{prelude::*, ThreadPool},
     solana_gossip::{
         cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
@@ -13,6 +14,7 @@ use {
     solana_ledger::{
         blockstore::SlotStats, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
     },
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -24,6 +26,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         any::TypeId,
+        cell::RefCell,
         cmp::Reverse,
         collections::HashMap,
         marker::PhantomData,
@@ -33,6 +36,12 @@ use {
         time::{Duration, Instant},
     },
 };
+
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("cluster_nodes_{}", ix))
+                    .build()
+                    .unwrap()));
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq)]
@@ -408,17 +417,28 @@ impl ClusterNodes<RetransmitStage> {
             );
             return 0.0;
         }
-        let mut stakes: u64 = 0;
-        for index in slot_stats.turbine_index_set.iter() {
-            let shred_stakes = self.get_deterministic_shred_distribution_stakes_by_slot_and_index(
-                slot,
-                *index,
-                root_bank,
-                fanout,
-                leader_schedule_cache,
-            );
-            stakes += shred_stakes.total();
-        }
+
+        let indices: Vec<_> = slot_stats.turbine_index_set.into_iter().collect();
+        let stakes: u64 = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                indices
+                    .into_par_iter()
+                    .with_min_len(32)
+                    .map(|index| {
+                        let shred_stakes = self
+                            .get_deterministic_shred_distribution_stakes_by_slot_and_index(
+                                slot,
+                                index,
+                                root_bank,
+                                fanout,
+                                leader_schedule_cache,
+                            );
+                        shred_stakes.total()
+                    })
+                    .sum()
+            })
+        });
+
         stakes as f64 / slot_stats.num_shreds as f64 / root_bank.total_epoch_stake() as f64 * 100.0
     }
 
