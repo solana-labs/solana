@@ -7365,8 +7365,6 @@ pub mod tests {
                 )
                 .unwrap();
         }
-        // Purge to freeze index 0
-        blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
         let slot1 = 20;
         for x in 5..9 {
             let signature = Signature::new(&[x; 64]);
@@ -7515,8 +7513,6 @@ pub mod tests {
                 )
                 .unwrap();
         }
-        // Purge to freeze index 0
-        blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
         for x in 7..9 {
             let signature = Signature::new(&[x; 64]);
             blockstore
@@ -7574,6 +7570,9 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
+        let (shreds, _) = make_slot_entries(1, 0, 4);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
         fn make_slot_entries_with_transaction_addresses(addresses: &[Pubkey]) -> Vec<Entry> {
             let mut entries: Vec<Entry> = Vec::new();
             for address in addresses {
@@ -7601,11 +7600,7 @@ pub mod tests {
             let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
-            for (i, entry) in entries.into_iter().enumerate() {
-                if slot == 4 && i == 2 {
-                    // Purge to freeze index 0 and write address-signatures in new primary index
-                    blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
-                }
+            for entry in entries.into_iter() {
                 for transaction in entry.transactions {
                     assert_eq!(transaction.signatures.len(), 1);
                     blockstore
