@@ -14,7 +14,9 @@ use {
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
-        blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
+        blockstore::{
+            self, Blockstore, BlockstoreInsertionMetrics, SlotStats, MAX_DATA_SHREDS_PER_SLOT,
+        },
         leader_schedule_cache::LeaderScheduleCache,
         shred::{Nonce, Shred, ShredType},
     },
@@ -294,7 +296,7 @@ fn run_insert<F>(
     completed_data_sets_sender: &CompletedDataSetsSender,
     retransmit_sender: &Sender<Vec<Shred>>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
-    dist_notify_sender: &Sender<Slot>,
+    dist_notify_sender: &Sender<(Slot, Option<SlotStats>)>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -463,7 +465,7 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
-        dist_notify_sender: Sender<Slot>,
+        dist_notify_sender: Sender<(Slot, Option<SlotStats>)>,
     ) -> WindowService
     where
         F: 'static
@@ -571,7 +573,7 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<Shred>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
-        dist_notify_sender: Sender<Slot>,
+        dist_notify_sender: Sender<(Slot, Option<SlotStats>)>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
         let handle_error = || {

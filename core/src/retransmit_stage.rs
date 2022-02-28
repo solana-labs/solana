@@ -22,7 +22,7 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::{
-        blockstore::Blockstore,
+        blockstore::{Blockstore, SlotStats},
         leader_schedule_cache::LeaderScheduleCache,
         shred::{Shred, ShredId},
     },
@@ -418,7 +418,7 @@ pub fn shred_stake_notifier(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
-    dist_notify_receiver: Receiver<Slot>,
+    dist_notify_receiver: Receiver<(Slot, Option<SlotStats>)>,
     blockstore: Arc<Blockstore>,
     cluster_nodes_cache: Arc<ClusterNodesCache<RetransmitStage>>,
 ) -> JoinHandle<()> {
@@ -444,17 +444,26 @@ pub fn shred_stake_notifier(
 fn notify_shred_stake_info(
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
-    dist_notify_receiver: &Receiver<Slot>,
-    blockstore: &Blockstore,
+    dist_notify_receiver: &Receiver<(Slot, Option<SlotStats>)>,
+    _blockstore: &Blockstore,
     cluster_info: &ClusterInfo,
     bank_forks: &RwLock<BankForks>,
 ) -> Result<(), RecvTimeoutError> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
-    let slot = dist_notify_receiver.recv_timeout(RECV_TIMEOUT)?;
+    let (slot, slot_stats) = dist_notify_receiver.recv_timeout(RECV_TIMEOUT)?;
+
+    if slot_stats.is_none() {
+        datapoint_info!("notify_shred_stake_info", ("no_slot_stats", slot, i64));
+        return Ok(());
+    }
+    let slot_stats = slot_stats.unwrap();
+    let num_shreds = slot_stats.num_shreds;
 
     let mut start = Measure::start("notify shred stake info");
 
+    /*
     let shreds = blockstore.get_data_shreds_for_slot(slot, 0).unwrap();
+    */
 
     let (working_bank, root_bank) = {
         let bank_forks = bank_forks.read().unwrap();
@@ -463,8 +472,17 @@ fn notify_shred_stake_info(
 
     let cluster_nodes = cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
 
+    /*
     let pct = cluster_nodes.get_shred_distribution_stakes_pct(
         &shreds,
+        &root_bank,
+        DATA_PLANE_FANOUT,
+        leader_schedule_cache,
+    );
+    */
+    let pct = cluster_nodes.get_deterministic_shred_distribution_stakes_pct_by_slot_and_index(
+        slot,
+        slot_stats,
         &root_bank,
         DATA_PLANE_FANOUT,
         leader_schedule_cache,
@@ -476,7 +494,7 @@ fn notify_shred_stake_info(
         "notify_shred_stake_info",
         ("slot", slot, i64),
         ("total_time_us", start.as_us(), i64),
-        ("num_shreds", shreds.len(), i64),
+        ("num_shreds", num_shreds, i64),
         ("distribution_pct", pct, f64),
     );
 

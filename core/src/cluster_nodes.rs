@@ -10,11 +10,14 @@ use {
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         weighted_shuffle::{weighted_best, weighted_shuffle, WeightedShuffle},
     },
-    solana_ledger::{leader_schedule_cache::LeaderScheduleCache, shred::Shred},
+    solana_ledger::{
+        blockstore::SlotStats, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+    },
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
         feature_set,
+        hash::hashv,
         pubkey::Pubkey,
         timing::timestamp,
     },
@@ -337,6 +340,86 @@ impl ClusterNodes<RetransmitStage> {
         let neighbors = neighbors.into_iter().map(|i| &self.nodes[i]).collect();
         let children = children.into_iter().map(|i| &self.nodes[i]).collect();
         (neighbors, children)
+    }
+
+    pub fn get_deterministic_shred_distribution_stakes_by_slot_and_index(
+        &self,
+        slot: Slot,
+        shred_index: u32,
+        root_bank: &Bank,
+        fanout: usize,
+        leader_schedule_cache: &LeaderScheduleCache,
+    ) -> ShredDistributionStakes {
+        let leader_pubkey = leader_schedule_cache
+            .slot_leader_at(slot, Some(root_bank))
+            .unwrap();
+
+        if leader_pubkey == self.pubkey {
+            // TODO?
+        }
+
+        let weighted_shuffle = self.weighted_shuffle.clone();
+
+        // TODO dedup the shred seed calculation here
+        let shred_seed = hashv(&[
+            &slot.to_le_bytes(),
+            &shred_index.to_le_bytes(),
+            &leader_pubkey.to_bytes(),
+        ])
+        .to_bytes();
+
+        let mut rng = ChaChaRng::from_seed(shred_seed);
+
+        let nodes: Vec<_> = weighted_shuffle
+            .shuffle(&mut rng)
+            .map(|index| &self.nodes[index])
+            .collect();
+        let self_index = nodes
+            .iter()
+            .position(|node| node.pubkey() == self.pubkey)
+            .unwrap();
+
+        let mut stakes = ShredDistributionStakes {
+            neighborhood: get_neighborhood_stake(self_index, fanout, &nodes),
+            parent: u64::default(),
+            parent_neighborhood: u64::default(),
+        };
+        if let Some(parent_index) = get_parent_index(self_index, fanout) {
+            stakes.parent = nodes.get(parent_index).map(|n| n.stake).unwrap_or(0);
+            stakes.parent_neighborhood = get_neighborhood_stake(parent_index, fanout, &nodes);
+        }
+
+        stakes
+    }
+
+    pub fn get_deterministic_shred_distribution_stakes_pct_by_slot_and_index(
+        &self,
+        slot: Slot,
+        slot_stats: SlotStats,
+        root_bank: &Bank,
+        fanout: usize,
+        leader_schedule_cache: &LeaderScheduleCache,
+    ) -> f64 {
+        if slot_stats.turbine_index_set.is_empty() || root_bank.total_epoch_stake() == 0 {
+            warn!(
+                "slot_stats.turbine_index_set.len()={} total_epoch_stake={}",
+                slot_stats.turbine_index_set.len(),
+                root_bank.total_epoch_stake()
+            );
+            return 0.0;
+        }
+        let mut stakes: u64 = 0;
+        for index in slot_stats.turbine_index_set.iter() {
+            let shred_stakes = self.get_deterministic_shred_distribution_stakes_by_slot_and_index(
+                slot,
+                *index,
+                root_bank,
+                fanout,
+                leader_schedule_cache,
+            );
+            stakes += shred_stakes.total();
+        }
+        stakes as f64 / slot_stats.num_shreds as f64 / root_bank.total_epoch_stake() as f64 * 100.0
     }
 
     pub fn get_shred_distribution_stakes(

@@ -860,7 +860,7 @@ impl Blockstore {
         retransmit_sender: Option<&Sender<Vec<Shred>>>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
-        dist_notify_sender: Option<&Sender<Slot>>,
+        dist_notify_sender: Option<&Sender<(Slot, Option<SlotStats>)>>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
@@ -1300,7 +1300,7 @@ impl Blockstore {
         handle_duplicate: &F,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
-        dist_notify_sender: Option<&Sender<Slot>>,
+        dist_notify_sender: Option<&Sender<(Slot, Option<SlotStats>)>>,
     ) -> std::result::Result<(Vec<CompletedDataSetInfo>, Option<SlotStats>), InsertDataShredError>
     where
         F: Fn(Shred),
@@ -1565,7 +1565,7 @@ impl Blockstore {
         shred: &Shred,
         write_batch: &mut WriteBatch,
         shred_source: ShredSource,
-        dist_notify_sender: Option<&Sender<Slot>>,
+        dist_notify_sender: Option<&Sender<(Slot, Option<SlotStats>)>>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Option<SlotStats>)> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
@@ -1681,7 +1681,7 @@ impl Blockstore {
             if num_repaired == 0 {
                 // TODO reconcile with send_signals?
                 if let Some(sender) = dist_notify_sender {
-                    sender.send(slot_meta.slot).unwrap();
+                    sender.send((slot_meta.slot, slot_stats.clone())).unwrap();
                 }
             }
             slot_stats
@@ -3456,12 +3456,13 @@ fn send_signals(
             .map(|slot| (*slot, completed_slots_stats.remove(slot)))
             .collect();
 
-        /*
-        let mut slots: Vec<_> = (0..completed_slots_senders.len() - 1)
-            .map(|_| newly_completed_slots.clone())
-            .collect();
+        // TODO calculate turbine stake percentage for each completed slot
 
-        slots.push(newly_completed_slots);
+        /*
+        cluster_nodes.get_shred_distribution_stakes_pct(shreds, root_bank, fanout, leader_schedule_cache)
+
+        leader_schedule_cache -> leader_pubkey
+        root_bank -> is deterministic seed enabled
         */
 
         let mut slot_data_copies: Vec<Vec<(Slot, Option<SlotStats>)>> = (0
