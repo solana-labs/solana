@@ -1,4 +1,8 @@
-//! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
+//! The `ledger_cleanup_service` drops older ledger data to limit disk space usage.
+//! The service works by counting the number of live data shreds in the ledger; this
+//! can be done quickly and should have a fairly stable correlation to actual bytes.
+//! Once the shred count (and thus roughly the byte count) reaches a threshold,
+//! the services begins removing data in FIFO order.
 
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
@@ -20,18 +24,24 @@ use {
     },
 };
 
-// - To try and keep the RocksDB size under 400GB:
-//   Seeing about 1600b/shred, using 2000b/shred for margin, so 200m shreds can be stored in 400gb.
-//   at 5k shreds/slot at 50k tps, this is 40k slots (~4.4 hours).
-//   At idle, 60 shreds/slot this is about 3.33m slots (~15 days)
+// To try and keep the RocksDB size under 500GB:
+//   Seeing about 2100 bytes/data shred, use 2500 bytes for margin.
+//   So, 500 GB / 2500 bytes = 200m (data) shreds.
+//   Disk space reclamation may not be immediate and shred insertion can be,
+//     bursty, so use 180m for an additional 10% margin.
+//   At 60 shreds/slot (idle), this is 3m slots (~14 days).
+//   At 5k shreds/slot at 50k tps, this is 36k slots (4 hours).
 // This is chosen to allow enough time for
-// - A validator to download a snapshot from a peer and boot from it
-// - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
-//   to catch back up to where it was when it stopped
-pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 200_000_000;
+//   A validator to download a snapshot from a peer and boot from it
+//   To make sure that if a validator needs to reboot from its own snapshot, it
+//     has enough slots locally to catch back up to where it was when it stopped.
+pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 180_000_000;
 
-// Allow down to 50m, or 3.5 days at idle, 1hr at 50k load, around ~100GB
-pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
+// Allow down to 45m shreds (50m with 10% margin for above stated reasons)
+//   50m shreds * 2500 bytes = 125 GB
+//   At 60 shreds/slot (idle), this is ~833k slots (~3.85 days).
+//   At 5k shreds/slot at 50k tps, this is 10k slots (~1.1 hours).
+pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 45_000_000;
 
 // Check for removing slots at this interval so we don't purge too often
 // and starve other blockstore users.
