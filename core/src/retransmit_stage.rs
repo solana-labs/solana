@@ -441,6 +441,8 @@ pub fn shred_stake_notifier(
         .unwrap()
 }
 
+// TODO consolidate with blockstore::send_signals
+// placeholder to report distribution pct
 fn notify_shred_stake_info(
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,

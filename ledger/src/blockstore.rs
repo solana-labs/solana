@@ -1641,6 +1641,7 @@ impl Blockstore {
                 let mut slots_stats = self.slots_stats.lock().unwrap();
                 let slot_stats = slots_stats.stats.remove(&slot_meta.slot);
 
+                // TODO preserve stats for _at least_ some time threshold
                 if slots_stats.last_cleanup_ts.elapsed().as_secs() > 30 {
                     let root = self.last_root();
                     slots_stats.stats = slots_stats.stats.split_off(&root);

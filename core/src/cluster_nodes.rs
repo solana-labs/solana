@@ -422,6 +422,7 @@ impl ClusterNodes<RetransmitStage> {
         stakes as f64 / slot_stats.num_shreds as f64 / root_bank.total_epoch_stake() as f64 * 100.0
     }
 
+    /*
     pub fn get_shred_distribution_stakes(
         &self,
         shred: &Shred,
@@ -429,11 +430,9 @@ impl ClusterNodes<RetransmitStage> {
         fanout: usize,
         leader_schedule_cache: &LeaderScheduleCache,
     ) -> ShredDistributionStakes {
-        /* TODO
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
             return ShredDistributionStakes::default();
         }
-        */
 
         let leader_pubkey = leader_schedule_cache
             .slot_leader_at(shred.slot(), Some(root_bank))
@@ -468,7 +467,9 @@ impl ClusterNodes<RetransmitStage> {
 
         stakes
     }
+    */
 
+    /*
     pub fn get_shred_distribution_stakes_pct(
         &self,
         shreds: &[Shred],
@@ -493,6 +494,7 @@ impl ClusterNodes<RetransmitStage> {
         }
         stakes as f64 / shreds.len() as f64 / root_bank.total_epoch_stake() as f64 * 100.0
     }
+    */
 }
 
 fn new_cluster_nodes<T: 'static>(
