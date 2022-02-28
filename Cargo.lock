@@ -3399,9 +3399,9 @@ checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quinn"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61a84d97630b137463c8e6802adc1dfe9de81457b41bb1ac59189e6761ab9255"
+checksum = "584865613896a1f644d757e52c45c573441c8b04cac38ac13990b0235203db66"
 dependencies = [
  "bytes 1.1.0",
  "futures-channel",
