@@ -3,14 +3,14 @@ use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
     rand::{thread_rng, Rng},
+    serde::{Deserialize, Serialize},
     solana_client::rpc_client::RpcClient,
     solana_core::serve_repair::RepairProtocol,
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
-    solana_sdk::pubkey::Pubkey,
     solana_sdk::{
         hash::Hash,
-        instruction::CompiledInstruction,
-        instruction::{AccountMeta, Instruction},
+        instruction::{AccountMeta, CompiledInstruction, Instruction},
+        pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signer},
         stake,
         system_instruction::SystemInstruction,
@@ -34,6 +34,7 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
 }
 
 /// Options for data_type=transaction
+#[derive(Serialize, Deserialize, Debug)]
 struct TransactionParams {
     unique_transactions: bool, // use unique transactions
     num_sign: usize,           // number of signatures in a transaction
@@ -163,8 +164,16 @@ fn run_dos(
         }
         target = Some(entrypoint_addr);
     } else {
+        info!("************ NODE ***********");
         for node in nodes {
+            info!("{:?}", node);
+        }
+        info!("ADDR = {}", entrypoint_addr);
+
+        for node in nodes {
+            //let node = &nodes[1];
             if node.gossip == entrypoint_addr {
+                info!("{}", node.gossip);
                 target = match mode.as_str() {
                     "gossip" => Some(node.gossip),
                     "tvu" => Some(node.tvu),
@@ -219,6 +228,8 @@ fn run_dos(
                 panic!("transaction parameters are not specified");
             }
             let tp = transaction_params.unwrap();
+            info!("{:?}", tp);
+
             trans_gen = Some(TransactionGenerator::new(tp));
             let tx = trans_gen.as_mut().unwrap().generate(payer, &rpc_client);
             info!("{:?}", tx);
@@ -230,6 +241,8 @@ fn run_dos(
             panic!("unknown data type");
         }
     }
+
+    info!("TARGET = {}, NODE = {}", target, nodes[1].rpc);
 
     let mut last_log = Instant::now();
     let mut count = 0;

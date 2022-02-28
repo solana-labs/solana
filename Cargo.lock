@@ -4749,6 +4749,7 @@ dependencies = [
  "clap 2.33.3",
  "log",
  "rand 0.7.3",
+ "serde",
  "solana-client",
  "solana-core",
  "solana-gossip",
