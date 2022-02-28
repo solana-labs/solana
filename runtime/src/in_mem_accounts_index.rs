@@ -468,6 +468,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// any entry at 'slot' is replaced with 'account_info'.
     /// or, 'account_info' is appended to the slot list if the slot did not exist previously.
     /// returns true if caller should addref
+    /// conditions when caller should addref:
+    ///   'account_info' does NOT represent a cached storage (the slot is being flushed from the cache)
+    /// AND
+    ///   previous slot_list entry AT 'slot' did not exist (this is the first time this account was modified in this "slot"), or was previously cached (the storage is now being flushed from the cache)
     fn update_slot_list(
         slot_list: &mut SlotList<T>,
         slot: Slot,
