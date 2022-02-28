@@ -1944,9 +1944,13 @@ impl Blockstore {
         self.block_height_cf.put(slot, &block_height)
     }
 
+    /// The first complete block that is available in the Blockstore ledger
     pub fn get_first_available_block(&self) -> Result<Slot> {
         let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot())?;
-        Ok(root_iterator.next().unwrap_or_default())
+        // The block at root-index 0 cannot be complete, because it is missing its parent
+        // blockhash. A parent blockhash must be calculated from the entries of the previous block.
+        // Therefore, the first available complete block is that at root-index 1.
+        Ok(root_iterator.nth(1).unwrap_or_default())
     }
 
     pub fn get_rooted_block(
