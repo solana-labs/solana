@@ -12,7 +12,7 @@ A validator receives all entries from the leader and submits votes confirming th
 
 ## Joining a Cluster
 
-Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
+Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that information cannot be censored by any one node.
 
 ## Sending Transactions to a Cluster
 
