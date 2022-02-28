@@ -149,11 +149,6 @@ pub fn process_instruction(
                     instruction_context,
                     instruction_account_indices::Authorize::Clock as usize,
                 )?;
-                /*let _current_authority = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account
-                        + instruction_account_indices::Authorize::CurrentAuthority as usize,
-                )?;*/
                 let custodian = keyed_account_at_index(
                     keyed_accounts,
                     first_instruction_account
@@ -182,6 +177,7 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::AuthorizeWithSeed(args) => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let authority_base = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account
@@ -229,6 +225,7 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::DelegateStake => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let vote = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account
@@ -244,6 +241,7 @@ pub fn process_instruction(
                 instruction_context,
                 instruction_account_indices::DelegateStake::StakeHistory as usize,
             )?;
+            instruction_context.check_number_of_instruction_accounts(5)?;
             let config_account = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account
@@ -257,6 +255,7 @@ pub fn process_instruction(
             me.delegate(vote, &clock, &stake_history, &config, &signers)
         }
         StakeInstruction::Split(lamports) => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let split_stake = &keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account + instruction_account_indices::Split::SplitTo as usize,
@@ -264,6 +263,7 @@ pub fn process_instruction(
             me.split(lamports, split_stake, &signers)
         }
         StakeInstruction::Merge => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let source_stake = &keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account + instruction_account_indices::Merge::MergeFrom as usize,
@@ -287,6 +287,7 @@ pub fn process_instruction(
             )
         }
         StakeInstruction::Withdraw(lamports) => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let to = &keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account
@@ -302,6 +303,7 @@ pub fn process_instruction(
                 instruction_context,
                 instruction_account_indices::Withdraw::StakeHistory as usize,
             )?;
+            instruction_context.check_number_of_instruction_accounts(5)?;
             me.withdraw(
                 lamports,
                 to,
@@ -337,6 +339,7 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
+                instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized = Authorized {
                     staker: *keyed_account_at_index(
                         keyed_accounts,
@@ -375,11 +378,7 @@ pub fn process_instruction(
                     instruction_context,
                     instruction_account_indices::AuthorizeChecked::Clock as usize,
                 )?;
-                /*let _current_authority = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account
-                        + instruction_account_indices::AuthorizeChecked::CurrentAuthority as usize,
-                )?;*/
+                instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized_pubkey = &keyed_account_at_index(
                     keyed_accounts,
                     first_instruction_account
@@ -412,6 +411,7 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
+                instruction_context.check_number_of_instruction_accounts(2)?;
                 let authority_base = keyed_account_at_index(
                     keyed_accounts,
                     first_instruction_account
@@ -423,6 +423,7 @@ pub fn process_instruction(
                     instruction_context,
                     instruction_account_indices::AuthorizeCheckedWithSeed::Clock as usize,
                 )?;
+                instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized_pubkey = &keyed_account_at_index(
                     keyed_accounts,
                     first_instruction_account
