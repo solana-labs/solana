@@ -1420,7 +1420,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    let disable_auto_compactions = disable_auto_compactions(&access_type);
+    let disable_auto_compactions = disable_auto_compactions(access_type);
     if disable_auto_compactions {
         options.set_disable_auto_compactions(true);
     }
@@ -1534,7 +1534,7 @@ fn get_db_options(access_type: &AccessType) -> Options {
     // Set max total wal size to 4G.
     options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
 
-    if disable_auto_compactions(&access_type) {
+    if disable_auto_compactions(access_type) {
         options.set_disable_auto_compactions(true);
     }
 
