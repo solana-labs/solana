@@ -5,23 +5,16 @@ use {
         pubkey::Pubkey,
         sysvar,
     },
-    std::{collections::HashSet, ops::Deref},
+    std::{borrow::Cow, collections::HashSet},
 };
 
 /// Combination of a version #0 message and its loaded addresses
 #[derive(Debug, Clone)]
-pub struct LoadedMessage {
+pub struct LoadedMessage<'a> {
     /// Message which loaded a collection of lookup table addresses
-    pub message: v0::Message,
+    pub message: Cow<'a, v0::Message>,
     /// Addresses loaded with on-chain address lookup tables
-    pub loaded_addresses: LoadedAddresses,
-}
-
-impl Deref for LoadedMessage {
-    type Target = v0::Message;
-    fn deref(&self) -> &Self::Target {
-        &self.message
-    }
+    pub loaded_addresses: Cow<'a, LoadedAddresses>,
 }
 
 /// Collection of addresses loaded from on-chain lookup tables, split
@@ -59,10 +52,29 @@ impl LoadedAddresses {
     }
 }
 
-impl LoadedMessage {
-    /// Returns the list of account keys that are loaded for this message.
+impl<'a> LoadedMessage<'a> {
+    pub fn new(message: v0::Message, loaded_addresses: LoadedAddresses) -> Self {
+        Self {
+            message: Cow::Owned(message),
+            loaded_addresses: Cow::Owned(loaded_addresses),
+        }
+    }
+
+    pub fn new_borrowed(message: &'a v0::Message, loaded_addresses: &'a LoadedAddresses) -> Self {
+        Self {
+            message: Cow::Borrowed(message),
+            loaded_addresses: Cow::Borrowed(loaded_addresses),
+        }
+    }
+
+    /// Returns the full list of static and dynamic account keys that are loaded for this message.
     pub fn account_keys(&self) -> AccountKeys {
-        AccountKeys::new(&self.account_keys, Some(&self.loaded_addresses))
+        AccountKeys::new(&self.message.account_keys, Some(&self.loaded_addresses))
+    }
+
+    /// Returns the list of static account keys that are loaded for this message.
+    pub fn static_account_keys(&self) -> &[Pubkey] {
+        &self.message.account_keys
     }
 
     /// Returns true if any account keys are duplicates
@@ -107,6 +119,10 @@ impl LoadedMessage {
         false
     }
 
+    pub fn is_signer(&self, i: usize) -> bool {
+        i < self.message.header.num_required_signatures as usize
+    }
+
     /// Returns true if the account at the specified index is called as a program by an instruction
     pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
         if let Ok(key_index) = u8::try_from(key_index) {
@@ -135,7 +151,7 @@ mod tests {
         itertools::Itertools,
     };
 
-    fn check_test_loaded_message() -> (LoadedMessage, [Pubkey; 6]) {
+    fn check_test_loaded_message() -> (LoadedMessage<'static>, [Pubkey; 6]) {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
@@ -143,8 +159,8 @@ mod tests {
         let key4 = Pubkey::new_unique();
         let key5 = Pubkey::new_unique();
 
-        let message = LoadedMessage {
-            message: v0::Message {
+        let message = LoadedMessage::new(
+            v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 2,
                     num_readonly_signed_accounts: 1,
@@ -153,11 +169,11 @@ mod tests {
                 account_keys: vec![key0, key1, key2, key3],
                 ..v0::Message::default()
             },
-            loaded_addresses: LoadedAddresses {
+            LoadedAddresses {
                 writable: vec![key4],
                 readonly: vec![key5],
             },
-        };
+        );
 
         (message, [key0, key1, key2, key3, key4, key5])
     }
@@ -171,15 +187,17 @@ mod tests {
 
     #[test]
     fn test_has_duplicates_with_dupe_keys() {
-        let create_message_with_dupe_keys = |mut keys: Vec<Pubkey>| LoadedMessage {
-            message: v0::Message {
-                account_keys: keys.split_off(2),
-                ..v0::Message::default()
-            },
-            loaded_addresses: LoadedAddresses {
-                writable: keys.split_off(2),
-                readonly: keys,
-            },
+        let create_message_with_dupe_keys = |mut keys: Vec<Pubkey>| {
+            LoadedMessage::new(
+                v0::Message {
+                    account_keys: keys.split_off(2),
+                    ..v0::Message::default()
+                },
+                LoadedAddresses {
+                    writable: keys.split_off(2),
+                    readonly: keys,
+                },
+            )
         };
 
         let key0 = Pubkey::new_unique();
@@ -212,11 +230,11 @@ mod tests {
     fn test_is_writable() {
         let mut message = check_test_loaded_message().0;
 
-        message.message.account_keys[0] = sysvar::clock::id();
+        message.message.to_mut().account_keys[0] = sysvar::clock::id();
         assert!(message.is_writable_index(0));
         assert!(!message.is_writable(0));
 
-        message.message.account_keys[0] = system_program::id();
+        message.message.to_mut().account_keys[0] = system_program::id();
         assert!(message.is_writable_index(0));
         assert!(!message.is_writable(0));
     }
@@ -226,8 +244,8 @@ mod tests {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
-        let message = LoadedMessage {
-            message: v0::Message {
+        let message = LoadedMessage::new(
+            v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
                     num_readonly_signed_accounts: 0,
@@ -241,11 +259,11 @@ mod tests {
                 }],
                 ..v0::Message::default()
             },
-            loaded_addresses: LoadedAddresses {
+            LoadedAddresses {
                 writable: vec![key1, key2],
                 readonly: vec![],
             },
-        };
+        );
 
         assert!(message.is_writable_index(2));
         assert!(!message.is_writable(2));

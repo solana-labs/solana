@@ -17,6 +17,13 @@ use {
     std::cmp::Ordering,
 };
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum TransactionVersion {
+    Legacy,
+    Number(u8),
+}
+
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
@@ -91,6 +98,14 @@ impl VersionedTransaction {
             signatures,
             message,
         })
+    }
+
+    /// Returns the version of the transaction
+    pub fn version(&self) -> TransactionVersion {
+        match self.message {
+            VersionedMessage::Legacy(_) => TransactionVersion::Legacy,
+            VersionedMessage::V0(_) => TransactionVersion::Number(0),
+        }
     }
 
     /// Returns a legacy transaction if the transaction message is legacy.

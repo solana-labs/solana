@@ -69,8 +69,7 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{
-            self, DisabledAddressLoader, SanitizedTransaction, TransactionError,
-            VersionedTransaction,
+            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
         },
     },
     solana_send_transaction_service::{
@@ -80,9 +79,9 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, Encodable, EncodedConfirmedTransactionWithStatusMeta,
-        Reward, RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
+        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
+        RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
         UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
@@ -991,8 +990,11 @@ impl JsonRpcRequestProcessor {
                 .map(|config| config.convert_to_current())
                 .unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
-            let transaction_details = config.transaction_details.unwrap_or_default();
-            let show_rewards = config.rewards.unwrap_or(true);
+            let encoding_options = BlockEncodingOptions {
+                transaction_details: config.transaction_details.unwrap_or_default(),
+                show_rewards: config.rewards.unwrap_or(true),
+                max_supported_transaction_version: config.max_supported_transaction_version,
+            };
             let commitment = config.commitment.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
 
@@ -1007,31 +1009,29 @@ impl JsonRpcRequestProcessor {
                 self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
-                let configure_block = |confirmed_block: ConfirmedBlock| {
-                    let legacy_block = confirmed_block
-                        .into_legacy_block()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-                    let mut confirmed_block =
-                        legacy_block.configure(encoding, transaction_details, show_rewards);
+                let encode_block = |confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
+                    let mut encoded_block = confirmed_block
+                        .encode_with_options(encoding, encoding_options)
+                        .map_err(RpcCustomError::from)?;
                     if slot == 0 {
-                        confirmed_block.block_time = Some(self.genesis_creation_time());
-                        confirmed_block.block_height = Some(0);
+                        encoded_block.block_time = Some(self.genesis_creation_time());
+                        encoded_block.block_height = Some(0);
                     }
-                    Ok(confirmed_block)
+                    Ok(encoded_block)
                 };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return bigtable_result.ok().map(configure_block).transpose();
+                        return bigtable_result.ok().map(encode_block).transpose();
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
                 return result
                     .ok()
                     .map(ConfirmedBlock::from)
-                    .map(configure_block)
+                    .map(encode_block)
                     .transpose();
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
@@ -1042,27 +1042,26 @@ impl JsonRpcRequestProcessor {
                     return result
                         .ok()
                         .map(ConfirmedBlock::from)
-                        .map(|confirmed_block| -> Result<UiConfirmedBlock> {
-                            let mut legacy_block = confirmed_block
-                                .into_legacy_block()
-                                .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                            if legacy_block.block_time.is_none()
-                                || legacy_block.block_height.is_none()
+                        .map(|mut confirmed_block| -> Result<UiConfirmedBlock> {
+                            if confirmed_block.block_time.is_none()
+                                || confirmed_block.block_height.is_none()
                             {
                                 let r_bank_forks = self.bank_forks.read().unwrap();
                                 let bank = r_bank_forks.get(slot).cloned();
                                 if let Some(bank) = bank {
-                                    if legacy_block.block_time.is_none() {
-                                        legacy_block.block_time = Some(bank.clock().unix_timestamp);
+                                    if confirmed_block.block_time.is_none() {
+                                        confirmed_block.block_time =
+                                            Some(bank.clock().unix_timestamp);
                                     }
-                                    if legacy_block.block_height.is_none() {
-                                        legacy_block.block_height = Some(bank.block_height());
+                                    if confirmed_block.block_height.is_none() {
+                                        confirmed_block.block_height = Some(bank.block_height());
                                     }
                                 }
                             }
 
-                            Ok(legacy_block.configure(encoding, transaction_details, show_rewards))
+                            Ok(confirmed_block
+                                .encode_with_options(encoding, encoding_options)
+                                .map_err(RpcCustomError::from)?)
                         })
                         .transpose();
                 }
@@ -1384,6 +1383,7 @@ impl JsonRpcRequestProcessor {
             .map(|config| config.convert_to_current())
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+        let max_supported_transaction_version = config.max_supported_transaction_version;
         let commitment = config.commitment.unwrap_or_default();
         check_is_at_least_confirmed(commitment)?;
 
@@ -1399,10 +1399,7 @@ impl JsonRpcRequestProcessor {
 
             let encode_transaction =
                 |confirmed_tx_with_meta: ConfirmedTransactionWithStatusMeta| -> Result<EncodedConfirmedTransactionWithStatusMeta> {
-                    let legacy_tx_with_meta = confirmed_tx_with_meta.into_legacy_confirmed_transaction()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                    Ok(legacy_tx_with_meta.encode(encoding))
+                    Ok(confirmed_tx_with_meta.encode(encoding, max_supported_transaction_version).map_err(RpcCustomError::from)?)
                 };
 
             match confirmed_transaction.unwrap_or(None) {
@@ -3478,7 +3475,8 @@ pub mod rpc_full {
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let finalized_bank = &*meta.bank(Some(CommitmentConfig::finalized()));
+            let transaction = sanitize_transaction(unsanitized_tx, finalized_bank)?;
             let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
@@ -3586,7 +3584,8 @@ pub mod rpc_full {
                     .set_recent_blockhash(bank.last_blockhash());
             }
 
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let finalized_bank = &*meta.bank(Some(CommitmentConfig::finalized()));
+            let transaction = sanitize_transaction(unsanitized_tx, finalized_bank)?;
             if config.sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
@@ -4271,9 +4270,12 @@ where
         .map(|output| (wire_output, output))
 }
 
-fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
+fn sanitize_transaction(
+    transaction: VersionedTransaction,
+    address_loader: &impl AddressLoader,
+) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, &DisabledAddressLoader)
+    SanitizedTransaction::try_create(transaction, message_hash, None, address_loader)
         .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
@@ -4400,11 +4402,12 @@ pub mod tests {
             fee_calculator::DEFAULT_BURN_PERCENT,
             hash::{hash, Hash},
             instruction::InstructionError,
+            message::{v0, MessageHeader, VersionedMessage},
             nonce, rpc_port,
             signature::{Keypair, Signer},
             system_program, system_transaction,
             timing::slot_duration_from_slots_per_year,
-            transaction::{self, Transaction, TransactionError},
+            transaction::{self, DisabledAddressLoader, Transaction, TransactionError},
         },
         solana_transaction_status::{
             EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
@@ -6320,9 +6323,16 @@ pub mod tests {
         assert_eq!(confirmed_block.transactions.len(), 2);
         assert_eq!(confirmed_block.rewards, vec![]);
 
-        for EncodedTransactionWithStatusMeta { transaction, meta } in
-            confirmed_block.transactions.into_iter()
+        for EncodedTransactionWithStatusMeta {
+            transaction,
+            meta,
+            version,
+        } in confirmed_block.transactions.into_iter()
         {
+            assert_eq!(
+                version, None,
+                "requests which don't set max_supported_transaction_version shouldn't receive a version"
+            );
             if let EncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     let meta = meta.unwrap();
@@ -6357,9 +6367,16 @@ pub mod tests {
         assert_eq!(confirmed_block.transactions.len(), 2);
         assert_eq!(confirmed_block.rewards, vec![]);
 
-        for EncodedTransactionWithStatusMeta { transaction, meta } in
-            confirmed_block.transactions.into_iter()
+        for EncodedTransactionWithStatusMeta {
+            transaction,
+            meta,
+            version,
+        } in confirmed_block.transactions.into_iter()
         {
+            assert_eq!(
+                version, None,
+                "requests which don't set max_supported_transaction_version shouldn't receive a version"
+            );
             if let EncodedTransaction::LegacyBinary(transaction) = transaction {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
@@ -6414,6 +6431,7 @@ pub mod tests {
                     transaction_details: Some(TransactionDetails::Signatures),
                     rewards: Some(false),
                     commitment: None,
+                    max_supported_transaction_version: None,
                 },
             ])),
         );
@@ -6436,6 +6454,7 @@ pub mod tests {
                     transaction_details: Some(TransactionDetails::None),
                     rewards: Some(true),
                     commitment: None,
+                    max_supported_transaction_version: None,
                 },
             ])),
         );
@@ -7662,8 +7681,30 @@ pub mod tests {
                 .to_string(),
         );
         assert_eq!(
-            sanitize_transaction(unsanitary_versioned_tx).unwrap_err(),
+            sanitize_transaction(unsanitary_versioned_tx, &DisabledAddressLoader).unwrap_err(),
             expect58
+        );
+    }
+
+    #[test]
+    fn test_sanitize_unsupported_transaction_version() {
+        let versioned_tx = VersionedTransaction {
+            signatures: vec![Signature::default()],
+            message: VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys: vec![Pubkey::new_unique()],
+                ..v0::Message::default()
+            }),
+        };
+
+        assert_eq!(
+            sanitize_transaction(versioned_tx, &DisabledAddressLoader).unwrap_err(),
+            Error::invalid_params(
+                "invalid transaction: Transaction version is unsupported".to_string(),
+            )
         );
     }
 }

@@ -36,7 +36,9 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    solana_transaction_status::{ConfirmedBlock, TransactionDetails, UiTransactionEncoding},
+    solana_transaction_status::{
+        BlockEncodingOptions, ConfirmedBlock, TransactionDetails, UiTransactionEncoding,
+    },
     std::{
         collections::HashSet,
         net::{IpAddr, SocketAddr},
@@ -270,6 +272,7 @@ fn test_block_subscription() {
             encoding: Some(UiTransactionEncoding::Json),
             transaction_details: Some(TransactionDetails::Signatures),
             show_rewards: None,
+            max_supported_transaction_version: None,
         }),
     )
     .unwrap();
@@ -281,14 +284,17 @@ fn test_block_subscription() {
     match maybe_actual {
         Ok(actual) => {
             let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
-            let legacy_block = ConfirmedBlock::from(versioned_block)
-                .into_legacy_block()
+            let confirmed_block = ConfirmedBlock::from(versioned_block);
+            let block = confirmed_block
+                .encode_with_options(
+                    UiTransactionEncoding::Json,
+                    BlockEncodingOptions {
+                        transaction_details: TransactionDetails::Signatures,
+                        show_rewards: false,
+                        max_supported_transaction_version: None,
+                    },
+                )
                 .unwrap();
-            let block = legacy_block.configure(
-                UiTransactionEncoding::Json,
-                TransactionDetails::Signatures,
-                false,
-            );
             assert_eq!(actual.value.slot, slot);
             assert!(block.eq(&actual.value.block.unwrap()));
         }

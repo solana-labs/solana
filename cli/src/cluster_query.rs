@@ -2019,6 +2019,7 @@ pub fn process_transaction_history(
                     RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
                         commitment: Some(CommitmentConfig::confirmed()),
+                        max_supported_transaction_version: None,
                     },
                 ) {
                     Ok(confirmed_transaction) => {

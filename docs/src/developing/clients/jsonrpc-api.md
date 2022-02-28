@@ -389,6 +389,7 @@ Returns identity and transaction information about a confirmed block in the ledg
   - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested block contains a transaction with a higher version, an error will be returned.
 
 #### Results:
 
@@ -413,6 +414,10 @@ The result field will be an object with the following fields:
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
         - `"Err": <ERR>` - Transaction failed with TransactionError
+      - `loadedAddresses: <object|undefined>` - Transaction addresses loaded from address lookup tables. Undefined if `maxSupportedTransactionVersion` is not set in request params.
+        - `writable: <array[string]>` - Ordered list of base-58 encoded addresses for writable loaded accounts
+        - `readonly: <array[string]>` - Ordered list of base-58 encoded addresses for readonly loaded accounts
+    - `version: <"legacy"|number|undefined>` - Transaction version. Undefined if `maxSupportedTransactionVersion` is not set in request params.
   - `signatures: <array>` - present if "signatures" are requested for transaction details; an array of signatures strings, corresponding to the transaction order in the block
   - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
     - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
@@ -559,6 +564,10 @@ The JSON structure of a transaction is defined as follows:
     - `programIdIndex: <number>` - Index into the `message.accountKeys` array indicating the program account that executes this instruction.
     - `accounts: <array[number]>` - List of ordered indices into the `message.accountKeys` array indicating which accounts to pass to the program.
     - `data: <string>` - The program input data encoded in a base-58 string.
+  - `addressTableLookups: <array[object]|undefined>` - List of address table lookups used by a transaction to dynamically load addresses from on-chain address lookup tables. Undefined if `maxSupportedTransactionVersion` is not set.
+    - `accountKey: <string>` - base-58 encoded public key for an address lookup table account.
+    - `writableIndexes: <array[number]>` - List of indices used to load addresses of writable accounts from a lookup table.
+    - `readonlyIndexes: <array[number]>` - List of indices used to load addresses of readonly accounts from a lookup table.
 
 #### Inner Instructions Structure
 
@@ -2313,7 +2322,7 @@ Returns the slot leaders for a given slot range
 
 #### Results:
 
-- `<array<string>>` - Node identity public keys as base-58 encoded strings
+- `<array[string]>` - Node identity public keys as base-58 encoded strings
 
 #### Example:
 
@@ -2847,6 +2856,7 @@ Returns transaction details for a confirmed transaction
   - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json".
     "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned.
 
 #### Results:
 
@@ -2873,6 +2883,10 @@ Returns transaction details for a confirmed transaction
       - `postBalance: <u64>` - account balance in lamports after the reward was applied
       - `rewardType: <string>` - type of reward: currently only "rent", other types may be added in the future
       - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
+    - `loadedAddresses: <object|undefined>` - Transaction addresses loaded from address lookup tables. Undefined if `maxSupportedTransactionVersion` is not set in request params.
+      - `writable: <array[string]>` - Ordered list of base-58 encoded addresses for writable loaded accounts
+      - `readonly: <array[string]>` - Ordered list of base-58 encoded addresses for readonly loaded accounts
+  - `version: <"legacy"|number|undefined>` - Transaction version. Undefined if `maxSupportedTransactionVersion` is not set in request params.
 
 #### Example:
 
