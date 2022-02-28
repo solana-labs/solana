@@ -422,7 +422,6 @@ impl ClusterNodes<RetransmitStage> {
         stakes as f64 / slot_stats.num_shreds as f64 / root_bank.total_epoch_stake() as f64 * 100.0
     }
 
-    /*
     pub fn get_shred_distribution_stakes(
         &self,
         shred: &Shred,
@@ -467,7 +466,6 @@ impl ClusterNodes<RetransmitStage> {
 
         stakes
     }
-    */
 
     /*
     pub fn get_shred_distribution_stakes_pct(
