@@ -1625,7 +1625,10 @@ pub mod tests {
         // The names and descriptors don't need to be in the same order for our use cases;
         // however, there should be the same number of each. For example, adding a new column
         // should update both lists.
-        assert_eq!(Rocks::columns().len(), Rocks::cf_descriptors(&options, &oldest_slot).len());
+        assert_eq!(
+            Rocks::columns().len(),
+            Rocks::cf_descriptors(&options, &oldest_slot).len()
+        );
     }
 
     #[test]
@@ -1635,7 +1638,9 @@ pub mod tests {
             columns::TransactionStatusIndex::NAME
         ));
         assert!(exclude_column_from_compaction(columns::ProgramCosts::NAME));
-        assert!(exclude_column_from_compaction(columns::TransactionMemos::NAME));
+        assert!(exclude_column_from_compaction(
+            columns::TransactionMemos::NAME
+        ));
         assert!(!exclude_column_from_compaction("something else"));
     }
 }
