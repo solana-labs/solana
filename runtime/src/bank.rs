@@ -7104,66 +7104,59 @@ pub(crate) mod tests {
     }
 
     #[test]
+    /// one thing being tested here is that a failed tx (due to rent collection using up all lamports) followed by rent collection
+    /// results in the same state as if just rent collection ran (and emptied the accounts that have too few lamports)
     fn test_credit_debit_rent_no_side_effect_on_hash() {
         solana_logger::setup();
 
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
-        let keypair1: Keypair = Keypair::new();
-        let keypair2: Keypair = Keypair::new();
-        let keypair3: Keypair = Keypair::new();
-        let keypair4: Keypair = Keypair::new();
-
-        // Transaction between these two keypairs will fail
-        let keypair5: Keypair = Keypair::new();
-        let keypair6: Keypair = Keypair::new();
 
         genesis_config.rent = rent_with_exemption_threshold(21.0);
 
+        let slot = years_as_slots(
+            2.0,
+            &genesis_config.poh_config.target_tick_duration,
+            genesis_config.ticks_per_slot,
+        ) as u64;
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank = Bank::new_from_parent(
-            &root_bank,
-            &Pubkey::default(),
-            years_as_slots(
-                2.0,
-                &genesis_config.poh_config.target_tick_duration,
-                genesis_config.ticks_per_slot,
-            ) as u64,
-        );
+        let bank = Bank::new_from_parent(&root_bank, &Pubkey::default(), slot);
 
         let root_bank_2 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank_with_success_txs = Bank::new_from_parent(
-            &root_bank_2,
-            &Pubkey::default(),
-            years_as_slots(
-                2.0,
-                &genesis_config.poh_config.target_tick_duration,
-                genesis_config.ticks_per_slot,
-            ) as u64,
-        );
+        let bank_with_success_txs = Bank::new_from_parent(&root_bank_2, &Pubkey::default(), slot);
 
         assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
+        let plenty_of_lamports = 264;
+        let too_few_lamports = 10;
         // Initialize credit-debit and credit only accounts
-        let account1 = AccountSharedData::new(264, 0, &Pubkey::default());
-        let account2 = AccountSharedData::new(264, 1, &Pubkey::default());
-        let account3 = AccountSharedData::new(264, 0, &Pubkey::default());
-        let account4 = AccountSharedData::new(264, 1, &Pubkey::default());
-        let account5 = AccountSharedData::new(10, 0, &Pubkey::default());
-        let account6 = AccountSharedData::new(10, 1, &Pubkey::default());
+        let mut accounts = [
+            AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
+            AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
+            AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
+            AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
+            // Transaction between these two accounts will fail
+            AccountSharedData::new(too_few_lamports, 0, &Pubkey::default()),
+            AccountSharedData::new(too_few_lamports, 1, &Pubkey::default()),
+        ];
 
-        bank.store_account(&keypair1.pubkey(), &account1);
-        bank.store_account(&keypair2.pubkey(), &account2);
-        bank.store_account(&keypair3.pubkey(), &account3);
-        bank.store_account(&keypair4.pubkey(), &account4);
-        bank.store_account(&keypair5.pubkey(), &account5);
-        bank.store_account(&keypair6.pubkey(), &account6);
+        let keypairs = accounts.iter().map(|_| Keypair::new()).collect::<Vec<_>>();
+        {
+            // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
+            let mut account_copy = accounts[4].clone();
+            let expected_rent = bank.rent_collector().collect_from_existing_account(
+                &keypairs[4].pubkey(),
+                &mut account_copy,
+                None,
+            );
+            assert_eq!(expected_rent.rent_amount, too_few_lamports);
+            assert_eq!(account_copy.lamports(), 0);
+        }
 
-        bank_with_success_txs.store_account(&keypair1.pubkey(), &account1);
-        bank_with_success_txs.store_account(&keypair2.pubkey(), &account2);
-        bank_with_success_txs.store_account(&keypair3.pubkey(), &account3);
-        bank_with_success_txs.store_account(&keypair4.pubkey(), &account4);
-        bank_with_success_txs.store_account(&keypair5.pubkey(), &account5);
-        bank_with_success_txs.store_account(&keypair6.pubkey(), &account6);
+        for i in 0..accounts.len() {
+            let account = &mut accounts[i];
+            bank.store_account(&keypairs[i].pubkey(), account);
+            bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
+        }
 
         // Make builtin instruction loader rent exempt
         let system_program_id = system_program::id();
@@ -7174,12 +7167,25 @@ pub(crate) mod tests {
         bank.store_account(&system_program_id, &system_program_account);
         bank_with_success_txs.store_account(&system_program_id, &system_program_account);
 
-        let t1 =
-            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_config.hash());
-        let t2 =
-            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_config.hash());
-        let t3 =
-            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_config.hash());
+        let t1 = system_transaction::transfer(
+            &keypairs[0],
+            &keypairs[1].pubkey(),
+            1,
+            genesis_config.hash(),
+        );
+        let t2 = system_transaction::transfer(
+            &keypairs[2],
+            &keypairs[3].pubkey(),
+            1,
+            genesis_config.hash(),
+        );
+        // the idea is this transaction will result in both accounts being drained of all lamports due to rent collection
+        let t3 = system_transaction::transfer(
+            &keypairs[4],
+            &keypairs[5].pubkey(),
+            1,
+            genesis_config.hash(),
+        );
 
         let txs = vec![t1.clone(), t2.clone(), t3];
         let res = bank.process_transactions(txs.iter());
