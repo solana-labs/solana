@@ -14,7 +14,7 @@ bs58 = "0.4.0"
 clap = "2.33.1"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
-dashmap = "4.0.2"
+dashmap = "5.1.0"
 histogram = "*"
 itertools = "0.10.3"
 log = { version = "0.4.14" }
