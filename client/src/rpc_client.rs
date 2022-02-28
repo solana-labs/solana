@@ -163,7 +163,7 @@ impl RpcClient {
     /// `RpcSender`. Most applications should use one of the other constructors,
     /// such as [`new`] and [`new_mock`], which create an `RpcClient`
     /// encapsulating an [`HttpSender`] and [`MockSender`] respectively.
-    fn new_sender<T: RpcSender + Send + Sync + 'static>(
+    pub fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
         config: RpcClientConfig,
     ) -> Self {
