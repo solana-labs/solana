@@ -2034,6 +2034,7 @@ impl RpcClient {
     ///     transaction_details: Some(TransactionDetails::None),
     ///     rewards: Some(true),
     ///     commitment: None,
+    ///     max_supported_transaction_version: Some(0),
     /// };
     /// let block = rpc_client.get_block_with_config(
     ///     slot,
@@ -2596,6 +2597,7 @@ impl RpcClient {
     /// let config = RpcTransactionConfig {
     ///     encoding: Some(UiTransactionEncoding::Json),
     ///     commitment: Some(CommitmentConfig::confirmed()),
+    ///     max_supported_transaction_version: Some(0),
     /// };
     /// let transaction = rpc_client.get_transaction_with_config(
     ///     &signature,
