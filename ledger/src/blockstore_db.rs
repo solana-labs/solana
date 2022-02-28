@@ -302,10 +302,10 @@ impl Rocks {
         fs::create_dir_all(&path)?;
 
         // Use default database options
-        if disable_auto_compactions(&access_type) {
+        if disable_auto_compactions(access_type) {
             warn!("Disabling rocksdb's auto compaction for maintenance bulk ledger update...");
         }
-        let mut db_options = get_db_options(&access_type);
+        let mut db_options = get_db_options(access_type);
         if let Some(recovery_mode) = recovery_mode {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
@@ -415,29 +415,29 @@ impl Rocks {
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
             new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(
                 &options.shred_storage_type,
-                &access_type,
-                &oldest_slot,
+                access_type,
+                oldest_slot,
             );
         vec![
-            new_cf_descriptor::<SlotMeta>(&access_type, &oldest_slot),
-            new_cf_descriptor::<DeadSlots>(&access_type, &oldest_slot),
-            new_cf_descriptor::<DuplicateSlots>(&access_type, &oldest_slot),
-            new_cf_descriptor::<ErasureMeta>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Orphans>(&access_type, &oldest_slot),
-            new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Root>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Index>(&access_type, &oldest_slot),
+            new_cf_descriptor::<SlotMeta>(access_type, oldest_slot),
+            new_cf_descriptor::<DeadSlots>(access_type, oldest_slot),
+            new_cf_descriptor::<DuplicateSlots>(access_type, oldest_slot),
+            new_cf_descriptor::<ErasureMeta>(access_type, oldest_slot),
+            new_cf_descriptor::<Orphans>(access_type, oldest_slot),
+            new_cf_descriptor::<BankHash>(access_type, oldest_slot),
+            new_cf_descriptor::<Root>(access_type, oldest_slot),
+            new_cf_descriptor::<Index>(access_type, oldest_slot),
             cf_descriptor_shred_data,
             cf_descriptor_shred_code,
-            new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
-            new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
-            new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
-            new_cf_descriptor::<TransactionStatusIndex>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Rewards>(&access_type, &oldest_slot),
-            new_cf_descriptor::<Blocktime>(&access_type, &oldest_slot),
-            new_cf_descriptor::<PerfSamples>(&access_type, &oldest_slot),
-            new_cf_descriptor::<BlockHeight>(&access_type, &oldest_slot),
-            new_cf_descriptor::<ProgramCosts>(&access_type, &oldest_slot),
+            new_cf_descriptor::<TransactionStatus>(access_type, oldest_slot),
+            new_cf_descriptor::<AddressSignatures>(access_type, oldest_slot),
+            new_cf_descriptor::<TransactionMemos>(access_type, oldest_slot),
+            new_cf_descriptor::<TransactionStatusIndex>(access_type, oldest_slot),
+            new_cf_descriptor::<Rewards>(access_type, oldest_slot),
+            new_cf_descriptor::<Blocktime>(access_type, oldest_slot),
+            new_cf_descriptor::<PerfSamples>(access_type, oldest_slot),
+            new_cf_descriptor::<BlockHeight>(access_type, oldest_slot),
+            new_cf_descriptor::<ProgramCosts>(access_type, oldest_slot),
         ]
     }
 
