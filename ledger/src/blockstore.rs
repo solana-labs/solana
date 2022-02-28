@@ -2142,7 +2142,7 @@ impl Blockstore {
         w_active_transaction_status_index: &RwLockWriteGuard<Slot>,
     ) -> Result<u64> {
         let i = **w_active_transaction_status_index;
-        let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
+        let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap().expect("No local snapshots or ledger state available.");
         if slot > index_meta.max_slot {
             assert!(!index_meta.frozen);
             index_meta.max_slot = slot;
