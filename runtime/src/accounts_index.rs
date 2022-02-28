@@ -191,8 +191,12 @@ impl AccountSecondaryIndexes {
 }
 
 #[derive(Debug, Default)]
+/// data per entry in in-mem accounts index
+/// used to keep track of consistency with disk index
 pub struct AccountMapEntryMeta {
+    /// true if entry in in-mem idx has changes and needs to be written to disk
     pub dirty: AtomicBool,
+    /// 'age' at which this entry should be purged from the cache (implements lru)
     pub age: AtomicU8,
 }
 
@@ -212,9 +216,17 @@ impl AccountMapEntryMeta {
 }
 
 #[derive(Debug, Default)]
+/// one entry in the in-mem accounts index
+/// Represents the value for an account key in the in-memory accounts index
 pub struct AccountMapEntryInner<T> {
+    /// number of alive slots that contain >= 1 instances of account data for this pubkey
+    /// where alive represents a slot that has not yet been removed by clean via AccountsDB::clean_stored_dead_slots() for containing no up to date account information
     ref_count: AtomicU64,
+    /// list of slots in which this pubkey was updated
+    /// Note that 'clean' removes outdated entries (ie. older roots) from this slot_list
+    /// purge_slot() also removes non-rooted slots from this list
     pub slot_list: RwLock<SlotList<T>>,
+    /// synchronization metadata for in-memory state since last flush to disk accounts index
     pub meta: AccountMapEntryMeta,
 }
 
