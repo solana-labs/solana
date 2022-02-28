@@ -23,6 +23,95 @@ use {
     },
 };
 
+pub mod instruction_account_indices {
+    pub enum Initialize {
+        StakeAccount = 0,
+        Rent = 1,
+    }
+
+    pub enum Authorize {
+        StakeAccount = 0,
+        Clock = 1,
+        // CurrentAuthority = 2,
+        Custodian = 3,
+    }
+
+    pub enum AuthorizeWithSeed {
+        StakeAccount = 0,
+        AuthorityBase = 1,
+        Clock = 2,
+        Custodian = 3,
+    }
+
+    pub enum DelegateStake {
+        StakeAccount = 0,
+        VoteAccount = 1,
+        Clock = 2,
+        StakeHistory = 3,
+        ConfigAccount = 4,
+    }
+
+    pub enum Split {
+        StakeAccount = 0,
+        SplitTo = 1,
+    }
+
+    pub enum Merge {
+        StakeAccount = 0,
+        MergeFrom = 1,
+        Clock = 2,
+        StakeHistory = 3,
+    }
+
+    pub enum Withdraw {
+        StakeAccount = 0,
+        Recipient = 1,
+        Clock = 2,
+        StakeHistory = 3,
+        WithdrawAuthority = 4,
+        Custodian = 5,
+    }
+
+    pub enum Deactivate {
+        StakeAccount = 0,
+        Clock = 1,
+    }
+
+    pub enum SetLockup {
+        StakeAccount = 0,
+        // Clock = 1,
+    }
+
+    pub enum InitializeChecked {
+        StakeAccount = 0,
+        Rent = 1,
+        AuthorizedStaker = 2,
+        AuthorizedWithdrawer = 3,
+    }
+
+    pub enum AuthorizeChecked {
+        StakeAccount = 0,
+        Clock = 1,
+        // CurrentAuthority = 2,
+        Authorized = 3,
+        Custodian = 4,
+    }
+
+    pub enum AuthorizeCheckedWithSeed {
+        StakeAccount = 0,
+        AuthorityBase = 1,
+        Clock = 2,
+        Authorized = 3,
+        Custodian = 4,
+    }
+
+    pub enum SetLockupChecked {
+        StakeAccount = 0,
+        // Clock = 1,
+        Custodian = 2,
+    }
+}
+
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
