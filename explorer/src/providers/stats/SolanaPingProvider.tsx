@@ -82,15 +82,15 @@ export function SolanaPingProvider({ children }: Props) {
   React.useEffect(() => {
     const url = getPingUrl(cluster);
 
-    setRollup({
-      status: PingStatus.Loading,
-    });
-
     if (!url) {
       return;
     }
 
     const fetchPingMetrics = () => {
+      setRollup({
+        status: PingStatus.Loading,
+      });
+
       fetch(url)
         .then((res) => {
           return res.json();
