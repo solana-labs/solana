@@ -12352,26 +12352,21 @@ pub mod tests {
             } else {
                 panic!("All roots should have been flushed to storage");
             };
-            if !should_clean || slot == slots.last().unwrap() {
+            let expected_accounts = if !should_clean || slot == slots.last().unwrap() {
                 // The slot was not cleaned before being flushed to storage,
                 // so it also contains all the original updates.
-                assert_eq!(
-                    slot_accounts,
-                    keys[*slot as usize..]
-                        .iter()
-                        .cloned()
-                        .collect::<HashSet<Pubkey>>()
-                );
+                keys[*slot as usize..]
+                    .iter()
+                    .cloned()
+                    .collect::<HashSet<Pubkey>>()
             } else {
                 // If clean was specified, only the latest slot should have all the updates.
                 // All these other slots have been cleaned before flush
-                assert_eq!(
-                    slot_accounts,
-                    std::iter::once(keys[*slot as usize])
-                        .into_iter()
-                        .collect::<HashSet<Pubkey>>()
-                );
-            }
+                std::iter::once(keys[*slot as usize])
+                    .into_iter()
+                    .collect::<HashSet<Pubkey>>()
+            };
+            assert_eq!(slot_accounts, expected_accounts);
         }
     }
 
