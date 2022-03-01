@@ -79,7 +79,9 @@ pub(crate) fn check_rent_state_with_account(
     account_state: &AccountSharedData,
 ) -> Result<()> {
     submit_rent_state_metrics(pre_rent_state, post_rent_state);
-    if !post_rent_state.transition_allowed_from(pre_rent_state) {
+    if !solana_sdk::incinerator::check_id(address)
+        && !post_rent_state.transition_allowed_from(pre_rent_state)
+    {
         debug!(
             "Account {} not rent exempt, state {:?}",
             address, account_state,

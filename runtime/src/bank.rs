@@ -16725,6 +16725,28 @@ pub(crate) mod tests {
         ));
     }
 
+    // Ensure System transfers of any size can be made to the incinerator
+    #[test]
+    fn test_rent_state_incinerator() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        let rent_exempt_minimum = genesis_config.rent.minimum_balance(0);
+
+        // Activate features, including require_rent_exempt_accounts
+        activate_all_features(&mut genesis_config);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        for amount in [rent_exempt_minimum - 1, rent_exempt_minimum] {
+            bank.transfer(amount, &mint_keypair, &solana_sdk::incinerator::id())
+                .unwrap();
+        }
+    }
+
     #[test]
     fn test_rent_state_list_len() {
         let GenesisConfigInfo {
