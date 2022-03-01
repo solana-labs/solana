@@ -483,11 +483,13 @@ impl From<Pubkey> for NodeId {
 pub fn make_cluster<R: Rng>(
     rng: &mut R,
     num_nodes: usize,
+    unstaked_ratio: Option<(u32, u32)>,
 ) -> (
     Vec<ContactInfo>,
     HashMap<Pubkey, u64>, // stakes
     ClusterInfo,
 ) {
+    let (unstaked_numerator, unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
     let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(rng, None))
         .take(num_nodes)
         .collect();
@@ -496,7 +498,7 @@ pub fn make_cluster<R: Rng>(
     let mut stakes: HashMap<Pubkey, u64> = nodes
         .iter()
         .filter_map(|node| {
-            if rng.gen_ratio(1, 7) {
+            if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
                 None // No stake for some of the nodes.
             } else {
                 Some((node.id, rng.gen_range(0, 20)))
@@ -557,7 +559,7 @@ mod tests {
     #[test]
     fn test_cluster_nodes_retransmit() {
         let mut rng = rand::thread_rng();
-        let (nodes, stakes, cluster_info) = make_cluster(&mut rng, 1_000);
+        let (nodes, stakes, cluster_info) = make_cluster(&mut rng, 1_000, None);
         let this_node = cluster_info.my_contact_info();
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
@@ -638,7 +640,7 @@ mod tests {
     #[test]
     fn test_cluster_nodes_broadcast() {
         let mut rng = rand::thread_rng();
-        let (nodes, stakes, cluster_info) = make_cluster(&mut rng, 1_000);
+        let (nodes, stakes, cluster_info) = make_cluster(&mut rng, 1_000, None);
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
         let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
