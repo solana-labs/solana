@@ -50,7 +50,7 @@ fn get_retransmit_peers_deterministic(
 fn get_retransmit_peers_compat(
     cluster_nodes: &ClusterNodes<RetransmitStage>,
     slot_leader: &Pubkey,
-    signatures: &Vec<Signature>,
+    signatures: &[Signature],
 ) {
     for signature in signatures.iter() {
         // see Shred::seed
