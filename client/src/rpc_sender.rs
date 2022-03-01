@@ -29,7 +29,7 @@ pub struct RpcTransportStats {
 /// [`HttpSender`]: crate::http_sender::HttpSender
 /// [`MockSender`]: crate::mock_sender::MockSender
 #[async_trait]
-pub(crate) trait RpcSender {
+pub trait RpcSender {
     async fn send(
         &self,
         request: RpcRequest,

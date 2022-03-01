@@ -3,6 +3,7 @@ use {
     log::*,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        pubkey::Pubkey,
         rent::Rent,
         transaction::{Result, TransactionError},
         transaction_context::TransactionContext,
@@ -55,17 +56,35 @@ pub(crate) fn check_rent_state(
     index: usize,
 ) -> Result<()> {
     if let Some((pre_rent_state, post_rent_state)) = pre_rent_state.zip(post_rent_state) {
-        submit_rent_state_metrics(pre_rent_state, post_rent_state);
-        if !post_rent_state.transition_allowed_from(pre_rent_state) {
-            debug!(
-                "Account {:?} not rent exempt, state {:?}",
-                transaction_context.get_key_of_account_at_index(index),
-                transaction_context
-                    .get_account_at_index(index)
-                    .map(|account| account.borrow()),
-            );
-            return Err(TransactionError::InvalidRentPayingAccount);
-        }
+        let expect_msg = "account must exist at TransactionContext index if rent-states are Some";
+        check_rent_state_with_account(
+            pre_rent_state,
+            post_rent_state,
+            transaction_context
+                .get_key_of_account_at_index(index)
+                .expect(expect_msg),
+            &transaction_context
+                .get_account_at_index(index)
+                .expect(expect_msg)
+                .borrow(),
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn check_rent_state_with_account(
+    pre_rent_state: &RentState,
+    post_rent_state: &RentState,
+    address: &Pubkey,
+    account_state: &AccountSharedData,
+) -> Result<()> {
+    submit_rent_state_metrics(pre_rent_state, post_rent_state);
+    if !post_rent_state.transition_allowed_from(pre_rent_state) {
+        debug!(
+            "Account {} not rent exempt, state {:?}",
+            address, account_state,
+        );
+        return Err(TransactionError::InvalidRentPayingAccount);
     }
     Ok(())
 }

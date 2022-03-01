@@ -102,8 +102,6 @@ command_step() {
     command: "$2"
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
-    agents:
-      - "queue=solana"
 EOF
 }
 
@@ -145,7 +143,21 @@ all_test_steps() {
     annotate --style info --context test-coverage \
       "Coverage skipped as no .rs files were modified"
   fi
-
+ # Coverage in disk...
+  if affects \
+             .rs$ \
+             Cargo.lock$ \
+             Cargo.toml$ \
+             ^ci/rust-version.sh \
+             ^ci/test-coverage.sh \
+             ^scripts/coverage-in-disk.sh \
+      ; then
+    command_step coverage-in-disk ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 40
+    wait_step
+  else
+    annotate --style info --context test-coverage \
+      "Coverage skipped as no .rs files were modified"
+  fi
   # Full test suite
   command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
   wait_step
@@ -170,7 +182,7 @@ all_test_steps() {
     timeout_in_minutes: 20
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
-      - "queue=solana"
+      - "queue=default"
 EOF
   else
     annotate --style info \
@@ -223,8 +235,6 @@ EOF
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
     timeout_in_minutes: 30
-    agents:
-      - "queue=solana"
 EOF
   else
     annotate --style info \
@@ -250,8 +260,6 @@ EOF
   - command: "scripts/build-downstream-anchor-projects.sh"
     name: "downstream-anchor-projects"
     timeout_in_minutes: 10
-    agents:
-      - "queue=solana"
 EOF
   else
     annotate --style info \

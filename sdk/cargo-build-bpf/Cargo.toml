@@ -13,7 +13,7 @@ publish = false
 bzip2 = "0.4.3"
 clap = "2.33.3"
 regex = "1.5.4"
-cargo_metadata = "0.14.1"
+cargo_metadata = "0.14.2"
 solana-sdk = { path = "..", version = "=1.10.0" }
 solana-download-utils = { path = "../../download-utils", version = "=1.10.0" }
 tar = "0.4.38"

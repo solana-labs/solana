@@ -642,7 +642,7 @@ impl RepairWeight {
     }
 
     // Heavier, smaller slots come first
-    fn sort_by_stake_weight_slot(slot_stake_voted: &mut Vec<(Slot, u64)>) {
+    fn sort_by_stake_weight_slot(slot_stake_voted: &mut [(Slot, u64)]) {
         slot_stake_voted.sort_by(|(slot, stake_voted), (slot_, stake_voted_)| {
             if stake_voted == stake_voted_ {
                 slot.cmp(slot_)

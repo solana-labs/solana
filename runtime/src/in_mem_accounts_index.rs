@@ -343,6 +343,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         new_value: PreAllocatedAccountMapEntry<T>,
+        other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
@@ -352,6 +353,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 Self::lock_and_update_slot_list(
                     entry,
                     new_value.into(),
+                    other_slot,
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
@@ -368,6 +370,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         Self::lock_and_update_slot_list(
                             current,
                             new_value.into(),
+                            other_slot,
                             reclaims,
                             previous_slot_entry_was_cached,
                         );
@@ -401,6 +404,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 Self::lock_and_update_slot_list(
                                     &disk_entry,
                                     new_value.into(),
+                                    other_slot,
                                     reclaims,
                                     previous_slot_entry_was_cached,
                                 );
@@ -440,6 +444,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn lock_and_update_slot_list(
         current: &AccountMapEntryInner<T>,
         new_value: (Slot, T),
+        other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
@@ -449,6 +454,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             &mut slot_list,
             slot,
             new_entry,
+            other_slot,
             reclaims,
             previous_slot_entry_was_cached,
         );
@@ -462,30 +468,35 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// any entry at 'slot' is replaced with 'account_info'.
     /// or, 'account_info' is appended to the slot list if the slot did not exist previously.
     /// returns true if caller should addref
+    /// conditions when caller should addref:
+    ///   'account_info' does NOT represent a cached storage (the slot is being flushed from the cache)
+    /// AND
+    ///   previous slot_list entry AT 'slot' did not exist (this is the first time this account was modified in this "slot"), or was previously cached (the storage is now being flushed from the cache)
     fn update_slot_list(
-        list: &mut SlotList<T>,
+        slot_list: &mut SlotList<T>,
         slot: Slot,
         account_info: T,
+        _other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) -> bool {
         let mut addref = !account_info.is_cached();
 
         // find other dirty entries from the same slot
-        for list_index in 0..list.len() {
-            let (s, previous_update_value) = &list[list_index];
+        for list_index in 0..slot_list.len() {
+            let (s, previous_update_value) = &slot_list[list_index];
             if *s == slot {
                 let previous_was_cached = previous_update_value.is_cached();
                 addref = addref && previous_was_cached;
 
                 let mut new_item = (slot, account_info);
-                std::mem::swap(&mut new_item, &mut list[list_index]);
+                std::mem::swap(&mut new_item, &mut slot_list[list_index]);
                 if previous_slot_entry_was_cached {
                     assert!(previous_was_cached);
                 } else {
                     reclaims.push(new_item);
                 }
-                list[(list_index + 1)..]
+                slot_list[(list_index + 1)..]
                     .iter()
                     .for_each(|item| assert!(item.0 != slot));
                 return addref;
@@ -493,7 +504,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         // if we make it here, we did not find the slot in the list
-        list.push((slot, account_info));
+        slot_list.push((slot, account_info));
         addref
     }
 
@@ -531,6 +542,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 InMemAccountsIndex::lock_and_update_slot_list(
                     occupied.get(),
                     (slot, account_info),
+                    None,
                     &mut Vec::default(),
                     false,
                 );
@@ -557,6 +569,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         InMemAccountsIndex::lock_and_update_slot_list(
                             &disk_entry,
                             (slot, account_info),
+                            None,
                             &mut Vec::default(),
                             false,
                         );
@@ -612,6 +625,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         &mut slot_list,
                         slot,
                         account_info,
+                        None,
                         reclaims,
                         previous_slot_entry_was_cached,
                     );
