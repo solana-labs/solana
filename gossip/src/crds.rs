@@ -52,7 +52,7 @@ use {
     },
 };
 
-const CRDS_SHARDS_BITS: u32 = 8;
+const CRDS_SHARDS_BITS: u32 = 12;
 // Number of vote slots to track in an lru-cache for metrics.
 const VOTE_SLOTS_METRICS_CAP: usize = 100;
 
