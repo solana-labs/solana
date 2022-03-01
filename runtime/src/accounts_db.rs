@@ -5777,6 +5777,11 @@ impl AccountsDb {
                 final_result = (hash, lamports);
             }
 
+            info!(
+                "calculate_accounts_hash_without_index: slot (exclusive): {} {:?}",
+                storages.range().end,
+                final_result
+            );
             Ok(final_result)
         };
         if let Some(thread_pool) = thread_pool {
