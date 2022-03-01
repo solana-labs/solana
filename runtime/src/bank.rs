@@ -8623,7 +8623,8 @@ pub(crate) mod tests {
         let zero_lamports = 0;
         let little_lamports = 1234;
         let large_lamports = 123_456_789;
-        let rent_collected = 22;
+        let some_slot = 1000;
+        let rent_collected = 22; // this is a function of 'some_slot'
 
         bank.store_account(
             &zero_lamport_pubkey,
@@ -8639,10 +8640,12 @@ pub(crate) mod tests {
         );
 
         let genesis_slot = 0;
-        let some_slot = 1000;
         let ancestors = vec![(some_slot, 0), (0, 1)].into_iter().collect();
 
+        let previous_epoch = bank.epoch();
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), some_slot));
+        let current_epoch = bank.epoch();
+        assert!(previous_epoch < current_epoch);
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
         assert_eq!(
@@ -8670,14 +8673,17 @@ pub(crate) mod tests {
             bank.get_account(&rent_due_pubkey).unwrap().lamports(),
             little_lamports - rent_collected
         );
-        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(), 6);
+        assert_eq!(
+            bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(),
+            current_epoch + 1
+        );
         assert_eq!(
             bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
             large_lamports
         );
         assert_eq!(
             bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch(),
-            5
+            current_epoch
         );
         assert_eq!(
             bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
