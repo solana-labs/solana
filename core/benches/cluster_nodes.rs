@@ -85,7 +85,7 @@ fn get_retransmit_peers_compat_wrapper(b: &mut Bencher, unstaked_ratio: Option<(
     let mut rng = rand::thread_rng();
     let (nodes, cluster_nodes) = make_cluster_nodes(&mut rng, unstaked_ratio);
     let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
-    let signatures: Vec<_> = std::iter::repeat_with(|| Signature::new_unique())
+    let signatures: Vec<_> = std::iter::repeat_with(Signature::new_unique)
         .take(NUM_SIMULATED_SHREDS)
         .collect();
     b.iter(|| get_retransmit_peers_compat(&cluster_nodes, &slot_leader, &signatures));
