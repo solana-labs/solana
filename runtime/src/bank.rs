@@ -5777,7 +5777,7 @@ impl Bank {
     /// snapshot.
     /// Only called from startup or test code.
     #[must_use]
-    fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
+    pub fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
