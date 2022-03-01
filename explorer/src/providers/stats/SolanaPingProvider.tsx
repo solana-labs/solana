@@ -33,6 +33,7 @@ export type PingInfo = {
 
 export enum PingStatus {
   Loading,
+  Refreshing,
   Ready,
   Error,
 }
@@ -124,15 +125,24 @@ export function SolanaPingProvider({ children }: Props) {
         .catch((error) => {
           setRollup({
             status: PingStatus.Error,
-            retry: fetchPingMetrics,
+            retry: () => {
+              setRollup({
+                status: PingStatus.Loading,
+              });
+
+              fetchPingMetrics();
+            },
           });
         });
     };
 
-    const fetchPingInterval = setInterval(
-      fetchPingMetrics,
-      FETCH_PING_INTERVAL
-    );
+    const fetchPingInterval = setInterval(() => {
+      setRollup({
+        status: PingStatus.Refreshing,
+      });
+
+      fetchPingMetrics();
+    }, FETCH_PING_INTERVAL);
     fetchPingMetrics();
     return () => {
       clearInterval(fetchPingInterval);
