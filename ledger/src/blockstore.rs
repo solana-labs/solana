@@ -1839,9 +1839,13 @@ impl Blockstore {
         self.block_height_cf.put(slot, &block_height)
     }
 
+    /// The first complete block that is available in the Blockstore ledger
     pub fn get_first_available_block(&self) -> Result<Slot> {
         let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot())?;
-        Ok(root_iterator.next().unwrap_or_default())
+        // The block at root-index 0 cannot be complete, because it is missing its parent
+        // blockhash. A parent blockhash must be calculated from the entries of the previous block.
+        // Therefore, the first available complete block is that at root-index 1.
+        Ok(root_iterator.nth(1).unwrap_or_default())
     }
 
     pub fn get_rooted_block(
@@ -7131,8 +7135,6 @@ pub mod tests {
                 )
                 .unwrap();
         }
-        // Purge to freeze index 0
-        blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
         let slot1 = 20;
         for x in 5..9 {
             let signature = Signature::new(&[x; 64]);
@@ -7281,8 +7283,6 @@ pub mod tests {
                 )
                 .unwrap();
         }
-        // Purge to freeze index 0
-        blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
         for x in 7..9 {
             let signature = Signature::new(&[x; 64]);
             blockstore
@@ -7340,6 +7340,9 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
+        let (shreds, _) = make_slot_entries(1, 0, 4);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
         fn make_slot_entries_with_transaction_addresses(addresses: &[Pubkey]) -> Vec<Entry> {
             let mut entries: Vec<Entry> = Vec::new();
             for address in addresses {
@@ -7367,6 +7370,7 @@ pub mod tests {
             let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
+<<<<<<< HEAD
             for (i, entry) in entries.into_iter().enumerate() {
                 if slot == 4 && i == 2 {
                     // Purge to freeze index 0 and write address-signatures in new primary index
@@ -7376,6 +7380,10 @@ pub mod tests {
                     let transaction = tx
                         .into_legacy_transaction()
                         .expect("versioned transactions not supported");
+=======
+            for entry in entries.into_iter() {
+                for transaction in entry.transactions {
+>>>>>>> 3b5b71ce4 (Improve UX querying rpc for blocks at or before the snapshot from boot (#23403))
                     assert_eq!(transaction.signatures.len(), 1);
                     blockstore
                         .write_transaction_status(
