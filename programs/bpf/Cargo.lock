@@ -792,7 +792,7 @@ checksum = "9d2be62a4061b872c8c0873ee4fc6f101ce7b889d039f019c5fa2af471a59908"
 dependencies = [
  "derivation-path",
  "ed25519-dalek",
- "hmac 0.12.0",
+ "hmac 0.12.1",
  "sha2 0.10.2",
 ]
 
@@ -1190,9 +1190,9 @@ dependencies = [
 
 [[package]]
 name = "hmac"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddca131f3e7f2ce2df364b57949a9d47915cfbd35e46cfee355ccebbf794d6a2"
+checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest 0.10.3",
 ]
@@ -3493,7 +3493,7 @@ dependencies = [
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.5",
- "hmac 0.12.0",
+ "hmac 0.12.1",
  "itertools 0.10.3",
  "js-sys",
  "lazy_static",
