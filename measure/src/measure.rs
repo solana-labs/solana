@@ -1,4 +1,3 @@
-use crate as solana_measure;
 use {
     solana_sdk::timing::duration_as_ns,
     std::{fmt, time::Instant},
@@ -28,7 +27,7 @@ pub struct Measure {
 ///
 /// ```
 /// // Call a function with a single argument
-/// # use solana_measure::measure::measure_this;
+/// # use solana_measure::measure_this;
 /// # fn my_function(fizz: i32) -> i32 { fizz }
 /// let (result, measure) = measure_this!("my_func", my_function, 42);
 /// # assert_eq!(result, 42);
@@ -36,26 +35,26 @@ pub struct Measure {
 ///
 /// ```
 /// // Call a function with multiple arguments
-/// # use solana_measure::measure::measure_this;
+/// # use solana_measure::measure_this;
 /// let (result, measure) = measure_this!("minimum", |arg1, arg2| std::cmp::min(arg1, arg2), 42, 123);
 /// # assert_eq!(result, 42);
 /// ```
 ///
 /// ```
 /// // Call a method
-/// # use solana_measure::measure::measure_this;
+/// # use solana_measure::measure_this;
 /// # struct Foo { x: i32 }
 /// # impl Foo { fn bar(&self, arg: i32) -> i32 { self.x + arg } }
 /// # let baz = 8;
 /// let foo = Foo { x: 42 };
-/// let (result, measure) = measue_this!("Foo::bar", |this, args| Foo::bar(&this, args), &foo, baz);
-/// # assert_eq!(result, 42);
+/// let (result, measure) = measure_this!("Foo::bar", |this, args| Foo::bar(&this, args), foo, baz);
+/// # assert_eq!(result, 50);
 /// ```
 
 #[macro_export]
 macro_rules! measure_this {
     ($name: expr, $func: expr, $($args: expr),* ) => {{
-        let mut measure = solana_measure::measure::Measure::start($name);
+        let mut measure = $crate::measure::Measure::start($name);
         let result = $func( $($args),* );
 
         measure.stop();
@@ -135,17 +134,8 @@ impl Measure {
     /// let (result, measure) = Measure::this(|(this, args)| Foo::bar(&this, args), (&foo, baz), "Foo::bar");
     /// # assert_eq!(result, 50);
     /// ```
-    // TODO:
-    // add proper since
-    #[deprecated(
-        since = "1.0.0",
-        note = "This method have been replaced by measure_this! macro."
-    )]
     pub fn this<T, R, F: FnOnce(T) -> R>(func: F, args: T, name: &'static str) -> (R, Self) {
-        let mut measure = Self::start(name);
-        let result = func(args);
-        measure.stop();
-        (result, measure)
+        measure_this!(name, func, args)
     }
 }
 
@@ -285,6 +275,12 @@ mod tests {
             assert_eq!(result, 1 * 2 * 3);
         }
 
+        // Ensure measure_this! can be called with function accepting 0 arguments
+        {
+            let (result, _measure) = measure_this!("test", || 10, );
+            assert_eq!(result, 10);
+        }
+
         // Ensure that this() can be called with a normal function with one argument
         {
             let (result, _measure) = Measure::this(square, 5, "test");
@@ -297,6 +293,15 @@ mod tests {
         // Ensure that this() can be called with a normal function
         {
             let (result, _measure) = Measure::this(my_multiply_tuple, (3, 4), "test");
+            assert_eq!(result, 3 * 4);
+        }
+
+        // Ensure that measure_this! can be called with normal function
+        {
+            let (result, _measure) = measure_this!("test", my_multiply, 3, 4);
+            assert_eq!(result, 3 * 4);
+
+            let (result, _measure) = measure_this!("test", my_multiply_tuple, (3, 4));
             assert_eq!(result, 3 * 4);
         }
 
