@@ -18,7 +18,6 @@ import { useVoteAccounts } from "providers/accounts/vote-accounts";
 import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { Epoch } from "components/common/Epoch";
 import { TimestampToggle } from "components/common/TimestampToggle";
-import { SolanaPingCard } from "components/SolanaPingCard";
 
 const CLUSTER_STATS_TIMEOUT = 5000;
 
@@ -37,7 +36,7 @@ export function ClusterStatsPage() {
         <StatsCardBody />
       </div>
       <TpsCard />
-      <SolanaPingCard />
+      {/* <SolanaPingCard /> */}
     </div>
   );
 }
