@@ -261,6 +261,12 @@ pub(crate) struct ProcessPacketsTimings {
     // Time spent running the cost model in processing transactions before executing
     // transactions
     pub cost_model_us: u64,
+
+    // Time spent prioritizing packets, before sending to consuming process
+    pub prioritize_packets_us: u64,
+
+    // Time soent to collect and organize packet sender info.
+    pub report_sender_info_us: u64,
 }
 
 impl ProcessPacketsTimings {

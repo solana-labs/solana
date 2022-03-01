@@ -92,7 +92,6 @@ impl CostModel {
         tx_cost.execution_cost = self.get_transaction_cost(transaction);
         tx_cost.account_data_size = self.calculate_account_data_size(transaction);
 
-        debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
         tx_cost
     }
 

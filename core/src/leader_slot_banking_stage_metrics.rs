@@ -640,6 +640,7 @@ impl LeaderSlotMetricsTracker {
     }
 
     // Processing packets timing metrics
+    #[allow(dead_code)]
     pub(crate) fn increment_transactions_from_packets_us(&mut self, us: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             saturating_add_assign!(
@@ -671,6 +672,30 @@ impl LeaderSlotMetricsTracker {
                     .timing_metrics
                     .process_packets_timings
                     .filter_retryable_packets_us,
+                us
+            );
+        }
+    }
+
+    pub(crate) fn increment_prioritize_packets_us(&mut self, us: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .timing_metrics
+                    .process_packets_timings
+                    .prioritize_packets_us,
+                us
+            );
+        }
+    }
+
+    pub(crate) fn increment_report_sender_info_us(&mut self, us: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .timing_metrics
+                    .process_packets_timings
+                    .report_sender_info_us,
                 us
             );
         }

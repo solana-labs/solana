@@ -106,12 +106,9 @@ impl<'a> PacketForwardManager<'a> {
             .iter_mut()
             .zip(self.forwardable_packets.iter_mut())
         {
-            match cost_tracker.try_add(transaction, cost) {
-                Ok(_) => {
-                    forwardable_packets.push(packet);
-                    return;
-                }
-                Err(_) => {}
+            if cost_tracker.try_add(transaction, cost).is_ok() {
+                forwardable_packets.push(packet);
+                return;
             }
         }
     }
@@ -152,16 +149,14 @@ mod tests {
         solana_logger::setup();
         let leader = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            ..
+            mut genesis_config, ..
         } = create_genesis_config_with_leader(1_000_000, &leader, 3);
         genesis_config
             .fee_rate_governor
             .target_lamports_per_signature = 1000;
         genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
-        let mut bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         goto_end_of_slot(&mut bank);
 
@@ -263,16 +258,14 @@ mod tests {
         solana_logger::setup();
         let leader = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            ..
+            mut genesis_config, ..
         } = create_genesis_config_with_leader(1_000_000, &leader, 3);
         genesis_config
             .fee_rate_governor
             .target_lamports_per_signature = 1000;
         genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
-        let mut bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         goto_end_of_slot(&mut bank);
 
@@ -280,7 +273,6 @@ mod tests {
         let key1 = Keypair::new();
         let ix0 = system_instruction::transfer(&key0.pubkey(), &key1.pubkey(), 1);
         let ix1 = system_instruction::transfer(&key1.pubkey(), &key0.pubkey(), 1);
-        let ix_cb = ComputeBudgetInstruction::request_units(1000, 20000);
 
         // build a buffer of 2 packet batches, 2nd bacth is forwarded
         let unprocessed_packets = vec![
@@ -289,7 +281,7 @@ mod tests {
                     None,
                     &Transaction::new(
                         &[&key0],
-                        Message::new(&[ix0.clone()], Some(&key0.pubkey())),
+                        Message::new(&[ix0], Some(&key0.pubkey())),
                         bank.last_blockhash(),
                     ),
                 )
@@ -302,7 +294,7 @@ mod tests {
                     None,
                     &Transaction::new(
                         &[&key1],
-                        Message::new(&[ix1.clone()], Some(&key1.pubkey())),
+                        Message::new(&[ix1], Some(&key1.pubkey())),
                         bank.last_blockhash(),
                     ),
                 )
@@ -359,22 +351,22 @@ mod tests {
         let account_b = solana_sdk::pubkey::new_rand();
         //
         let tx_cost_large_a = TransactionCost {
-            writable_accounts: vec![account_a.clone()],
+            writable_accounts: vec![account_a],
             execution_cost: MAX_WRITABLE_ACCOUNT_UNITS,
             ..TransactionCost::default()
         };
         let tx_cost_large_ab = TransactionCost {
-            writable_accounts: vec![account_a.clone(), account_b.clone()],
+            writable_accounts: vec![account_a, account_b],
             execution_cost: MAX_WRITABLE_ACCOUNT_UNITS,
             ..TransactionCost::default()
         };
         let tx_cost_small_a = TransactionCost {
-            writable_accounts: vec![account_a.clone()],
+            writable_accounts: vec![account_a],
             execution_cost: 1,
             ..TransactionCost::default()
         };
         let tx_cost_small_b = TransactionCost {
-            writable_accounts: vec![account_b.clone()],
+            writable_accounts: vec![account_b],
             execution_cost: 1,
             ..TransactionCost::default()
         };
