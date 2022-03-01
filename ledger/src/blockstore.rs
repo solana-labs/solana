@@ -7370,20 +7370,11 @@ pub mod tests {
             let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
-<<<<<<< HEAD
-            for (i, entry) in entries.into_iter().enumerate() {
-                if slot == 4 && i == 2 {
-                    // Purge to freeze index 0 and write address-signatures in new primary index
-                    blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
-                }
+            for entry in entries.into_iter() {
                 for tx in entry.transactions {
                     let transaction = tx
                         .into_legacy_transaction()
                         .expect("versioned transactions not supported");
-=======
-            for entry in entries.into_iter() {
-                for transaction in entry.transactions {
->>>>>>> 3b5b71ce4 (Improve UX querying rpc for blocks at or before the snapshot from boot (#23403))
                     assert_eq!(transaction.signatures.len(), 1);
                     blockstore
                         .write_transaction_status(
