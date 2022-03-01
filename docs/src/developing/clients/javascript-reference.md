@@ -4,6 +4,10 @@ title: Web3 API Reference
 
 ## Web3 API Reference Guide
 
+The `@solana/web3.js` library is a package that has coverage over the [Solana JSON RPC API](https://docs.solana.com/developing/clients/jsonrpc-api).
+
+You can find the full documentation for the `@solana/web3.js` library [here](https://solana-labs.github.io/solana-web3.js/).
+
 ## General
 
 ### Connection
