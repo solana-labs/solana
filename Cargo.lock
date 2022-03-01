@@ -81,15 +81,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
-name = "ansi_term"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
-dependencies = [
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -704,48 +695,17 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "2.33.3"
+version = "3.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
-dependencies = [
- "ansi_term",
- "atty",
- "bitflags",
- "strsim 0.8.0",
- "textwrap 0.11.0",
- "unicode-width",
- "vec_map",
-]
-
-[[package]]
-name = "clap"
-version = "3.0.0-beta.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feff3878564edb93745d58cf63e17b63f24142506e7a20c87a5521ed7bfb1d63"
+checksum = "86f8c0e2a6b902acc18214e24a6935cdaf8a8e34231913d4404dcaee659f65a1"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive",
  "indexmap",
- "lazy_static",
  "os_str_bytes",
- "strsim 0.10.0",
+ "strsim",
  "termcolor",
- "textwrap 0.14.2",
- "unicase 2.6.0",
-]
-
-[[package]]
-name = "clap_derive"
-version = "3.0.0-beta.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b15c6b4f786ffb6192ffe65a36855bc1fc2444bcd0945ae16748dcd6ed7d0d3"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.81",
+ "textwrap",
 ]
 
 [[package]]
@@ -1551,9 +1511,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3dda0b6588335f360afc675d0564c17a77a2bda81ca178a4b6081bd86c7f0b"
+checksum = "c3083ce4b914124575708913bca19bfe887522d6e2e6d0952943f5eac4a74010"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -1561,9 +1521,9 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c8ff0461b82559810cdccfde3215c3f373807f5e5232b71479bff7bb2583d7"
+checksum = "0c09fd04b7e4073ac7156a9539b57a484a8ea920f79c7c675d05d289ab6110d3"
 
 [[package]]
 name = "futures-executor"
@@ -1579,15 +1539,15 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f9d34af5a1aac6fb380f735fe510746c38067c5bf16c7fd250280503c971b2"
+checksum = "fc4045962a5a5e935ee2fdedaa4e08284547402885ab326734432bed5d12966b"
 
 [[package]]
 name = "futures-macro"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dbd947adfffb0efc70599b3ddcf7b5597bb5fa9e245eb99f62b3a5f7bb8bd3c"
+checksum = "33c1e13800337f4d4d7a316bf45a567dbcb6ffe087f16424852d97e97a91f512"
 dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
@@ -1596,21 +1556,21 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3055baccb68d74ff6480350f8d6eb8fcfa3aa11bdc1a1ae3afdd0514617d508"
+checksum = "21163e139fa306126e6eedaf49ecdb4588f939600f0b1e770f4205ee4b7fa868"
 
 [[package]]
 name = "futures-task"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ee7c6485c30167ce4dfb83ac568a849fe53274c831081476ee13e0dce1aad72"
+checksum = "57c66a976bf5909d801bbef33416c41372779507e7a6b3a5e25e4749c58f776a"
 
 [[package]]
 name = "futures-util"
-version = "0.3.19"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b5cf40b47a271f77a8b1bec03ca09044d99d2372c0de244e66430761127164"
+checksum = "d8b7abd5d659d9b90c8cba917f6ec750a74e2dc23902ef9cd4cc8c8b22e6036a"
 dependencies = [
  "futures 0.1.31",
  "futures-channel",
@@ -2899,9 +2859,9 @@ dependencies = [
 
 [[package]]
 name = "os_str_bytes"
-version = "4.2.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "addaa943333a514159c80c97ff4a93306530d965d27e139188283cd13e06a799"
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
 dependencies = [
  "memchr",
 ]
@@ -3728,7 +3688,7 @@ dependencies = [
 name = "rbpf-cli"
 version = "1.10.0"
 dependencies = [
- "clap 3.0.0-beta.5",
+ "clap",
  "serde",
  "serde_json",
  "solana-bpf-loader-program",
@@ -4490,7 +4450,7 @@ dependencies = [
 name = "solana-accounts-bench"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "rayon",
  "solana-logger 1.10.0",
@@ -4504,7 +4464,7 @@ dependencies = [
 name = "solana-accounts-cluster-bench"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "rand 0.7.3",
  "rayon",
@@ -4590,7 +4550,7 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "log 0.4.14",
  "rand 0.7.3",
@@ -4655,7 +4615,7 @@ dependencies = [
 name = "solana-bench-streamer"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "solana-net-utils",
  "solana-streamer",
@@ -4666,7 +4626,7 @@ dependencies = [
 name = "solana-bench-tps"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "log 0.4.14",
  "rayon",
@@ -4747,7 +4707,7 @@ version = "1.10.0"
 dependencies = [
  "bzip2",
  "cargo_metadata",
- "clap 2.33.3",
+ "clap",
  "regex",
  "serial_test",
  "solana-download-utils",
@@ -4760,7 +4720,7 @@ name = "solana-cargo-test-bpf"
 version = "1.10.0"
 dependencies = [
  "cargo_metadata",
- "clap 2.33.3",
+ "clap",
 ]
 
 [[package]]
@@ -4768,7 +4728,7 @@ name = "solana-clap-utils"
 version = "1.10.0"
 dependencies = [
  "chrono",
- "clap 2.33.3",
+ "clap",
  "rpassword",
  "solana-perf",
  "solana-remote-wallet",
@@ -4786,7 +4746,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "bs58 0.4.0",
- "clap 2.33.3",
+ "clap",
  "console",
  "const_format",
  "criterion-stats",
@@ -4845,7 +4805,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "humantime",
  "indicatif",
@@ -4869,7 +4829,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bs58 0.4.0",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "futures-util",
  "indicatif",
@@ -5022,7 +4982,7 @@ name = "solana-dos"
 version = "1.10.0"
 dependencies = [
  "bincode",
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "rand 0.7.3",
  "solana-client",
@@ -5088,7 +5048,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "byteorder",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "log 0.4.14",
  "serde",
@@ -5169,7 +5129,7 @@ name = "solana-genesis"
 version = "1.10.0"
 dependencies = [
  "base64 0.12.3",
- "clap 2.33.3",
+ "clap",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5201,7 +5161,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "bv",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "flate2",
  "indexmap",
@@ -5248,7 +5208,7 @@ dependencies = [
  "bincode",
  "bzip2",
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "crossbeam-channel",
  "ctrlc",
@@ -5278,7 +5238,7 @@ name = "solana-keygen"
 version = "1.10.0"
 dependencies = [
  "bs58 0.4.0",
- "clap 2.33.3",
+ "clap",
  "dirs-next",
  "num_cpus",
  "solana-clap-utils",
@@ -5350,7 +5310,7 @@ dependencies = [
  "assert_cmd",
  "bs58 0.4.0",
  "bytecount",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "csv",
  "dashmap",
@@ -5413,7 +5373,7 @@ name = "solana-log-analyzer"
 version = "1.10.0"
 dependencies = [
  "byte-unit",
- "clap 2.33.3",
+ "clap",
  "serde",
  "serde_json",
  "solana-logger 1.10.0",
@@ -5452,7 +5412,7 @@ dependencies = [
 name = "solana-merkle-root-bench"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "solana-logger 1.10.0",
  "solana-measure",
@@ -5490,7 +5450,7 @@ dependencies = [
 name = "solana-net-shaper"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -5502,7 +5462,7 @@ name = "solana-net-utils"
 version = "1.10.0"
 dependencies = [
  "bincode",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "log 0.4.14",
  "nix",
@@ -5580,7 +5540,7 @@ dependencies = [
 name = "solana-poh-bench"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "rand 0.7.3",
  "rayon",
@@ -5765,7 +5725,7 @@ dependencies = [
 name = "solana-replica-node"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "log 0.4.14",
  "rand 0.7.3",
@@ -6020,7 +5980,7 @@ dependencies = [
 name = "solana-stake-accounts"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
@@ -6098,7 +6058,7 @@ dependencies = [
 name = "solana-store-tool"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "solana-logger 1.10.0",
  "solana-runtime",
@@ -6134,7 +6094,7 @@ dependencies = [
 name = "solana-sys-tuner"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "libc",
  "log 0.4.14",
  "nix",
@@ -6174,7 +6134,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "csv",
  "ctrlc",
@@ -6204,7 +6164,7 @@ name = "solana-transaction-dos"
 version = "1.10.0"
 dependencies = [
  "bincode",
- "clap 2.33.3",
+ "clap",
  "log 0.4.14",
  "rand 0.7.3",
  "rayon",
@@ -6263,7 +6223,7 @@ name = "solana-validator"
 version = "1.10.0"
 dependencies = [
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "core_affinity",
  "crossbeam-channel",
@@ -6346,7 +6306,7 @@ dependencies = [
 name = "solana-watchtower"
 version = "1.10.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "humantime",
  "log 0.4.14",
  "solana-clap-utils",
@@ -6558,12 +6518,6 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-
-[[package]]
-name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
@@ -6744,21 +6698,9 @@ checksum = "13a4ec180a2de59b57434704ccfad967f789b12737738798fa08798cd5824c16"
 
 [[package]]
 name = "textwrap"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
-dependencies = [
- "unicode-width",
-]
-
-[[package]]
-name = "textwrap"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
-dependencies = [
- "unicode-width",
-]
 
 [[package]]
 name = "thiserror"
@@ -7487,12 +7429,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "version_check"
