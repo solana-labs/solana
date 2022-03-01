@@ -45,26 +45,28 @@ pub type StoredMetaWriteVersion = u64;
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Debug)]
+#[repr(C, align(8))]
 pub struct StoredMeta {
     /// global write version
     pub write_version: StoredMetaWriteVersion,
+    pub data_len: u64,
     /// key for the account
     pub pubkey: Pubkey,
-    pub data_len: u64,
 }
 
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[repr(C, align(8))]
 pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
-    /// the epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
 }
 
 impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
