@@ -5,7 +5,10 @@ title: Fee Transaction Priority
 Additional fees were introduced to transactions as a method to allow users to bid for priority for
 their transactions in the leader's queue.
 
-Let the additional fee for a transaction `T` be defined as `F(T)`.
+The fee priority of a transaction `T` can then be defined as `F(T)`, where `F(T)` is the "fee-per
+compute-unit", calculated by:
+
+`(additional_fee + base_fee) / requested_compute_units`
 
 To ensure users get fair priority based on their fee, the proposed scheduler for the leader must
 guarantee that given `T1` and `T2` in the pending queue, and `F(T1) > F(T2)`:
