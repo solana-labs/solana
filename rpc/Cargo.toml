@@ -55,7 +55,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.6", features = ["codec", "compat"] }
 
 [dev-dependencies]
-serial_test = "0.5.1"
+serial_test = "0.6.0"
 solana-net-utils = { path = "../net-utils", version = "=1.10.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.10.0" }
 symlink = "0.1.0"

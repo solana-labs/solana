@@ -941,15 +941,20 @@ impl JsonRpcRequestProcessor {
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
     ) -> Result<()> {
+        let first_available_block = self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default();
+        let err: Error = RpcCustomError::BlockCleanedUp {
+            slot,
+            first_available_block,
+        }
+        .into();
         if let Err(BlockstoreError::SlotCleanedUp) = result {
-            return Err(RpcCustomError::BlockCleanedUp {
-                slot,
-                first_available_block: self
-                    .blockstore
-                    .get_first_available_block()
-                    .unwrap_or_default(),
-            }
-            .into());
+            return Err(err);
+        }
+        if slot < first_available_block {
+            return Err(err);
         }
         Ok(())
     }

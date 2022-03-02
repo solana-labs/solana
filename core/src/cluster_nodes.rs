@@ -2,13 +2,15 @@ use {
     crate::{broadcast_stage::BroadcastStage, retransmit_stage::RetransmitStage},
     itertools::Itertools,
     lru::LruCache,
-    rand::SeedableRng,
+    rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     rayon::{prelude::*, ThreadPool},
     solana_gossip::{
         cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
+        crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+        crds_value::{CrdsData, CrdsValue},
         weighted_shuffle::{weighted_best, weighted_shuffle, WeightedShuffle},
     },
     solana_ledger::{
@@ -21,6 +23,7 @@ use {
         feature_set,
         hash::hashv,
         pubkey::Pubkey,
+        signature::Keypair,
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -29,6 +32,7 @@ use {
         cell::RefCell,
         cmp::Reverse,
         collections::HashMap,
+        iter::repeat_with,
         marker::PhantomData,
         net::SocketAddr,
         ops::Deref,
@@ -53,7 +57,7 @@ enum NodeId {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct Node {
+pub struct Node {
     node: NodeId,
     stake: u64,
 }
@@ -288,6 +292,18 @@ impl ClusterNodes<RetransmitStage> {
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
             return self.get_retransmit_peers_compat(shred_seed, fanout, slot_leader);
         }
+        self.get_retransmit_peers_deterministic(shred_seed, fanout, slot_leader)
+    }
+
+    pub fn get_retransmit_peers_deterministic(
+        &self,
+        shred_seed: [u8; 32],
+        fanout: usize,
+        slot_leader: Pubkey,
+    ) -> (
+        Vec<&Node>, // neighbors
+        Vec<&Node>, // children
+    ) {
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == self.pubkey {
@@ -311,7 +327,7 @@ impl ClusterNodes<RetransmitStage> {
         (neighbors, children)
     }
 
-    fn get_retransmit_peers_compat(
+    pub fn get_retransmit_peers_compat(
         &self,
         shred_seed: [u8; 32],
         fanout: usize,
@@ -515,7 +531,7 @@ impl ClusterNodes<RetransmitStage> {
     */
 }
 
-fn new_cluster_nodes<T: 'static>(
+pub fn new_cluster_nodes<T: 'static>(
     cluster_info: &ClusterInfo,
     stakes: &HashMap<Pubkey, u64>,
 ) -> ClusterNodes<T> {
@@ -681,34 +697,67 @@ impl From<Pubkey> for NodeId {
     }
 }
 
+pub fn make_test_cluster<R: Rng>(
+    rng: &mut R,
+    num_nodes: usize,
+    unstaked_ratio: Option<(u32, u32)>,
+) -> (
+    Vec<ContactInfo>,
+    HashMap<Pubkey, u64>, // stakes
+    ClusterInfo,
+) {
+    let (unstaked_numerator, unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
+    let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(rng, None))
+        .take(num_nodes)
+        .collect();
+    nodes.shuffle(rng);
+    let this_node = nodes[0].clone();
+    let mut stakes: HashMap<Pubkey, u64> = nodes
+        .iter()
+        .filter_map(|node| {
+            if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
+                None // No stake for some of the nodes.
+            } else {
+                Some((node.id, rng.gen_range(0, 20)))
+            }
+        })
+        .collect();
+    // Add some staked nodes with no contact-info.
+    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
+    let cluster_info = ClusterInfo::new(
+        this_node,
+        Arc::new(Keypair::new()),
+        SocketAddrSpace::Unspecified,
+    );
+    {
+        let now = timestamp();
+        let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
+        // First node is pushed to crds table by ClusterInfo constructor.
+        for node in nodes.iter().skip(1) {
+            let node = CrdsData::ContactInfo(node.clone());
+            let node = CrdsValue::new_unsigned(node);
+            assert_eq!(
+                gossip_crds.insert(node, now, GossipRoute::LocalMessage),
+                Ok(())
+            );
+        }
+    }
+    (nodes, stakes, cluster_info)
+}
+
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        rand::{seq::SliceRandom, Rng},
         solana_entry::entry::Entry,
-        solana_gossip::{
-            crds::GossipRoute,
-            crds_value::{CrdsData, CrdsValue},
-            deprecated::{
-                shuffle_peers_and_index, sorted_retransmit_peers_and_stakes,
-                sorted_stakes_with_index,
-            },
+        solana_gossip::deprecated::{
+            shuffle_peers_and_index, sorted_retransmit_peers_and_stakes, sorted_stakes_with_index,
         },
-        solana_ledger::{
-            genesis_utils::{
-                bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
-            },
-            shred::Shredder,
+        solana_ledger::shred::Shredder,
+        solana_runtime::genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
         },
-        solana_sdk::{
-            hash::Hash,
-            signature::{Keypair, Signer},
-            system_transaction,
-            timing::timestamp,
-        },
-        solana_streamer::socket::SocketAddrSpace,
-        std::{iter::repeat_with, sync::Arc},
+        solana_sdk::{hash::Hash, signature::Signer, system_transaction},
     };
 
     // Legacy methods copied for testing backward compatibility.
@@ -730,55 +779,10 @@ mod tests {
         sorted_stakes_with_index(peers, stakes)
     }
 
-    fn make_cluster<R: Rng>(
-        rng: &mut R,
-    ) -> (
-        Vec<ContactInfo>,
-        HashMap<Pubkey, u64>, // stakes
-        ClusterInfo,
-    ) {
-        let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(rng, None))
-            .take(1000)
-            .collect();
-        nodes.shuffle(rng);
-        let this_node = nodes[0].clone();
-        let mut stakes: HashMap<Pubkey, u64> = nodes
-            .iter()
-            .filter_map(|node| {
-                if rng.gen_ratio(1, 7) {
-                    None // No stake for some of the nodes.
-                } else {
-                    Some((node.id, rng.gen_range(0, 20)))
-                }
-            })
-            .collect();
-        // Add some staked nodes with no contact-info.
-        stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
-        let cluster_info = ClusterInfo::new(
-            this_node,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
-        {
-            let now = timestamp();
-            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
-            // First node is pushed to crds table by ClusterInfo constructor.
-            for node in nodes.iter().skip(1) {
-                let node = CrdsData::ContactInfo(node.clone());
-                let node = CrdsValue::new_unsigned(node);
-                assert_eq!(
-                    gossip_crds.insert(node, now, GossipRoute::LocalMessage),
-                    Ok(())
-                );
-            }
-        }
-        (nodes, stakes, cluster_info)
-    }
-
     #[test]
     fn test_cluster_nodes_retransmit() {
         let mut rng = rand::thread_rng();
-        let (nodes, stakes, cluster_info) = make_cluster(&mut rng);
+        let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
         let this_node = cluster_info.my_contact_info();
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
@@ -859,7 +863,7 @@ mod tests {
     #[test]
     fn test_cluster_nodes_broadcast() {
         let mut rng = rand::thread_rng();
-        let (nodes, stakes, cluster_info) = make_cluster(&mut rng);
+        let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
         let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
@@ -948,7 +952,7 @@ mod tests {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         let mut rng = rand::thread_rng();
-        let (_nodes, stakes, cluster_info) = make_cluster(&mut rng);
+        let (_nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
 
         let cluster_nodes = ClusterNodes::<RetransmitStage>::new(&cluster_info, &stakes);
 

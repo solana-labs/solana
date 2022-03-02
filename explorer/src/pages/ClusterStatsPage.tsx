@@ -36,6 +36,7 @@ export function ClusterStatsPage() {
         <StatsCardBody />
       </div>
       <TpsCard />
+      {/* <SolanaPingCard /> */}
     </div>
   );
 }

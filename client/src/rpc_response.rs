@@ -143,9 +143,13 @@ pub struct SlotTransactionStats {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SlotShredStats {
+    /// Total number of data shreds
     pub num_shreds: u64,
+    /// Number of repaired shreds
     pub num_repaired: u64,
+    /// Number of recovered shreds
     pub num_recovered: u64,
+    /// Indices of shreds received via Turbine
     pub turbine_indices: Vec<u32>,
 }
 
