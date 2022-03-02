@@ -25,8 +25,8 @@ cargo_audit_ignores=(
 
   # generic-array: arr! macro erases lifetimes
   #
-  # Blocked on libsecp256k1 releasing with upgraded dependencies
-  # https://github.com/paritytech/libsecp256k1/issues/66
+  # Blocked on new spl dependencies on solana-program v1.9
+  # due to curve25519-dalek dependency
   --ignore RUSTSEC-2020-0146
 
   # hyper: Lenient `hyper` header parsing of `Content-Length` could allow request smuggling
