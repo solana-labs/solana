@@ -1,8 +1,7 @@
 use {
     bincode::serialize,
     crossbeam_channel::unbounded,
-    jsonrpc_core::futures::StreamExt,
-    jsonrpc_core_client::transports::ws,
+    futures_util::StreamExt,
     log::*,
     reqwest::{self, header::CONTENT_TYPE},
     serde_json::{json, Value},
@@ -16,13 +15,12 @@ use {
         rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
         tpu_client::{TpuClient, TpuClientConfig},
     },
-    solana_rpc::rpc_pubsub::gen_client::Client as GenPubsubClient,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,
         pubkey::Pubkey,
         rent::Rent,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Signature, Signer},
         system_transaction,
         transaction::Transaction,
     },
@@ -253,13 +251,11 @@ fn test_rpc_subscriptions() {
             )
         })
         .collect();
-    let mut signature_set: HashSet<String> = transactions
+    let mut signature_set: HashSet<Signature> =
+        transactions.iter().map(|tx| tx.signatures[0]).collect();
+    let account_set: HashSet<Pubkey> = transactions
         .iter()
-        .map(|tx| tx.signatures[0].to_string())
-        .collect();
-    let account_set: HashSet<String> = transactions
-        .iter()
-        .map(|tx| tx.message.account_keys[1].to_string())
+        .map(|tx| tx.message.account_keys[1])
         .collect();
 
     // Track when subscriptions are ready
@@ -267,62 +263,74 @@ fn test_rpc_subscriptions() {
     // Track account notifications are received
     let (account_sender, account_receiver) = unbounded::<RpcResponse<UiAccount>>();
     // Track when status notifications are received
-    let (status_sender, status_receiver) = unbounded::<(String, RpcResponse<RpcSignatureResult>)>();
+    let (status_sender, status_receiver) =
+        unbounded::<(Signature, RpcResponse<RpcSignatureResult>)>();
 
     // Create the pub sub runtime
     let rt = Runtime::new().unwrap();
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
     let signature_set_clone = signature_set.clone();
     rt.spawn(async move {
-        let connect = ws::try_connect::<GenPubsubClient>(&rpc_pubsub_url).unwrap();
-        let client = connect.await.unwrap();
+        let pubsub_client = Arc::new(PubsubClient::new(&rpc_pubsub_url).await.unwrap());
 
         // Subscribe to signature notifications
-        for sig in signature_set_clone {
+        for signature in signature_set_clone {
             let status_sender = status_sender.clone();
-            let mut sig_sub = client
-                .signature_subscribe(
-                    sig.clone(),
-                    Some(RpcSignatureSubscribeConfig {
-                        commitment: Some(CommitmentConfig::confirmed()),
-                        ..RpcSignatureSubscribeConfig::default()
-                    }),
-                )
-                .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
+            tokio::spawn({
+                let _pubsub_client = Arc::clone(&pubsub_client);
+                async move {
+                    let (mut sig_notifications, sig_unsubscribe) = _pubsub_client
+                        .signature_subscribe(
+                            &signature,
+                            Some(RpcSignatureSubscribeConfig {
+                                commitment: Some(CommitmentConfig::confirmed()),
+                                ..RpcSignatureSubscribeConfig::default()
+                            }),
+                        )
+                        .await
+                        .unwrap();
 
-            tokio::spawn(async move {
-                let response = sig_sub.next().await.unwrap();
-                status_sender
-                    .send((sig.clone(), response.unwrap()))
-                    .unwrap();
+                    let response = sig_notifications.next().await.unwrap();
+                    status_sender.send((signature, response)).unwrap();
+                    sig_unsubscribe().await;
+                }
             });
         }
 
         // Subscribe to account notifications
         for pubkey in account_set {
             let account_sender = account_sender.clone();
-            let mut client_sub = client
-                .account_subscribe(
-                    pubkey,
-                    Some(RpcAccountInfoConfig {
-                        commitment: Some(CommitmentConfig::confirmed()),
-                        ..RpcAccountInfoConfig::default()
-                    }),
-                )
-                .unwrap_or_else(|err| panic!("acct sub err: {:#?}", err));
-            tokio::spawn(async move {
-                let response = client_sub.next().await.unwrap();
-                account_sender.send(response.unwrap()).unwrap();
+            tokio::spawn({
+                let _pubsub_client = Arc::clone(&pubsub_client);
+                async move {
+                    let (mut account_notifications, account_unsubscribe) = _pubsub_client
+                        .account_subscribe(
+                            &pubkey,
+                            Some(RpcAccountInfoConfig {
+                                commitment: Some(CommitmentConfig::confirmed()),
+                                ..RpcAccountInfoConfig::default()
+                            }),
+                        )
+                        .await
+                        .unwrap();
+
+                    let response = account_notifications.next().await.unwrap();
+                    account_sender.send(response).unwrap();
+                    account_unsubscribe().await;
+                }
             });
         }
 
         // Signal ready after the next slot notification
-        let mut slot_sub = client
-            .slot_subscribe()
-            .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
-        tokio::spawn(async move {
-            let _response = slot_sub.next().await.unwrap();
-            ready_sender.send(()).unwrap();
+        tokio::spawn({
+            let _pubsub_client = Arc::clone(&pubsub_client);
+            async move {
+                let (mut slot_notifications, slot_unsubscribe) =
+                    _pubsub_client.slot_subscribe().await.unwrap();
+                let _response = slot_notifications.next().await.unwrap();
+                ready_sender.send(()).unwrap();
+                slot_unsubscribe().await;
+            }
         });
     });
 
