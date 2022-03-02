@@ -113,7 +113,7 @@ pub fn format_name_value(name: &str, value: &str) -> String {
 }
 /// Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
-    format_name_value(name, value);
+    println!("{}", format_name_value(name, value));
 }
 
 /// Creates a new process bar for processing that will take an unknown amount of time
