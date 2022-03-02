@@ -3959,8 +3959,35 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature)
         );
 
+        let signers = HashSet::from([stake_pubkey]);
+
+        // splitting an uninitialized account where the destination is the same as the source
+        {
+            // splitting should work when...
+            // - when split amount is the full balance
+            // - when split amount is zero
+            // - when split amount is non-zero and less than the full balance
+            //
+            // and splitting should fail when the split amount is greater than the balance
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports, &stake_keyed_account, &signers),
+                Ok(()),
+            );
+            assert_eq!(
+                stake_keyed_account.split(0, &stake_keyed_account, &signers),
+                Ok(()),
+            );
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports / 2, &stake_keyed_account, &signers),
+                Ok(()),
+            );
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports + 1, &stake_keyed_account, &signers),
+                Err(InstructionError::InsufficientFunds),
+            );
+        }
+
         // this should work
-        let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
             Ok(())
