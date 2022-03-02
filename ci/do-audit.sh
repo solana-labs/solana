@@ -29,18 +29,6 @@ cargo_audit_ignores=(
   # due to curve25519-dalek dependency
   --ignore RUSTSEC-2020-0146
 
-  # hyper: Lenient `hyper` header parsing of `Content-Length` could allow request smuggling
-  #
-  # Blocked on jsonrpc removing dependency on unmaintained `websocket`
-  # https://github.com/paritytech/jsonrpc/issues/605
-  --ignore RUSTSEC-2021-0078
-
-  # hyper: Integer overflow in `hyper`'s parsing of the `Transfer-Encoding` header leads to data loss
-  #
-  # Blocked on jsonrpc removing dependency on unmaintained `websocket`
-  # https://github.com/paritytech/jsonrpc/issues/605
-  --ignore RUSTSEC-2021-0079
-
   # chrono: Potential segfault in `localtime_r` invocations
   #
   # Blocked due to no safe upgrade
