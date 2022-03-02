@@ -193,10 +193,10 @@ function PingBarChart({ pingInfo }: { pingInfo: PingRollupInfo }) {
     datasets: [
       {
         backgroundColor: seriesData.map((val) =>
-          val.loss ? "#fa62fc" : "#00D192"
+          val.loss > 0.5 ? "#f00" : "#00D192"
         ),
         hoverBackgroundColor: seriesData.map((val) =>
-          val.loss ? "#fa62fc" : "#00D192"
+          val.loss > 0.5 ? "#f00" : "#00D192"
         ),
         borderWidth: 0,
         data: seriesData.map((val) => val.mean || 0),
