@@ -163,6 +163,7 @@ pub enum SlotUpdate {
     Completed {
         slot: Slot,
         timestamp: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
         stats: Option<SlotShredStats>,
     },
     CreatedBank {
