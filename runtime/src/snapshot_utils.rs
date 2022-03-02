@@ -1074,7 +1074,7 @@ fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
 }
 
 /// Parse a full snapshot archive filename into its Slot, Hash, and Archive Format
-pub fn parse_full_snapshot_archive_filename(
+pub(crate) fn parse_full_snapshot_archive_filename(
     archive_filename: &str,
 ) -> Result<(Slot, Hash, ArchiveFormat)> {
     lazy_static! {
@@ -1105,7 +1105,7 @@ pub fn parse_full_snapshot_archive_filename(
 }
 
 /// Parse an incremental snapshot archive filename into its base Slot, actual Slot, Hash, and Archive Format
-pub fn parse_incremental_snapshot_archive_filename(
+pub(crate) fn parse_incremental_snapshot_archive_filename(
     archive_filename: &str,
 ) -> Result<(Slot, Slot, Hash, ArchiveFormat)> {
     lazy_static! {
