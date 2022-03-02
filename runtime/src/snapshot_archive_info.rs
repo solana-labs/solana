@@ -79,7 +79,7 @@ impl PartialOrd for FullSnapshotArchiveInfo {
     }
 }
 
-// Order `FullSnapshotArchiveInfo` by slot (ascending), which practially is sorting chronologically
+// Order `FullSnapshotArchiveInfo` by slot (ascending), which practically is sorting chronologically
 impl Ord for FullSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.slot().cmp(&other.slot())
@@ -141,7 +141,7 @@ impl PartialOrd for IncrementalSnapshotArchiveInfo {
 }
 
 // Order `IncrementalSnapshotArchiveInfo` by base slot (ascending), then slot (ascending), which
-// practially is sorting chronologically
+// practically is sorting chronologically
 impl Ord for IncrementalSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.base_slot()

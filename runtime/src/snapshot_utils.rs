@@ -56,6 +56,7 @@ pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 2;
 pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 4;
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
+pub const LOCAL_SNAPSHOT_FILE_NAME: &str = ".local_snapshot";
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -395,6 +396,25 @@ pub fn archive_snapshot_package(
         ("duration_ms", timer.as_ms(), i64),
         ("size", metadata.len(), i64)
     );
+
+    info!("Create snapshot local file in {:?}", tar_dir);
+    create_snapshot_local_file(tar_dir)?;
+    Ok(())
+}
+
+pub fn has_snapshot_local_file(snapshot_archive_dir: &Path) -> bool {
+    snapshot_archive_dir.join(LOCAL_SNAPSHOT_FILE_NAME).exists()
+}
+
+pub fn create_snapshot_local_file(snapshot_archive_dir: &Path) -> Result<()> {
+    let _local_file = File::create(snapshot_archive_dir.join(LOCAL_SNAPSHOT_FILE_NAME))?;
+    Ok(())
+}
+
+pub fn delete_snapshot_local_file(snapshot_archive_dir: &Path) -> Result<()> {
+    if has_snapshot_local_file(snapshot_archive_dir) {
+        fs::remove_file(snapshot_archive_dir.join(LOCAL_SNAPSHOT_FILE_NAME))?;
+    }
     Ok(())
 }
 
@@ -806,7 +826,8 @@ pub fn bank_from_snapshot_archives(
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
-        accounts_db_skip_shrink,
+        accounts_db_skip_shrink
+            || has_snapshot_local_file(full_snapshot_archive_info.path().parent().unwrap()),
         Some(full_snapshot_archive_info.slot()),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -2671,6 +2692,8 @@ mod tests {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
+
+        assert!(has_snapshot_local_file(snapshot_archives_dir.path()));
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
             &[PathBuf::from(accounts_dir.path())],
