@@ -30,7 +30,7 @@ lru = "0.7.2"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.1"
-retain_mut = "0.1.5"
+retain_mut = "0.1.7"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.1" }
