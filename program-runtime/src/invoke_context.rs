@@ -1745,7 +1745,7 @@ mod tests {
             assert!(result.is_err());
             assert!(matches!(
                 result,
-                Err(solana_sdk::instruction::InstructionError::AccountsDataBudgetExceeded)
+                Err(solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded)
             ));
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
         }

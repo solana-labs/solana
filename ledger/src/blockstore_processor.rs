@@ -42,6 +42,7 @@ use {
         feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
+        instruction::InstructionError,
         pubkey::Pubkey,
         signature::{Keypair, Signature},
         timing,
@@ -223,6 +224,13 @@ fn execute_batch(
         rent_debits,
         ..
     } = tx_results;
+
+    if bank
+        .feature_set
+        .is_active(&feature_set::cap_accounts_data_len::id())
+    {
+        check_accounts_data_size(&execution_results)?;
+    }
 
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
@@ -1538,6 +1546,30 @@ pub fn fill_blockstore_slot_with_ticks(
         .unwrap();
 
     last_entry_hash
+}
+
+/// Check the transaction execution results to see if any instruction errored by exceeding the max
+/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
+fn check_accounts_data_size<'a>(
+    execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
+) -> Result<()> {
+    if let Some(result) = execution_results
+        .into_iter()
+        .map(|execution_result| execution_result.flattened_result())
+        .find(|result| {
+            matches!(
+                result,
+                Err(TransactionError::InstructionError(
+                    _,
+                    InstructionError::MaxAccountsDataSizeExceeded
+                )),
+            )
+        })
+    {
+        return result;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

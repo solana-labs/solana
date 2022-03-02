@@ -80,7 +80,7 @@ impl AccountsDataMeter {
     /// the remaining space, return an error and *do not* adjust accounts data space.
     pub fn adjust_delta(&mut self, amount: i64) -> Result<(), InstructionError> {
         if amount > self.remaining() as i64 {
-            return Err(InstructionError::AccountsDataBudgetExceeded);
+            return Err(InstructionError::MaxAccountsDataSizeExceeded);
         }
         self.adjust_delta_unchecked(amount);
         Ok(())
