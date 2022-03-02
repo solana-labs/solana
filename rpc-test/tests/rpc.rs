@@ -241,12 +241,13 @@ fn test_rpc_subscriptions() {
     let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
 
     // Create transaction signatures to subscribe to
+    let transfer_amount = Rent::default().minimum_balance(0);
     let transactions: Vec<Transaction> = (0..1000)
         .map(|_| {
             system_transaction::transfer(
                 &alice,
                 &solana_sdk::pubkey::new_rand(),
-                Rent::default().minimum_balance(0),
+                transfer_amount,
                 recent_blockhash,
             )
         })
@@ -353,7 +354,7 @@ fn test_rpc_subscriptions() {
 
     // Track mint balance to know when transactions have completed
     let now = Instant::now();
-    let expected_mint_balance = mint_balance - transactions.len() as u64;
+    let expected_mint_balance = mint_balance - (transfer_amount * transactions.len() as u64);
     while mint_balance != expected_mint_balance && now.elapsed() < Duration::from_secs(15) {
         mint_balance = rpc_client
             .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed())
