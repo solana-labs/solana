@@ -4009,24 +4009,30 @@ mod tests {
             &id(),
         )
         .expect("stake_account");
-
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let split_stake_account = AccountSharedData::new_ref_data_with_space(
-            0,
-            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let signers = vec![stake_pubkey].into_iter().collect();
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-        let split_stake_keyed_account =
-            KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
-        assert_eq!(
-            stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
-            Err(InstructionError::InvalidAccountData)
-        );
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        for split_stake_state in &[
+            StakeState::Initialized(Meta::default()),
+            StakeState::Stake(Meta::default(), Stake::default()),
+            StakeState::RewardsPool,
+        ] {
+            let split_stake_pubkey = solana_sdk::pubkey::new_rand();
+            let split_stake_account = AccountSharedData::new_ref_data_with_space(
+                0,
+                split_stake_state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("split_stake_account");
+
+            let split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+                Err(InstructionError::InvalidAccountData)
+            );
+        }
     }
     fn just_stake(stake: u64) -> Stake {
         Stake {
