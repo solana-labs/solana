@@ -7129,7 +7129,7 @@ pub(crate) mod tests {
         let plenty_of_lamports = 264;
         let too_few_lamports = 10;
         // Initialize credit-debit and credit only accounts
-        let mut accounts = [
+        let accounts = [
             AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
             AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
             AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
@@ -7153,7 +7153,7 @@ pub(crate) mod tests {
         }
 
         for i in 0..accounts.len() {
-            let account = &mut accounts[i];
+            let account = &accounts[i];
             bank.store_account(&keypairs[i].pubkey(), account);
             bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
         }
