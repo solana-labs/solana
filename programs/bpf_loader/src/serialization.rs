@@ -1,3 +1,5 @@
+#![allow(clippy::integer_arithmetic)]
+
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},

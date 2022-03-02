@@ -1037,7 +1037,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
                     return;
                 }
             }
-            bump_seed[0] -= 1;
+            bump_seed[0] = bump_seed[0].saturating_sub(1);
             question_mark!(invoke_context.get_compute_meter().consume(cost), result);
         }
         *result = Ok(1);
@@ -1115,10 +1115,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                     compute_budget.mem_op_base_cost.max(
                         compute_budget
                             .sha256_byte_cost
-                            .saturating_mul(val.len() as u64 / 2),
+                            .saturating_mul((val.len() as u64).saturating_div(2)),
                     )
                 } else {
-                    compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                    compute_budget
+                        .sha256_byte_cost
+                        .saturating_mul((val.len() as u64).saturating_div(2))
                 };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
@@ -1136,9 +1138,12 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     memory_mapping: &MemoryMapping,
     invoke_context: &mut InvokeContext,
 ) -> Result<u64, EbpfError<BpfError>> {
-    invoke_context
-        .get_compute_meter()
-        .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
+    invoke_context.get_compute_meter().consume(
+        invoke_context
+            .get_compute_budget()
+            .sysvar_base_cost
+            .saturating_add(size_of::<T>() as u64),
+    )?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
     let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
@@ -1349,10 +1354,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                     compute_budget.mem_op_base_cost.max(
                         compute_budget
                             .sha256_byte_cost
-                            .saturating_mul(val.len() as u64 / 2),
+                            .saturating_mul((val.len() as u64).saturating_div(2)),
                     )
                 } else {
-                    compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                    compute_budget
+                        .sha256_byte_cost
+                        .saturating_mul((val.len() as u64).saturating_div(2))
                 };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
@@ -1366,8 +1373,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
 /// This function is incorrect due to arithmetic overflow and only exists for
 /// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
 fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
-    (src_addr <= dst_addr && src_addr + n > dst_addr)
-        || (dst_addr <= src_addr && dst_addr + n > src_addr)
+    (src_addr <= dst_addr && src_addr.saturating_add(n) > dst_addr)
+        || (dst_addr <= src_addr && dst_addr.saturating_add(n) > src_addr)
 }
 
 fn mem_op_consume<'a, 'b>(
@@ -1381,9 +1388,9 @@ fn mem_op_consume<'a, 'b>(
     {
         compute_budget
             .mem_op_base_cost
-            .max(n / compute_budget.cpi_bytes_per_unit)
+            .max(n.saturating_div(compute_budget.cpi_bytes_per_unit))
     } else {
-        n / compute_budget.cpi_bytes_per_unit
+        n.saturating_div(compute_budget.cpi_bytes_per_unit)
     };
     invoke_context.get_compute_meter().consume(cost)
 }
@@ -1417,7 +1424,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         if update_syscall_base_costs {
             let cost = compute_budget
                 .mem_op_base_cost
-                .max(n / compute_budget.cpi_bytes_per_unit);
+                .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
             question_mark!(invoke_context.get_compute_meter().consume(cost), result);
         }
 
@@ -1439,7 +1446,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         }
 
         if !update_syscall_base_costs {
-            let cost = n / compute_budget.cpi_bytes_per_unit;
+            let cost = n.saturating_div(compute_budget.cpi_bytes_per_unit);
             question_mark!(invoke_context.get_compute_meter().consume(cost), result);
         };
 
@@ -1537,11 +1544,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
             let a = s1[i];
             let b = s2[i];
             if a != b {
-                *cmp_result = a as i32 - b as i32;
+                *cmp_result = (a as i32).saturating_sub(b as i32);
                 *result = Ok(0);
                 return;
             }
-            i += 1;
+            i = i.saturating_add(1);
         }
         *cmp_result = 0;
         *result = Ok(0);
@@ -1924,10 +1931,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                     compute_budget.mem_op_base_cost.max(
                         compute_budget
                             .sha256_byte_cost
-                            .saturating_mul(val.len() as u64 / 2),
+                            .saturating_mul((val.len() as u64).saturating_div(2)),
                     )
                 } else {
-                    compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                    compute_budget
+                        .sha256_byte_cost
+                        .saturating_mul((val.len() as u64).saturating_div(2))
                 };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
@@ -2082,7 +2091,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 )?;
 
                 invoke_context.get_compute_meter().consume(
-                    data.len() as u64 / invoke_context.get_compute_budget().cpi_bytes_per_unit,
+                    (data.len() as u64)
+                        .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
                 )?;
 
                 let translated = translate(
@@ -2352,7 +2362,9 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             let vm_data_addr = account_info.data_addr;
 
             invoke_context.get_compute_meter().consume(
-                account_info.data_len / invoke_context.get_compute_budget().cpi_bytes_per_unit,
+                account_info
+                    .data_len
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
             )?;
 
             let data = translate_slice_mut::<u8>(
@@ -2364,7 +2376,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
 
             let first_info_addr = &account_infos[0] as *const _ as u64;
             let addr = &account_info.data_len as *const u64 as u64;
-            let vm_addr = account_infos_addr + (addr - first_info_addr);
+            let vm_addr = account_infos_addr.saturating_add(addr.saturating_sub(first_info_addr));
             let _ = translate(
                 memory_mapping,
                 AccessType::Store,
@@ -2580,7 +2592,9 @@ fn check_account_infos(
     len: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    if len * size_of::<Pubkey>() > invoke_context.get_compute_budget().max_cpi_instruction_size {
+    if len.saturating_mul(size_of::<Pubkey>())
+        > invoke_context.get_compute_budget().max_cpi_instruction_size
+    {
         // Cap the number of account_infos a caller can pass to approximate
         // maximum that accounts that could be passed in an instruction
         return Err(SyscallError::TooManyAccounts.into());
@@ -2710,9 +2724,16 @@ fn call<'a, 'b: 'a>(
                     );
                 }
                 let data_overflow = if do_support_realloc {
-                    new_len > caller_account.original_data_len + MAX_PERMITTED_DATA_INCREASE
+                    new_len
+                        > caller_account
+                            .original_data_len
+                            .saturating_add(MAX_PERMITTED_DATA_INCREASE)
                 } else {
-                    new_len > caller_account.data.len() + MAX_PERMITTED_DATA_INCREASE
+                    new_len
+                        > caller_account
+                            .data
+                            .len()
+                            .saturating_add(MAX_PERMITTED_DATA_INCREASE)
                 };
                 if data_overflow {
                     ic_msg!(
@@ -2770,9 +2791,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
         let budget = invoke_context.get_compute_budget();
 
         question_mark!(
-            invoke_context
-                .get_compute_meter()
-                .consume(len / budget.cpi_bytes_per_unit + budget.syscall_base_cost),
+            invoke_context.get_compute_meter().consume(
+                len.saturating_div(budget.cpi_bytes_per_unit)
+                    .saturating_add(budget.syscall_base_cost)
+            ),
             result
         );
 
@@ -2845,9 +2867,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
         length = length.min(return_data.len() as u64);
         if length != 0 {
             question_mark!(
-                invoke_context
-                    .get_compute_meter()
-                    .consume((length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit),
+                invoke_context.get_compute_meter().consume(
+                    (length.saturating_add(size_of::<Pubkey>() as u64))
+                        .saturating_div(budget.cpi_bytes_per_unit)
+                ),
                 result
             );
 
@@ -2994,7 +3017,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                         if index == current_index {
                             return true;
                         } else {
-                            current_index += 1;
+                            current_index = current_index.saturating_add(1);
                         }
                     }
                     false
@@ -4190,7 +4213,7 @@ mod tests {
             MemoryRegion {
                 host_addr: mock_slices.as_ptr() as u64,
                 vm_addr: SEEDS_VA,
-                len: (seeds.len() * size_of::<MockSlice>()) as u64,
+                len: (seeds.len().saturating_mul(size_of::<MockSlice>()) as u64),
                 vm_gap_shift: 63,
                 is_writable: false,
             },
@@ -4218,7 +4241,7 @@ mod tests {
         ];
 
         for (i, seed) in seeds.iter().enumerate() {
-            let vm_addr = SEED_VA + (i as u64 * 0x100000000);
+            let vm_addr = SEED_VA.saturating_add((i as u64).saturating_mul(0x100000000));
             let mock_slice = MockSlice {
                 vm_addr,
                 len: seed.len(),
