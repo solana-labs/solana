@@ -17,7 +17,7 @@ crossbeam-channel = "0.5"
 dashmap = "4.0.2"
 itertools = "0.10.3"
 jsonrpc-core = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
+jsonrpc-core-client = { version = "18.0.0" }
 jsonrpc-derive = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-pubsub = "18.0.0"

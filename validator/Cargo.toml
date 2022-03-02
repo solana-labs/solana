@@ -19,7 +19,7 @@ crossbeam-channel = "0.5"
 fd-lock = "3.0.4"
 indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
+jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
 jsonrpc-derive = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils= "18.0.0"
