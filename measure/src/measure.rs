@@ -277,7 +277,7 @@ mod tests {
 
         // Ensure measure_this! can be called with function accepting 0 arguments
         {
-            let (result, _measure) = measure_this!("test", || 10, );
+            let (result, _measure) = measure_this!("test", || 10,);
             assert_eq!(result, 10);
         }
 
@@ -333,8 +333,7 @@ mod tests {
             assert_eq!(some_struct.add_to(6), 42 + 6);
 
             let some_struct = SomeStruct { x: 42 };
-            let (result, _measure) =
-                measure_this!("test", SomeStruct::add_to, &some_struct, 4,);
+            let (result, _measure) = measure_this!("test", SomeStruct::add_to, &some_struct, 4,);
             assert_eq!(result, 42 + 4);
             assert_eq!(some_struct.add_to(6), 42 + 6);
         }
