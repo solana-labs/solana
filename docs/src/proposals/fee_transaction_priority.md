@@ -48,7 +48,7 @@ locking complexity.
 #### Components of the `Scheduler`:
 
 1. `default_transaction_queue` - A max-heap `BinaryHeap<Transaction>` that tracks all pending transactions.
-The priority in the heap is the additional fee of the transaction. Transactions are added to this queue 
+The priority in the heap is the additional fee of the transaction. Transactions are added to this queue
 from sigverify before the leader slot begins.
 2. `all_transaction_queues` - A `VecDeque<BinaryHeap<Transaction>>` that tracks all pending queues of work.
 Some pending queues have higher priority than others (as will be explained later in the `Handling Completion Signals from BankingStage Threads` section below). The list is ordered in priority from highest to lowest priority. On
@@ -98,7 +98,7 @@ If ``self.all_transaction_queues[0]` is empty, pop off the first entry and conti
         if self.locked_accounts.is_conflicting(account_key) {
             return Conflict;
         }
-        
+
         // Check if any higher fee transaction has already reserved this account. This prevents
         // lower fee transactions from starving higher fee transactions.
         if self.blocked_transaction_queues_by_accounts.contains_key(account_key) {
@@ -133,7 +133,7 @@ for locked_account_key in transaction_accounts {
 
         Vacant(vacant_entry) => {
             // Create a new queue blocked on this transaction
-            let new_blocked_transaction_queue = 
+            let new_blocked_transaction_queue =
                 Rc::new(BlockedTransactionsQueue {
                     highest_priority_blocked_transaction: next_highest_transaction,
                     other_blocked_transactions: BinaryHeap::new(),
@@ -208,8 +208,3 @@ if let Some(blocked_transaction_queue) = self.blocked_transactions.get(completed
     self.blocked_transactions.remove(completed_transaction.signature);
 }
 ```
-
-
-
-
-
