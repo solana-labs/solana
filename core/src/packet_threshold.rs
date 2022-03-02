@@ -55,8 +55,7 @@ impl DynamicPacketToProcessThreshold {
 
 #[cfg(test)]
 mod test {
-    use super::DynamicPacketToProcessThreshold;
-    use std::time::Duration;
+    use {super::DynamicPacketToProcessThreshold, std::time::Duration};
 
     #[test]
     fn test_dynamic_packet_threshold() {
