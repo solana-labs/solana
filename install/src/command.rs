@@ -6,6 +6,7 @@ use {
     },
     chrono::{Local, TimeZone},
     console::{style, Emoji},
+    crossbeam_channel::unbounded,
     indicatif::{ProgressBar, ProgressStyle},
     serde::{Deserialize, Serialize},
     solana_client::rpc_client::RpcClient,
@@ -21,7 +22,6 @@ use {
         fs::{self, File},
         io::{self, BufReader, Read},
         path::{Path, PathBuf},
-        sync::mpsc,
         time::{Duration, Instant, SystemTime},
     },
     tempfile::TempDir,
@@ -577,7 +577,7 @@ fn github_release_download_url(release_semver: &str) -> String {
 
 fn release_channel_download_url(release_channel: &str) -> String {
     format!(
-        "http://release.solana.com/{}/solana-release-{}.tar.bz2",
+        "https://release.solana.com/{}/solana-release-{}.tar.bz2",
         release_channel,
         crate::build_env::TARGET
     )
@@ -585,7 +585,7 @@ fn release_channel_download_url(release_channel: &str) -> String {
 
 fn release_channel_version_url(release_channel: &str) -> String {
     format!(
-        "http://release.solana.com/{}/solana-release-{}.yml",
+        "https://release.solana.com/{}/solana-release-{}.yml",
         release_channel,
         crate::build_env::TARGET
     )
@@ -1196,7 +1196,7 @@ pub fn run(
     let mut child_option: Option<std::process::Child> = None;
     let mut now = Instant::now();
 
-    let (signal_sender, signal_receiver) = mpsc::channel();
+    let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
     })

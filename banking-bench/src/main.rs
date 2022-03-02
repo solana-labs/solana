@@ -1,16 +1,17 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::{banking_stage::BankingStage, packet_deduper::PacketDeduper},
+    solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
+        leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
     solana_perf::packet::to_packet_batches,
@@ -28,7 +29,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
+        sync::{atomic::Ordering, Arc, Mutex, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -174,6 +175,11 @@ fn main() {
     let mut bank_forks = BankForks::new(bank0);
     let mut bank = bank_forks.working_bank();
 
+    // set cost tracker limits to MAX so it will not filter out TXs
+    bank.write_cost_tracker()
+        .unwrap()
+        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+
     info!("threads: {} txs: {}", num_threads, total_num_transactions);
 
     let same_payer = matches.is_present("same_payer");
@@ -218,15 +224,19 @@ fn main() {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
-        let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None);
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(
+            &bank,
+            &blockstore,
+            None,
+            Some(leader_schedule_cache.clone()),
+        );
         let cluster_info = ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
-        let packet_deduper = PacketDeduper::default();
         let banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
@@ -236,7 +246,6 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-            packet_deduper.clone(),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -331,9 +340,17 @@ fn main() {
                 bank = bank_forks.working_bank();
                 insert_time.stop();
 
+                // set cost tracker limits to MAX so it will not filter out TXs
+                bank.write_cost_tracker().unwrap().set_limits(
+                    std::u64::MAX,
+                    std::u64::MAX,
+                    std::u64::MAX,
+                );
+
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
+                    leader_schedule_cache.set_root(&bank);
                     bank_forks.set_root(root, &AbsRequestSender::default(), None);
                     root += 1;
                 }
@@ -351,7 +368,6 @@ fn main() {
             // in this chunk, but since we rotate between CHUNKS then
             // we should clear them by the time we come around again to re-use that chunk.
             bank.clear_signatures();
-            packet_deduper.reset();
             total_us += duration_as_us(&now.elapsed());
             debug!(
                 "time: {} us checked: {} sent: {}",

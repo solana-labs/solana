@@ -147,6 +147,7 @@ impl CacheHashData {
         parent_folder.as_ref().join("calculate_accounts_hash_cache")
     }
 
+    /// load from 'file_name' into 'accumulator'
     pub fn load<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
@@ -239,6 +240,7 @@ impl CacheHashData {
         Ok(())
     }
 
+    /// save 'data' to 'file_name'
     pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
@@ -246,7 +248,7 @@ impl CacheHashData {
         result
     }
 
-    pub fn save_internal(
+    fn save_internal(
         &self,
         file_name: &Path,
         data: &SavedTypeSlice,

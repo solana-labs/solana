@@ -4,6 +4,7 @@
 //! represents an approximate amount of time since the last Entry was created.
 use {
     crate::poh::Poh,
+    crossbeam_channel::{Receiver, Sender},
     dlopen::symbor::{Container, SymBorApi, Symbol},
     dlopen_derive::SymBorApi,
     log::*,
@@ -35,7 +36,7 @@ use {
         cmp,
         ffi::OsStr,
         sync::{
-            mpsc::{Receiver, Sender},
+            atomic::{AtomicUsize, Ordering},
             Arc, Mutex, Once,
         },
         thread::{self, JoinHandle},
@@ -499,11 +500,13 @@ pub fn start_verify_transactions(
                 })
                 .flatten()
                 .collect::<Vec<_>>();
+            let total_packets = AtomicUsize::new(0);
             let mut packet_batches = entry_txs
                 .par_iter()
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
+                    total_packets.fetch_add(vec_size, Ordering::Relaxed);
                     let mut packet_batch = PacketBatch::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
@@ -546,6 +549,7 @@ pub fn start_verify_transactions(
                     &tx_offset_recycler,
                     &out_recycler,
                     false,
+                    total_packets.load(Ordering::Relaxed),
                 );
                 let verified = packet_batches
                     .iter()
@@ -900,8 +904,17 @@ pub fn create_random_ticks(num_ticks: u64, max_hashes_per_tick: u64, mut hash: H
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
-    assert!(num_hashes > 0 || transactions.is_empty());
     let transactions = transactions.into_iter().map(Into::into).collect::<Vec<_>>();
+    next_versioned_entry(prev_hash, num_hashes, transactions)
+}
+
+/// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
+pub fn next_versioned_entry(
+    prev_hash: &Hash,
+    num_hashes: u64,
+    transactions: Vec<VersionedTransaction>,
+) -> Entry {
+    assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
         num_hashes,
         hash: next_hash(prev_hash, num_hashes, &transactions),
@@ -919,7 +932,9 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_transaction,
-            transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
+            transaction::{
+                DisabledAddressLoader, Result, SanitizedTransaction, VersionedTransaction,
+            },
         },
     };
 
@@ -1003,9 +1018,12 @@ mod tests {
                             versioned_tx.message.hash()
                         };
 
-                    SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    })
+                    SanitizedTransaction::try_create(
+                        versioned_tx,
+                        message_hash,
+                        None,
+                        &DisabledAddressLoader,
+                    )
                 }?;
 
                 Ok(sanitized_tx)

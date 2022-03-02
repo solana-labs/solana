@@ -166,6 +166,33 @@ export const decodePlacePerpOrder = (
   return placePerpOrder;
 };
 
+export type PlacePerpOrder2 = {
+  price: number;
+  maxBaseQuantity: number;
+  clientOrderId: String;
+  side: String;
+  orderType: String;
+  reduceOnly: String;
+  expiryTimestamp: number;
+};
+
+export const decodePlacePerpOrder2 = (
+  ix: TransactionInstruction
+): PlacePerpOrder2 => {
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
+  const placePerpOrder2: PlacePerpOrder2 = {
+    price: decoded.PlacePerpOrder2.price.toNumber(),
+    maxBaseQuantity: decoded.PlacePerpOrder2.maxBaseQuantity.toNumber(),
+    clientOrderId: decoded.PlacePerpOrder2.clientOrderId.toString(),
+    side: decoded.PlacePerpOrder2.side.toString(),
+    orderType: decoded.PlacePerpOrder2.orderType.toString(),
+    reduceOnly: decoded.PlacePerpOrder2.reduceOnly.toString(),
+    expiryTimestamp: decoded.PlacePerpOrder2.expiryTimestamp.toNumber(),
+  };
+
+  return placePerpOrder2;
+};
+
 export type CancelPerpOrder = {
   orderId: String;
   invalidIdOk: String;

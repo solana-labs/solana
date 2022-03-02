@@ -23,6 +23,7 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
+        system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
@@ -32,7 +33,6 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
-    solana_metrics::datapoint_info,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
@@ -115,6 +115,7 @@ fn wait_for_restart_window(
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
     max_delinquency_percentage: u8,
+    skip_new_snapshot_check: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
 
@@ -291,6 +292,9 @@ fn wait_for_restart_window(
                 });
                 match in_leader_schedule_hole {
                     Ok(_) => {
+                        if skip_new_snapshot_check {
+                            break; // Restart!
+                        }
                         if restart_snapshot == None {
                             restart_snapshot = snapshot_slot;
                         }
@@ -334,10 +338,9 @@ fn wait_for_restart_window(
                         .unwrap_or_else(|| '-'.to_string()),
                     snapshot_slot_info
                         .as_ref()
-                        .map(|snapshot_slot_info| snapshot_slot_info
+                        .and_then(|snapshot_slot_info| snapshot_slot_info
                             .incremental
                             .map(|incremental| incremental.to_string()))
-                        .flatten()
                         .unwrap_or_else(|| '-'.to_string()),
                 )
             },
@@ -409,85 +412,6 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
         }
     }
     None
-}
-
-fn platform_id() -> String {
-    format!(
-        "{}/{}/{}",
-        std::env::consts::FAMILY,
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn check_os_network_limits() {
-    use {solana_metrics::datapoint_warn, std::collections::HashMap, sysctl::Sysctl};
-
-    fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
-        let ctl = sysctl::Ctl::new(name)?;
-        let val = ctl.value_string()?;
-        Ok(val)
-    }
-    let mut check_failed = false;
-
-    info!("Testing OS network limits:");
-
-    // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-    let mut recommended_limits: HashMap<&str, i64> = HashMap::default();
-    recommended_limits.insert("net.core.rmem_max", 134217728);
-    recommended_limits.insert("net.core.rmem_default", 134217728);
-    recommended_limits.insert("net.core.wmem_max", 134217728);
-    recommended_limits.insert("net.core.wmem_default", 134217728);
-    recommended_limits.insert("vm.max_map_count", 1000000);
-
-    // Additionally collect the following limits
-    recommended_limits.insert("net.core.optmem_max", 0);
-    recommended_limits.insert("net.core.netdev_max_backlog", 0);
-
-    let mut current_limits: HashMap<&str, i64> = HashMap::default();
-    for (key, _) in recommended_limits.iter() {
-        let current_val = match sysctl_read(key) {
-            Ok(val) => val.parse::<i64>().unwrap(),
-            Err(e) => {
-                error!("Failed to query value for {}: {}", key, e);
-                check_failed = true;
-                -1
-            }
-        };
-        current_limits.insert(key, current_val);
-    }
-
-    for (key, recommended_val) in recommended_limits.iter() {
-        let current_val = *current_limits.get(key).unwrap();
-        if current_val < *recommended_val {
-            datapoint_warn!("os-config", (key, current_val, i64));
-            warn!(
-                "  {}: recommended={} current={}, too small",
-                key, recommended_val, current_val
-            );
-            check_failed = true;
-        } else {
-            datapoint_info!("os-config", (key, current_val, i64));
-            info!(
-                "  {}: recommended={} current={}",
-                key, recommended_val, current_val
-            );
-        }
-    }
-    datapoint_info!("os-config", ("platform", platform_id(), String));
-
-    if check_failed {
-        datapoint_warn!("os-config", ("network_limit_test_failed", 1, i64));
-        warn!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
-    } else {
-        info!("OS network limits test passed.");
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn check_os_network_limits() {
-    datapoint_info!("os-config", ("platform", platform_id(), String));
 }
 
 pub fn main() {
@@ -623,7 +547,17 @@ pub fn main() {
                 .takes_value(false)
                 .conflicts_with("no_voting")
                 .requires("entrypoint")
+                .hidden(true)
                 .help("Skip the RPC vote account sanity check")
+        )
+        .arg(
+            Arg::with_name("check_vote_account")
+                .long("check-vote-account")
+                .takes_value(true)
+                .value_name("RPC_URL")
+                .requires("entrypoint")
+                .conflicts_with_all(&["no_check_vote_account", "no_voting"])
+                .help("Sanity check vote account state at startup. The JSON RPC endpoint at RPC_URL must expose `--full-rpc-api`")
         )
         .arg(
             Arg::with_name("restricted_repair_only_mode")
@@ -656,7 +590,15 @@ pub fn main() {
             Arg::with_name("minimal_rpc_api")
                 .long("--minimal-rpc-api")
                 .takes_value(false)
+                .hidden(true)
                 .help("Only expose the RPC methods required to serve snapshots to other nodes"),
+        )
+        .arg(
+            Arg::with_name("full_rpc_api")
+                .long("--full-rpc-api")
+                .conflicts_with("minimal_rpc_api")
+                .takes_value(false)
+                .help("Expose RPC methods for querying chain state and transaction history"),
         )
         .arg(
             Arg::with_name("obsolete_v1_7_rpc_api")
@@ -834,6 +776,16 @@ pub fn main() {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
+            Arg::with_name("tpu_host_addr")
+                .long("tpu-host-addr")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Specify TPU address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
+
+        )
+        .arg(
             Arg::with_name("public_rpc_addr")
                 .long("public-rpc-address")
                 .value_name("HOST:PORT")
@@ -867,7 +819,20 @@ pub fn main() {
             Arg::with_name("incremental_snapshots")
                 .long("incremental-snapshots")
                 .takes_value(false)
+                .hidden(true)
+                .conflicts_with("no_incremental_snapshots")
+                .help("Enable incremental snapshots")
                 .long_help("Enable incremental snapshots by setting this flag. \
+                   When enabled, --snapshot-interval-slots will set the \
+                   incremental snapshot interval. To set the full snapshot \
+                   interval, use --full-snapshot-interval-slots.")
+         )
+        .arg(
+            Arg::with_name("no_incremental_snapshots")
+                .long("no-incremental-snapshots")
+                .takes_value(false)
+                .help("Disable incremental snapshots")
+                .long_help("Disable incremental snapshots by setting this flag. \
                    When enabled, --snapshot-interval-slots will set the \
                    incremental snapshot interval. To set the full snapshot \
                    interval, use --full-snapshot-interval-slots.")
@@ -1206,6 +1171,7 @@ pub fn main() {
         .arg(
             Arg::with_name("rpc_pubsub_enable_block_subscription")
                 .long("rpc-pubsub-enable-block-subscription")
+                .requires("enable_rpc_transaction_history")
                 .takes_value(false)
                 .help("Enable the unstable RPC PubSub `blockSubscribe` subscription"),
         )
@@ -1378,7 +1344,6 @@ pub fn main() {
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .hidden(true)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
@@ -1525,6 +1490,12 @@ pub fn main() {
                 .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
         )
         .arg(
+            Arg::with_name("disable_accounts_disk_index")
+                .long("disable-accounts-disk-index")
+                .help("Disable the disk-based accounts index if it is enabled by default.")
+                .conflicts_with("accounts_index_memory_limit_mb")
+        )
+        .arg(
             Arg::with_name("accounts_index_bins")
                 .long("accounts-index-bins")
                 .value_name("BINS")
@@ -1639,8 +1610,8 @@ pub fn main() {
             )
             .arg(
                 Arg::with_name("min_idle_time")
-                    .takes_value(true)
                     .long("min-idle-time")
+                    .takes_value(true)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
                     .default_value("10")
@@ -1654,6 +1625,11 @@ pub fn main() {
                     .default_value("5")
                     .value_name("PERCENT")
                     .help("The maximum delinquent stake % permitted for an exit")
+            )
+            .arg(
+                Arg::with_name("skip_new_snapshot_check")
+                    .long("skip-new-snapshot-check")
+                    .help("Skip check for a new snapshot")
             )
         )
         .subcommand(
@@ -1717,6 +1693,12 @@ pub fn main() {
                     .validator(is_keypair)
                     .help("Validator identity keypair")
             )
+            .arg(
+                clap::Arg::with_name("require_tower")
+                    .long("require-tower")
+                    .takes_value(false)
+                    .help("Refuse to set the validator identity if saved tower state is not found"),
+            )
             .after_help("Note: the new identity only applies to the \
                          currently running validator instance")
         )
@@ -1736,8 +1718,8 @@ pub fn main() {
             .about("Monitor the validator for a good time to restart")
             .arg(
                 Arg::with_name("min_idle_time")
+                    .long("min-idle-time")
                     .takes_value(true)
-                    .index(1)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
                     .default_value("10")
@@ -1759,6 +1741,11 @@ pub fn main() {
                     .default_value("5")
                     .value_name("PERCENT")
                     .help("The maximum delinquent stake % permitted for a restart")
+            )
+            .arg(
+                Arg::with_name("skip_new_snapshot_check")
+                    .long("skip-new-snapshot-check")
+                    .help("Skip check for a new snapshot")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -1846,15 +1833,22 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
+            let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time, max_delinquent_stake)
-                    .unwrap_or_else(|err| {
-                        println!("{}", err);
-                        exit(1);
-                    });
+                wait_for_restart_window(
+                    &ledger_path,
+                    None,
+                    min_idle_time,
+                    max_delinquent_stake,
+                    skip_new_snapshot_check,
+                )
+                .unwrap_or_else(|err| {
+                    println!("{}", err);
+                    exit(1);
+                });
             }
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -1876,6 +1870,7 @@ pub fn main() {
             return;
         }
         ("set-identity", Some(subcommand_matches)) => {
+            let require_tower = subcommand_matches.is_present("require_tower");
             let identity_keypair = value_t_or_exit!(subcommand_matches, "identity", String);
 
             let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
@@ -1889,7 +1884,7 @@ pub fn main() {
                 .block_on(async move {
                     admin_client
                         .await?
-                        .set_identity(identity_keypair.display().to_string())
+                        .set_identity(identity_keypair.display().to_string(), require_tower)
                         .await
                 })
                 .unwrap_or_else(|err| {
@@ -1914,12 +1909,19 @@ pub fn main() {
             let identity = pubkey_of(subcommand_matches, "identity");
             let max_delinquent_stake =
                 value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
+            let skip_new_snapshot_check = subcommand_matches.is_present("skip_new_snapshot_check");
 
-            wait_for_restart_window(&ledger_path, identity, min_idle_time, max_delinquent_stake)
-                .unwrap_or_else(|err| {
-                    println!("{}", err);
-                    exit(1);
-                });
+            wait_for_restart_window(
+                &ledger_path,
+                identity,
+                min_idle_time,
+                max_delinquent_stake,
+                skip_new_snapshot_check,
+            )
+            .unwrap_or_else(|err| {
+                println!("{}", err);
+                exit(1);
+            });
             return;
         }
         _ => unreachable!(),
@@ -1971,17 +1973,22 @@ pub fn main() {
 
     let init_complete_file = matches.value_of("init_complete_file");
 
+    if matches.is_present("no_check_vote_account") {
+        info!("vote account sanity checks are no longer performed by default. --no-check-vote-account is deprecated and can be removed from the command line");
+    }
     let rpc_bootstrap_config = bootstrap::RpcBootstrapConfig {
         no_genesis_fetch: matches.is_present("no_genesis_fetch"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
-        no_check_vote_account: matches.is_present("no_check_vote_account"),
+        check_vote_account: matches
+            .value_of("check_vote_account")
+            .map(|url| url.to_string()),
         only_known_rpc: matches.is_present("only_known_rpc"),
         max_genesis_archive_unpacked_size: value_t_or_exit!(
             matches,
             "max_genesis_archive_unpacked_size",
             u64
         ),
-        incremental_snapshot_fetch: matches.is_present("incremental_snapshots"),
+        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots"),
     };
 
     let private_rpc = matches.is_present("private_rpc");
@@ -2125,13 +2132,18 @@ pub fn main() {
             _ => unreachable!(),
         };
 
-    let mut accounts_index_config = AccountsIndexConfig::default();
+    let mut accounts_index_config = AccountsIndexConfig {
+        started_from_validator: true, // this is the only place this is set
+        ..AccountsIndexConfig::default()
+    };
     if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
         accounts_index_config.bins = Some(bins);
     }
 
     if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
         accounts_index_config.index_limit_mb = Some(limit);
+    } else if matches.is_present("disable_accounts_disk_index") {
+        accounts_index_config.index_limit_mb = None;
     }
 
     {
@@ -2202,6 +2214,10 @@ pub fn main() {
         None
     };
 
+    if matches.is_present("minimal_rpc_api") {
+        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2223,7 +2239,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            minimal_api: matches.is_present("minimal_rpc_api"),
+            full_api: matches.is_present("full_rpc_api"),
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -2440,7 +2456,7 @@ pub fn main() {
         value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);
     let (full_snapshot_archive_interval_slots, incremental_snapshot_archive_interval_slots) =
         if incremental_snapshot_interval_slots > 0 {
-            if matches.is_present("incremental_snapshots") {
+            if !matches.is_present("no_incremental_snapshots") {
                 (
                     value_t_or_exit!(matches, "full_snapshot_interval_slots", u64),
                     incremental_snapshot_interval_slots,
@@ -2487,6 +2503,9 @@ pub fn main() {
 
         exit(1);
     }
+    if matches.is_present("incremental_snapshots") {
+        warn!("--incremental-snapshots is now the default behavior. This flag is deprecated and can be removed from the launch args")
+    }
 
     if matches.is_present("limit_ledger_size") {
         let limit_ledger_size = match matches.value_of("limit_ledger_size") {
@@ -2515,14 +2534,19 @@ pub fn main() {
     });
 
     if !matches.is_present("no_os_network_limits_test") {
-        check_os_network_limits();
+        if SystemMonitorService::check_os_network_limits() {
+            info!("OS network limits test passed.");
+        } else {
+            eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+            exit(1);
+        }
     }
 
     let mut ledger_lock = ledger_lockfile(&ledger_path);
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
-    let admin_service_cluster_info = Arc::new(RwLock::new(None));
+    let admin_service_post_init = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -2531,7 +2555,7 @@ pub fn main() {
             validator_exit: validator_config.validator_exit.clone(),
             start_progress: start_progress.clone(),
             authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            cluster_info: admin_service_cluster_info.clone(),
+            post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
         },
     );
@@ -2588,6 +2612,13 @@ pub fn main() {
         }),
     );
 
+    let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
+        solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --overwrite-tpu-addr: {}", err);
+            exit(1);
+        })
+    });
+
     let cluster_entrypoints = entrypoint_addrs
         .iter()
         .map(ContactInfo::new_gossip_entry_point)
@@ -2598,6 +2629,7 @@ pub fn main() {
         &gossip_addr,
         dynamic_port_range,
         bind_address,
+        overwrite_tpu_addr,
     );
 
     if restricted_repair_only_mode {
@@ -2626,8 +2658,10 @@ pub fn main() {
     }
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    solana_metrics::set_panic_hook("validator");
-
+    solana_metrics::set_panic_hook("validator", {
+        let version = format!("{:?}", solana_version::version!());
+        Some(version)
+    });
     solana_entry::entry::init_poh();
     snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
 
@@ -2674,7 +2708,12 @@ pub fn main() {
         start_progress,
         socket_addr_space,
     );
-    *admin_service_cluster_info.write().unwrap() = Some(validator.cluster_info.clone());
+    *admin_service_post_init.write().unwrap() =
+        Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
+            bank_forks: validator.bank_forks.clone(),
+            cluster_info: validator.cluster_info.clone(),
+            vote_account,
+        });
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {

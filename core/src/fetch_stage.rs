@@ -5,6 +5,7 @@ use {
         banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET,
         result::{Error, Result},
     },
+    crossbeam_channel::{unbounded, RecvTimeoutError},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
@@ -15,11 +16,7 @@ use {
     solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
     std::{
         net::UdpSocket,
-        sync::{
-            atomic::AtomicBool,
-            mpsc::{channel, RecvTimeoutError},
-            Arc, Mutex,
-        },
+        sync::{atomic::AtomicBool, Arc, Mutex},
         thread::{self, Builder, JoinHandle},
     },
 };
@@ -38,8 +35,8 @@ impl FetchStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
     ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
-        let (sender, receiver) = channel();
-        let (vote_sender, vote_receiver) = channel();
+        let (sender, receiver) = unbounded();
+        let (vote_sender, vote_receiver) = unbounded();
         (
             Self::new_with_sender(
                 sockets,
@@ -147,7 +144,7 @@ impl FetchStage {
             )
         });
 
-        let (forward_sender, forward_receiver) = channel();
+        let (forward_sender, forward_receiver) = unbounded();
         let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,

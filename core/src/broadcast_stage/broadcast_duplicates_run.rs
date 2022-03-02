@@ -260,7 +260,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .map(|(node, _)| node)
             .collect();
 
-        // Creat cluster partition.
+        // Create cluster partition.
         let cluster_partition: HashSet<Pubkey> = {
             let mut cumilative_stake = 0;
             let epoch = root_bank.get_leader_schedule_epoch(slot);

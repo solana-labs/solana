@@ -81,7 +81,7 @@ Programs have access to a runtime heap either directly in C or via the Rust
 utilized. The heap does not support `free` or `realloc` so use it wisely.
 
 Internally, programs have access to the 32KB memory region starting at virtual
-address 0x300000000 and may implement a custom heap based on the the program's
+address 0x300000000 and may implement a custom heap based on the program's
 specific needs.
 
 - [Rust program heap usage](developing-rust.md#heap)
@@ -194,7 +194,7 @@ For language specific information about serialization see:
 The latest loader serializes the program input parameters as follows (all
 encoding is little endian):
 
-- 8 byte unsigned number of accounts
+- 8 bytes unsigned number of accounts
 - For each account
   - 1 byte indicating if this is a duplicate account, if not a duplicate then
     the value is 0xff, otherwise the value is the index of the account it is a
@@ -207,7 +207,7 @@ encoding is little endian):
     - 4 bytes of padding
     - 32 bytes of the account public key
     - 32 bytes of the account's owner public key
-    - 8 byte unsigned number of lamports owned by the account
+    - 8 bytes unsigned number of lamports owned by the account
     - 8 bytes unsigned number of bytes of account data
     - x bytes of account data
     - 10k bytes of padding, used for realloc

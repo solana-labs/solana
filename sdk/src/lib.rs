@@ -21,9 +21,11 @@ pub mod ed25519_instruction;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_info;
+pub mod example_mocks;
 pub mod exit;
 pub mod feature;
 pub mod feature_set;
+pub mod fee;
 pub mod genesis_config;
 pub mod hard_forks;
 pub mod hash;
@@ -37,6 +39,7 @@ pub mod poh_config;
 pub mod precompiles;
 pub mod program_utils;
 pub mod pubkey;
+pub mod quic;
 pub mod recent_blockhashes_account;
 pub mod rpc_port;
 pub mod secp256k1_instruction;
@@ -93,6 +96,14 @@ pub use solana_sdk_macro::pubkey;
 pub use solana_sdk_macro::pubkeys;
 #[rustversion::since(1.46.0)]
 pub use solana_sdk_macro::respan;
+
+#[deprecated(
+    since = "1.9.0",
+    note = "use only to break https://github.com/rust-lang/rust/issues/92987. remove when we move to Rust 1.60.0"
+)]
+#[doc(hidden)]
+#[cfg(debug_assertions)]
+pub trait AutoTraitBreakSendSync: Send + Sync {}
 
 // Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with older programs
 #[macro_export]

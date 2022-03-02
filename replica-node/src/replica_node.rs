@@ -146,7 +146,7 @@ fn initialize_from_snapshot(
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
     let mut block_commitment_cache = BlockCommitmentCache::default();
-    block_commitment_cache.initialize_slots(bank0_slot);
+    block_commitment_cache.initialize_slots(bank0_slot, bank0_slot);
     let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
     ReplicaBankInfo {

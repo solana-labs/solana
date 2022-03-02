@@ -46,6 +46,8 @@ use {
     },
 };
 
+static CHECK_MARK: Emoji = Emoji("✅ ", "");
+static CROSS_MARK: Emoji = Emoji("❌ ", "");
 static WARNING: Emoji = Emoji("⚠️", "!");
 
 #[derive(PartialEq, Debug)]
@@ -391,19 +393,19 @@ impl fmt::Display for CliValidators {
         ) -> fmt::Result {
             fn non_zero_or_dash(v: u64, max_v: u64) -> String {
                 if v == 0 {
-                    "-         ".into()
+                    "        -      ".into()
                 } else if v == max_v {
-                    format!("{:>8} (  0)", v)
+                    format!("{:>9} (  0)", v)
                 } else if v > max_v.saturating_sub(100) {
-                    format!("{:>8} ({:>3})", v, -(max_v.saturating_sub(v) as isize))
+                    format!("{:>9} ({:>3})", v, -(max_v.saturating_sub(v) as isize))
                 } else {
-                    format!("{:>8}      ", v)
+                    format!("{:>9}      ", v)
                 }
             }
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>3}%  {:>14}  {:>14} {:>7} {:>8}  {:>7}  {}",
+                "{} {:<44}  {:<44}  {:>3}%  {:>14}  {:>14} {:>7} {:>8}  {:>7}  {:>22} ({:.2}%)",
                 if validator.delinquent {
                     WARNING.to_string()
                 } else {
@@ -417,19 +419,19 @@ impl fmt::Display for CliValidators {
                 if let Some(skip_rate) = validator.skip_rate {
                     format!("{:.2}%", skip_rate)
                 } else {
-                    "- ".to_string()
+                    "-   ".to_string()
                 },
                 validator.epoch_credits,
                 validator.version,
-                if validator.activated_stake > 0 {
-                    format!(
-                        "{} ({:.2}%)",
-                        build_balance_message(validator.activated_stake, use_lamports_unit, true),
-                        100. * validator.activated_stake as f64 / total_active_stake as f64,
-                    )
-                } else {
-                    "-".into()
-                },
+                build_balance_message_with_config(
+                    validator.activated_stake,
+                    &BuildBalanceMessageConfig {
+                        use_lamports_unit,
+                        trim_trailing_zeros: false,
+                        ..BuildBalanceMessageConfig::default()
+                    }
+                ),
+                100. * validator.activated_stake as f64 / total_active_stake as f64,
             )
         }
 
@@ -439,13 +441,13 @@ impl fmt::Display for CliValidators {
             0
         };
         let header = style(format!(
-            "{:padding$} {:<44}  {:<38}  {}  {}  {} {}  {}  {}  {}",
+            "{:padding$} {:<44}  {:<38}  {}  {}  {} {}  {}  {}    {}",
             " ",
             "Identity",
             "Vote Account",
             "Commission",
-            "Last Vote     ",
-            "Root Slot   ",
+            "Last Vote      ",
+            "Root Slot    ",
             "Skip Rate",
             "Credits",
             "Version",
@@ -2285,6 +2287,7 @@ impl fmt::Display for CliBlock {
                 let sign = if reward.lamports < 0 { "-" } else { "" };
 
                 total_rewards += reward.lamports;
+                #[allow(clippy::format_in_format_args)]
                 writeln!(
                     f,
                     "  {:<44}  {:^15}  {:>15}  {}  {}",
@@ -2448,6 +2451,8 @@ pub struct CliGossipNode {
     pub rpc_host: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feature_set: Option<u32>,
 }
 
 impl CliGossipNode {
@@ -2460,6 +2465,7 @@ impl CliGossipNode {
             tpu_port: info.tpu.map(|addr| addr.port()),
             rpc_host: info.rpc.map(|addr| addr.to_string()),
             version: info.version,
+            feature_set: info.feature_set,
         }
     }
 }
@@ -2485,7 +2491,7 @@ impl fmt::Display for CliGossipNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:15} | {:44} | {:6} | {:5} | {:21} | {}",
+            "{:15} | {:44} | {:6} | {:5} | {:21} | {:8}| {}",
             unwrap_to_string_or_none(self.ip_address.as_ref()),
             self.identity_label
                 .as_ref()
@@ -2494,6 +2500,7 @@ impl fmt::Display for CliGossipNode {
             unwrap_to_string_or_none(self.tpu_port.as_ref()),
             unwrap_to_string_or_none(self.rpc_host.as_ref()),
             unwrap_to_string_or_default(self.version.as_ref(), "unknown"),
+            unwrap_to_string_or_default(self.feature_set.as_ref(), "unknown"),
         )
     }
 }
@@ -2508,10 +2515,10 @@ impl fmt::Display for CliGossipNodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
-            "IP Address      | Node identifier                              \
-             | Gossip | TPU   | RPC Address           | Version\n\
+            "IP Address      | Identity                                     \
+             | Gossip | TPU   | RPC Address           | Version | Feature Set\n\
              ----------------+----------------------------------------------+\
-             --------+-------+-----------------------+----------------",
+             --------+-------+-----------------------+---------+----------------",
         )?;
         for node in self.0.iter() {
             writeln!(f, "{}", node)?;
@@ -2522,6 +2529,172 @@ impl fmt::Display for CliGossipNodes {
 
 impl QuietDisplay for CliGossipNodes {}
 impl VerboseDisplay for CliGossipNodes {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliPing {
+    pub source_pubkey: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fixed_blockhash: Option<String>,
+    #[serde(skip_serializing)]
+    pub blockhash_from_cluster: bool,
+    pub pings: Vec<CliPingData>,
+    pub transaction_stats: CliPingTxStats,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmation_stats: Option<CliPingConfirmationStats>,
+}
+
+impl fmt::Display for CliPing {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Source Account:", &self.source_pubkey)?;
+        if let Some(fixed_blockhash) = &self.fixed_blockhash {
+            let blockhash_origin = if self.blockhash_from_cluster {
+                "fetched from cluster"
+            } else {
+                "supplied from cli arguments"
+            };
+            writeln!(
+                f,
+                "Fixed blockhash is used: {} ({})",
+                fixed_blockhash, blockhash_origin
+            )?;
+        }
+        writeln!(f)?;
+        for ping in &self.pings {
+            write!(f, "{}", ping)?;
+        }
+        writeln!(f)?;
+        writeln!(f, "--- transaction statistics ---")?;
+        write!(f, "{}", self.transaction_stats)?;
+        if let Some(confirmation_stats) = &self.confirmation_stats {
+            write!(f, "{}", confirmation_stats)?;
+        }
+        Ok(())
+    }
+}
+
+impl QuietDisplay for CliPing {}
+impl VerboseDisplay for CliPing {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliPingData {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing)]
+    pub print_timestamp: bool,
+    pub timestamp: String,
+    pub sequence: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lamports: Option<u64>,
+}
+impl fmt::Display for CliPingData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (mark, msg) = if let Some(signature) = &self.signature {
+            if self.success {
+                (
+                    CHECK_MARK,
+                    format!(
+                        "{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
+                        self.lamports.unwrap(),
+                        self.sequence,
+                        self.ms.unwrap(),
+                        signature
+                    ),
+                )
+            } else if let Some(error) = &self.error {
+                (
+                    CROSS_MARK,
+                    format!(
+                        "Transaction failed:    seq={:<3} error={:?} signature={}",
+                        self.sequence, error, signature
+                    ),
+                )
+            } else {
+                (
+                    CROSS_MARK,
+                    format!(
+                        "Confirmation timeout:  seq={:<3}             signature={}",
+                        self.sequence, signature
+                    ),
+                )
+            }
+        } else {
+            (
+                CROSS_MARK,
+                format!(
+                    "Submit failed:         seq={:<3} error={:?}",
+                    self.sequence,
+                    self.error.as_ref().unwrap(),
+                ),
+            )
+        };
+
+        writeln!(
+            f,
+            "{}{}{}",
+            if self.print_timestamp {
+                &self.timestamp
+            } else {
+                ""
+            },
+            mark,
+            msg
+        )
+    }
+}
+
+impl QuietDisplay for CliPingData {}
+impl VerboseDisplay for CliPingData {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliPingTxStats {
+    pub num_transactions: u32,
+    pub num_transaction_confirmed: u32,
+}
+impl fmt::Display for CliPingTxStats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "{} transactions submitted, {} transactions confirmed, {:.1}% transaction loss",
+            self.num_transactions,
+            self.num_transaction_confirmed,
+            (100.
+                - f64::from(self.num_transaction_confirmed) / f64::from(self.num_transactions)
+                    * 100.)
+        )
+    }
+}
+
+impl QuietDisplay for CliPingTxStats {}
+impl VerboseDisplay for CliPingTxStats {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliPingConfirmationStats {
+    pub min: f64,
+    pub mean: f64,
+    pub max: f64,
+    pub std_dev: f64,
+}
+impl fmt::Display for CliPingConfirmationStats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "confirmation min/mean/max/stddev = {:.0}/{:.0}/{:.0}/{:.0} ms",
+            self.min, self.mean, self.max, self.std_dev,
+        )
+    }
+}
+impl QuietDisplay for CliPingConfirmationStats {}
+impl VerboseDisplay for CliPingConfirmationStats {}
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,6 @@
 use {
     crate::blockstore::Blockstore,
+    crossbeam_channel::bounded,
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
@@ -25,7 +26,6 @@ pub async fn upload_confirmed_blocks(
     bigtable: solana_storage_bigtable::LedgerStorage,
     starting_slot: Slot,
     ending_slot: Option<Slot>,
-    allow_missing_metadata: bool,
     force_reupload: bool,
     exit: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -130,7 +130,7 @@ pub async fn upload_confirmed_blocks(
     let (_loader_thread, receiver) = {
         let exit = exit.clone();
 
-        let (sender, receiver) = std::sync::mpsc::sync_channel(BLOCK_READ_AHEAD_DEPTH);
+        let (sender, receiver) = bounded(BLOCK_READ_AHEAD_DEPTH);
         (
             std::thread::spawn(move || {
                 let mut measure = Measure::start("block loader thread");
@@ -186,20 +186,7 @@ pub async fn upload_confirmed_blocks(
                 num_blocks -= 1;
                 None
             }
-            Some(confirmed_block) => {
-                if confirmed_block
-                    .transactions
-                    .iter()
-                    .any(|transaction| transaction.meta.is_none())
-                {
-                    if allow_missing_metadata {
-                        info!("Transaction metadata missing from slot {}", slot);
-                    } else {
-                        panic!("Transaction metadata missing from slot {}", slot);
-                    }
-                }
-                Some(bigtable.upload_confirmed_block(slot, confirmed_block))
-            }
+            Some(confirmed_block) => Some(bigtable.upload_confirmed_block(slot, confirmed_block)),
         });
 
         for result in futures::future::join_all(uploads).await {

@@ -219,6 +219,7 @@ solana_sdk::pubkeys!(
 mod tests {
     use {
         super::*,
+        crate::genesis_utils::genesis_sysvar_and_builtin_program_lamports,
         solana_sdk::{
             account::{Account, AccountSharedData},
             epoch_schedule::EpochSchedule,
@@ -278,11 +279,10 @@ mod tests {
             ..GenesisConfig::default()
         };
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let sysvar_and_native_program_delta = 11;
         assert_eq!(
             bank.capitalization(),
             (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance
-                + sysvar_and_native_program_delta,
+                + genesis_sysvar_and_builtin_program_lamports(),
         );
 
         let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();

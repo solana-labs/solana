@@ -2,26 +2,25 @@ use {
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
-        instruction_recorder::InstructionRecorder,
+        compute_budget::ComputeBudget,
         invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
+        sysvar_cache::SysvarCache,
         timings::ExecuteTimings,
     },
     solana_sdk::{
         account::WritableAccount,
-        compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
         message::SanitizedMessage,
         precompiles::is_precompile,
-        pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
         transaction_context::{InstructionAccount, TransactionContext},
     },
-    std::{cell::RefCell, rc::Rc, sync::Arc},
+    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -39,8 +38,8 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessedMessageInfo {
-    /// The new accounts data len
-    pub accounts_data_len: u64,
+    /// The change in accounts data len
+    pub accounts_data_len_delta: i64,
 }
 
 impl MessageProcessor {
@@ -58,11 +57,10 @@ impl MessageProcessor {
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
-        sysvars: &[(Pubkey, Vec<u8>)],
+        sysvar_cache: &SysvarCache,
         blockhash: Hash,
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
@@ -71,11 +69,10 @@ impl MessageProcessor {
             transaction_context,
             rent,
             builtin_programs,
-            sysvars,
+            Cow::Borrowed(sysvar_cache),
             log_collector,
             compute_budget,
             executors,
-            instruction_recorder,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -106,6 +103,7 @@ impl MessageProcessor {
                 let mut mut_account_ref = invoke_context
                     .transaction_context
                     .get_account_at_index(account_index)
+                    .map_err(|_| TransactionError::InvalidAccountIndex)?
                     .borrow_mut();
                 instructions::store_current_index(
                     mut_account_ref.data_as_mut_slice(),
@@ -151,7 +149,7 @@ impl MessageProcessor {
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(ProcessedMessageInfo {
-            accounts_data_len: invoke_context.get_accounts_data_meter().current(),
+            accounts_data_len_delta: invoke_context.get_accounts_data_meter().delta(),
         })
     }
 }
@@ -166,6 +164,7 @@ mod tests {
             instruction::{AccountMeta, Instruction, InstructionError},
             message::Message,
             native_loader::{self, create_loadable_account_for_test},
+            pubkey::Pubkey,
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program,
         },
@@ -211,7 +210,7 @@ mod tests {
                     MockSystemInstruction::ChangeData { data } => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_data(&[data])?;
+                            .set_data(&[data]);
                         Ok(())
                     }
                 }
@@ -241,12 +240,18 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), true),
-            AccountMeta::new_readonly(*transaction_context.get_key_of_account_at_index(1), false),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(0).unwrap(),
+                true,
+            ),
+            AccountMeta::new_readonly(
+                *transaction_context.get_key_of_account_at_index(1).unwrap(),
+                false,
+            ),
         ];
 
         let message = SanitizedMessage::Legacy(Message::new(
@@ -255,8 +260,9 @@ mod tests {
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -265,11 +271,10 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -278,6 +283,7 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(0)
+                .unwrap()
                 .borrow()
                 .lamports(),
             100
@@ -285,6 +291,7 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(1)
+                .unwrap()
                 .borrow()
                 .lamports(),
             0
@@ -296,7 +303,7 @@ mod tests {
                 &MockSystemInstruction::TransferLamports { lamports: 50 },
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -306,11 +313,10 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -329,7 +335,7 @@ mod tests {
                 &MockSystemInstruction::ChangeData { data: 50 },
                 account_metas,
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -339,11 +345,10 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -404,7 +409,7 @@ mod tests {
                             .try_borrow_instruction_account(transaction_context, 2)?;
                         dup_account.checked_sub_lamports(lamports)?;
                         to_account.checked_add_lamports(lamports)?;
-                        dup_account.set_data(&[data])?;
+                        dup_account.set_data(&[data]);
                         drop(dup_account);
                         let mut from_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?;
@@ -439,13 +444,22 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), true),
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(1), false),
-            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), false),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(0).unwrap(),
+                true,
+            ),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(1).unwrap(),
+                false,
+            ),
+            AccountMeta::new(
+                *transaction_context.get_key_of_account_at_index(0).unwrap(),
+                false,
+            ),
         ];
 
         // Try to borrow mut the same account
@@ -455,8 +469,9 @@ mod tests {
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -465,11 +480,10 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -489,7 +503,7 @@ mod tests {
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -499,11 +513,10 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -520,7 +533,7 @@ mod tests {
                 },
                 account_metas,
             )],
-            Some(transaction_context.get_key_of_account_at_index(0)),
+            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -530,11 +543,10 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -543,6 +555,7 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(0)
+                .unwrap()
                 .borrow()
                 .lamports(),
             80
@@ -550,12 +563,17 @@ mod tests {
         assert_eq!(
             transaction_context
                 .get_account_at_index(1)
+                .unwrap()
                 .borrow()
                 .lamports(),
             20
         );
         assert_eq!(
-            transaction_context.get_account_at_index(0).borrow().data(),
+            transaction_context
+                .get_account_at_index(0)
+                .unwrap()
+                .borrow()
+                .data(),
             &vec![42]
         );
     }
@@ -583,7 +601,7 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
 
         let message = SanitizedMessage::Legacy(Message::new(
             &[
@@ -595,6 +613,7 @@ mod tests {
             ],
             None,
         ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -603,11 +622,10 @@ mod tests {
             RentCollector::default().rent,
             None,
             Rc::new(RefCell::new(Executors::default())),
-            None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
+            ComputeBudget::default(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,

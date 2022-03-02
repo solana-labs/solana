@@ -27,8 +27,7 @@ type StakeHistoryInner = solana_sdk::stake_history::StakeHistory;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::stake_history::StakeHistoryEntry;
+    use {super::*, solana_sdk::stake_history::StakeHistoryEntry};
 
     fn rand_stake_history_entry() -> StakeHistoryEntry {
         StakeHistoryEntry {

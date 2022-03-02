@@ -25,7 +25,7 @@ use {
     lru::LruCache,
     rand::Rng,
     rayon::{prelude::*, ThreadPool},
-    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_sdk::{
         hash::{hash, Hash},
         pubkey::Pubkey,
@@ -246,8 +246,9 @@ impl CrdsGossipPull {
             return Err(CrdsGossipError::NoPeers);
         }
         let mut rng = rand::thread_rng();
-        let mut peers = WeightedShuffle::new(&mut rng, &weights)
+        let mut peers = WeightedShuffle::new(&weights)
             .unwrap()
+            .shuffle(&mut rng)
             .map(|i| peers[i]);
         let peer = {
             let mut rng = rand::thread_rng();

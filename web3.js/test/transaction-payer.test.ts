@@ -128,5 +128,5 @@ describe('Transaction Payer', () => {
     expect(
       await connection.getBalance(accountFrom.publicKey, 'confirmed'),
     ).to.eq(minimumAmount + 2);
-  });
+  }).timeout(30 * 1000);
 });

@@ -6,7 +6,7 @@ use {
     solana_account_decoder::parse_token::{pubkey_from_spl_token, token_amount_to_ui_amount},
     solana_sdk::{
         instruction::{AccountMeta, CompiledInstruction, Instruction},
-        pubkey::Pubkey,
+        message::AccountKeys,
     },
     spl_token::{
         instruction::{AuthorityType, TokenInstruction},
@@ -18,7 +18,7 @@ use {
 
 pub fn parse_token(
     instruction: &CompiledInstruction,
-    account_keys: &[Pubkey],
+    account_keys: &AccountKeys,
 ) -> Result<ParsedInstructionEnum, ParseInstructionError> {
     let token_instruction = TokenInstruction::unpack(&instruction.data)
         .map_err(|_| ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken))?;
@@ -411,7 +411,7 @@ impl From<AuthorityType> for UiAuthorityType {
 fn parse_signers(
     map: &mut Map<String, Value>,
     last_nonsigner_index: usize,
-    account_keys: &[Pubkey],
+    account_keys: &AccountKeys,
     accounts: &[u8],
     owner_field_name: &str,
     multisig_field_name: &str,
@@ -458,7 +458,7 @@ pub fn spl_token_instruction(instruction: SplTokenInstruction) -> Instruction {
 mod test {
     use {
         super::*,
-        solana_sdk::instruction::CompiledInstruction,
+        solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
         spl_token::{
             instruction::*,
             solana_program::{
@@ -503,7 +503,7 @@ mod test {
         let message = Message::new(&[initialize_mint_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeMint".to_string(),
                 info: json!({
@@ -527,7 +527,7 @@ mod test {
         let message = Message::new(&[initialize_mint_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeMint".to_string(),
                 info: json!({
@@ -550,7 +550,7 @@ mod test {
         let message = Message::new(&[initialize_account_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeAccount".to_string(),
                 info: json!({
@@ -577,7 +577,7 @@ mod test {
         let message = Message::new(&[initialize_multisig_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeMultisig".to_string(),
                 info: json!({
@@ -602,7 +602,7 @@ mod test {
         let message = Message::new(&[transfer_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "transfer".to_string(),
                 info: json!({
@@ -626,7 +626,7 @@ mod test {
         let message = Message::new(&[transfer_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "transfer".to_string(),
                 info: json!({
@@ -652,7 +652,7 @@ mod test {
         let message = Message::new(&[approve_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "approve".to_string(),
                 info: json!({
@@ -676,7 +676,7 @@ mod test {
         let message = Message::new(&[approve_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "approve".to_string(),
                 info: json!({
@@ -700,7 +700,7 @@ mod test {
         let message = Message::new(&[revoke_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "revoke".to_string(),
                 info: json!({
@@ -723,7 +723,7 @@ mod test {
         let message = Message::new(&[set_authority_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "setAuthority".to_string(),
                 info: json!({
@@ -748,7 +748,7 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         let new_authority: Option<String> = None;
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "setAuthority".to_string(),
                 info: json!({
@@ -773,7 +773,7 @@ mod test {
         let message = Message::new(&[mint_to_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "mintTo".to_string(),
                 info: json!({
@@ -798,7 +798,7 @@ mod test {
         let message = Message::new(&[burn_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "burn".to_string(),
                 info: json!({
@@ -822,7 +822,7 @@ mod test {
         let message = Message::new(&[close_account_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "closeAccount".to_string(),
                 info: json!({
@@ -845,7 +845,7 @@ mod test {
         let message = Message::new(&[freeze_account_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "freezeAccount".to_string(),
                 info: json!({
@@ -868,7 +868,7 @@ mod test {
         let message = Message::new(&[thaw_account_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "thawAccount".to_string(),
                 info: json!({
@@ -894,7 +894,7 @@ mod test {
         let message = Message::new(&[transfer_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "transferChecked".to_string(),
                 info: json!({
@@ -926,7 +926,7 @@ mod test {
         let message = Message::new(&[transfer_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "transferChecked".to_string(),
                 info: json!({
@@ -960,7 +960,7 @@ mod test {
         let message = Message::new(&[approve_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "approveChecked".to_string(),
                 info: json!({
@@ -992,7 +992,7 @@ mod test {
         let message = Message::new(&[approve_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "approveChecked".to_string(),
                 info: json!({
@@ -1025,7 +1025,7 @@ mod test {
         let message = Message::new(&[mint_to_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "mintToChecked".to_string(),
                 info: json!({
@@ -1056,7 +1056,7 @@ mod test {
         let message = Message::new(&[burn_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "burnChecked".to_string(),
                 info: json!({
@@ -1078,7 +1078,7 @@ mod test {
         let message = Message::new(&[sync_native_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys).unwrap(),
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "syncNative".to_string(),
                 info: json!({
@@ -1107,10 +1107,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[initialize_mint_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         let initialize_mint_ix = initialize_mint(
             &spl_token::id(),
@@ -1122,10 +1122,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[initialize_mint_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test InitializeAccount
         let initialize_account_ix = initialize_account(
@@ -1137,10 +1137,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[initialize_account_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..3]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..3], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test InitializeMultisig
         let initialize_multisig_ix = initialize_multisig(
@@ -1156,10 +1156,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[initialize_multisig_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..4]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..4], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test Transfer, incl multisig
         let transfer_ix = transfer(
@@ -1173,10 +1173,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[transfer_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         let transfer_ix = transfer(
             &spl_token::id(),
@@ -1189,10 +1189,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[transfer_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..4]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..4], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test Approve, incl multisig
         let approve_ix = approve(
@@ -1206,10 +1206,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[approve_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         let approve_ix = approve(
             &spl_token::id(),
@@ -1222,10 +1222,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[approve_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..4]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..4], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test Revoke
         let revoke_ix = revoke(
@@ -1237,10 +1237,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[revoke_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test SetAuthority
         let set_authority_ix = set_authority(
@@ -1254,10 +1254,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[set_authority_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test MintTo
         let mint_to_ix = mint_to(
@@ -1271,10 +1271,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[mint_to_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test Burn
         let burn_ix = burn(
@@ -1288,10 +1288,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[burn_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test CloseAccount
         let close_account_ix = close_account(
@@ -1304,10 +1304,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[close_account_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test FreezeAccount
         let freeze_account_ix = freeze_account(
@@ -1320,10 +1320,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[freeze_account_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test ThawAccount
         let thaw_account_ix = thaw_account(
@@ -1336,10 +1336,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[thaw_account_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test TransferChecked, incl multisig
         let transfer_ix = transfer_checked(
@@ -1355,10 +1355,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[transfer_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..3]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..3], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         let transfer_ix = transfer_checked(
             &spl_token::id(),
@@ -1373,10 +1373,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[transfer_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..5]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..5], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test ApproveChecked, incl multisig
         let approve_ix = approve_checked(
@@ -1392,10 +1392,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[approve_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..3]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..3], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         let approve_ix = approve_checked(
             &spl_token::id(),
@@ -1410,10 +1410,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[approve_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..5]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..5], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test MintToChecked
         let mint_to_ix = mint_to_checked(
@@ -1428,10 +1428,10 @@ mod test {
         .unwrap();
         let message = Message::new(&[mint_to_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test BurnChecked
         let burn_ix = burn_checked(
@@ -1446,18 +1446,18 @@ mod test {
         .unwrap();
         let message = Message::new(&[burn_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test SyncNative
         let sync_native_ix = sync_native(&spl_token::id(), &convert_pubkey(keys[0])).unwrap();
         let message = Message::new(&[sync_native_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        assert!(parse_token(&compiled_instruction, &[]).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
-        assert!(parse_token(&compiled_instruction, &keys).is_err());
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
     }
 }

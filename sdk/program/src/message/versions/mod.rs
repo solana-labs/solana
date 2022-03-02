@@ -20,7 +20,7 @@ pub mod v0;
 /// Bit mask that indicates whether a serialized message is versioned.
 pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 
-/// Message versions supported by the Solana runtime.
+/// Either a legacy message or a v0 message.
 ///
 /// # Serialization
 ///
@@ -50,27 +50,6 @@ impl VersionedMessage {
         }
     }
 
-    pub fn into_static_account_keys(self) -> Vec<Pubkey> {
-        match self {
-            Self::Legacy(message) => message.account_keys,
-            Self::V0(message) => message.account_keys,
-        }
-    }
-
-    pub fn static_account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
-        match self {
-            Self::Legacy(message) => message.account_keys.iter(),
-            Self::V0(message) => message.account_keys.iter(),
-        }
-    }
-
-    pub fn static_account_keys_len(&self) -> usize {
-        match self {
-            Self::Legacy(message) => message.account_keys.len(),
-            Self::V0(message) => message.account_keys.len(),
-        }
-    }
-
     pub fn recent_blockhash(&self) -> &Hash {
         match self {
             Self::Legacy(message) => &message.recent_blockhash,
@@ -82,6 +61,13 @@ impl VersionedMessage {
         match self {
             Self::Legacy(message) => message.recent_blockhash = recent_blockhash,
             Self::V0(message) => message.recent_blockhash = recent_blockhash,
+        }
+    }
+
+    pub fn instructions(&self) -> &[CompiledInstruction] {
+        match self {
+            Self::Legacy(message) => &message.instructions,
+            Self::V0(message) => &message.instructions,
         }
     }
 

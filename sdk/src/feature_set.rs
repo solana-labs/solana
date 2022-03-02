@@ -53,6 +53,10 @@ pub mod full_inflation {
     }
 }
 
+pub mod secp256k1_program_enabled {
+    solana_sdk::declare_id!("E3PHP7w8kB7np3CTQ1qQ2tW3KCtjRSXBQgW9vM2mWv2Y");
+}
+
 pub mod spl_token_v2_multisig_fix {
     solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
 }
@@ -63,10 +67,6 @@ pub mod no_overflow_rent_distribution {
 
 pub mod filter_stake_delegation_accounts {
     solana_sdk::declare_id!("GE7fRxmW46K6EmCD9AMZSbnaJ2e3LfqCZzdHi9hmYAgi");
-}
-
-pub mod stake_program_v3 {
-    solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
 }
 
 pub mod require_custodian_for_locked_stake_authorize {
@@ -83,10 +83,6 @@ pub mod warp_timestamp_again {
 
 pub mod check_init_vote_data {
     solana_sdk::declare_id!("3ccR6QpxGYsAbWyfevEtBNGfWV4xBffxRj2tD6A9i39F");
-}
-
-pub mod stake_program_v4 {
-    solana_sdk::declare_id!("Dc7djyhP9aLfdq2zktpvskeAjpG56msCU1yexpxXiWZb");
 }
 
 pub mod secp256k1_recover_syscall_enabled {
@@ -135,14 +131,6 @@ pub mod tx_wide_compute_cap {
 
 pub mod spl_token_v2_set_authority_fix {
     solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
-}
-
-pub mod stop_verify_mul64_imm_nonzero {
-    solana_sdk::declare_id!("EHFwHg2vhwUb7ifm7BuY9RMbsyt1rS1rUii7yeDJtGnN");
-}
-
-pub mod start_verify_shift32_imm {
-    solana_sdk::declare_id!("CqvdhqAYMc6Eq6tjW3H42Qg39TK2SCsL8ydMsC363PRp");
 }
 
 pub mod merge_nonce_error_into_system_error {
@@ -243,14 +231,6 @@ pub mod add_compute_budget_program {
     solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
 }
 
-pub mod reject_deployment_of_unresolved_syscalls {
-    solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
-}
-
-pub mod reject_section_virtual_address_file_offset_mismatch {
-    solana_sdk::declare_id!("5N4NikcJLEiZNqwndhNyvZw15LvFXp1oF7AJQTNTZY5k");
-}
-
 pub mod nonce_must_be_writable {
     solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
 }
@@ -283,10 +263,6 @@ pub mod allow_votes_to_directly_update_vote_state {
     solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
 }
 
-pub mod reject_all_elf_rw {
-    solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
-}
-
 pub mod cap_accounts_data_len {
     solana_sdk::declare_id!("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r");
 }
@@ -295,23 +271,66 @@ pub mod max_tx_account_locks {
     solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
 }
 
+pub mod require_rent_exempt_accounts {
+    solana_sdk::declare_id!("BkFDxiJQWZXGTZaJQxH7wVEHkAmwCgSEVkrvswFfRJPD");
+}
+
+pub mod filter_votes_outside_slot_hashes {
+    solana_sdk::declare_id!("3gtZPqvPpsbXZVCx6hceMfWxtsmrjMzmg8C7PLKSxS2d");
+}
+
+pub mod update_syscall_base_costs {
+    solana_sdk::declare_id!("2h63t332mGCCsWK2nqqqHhN4U9ayyqhLVFvczznHDoTZ");
+}
+
+pub mod vote_withdraw_authority_may_change_authorized_voter {
+    solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
+}
+
+pub mod spl_associated_token_account_v1_0_4 {
+    solana_sdk::declare_id!("FaTa4SpiaSNH44PGC4z8bnGVTkSRYaWvrBs3KTu8XQQq");
+}
+
+pub mod reject_vote_account_close_unless_zero_credit_epoch {
+    solana_sdk::declare_id!("ALBk3EWdeAg2WAGf6GPDUf1nynyNqCdEVmgouG7rpuCj");
+}
+
+pub mod add_get_processed_sibling_instruction_syscall {
+    solana_sdk::declare_id!("CFK1hRCNy8JJuAAY8Pb2GjLFNdCThS2qwZNe3izzBMgn");
+}
+
+pub mod bank_tranaction_count_fix {
+    solana_sdk::declare_id!("Vo5siZ442SaZBKPXNocthiXysNviW4UYPwRFggmbgAp");
+}
+
+pub mod disable_bpf_deprecated_load_instructions {
+    solana_sdk::declare_id!("3XgNukcZWf9o3HdA3fpJbm94XFc4qpvTXc8h1wxYwiPi");
+}
+
+pub mod disable_bpf_unresolved_symbols_at_runtime {
+    solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
+}
+
+pub mod record_instruction_in_transaction_context_push {
+    solana_sdk::declare_id!("3aJdcZqxoLpSBxgeYGjPwaYS1zzcByxUDqJkbzWAH1Zb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
+        (secp256k1_program_enabled::id(), "secp256k1 program"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
-        (stake_program_v3::id(), "solana_stake_program v3"),
         (require_custodian_for_locked_stake_authorize::id(), "require custodian to authorize withdrawer change for locked stake"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (full_inflation::mainnet::certusone::enable::id(), "full inflation enabled by Certus One"),
         (full_inflation::mainnet::certusone::vote::id(), "community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
-        (stake_program_v4::id(), "solana_stake_program v4"),
         (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
@@ -324,8 +343,6 @@ lazy_static! {
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (tx_wide_compute_cap::id(), "transaction wide compute cap"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
-        (stop_verify_mul64_imm_nonzero::id(), "sets rbpf vm config verify_mul64_imm_nonzero to false"),
-        (start_verify_shift32_imm::id(), "sets rbpf vm config verify_shift32_imm to true"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
@@ -350,8 +367,6 @@ lazy_static! {
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
-        (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
-        (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
         (nonce_must_be_writable::id(), "nonce must be writable"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (leave_nonce_on_success::id(), "leave nonce as is on success"),
@@ -360,9 +375,19 @@ lazy_static! {
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
-        (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         (cap_accounts_data_len::id(), "cap the accounts data len"),
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
+        (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
+        (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
+        (update_syscall_base_costs::id(), "Update syscall base costs"),
+        (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
+        (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
+        (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
+        (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
+        (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
+        (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
+        (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
+        (record_instruction_in_transaction_context_push::id(), "Move the CPI stack overflow check to the end of push"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

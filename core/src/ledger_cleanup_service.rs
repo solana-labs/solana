@@ -1,6 +1,7 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
 use {
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     rand::{thread_rng, Rng},
     solana_ledger::{
         blockstore::{Blockstore, PurgeType},
@@ -12,7 +13,6 @@ use {
         string::ToString,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{Receiver, RecvTimeoutError},
             Arc,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -117,6 +117,19 @@ impl LedgerCleanupService {
         }
     }
 
+    /// A helper function to `cleanup_ledger` which returns a tuple of the
+    /// following four elements suggesting whether to clean up the ledger:
+    ///
+    /// Return value (bool, Slot, Slot, u64):
+    /// - `slots_to_clean` (bool): a boolean value indicating whether there
+    /// are any slots to clean.  If true, then `cleanup_ledger` function
+    /// will then proceed with the ledger cleanup.
+    /// - `first_slot_to_purge` (Slot): the first slot to purge.
+    /// - `lowest_slot_to_puerge` (Slot): the lowest slot to purge.  Together
+    ///   with `first_slot_to_purge`, the two Slot values represent the
+    ///   range of the clean up.
+    /// - `total_shreds` (u64): the total estimated number of shreds before the
+    ///   `root`.
     fn find_slots_to_clean(
         blockstore: &Arc<Blockstore>,
         root: Slot,
@@ -169,6 +182,30 @@ impl LedgerCleanupService {
         Ok(new_root_receiver.try_iter().last().unwrap_or(root))
     }
 
+    /// Checks for new roots and initiates a cleanup if the last cleanup was at
+    /// least `purge_interval` slots ago. A cleanup will no-op if the ledger
+    /// already has fewer than `max_ledger_shreds`; otherwise, the cleanup will
+    /// purge enough slots to get the ledger size below `max_ledger_shreds`.
+    ///
+    /// [`new_root_receiver`]: signal receiver which contains the information
+    ///   about what `Slot` is the current root.
+    /// [`max_ledger_shreds`]: the number of shreds to keep since the new root.
+    /// [`last_purge_slot`]: an both an input and output parameter indicating
+    ///   the id of the last purged slot.  As an input parameter, it works
+    ///   together with `purge_interval` on whether it is too early to perform
+    ///   ledger cleanup.  As an output parameter, it will be updated if this
+    ///   function actually performs the ledger cleanup.
+    /// [`purge_interval`]: the minimum slot interval between two ledger
+    ///   cleanup.  When the root derived from `new_root_receiver` minus
+    ///   `last_purge_slot` is fewer than `purge_interval`, the function will
+    ///   simply return `Ok` without actually running the ledger cleanup.
+    ///   In this case, `purge_interval` will remain unchanged.
+    /// [`last_compact_slot`]: an output value which indicates the most recent
+    ///   slot which has been cleaned up after this call.  If this parameter is
+    ///   updated after this function call, it means the ledger cleanup has
+    ///   been performed.
+    ///
+    /// Also see `blockstore::purge_slot`.
     pub fn cleanup_ledger(
         new_root_receiver: &Receiver<Slot>,
         blockstore: &Arc<Blockstore>,
@@ -312,8 +349,8 @@ impl LedgerCleanupService {
 mod tests {
     use {
         super::*,
+        crossbeam_channel::unbounded,
         solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
-        std::sync::mpsc::channel,
     };
 
     #[test]
@@ -324,7 +361,7 @@ mod tests {
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let blockstore = Arc::new(blockstore);
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         //send a signal to kill all but 5 shreds, which will be in the newest slots
         let mut last_purge_slot = 0;
@@ -371,7 +408,7 @@ mod tests {
         let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
         blockstore.set_no_compaction(true);
         let blockstore = Arc::new(blockstore);
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let mut first_insert = Measure::start("first_insert");
         let initial_slots = 50;

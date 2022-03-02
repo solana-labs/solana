@@ -33,6 +33,7 @@ use {
         weighted_shuffle::WeightedShuffle,
     },
     bincode::{serialize, serialized_size},
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     itertools::Itertools,
     rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
@@ -41,8 +42,8 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
     solana_net_utils::{
-        bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
-        multi_bind_in_range, PortRange,
+        bind_common, bind_common_in_range, bind_in_range, bind_two_consecutive_in_range,
+        find_available_port_in_range, multi_bind_in_range, PortRange,
     },
     solana_perf::{
         data_budget::DataBudget,
@@ -52,12 +53,13 @@ use {
         },
     },
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank_forks::BankForks, vote_parser},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
         feature_set::FeatureSet,
         hash::Hash,
         pubkey::Pubkey,
+        quic::QUIC_PORT_OFFSET,
         sanitize::{Sanitize, SanitizeError},
         signature::{Keypair, Signable, Signature, Signer},
         timing::timestamp,
@@ -69,9 +71,7 @@ use {
         socket::SocketAddrSpace,
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
-    solana_vote_program::{
-        vote_state::MAX_LOCKOUT_HISTORY, vote_transaction::parse_vote_transaction,
-    },
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         borrow::Cow,
         collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -85,7 +85,6 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, Sender},
             Arc, Mutex, RwLock, RwLockReadGuard,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -94,7 +93,7 @@ use {
 };
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
-pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 11; // VALIDATOR_PORT_RANGE must be at least this wide
+pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 12; // VALIDATOR_PORT_RANGE must be at least this wide
 
 /// The Data plane fanout size, also used as the neighborhood size
 pub const DATA_PLANE_FANOUT: usize = 200;
@@ -261,7 +260,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "4qB65g6HSnHFxkhZuvMEBCLHARBda1HBwJ8qeQ5RZ6Pk")]
+#[frozen_abi(digest = "C1nR7B7CgMyUYo6h3z2KXcS38JSwF6y8jmZ6Y9Cz7XEd")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -710,9 +709,9 @@ impl ClusterInfo {
                 Some(format!(
                     "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {}\n",
                     rpc_addr.to_string(),
-                    if node.id == my_pubkey { "me" } else { "" }.to_string(),
+                    if node.id == my_pubkey { "me" } else { "" },
                     now.saturating_sub(last_updated),
-                    node.id.to_string(),
+                    node.id,
                     if let Some(node_version) = node_version {
                         node_version.to_string()
                     } else {
@@ -780,9 +779,9 @@ impl ClusterInfo {
                         } else {
                             "none".to_string()
                         },
-                        if node.id == my_pubkey { "me" } else { "" }.to_string(),
+                        if node.id == my_pubkey { "me" } else { "" },
                         now.saturating_sub(last_updated),
-                        node.id.to_string(),
+                        node.id,
                         if let Some(node_version) = node_version {
                             node_version.to_string()
                         } else {
@@ -1037,7 +1036,7 @@ impl ClusterInfo {
         };
         let vote_index = vote_index.unwrap_or(num_crds_votes);
         if (vote_index as usize) >= MAX_LOCKOUT_HISTORY {
-            let (_, vote, hash) = parse_vote_transaction(&vote).unwrap();
+            let (_, vote, hash) = vote_parser::parse_vote_transaction(&vote).unwrap();
             panic!(
                 "invalid vote index: {}, switch: {}, vote slots: {:?}, tower: {:?}",
                 vote_index,
@@ -2012,7 +2011,7 @@ impl ClusterInfo {
             return packet_batch;
         }
         let mut rng = rand::thread_rng();
-        let shuffle = WeightedShuffle::new(&mut rng, &scores).unwrap();
+        let shuffle = WeightedShuffle::new(&scores).unwrap().shuffle(&mut rng);
         let mut total_bytes = 0;
         let mut sent = 0;
         for (addr, response) in shuffle.map(|i| &responses[i]) {
@@ -2743,6 +2742,7 @@ pub struct Sockets {
     pub retransmit_sockets: Vec<UdpSocket>,
     pub serve_repair: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
+    pub tpu_quic: UdpSocket,
 }
 
 #[derive(Debug)]
@@ -2758,7 +2758,8 @@ impl Node {
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
@@ -2808,6 +2809,7 @@ impl Node {
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
                 ancestor_hashes_requests,
+                tpu_quic,
             },
         }
     }
@@ -2842,7 +2844,8 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
-        let (tpu_port, tpu) = Self::bind(bind_ip_addr, port_range);
+        let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
         let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
@@ -2886,6 +2889,7 @@ impl Node {
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
                 ancestor_hashes_requests,
+                tpu_quic,
             },
         }
     }
@@ -2895,6 +2899,7 @@ impl Node {
         gossip_addr: &SocketAddr,
         port_range: PortRange,
         bind_ip_addr: IpAddr,
+        overwrite_tpu_addr: Option<SocketAddr>,
     ) -> Node {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
@@ -2907,6 +2912,11 @@ impl Node {
 
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
+
+        let (_tpu_port_quic, tpu_quic) = Self::bind(
+            bind_ip_addr,
+            (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
+        );
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
@@ -2931,7 +2941,7 @@ impl Node {
             tvu: SocketAddr::new(gossip_addr.ip(), tvu_port),
             tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
             repair: SocketAddr::new(gossip_addr.ip(), repair_port),
-            tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
+            tpu: overwrite_tpu_addr.unwrap_or_else(|| SocketAddr::new(gossip_addr.ip(), tpu_port)),
             tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
             tpu_vote: SocketAddr::new(gossip_addr.ip(), tpu_vote_port),
             rpc: socketaddr_any!(),
@@ -2957,6 +2967,7 @@ impl Node {
                 serve_repair,
                 ip_echo: Some(ip_echo),
                 ancestor_hashes_requests,
+                tpu_quic,
             },
         }
     }
@@ -3490,6 +3501,7 @@ mod tests {
             &socketaddr!(ip, 0),
             VALIDATOR_PORT_RANGE,
             IpAddr::V4(ip),
+            None,
         );
 
         check_node_sockets(&node, IpAddr::V4(ip), VALIDATOR_PORT_RANGE);
@@ -3511,6 +3523,7 @@ mod tests {
             &socketaddr!(0, port),
             port_range,
             ip,
+            None,
         );
 
         check_node_sockets(&node, ip, port_range);

@@ -79,6 +79,21 @@ export const lockup = (property: string = 'lockup') => {
   );
 };
 
+/**
+ *  Layout for a VoteInit object
+ */
+export const voteInit = (property: string = 'voteInit') => {
+  return BufferLayout.struct(
+    [
+      publicKey('nodePubkey'),
+      publicKey('authorizedVoter'),
+      publicKey('authorizedWithdrawer'),
+      BufferLayout.u8('commission'),
+    ],
+    property,
+  );
+};
+
 export function getAlloc(type: any, fields: any): number {
   let alloc = 0;
   type.layout.fields.forEach((item: any) => {

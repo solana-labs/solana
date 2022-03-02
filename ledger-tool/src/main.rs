@@ -4,6 +4,7 @@ use {
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
+    crossbeam_channel::unbounded,
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
@@ -55,7 +56,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeState},
         system_program,
-        transaction::{SanitizedTransaction, TransactionError},
+        transaction::{DisabledAddressLoader, SanitizedTransaction},
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -72,7 +73,6 @@ use {
         str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::channel,
             Arc, RwLock,
         },
     },
@@ -232,10 +232,12 @@ fn output_slot(
             num_hashes += entry.num_hashes;
             for transaction in entry.transactions {
                 let tx_signature = transaction.signatures[0];
-                let sanitize_result =
-                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    });
+                let sanitize_result = SanitizedTransaction::try_create(
+                    transaction,
+                    Hash::default(),
+                    None,
+                    &DisabledAddressLoader,
+                );
 
                 match sanitize_result {
                     Ok(transaction) => {
@@ -676,6 +678,7 @@ fn open_blockstore(
             access_type,
             recovery_mode: wal_recovery_mode,
             enforce_ulimit_nofile: true,
+            ..BlockstoreOptions::default()
         },
     ) {
         Ok(blockstore) => blockstore,
@@ -741,7 +744,7 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    let (accounts_package_sender, _) = channel();
+    let (accounts_package_sender, _) = unbounded();
     bank_forks_utils::load(
         genesis_config,
         blockstore,
@@ -780,9 +783,12 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .transactions
             .into_iter()
             .filter_map(|transaction| {
-                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                SanitizedTransaction::try_create(
+                    transaction,
+                    Hash::default(),
+                    None,
+                    &DisabledAddressLoader,
+                )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
                 })
@@ -883,6 +889,10 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let disable_disk_index = Arg::with_name("disable_accounts_disk_index")
+        .long("disable-accounts-disk-index")
+        .help("Disable the disk-based accounts index if it is enabled by default.")
+        .conflicts_with("accounts_index_memory_limit_mb");
     let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
         .long("accounts-db-skip-shrink")
         .help(
@@ -1233,6 +1243,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
@@ -1985,6 +1996,8 @@ fn main() {
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
                     accounts_index_config.index_limit_mb = Some(limit);
+                } else if arg_matches.is_present("disable_accounts_disk_index") {
+                    accounts_index_config.index_limit_mb = None;
                 }
 
                 {

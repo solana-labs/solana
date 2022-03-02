@@ -1,10 +1,14 @@
 //! Errors related to proving and verifying proofs.
-use crate::{range_proof::errors::RangeProofError, sigma_proofs::errors::*};
-use thiserror::Error;
+use {
+    crate::{range_proof::errors::RangeProofError, sigma_proofs::errors::*},
+    thiserror::Error,
+};
 
 // TODO: clean up errors for encryption
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ProofError {
+    #[error("proof generation failed")]
+    Generation,
     #[error("proof failed to verify")]
     Verification,
     #[error("range proof failed to verify")]
@@ -41,8 +45,8 @@ impl From<EqualityProofError> for ProofError {
     }
 }
 
-impl From<FeeProofError> for ProofError {
-    fn from(_err: FeeProofError) -> Self {
+impl From<FeeSigmaProofError> for ProofError {
+    fn from(_err: FeeSigmaProofError) -> Self {
         Self::FeeProof
     }
 }

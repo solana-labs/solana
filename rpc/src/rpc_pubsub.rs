@@ -594,6 +594,7 @@ mod tests {
                 create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
+            vote_transaction::VoteTransaction,
         },
         solana_sdk::{
             account::ReadableAccount,
@@ -611,7 +612,7 @@ mod tests {
             transaction::{self, Transaction},
         },
         solana_stake_program::stake_state,
-        solana_vote_program::vote_state::{Vote, VoteTransaction},
+        solana_vote_program::vote_state::Vote,
         std::{
             sync::{
                 atomic::{AtomicBool, AtomicU64},
@@ -1315,12 +1316,12 @@ mod tests {
             hash: Hash::default(),
             timestamp: None,
         };
-        subscriptions.notify_vote(VoteTransaction::from(vote));
+        subscriptions.notify_vote(Pubkey::default(), VoteTransaction::from(vote));
 
         let response = receiver.recv();
         assert_eq!(
             response,
-            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"slots":[1,2],"hash":"11111111111111111111111111111111","timestamp":null},"subscription":0}}"#
+            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"votePubkey":"11111111111111111111111111111111","slots":[1,2],"hash":"11111111111111111111111111111111","timestamp":null},"subscription":0}}"#
         );
     }
 

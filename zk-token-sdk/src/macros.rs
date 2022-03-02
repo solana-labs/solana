@@ -74,28 +74,3 @@ macro_rules! define_mul_variants {
         }
     };
 }
-
-macro_rules! define_div_variants {
-    (LHS = $lhs:ty, RHS = $rhs:ty, Output = $out:ty) => {
-        impl<'b> Div<&'b $rhs> for $lhs {
-            type Output = $out;
-            fn div(self, rhs: &'b $rhs) -> $out {
-                &self / rhs
-            }
-        }
-
-        impl<'a> Div<$rhs> for &'a $lhs {
-            type Output = $out;
-            fn div(self, rhs: $rhs) -> $out {
-                self / &rhs
-            }
-        }
-
-        impl Div<$rhs> for $lhs {
-            type Output = $out;
-            fn div(self, rhs: $rhs) -> $out {
-                &self / &rhs
-            }
-        }
-    };
-}

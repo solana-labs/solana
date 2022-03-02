@@ -9,6 +9,7 @@ use {
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
+    solana_runtime::vote_parser,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -18,7 +19,6 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
-    solana_vote_program::vote_transaction::parse_vote_transaction,
     std::{
         borrow::{Borrow, Cow},
         cmp::Ordering,
@@ -307,7 +307,7 @@ impl Sanitize for Vote {
 impl Vote {
     // Returns None if cannot parse transaction into a vote.
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Option<Self> {
-        parse_vote_transaction(&transaction).map(|(_, vote, _)| Self {
+        vote_parser::parse_vote_transaction(&transaction).map(|(_, vote, _)| Self {
             from,
             transaction,
             wallclock,

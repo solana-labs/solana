@@ -1,5 +1,15 @@
+//! The original and current Solana message format.
+//!
+//! This crate defines two versions of `Message` in their own modules:
+//! [`legacy`] and [`v0`]. `legacy` is the current version as of Solana 1.10.0.
+//! `v0` is a [future message format] that encodes more account keys into a
+//! transaction than the legacy format.
+//!
+//! [`legacy`]: crate::message::legacy
+//! [`v0`]: crate::message::v0
+//! [future message format]: https://docs.solana.com/proposals/transactions-v2
+
 #![allow(clippy::integer_arithmetic)]
-//! A library for generating a message from a sequence of instructions
 
 use {
     crate::{
@@ -9,9 +19,6 @@ use {
         message::MessageHeader,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
-        serialize_utils::{
-            append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
-        },
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
     lazy_static::lazy_static,
@@ -166,6 +173,20 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
+/// A Solana transaction message (legacy).
+///
+/// See the [`message`] module documentation for further description.
+///
+/// [`message`]: crate::message
+///
+/// Some constructors accept an optional `payer`, the account responsible for
+/// paying the cost of executing a transaction. In most cases, callers should
+/// specify the payer explicitly in these constructors. In some cases though,
+/// the caller is not _required_ to specify the payer, but is still allowed to:
+/// in the `Message` structure, the first account is always the fee-payer, so if
+/// the caller has knowledge that the first account of the constructed
+/// transaction's `Message` is both a signer and the expected fee-payer, then
+/// redundantly specifying the fee-payer is not strictly required.
 // NOTE: Serialization-related changes must be paired with the custom serialization
 // for versioned messages in the `RemainingLegacyMessage` struct.
 #[wasm_bindgen]
@@ -173,12 +194,12 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
-    /// The message header, identifying signed and read-only `account_keys`
-    /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+    /// The message header, identifying signed and read-only `account_keys`.
+    // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     #[wasm_bindgen(skip)]
     pub header: MessageHeader,
 
-    /// All the account keys used by this transaction
+    /// All the account keys used by this transaction.
     #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
@@ -230,30 +251,147 @@ impl Sanitize for Message {
 }
 
 impl Message {
-    pub fn new_with_compiled_instructions(
-        num_required_signatures: u8,
-        num_readonly_signed_accounts: u8,
-        num_readonly_unsigned_accounts: u8,
-        account_keys: Vec<Pubkey>,
-        recent_blockhash: Hash,
-        instructions: Vec<CompiledInstruction>,
-    ) -> Self {
-        Self {
-            header: MessageHeader {
-                num_required_signatures,
-                num_readonly_signed_accounts,
-                num_readonly_unsigned_accounts,
-            },
-            account_keys,
-            recent_blockhash,
-            instructions,
-        }
-    }
-
+    /// Create a new `Message`.
+    ///
+    /// # Examples
+    ///
+    /// This example uses the [`solana_sdk`], [`solana_client`] and [`anyhow`] crates.
+    ///
+    /// [`solana_sdk`]: https://docs.rs/solana-sdk
+    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`anyhow`]: https://docs.rs/anyhow
+    ///
+    /// ```
+    /// # use solana_program::example_mocks::solana_sdk;
+    /// # use solana_program::example_mocks::solana_client;
+    /// use anyhow::Result;
+    /// use borsh::{BorshSerialize, BorshDeserialize};
+    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_sdk::{
+    ///      instruction::Instruction,
+    ///      message::Message,
+    ///      pubkey::Pubkey,
+    ///      signature::Keypair,
+    ///      transaction::Transaction,
+    /// };
+    ///
+    /// // A custom program instruction. This would typically be defined in
+    /// // another crate so it can be shared between the on-chain program and
+    /// // the client.
+    /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// enum BankInstruction {
+    ///     Initialize,
+    ///     Deposit { lamports: u64 },
+    ///     Withdraw { lamports: u64 },
+    /// }
+    ///
+    /// fn send_initialize_tx(
+    ///     client: &RpcClient,
+    ///     program_id: Pubkey,
+    ///     payer: &Keypair
+    /// ) -> Result<()> {
+    ///
+    ///     let bank_instruction = BankInstruction::Initialize;
+    ///
+    ///     let instruction = Instruction::new_with_borsh(
+    ///         program_id,
+    ///         &bank_instruction,
+    ///         vec![],
+    ///     );
+    ///
+    ///     let message = Message::new(
+    ///         &[instruction],
+    ///         Some(&payer.pubkey()),
+    ///     );
+    ///
+    ///     let blockhash = client.get_latest_blockhash()?;
+    ///     let mut tx = Transaction::new(&[payer], message, blockhash);
+    ///     client.send_and_confirm_transaction(&tx)?;
+    ///
+    ///     Ok(())
+    /// }
+    /// #
+    /// # let client = RpcClient::new(String::new());
+    /// # let program_id = Pubkey::new_unique();
+    /// # let payer = Keypair::new();
+    /// # send_initialize_tx(&client, program_id, &payer)?;
+    /// #
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
         Self::new_with_blockhash(instructions, payer, &Hash::default())
     }
 
+    /// Create a new message while setting the blockhash.
+    ///
+    /// # Examples
+    ///
+    /// This example uses the [`solana_sdk`], [`solana_client`] and [`anyhow`] crates.
+    ///
+    /// [`solana_sdk`]: https://docs.rs/solana-sdk
+    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`anyhow`]: https://docs.rs/anyhow
+    ///
+    /// ```
+    /// # use solana_program::example_mocks::solana_sdk;
+    /// # use solana_program::example_mocks::solana_client;
+    /// use anyhow::Result;
+    /// use borsh::{BorshSerialize, BorshDeserialize};
+    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_sdk::{
+    ///      instruction::Instruction,
+    ///      message::Message,
+    ///      pubkey::Pubkey,
+    ///      signature::Keypair,
+    ///      transaction::Transaction,
+    /// };
+    ///
+    /// // A custom program instruction. This would typically be defined in
+    /// // another crate so it can be shared between the on-chain program and
+    /// // the client.
+    /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// enum BankInstruction {
+    ///     Initialize,
+    ///     Deposit { lamports: u64 },
+    ///     Withdraw { lamports: u64 },
+    /// }
+    ///
+    /// fn send_initialize_tx(
+    ///     client: &RpcClient,
+    ///     program_id: Pubkey,
+    ///     payer: &Keypair
+    /// ) -> Result<()> {
+    ///
+    ///     let bank_instruction = BankInstruction::Initialize;
+    ///
+    ///     let instruction = Instruction::new_with_borsh(
+    ///         program_id,
+    ///         &bank_instruction,
+    ///         vec![],
+    ///     );
+    ///
+    ///     let blockhash = client.get_latest_blockhash()?;
+    ///
+    ///     let message = Message::new_with_blockhash(
+    ///         &[instruction],
+    ///         Some(&payer.pubkey()),
+    ///         &blockhash,
+    ///     );
+    ///
+    ///     let mut tx = Transaction::new_unsigned(message);
+    ///     tx.sign(&[payer], tx.message.recent_blockhash);
+    ///     client.send_and_confirm_transaction(&tx)?;
+    ///
+    ///     Ok(())
+    /// }
+    /// #
+    /// # let client = RpcClient::new(String::new());
+    /// # let program_id = Pubkey::new_unique();
+    /// # let payer = Keypair::new();
+    /// # send_initialize_tx(&client, program_id, &payer)?;
+    /// #
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn new_with_blockhash(
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
@@ -278,6 +416,112 @@ impl Message {
         )
     }
 
+    /// Create a new message for a [nonced transaction].
+    ///
+    /// [nonced transaction]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+    ///
+    /// In this type of transaction, the blockhash is replaced with a _durable
+    /// transaction nonce_, allowing for extended time to pass between the
+    /// transaction's signing and submission to the blockchain.
+    ///
+    /// # Examples
+    ///
+    /// This example uses the [`solana_sdk`], [`solana_client`] and [`anyhow`] crates.
+    ///
+    /// [`solana_sdk`]: https://docs.rs/solana-sdk
+    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`anyhow`]: https://docs.rs/anyhow
+    ///
+    /// ```
+    /// # use solana_program::example_mocks::solana_sdk;
+    /// # use solana_program::example_mocks::solana_client;
+    /// use anyhow::Result;
+    /// use borsh::{BorshSerialize, BorshDeserialize};
+    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_sdk::{
+    ///      hash::Hash,
+    ///      instruction::Instruction,
+    ///      message::Message,
+    ///      nonce,
+    ///      pubkey::Pubkey,
+    ///      signature::Keypair,
+    ///      system_instruction,
+    ///      transaction::Transaction,
+    /// };
+    ///
+    /// // A custom program instruction. This would typically be defined in
+    /// // another crate so it can be shared between the on-chain program and
+    /// // the client.
+    /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// enum BankInstruction {
+    ///     Initialize,
+    ///     Deposit { lamports: u64 },
+    ///     Withdraw { lamports: u64 },
+    /// }
+    ///
+    /// // Create a nonced transaction for later signing and submission,
+    /// // returning it and the nonce account's pubkey.
+    /// fn create_offline_initialize_tx(
+    ///     client: &RpcClient,
+    ///     program_id: Pubkey,
+    ///     payer: &Keypair
+    /// ) -> Result<(Transaction, Pubkey)> {
+    ///
+    ///     let bank_instruction = BankInstruction::Initialize;
+    ///     let bank_instruction = Instruction::new_with_borsh(
+    ///         program_id,
+    ///         &bank_instruction,
+    ///         vec![],
+    ///     );
+    ///
+    ///     // This will create a nonce account and assign authority to the
+    ///     // payer so they can sign to advance the nonce and withdraw its rent.
+    ///     let nonce_account = make_nonce_account(client, payer)?;
+    ///
+    ///     let mut message = Message::new_with_nonce(
+    ///         vec![bank_instruction],
+    ///         Some(&payer.pubkey()),
+    ///         &nonce_account,
+    ///         &payer.pubkey()
+    ///     );
+    ///
+    ///     // This transaction will need to be signed later, using the blockhash
+    ///     // stored in the nonce account.
+    ///     let tx = Transaction::new_unsigned(message);
+    ///
+    ///     Ok((tx, nonce_account))
+    /// }
+    ///
+    /// fn make_nonce_account(client: &RpcClient, payer: &Keypair)
+    ///     -> Result<Pubkey>
+    /// {
+    ///     let nonce_account_address = Keypair::new();
+    ///     let nonce_account_size = nonce::State::size();
+    ///     let nonce_rent = client.get_minimum_balance_for_rent_exemption(nonce_account_size)?;
+    ///
+    ///     // Assigning the nonce authority to the payer so they can sign for the withdrawal,
+    ///     // and we can throw away the nonce address secret key.
+    ///     let create_nonce_instr = system_instruction::create_nonce_account(
+    ///         &payer.pubkey(),
+    ///         &nonce_account_address.pubkey(),
+    ///         &payer.pubkey(),
+    ///         nonce_rent,
+    ///     );
+    ///
+    ///    let mut nonce_tx = Transaction::new_with_payer(&create_nonce_instr, Some(&payer.pubkey()));
+    ///    let blockhash = client.get_latest_blockhash()?;
+    ///    nonce_tx.sign(&[&payer, &nonce_account_address], blockhash);
+    ///    client.send_and_confirm_transaction(&nonce_tx)?;
+    ///
+    ///    Ok(nonce_account_address.pubkey())
+    /// }
+    /// #
+    /// # let client = RpcClient::new(String::new());
+    /// # let program_id = Pubkey::new_unique();
+    /// # let payer = Keypair::new();
+    /// # create_offline_initialize_tx(&client, program_id, &payer)?;
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn new_with_nonce(
         mut instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
@@ -290,14 +534,34 @@ impl Message {
         Self::new(&instructions, payer)
     }
 
-    /// Compute the blake3 hash of this transaction's message
+    pub fn new_with_compiled_instructions(
+        num_required_signatures: u8,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
+        account_keys: Vec<Pubkey>,
+        recent_blockhash: Hash,
+        instructions: Vec<CompiledInstruction>,
+    ) -> Self {
+        Self {
+            header: MessageHeader {
+                num_required_signatures,
+                num_readonly_signed_accounts,
+                num_readonly_unsigned_accounts,
+            },
+            account_keys,
+            recent_blockhash,
+            instructions,
+        }
+    }
+
+    /// Compute the blake3 hash of this transaction's message.
     #[cfg(not(target_arch = "bpf"))]
     pub fn hash(&self) -> Hash {
         let message_bytes = self.serialize();
         Self::hash_raw_message(&message_bytes)
     }
 
-    /// Compute the blake3 hash of a raw transaction message
+    /// Compute the blake3 hash of a raw transaction message.
     #[cfg(not(target_arch = "bpf"))]
     pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
         use blake3::traits::digest::Digest;
@@ -400,100 +664,13 @@ impl Message {
         (writable_keys, readonly_keys)
     }
 
-    // First encode the number of instructions:
-    // [0..2 - num_instructions
-    //
-    // Then a table of offsets of where to find them in the data
-    //  3..2 * num_instructions table of instruction offsets
-    //
-    // Each instruction is then encoded as:
-    //   0..2 - num_accounts
-    //   2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
-    //   3..35 - pubkey - 32 bytes
-    //   35..67 - program_id
-    //   67..69 - data len - u16
-    //   69..data_len - data
     #[deprecated]
-    pub fn serialize_instructions(&self) -> Vec<u8> {
-        // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
-        let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
-        append_u16(&mut data, self.instructions.len() as u16);
-        for _ in 0..self.instructions.len() {
-            append_u16(&mut data, 0);
-        }
-        for (i, instruction) in self.instructions.iter().enumerate() {
-            let start_instruction_offset = data.len() as u16;
-            let start = 2 + (2 * i);
-            data[start..start + 2].copy_from_slice(&start_instruction_offset.to_le_bytes());
-            append_u16(&mut data, instruction.accounts.len() as u16);
-            for account_index in &instruction.accounts {
-                let account_index = *account_index as usize;
-                let is_signer = self.is_signer(account_index);
-                let is_writable = self.is_writable(account_index);
-                let mut meta_byte = 0;
-                if is_signer {
-                    meta_byte |= 1 << Self::IS_SIGNER_BIT;
-                }
-                if is_writable {
-                    meta_byte |= 1 << Self::IS_WRITABLE_BIT;
-                }
-                append_u8(&mut data, meta_byte);
-                append_slice(&mut data, self.account_keys[account_index].as_ref());
-            }
-
-            let program_id = &self.account_keys[instruction.program_id_index as usize];
-            append_slice(&mut data, program_id.as_ref());
-            append_u16(&mut data, instruction.data.len() as u16);
-            append_slice(&mut data, &instruction.data);
-        }
-        data
-    }
-
-    const IS_SIGNER_BIT: usize = 0;
-    const IS_WRITABLE_BIT: usize = 1;
-
     pub fn deserialize_instruction(
         index: usize,
         data: &[u8],
     ) -> Result<Instruction, SanitizeError> {
-        let mut current = 0;
-        let num_instructions = read_u16(&mut current, data)?;
-        if index >= num_instructions as usize {
-            return Err(SanitizeError::IndexOutOfBounds);
-        }
-
-        // index into the instruction byte-offset table.
-        current += index * 2;
-        let start = read_u16(&mut current, data)?;
-
-        current = start as usize;
-        let num_accounts = read_u16(&mut current, data)?;
-        let mut accounts = Vec::with_capacity(num_accounts as usize);
-        for _ in 0..num_accounts {
-            let meta_byte = read_u8(&mut current, data)?;
-            let mut is_signer = false;
-            let mut is_writable = false;
-            if meta_byte & (1 << Self::IS_SIGNER_BIT) != 0 {
-                is_signer = true;
-            }
-            if meta_byte & (1 << Self::IS_WRITABLE_BIT) != 0 {
-                is_writable = true;
-            }
-            let pubkey = read_pubkey(&mut current, data)?;
-            accounts.push(AccountMeta {
-                pubkey,
-                is_signer,
-                is_writable,
-            });
-        }
-        let program_id = read_pubkey(&mut current, data)?;
-        let data_len = read_u16(&mut current, data)?;
-        let data = read_slice(&mut current, data, data_len as usize)?;
-        Ok(Instruction {
-            program_id,
-            accounts,
-            data,
-        })
+        #[allow(deprecated)]
+        sysvar::instructions::load_instruction_at(index, data)
     }
 
     pub fn signer_keys(&self) -> Vec<&Pubkey> {
@@ -505,7 +682,7 @@ impl Message {
         self.account_keys[..last_key].iter().collect()
     }
 
-    /// Return true if account_keys has any duplicate keys
+    /// Returns `true` if `account_keys` has any duplicate keys.
     pub fn has_duplicates(&self) -> bool {
         // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
         // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
@@ -519,7 +696,7 @@ impl Message {
         false
     }
 
-    /// Returns true if any account is the bpf upgradeable loader
+    /// Returns `true` if any account is the BPF upgradeable loader.
     pub fn is_upgradeable_loader_present(&self) -> bool {
         self.account_keys
             .iter()
@@ -927,59 +1104,6 @@ mod tests {
         assert_eq!(
             message.get_account_keys_by_lock_type(),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
-        );
-    }
-
-    #[test]
-    fn test_decompile_instructions() {
-        solana_logger::setup();
-        let program_id0 = Pubkey::new_unique();
-        let program_id1 = Pubkey::new_unique();
-        let id0 = Pubkey::new_unique();
-        let id1 = Pubkey::new_unique();
-        let id2 = Pubkey::new_unique();
-        let id3 = Pubkey::new_unique();
-        let instructions = vec![
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
-            Instruction::new_with_bincode(
-                program_id1,
-                &0,
-                vec![AccountMeta::new_readonly(id2, false)],
-            ),
-            Instruction::new_with_bincode(
-                program_id1,
-                &0,
-                vec![AccountMeta::new_readonly(id3, true)],
-            ),
-        ];
-
-        let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
-        for (i, instruction) in instructions.iter().enumerate() {
-            assert_eq!(
-                Message::deserialize_instruction(i, &serialized).unwrap(),
-                *instruction
-            );
-        }
-    }
-
-    #[test]
-    fn test_decompile_instructions_out_of_bounds() {
-        solana_logger::setup();
-        let program_id0 = Pubkey::new_unique();
-        let id0 = Pubkey::new_unique();
-        let id1 = Pubkey::new_unique();
-        let instructions = vec![
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
-        ];
-
-        let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
-        assert_eq!(
-            Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
-            SanitizeError::IndexOutOfBounds,
         );
     }
 

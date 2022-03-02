@@ -1,9 +1,17 @@
 #![allow(clippy::integer_arithmetic)]
 //! This account contains the serialized transaction instructions
-
 use crate::{
-    account_info::AccountInfo, instruction::Instruction, program_error::ProgramError,
+    account_info::AccountInfo,
+    instruction::{AccountMeta, Instruction},
+    program_error::ProgramError,
+    pubkey::Pubkey,
     sanitize::SanitizeError,
+    serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
+};
+#[cfg(not(target_arch = "bpf"))]
+use {
+    crate::serialize_utils::{append_slice, append_u16, append_u8},
+    bitflags::bitflags,
 };
 
 // Instructions Sysvar, dummy type, use the associated helpers instead of the Sysvar trait
@@ -11,13 +19,82 @@ pub struct Instructions();
 
 crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instructions);
 
-// Construct the account data for the Instruction sSysvar
+// Construct the account data for the Instructions Sysvar
 #[cfg(not(target_arch = "bpf"))]
-pub fn construct_instructions_data(message: &crate::message::SanitizedMessage) -> Vec<u8> {
-    let mut data = message.serialize_instructions();
+pub fn construct_instructions_data(instructions: &[BorrowedInstruction]) -> Vec<u8> {
+    let mut data = serialize_instructions(instructions);
     // add room for current instruction index.
     data.resize(data.len() + 2, 0);
 
+    data
+}
+
+/// Borrowed version of AccountMeta
+pub struct BorrowedAccountMeta<'a> {
+    pub pubkey: &'a Pubkey,
+    pub is_signer: bool,
+    pub is_writable: bool,
+}
+
+/// Borrowed version of Instruction
+pub struct BorrowedInstruction<'a> {
+    pub program_id: &'a Pubkey,
+    pub accounts: Vec<BorrowedAccountMeta<'a>>,
+    pub data: &'a [u8],
+}
+
+#[cfg(not(target_arch = "bpf"))]
+bitflags! {
+    struct InstructionsSysvarAccountMeta: u8 {
+        const NONE = 0b00000000;
+        const IS_SIGNER = 0b00000001;
+        const IS_WRITABLE = 0b00000010;
+    }
+}
+
+// First encode the number of instructions:
+// [0..2 - num_instructions
+//
+// Then a table of offsets of where to find them in the data
+//  3..2 * num_instructions table of instruction offsets
+//
+// Each instruction is then encoded as:
+//   0..2 - num_accounts
+//   2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
+//   3..35 - pubkey - 32 bytes
+//   35..67 - program_id
+//   67..69 - data len - u16
+//   69..data_len - data
+#[cfg(not(target_arch = "bpf"))]
+fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
+    // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
+    let mut data = Vec::with_capacity(instructions.len() * (32 * 2));
+    append_u16(&mut data, instructions.len() as u16);
+    for _ in 0..instructions.len() {
+        append_u16(&mut data, 0);
+    }
+
+    for (i, instruction) in instructions.iter().enumerate() {
+        let start_instruction_offset = data.len() as u16;
+        let start = 2 + (2 * i);
+        data[start..start + 2].copy_from_slice(&start_instruction_offset.to_le_bytes());
+        append_u16(&mut data, instruction.accounts.len() as u16);
+        for account_meta in &instruction.accounts {
+            let mut account_meta_flags = InstructionsSysvarAccountMeta::NONE;
+            if account_meta.is_signer {
+                account_meta_flags |= InstructionsSysvarAccountMeta::IS_SIGNER;
+            }
+            if account_meta.is_writable {
+                account_meta_flags |= InstructionsSysvarAccountMeta::IS_WRITABLE;
+            }
+            append_u8(&mut data, account_meta_flags.bits());
+            append_slice(&mut data, account_meta.pubkey.as_ref());
+        }
+
+        append_slice(&mut data, instruction.program_id.as_ref());
+        append_u16(&mut data, instruction.data.len() as u16);
+        append_slice(&mut data, instruction.data);
+    }
     data
 }
 
@@ -56,6 +133,50 @@ pub fn store_current_index(data: &mut [u8], instruction_index: u16) {
     data[last_index..last_index + 2].copy_from_slice(&instruction_index.to_le_bytes());
 }
 
+fn deserialize_instruction(index: usize, data: &[u8]) -> Result<Instruction, SanitizeError> {
+    const IS_SIGNER_BIT: usize = 0;
+    const IS_WRITABLE_BIT: usize = 1;
+
+    let mut current = 0;
+    let num_instructions = read_u16(&mut current, data)?;
+    if index >= num_instructions as usize {
+        return Err(SanitizeError::IndexOutOfBounds);
+    }
+
+    // index into the instruction byte-offset table.
+    current += index * 2;
+    let start = read_u16(&mut current, data)?;
+
+    current = start as usize;
+    let num_accounts = read_u16(&mut current, data)?;
+    let mut accounts = Vec::with_capacity(num_accounts as usize);
+    for _ in 0..num_accounts {
+        let meta_byte = read_u8(&mut current, data)?;
+        let mut is_signer = false;
+        let mut is_writable = false;
+        if meta_byte & (1 << IS_SIGNER_BIT) != 0 {
+            is_signer = true;
+        }
+        if meta_byte & (1 << IS_WRITABLE_BIT) != 0 {
+            is_writable = true;
+        }
+        let pubkey = read_pubkey(&mut current, data)?;
+        accounts.push(AccountMeta {
+            pubkey,
+            is_signer,
+            is_writable,
+        });
+    }
+    let program_id = read_pubkey(&mut current, data)?;
+    let data_len = read_u16(&mut current, data)?;
+    let data = read_slice(&mut current, data, data_len as usize)?;
+    Ok(Instruction {
+        program_id,
+        accounts,
+        data,
+    })
+}
+
 /// Load an `Instruction` in the currently executing `Transaction` at the
 /// specified index
 #[deprecated(
@@ -63,7 +184,7 @@ pub fn store_current_index(data: &mut [u8], instruction_index: u16) {
     note = "Unsafe because the sysvar accounts address is not checked, please use `load_instruction_at_checked` instead"
 )]
 pub fn load_instruction_at(index: usize, data: &[u8]) -> Result<Instruction, SanitizeError> {
-    crate::message::Message::deserialize_instruction(index, data)
+    deserialize_instruction(index, data)
 }
 
 /// Load an `Instruction` in the currently executing `Transaction` at the
@@ -77,11 +198,9 @@ pub fn load_instruction_at_checked(
     }
 
     let instruction_sysvar = instruction_sysvar_account_info.try_borrow_data()?;
-    crate::message::Message::deserialize_instruction(index, &instruction_sysvar).map_err(|err| {
-        match err {
-            SanitizeError::IndexOutOfBounds => ProgramError::InvalidArgument,
-            _ => ProgramError::InvalidInstructionData,
-        }
+    deserialize_instruction(index, &instruction_sysvar).map_err(|err| match err {
+        SanitizeError::IndexOutOfBounds => ProgramError::InvalidArgument,
+        _ => ProgramError::InvalidInstructionData,
     })
 }
 
@@ -117,7 +236,11 @@ pub fn get_instruction_relative(
 mod tests {
     use {
         super::*,
-        crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey},
+        crate::{
+            instruction::AccountMeta,
+            message::{Message as LegacyMessage, SanitizedMessage},
+            pubkey::Pubkey,
+        },
         std::convert::TryFrom,
     };
 
@@ -143,7 +266,7 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = crate::message::SanitizedMessage::try_from(Message::new(
+        let sanitized_message = SanitizedMessage::try_from(LegacyMessage::new(
             &[instruction0.clone(), instruction1.clone()],
             Some(&Pubkey::new_unique()),
         ))
@@ -151,7 +274,7 @@ mod tests {
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message);
+        let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
         let owner = crate::sysvar::id();
         let mut account_info = AccountInfo::new(
             &key,
@@ -197,7 +320,7 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = crate::message::SanitizedMessage::try_from(Message::new(
+        let sanitized_message = SanitizedMessage::try_from(LegacyMessage::new(
             &[instruction0, instruction1],
             Some(&Pubkey::new_unique()),
         ))
@@ -205,7 +328,7 @@ mod tests {
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message);
+        let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
         store_current_index(&mut data, 1);
         let owner = crate::sysvar::id();
         let mut account_info = AccountInfo::new(
@@ -251,7 +374,7 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = crate::message::SanitizedMessage::try_from(Message::new(
+        let sanitized_message = SanitizedMessage::try_from(LegacyMessage::new(
             &[
                 instruction0.clone(),
                 instruction1.clone(),
@@ -263,7 +386,7 @@ mod tests {
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message);
+        let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
         store_current_index(&mut data, 1);
         let owner = crate::sysvar::id();
         let mut account_info = AccountInfo::new(
@@ -327,6 +450,61 @@ mod tests {
         assert_eq!(
             Err(ProgramError::UnsupportedSysvar),
             get_instruction_relative(0, &account_info)
+        );
+    }
+
+    #[test]
+    fn test_serialize_instructions() {
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
+        let id2 = Pubkey::new_unique();
+        let id3 = Pubkey::new_unique();
+        let instructions = vec![
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new_with_bincode(
+                program_id1,
+                &0,
+                vec![AccountMeta::new_readonly(id2, false)],
+            ),
+            Instruction::new_with_bincode(
+                program_id1,
+                &0,
+                vec![AccountMeta::new_readonly(id3, true)],
+            ),
+        ];
+
+        let message = LegacyMessage::new(&instructions, Some(&id1));
+        let sanitized_message = SanitizedMessage::try_from(message).unwrap();
+        let serialized = serialize_instructions(&sanitized_message.decompile_instructions());
+
+        // assert that deserialize_instruction is compatible with SanitizedMessage::serialize_instructions
+        for (i, instruction) in instructions.iter().enumerate() {
+            assert_eq!(
+                deserialize_instruction(i, &serialized).unwrap(),
+                *instruction
+            );
+        }
+    }
+
+    #[test]
+    fn test_decompile_instructions_out_of_bounds() {
+        let program_id0 = Pubkey::new_unique();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
+        let instructions = vec![
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+        ];
+
+        let message =
+            SanitizedMessage::try_from(LegacyMessage::new(&instructions, Some(&id1))).unwrap();
+        let serialized = serialize_instructions(&message.decompile_instructions());
+        assert_eq!(
+            deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
+            SanitizeError::IndexOutOfBounds,
         );
     }
 }

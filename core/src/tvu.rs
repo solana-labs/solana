@@ -25,7 +25,7 @@ use {
         tower_storage::TowerStorage,
         voting_service::VotingService,
     },
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -49,6 +49,9 @@ use {
         snapshot_package::{
             AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage,
         },
+        transaction_cost_metrics_sender::{
+            TransactionCostMetricsSender, TransactionCostMetricsService,
+        },
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
@@ -56,11 +59,7 @@ use {
         boxed::Box,
         collections::HashSet,
         net::UdpSocket,
-        sync::{
-            atomic::AtomicBool,
-            mpsc::{channel, Receiver},
-            Arc, Mutex, RwLock,
-        },
+        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
     },
 };
@@ -76,6 +75,7 @@ pub struct Tvu {
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
     drop_bank_service: DropBankService,
+    transaction_cost_metrics_service: TransactionCostMetricsService,
 }
 
 pub struct TvuSockets {
@@ -145,6 +145,7 @@ impl Tvu {
         accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        wait_to_vote_slot: Option<Slot>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -154,7 +155,7 @@ impl Tvu {
             ancestor_hashes_requests: ancestor_hashes_socket,
         } = sockets;
 
-        let (fetch_sender, fetch_receiver) = channel();
+        let (fetch_sender, fetch_receiver) = unbounded();
 
         let repair_socket = Arc::new(repair_socket);
         let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
@@ -210,7 +211,7 @@ impl Tvu {
             ancestor_hashes_replay_update_receiver,
         );
 
-        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
 
         let snapshot_interval_slots = {
             if let Some(config) = bank_forks.read().unwrap().snapshot_config() {
@@ -293,9 +294,10 @@ impl Tvu {
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
             tower_storage: tower_storage.clone(),
+            wait_to_vote_slot,
         };
 
-        let (voting_sender, voting_receiver) = channel();
+        let (voting_sender, voting_receiver) = unbounded();
         let voting_service = VotingService::new(
             voting_receiver,
             cluster_info.clone(),
@@ -304,15 +306,20 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let (cost_update_sender, cost_update_receiver) = channel();
-        let cost_update_service = CostUpdateService::new(
-            exit.clone(),
-            blockstore.clone(),
-            cost_model.clone(),
-            cost_update_receiver,
-        );
+        let (cost_update_sender, cost_update_receiver) = unbounded();
+        let cost_update_service =
+            CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
 
-        let (drop_bank_sender, drop_bank_receiver) = channel();
+        let (drop_bank_sender, drop_bank_receiver) = unbounded();
+
+        let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
+        let transaction_cost_metrics_sender = Some(TransactionCostMetricsSender::new(
+            cost_model.clone(),
+            tx_cost_metrics_sender,
+        ));
+        let transaction_cost_metrics_service =
+            TransactionCostMetricsService::new(tx_cost_metrics_receiver);
+
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
         let replay_stage = ReplayStage::new(
@@ -336,6 +343,7 @@ impl Tvu {
             voting_sender,
             drop_bank_sender,
             block_metadata_notifier,
+            transaction_cost_metrics_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -370,6 +378,7 @@ impl Tvu {
             cost_update_service,
             voting_service,
             drop_bank_service,
+            transaction_cost_metrics_service,
         }
     }
 
@@ -386,6 +395,7 @@ impl Tvu {
         self.cost_update_service.join()?;
         self.voting_service.join()?;
         self.drop_bank_service.join()?;
+        self.transaction_cost_metrics_service.join()?;
         Ok(())
     }
 }
@@ -407,8 +417,7 @@ pub mod tests {
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::AtomicU64,
-        std::sync::atomic::Ordering,
+        std::sync::atomic::{AtomicU64, Ordering},
     };
 
     #[ignore]
@@ -444,7 +453,7 @@ pub mod tests {
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, &blockstore, None);
+            create_test_recorder(&bank, &blockstore, None, None);
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -456,7 +465,7 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
-        let accounts_package_channel = channel();
+        let accounts_package_channel = unbounded();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -492,7 +501,7 @@ pub mod tests {
             None,
             None,
             None,
-            Arc::new(VoteTracker::new(&bank)),
+            Arc::<VoteTracker>::default(),
             retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
             verified_vote_receiver,
@@ -504,6 +513,7 @@ pub mod tests {
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
             accounts_package_channel,
+            None,
             None,
             None,
         );

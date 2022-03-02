@@ -309,10 +309,10 @@ fn main() {
         bpf_out_dir: value_t!(matches, "bpf_out_dir", String).ok(),
         extra_cargo_test_args: values_t!(matches, "extra_cargo_test_args", String)
             .ok()
-            .unwrap_or_else(Vec::new),
+            .unwrap_or_default(),
         features: values_t!(matches, "features", String)
             .ok()
-            .unwrap_or_else(Vec::new),
+            .unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         test_name: value_t!(matches, "test", String).ok(),
         no_default_features: matches.is_present("no_default_features"),

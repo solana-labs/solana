@@ -562,7 +562,7 @@ impl AccountsHash {
         bin: usize,
         first_items: &'a mut Vec<Pubkey>,
         pubkey_division: &'b [Vec<Vec<CalculateHashIntermediate>>],
-        indexes: &'a mut Vec<usize>,
+        indexes: &'a mut [usize],
         first_item_to_pubkey_division: &'a mut Vec<usize>,
     ) -> &'b CalculateHashIntermediate {
         let first_item = first_items[min_index];
@@ -1154,7 +1154,7 @@ pub mod tests {
         let sorted2 = chunk.clone();
 
         let mut with_left_over = vec![left_over_1];
-        with_left_over.extend(sorted2[0..plus1 - 2].to_vec().into_iter().map(|i| i.hash));
+        with_left_over.extend(sorted2[0..plus1 - 2].iter().cloned().map(|i| i.hash));
         let expected_hash2 = AccountsHash::compute_merkle_root(
             with_left_over[0..target_fanout]
                 .iter()

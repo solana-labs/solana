@@ -23,11 +23,11 @@ uses an _address_ to look up an account. The address is a 256-bit public key.
 
 ## Signers
 
-Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. Such
-signatures signify that the holder of the
-account's private key signed and thus "authorized" the transaction.  In this case,
-the account is referred to as a _signer_. Whether an account is a signer or not
+Transactions include one or more digital [signatures](terminology.md#signature)
+each corresponding to an account address referenced by the transaction. Each of these
+addresses must be the public key of an ed25519 keypair, and the signature signifies
+that the holder of the matching private key signed, and thus, "authorized" the transaction.
+In this case, the account is referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
 
@@ -71,7 +71,7 @@ previously created, the program will be passed an account with no data and zero 
 that is owned by the system program.
 
 Such newly created accounts reflect
-whether they sign the transaction and therefore can be used as an
+whether they sign the transaction, and therefore, can be used as an
 authority. Authorities in this context convey to the program that the holder of
 the private key associated with the account's public key signed the transaction.
 The account's public key may be known to the program or recorded in another
@@ -85,14 +85,14 @@ System program and is called a _system account_ aptly. An account includes
 "owner" metadata. The owner is a program id. The runtime grants the program
 write access to the account if its id matches the owner. For the case of the
 System program, the runtime allows clients to transfer lamports and importantly
-_assign_ account ownership, meaning changing owner to different program id. If
+_assign_ account ownership, meaning changing the owner to a different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
 
 ## Verifying validity of unmodified, reference-only accounts
 
 For security purposes, it is recommended that programs check the validity of any
-account it reads but does not modify.
+account it reads, but does not modify.
 
 This is because a malicious user
 could create accounts with arbitrary data and then pass these accounts to the
@@ -101,17 +101,17 @@ a way that leads to unexpected or harmful program behavior.
 
 The security model enforces that an account's data can only be modified by the
 account's `Owner` program. This allows the program to trust that the data
-passed to them via accounts they own. The
+is passed to them via accounts they own. The
 runtime enforces this by rejecting any transaction containing a program that
 attempts to write to an account it does not own.
 
 If a program were to not check account validity, it might read an account
-it thinks it owns but doesn't.  Anyone can
+it thinks it owns, but doesn't. Anyone can
 issue instructions to a program, and the runtime does not know that those
 accounts are expected to be owned by the program.
 
 To check an account's validity, the program should either check the account's
-address against a known value or check that the account is indeed owned
+address against a known value, or check that the account is indeed owned
 correctly (usually owned by the program itself).
 
 One example is when programs use a sysvar account. Unless the program checks the
@@ -120,7 +120,7 @@ valid sysvar account merely by successful deserialization of the account's data.
 
 Accordingly, the Solana SDK [checks the sysvar account's validity during
 deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
-A alternative and safer way to read a sysvar is via the sysvar's [`get()`
+An alternative and safer way to read a sysvar is via the sysvar's [`get()`
 function](https://github.com/solana-labs/solana/blob/64bfc14a75671e4ec3fe969ded01a599645080eb/sdk/program/src/sysvar/mod.rs#L73)
 which doesn't require these checks.
 
@@ -135,72 +135,13 @@ blockchain cluster must actively maintain the data to process any future transac
 This is different from Bitcoin and Ethereum, where storing accounts doesn't
 incur any costs.
 
-The rent is debited from an account's balance by the runtime upon the first
-access (including the initial account creation) in the current epoch by
-transactions or once per an epoch if there are no transactions. The fee is
-currently a fixed rate, measured in bytes-times-epochs. The fee may change in
-the future.
-
-For the sake of simple rent calculation, rent is always collected for a single,
-full epoch. Rent is not pro-rated, meaning there are neither fees nor refunds
-for partial epochs. This means that, on account creation, the first rent
-collected isn't for the current partial epoch, but collected up front for the
-next full epoch. Subsequent rent collections are for further future epochs. On
-the other end, if the balance of an already-rent-collected account drops below
-another rent fee mid-epoch, the account will continue to exist through the
-current epoch and be purged immediately at the start of the upcoming epoch.
-
-Accounts can be exempt from paying rent if they maintain a minimum balance. This
-rent-exemption is described below.
-
-### Calculation of rent
-
-Note: The rent rate can change in the future.
-
-As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch
-on the testnet and mainnet-beta clusters. An [epoch](terminology.md#epoch) is
-targeted to be 2 days (For devnet, the rent fee is 0.3608183131797095 lamports
-per byte-epoch with its 54m36s-long epoch).
-
-This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching
-to 3.56 SOL per mebibyte-year):
-
-```text
-Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
-```
-
-And rent calculation is done with the `f64` precision and the final result is
-truncated to `u64` in lamports.
-
-The rent calculation includes account metadata (address, owner, lamports, etc)
-in the size of an account. Therefore the smallest an account can be for rent
-calculations is 128 bytes.
-
-For example, an account is created with the initial transfer of 10,000 lamports
-and no additional data. Rent is immediately debited from it on creation,
-resulting in a balance of 7,561 lamports:
-
-```text
-Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
-Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's rent fee for an epoch)
-```
-
-The account balance will be reduced to 5,122 lamports at the next epoch even if
-there is no activity:
-
-```text
-Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fee for an epoch)
-```
-
-Accordingly, a minimum-size account will be immediately removed after creation
-if the transferred lamports are less than or equal to 2,439.
+Currently, all new accounts are required to be rent-exempt.
 
 ### Rent exemption
 
-Alternatively, an account can be made entirely exempt from rent collection by
-depositing at least 2 years worth of rent. This is checked every time an
-account's balance is reduced, and rent is immediately debited once the balance
-goes below the minimum amount.
+An account is considered rent-exempt if it holds at least 2 years worth of rent.
+This is checked every time an account's balance is reduced, and transactions
+that would reduce the balance to below the minimum amount will fail.
 
 Program executable accounts are required by the runtime to be rent-exempt to
 avoid being purged.

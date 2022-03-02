@@ -10,14 +10,12 @@ use {
     solana_program_test::*,
     solana_sdk::{
         account::ReadableAccount,
-        instruction::Instruction,
-        instruction::InstructionError,
+        instruction::{Instruction, InstructionError},
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
     },
-    std::borrow::Cow,
-    std::result::Result,
+    std::{borrow::Cow, result::Result},
 };
 
 mod common;

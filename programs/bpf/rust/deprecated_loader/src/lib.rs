@@ -4,8 +4,8 @@
 
 extern crate solana_program;
 use solana_program::{
-    account_info::AccountInfo, bpf_loader, entrypoint_deprecated,
-    entrypoint_deprecated::ProgramResult, log::*, msg, pubkey::Pubkey,
+    account_info::AccountInfo, bpf_loader, entrypoint_deprecated::ProgramResult, log::*, msg,
+    pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -26,7 +26,7 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     msg!(&format!("{}", info));
 }
 
-entrypoint_deprecated!(process_instruction);
+solana_program::entrypoint_deprecated!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     program_id: &Pubkey,

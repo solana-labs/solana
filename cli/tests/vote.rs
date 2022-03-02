@@ -1,8 +1,9 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     solana_cli::{
+        check_balance,
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
         spend_utils::SpendAmount,
-        test_utils::check_recent_balance,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_client::{
@@ -69,12 +70,12 @@ fn test_vote_authorize_and_withdraw() {
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())
         .unwrap()
         .max(1);
-    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+    check_balance!(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Transfer in some more SOL
     config.signers = vec![&default_signer];
     config.command = CliCommand::Transfer {
-        amount: SpendAmount::Some(1_000),
+        amount: SpendAmount::Some(10_000),
         to: vote_account_pubkey,
         from: 0,
         sign_only: false,
@@ -90,8 +91,8 @@ fn test_vote_authorize_and_withdraw() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    let expected_balance = expected_balance + 1_000;
-    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+    let expected_balance = expected_balance + 10_000;
+    check_balance!(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Authorize vote account withdrawal to another signer
     let first_withdraw_authority = Keypair::new();
@@ -169,7 +170,7 @@ fn test_vote_authorize_and_withdraw() {
     config.command = CliCommand::WithdrawFromVoteAccount {
         vote_account_pubkey,
         withdraw_authority: 1,
-        withdraw_amount: SpendAmount::Some(100),
+        withdraw_amount: SpendAmount::Some(1_000),
         destination_account_pubkey: destination_account,
         sign_only: false,
         dump_transaction_message: false,
@@ -180,9 +181,9 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let expected_balance = expected_balance - 100;
-    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
-    check_recent_balance(100, &rpc_client, &destination_account);
+    let expected_balance = expected_balance - 1_000;
+    check_balance!(expected_balance, &rpc_client, &vote_account_pubkey);
+    check_balance!(1_000, &rpc_client, &destination_account);
 
     // Re-assign validator identity
     let new_identity_keypair = Keypair::new();
@@ -212,8 +213,8 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_recent_balance(0, &rpc_client, &vote_account_pubkey);
-    check_recent_balance(expected_balance, &rpc_client, &destination_account);
+    check_balance!(0, &rpc_client, &vote_account_pubkey);
+    check_balance!(expected_balance, &rpc_client, &destination_account);
 }
 
 #[test]
@@ -247,7 +248,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         100_000,
     )
     .unwrap();
-    check_recent_balance(100_000, &rpc_client, &config_payer.signers[0].pubkey());
+    check_balance!(100_000, &rpc_client, &config_payer.signers[0].pubkey());
 
     request_and_confirm_airdrop(
         &rpc_client,
@@ -256,7 +257,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         100_000,
     )
     .unwrap();
-    check_recent_balance(100_000, &rpc_client, &config_offline.signers[0].pubkey());
+    check_balance!(100_000, &rpc_client, &config_offline.signers[0].pubkey());
 
     // Create vote account with specific withdrawer
     let vote_account_keypair = Keypair::new();
@@ -288,12 +289,12 @@ fn test_offline_vote_authorize_and_withdraw() {
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())
         .unwrap()
         .max(1);
-    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+    check_balance!(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Transfer in some more SOL
     config_payer.signers = vec![&default_signer];
     config_payer.command = CliCommand::Transfer {
-        amount: SpendAmount::Some(1_000),
+        amount: SpendAmount::Some(10_000),
         to: vote_account_pubkey,
         from: 0,
         sign_only: false,
@@ -309,8 +310,8 @@ fn test_offline_vote_authorize_and_withdraw() {
         derived_address_program_id: None,
     };
     process_command(&config_payer).unwrap();
-    let expected_balance = expected_balance + 1_000;
-    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+    let expected_balance = expected_balance + 10_000;
+    check_balance!(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Authorize vote account withdrawal to another signer, offline
     let withdraw_authority = Keypair::new();
@@ -367,7 +368,7 @@ fn test_offline_vote_authorize_and_withdraw() {
     config_offline.command = CliCommand::WithdrawFromVoteAccount {
         vote_account_pubkey,
         withdraw_authority: 1,
-        withdraw_amount: SpendAmount::Some(100),
+        withdraw_amount: SpendAmount::Some(1_000),
         destination_account_pubkey: destination_account,
         sign_only: true,
         dump_transaction_message: false,
@@ -387,7 +388,7 @@ fn test_offline_vote_authorize_and_withdraw() {
     config_payer.command = CliCommand::WithdrawFromVoteAccount {
         vote_account_pubkey,
         withdraw_authority: 1,
-        withdraw_amount: SpendAmount::Some(100),
+        withdraw_amount: SpendAmount::Some(1_000),
         destination_account_pubkey: destination_account,
         sign_only: false,
         dump_transaction_message: false,
@@ -398,9 +399,9 @@ fn test_offline_vote_authorize_and_withdraw() {
         fee_payer: 0,
     };
     process_command(&config_payer).unwrap();
-    let expected_balance = expected_balance - 100;
-    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
-    check_recent_balance(100, &rpc_client, &destination_account);
+    let expected_balance = expected_balance - 1_000;
+    check_balance!(expected_balance, &rpc_client, &vote_account_pubkey);
+    check_balance!(1_000, &rpc_client, &destination_account);
 
     // Re-assign validator identity offline
     let blockhash = rpc_client.get_latest_blockhash().unwrap();
@@ -483,9 +484,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         memo: None,
         fee_payer: 0,
     };
-    let result = process_command(&config_payer).unwrap();
-    println!("{:?}", result);
-    check_recent_balance(0, &rpc_client, &vote_account_pubkey);
-    println!("what");
-    check_recent_balance(expected_balance, &rpc_client, &destination_account);
+    process_command(&config_payer).unwrap();
+    check_balance!(0, &rpc_client, &vote_account_pubkey);
+    check_balance!(expected_balance, &rpc_client, &destination_account);
 }

@@ -6,16 +6,13 @@ use {
             v0::{self, LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage, VersionedMessage,
         },
-        nonce::NONCED_TX_MARKER_IX_INDEX,
         precompiles::verify_if_precompile,
-        program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
-    solana_program::{system_instruction::SystemInstruction, system_program},
     std::sync::Arc,
 };
 
@@ -42,6 +39,17 @@ pub struct TransactionAccountLocks<'a> {
     pub writable: Vec<&'a Pubkey>,
 }
 
+pub trait AddressLoader {
+    fn load_addresses(&self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
+}
+
+pub struct DisabledAddressLoader;
+impl AddressLoader for DisabledAddressLoader {
+    fn load_addresses(&self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
+        Err(TransactionError::UnsupportedVersion)
+    }
+}
+
 impl SanitizedTransaction {
     /// Create a sanitized transaction from an unsanitized transaction.
     /// If the input transaction uses address tables, attempt to lookup
@@ -50,7 +58,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
+        address_loader: &impl AddressLoader,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -58,12 +66,13 @@ impl SanitizedTransaction {
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
-                loaded_addresses: address_loader(&message.address_table_lookups)?,
+                loaded_addresses: address_loader.load_addresses(&message.address_table_lookups)?,
                 message,
             }),
         };
 
         let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
+            // TODO: Move to `vote_parser` runtime module
             let mut ix_iter = message.program_instructions_iter();
             ix_iter.next().map(|(program_id, _ix)| program_id) == Some(&crate::vote::program::id())
         });
@@ -147,7 +156,7 @@ impl SanitizedTransaction {
         if self.message.has_duplicates() {
             Err(TransactionError::AccountLoadedTwice)
         } else if feature_set.is_active(&feature_set::max_tx_account_locks::id())
-            && self.message.account_keys_len() > MAX_TX_ACCOUNT_LOCKS
+            && self.message.account_keys().len() > MAX_TX_ACCOUNT_LOCKS
         {
             Err(TransactionError::TooManyAccountLocks)
         } else {
@@ -158,17 +167,16 @@ impl SanitizedTransaction {
     /// Return the list of accounts that must be locked during processing this transaction.
     pub fn get_account_locks_unchecked(&self) -> TransactionAccountLocks {
         let message = &self.message;
+        let account_keys = message.account_keys();
         let num_readonly_accounts = message.num_readonly_accounts();
-        let num_writable_accounts = message
-            .account_keys_len()
-            .saturating_sub(num_readonly_accounts);
+        let num_writable_accounts = account_keys.len().saturating_sub(num_readonly_accounts);
 
         let mut account_locks = TransactionAccountLocks {
             writable: Vec::with_capacity(num_writable_accounts),
             readonly: Vec::with_capacity(num_readonly_accounts),
         };
 
-        for (i, key) in message.account_keys_iter().enumerate() {
+        for (i, key) in account_keys.iter().enumerate() {
             if message.is_writable(i) {
                 account_locks.writable.push(key);
             } else {
@@ -179,33 +187,17 @@ impl SanitizedTransaction {
         account_locks
     }
 
+    /// Return the list of addresses loaded from on-chain address lookup tables
+    pub fn get_loaded_addresses(&self) -> LoadedAddresses {
+        match &self.message {
+            SanitizedMessage::Legacy(_) => LoadedAddresses::default(),
+            SanitizedMessage::V0(message) => message.loaded_addresses.clone(),
+        }
+    }
+
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account
     pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
-        self.message
-            .instructions()
-            .get(NONCED_TX_MARKER_IX_INDEX as usize)
-            .filter(
-                |ix| match self.message.get_account_key(ix.program_id_index as usize) {
-                    Some(program_id) => system_program::check_id(program_id),
-                    _ => false,
-                },
-            )
-            .filter(|ix| {
-                matches!(
-                    limited_deserialize(&ix.data),
-                    Ok(SystemInstruction::AdvanceNonceAccount)
-                )
-            })
-            .and_then(|ix| {
-                ix.accounts.get(0).and_then(|idx| {
-                    let idx = *idx as usize;
-                    if nonce_must_be_writable && !self.message.is_writable(idx) {
-                        None
-                    } else {
-                        self.message.get_account_key(idx)
-                    }
-                })
-            })
+        self.message.get_durable_nonce(nonce_must_be_writable)
     }
 
     /// Return the serialized message data to sign.
@@ -222,7 +214,7 @@ impl SanitizedTransaction {
         if self
             .signatures
             .iter()
-            .zip(self.message.account_keys_iter())
+            .zip(self.message.account_keys().iter())
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &message_bytes))
             .any(|verified| !verified)
         {

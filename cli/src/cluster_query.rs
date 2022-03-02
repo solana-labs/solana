@@ -4,7 +4,8 @@ use {
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
-    console::{style, Emoji},
+    console::style,
+    crossbeam_channel::unbounded,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
         input_parsers::*,
@@ -15,7 +16,7 @@ use {
     solana_cli_output::{
         display::{
             build_balance_message, format_labeled_address, new_spinner_progress_bar,
-            println_name_value, println_transaction, unix_timestamp_to_string, writeln_name_value,
+            println_transaction, unix_timestamp_to_string, writeln_name_value,
         },
         *,
     },
@@ -43,13 +44,13 @@ use {
         message::Message,
         native_token::lamports_to_sol,
         nonce::State as NonceState,
-        pubkey::{self, Pubkey},
+        pubkey::Pubkey,
         rent::Rent,
         rpc_port::DEFAULT_RPC_PORT_STR,
         signature::Signature,
         slot_history,
         stake::{self, state::StakeState},
-        system_instruction, system_program,
+        system_instruction,
         sysvar::{
             self,
             slot_history::SlotHistory,
@@ -73,9 +74,6 @@ use {
     },
     thiserror::Error,
 };
-
-static CHECK_MARK: Emoji = Emoji("✅ ", "");
-static CROSS_MARK: Emoji = Emoji("❌ ", "");
 
 pub trait ClusterQuerySubCommands {
     fn cluster_query_subcommands(self) -> Self;
@@ -261,15 +259,6 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("print-timestamp")
                         .takes_value(false)
                         .help("Print timestamp (unix time + microseconds as in gettimeofday) before each line"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .default_value("1")
-                        .validator(is_amount)
-                        .help("Number of lamports to transfer for each transaction"),
                 )
                 .arg(
                     Arg::with_name("timeout")
@@ -515,7 +504,6 @@ pub fn parse_cluster_ping(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let lamports = value_t_or_exit!(matches, "lamports", u64);
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
         Some(value_t_or_exit!(matches, "count", u64))
@@ -527,7 +515,6 @@ pub fn parse_cluster_ping(
     let print_timestamp = matches.is_present("print_timestamp");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
-            lamports,
             interval,
             count,
             timeout,
@@ -1358,40 +1345,34 @@ pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig
 pub fn process_ping(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    lamports: u64,
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
 ) -> ProcessResult {
-    println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
-    println!();
-
-    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+    let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
     })
     .expect("Error setting Ctrl-C handler");
+
+    let mut cli_pings = vec![];
 
     let mut submit_count = 0;
     let mut confirmed_count = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
     let mut blockhash = rpc_client.get_latest_blockhash()?;
-    let mut blockhash_transaction_count = 0;
+    let mut lamports = 0;
     let mut blockhash_acquired = Instant::now();
+    let mut blockhash_from_cluster = false;
     if let Some(fixed_blockhash) = fixed_blockhash {
-        let blockhash_origin = if *fixed_blockhash != Hash::default() {
+        if *fixed_blockhash != Hash::default() {
             blockhash = *fixed_blockhash;
-            "supplied from cli arguments"
         } else {
-            "fetched from cluster"
-        };
-        println!(
-            "Fixed blockhash is used: {} ({})",
-            blockhash, blockhash_origin
-        );
+            blockhash_from_cluster = true;
+        }
     }
     'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
         let now = Instant::now();
@@ -1399,15 +1380,12 @@ pub fn process_ping(
             // Fetch a new blockhash every minute
             let new_blockhash = rpc_client.get_new_latest_blockhash(&blockhash)?;
             blockhash = new_blockhash;
-            blockhash_transaction_count = 0;
+            lamports = 0;
             blockhash_acquired = Instant::now();
         }
 
-        let seed =
-            &format!("{}{}", blockhash_transaction_count, blockhash)[0..pubkey::MAX_SEED_LEN];
-        let to = Pubkey::create_with_seed(&config.signers[0].pubkey(), seed, &system_program::id())
-            .unwrap();
-        blockhash_transaction_count += 1;
+        let to = config.signers[0].pubkey();
+        lamports += 1;
 
         let build_message = |lamports| {
             let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
@@ -1430,11 +1408,7 @@ pub fn process_ping(
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_micros();
-            if print_timestamp {
-                format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
-            } else {
-                String::new()
-            }
+            format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
         };
 
         match rpc_client.send_transaction(&tx) {
@@ -1448,35 +1422,51 @@ pub fn process_ping(
                             Ok(()) => {
                                 let elapsed_time_millis = elapsed_time.as_millis() as u64;
                                 confirmation_time.push_back(elapsed_time_millis);
-                                println!(
-                                    "{}{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
-                                    timestamp(),
-                                    CHECK_MARK, lamports, seq, elapsed_time_millis, signature
-                                );
+                                let cli_ping_data = CliPingData {
+                                    success: true,
+                                    signature: Some(signature.to_string()),
+                                    ms: Some(elapsed_time_millis),
+                                    error: None,
+                                    timestamp: timestamp(),
+                                    print_timestamp,
+                                    sequence: seq,
+                                    lamports: Some(lamports),
+                                };
+                                eprint!("{}", cli_ping_data);
+                                cli_pings.push(cli_ping_data);
                                 confirmed_count += 1;
                             }
                             Err(err) => {
-                                println!(
-                                    "{}{}Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    timestamp(),
-                                    CROSS_MARK,
-                                    seq,
-                                    err,
-                                    signature
-                                );
+                                let cli_ping_data = CliPingData {
+                                    success: false,
+                                    signature: Some(signature.to_string()),
+                                    ms: None,
+                                    error: Some(err.to_string()),
+                                    timestamp: timestamp(),
+                                    print_timestamp,
+                                    sequence: seq,
+                                    lamports: None,
+                                };
+                                eprint!("{}", cli_ping_data);
+                                cli_pings.push(cli_ping_data);
                             }
                         }
                         break;
                     }
 
                     if elapsed_time >= *timeout {
-                        println!(
-                            "{}{}Confirmation timeout:  seq={:<3}             signature={}",
-                            timestamp(),
-                            CROSS_MARK,
-                            seq,
-                            signature
-                        );
+                        let cli_ping_data = CliPingData {
+                            success: false,
+                            signature: Some(signature.to_string()),
+                            ms: None,
+                            error: None,
+                            timestamp: timestamp(),
+                            print_timestamp,
+                            sequence: seq,
+                            lamports: None,
+                        };
+                        eprint!("{}", cli_ping_data);
+                        cli_pings.push(cli_ping_data);
                         break;
                     }
 
@@ -1490,13 +1480,18 @@ pub fn process_ping(
                 }
             }
             Err(err) => {
-                println!(
-                    "{}{}Submit failed:         seq={:<3} error={:?}",
-                    timestamp(),
-                    CROSS_MARK,
-                    seq,
-                    err
-                );
+                let cli_ping_data = CliPingData {
+                    success: false,
+                    signature: None,
+                    ms: None,
+                    error: Some(err.to_string()),
+                    timestamp: timestamp(),
+                    print_timestamp,
+                    sequence: seq,
+                    lamports: None,
+                };
+                eprint!("{}", cli_ping_data);
+                cli_pings.push(cli_ping_data);
             }
         }
         submit_count += 1;
@@ -1506,28 +1501,34 @@ pub fn process_ping(
         }
     }
 
-    println!();
-    println!("--- transaction statistics ---");
-    println!(
-        "{} transactions submitted, {} transactions confirmed, {:.1}% transaction loss",
-        submit_count,
-        confirmed_count,
-        (100. - f64::from(confirmed_count) / f64::from(submit_count) * 100.)
-    );
-    if !confirmation_time.is_empty() {
+    let transaction_stats = CliPingTxStats {
+        num_transactions: submit_count,
+        num_transaction_confirmed: confirmed_count,
+    };
+    let confirmation_stats = if !confirmation_time.is_empty() {
         let samples: Vec<f64> = confirmation_time.iter().map(|t| *t as f64).collect();
         let dist = criterion_stats::Distribution::from(samples.into_boxed_slice());
         let mean = dist.mean();
-        println!(
-            "confirmation min/mean/max/stddev = {:.0}/{:.0}/{:.0}/{:.0} ms",
-            dist.min(),
+        Some(CliPingConfirmationStats {
+            min: dist.min(),
             mean,
-            dist.max(),
-            dist.std_dev(Some(mean))
-        );
-    }
+            max: dist.max(),
+            std_dev: dist.std_dev(Some(mean)),
+        })
+    } else {
+        None
+    };
 
-    Ok("".to_string())
+    let cli_ping = CliPing {
+        source_pubkey: config.signers[0].pubkey().to_string(),
+        fixed_blockhash: fixed_blockhash.map(|_| blockhash.to_string()),
+        blockhash_from_cluster,
+        pings: cli_pings,
+        transaction_stats,
+        confirmation_stats,
+    };
+
+    Ok(config.output_format.formatted_string(&cli_ping))
 }
 
 pub fn parse_logs(
@@ -2304,7 +2305,6 @@ mod tests {
             parse_command(&test_ping, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Ping {
-                    lamports: 1,
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),

@@ -59,6 +59,9 @@ pub const MAX_BLOCK_UNITS: u64 =
 /// limit is to prevent too many transactions write to same account, therefore
 /// reduce block's parallelism.
 pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO;
+/// Number of compute units that a block can have for vote transactions,
+/// sets at ~75% of MAX_BLOCK_UNITS to leave room for non-vote transactions
+pub const MAX_VOTE_UNITS: u64 = (MAX_BLOCK_UNITS as f64 * 0.75_f64) as u64;
 
 /// max length of account data in a slot (bytes)
 pub const MAX_ACCOUNT_DATA_LEN: u64 = 100_000_000;

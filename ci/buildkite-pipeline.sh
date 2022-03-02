@@ -102,6 +102,8 @@ command_step() {
     command: "$2"
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
+    agents:
+      - "queue=solana"
 EOF
 }
 
@@ -168,7 +170,7 @@ all_test_steps() {
     timeout_in_minutes: 20
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
-      - "queue=default"
+      - "queue=solana"
 EOF
   else
     annotate --style info \
@@ -221,10 +223,39 @@ EOF
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
     timeout_in_minutes: 30
+    agents:
+      - "queue=solana"
 EOF
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
+  fi
+
+  # Downstream Anchor projects backwards compatibility
+  if affects \
+             .rs$ \
+             Cargo.lock$ \
+             Cargo.toml$ \
+             ^ci/rust-version.sh \
+             ^ci/test-stable-perf.sh \
+             ^ci/test-stable.sh \
+             ^ci/test-local-cluster.sh \
+             ^core/build.rs \
+             ^fetch-perf-libs.sh \
+             ^programs/ \
+             ^sdk/ \
+             ^scripts/build-downstream-anchor-projects.sh \
+      ; then
+    cat >> "$output_file" <<"EOF"
+  - command: "scripts/build-downstream-anchor-projects.sh"
+    name: "downstream-anchor-projects"
+    timeout_in_minutes: 10
+    agents:
+      - "queue=solana"
+EOF
+  else
+    annotate --style info \
+      "downstream-anchor-projects skipped as no relevant files were modified"
   fi
 
   # Wasm support

@@ -249,7 +249,13 @@ const FilterDropdown = ({
     filterOptions.push({ name, programId, transactionCount });
   });
 
-  filterOptions.sort();
+  filterOptions.sort((a, b) => {
+    if (a.transactionCount !== b.transactionCount) {
+      return b.transactionCount - a.transactionCount;
+    } else {
+      return b.name > a.name ? -1 : 1;
+    }
+  });
 
   return (
     <div className="dropdown me-2">

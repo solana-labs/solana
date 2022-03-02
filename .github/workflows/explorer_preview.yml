@@ -20,3 +20,33 @@ jobs:
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
           working-directory: ./explorer
           scope: ${{ secrets.TEAM_ID }}
+     
+      - name: vercel url
+        run : |
+              touch vercelfile.txt
+              vercel --token ${{secrets.VERCEL_TOKEN}}  ls explorer --scope team_8A2WD7p4uR7tmKX9M68loHXI > vercelfile.txt
+              touch vercelfile1.txt
+              head -n 2 vercelfile.txt > vercelfile1.txt
+              touch vercelfile2.txt
+              tail -n 1 vercelfile1.txt > vercelfile2.txt
+              filtered_url7=$(cut -f7 -d" " vercelfile2.txt)
+              echo "filtered_url7 is: $filtered_url7" 
+              touch .env.preview1
+              echo "$filtered_url7" > .env.preview1
+              #filtered_url=$(cat vercelfile2.txt )
+              #echo "$filtered_url" >> .env.preview1 
+
+
+      - name: Run tests
+        uses: mathiasvr/command-output@v1
+        id: tests2
+        with:
+          run: |
+               echo "$(cat .env.preview1)"
+      
+      - name: Slack Notification1
+        uses: rtCamp/action-slack-notify@master
+        env:
+         SLACK_MESSAGE: ${{ steps.tests2.outputs.stdout }}
+         SLACK_TITLE: Vercel "Explorer" Preview Deployment Link
+         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

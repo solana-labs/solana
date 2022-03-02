@@ -7,7 +7,7 @@ source multinode-demo/common.sh
 
 rm -rf config/run/init-completed config/ledger config/snapshot-ledger
 
-SOLANA_RUN_SH_VALIDATOR_ARGS="--snapshot-interval-slots 200" timeout 120 ./scripts/run.sh &
+SOLANA_RUN_SH_VALIDATOR_ARGS="--full-snapshot-interval-slots 200" timeout 120 ./scripts/run.sh &
 pid=$!
 
 attempts=20

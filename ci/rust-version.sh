@@ -18,13 +18,13 @@
 if [[ -n $RUST_STABLE_VERSION ]]; then
   stable_version="$RUST_STABLE_VERSION"
 else
-  stable_version=1.57.0
+  stable_version=1.59.0
 fi
 
 if [[ -n $RUST_NIGHTLY_VERSION ]]; then
   nightly_version="$RUST_NIGHTLY_VERSION"
 else
-  nightly_version=2021-12-03
+  nightly_version=2022-02-24
 fi
 
 

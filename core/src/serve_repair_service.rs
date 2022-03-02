@@ -1,15 +1,12 @@
 use {
     crate::serve_repair::ServeRepair,
+    crossbeam_channel::{unbounded, Sender},
     solana_ledger::blockstore::Blockstore,
     solana_perf::recycler::Recycler,
     solana_streamer::{socket::SocketAddrSpace, streamer},
     std::{
         net::UdpSocket,
-        sync::{
-            atomic::AtomicBool,
-            mpsc::{channel, Sender},
-            Arc, RwLock,
-        },
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, JoinHandle},
     },
 };
@@ -27,7 +24,7 @@ impl ServeRepairService {
         stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = channel();
+        let (request_sender, request_receiver) = unbounded();
         let serve_repair_socket = Arc::new(serve_repair_socket);
         trace!(
             "ServeRepairService: id: {}, listening on: {:?}",
@@ -43,7 +40,7 @@ impl ServeRepairService {
             1,
             false,
         );
-        let (response_sender, response_receiver) = channel();
+        let (response_sender, response_receiver) = unbounded();
         let t_responder = streamer::responder(
             "serve-repairs",
             serve_repair_socket,

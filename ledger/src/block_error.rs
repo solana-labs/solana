@@ -16,7 +16,7 @@ pub enum BlockError {
     InvalidLastTick,
 
     /// Blocks can not have missing ticks
-    /// Usually indicates that the node was interruppted with a more valuable block during
+    /// Usually indicates that the node was interrupted with a more valuable block during
     /// production and abandoned it for that more-favorable block. Leader sent data to indicate
     /// the end of the block.
     #[error("too few ticks")]

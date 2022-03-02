@@ -9,10 +9,7 @@ use {
         },
         vote_stake_tracker::VoteStakeTracker,
     },
-    crossbeam_channel::{
-        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select,
-        Sender as CrossbeamSender,
-    },
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
@@ -28,8 +25,13 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-        bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-        epoch_stakes::EpochStakes, vote_sender_types::ReplayVoteReceiver,
+        bank::Bank,
+        bank_forks::BankForks,
+        commitment::VOTE_THRESHOLD_SIZE,
+        epoch_stakes::EpochStakes,
+        vote_parser::{self, ParsedVote},
+        vote_sender_types::ReplayVoteReceiver,
+        vote_transaction::VoteTransaction,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -38,10 +40,6 @@ use {
         signature::Signature,
         slot_hashes,
         transaction::Transaction,
-    },
-    solana_vote_program::{
-        vote_state::VoteTransaction,
-        vote_transaction::{self, ParsedVote},
     },
     std::{
         collections::{HashMap, HashSet},
@@ -57,16 +55,16 @@ use {
 
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<VerifiedVoteMetadata>>;
-pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<VerifiedVoteMetadata>>;
-pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
-pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
-pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
-pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
-pub type GossipVerifiedVoteHashSender = CrossbeamSender<(Pubkey, Slot, Hash)>;
-pub type GossipVerifiedVoteHashReceiver = CrossbeamReceiver<(Pubkey, Slot, Hash)>;
-pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
-pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
+pub type VerifiedLabelVotePacketsSender = Sender<Vec<VerifiedVoteMetadata>>;
+pub type VerifiedLabelVotePacketsReceiver = Receiver<Vec<VerifiedVoteMetadata>>;
+pub type VerifiedVoteTransactionsSender = Sender<Vec<Transaction>>;
+pub type VerifiedVoteTransactionsReceiver = Receiver<Vec<Transaction>>;
+pub type VerifiedVoteSender = Sender<(Pubkey, Vec<Slot>)>;
+pub type VerifiedVoteReceiver = Receiver<(Pubkey, Vec<Slot>)>;
+pub type GossipVerifiedVoteHashSender = Sender<(Pubkey, Slot, Hash)>;
+pub type GossipVerifiedVoteHashReceiver = Receiver<(Pubkey, Slot, Hash)>;
+pub type GossipDuplicateConfirmedSlotsSender = Sender<ThresholdConfirmedSlots>;
+pub type GossipDuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
@@ -102,12 +100,6 @@ pub struct VoteTracker {
 }
 
 impl VoteTracker {
-    pub(crate) fn new(root_bank: &Bank) -> Self {
-        let vote_tracker = VoteTracker::default();
-        vote_tracker.progress_with_new_root_bank(root_bank);
-        vote_tracker
-    }
-
     fn get_or_insert_slot_tracker(&self, slot: Slot) -> Arc<RwLock<SlotVoteTracker>> {
         if let Some(slot_vote_tracker) = self.slot_vote_trackers.read().unwrap().get(&slot) {
             return slot_vote_tracker.clone();
@@ -198,7 +190,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: CrossbeamSender<Vec<PacketBatch>>,
+        verified_packets_sender: Sender<Vec<PacketBatch>>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -299,7 +291,11 @@ impl ClusterInfoVoteListener {
         let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
-        sigverify::ed25519_verify_cpu(&mut packet_batches, /*reject_non_vote=*/ false);
+        sigverify::ed25519_verify_cpu(
+            &mut packet_batches,
+            /*reject_non_vote=*/ false,
+            votes.len(),
+        );
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch_schedule = root_bank.epoch_schedule();
         votes
@@ -311,7 +307,7 @@ impl ClusterInfoVoteListener {
                 !packet_batch.packets[0].meta.discard()
             })
             .filter_map(|(tx, packet_batch)| {
-                let (vote_account_key, vote, _) = vote_transaction::parse_vote_transaction(&tx)?;
+                let (vote_account_key, vote, _) = vote_parser::parse_vote_transaction(&tx)?;
                 let slot = vote.last_voted_slot()?;
                 let epoch = epoch_schedule.get_epoch(slot);
                 let authorized_voter = root_bank
@@ -337,7 +333,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
+        verified_packets_sender: &Sender<Vec<PacketBatch>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -358,8 +354,8 @@ impl ClusterInfoVoteListener {
                 would_be_leader,
             ) {
                 match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected)
-                    | Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => (),
+                    Error::RecvTimeout(RecvTimeoutError::Disconnected)
+                    | Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
@@ -385,7 +381,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
+        verified_packets_sender: &Sender<Vec<PacketBatch>>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -489,7 +485,7 @@ impl ClusterInfoVoteListener {
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
                 }
                 Err(e) => match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => {
+                    Error::RecvTimeout(RecvTimeoutError::Disconnected) => {
                         return Ok(());
                     }
                     Error::ReadyTimeout => (),
@@ -538,17 +534,14 @@ impl ClusterInfoVoteListener {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
         sel.recv(replay_votes_receiver);
-        let mut remaining_wait_time = 200;
-        loop {
-            if remaining_wait_time == 0 {
-                break;
-            }
+        let mut remaining_wait_time = Duration::from_millis(200);
+        while remaining_wait_time > Duration::ZERO {
             let start = Instant::now();
             // Wait for one of the receivers to be ready. `ready_timeout`
             // will return if channels either have something, or are
             // disconnected. `ready_timeout` can wake up spuriously,
             // hence the loop
-            let _ = sel.ready_timeout(Duration::from_millis(remaining_wait_time))?;
+            let _ = sel.ready_timeout(remaining_wait_time)?;
 
             // Should not early return from this point onwards until `process_votes()`
             // returns below to avoid missing any potential `optimistic_confirmed_slots`
@@ -566,10 +559,8 @@ impl ClusterInfoVoteListener {
                     bank_notification_sender,
                     cluster_confirmed_slot_sender,
                 ));
-            } else {
-                remaining_wait_time = remaining_wait_time
-                    .saturating_sub(std::cmp::max(start.elapsed().as_millis() as u64, 1));
             }
+            remaining_wait_time = remaining_wait_time.saturating_sub(start.elapsed());
         }
         Ok(vec![])
     }
@@ -612,6 +603,9 @@ impl ClusterInfoVoteListener {
 
             // The last vote slot, which is the greatest slot in the stack
             // of votes in a vote transaction, qualifies for optimistic confirmation.
+            // We cannot count any other slots in this vote toward optimistic confirmation because:
+            // 1) There may have been a switch between the earlier vote and the last vote
+            // 2) We do not know the hash of the earlier slot
             if slot == last_vote_slot {
                 let vote_accounts = epoch_stakes.stakes().vote_accounts();
                 let stake = vote_accounts
@@ -683,7 +677,7 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(vote);
+            subscriptions.notify_vote(*vote_pubkey, vote);
             let _ = verified_vote_sender.send((*vote_pubkey, vote_slots));
         }
     }
@@ -705,7 +699,7 @@ impl ClusterInfoVoteListener {
         // Process votes from gossip and ReplayStage
         let votes = gossip_vote_txs
             .iter()
-            .filter_map(vote_transaction::parse_vote_transaction)
+            .filter_map(vote_parser::parse_vote_transaction)
             .zip(repeat(/*is_gossip:*/ true))
             .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
         for ((vote_pubkey, vote, _), is_gossip) in votes {
@@ -823,7 +817,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
         },
-        solana_vote_program::vote_state::Vote,
+        solana_vote_program::{vote_state::Vote, vote_transaction},
         std::{
             collections::BTreeSet,
             iter::repeat_with,
@@ -1369,7 +1363,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
-        let vote_tracker = VoteTracker::new(&bank);
+        let vote_tracker = VoteTracker::default();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -1476,7 +1470,7 @@ mod tests {
                 vec![100; validator_voting_keypairs.len()],
             );
         let bank = Bank::new_for_tests(&genesis_config);
-        let vote_tracker = VoteTracker::new(&bank);
+        let vote_tracker = VoteTracker::default();
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().get(0).unwrap().clone();

@@ -3,7 +3,7 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     serde_json::json,
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
+    solana_sdk::{instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey},
 };
 
 // A helper function to convert spl_associated_token_account::id() as spl_sdk::pubkey::Pubkey
@@ -14,7 +14,7 @@ pub fn spl_associated_token_id() -> Pubkey {
 
 pub fn parse_associated_token(
     instruction: &CompiledInstruction,
-    account_keys: &[Pubkey],
+    account_keys: &AccountKeys,
 ) -> Result<ParsedInstructionEnum, ParseInstructionError> {
     match instruction.accounts.iter().max() {
         Some(index) if (*index as usize) < account_keys.len() => {}
@@ -88,8 +88,9 @@ mod test {
         );
         let message = Message::new(&[create_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let account_keys = AccountKeys::new(&keys, None);
         assert_eq!(
-            parse_associated_token(&compiled_instruction, &keys).unwrap(),
+            parse_associated_token(&compiled_instruction, &account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "create".to_string(),
                 info: json!({

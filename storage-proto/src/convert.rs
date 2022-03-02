@@ -4,14 +4,19 @@ use {
     solana_sdk::{
         hash::Hash,
         instruction::{CompiledInstruction, InstructionError},
-        message::{Message, MessageHeader},
+        message::{
+            legacy::Message as LegacyMessage,
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            MessageHeader, VersionedMessage,
+        },
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{Transaction, TransactionError},
+        transaction::{Transaction, TransactionError, VersionedTransaction},
     },
     solana_transaction_status::{
         ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
         TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
+        VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
     },
     std::{
         convert::{TryFrom, TryInto},
@@ -111,9 +116,9 @@ impl From<generated::Reward> for Reward {
     }
 }
 
-impl From<ConfirmedBlock> for generated::ConfirmedBlock {
-    fn from(confirmed_block: ConfirmedBlock) -> Self {
-        let ConfirmedBlock {
+impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
+    fn from(confirmed_block: VersionedConfirmedBlock) -> Self {
+        let VersionedConfirmedBlock {
             previous_blockhash,
             blockhash,
             parent_slot,
@@ -157,7 +162,7 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
             transactions: transactions
                 .into_iter()
                 .map(|tx| tx.try_into())
-                .collect::<std::result::Result<Vec<TransactionWithStatusMeta>, Self::Error>>()?,
+                .collect::<std::result::Result<Vec<_>, Self::Error>>()?,
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
             block_time: block_time.map(|generated::UnixTimestamp { timestamp }| timestamp),
             block_height: block_height.map(|generated::BlockHeight { block_height }| block_height),
@@ -166,11 +171,22 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
 }
 
 impl From<TransactionWithStatusMeta> for generated::ConfirmedTransaction {
-    fn from(value: TransactionWithStatusMeta) -> Self {
-        let meta = value.meta.map(|meta| meta.into());
+    fn from(tx_with_meta: TransactionWithStatusMeta) -> Self {
+        match tx_with_meta {
+            TransactionWithStatusMeta::MissingMetadata(transaction) => Self {
+                transaction: Some(generated::Transaction::from(transaction)),
+                meta: None,
+            },
+            TransactionWithStatusMeta::Complete(tx_with_meta) => Self::from(tx_with_meta),
+        }
+    }
+}
+
+impl From<VersionedTransactionWithStatusMeta> for generated::ConfirmedTransaction {
+    fn from(value: VersionedTransactionWithStatusMeta) -> Self {
         Self {
             transaction: Some(value.transaction.into()),
-            meta,
+            meta: Some(value.meta.into()),
         }
     }
 }
@@ -179,9 +195,14 @@ impl TryFrom<generated::ConfirmedTransaction> for TransactionWithStatusMeta {
     type Error = bincode::Error;
     fn try_from(value: generated::ConfirmedTransaction) -> std::result::Result<Self, Self::Error> {
         let meta = value.meta.map(|meta| meta.try_into()).transpose()?;
-        Ok(Self {
-            transaction: value.transaction.expect("transaction is required").into(),
-            meta,
+        let transaction = value.transaction.expect("transaction is required").into();
+        Ok(match meta {
+            Some(meta) => Self::Complete(VersionedTransactionWithStatusMeta { transaction, meta }),
+            None => Self::MissingMetadata(
+                transaction
+                    .into_legacy_transaction()
+                    .expect("meta is required for versioned transactions"),
+            ),
         })
     }
 }
@@ -199,7 +220,20 @@ impl From<Transaction> for generated::Transaction {
     }
 }
 
-impl From<generated::Transaction> for Transaction {
+impl From<VersionedTransaction> for generated::Transaction {
+    fn from(value: VersionedTransaction) -> Self {
+        Self {
+            signatures: value
+                .signatures
+                .into_iter()
+                .map(|signature| <Signature as AsRef<[u8]>>::as_ref(&signature).into())
+                .collect(),
+            message: Some(value.message.into()),
+        }
+    }
+}
+
+impl From<generated::Transaction> for VersionedTransaction {
     fn from(value: generated::Transaction) -> Self {
         Self {
             signatures: value
@@ -212,32 +246,86 @@ impl From<generated::Transaction> for Transaction {
     }
 }
 
-impl From<Message> for generated::Message {
-    fn from(value: Message) -> Self {
+impl From<LegacyMessage> for generated::Message {
+    fn from(message: LegacyMessage) -> Self {
         Self {
-            header: Some(value.header.into()),
-            account_keys: value
+            header: Some(message.header.into()),
+            account_keys: message
                 .account_keys
-                .into_iter()
-                .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+                .iter()
+                .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(key).into())
                 .collect(),
-            recent_blockhash: value.recent_blockhash.to_bytes().into(),
-            instructions: value.instructions.into_iter().map(|ix| ix.into()).collect(),
+            recent_blockhash: message.recent_blockhash.to_bytes().into(),
+            instructions: message
+                .instructions
+                .into_iter()
+                .map(|ix| ix.into())
+                .collect(),
+            versioned: false,
+            address_table_lookups: vec![],
         }
     }
 }
 
-impl From<generated::Message> for Message {
+impl From<VersionedMessage> for generated::Message {
+    fn from(message: VersionedMessage) -> Self {
+        match message {
+            VersionedMessage::Legacy(message) => Self::from(message),
+            VersionedMessage::V0(message) => Self {
+                header: Some(message.header.into()),
+                account_keys: message
+                    .account_keys
+                    .iter()
+                    .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(key).into())
+                    .collect(),
+                recent_blockhash: message.recent_blockhash.to_bytes().into(),
+                instructions: message
+                    .instructions
+                    .into_iter()
+                    .map(|ix| ix.into())
+                    .collect(),
+                versioned: true,
+                address_table_lookups: message
+                    .address_table_lookups
+                    .into_iter()
+                    .map(|lookup| lookup.into())
+                    .collect(),
+            },
+        }
+    }
+}
+
+impl From<generated::Message> for VersionedMessage {
     fn from(value: generated::Message) -> Self {
-        Self {
-            header: value.header.expect("header is required").into(),
-            account_keys: value
-                .account_keys
-                .into_iter()
-                .map(|key| Pubkey::new(&key))
-                .collect(),
-            recent_blockhash: Hash::new(&value.recent_blockhash),
-            instructions: value.instructions.into_iter().map(|ix| ix.into()).collect(),
+        let header = value.header.expect("header is required").into();
+        let account_keys = value
+            .account_keys
+            .into_iter()
+            .map(|key| Pubkey::new(&key))
+            .collect();
+        let recent_blockhash = Hash::new(&value.recent_blockhash);
+        let instructions = value.instructions.into_iter().map(|ix| ix.into()).collect();
+        let address_table_lookups = value
+            .address_table_lookups
+            .into_iter()
+            .map(|lookup| lookup.into())
+            .collect();
+
+        if !value.versioned {
+            Self::Legacy(LegacyMessage {
+                header,
+                account_keys,
+                recent_blockhash,
+                instructions,
+            })
+        } else {
+            Self::V0(v0::Message {
+                header,
+                account_keys,
+                recent_blockhash,
+                instructions,
+                address_table_lookups,
+            })
         }
     }
 }
@@ -274,6 +362,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_addresses,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -304,6 +393,16 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             .into_iter()
             .map(|reward| reward.into())
             .collect();
+        let loaded_writable_addresses = loaded_addresses
+            .writable
+            .into_iter()
+            .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+            .collect();
+        let loaded_readonly_addresses = loaded_addresses
+            .readonly
+            .into_iter()
+            .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+            .collect();
 
         Self {
             err,
@@ -317,6 +416,8 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_writable_addresses,
+            loaded_readonly_addresses,
         }
     }
 }
@@ -344,6 +445,8 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_writable_addresses,
+            loaded_readonly_addresses,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -377,6 +480,16 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
                 .collect(),
         );
         let rewards = Some(rewards.into_iter().map(|reward| reward.into()).collect());
+        let loaded_addresses = LoadedAddresses {
+            writable: loaded_writable_addresses
+                .into_iter()
+                .map(|key| Pubkey::new(&key))
+                .collect(),
+            readonly: loaded_readonly_addresses
+                .into_iter()
+                .map(|key| Pubkey::new(&key))
+                .collect(),
+        };
         Ok(Self {
             status,
             fee,
@@ -387,6 +500,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_addresses,
         })
     }
 }
@@ -449,6 +563,26 @@ impl From<generated::TokenBalance> for TransactionTokenBalance {
                 },
             },
             owner: value.owner,
+        }
+    }
+}
+
+impl From<MessageAddressTableLookup> for generated::MessageAddressTableLookup {
+    fn from(lookup: MessageAddressTableLookup) -> Self {
+        Self {
+            account_key: <Pubkey as AsRef<[u8]>>::as_ref(&lookup.account_key).into(),
+            writable_indexes: lookup.writable_indexes,
+            readonly_indexes: lookup.readonly_indexes,
+        }
+    }
+}
+
+impl From<generated::MessageAddressTableLookup> for MessageAddressTableLookup {
+    fn from(value: generated::MessageAddressTableLookup) -> Self {
+        Self {
+            account_key: Pubkey::new(&value.account_key),
+            writable_indexes: value.writable_indexes,
+            readonly_indexes: value.readonly_indexes,
         }
     }
 }
@@ -537,6 +671,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     48 => InstructionError::UnsupportedSysvar,
                     49 => InstructionError::IllegalOwner,
                     50 => InstructionError::AccountsDataBudgetExceeded,
+                    51 => InstructionError::ActiveVoteAccountClose,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -574,6 +709,8 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             24 => TransactionError::InvalidAddressLookupTableOwner,
             25 => TransactionError::InvalidAddressLookupTableData,
             26 => TransactionError::InvalidAddressLookupTableIndex,
+            27 => TransactionError::InvalidRentPayingAccount,
+            28 => TransactionError::WouldExceedMaxVoteCostLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -661,6 +798,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::InvalidAddressLookupTableIndex => {
                     tx_by_addr::TransactionErrorType::InvalidAddressLookupTableIndex
+                }
+                TransactionError::InvalidRentPayingAccount => {
+                    tx_by_addr::TransactionErrorType::InvalidRentPayingAccount
+                }
+                TransactionError::WouldExceedMaxVoteCostLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedMaxVoteCostLimit
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -818,6 +961,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::AccountsDataBudgetExceeded => {
                                 tx_by_addr::InstructionErrorType::AccountsDataBudgetExceeded
+                            }
+                            InstructionError::ActiveVoteAccountClose => {
+                                tx_by_addr::InstructionErrorType::ActiveVoteAccountClose
                             }
                         } as i32,
                         custom: match instruction_error {
@@ -1069,6 +1215,14 @@ mod test {
         );
 
         let transaction_error = TransactionError::WouldExceedMaxBlockCostLimit;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::WouldExceedMaxVoteCostLimit;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

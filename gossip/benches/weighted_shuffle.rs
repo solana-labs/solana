@@ -32,8 +32,9 @@ fn bench_weighted_shuffle_new(bencher: &mut Bencher) {
     let weights = make_weights(&mut rng);
     bencher.iter(|| {
         rng.fill(&mut seed[..]);
-        WeightedShuffle::new(&mut ChaChaRng::from_seed(seed), &weights)
-            .unwrap()
+        let shuffle = WeightedShuffle::new(&weights).unwrap();
+        shuffle
+            .shuffle(&mut ChaChaRng::from_seed(seed))
             .collect::<Vec<_>>()
     });
 }

@@ -1,3 +1,14 @@
+//! A future Solana message format.
+//!
+//! This crate defines two versions of `Message` in their own modules:
+//! [`legacy`] and [`v0`]. `legacy` is the current version as of Solana 1.10.0.
+//! `v0` is a [future message format] that encodes more account keys into a
+//! transaction than the legacy format.
+//!
+//! [`legacy`]: crate::message::legacy
+//! [`v0`]: crate::message::v0
+//! [future message format]: https://docs.solana.com/proposals/transactions-v2
+
 use crate::{
     hash::Hash,
     instruction::CompiledInstruction,
@@ -26,8 +37,14 @@ pub struct MessageAddressTableLookup {
     pub readonly_indexes: Vec<u8>,
 }
 
-/// Transaction message format which supports succinct account loading with
+/// A Solana transaction message (v0).
+///
+/// This message format supports succinct account loading with
 /// on-chain address lookup tables.
+///
+/// See the [`message`] module documentation for further description.
+///
+/// [`message`]: crate::message
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {

@@ -90,7 +90,7 @@ fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Tra
 }
 
 fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Transaction]) {
-    for transaction in transactions.to_owned() {
+    for transaction in transactions.iter().cloned() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
     for _ in 0..1_000_000_000_u64 {
@@ -123,9 +123,14 @@ fn do_bench_transactions(
 ) {
     solana_logger::setup();
     let ns_per_s = 1_000_000_000;
-    let (mut genesis_config, mint_keypair) = create_genesis_config(100_000_000);
+    let (mut genesis_config, mint_keypair) = create_genesis_config(100_000_000_000_000);
     genesis_config.ticks_per_slot = 100;
-    let mut bank = Bank::new_for_benches(&genesis_config);
+
+    let bank = Bank::new_for_benches(&genesis_config);
+    // freeze bank so that slot hashes is populated
+    bank.freeze();
+
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 1);
     bank.add_builtin(
         "builtin_program",
         &Pubkey::new(&BUILTIN_PROGRAM_ID),

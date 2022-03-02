@@ -5,10 +5,6 @@ title: Command Line Wallets
 Solana supports several different types of wallets that can be used to interface
 directly with the Solana command-line tools.
 
-**If you are unfamiliar with using command line programs and just want to be able
-to send and receive SOL tokens, we recommend setting up a third-party
-[App Wallet](apps.md)**.
-
 To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
 
 ## File System Wallet
@@ -43,11 +39,7 @@ regenerate a keypair on demand.
 In terms of convenience versus security, a paper wallet sits at the opposite
 side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
 offers excellent security. That high security is further amplified when paper
-wallets are used in conjunction with
-[offline signing](../offline-signing.md). Custody services such as
-[Coinbase Custody](https://custody.coinbase.com/) use this combination.
-Paper wallets and custody services are an excellent way to secure a large number
-of tokens for a long period of time.
+wallets are used in conjunction with [offline signing](../offline-signing.md).
 
 [Paper Wallets](paper-wallet.md)
 

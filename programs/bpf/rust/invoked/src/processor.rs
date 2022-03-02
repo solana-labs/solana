@@ -2,20 +2,22 @@
 
 #![cfg(feature = "program")]
 
-use crate::instructions::*;
-use solana_program::{
-    account_info::AccountInfo,
-    bpf_loader, entrypoint,
-    entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
-    log::sol_log_64,
-    msg,
-    program::{get_return_data, invoke, invoke_signed, set_return_data},
-    program_error::ProgramError,
-    pubkey::Pubkey,
-    system_instruction,
+use {
+    crate::instructions::*,
+    solana_program::{
+        account_info::AccountInfo,
+        bpf_loader,
+        entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
+        log::sol_log_64,
+        msg,
+        program::{get_return_data, invoke, invoke_signed, set_return_data},
+        program_error::ProgramError,
+        pubkey::Pubkey,
+        system_instruction,
+    },
 };
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 #[allow(clippy::cognitive_complexity)]
 fn process_instruction(
     program_id: &Pubkey,

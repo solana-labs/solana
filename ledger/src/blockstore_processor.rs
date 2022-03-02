@@ -14,7 +14,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
@@ -28,10 +28,12 @@ use {
         bank_utils,
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
+        cost_model::CostModel,
         snapshot_config::SnapshotConfig,
         snapshot_package::{AccountsPackageSender, SnapshotType},
         snapshot_utils::{self, BankFromArchiveTimings},
         transaction_batch::TransactionBatch,
+        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccount,
         vote_sender_types::ReplayVoteSender,
     },
@@ -52,6 +54,7 @@ use {
         collect_token_balances, TransactionTokenBalancesSet,
     },
     std::{
+        borrow::Cow,
         cell::RefCell,
         collections::{HashMap, HashSet},
         path::PathBuf,
@@ -63,7 +66,7 @@ use {
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max blockl cost limit
+// by max block cost limit
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
@@ -246,7 +249,7 @@ fn execute_batch(
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
 
-fn execute_batches(
+fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatch],
     entry_callback: Option<&ProcessCallback>,
@@ -280,13 +283,82 @@ fn execute_batches(
             })
         });
 
-    timings.total_batches_len += batches.len();
-    timings.num_execute_batches += 1;
+    timings.saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
+    timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
     for timing in new_timings {
         timings.accumulate(&timing);
     }
 
     first_err(&results)
+}
+
+fn execute_batches(
+    bank: &Arc<Bank>,
+    batches: &[TransactionBatch],
+    entry_callback: Option<&ProcessCallback>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    replay_vote_sender: Option<&ReplayVoteSender>,
+    timings: &mut ExecuteTimings,
+    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+) -> Result<()> {
+    let lock_results = batches
+        .iter()
+        .flat_map(|batch| batch.lock_results().clone())
+        .collect::<Vec<_>>();
+    let sanitized_txs = batches
+        .iter()
+        .flat_map(|batch| batch.sanitized_transactions().to_vec())
+        .collect::<Vec<_>>();
+
+    let cost_model = CostModel::new();
+    let mut minimal_tx_cost = u64::MAX;
+    let mut total_cost: u64 = 0;
+    // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
+    // These two values are later used for checking if the tx_costs vector needs to be iterated over.
+    #[allow(clippy::needless_collect)]
+    let tx_costs = sanitized_txs
+        .iter()
+        .map(|tx| {
+            let cost = cost_model.calculate_cost(tx).sum();
+            minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
+            total_cost = total_cost.saturating_add(cost);
+            cost
+        })
+        .collect::<Vec<_>>();
+
+    let target_batch_count = get_thread_count() as u64;
+
+    let mut tx_batches: Vec<TransactionBatch> = vec![];
+    let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
+        let target_batch_cost = total_cost / target_batch_count;
+        let mut batch_cost: u64 = 0;
+        let mut slice_start = 0;
+        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
+            let next_index = index + 1;
+            batch_cost = batch_cost.saturating_add(cost);
+            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                let txs = &sanitized_txs[slice_start..=index];
+                let results = &lock_results[slice_start..=index];
+                let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+                slice_start = next_index;
+                tx_batches.push(tx_batch);
+                batch_cost = 0;
+            }
+        });
+        &tx_batches[..]
+    } else {
+        batches
+    };
+
+    execute_batches_internal(
+        bank,
+        rebatched_txs,
+        entry_callback,
+        transaction_status_sender,
+        replay_vote_sender,
+        timings,
+        cost_capacity_meter,
+    )
 }
 
 /// Process an ordered list of entries in parallel
@@ -317,6 +389,7 @@ pub fn process_entries_for_tests(
         None,
         transaction_status_sender,
         replay_vote_sender,
+        None,
         &mut timings,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
     );
@@ -333,6 +406,7 @@ fn process_entries_with_callback(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
@@ -366,6 +440,11 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
+                if let Some(transaction_cost_metrics_sender) = transaction_cost_metrics_sender {
+                    transaction_cost_metrics_sender
+                        .send_cost_details(bank.clone(), transactions.iter());
+                }
+
                 if randomize {
                     transactions.shuffle(&mut rng);
                 }
@@ -433,22 +512,22 @@ fn process_entries_with_callback(
 
 #[derive(Error, Debug)]
 pub enum BlockstoreProcessorError {
-    #[error("failed to load entries")]
+    #[error("failed to load entries, error: {0}")]
     FailedToLoadEntries(#[from] BlockstoreError),
 
     #[error("failed to load meta")]
     FailedToLoadMeta,
 
-    #[error("invalid block")]
+    #[error("invalid block error: {0}")]
     InvalidBlock(#[from] BlockError),
 
-    #[error("invalid transaction")]
+    #[error("invalid transaction error: {0}")]
     InvalidTransaction(#[from] TransactionError),
 
     #[error("no valid forks found")]
     NoValidForksFound,
 
-    #[error("invalid hard fork")]
+    #[error("invalid hard fork slot {0}")]
     InvalidHardFork(Slot),
 
     #[error("root bank with mismatched capitalization at {0}")]
@@ -791,6 +870,7 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
+        None,
         opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
@@ -858,6 +938,7 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
@@ -954,6 +1035,7 @@ pub fn confirm_slot(
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
+                transaction_cost_metrics_sender,
                 &mut execute_timings,
                 cost_capacity_meter,
             )
@@ -1237,7 +1319,6 @@ fn load_frozen_forks(
                         new_root_bank.update_accounts_hash_with_index_option(
                             snapshot_config.accounts_hash_use_index,
                             snapshot_config.accounts_hash_debug_verify,
-                            Some(new_root_bank.epoch_schedule().slots_per_epoch),
                             false,
                         );
                         snapshot_utils::snapshot_bank(
@@ -1293,6 +1374,8 @@ fn load_frozen_forks(
             )?;
 
             if slot >= dev_halt_at_slot {
+                bank.force_flush_accounts_cache();
+                let _ = bank.verify_bank_hash(false);
                 break;
             }
         }
@@ -1407,7 +1490,6 @@ pub struct TransactionStatusBatch {
 #[derive(Clone)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
-    pub enable_cpi_and_log_storage: bool,
 }
 
 impl TransactionStatusSender {
@@ -1415,20 +1497,13 @@ impl TransactionStatusSender {
         &self,
         bank: Arc<Bank>,
         transactions: Vec<SanitizedTransaction>,
-        mut execution_results: Vec<TransactionExecutionResult>,
+        execution_results: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         rent_debits: Vec<RentDebits>,
     ) {
         let slot = bank.slot();
-        if !self.enable_cpi_and_log_storage {
-            execution_results.iter_mut().for_each(|execution_result| {
-                if let TransactionExecutionResult::Executed(details) = execution_result {
-                    details.log_messages.take();
-                    details.inner_instructions.take();
-                }
-            });
-        }
+
         if let Err(e) = self
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
@@ -1530,10 +1605,7 @@ pub mod tests {
             vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
             vote_transaction,
         },
-        std::{
-            collections::BTreeSet,
-            sync::{mpsc::channel, RwLock},
-        },
+        std::{collections::BTreeSet, sync::RwLock},
         tempfile::TempDir,
         trees::tr,
     };
@@ -1543,7 +1615,7 @@ pub mod tests {
         blockstore: &Blockstore,
         opts: ProcessOptions,
     ) -> BlockstoreProcessorInner {
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         process_blockstore(
             genesis_config,
             blockstore,
@@ -3119,7 +3191,7 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         let (bank_forks, ..) = do_process_blockstore_from_root(
             &blockstore,
             bank1,
@@ -3223,7 +3295,7 @@ pub mod tests {
             ..SnapshotConfig::default()
         };
 
-        let (accounts_package_sender, accounts_package_receiver) = channel();
+        let (accounts_package_sender, accounts_package_receiver) = unbounded();
 
         do_process_blockstore_from_root(
             &blockstore,

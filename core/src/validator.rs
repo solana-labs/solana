@@ -20,7 +20,7 @@ use {
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
-    crossbeam_channel::{bounded, unbounded},
+    crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
     solana_accountsdb_plugin_manager::accountsdb_plugin_service::AccountsDbPluginService,
     solana_entry::poh::compute_hash_time_ns,
@@ -96,11 +96,9 @@ use {
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
-        ops::Deref,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{channel, Receiver},
             Arc, Mutex, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -166,6 +164,7 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub wait_to_vote_slot: Option<Slot>,
 }
 
 impl Default for ValidatorConfig {
@@ -225,6 +224,16 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
+            wait_to_vote_slot: None,
+        }
+    }
+}
+
+impl ValidatorConfig {
+    pub fn default_for_test() -> Self {
+        Self {
+            rpc_config: JsonRpcConfig::default_for_test(),
+            ..Self::default()
         }
     }
 }
@@ -288,6 +297,7 @@ pub struct Validator {
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
+    pub bank_forks: Arc<RwLock<BankForks>>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     accountsdb_plugin_service: Option<AccountsDbPluginService>,
 }
@@ -411,7 +421,7 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
-        let accounts_package_channel = channel();
+        let accounts_package_channel = unbounded();
 
         let accounts_update_notifier =
             accountsdb_plugin_service
@@ -532,14 +542,17 @@ impl Validator {
             }
         }
 
-        let mut cluster_info =
-            ClusterInfo::new(node.info.clone(), identity_keypair, socket_addr_space);
+        let mut cluster_info = ClusterInfo::new(
+            node.info.clone(),
+            identity_keypair.clone(),
+            socket_addr_space,
+        );
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
         let mut block_commitment_cache = BlockCommitmentCache::default();
-        block_commitment_cache.initialize_slots(bank.slot());
+        block_commitment_cache.initialize_slots(bank.slot(), bank_forks.read().unwrap().root());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =
@@ -576,29 +589,25 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
-        let (mut poh_recorder, entry_receiver, record_receiver) =
-            PohRecorder::new_with_clear_signal(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.clone(),
-                leader_schedule_cache.next_leader_slot(
-                    &id,
-                    bank.slot(),
-                    &bank,
-                    Some(&blockstore),
-                    GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
-                ),
-                bank.ticks_per_slot(),
+        let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new_with_clear_signal(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.clone(),
+            leader_schedule_cache.next_leader_slot(
                 &id,
-                &blockstore,
-                blockstore.new_shreds_signals.first().cloned(),
-                &leader_schedule_cache,
-                &poh_config,
-                exit.clone(),
-            );
-        if config.snapshot_config.is_some() {
-            poh_recorder.set_bank(&bank);
-        }
+                bank.slot(),
+                &bank,
+                Some(&blockstore),
+                GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
+            ),
+            bank.ticks_per_slot(),
+            &id,
+            &blockstore,
+            blockstore.new_shreds_signals.first().cloned(),
+            &leader_schedule_cache,
+            &poh_config,
+            exit.clone(),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
@@ -655,7 +664,7 @@ impl Validator {
                     leader_schedule_cache.clone(),
                     max_complete_transaction_status_slot,
                 )),
-                if config.rpc_config.minimal_api {
+                if !config.rpc_config.full_api {
                     None
                 } else {
                     let (trigger, pubsub_service) = PubSubService::new(
@@ -707,9 +716,7 @@ impl Validator {
             )),
         };
 
-        let (stats_reporter_sender, stats_reporter_receiver) = channel();
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
-        let _stats_reporter_sender = stats_reporter_sender.clone();
+        let (stats_reporter_sender, stats_reporter_receiver) = unbounded();
 
         let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
 
@@ -800,10 +807,7 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
-        let vote_tracker = Arc::new(VoteTracker::new(
-            bank_forks.read().unwrap().root_bank().deref(),
-        ));
-
+        let vote_tracker = Arc::<VoteTracker>::default();
         let mut cost_model = CostModel::default();
         cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
         let cost_model = Arc::new(RwLock::new(cost_model));
@@ -872,6 +876,7 @@ impl Validator {
             accounts_package_channel,
             last_full_snapshot_slot,
             block_metadata_notifier,
+            config.wait_to_vote_slot,
         );
 
         let tpu = Tpu::new(
@@ -884,6 +889,7 @@ impl Validator {
                 transaction_forwards: node.sockets.tpu_forwards,
                 vote: node.sockets.tpu_vote,
                 broadcast: node.sockets.broadcast,
+                transactions_quic: node.sockets.tpu_quic,
             },
             &rpc_subscriptions,
             transaction_status_sender,
@@ -892,7 +898,7 @@ impl Validator {
             &exit,
             node.info.shred_version,
             vote_tracker,
-            bank_forks,
+            bank_forks.clone(),
             verified_vote_sender,
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
@@ -901,6 +907,7 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &identity_keypair,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
@@ -928,6 +935,7 @@ impl Validator {
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
             cluster_info,
+            bank_forks,
             accountsdb_repl_service,
             accountsdb_plugin_service,
         }
@@ -969,6 +977,7 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.bank_forks);
         drop(self.cluster_info);
 
         self.poh_service.join().expect("poh_service");
@@ -1502,7 +1511,6 @@ fn initialize_rpc_transaction_history_services(
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
     let transaction_status_sender = Some(TransactionStatusSender {
         sender: transaction_status_sender,
-        enable_cpi_and_log_storage,
     });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
@@ -1510,6 +1518,7 @@ fn initialize_rpc_transaction_history_services(
         enable_rpc_transaction_history,
         transaction_notifier.clone(),
         blockstore.clone(),
+        enable_cpi_and_log_storage,
         exit,
     ));
 
@@ -1772,7 +1781,7 @@ mod tests {
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
             rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-            ..ValidatorConfig::default()
+            ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
@@ -1854,7 +1863,7 @@ mod tests {
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
                     rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-                    ..ValidatorConfig::default()
+                    ..ValidatorConfig::default_for_test()
                 };
                 Validator::new(
                     validator_node,
@@ -1897,7 +1906,7 @@ mod tests {
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut config = ValidatorConfig::default();
+        let mut config = ValidatorConfig::default_for_test();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
 

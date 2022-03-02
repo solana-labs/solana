@@ -3,10 +3,12 @@
 
 use {
     crate::{
-        packet::{self, send_to, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        packet::{self, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
         recvmmsg::NUM_RCVMMSGS,
+        sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
     solana_sdk::{packet::Packet, timing::timestamp},
     std::{
@@ -15,7 +17,6 @@ use {
         net::{IpAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
             Arc,
         },
         thread::{Builder, JoinHandle},
@@ -37,6 +38,9 @@ pub enum StreamerError {
 
     #[error("send packets error")]
     Send(#[from] SendError<PacketBatch>),
+
+    #[error(transparent)]
+    SendPktsError(#[from] SendPktsError),
 }
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
@@ -104,7 +108,7 @@ pub fn receiver(
     use_pinned_memory: bool,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
-    assert!(!res.is_err(), "streamer::receiver set_read_timeout error");
+    assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
     let exit = exit.clone();
     Builder::new()
         .name("solana-receiver".to_string())
@@ -242,7 +246,13 @@ fn recv_send(
     if let Some(stats) = stats {
         packet_batch.packets.iter().for_each(|p| stats.record(p));
     }
-    send_to(&packet_batch, sock, socket_addr_space)?;
+    let packets = packet_batch.packets.iter().filter_map(|pkt| {
+        let addr = pkt.meta.addr();
+        socket_addr_space
+            .check(&addr)
+            .then(|| (&pkt.data[..pkt.meta.size], addr))
+    });
+    batch_send(sock, &packets.collect::<Vec<_>>())?;
     Ok(())
 }
 
@@ -324,6 +334,7 @@ mod test {
             packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
             streamer::{receiver, responder},
         },
+        crossbeam_channel::unbounded,
         solana_perf::recycler::Recycler,
         std::{
             io,
@@ -331,7 +342,6 @@ mod test {
             net::UdpSocket,
             sync::{
                 atomic::{AtomicBool, Ordering},
-                mpsc::channel,
                 Arc,
             },
             time::Duration,
@@ -366,7 +376,7 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         let t_receiver = receiver(
             Arc::new(read),
             &exit,
@@ -377,7 +387,7 @@ mod test {
             true,
         );
         let t_responder = {
-            let (s_responder, r_responder) = channel();
+            let (s_responder, r_responder) = unbounded();
             let t_responder = responder(
                 "streamer_send_test",
                 Arc::new(send),

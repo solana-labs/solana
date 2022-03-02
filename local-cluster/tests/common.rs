@@ -76,6 +76,7 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
             access_type: AccessType::TryPrimaryThenSecondary,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
+            ..BlockstoreOptions::default()
         },
     )
     .unwrap_or_else(|e| {
@@ -165,7 +166,8 @@ pub fn run_kill_partition_switch_threshold<C>(
         .flat_map(|stakes_and_slots| stakes_and_slots.iter().map(|(_, num_slots)| *num_slots))
         .collect();
 
-    let (leader_schedule, validator_keys) = create_custom_leader_schedule(&num_slots_per_validator);
+    let (leader_schedule, validator_keys) =
+        create_custom_leader_schedule_with_random_keys(&num_slots_per_validator);
 
     info!(
         "Validator ids: {:?}",
@@ -205,23 +207,32 @@ pub fn run_kill_partition_switch_threshold<C>(
 }
 
 pub fn create_custom_leader_schedule(
-    validator_num_slots: &[usize],
-) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
+    validator_key_to_slots: impl Iterator<Item = (Pubkey, usize)>,
+) -> LeaderSchedule {
     let mut leader_schedule = vec![];
-    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
-        .take(validator_num_slots.len())
-        .collect();
-    for (k, num_slots) in validator_keys.iter().zip(validator_num_slots.iter()) {
-        for _ in 0..*num_slots {
-            leader_schedule.push(k.pubkey())
+    for (k, num_slots) in validator_key_to_slots {
+        for _ in 0..num_slots {
+            leader_schedule.push(k)
         }
     }
 
     info!("leader_schedule: {}", leader_schedule.len());
-    (
-        LeaderSchedule::new_from_schedule(leader_schedule),
-        validator_keys,
-    )
+    LeaderSchedule::new_from_schedule(leader_schedule)
+}
+
+pub fn create_custom_leader_schedule_with_random_keys(
+    validator_num_slots: &[usize],
+) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+        .take(validator_num_slots.len())
+        .collect();
+    let leader_schedule = create_custom_leader_schedule(
+        validator_keys
+            .iter()
+            .map(|k| k.pubkey())
+            .zip(validator_num_slots.iter().cloned()),
+    );
+    (leader_schedule, validator_keys)
 }
 
 /// This function runs a network, initiates a partition based on a
@@ -257,7 +268,7 @@ pub fn run_cluster_partition<C>(
     let enable_partition = Arc::new(AtomicBool::new(true));
     let mut validator_config = ValidatorConfig {
         enable_partition: Some(enable_partition.clone()),
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
 
     // Returns:
@@ -375,13 +386,13 @@ pub fn test_faulty_node(
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, ValidatorConfig::default);
+    validator_configs.resize_with(num_nodes, ValidatorConfig::default_for_test);
 
     let mut validator_keys = Vec::with_capacity(num_nodes);
     validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));

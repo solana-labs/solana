@@ -3,18 +3,19 @@
 #![cfg(feature = "program")]
 #![allow(unreachable_code)]
 
-use crate::instructions::*;
-use solana_bpf_rust_invoked::instructions::*;
-use solana_program::{
-    account_info::AccountInfo,
-    entrypoint,
-    entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
-    instruction::Instruction,
-    msg,
-    program::{get_return_data, invoke, invoke_signed, set_return_data},
-    program_error::ProgramError,
-    pubkey::{Pubkey, PubkeyError},
-    system_instruction,
+use {
+    crate::instructions::*,
+    solana_bpf_rust_invoked::instructions::*,
+    solana_program::{
+        account_info::AccountInfo,
+        entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
+        instruction::Instruction,
+        msg,
+        program::{get_return_data, invoke, invoke_signed, set_return_data},
+        program_error::ProgramError,
+        pubkey::{Pubkey, PubkeyError},
+        system_instruction,
+    },
 };
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
@@ -50,7 +51,7 @@ fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> Progr
     Ok(())
 }
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -426,7 +427,6 @@ fn process_instruction(
 
             // Writable privilege escalation will always fail the whole transaction
             invoked_instruction.accounts[0].is_writable = true;
-
             invoke(&invoked_instruction, accounts)?;
         }
         TEST_PPROGRAM_NOT_EXECUTABLE => {
@@ -637,6 +637,40 @@ fn process_instruction(
         }
         TEST_RETURN_DATA_TOO_LARGE => {
             set_return_data(&[1u8; 1028]);
+        }
+        TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER => {
+            msg!("Test duplicate privilege escalation signer");
+            let mut invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                ],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
+            );
+            invoke(&invoked_instruction, accounts)?;
+
+            // Signer privilege escalation will always fail the whole transaction
+            invoked_instruction.accounts[1].is_signer = true;
+            invoke(&invoked_instruction, accounts)?;
+        }
+        TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE => {
+            msg!("Test duplicate privilege escalation writable");
+            let mut invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, false),
+                ],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
+            );
+            invoke(&invoked_instruction, accounts)?;
+
+            // Writable privilege escalation will always fail the whole transaction
+            invoked_instruction.accounts[1].is_writable = true;
+            invoke(&invoked_instruction, accounts)?;
         }
         _ => panic!(),
     }

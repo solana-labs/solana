@@ -7,7 +7,7 @@ use {
         instruction::{AccountMeta, Instruction},
         message::{Message, SanitizedMessage},
         pubkey::{self, Pubkey},
-        sysvar::instructions,
+        sysvar::instructions::{self, construct_instructions_data},
     },
     std::convert::TryFrom,
     test::Bencher,
@@ -28,13 +28,14 @@ fn bench_bincode_instruction_serialize(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_manual_instruction_serialize(b: &mut Bencher) {
+fn bench_construct_instructions_data(b: &mut Bencher) {
     let instructions = make_instructions();
     let message =
         SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
             .unwrap();
     b.iter(|| {
-        test::black_box(message.serialize_instructions());
+        let instructions = message.decompile_instructions();
+        test::black_box(construct_instructions_data(&instructions));
     });
 }
 
@@ -53,7 +54,7 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let message =
         SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
             .unwrap();
-    let serialized = message.serialize_instructions();
+    let serialized = construct_instructions_data(&message.decompile_instructions());
     b.iter(|| {
         for i in 0..instructions.len() {
             #[allow(deprecated)]
@@ -68,7 +69,7 @@ fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let message =
         SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
             .unwrap();
-    let serialized = message.serialize_instructions();
+    let serialized = construct_instructions_data(&message.decompile_instructions());
     b.iter(|| {
         #[allow(deprecated)]
         test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());

@@ -12,10 +12,7 @@ use {
         cluster_nodes::{ClusterNodes, ClusterNodesCache},
         result::{Error, Result},
     },
-    crossbeam_channel::{
-        Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
-        Sender as CrossbeamSender,
-    },
+    crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::Itertools,
     solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
     solana_ledger::{blockstore::Blockstore, shred::Shred},
@@ -39,7 +36,6 @@ use {
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -58,8 +54,8 @@ const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
-pub(crate) type RetransmitSlotsSender = CrossbeamSender<Slot>;
-pub(crate) type RetransmitSlotsReceiver = CrossbeamReceiver<Slot>;
+pub(crate) type RetransmitSlotsSender = Sender<Slot>;
+pub(crate) type RetransmitSlotsReceiver = Receiver<Slot>;
 pub(crate) type RecordReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 pub(crate) type TransmitReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 
@@ -211,12 +207,10 @@ impl BroadcastStage {
             match e {
                 Error::RecvTimeout(RecvTimeoutError::Disconnected)
                 | Error::Send
-                | Error::Recv(RecvError)
-                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Disconnected) => {
+                | Error::Recv(RecvError) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
                 Error::RecvTimeout(RecvTimeoutError::Timeout)
-                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Timeout)
                 | Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
@@ -256,8 +250,8 @@ impl BroadcastStage {
     ) -> Self {
         let btree = blockstore.clone();
         let exit = exit_sender.clone();
-        let (socket_sender, socket_receiver) = channel();
-        let (blockstore_sender, blockstore_receiver) = channel();
+        let (socket_sender, socket_receiver) = unbounded();
+        let (blockstore_sender, blockstore_receiver) = unbounded();
         let bs_run = broadcast_stage_run.clone();
 
         let socket_sender_ = socket_sender.clone();
@@ -474,7 +468,7 @@ pub mod test {
         },
         std::{
             path::Path,
-            sync::{atomic::AtomicBool, mpsc::channel, Arc},
+            sync::{atomic::AtomicBool, Arc},
             thread::sleep,
         },
     };
@@ -546,7 +540,7 @@ pub mod test {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let (transmit_sender, transmit_receiver) = channel();
+        let (transmit_sender, transmit_receiver) = unbounded();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
 
         // Make some shreds
@@ -651,7 +645,7 @@ pub mod test {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
 
-            let (entry_sender, entry_receiver) = channel();
+            let (entry_sender, entry_receiver) = unbounded();
             let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
                 &leader_keypair.pubkey(),

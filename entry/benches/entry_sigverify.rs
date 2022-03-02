@@ -6,7 +6,7 @@ use {
     solana_sdk::{
         hash::Hash,
         transaction::{
-            Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+            DisabledAddressLoader, Result, SanitizedTransaction, TransactionVerificationMode,
             VersionedTransaction,
         },
     },
@@ -35,9 +35,12 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                         versioned_tx.message.hash()
                     };
 
-                SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                SanitizedTransaction::try_create(
+                    versioned_tx,
+                    message_hash,
+                    None,
+                    &DisabledAddressLoader,
+                )
             }?;
 
             Ok(sanitized_tx)
@@ -73,10 +76,12 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
             let sanitized_tx = {
                 let message_hash = versioned_tx.verify_and_hash_message()?;
-
-                SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                SanitizedTransaction::try_create(
+                    versioned_tx,
+                    message_hash,
+                    None,
+                    &DisabledAddressLoader,
+                )
             }?;
 
             Ok(sanitized_tx)

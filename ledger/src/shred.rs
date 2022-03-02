@@ -1152,30 +1152,26 @@ pub fn get_shred_slot_index_type(
         return None;
     }
 
-    let index;
-    match limited_deserialize::<u32>(&p.data[index_start..index_end]) {
-        Ok(x) => index = x,
+    let index = match limited_deserialize::<u32>(&p.data[index_start..index_end]) {
+        Ok(x) => x,
         Err(_e) => {
             stats.index_bad_deserialize += 1;
             return None;
         }
-    }
+    };
 
     if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
         stats.index_out_of_bounds += 1;
         return None;
     }
 
-    let slot;
-    match limited_deserialize::<Slot>(&p.data[slot_start..slot_end]) {
-        Ok(x) => {
-            slot = x;
-        }
+    let slot = match limited_deserialize::<Slot>(&p.data[slot_start..slot_end]) {
+        Ok(x) => x,
         Err(_e) => {
             stats.slot_bad_deserialize += 1;
             return None;
         }
-    }
+    };
 
     let shred_type = match ShredType::from_u8(p.data[OFFSET_OF_SHRED_TYPE]) {
         None => {

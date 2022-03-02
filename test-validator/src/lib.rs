@@ -2,7 +2,7 @@
 use {
     log::*,
     solana_cli_output::CliAccount,
-    solana_client::rpc_client::RpcClient,
+    solana_client::{nonblocking, rpc_client::RpcClient},
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -14,8 +14,9 @@ use {
     },
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_net_utils::PortRange,
-    solana_rpc::rpc::JsonRpcConfig,
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
+        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, snapshot_config::SnapshotConfig,
     },
@@ -25,6 +26,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         exit::Exit,
+        feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         instruction::{AccountMeta, Instruction},
@@ -36,16 +38,16 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         fs::{remove_dir_all, File},
         io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         str::FromStr,
         sync::{Arc, RwLock},
-        thread::sleep,
         time::Duration,
     },
+    tokio::time::sleep,
 };
 
 #[derive(Clone)]
@@ -84,18 +86,19 @@ impl Default for TestValidatorNodeConfig {
     }
 }
 
-#[derive(Default)]
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
     tower_storage: Option<Arc<dyn TowerStorage>>,
     pub rent: Rent,
     rpc_config: JsonRpcConfig,
+    pubsub_config: PubSubConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     programs: Vec<ProgramInfo>,
+    ticks_per_slot: Option<u64>,
     epoch_schedule: Option<EpochSchedule>,
     node_config: TestValidatorNodeConfig,
     pub validator_exit: Arc<RwLock<Exit>>,
@@ -105,9 +108,46 @@ pub struct TestValidatorGenesis {
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
+    deactivate_feature_set: HashSet<Pubkey>,
+}
+
+impl Default for TestValidatorGenesis {
+    fn default() -> Self {
+        Self {
+            fee_rate_governor: FeeRateGovernor::default(),
+            ledger_path: Option::<PathBuf>::default(),
+            tower_storage: Option::<Arc<dyn TowerStorage>>::default(),
+            rent: Rent::default(),
+            rpc_config: JsonRpcConfig::default_for_test(),
+            pubsub_config: PubSubConfig::default(),
+            rpc_ports: Option::<(u16, u16)>::default(),
+            warp_slot: Option::<Slot>::default(),
+            no_bpf_jit: bool::default(),
+            accounts: HashMap::<Pubkey, AccountSharedData>::default(),
+            programs: Vec::<ProgramInfo>::default(),
+            ticks_per_slot: Option::<u64>::default(),
+            epoch_schedule: Option::<EpochSchedule>::default(),
+            node_config: TestValidatorNodeConfig::default(),
+            validator_exit: Arc::<RwLock<Exit>>::default(),
+            start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
+            authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
+            max_ledger_shreds: Option::<u64>::default(),
+            max_genesis_archive_unpacked_size: Option::<u64>::default(),
+            accountsdb_plugin_config_files: Option::<Vec<PathBuf>>::default(),
+            accounts_db_caching_enabled: bool::default(),
+            deactivate_feature_set: HashSet::<Pubkey>::default(),
+        }
+    }
 }
 
 impl TestValidatorGenesis {
+    /// Adds features to deactivate to a set, eliminating redundancies
+    /// during `initialize_ledger`, if member of the set is not a Feature
+    /// it will be silently ignored
+    pub fn deactivate_features(&mut self, deactivate_list: &[Pubkey]) -> &mut Self {
+        self.deactivate_feature_set.extend(deactivate_list);
+        self
+    }
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
         self
@@ -128,6 +168,11 @@ impl TestValidatorGenesis {
         self
     }
 
+    pub fn ticks_per_slot(&mut self, ticks_per_slot: u64) -> &mut Self {
+        self.ticks_per_slot = Some(ticks_per_slot);
+        self
+    }
+
     pub fn epoch_schedule(&mut self, epoch_schedule: EpochSchedule) -> &mut Self {
         self.epoch_schedule = Some(epoch_schedule);
         self
@@ -140,6 +185,11 @@ impl TestValidatorGenesis {
 
     pub fn rpc_config(&mut self, rpc_config: JsonRpcConfig) -> &mut Self {
         self.rpc_config = rpc_config;
+        self
+    }
+
+    pub fn pubsub_config(&mut self, pubsub_config: PubSubConfig) -> &mut Self {
+        self.pubsub_config = pubsub_config;
         self
     }
 
@@ -328,7 +378,15 @@ impl TestValidatorGenesis {
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self, socket_addr_space)
+        TestValidator::start(mint_address, self, socket_addr_space).map(|test_validator| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .unwrap();
+            runtime.block_on(test_validator.wait_for_nonzero_fees());
+            test_validator
+        })
     }
 
     /// Start a test validator
@@ -352,9 +410,30 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space)
+        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
-            .expect("Test validator failed to start")
+            .unwrap_or_else(|err| panic!("Test validator failed to start: {}", err))
+    }
+
+    pub async fn start_async(&self) -> (TestValidator, Keypair) {
+        self.start_async_with_socket_addr_space(SocketAddrSpace::new(
+            /*allow_private_addr=*/ true,
+        ))
+        .await
+    }
+
+    pub async fn start_async_with_socket_addr_space(
+        &self,
+        socket_addr_space: SocketAddrSpace,
+    ) -> (TestValidator, Keypair) {
+        let mint_keypair = Keypair::new();
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
+            Ok(test_validator) => {
+                test_validator.wait_for_nonzero_fees().await;
+                (test_validator, mint_keypair)
+            }
+            Err(err) => panic!("Test validator failed to start: {}", err),
+        }
     }
 }
 
@@ -465,6 +544,28 @@ impl TestValidator {
             .epoch_schedule
             .unwrap_or_else(EpochSchedule::without_warmup);
 
+        if let Some(ticks_per_slot) = config.ticks_per_slot {
+            genesis_config.ticks_per_slot = ticks_per_slot;
+        }
+
+        // Remove features tagged to deactivate
+        for deactivate_feature_pk in &config.deactivate_feature_set {
+            if FEATURE_NAMES.contains_key(deactivate_feature_pk) {
+                match genesis_config.accounts.remove(deactivate_feature_pk) {
+                    Some(_) => info!("Feature for {:?} deactivated", deactivate_feature_pk),
+                    None => warn!(
+                        "Feature {:?} set for deactivation not found in genesis_config account list, ignored.",
+                        deactivate_feature_pk
+                    ),
+                }
+            } else {
+                warn!(
+                    "Feature {:?} set for deactivation is not a known Feature public key",
+                    deactivate_feature_pk
+                );
+            }
+        }
+
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
             Some(ledger_path) => {
@@ -555,6 +656,14 @@ impl TestValidator {
             }
         }
 
+        let accounts_db_config = Some(AccountsDbConfig {
+            index: Some(AccountsIndexConfig {
+                started_from_validator: true,
+                ..AccountsIndexConfig::default()
+            }),
+            ..AccountsDbConfig::default()
+        });
+
         let mut validator_config = ValidatorConfig {
             accountsdb_plugin_config_files: config.accountsdb_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -566,6 +675,7 @@ impl TestValidator {
                 ),
             )),
             rpc_config: config.rpc_config.clone(),
+            pubsub_config: config.pubsub_config.clone(),
             accounts_hash_interval_slots: 100,
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
@@ -583,7 +693,8 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
-            ..ValidatorConfig::default()
+            accounts_db_config,
+            ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {
             validator_config.tower_storage = tower_storage.clone();
@@ -607,53 +718,7 @@ impl TestValidator {
         discover_cluster(&gossip, 1, socket_addr_space)
             .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
-        // This is a hack to delay until the fees are non-zero for test consistency
-        // (fees from genesis are zero until the first block with a transaction in it is completed
-        //  due to a bug in the Bank)
-        {
-            let rpc_client =
-                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
-            let mut message = Message::new(
-                &[Instruction::new_with_bytes(
-                    Pubkey::new_unique(),
-                    &[],
-                    vec![AccountMeta::new(Pubkey::new_unique(), true)],
-                )],
-                None,
-            );
-            const MAX_TRIES: u64 = 10;
-            let mut num_tries = 0;
-            loop {
-                num_tries += 1;
-                if num_tries > MAX_TRIES {
-                    break;
-                }
-                println!("Waiting for fees to stabilize {:?}...", num_tries);
-                match rpc_client.get_latest_blockhash() {
-                    Ok(blockhash) => {
-                        message.recent_blockhash = blockhash;
-                        match rpc_client.get_fee_for_message(&message) {
-                            Ok(fee) => {
-                                if fee != 0 {
-                                    break;
-                                }
-                            }
-                            Err(err) => {
-                                warn!("get_fee_for_message() failed: {:?}", err);
-                                break;
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        warn!("get_latest_blockhash() failed: {:?}", err);
-                        break;
-                    }
-                }
-                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-            }
-        }
-
-        Ok(TestValidator {
+        let test_validator = TestValidator {
             ledger_path,
             preserve_ledger,
             rpc_pubsub_url,
@@ -662,7 +727,56 @@ impl TestValidator {
             gossip,
             validator,
             vote_account_address,
-        })
+        };
+        Ok(test_validator)
+    }
+
+    /// This is a hack to delay until the fees are non-zero for test consistency
+    /// (fees from genesis are zero until the first block with a transaction in it is completed
+    ///  due to a bug in the Bank)
+    async fn wait_for_nonzero_fees(&self) {
+        let rpc_client = nonblocking::rpc_client::RpcClient::new_with_commitment(
+            self.rpc_url.clone(),
+            CommitmentConfig::processed(),
+        );
+        let mut message = Message::new(
+            &[Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![AccountMeta::new(Pubkey::new_unique(), true)],
+            )],
+            None,
+        );
+        const MAX_TRIES: u64 = 10;
+        let mut num_tries = 0;
+        loop {
+            num_tries += 1;
+            if num_tries > MAX_TRIES {
+                break;
+            }
+            println!("Waiting for fees to stabilize {:?}...", num_tries);
+            match rpc_client.get_latest_blockhash().await {
+                Ok(blockhash) => {
+                    message.recent_blockhash = blockhash;
+                    match rpc_client.get_fee_for_message(&message).await {
+                        Ok(fee) => {
+                            if fee != 0 {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            warn!("get_fee_for_message() failed: {:?}", err);
+                            break;
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!("get_latest_blockhash() failed: {:?}", err);
+                    break;
+                }
+            }
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT)).await;
+        }
     }
 
     /// Return the validator's TPU address
@@ -709,6 +823,14 @@ impl TestValidator {
         RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed())
     }
 
+    /// Return a nonblocking RpcClient for the validator.
+    pub fn get_async_rpc_client(&self) -> nonblocking::rpc_client::RpcClient {
+        nonblocking::rpc_client::RpcClient::new_with_commitment(
+            self.rpc_url.clone(),
+            CommitmentConfig::processed(),
+        )
+    }
+
     pub fn join(mut self) {
         if let Some(validator) = self.validator.take() {
             validator.join();
@@ -717,6 +839,10 @@ impl TestValidator {
 
     pub fn cluster_info(&self) -> Arc<ClusterInfo> {
         self.validator.as_ref().unwrap().cluster_info.clone()
+    }
+
+    pub fn bank_forks(&self) -> Arc<RwLock<BankForks>> {
+        self.validator.as_ref().unwrap().bank_forks.clone()
     }
 }
 
@@ -734,5 +860,31 @@ impl Drop for TestValidator {
                 )
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn get_health() {
+        let (test_validator, _payer) = TestValidatorGenesis::default().start();
+        let rpc_client = test_validator.get_rpc_client();
+        rpc_client.get_health().expect("health");
+    }
+
+    #[tokio::test]
+    async fn nonblocking_get_health() {
+        let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
+        let rpc_client = test_validator.get_async_rpc_client();
+        rpc_client.get_health().await.expect("health");
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn document_tokio_panic() {
+        // `start()` blows up when run within tokio
+        let (_test_validator, _payer) = TestValidatorGenesis::default().start();
     }
 }
