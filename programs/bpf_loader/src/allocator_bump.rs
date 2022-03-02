@@ -1,3 +1,5 @@
+#![allow(clippy::integer_arithmetic)]
+
 use {
     crate::alloc,
     alloc::{Alloc, AllocErr},
