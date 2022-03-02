@@ -8,11 +8,6 @@ src_root="$(readlink -f "${here}/..")"
 cd "${src_root}"
 
 cargo_audit_ignores=(
-  # failure is officially deprecated/unmaintained
-  #
-  # Blocked on multiple upstream crates removing their `failure` dependency.
-  --ignore RUSTSEC-2020-0036
-
   # `net2` crate has been deprecated; use `socket2` instead
   #
   # Blocked on https://github.com/paritytech/jsonrpc/issues/575
