@@ -1,6 +1,7 @@
 import React from "react";
 import { Cluster, clusterSlug, useCluster } from "providers/cluster";
 import { fetch } from "cross-fetch";
+import { useStatsProvider } from "providers/stats/solanaClusterStats";
 
 const FETCH_PING_INTERVAL = 60 * 1000;
 
@@ -33,7 +34,6 @@ export type PingInfo = {
 
 export enum PingStatus {
   Loading,
-  Refreshing,
   Ready,
   Error,
 }
@@ -76,11 +76,16 @@ function downsample(points: PingInfo[], bucketSize: number): PingInfo[] {
 
 export function SolanaPingProvider({ children }: Props) {
   const { cluster } = useCluster();
+  const { active } = useStatsProvider();
   const [rollup, setRollup] = React.useState<PingRollupInfo | undefined>({
     status: PingStatus.Loading,
   });
 
   React.useEffect(() => {
+    if (!active) {
+      return;
+    }
+
     const url = getPingUrl(cluster);
 
     setRollup({
@@ -137,17 +142,13 @@ export function SolanaPingProvider({ children }: Props) {
     };
 
     const fetchPingInterval = setInterval(() => {
-      setRollup({
-        status: PingStatus.Refreshing,
-      });
-
       fetchPingMetrics();
     }, FETCH_PING_INTERVAL);
     fetchPingMetrics();
     return () => {
       clearInterval(fetchPingInterval);
     };
-  }, [cluster]);
+  }, [cluster, active]);
 
   return <PingContext.Provider value={rollup}>{children}</PingContext.Provider>;
 }
