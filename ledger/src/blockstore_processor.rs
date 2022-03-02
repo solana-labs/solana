@@ -695,41 +695,36 @@ fn do_process_blockstore_from_root(
 
     let mut timing = ExecuteTimings::default();
     // Iterate and replay slots from blockstore starting from `start_slot`
-    let (initial_forks, leader_schedule_cache) = {
-        if let Some(meta) = blockstore
-            .meta(start_slot)
-            .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
-        {
-            let epoch_schedule = bank.epoch_schedule();
-            let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank);
-            if opts.full_leader_cache {
-                leader_schedule_cache.set_max_schedules(std::usize::MAX);
-            }
-            let mut initial_forks = load_frozen_forks(
-                &bank,
-                &meta,
-                blockstore,
-                &mut leader_schedule_cache,
-                &mut root,
-                opts,
-                recyclers,
-                transaction_status_sender,
-                cache_block_meta_sender,
-                snapshot_config,
-                accounts_package_sender,
-                &mut timing,
-                &mut last_full_snapshot_slot,
-            )?;
-            initial_forks.sort_by_key(|bank| bank.slot());
-
-            (initial_forks, leader_schedule_cache)
-        } else {
-            // If there's no meta for the input `start_slot`, then we started from a snapshot
-            // and there's no point in processing the rest of blockstore and implies blockstore
-            // should be empty past this point.
-            let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-            (vec![bank], leader_schedule_cache)
-        }
+    let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
+    if opts.full_leader_cache {
+        leader_schedule_cache.set_max_schedules(std::usize::MAX);
+    }
+    let initial_forks = if let Some(meta) = blockstore
+        .meta(start_slot)
+        .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
+    {
+        let mut initial_forks = load_frozen_forks(
+            &bank,
+            &meta,
+            blockstore,
+            &mut leader_schedule_cache,
+            &mut root,
+            opts,
+            recyclers,
+            transaction_status_sender,
+            cache_block_meta_sender,
+            snapshot_config,
+            accounts_package_sender,
+            &mut timing,
+            &mut last_full_snapshot_slot,
+        )?;
+        initial_forks.sort_by_key(|bank| bank.slot());
+        initial_forks
+    } else {
+        // If there's no meta for the input `start_slot`, then we started from a snapshot
+        // and there's no point in processing the rest of blockstore and implies blockstore
+        // should be empty past this point.
+        vec![bank]
     };
     if initial_forks.is_empty() {
         return Err(BlockstoreProcessorError::NoValidForksFound);
