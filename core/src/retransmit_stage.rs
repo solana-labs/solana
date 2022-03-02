@@ -416,7 +416,6 @@ pub fn retransmitter(
         .unwrap()
 }
 
-// pub for bench
 pub struct RetransmitStage {
     retransmit_thread_handle: JoinHandle<()>,
     window_service: WindowService,

@@ -5,7 +5,7 @@ extern crate test;
 use {
     rand::{seq::SliceRandom, Rng},
     solana_core::{
-        cluster_nodes::{make_cluster, new_cluster_nodes, ClusterNodes},
+        cluster_nodes::{make_test_cluster, new_cluster_nodes, ClusterNodes},
         retransmit_stage::RetransmitStage,
     },
     solana_gossip::contact_info::ContactInfo,
@@ -19,7 +19,7 @@ fn make_cluster_nodes<R: Rng>(
     rng: &mut R,
     unstaked_ratio: Option<(u32, u32)>,
 ) -> (Vec<ContactInfo>, ClusterNodes<RetransmitStage>) {
-    let (nodes, stakes, cluster_info) = make_cluster(rng, 5_000, unstaked_ratio);
+    let (nodes, stakes, cluster_info) = make_test_cluster(rng, 5_000, unstaked_ratio);
     let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
     (nodes, cluster_nodes)
 }

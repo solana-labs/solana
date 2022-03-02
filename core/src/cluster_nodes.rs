@@ -43,7 +43,6 @@ enum NodeId {
     Pubkey(Pubkey),
 }
 
-// pub for bench
 pub struct Node {
     node: NodeId,
     stake: u64,
@@ -479,8 +478,7 @@ impl From<Pubkey> for NodeId {
     }
 }
 
-// pub for bench
-pub fn make_cluster<R: Rng>(
+pub fn make_test_cluster<R: Rng>(
     rng: &mut R,
     num_nodes: usize,
     unstaked_ratio: Option<(u32, u32)>,
@@ -559,7 +557,7 @@ mod tests {
     #[test]
     fn test_cluster_nodes_retransmit() {
         let mut rng = rand::thread_rng();
-        let (nodes, stakes, cluster_info) = make_cluster(&mut rng, 1_000, None);
+        let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
         let this_node = cluster_info.my_contact_info();
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
@@ -640,7 +638,7 @@ mod tests {
     #[test]
     fn test_cluster_nodes_broadcast() {
         let mut rng = rand::thread_rng();
-        let (nodes, stakes, cluster_info) = make_cluster(&mut rng, 1_000, None);
+        let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
         let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
