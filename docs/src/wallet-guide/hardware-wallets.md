@@ -37,7 +37,7 @@ usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 
 `DERVIATION_PATH` is used to navigate to Solana keys within your hardware wallet.
 The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
-are positive integers.
+are nonnegative integers.
 
 For example, a fully qualified URL for a Ledger device might be:
 

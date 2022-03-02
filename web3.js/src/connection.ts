@@ -470,7 +470,7 @@ export type SimulatedTransactionAccountInfo = {
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
-  accounts?: SimulatedTransactionAccountInfo[] | null;
+  accounts?: (SimulatedTransactionAccountInfo | null)[] | null;
   unitsConsumed?: number;
 };
 
@@ -481,13 +481,15 @@ const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
     accounts: optional(
       nullable(
         array(
-          pick({
-            executable: boolean(),
-            owner: string(),
-            lamports: number(),
-            data: array(string()),
-            rentEpoch: optional(number()),
-          }),
+          nullable(
+            pick({
+              executable: boolean(),
+              owner: string(),
+              lamports: number(),
+              data: array(string()),
+              rentEpoch: optional(number()),
+            }),
+          ),
         ),
       ),
     ),
@@ -2551,13 +2553,14 @@ export class Connection {
   }
 
   /**
-   * Fetch all the account info for multiple accounts specified by an array of public keys
+   * Fetch all the account info for multiple accounts specified by an array of public keys, return with context
    */
-  async getMultipleAccountsInfo(
+  async getMultipleAccountsInfoAndContext(
     publicKeys: PublicKey[],
-    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
-  ): Promise<(AccountInfo<Buffer | ParsedAccountData> | null)[]> {
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<(AccountInfo<Buffer> | null)[]>> {
     const keys = publicKeys.map(key => key.toBase58());
+
     const chunks = sliceIntoChunks(keys, 100);
 
     let accounts : (AccountInfo<Buffer | ParsedAccountData> | null)[] = [];
@@ -2574,7 +2577,7 @@ export class Connection {
           encoding = configOrCommitment.encoding || 'base64';
         }
       }
-      console.log(chunks[i].length, i);
+
       const args = this._buildArgs([chunks[i]], commitment, encoding);
       const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
       const res = create(
@@ -2587,10 +2590,8 @@ export class Connection {
           'failed to get info for accounts ' + chunks[i] + ': ' + res.error.message,
         );
       }
-
       accounts = accounts.concat(res.result.value);
     }
-
     return accounts;
   }
 

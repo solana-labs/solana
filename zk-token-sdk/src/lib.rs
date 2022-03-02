@@ -23,7 +23,7 @@ pub(crate) mod macros;
 #[cfg(not(target_arch = "bpf"))]
 pub mod encryption;
 #[cfg(not(target_arch = "bpf"))]
-mod errors;
+pub mod errors;
 #[cfg(not(target_arch = "bpf"))]
 mod range_proof;
 #[cfg(not(target_arch = "bpf"))]

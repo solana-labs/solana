@@ -3,8 +3,8 @@
 //!
 //! The module contains implementations of the following proof systems that work on Pedersen
 //! commitments and twisted ElGamal ciphertexts:
-//! - Equality proof: can be used to certify that a twisted ElGamal ciphertext and a Pedersen
-//! commitment encrypt/encode the same message.
+//! - Equality proof: can be used to certify that a twisted ElGamal ciphertext encrypts the same
+//! message as either a Pedersen commitment or another ElGamal ciphertext.
 //! - Validity proof: can be used to certify that a twisted ElGamal ciphertext is a properly-formed
 //! ciphertext with respect to a pair of ElGamal public keys.
 //! - Zero-balance proof: can be used to certify that a twisted ElGamal ciphertext encrypts the

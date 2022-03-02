@@ -83,19 +83,26 @@ impl RentCollector {
     /// given an account that 'should_collect_rent'
     /// returns (amount rent due, is_exempt_from_rent)
     pub fn get_rent_due(&self, account: &impl ReadableAccount) -> RentDue {
-        let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
-            .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
-            .sum();
-
-        // avoid infinite rent in rust 1.45
-        let years_elapsed = if self.slots_per_year != 0.0 {
-            slots_elapsed as f64 / self.slots_per_year
+        if self
+            .rent
+            .is_exempt(account.lamports(), account.data().len())
+        {
+            RentDue::Exempt
         } else {
-            0.0
-        };
+            let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
+                .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
+                .sum();
 
-        self.rent
-            .due(account.lamports(), account.data().len(), years_elapsed)
+            // avoid infinite rent in rust 1.45
+            let years_elapsed = if self.slots_per_year != 0.0 {
+                slots_elapsed as f64 / self.slots_per_year
+            } else {
+                0.0
+            };
+
+            // we know this account is not exempt
+            RentDue::Paying(self.rent.due_amount(account.data().len(), years_elapsed))
+        }
     }
 
     // Updates the account's lamports and status, and returns the amount of rent collected, if any.
@@ -225,7 +232,7 @@ mod tests {
     fn test_collect_from_account_created_and_existing() {
         let old_lamports = 1000;
         let old_epoch = 1;
-        let new_epoch = 3;
+        let new_epoch = 2;
 
         let (mut created_account, mut existing_account) = {
             let account = AccountSharedData::from(Account {
@@ -329,7 +336,7 @@ mod tests {
             rent_epoch: account_rent_epoch,
             ..Account::default()
         });
-        let rent_collector = default_rent_collector_clone_with_epoch(account_rent_epoch + 2);
+        let rent_collector = default_rent_collector_clone_with_epoch(account_rent_epoch + 1);
 
         let collected =
             rent_collector.collect_from_existing_account(&Pubkey::new_unique(), &mut account, None);

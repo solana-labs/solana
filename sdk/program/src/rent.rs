@@ -68,10 +68,15 @@ impl Rent {
         if self.is_exempt(balance, data_len) {
             RentDue::Exempt
         } else {
-            let actual_data_len = data_len as u64 + ACCOUNT_STORAGE_OVERHEAD;
-            let lamports_per_year = self.lamports_per_byte_year * actual_data_len;
-            RentDue::Paying((lamports_per_year as f64 * years_elapsed) as u64)
+            RentDue::Paying(self.due_amount(data_len, years_elapsed))
         }
+    }
+
+    /// rent due for account that is known to be not exempt
+    pub fn due_amount(&self, data_len: usize, years_elapsed: f64) -> u64 {
+        let actual_data_len = data_len as u64 + ACCOUNT_STORAGE_OVERHEAD;
+        let lamports_per_year = self.lamports_per_byte_year * actual_data_len;
+        (lamports_per_year as f64 * years_elapsed) as u64
     }
 
     pub fn free() -> Self {

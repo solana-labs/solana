@@ -416,7 +416,7 @@ pub fn retransmitter(
         .unwrap()
 }
 
-pub(crate) struct RetransmitStage {
+pub struct RetransmitStage {
     retransmit_thread_handle: JoinHandle<()>,
     window_service: WindowService,
     cluster_slots_service: ClusterSlotsService,

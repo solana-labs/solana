@@ -417,8 +417,7 @@ pub mod tests {
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::AtomicU64,
-        std::sync::atomic::Ordering,
+        std::sync::atomic::{AtomicU64, Ordering},
     };
 
     #[ignore]

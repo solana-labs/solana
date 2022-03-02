@@ -3,17 +3,6 @@ module.exports = {
     About: ["introduction", "terminology", "history"],
     Wallets: [
       "wallet-guide",
-      "wallet-guide/apps",
-      {
-        type: "category",
-        label: "Web Wallets",
-        items: ["wallet-guide/web-wallets", "wallet-guide/solflare"],
-      },
-      {
-        type: "category",
-        label: "Hardware Wallets",
-        items: ["wallet-guide/ledger-live"],
-      },
       {
         type: "category",
         label: "Command-line Wallets",

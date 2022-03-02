@@ -102,6 +102,8 @@ command_step() {
     command: "$2"
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
+    agents:
+      - "queue=solana"
 EOF
 }
 
@@ -168,7 +170,7 @@ all_test_steps() {
     timeout_in_minutes: 20
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
-      - "queue=default"
+      - "queue=solana"
 EOF
   else
     annotate --style info \
@@ -221,6 +223,8 @@ EOF
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
     timeout_in_minutes: 30
+    agents:
+      - "queue=solana"
 EOF
   else
     annotate --style info \
@@ -246,6 +250,8 @@ EOF
   - command: "scripts/build-downstream-anchor-projects.sh"
     name: "downstream-anchor-projects"
     timeout_in_minutes: 10
+    agents:
+      - "queue=solana"
 EOF
   else
     annotate --style info \

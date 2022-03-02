@@ -326,6 +326,21 @@ fn shared_new<T: WritableAccount>(lamports: u64, space: usize, owner: &Pubkey) -
     )
 }
 
+fn shared_new_rent_epoch<T: WritableAccount>(
+    lamports: u64,
+    space: usize,
+    owner: &Pubkey,
+    rent_epoch: Epoch,
+) -> T {
+    T::create(
+        lamports,
+        vec![0u8; space],
+        *owner,
+        bool::default(),
+        rent_epoch,
+    )
+}
+
 fn shared_new_ref<T: WritableAccount>(
     lamports: u64,
     space: usize,
@@ -434,6 +449,9 @@ impl Account {
     ) -> Result<RefCell<Self>, bincode::Error> {
         shared_new_ref_data_with_space(lamports, state, space, owner)
     }
+    pub fn new_rent_epoch(lamports: u64, space: usize, owner: &Pubkey, rent_epoch: Epoch) -> Self {
+        shared_new_rent_epoch(lamports, space, owner, rent_epoch)
+    }
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
         shared_deserialize_data(self)
     }
@@ -489,6 +507,9 @@ impl AccountSharedData {
         owner: &Pubkey,
     ) -> Result<RefCell<Self>, bincode::Error> {
         shared_new_ref_data_with_space(lamports, state, space, owner)
+    }
+    pub fn new_rent_epoch(lamports: u64, space: usize, owner: &Pubkey, rent_epoch: Epoch) -> Self {
+        shared_new_rent_epoch(lamports, space, owner, rent_epoch)
     }
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
         shared_deserialize_data(self)

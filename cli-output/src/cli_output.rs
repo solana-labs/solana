@@ -393,19 +393,19 @@ impl fmt::Display for CliValidators {
         ) -> fmt::Result {
             fn non_zero_or_dash(v: u64, max_v: u64) -> String {
                 if v == 0 {
-                    "-         ".into()
+                    "        -      ".into()
                 } else if v == max_v {
-                    format!("{:>8} (  0)", v)
+                    format!("{:>9} (  0)", v)
                 } else if v > max_v.saturating_sub(100) {
-                    format!("{:>8} ({:>3})", v, -(max_v.saturating_sub(v) as isize))
+                    format!("{:>9} ({:>3})", v, -(max_v.saturating_sub(v) as isize))
                 } else {
-                    format!("{:>8}      ", v)
+                    format!("{:>9}      ", v)
                 }
             }
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>3}%  {:>14}  {:>14} {:>7} {:>8}  {:>7}  {}",
+                "{} {:<44}  {:<44}  {:>3}%  {:>14}  {:>14} {:>7} {:>8}  {:>7}  {:>22} ({:.2}%)",
                 if validator.delinquent {
                     WARNING.to_string()
                 } else {
@@ -419,19 +419,19 @@ impl fmt::Display for CliValidators {
                 if let Some(skip_rate) = validator.skip_rate {
                     format!("{:.2}%", skip_rate)
                 } else {
-                    "- ".to_string()
+                    "-   ".to_string()
                 },
                 validator.epoch_credits,
                 validator.version,
-                if validator.activated_stake > 0 {
-                    format!(
-                        "{} ({:.2}%)",
-                        build_balance_message(validator.activated_stake, use_lamports_unit, true),
-                        100. * validator.activated_stake as f64 / total_active_stake as f64,
-                    )
-                } else {
-                    "-".into()
-                },
+                build_balance_message_with_config(
+                    validator.activated_stake,
+                    &BuildBalanceMessageConfig {
+                        use_lamports_unit,
+                        trim_trailing_zeros: false,
+                        ..BuildBalanceMessageConfig::default()
+                    }
+                ),
+                100. * validator.activated_stake as f64 / total_active_stake as f64,
             )
         }
 
@@ -441,13 +441,13 @@ impl fmt::Display for CliValidators {
             0
         };
         let header = style(format!(
-            "{:padding$} {:<44}  {:<38}  {}  {}  {} {}  {}  {}  {}",
+            "{:padding$} {:<44}  {:<38}  {}  {}  {} {}  {}  {}    {}",
             " ",
             "Identity",
             "Vote Account",
             "Commission",
-            "Last Vote     ",
-            "Root Slot   ",
+            "Last Vote      ",
+            "Root Slot    ",
             "Skip Rate",
             "Credits",
             "Version",
@@ -2451,6 +2451,8 @@ pub struct CliGossipNode {
     pub rpc_host: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feature_set: Option<u32>,
 }
 
 impl CliGossipNode {
@@ -2463,6 +2465,7 @@ impl CliGossipNode {
             tpu_port: info.tpu.map(|addr| addr.port()),
             rpc_host: info.rpc.map(|addr| addr.to_string()),
             version: info.version,
+            feature_set: info.feature_set,
         }
     }
 }
@@ -2488,7 +2491,7 @@ impl fmt::Display for CliGossipNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:15} | {:44} | {:6} | {:5} | {:21} | {}",
+            "{:15} | {:44} | {:6} | {:5} | {:21} | {:8}| {}",
             unwrap_to_string_or_none(self.ip_address.as_ref()),
             self.identity_label
                 .as_ref()
@@ -2497,6 +2500,7 @@ impl fmt::Display for CliGossipNode {
             unwrap_to_string_or_none(self.tpu_port.as_ref()),
             unwrap_to_string_or_none(self.rpc_host.as_ref()),
             unwrap_to_string_or_default(self.version.as_ref(), "unknown"),
+            unwrap_to_string_or_default(self.feature_set.as_ref(), "unknown"),
         )
     }
 }
@@ -2511,10 +2515,10 @@ impl fmt::Display for CliGossipNodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
-            "IP Address      | Node identifier                              \
-             | Gossip | TPU   | RPC Address           | Version\n\
+            "IP Address      | Identity                                     \
+             | Gossip | TPU   | RPC Address           | Version | Feature Set\n\
              ----------------+----------------------------------------------+\
-             --------+-------+-----------------------+----------------",
+             --------+-------+-----------------------+---------+----------------",
         )?;
         for node in self.0.iter() {
             writeln!(f, "{}", node)?;

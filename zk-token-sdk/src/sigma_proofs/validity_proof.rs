@@ -298,8 +298,10 @@ impl AggregatedValidityProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen};
+    use {
+        super::*,
+        crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen},
+    };
 
     #[test]
     fn test_validity_proof_correctness() {

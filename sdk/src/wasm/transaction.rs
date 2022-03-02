@@ -2,11 +2,7 @@
 #![cfg(target_arch = "wasm32")]
 #![allow(non_snake_case)]
 use {
-    crate::{
-        hash::Hash,
-        signer::keypair::Keypair,
-        {message::Message, transaction::Transaction},
-    },
+    crate::{hash::Hash, message::Message, signer::keypair::Keypair, transaction::Transaction},
     solana_program::{
         pubkey::Pubkey,
         wasm::{display_to_jsvalue, instructions::Instructions},

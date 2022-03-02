@@ -36,6 +36,8 @@ pub struct ComputeBudget {
     pub sha256_base_cost: u64,
     /// Incremental number of units consumed by SHA256 (based on bytes)
     pub sha256_byte_cost: u64,
+    /// Maximum number of slices hashed per syscall
+    pub sha256_max_slices: u64,
     /// Maximum BPF to BPF call depth
     pub max_call_depth: usize,
     /// Size of a stack frame in bytes, must match the size specified in the LLVM BPF backend
@@ -84,6 +86,7 @@ impl ComputeBudget {
             max_invoke_depth: 4,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
+            sha256_max_slices: 20_000,
             max_call_depth: 64,
             stack_frame_size: 4_096,
             log_pubkey_units: 100,

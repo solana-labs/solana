@@ -27,7 +27,7 @@ mod target_arch {
             },
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                equality_proof::EqualityProof,
+                equality_proof::{CtxtCommEqualityProof, CtxtCtxtEqualityProof},
                 errors::*,
                 fee_proof::FeeSigmaProof,
                 validity_proof::{AggregatedValidityProof, ValidityProof},
@@ -151,16 +151,30 @@ mod target_arch {
         }
     }
 
-    impl From<EqualityProof> for pod::EqualityProof {
-        fn from(proof: EqualityProof) -> Self {
+    impl From<CtxtCommEqualityProof> for pod::CtxtCommEqualityProof {
+        fn from(proof: CtxtCommEqualityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::EqualityProof> for EqualityProof {
+    impl TryFrom<pod::CtxtCommEqualityProof> for CtxtCommEqualityProof {
         type Error = EqualityProofError;
 
-        fn try_from(pod: pod::EqualityProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::CtxtCommEqualityProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
+    impl From<CtxtCtxtEqualityProof> for pod::CtxtCtxtEqualityProof {
+        fn from(proof: CtxtCtxtEqualityProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::CtxtCtxtEqualityProof> for CtxtCtxtEqualityProof {
+        type Error = EqualityProofError;
+
+        fn try_from(pod: pod::CtxtCtxtEqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
@@ -313,9 +327,9 @@ mod target_arch {
     impl From<TransferPubkeys> for pod::TransferPubkeys {
         fn from(keys: TransferPubkeys) -> Self {
             Self {
-                source: keys.source.into(),
-                dest: keys.dest.into(),
-                auditor: keys.auditor.into(),
+                pubkey_source: keys.pubkey_source.into(),
+                pubkey_dest: keys.pubkey_dest.into(),
+                pubkey_auditor: keys.pubkey_auditor.into(),
             }
         }
     }
@@ -325,9 +339,9 @@ mod target_arch {
 
         fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
-                source: pod.source.try_into()?,
-                dest: pod.dest.try_into()?,
-                auditor: pod.auditor.try_into()?,
+                pubkey_source: pod.pubkey_source.try_into()?,
+                pubkey_dest: pod.pubkey_dest.try_into()?,
+                pubkey_auditor: pod.pubkey_auditor.try_into()?,
             })
         }
     }
@@ -335,10 +349,10 @@ mod target_arch {
     impl From<TransferWithFeePubkeys> for pod::TransferWithFeePubkeys {
         fn from(keys: TransferWithFeePubkeys) -> Self {
             Self {
-                source: keys.source.into(),
-                dest: keys.dest.into(),
-                auditor: keys.auditor.into(),
-                fee_collector: keys.fee_collector.into(),
+                pubkey_source: keys.pubkey_source.into(),
+                pubkey_dest: keys.pubkey_dest.into(),
+                pubkey_auditor: keys.pubkey_auditor.into(),
+                pubkey_withdraw_withheld_authority: keys.pubkey_withdraw_withheld_authority.into(),
             }
         }
     }
@@ -348,10 +362,12 @@ mod target_arch {
 
         fn try_from(pod: pod::TransferWithFeePubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
-                source: pod.source.try_into()?,
-                dest: pod.dest.try_into()?,
-                auditor: pod.auditor.try_into()?,
-                fee_collector: pod.fee_collector.try_into()?,
+                pubkey_source: pod.pubkey_source.try_into()?,
+                pubkey_dest: pod.pubkey_dest.try_into()?,
+                pubkey_auditor: pod.pubkey_auditor.try_into()?,
+                pubkey_withdraw_withheld_authority: pod
+                    .pubkey_withdraw_withheld_authority
+                    .try_into()?,
             })
         }
     }
@@ -360,9 +376,9 @@ mod target_arch {
         fn from(ciphertext: TransferAmountEncryption) -> Self {
             Self {
                 commitment: ciphertext.commitment.into(),
-                source: ciphertext.source.into(),
-                dest: ciphertext.dest.into(),
-                auditor: ciphertext.auditor.into(),
+                handle_source: ciphertext.handle_source.into(),
+                handle_dest: ciphertext.handle_dest.into(),
+                handle_auditor: ciphertext.handle_auditor.into(),
             }
         }
     }
@@ -373,9 +389,9 @@ mod target_arch {
         fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
             Ok(Self {
                 commitment: pod.commitment.try_into()?,
-                source: pod.source.try_into()?,
-                dest: pod.dest.try_into()?,
-                auditor: pod.auditor.try_into()?,
+                handle_source: pod.handle_source.try_into()?,
+                handle_dest: pod.handle_dest.try_into()?,
+                handle_auditor: pod.handle_auditor.try_into()?,
             })
         }
     }
@@ -384,8 +400,10 @@ mod target_arch {
         fn from(ciphertext: FeeEncryption) -> Self {
             Self {
                 commitment: ciphertext.commitment.into(),
-                dest: ciphertext.dest.into(),
-                fee_collector: ciphertext.fee_collector.into(),
+                handle_dest: ciphertext.handle_dest.into(),
+                handle_withdraw_withheld_authority: ciphertext
+                    .handle_withdraw_withheld_authority
+                    .into(),
             }
         }
     }
@@ -396,8 +414,10 @@ mod target_arch {
         fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
             Ok(Self {
                 commitment: pod.commitment.try_into()?,
-                dest: pod.dest.try_into()?,
-                fee_collector: pod.fee_collector.try_into()?,
+                handle_dest: pod.handle_dest.try_into()?,
+                handle_withdraw_withheld_authority: pod
+                    .handle_withdraw_withheld_authority
+                    .try_into()?,
             })
         }
     }

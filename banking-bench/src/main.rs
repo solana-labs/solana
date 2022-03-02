@@ -175,6 +175,11 @@ fn main() {
     let mut bank_forks = BankForks::new(bank0);
     let mut bank = bank_forks.working_bank();
 
+    // set cost tracker limits to MAX so it will not filter out TXs
+    bank.write_cost_tracker()
+        .unwrap()
+        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+
     info!("threads: {} txs: {}", num_threads, total_num_transactions);
 
     let same_payer = matches.is_present("same_payer");
@@ -334,6 +339,13 @@ fn main() {
                 bank_forks.insert(new_bank);
                 bank = bank_forks.working_bank();
                 insert_time.stop();
+
+                // set cost tracker limits to MAX so it will not filter out TXs
+                bank.write_cost_tracker().unwrap().set_limits(
+                    std::u64::MAX,
+                    std::u64::MAX,
+                    std::u64::MAX,
+                );
 
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());

@@ -83,15 +83,25 @@ impl fmt::Debug for DecryptHandle {
     }
 }
 
-/// Serialization of equality proofs
+/// Serialization of `CtxtCommEqualityProof`
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct EqualityProof(pub [u8; 192]);
+pub struct CtxtCommEqualityProof(pub [u8; 192]);
 
-// `EqualityProof` is a Pod and Zeroable.
+// `CtxtCommEqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for EqualityProof {}
-unsafe impl Pod for EqualityProof {}
+unsafe impl Zeroable for CtxtCommEqualityProof {}
+unsafe impl Pod for CtxtCommEqualityProof {}
+
+/// Serialization of `CtxtCtxtEqualityProof`
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct CtxtCtxtEqualityProof(pub [u8; 224]);
+
+// `CtxtCtxtEqualityProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for CtxtCtxtEqualityProof {}
+unsafe impl Pod for CtxtCtxtEqualityProof {}
 
 /// Serialization of validity proofs
 #[derive(Clone, Copy)]
@@ -184,40 +194,35 @@ impl Default for AeCiphertext {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubkeys {
-    pub source: ElGamalPubkey,
-    pub dest: ElGamalPubkey,
-    pub auditor: ElGamalPubkey,
+    pub pubkey_source: ElGamalPubkey,
+    pub pubkey_dest: ElGamalPubkey,
+    pub pubkey_auditor: ElGamalPubkey,
 }
-
-// pub struct TransferPubkeys(pub [u8; 96]);
-
-// unsafe impl Zeroable for TransferPubkeys {}
-// unsafe impl Pod for TransferPubkeys {}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeePubkeys {
-    pub source: ElGamalPubkey,
-    pub dest: ElGamalPubkey,
-    pub auditor: ElGamalPubkey,
-    pub fee_collector: ElGamalPubkey,
+    pub pubkey_source: ElGamalPubkey,
+    pub pubkey_dest: ElGamalPubkey,
+    pub pubkey_auditor: ElGamalPubkey,
+    pub pubkey_withdraw_withheld_authority: ElGamalPubkey,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferAmountEncryption {
     pub commitment: PedersenCommitment,
-    pub source: DecryptHandle,
-    pub dest: DecryptHandle,
-    pub auditor: DecryptHandle,
+    pub handle_source: DecryptHandle,
+    pub handle_dest: DecryptHandle,
+    pub handle_auditor: DecryptHandle,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct FeeEncryption {
     pub commitment: PedersenCommitment,
-    pub dest: DecryptHandle,
-    pub fee_collector: DecryptHandle,
+    pub handle_dest: DecryptHandle,
+    pub handle_withdraw_withheld_authority: DecryptHandle,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]

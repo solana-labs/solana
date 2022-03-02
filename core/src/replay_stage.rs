@@ -1593,10 +1593,7 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions {
-                    vote_only_bank,
-                    simulation_bank: false,
-                },
+                NewBankOptions { vote_only_bank },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
@@ -1616,7 +1613,10 @@ impl ReplayStage {
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
-        let confirm_result = blockstore_processor::confirm_slot(
+        // All errors must lead to marking the slot as dead, otherwise,
+        // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
+        // will break!
+        blockstore_processor::confirm_slot(
             blockstore,
             bank,
             &mut bank_progress.replay_stats,
@@ -1628,16 +1628,9 @@ impl ReplayStage {
             None,
             verify_recyclers,
             false,
-        );
+        )?;
         let tx_count_after = bank_progress.replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
-        confirm_result.map_err(|err| {
-            // All errors must lead to marking the slot as dead, otherwise,
-            // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
-            // will break!
-            err
-        })?;
-
         Ok(tx_count)
     }
 

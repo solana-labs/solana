@@ -941,15 +941,20 @@ impl JsonRpcRequestProcessor {
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
     ) -> Result<()> {
+        let first_available_block = self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default();
+        let err: Error = RpcCustomError::BlockCleanedUp {
+            slot,
+            first_available_block,
+        }
+        .into();
         if let Err(BlockstoreError::SlotCleanedUp) = result {
-            return Err(RpcCustomError::BlockCleanedUp {
-                slot,
-                first_available_block: self
-                    .blockstore
-                    .get_first_available_block()
-                    .unwrap_or_default(),
-            }
-            .into());
+            return Err(err);
+        }
+        if slot < first_available_block {
+            return Err(err);
         }
         Ok(())
     }
@@ -2075,7 +2080,7 @@ impl JsonRpcRequestProcessor {
     }
 }
 
-fn optimize_filters(filters: &mut Vec<RpcFilterType>) {
+fn optimize_filters(filters: &mut [RpcFilterType]) {
     filters.iter_mut().for_each(|filter_type| {
         if let RpcFilterType::Memcmp(compare) = filter_type {
             use MemcmpEncodedBytes::*;
@@ -3472,7 +3477,7 @@ pub mod rpc_full {
             let preflight_commitment = config
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
-            let preflight_bank = meta.bank(preflight_commitment);
+            let preflight_bank = &*meta.bank(preflight_commitment);
             let transaction = sanitize_transaction(unsanitized_tx)?;
             let signature = *transaction.signature();
 
@@ -3569,7 +3574,7 @@ pub mod rpc_full {
             let (_, mut unsanitized_tx) =
                 decode_and_deserialize::<VersionedTransaction>(data, encoding)?;
 
-            let bank = meta.bank(config.commitment);
+            let bank = &*meta.bank(config.commitment);
             if config.replace_recent_blockhash {
                 if config.sig_verify {
                     return Err(Error::invalid_params(
@@ -3637,7 +3642,7 @@ pub mod rpc_full {
             };
 
             Ok(new_response(
-                &bank,
+                bank,
                 RpcSimulateTransactionResult {
                     err: result.err(),
                     logs: Some(logs),

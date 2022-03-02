@@ -2,6 +2,7 @@ use {
     crate::{
         cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
+        packet_threshold::DynamicPacketToProcessThreshold,
         repair_response,
         repair_service::{OutstandingShredRepairs, RepairStats},
         request_response::RequestResponse,
@@ -23,7 +24,6 @@ use {
         blockstore::Blockstore,
         shred::{Nonce, Shred, SIZE_OF_NONCE},
     },
-    solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
     solana_perf::packet::{limited_deserialize, PacketBatch, PacketBatchRecycler},
     solana_sdk::{
@@ -322,7 +322,7 @@ impl ServeRepair {
         requests_receiver: &PacketBatchReceiver,
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
-        max_packets: &mut usize,
+        packet_threshold: &mut DynamicPacketToProcessThreshold,
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
@@ -332,29 +332,21 @@ impl ServeRepair {
         let mut dropped_packets = 0;
         while let Ok(more) = requests_receiver.try_recv() {
             total_packets += more.packets.len();
-            if total_packets < *max_packets {
-                // Drop the rest in the channel in case of dos
-                reqs_v.push(more);
-            } else {
+            if packet_threshold.should_drop(total_packets) {
                 dropped_packets += more.packets.len();
+            } else {
+                reqs_v.push(more);
             }
         }
 
         stats.dropped_packets += dropped_packets;
         stats.total_packets += total_packets;
 
-        let mut time = Measure::start("repair::handle_packets");
+        let timer = Instant::now();
         for reqs in reqs_v {
             Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
         }
-        time.stop();
-        if total_packets >= *max_packets {
-            if time.as_ms() > 1000 {
-                *max_packets = (*max_packets * 9) / 10;
-            } else {
-                *max_packets = (*max_packets * 10) / 9;
-            }
-        }
+        packet_threshold.update(total_packets, timer.elapsed());
         Ok(())
     }
 
@@ -403,7 +395,7 @@ impl ServeRepair {
             .spawn(move || {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();
-                let mut max_packets = 1024;
+                let mut packet_threshold = DynamicPacketToProcessThreshold::default();
                 loop {
                     let result = Self::run_listen(
                         &me,
@@ -412,7 +404,7 @@ impl ServeRepair {
                         &requests_receiver,
                         &response_sender,
                         &mut stats,
-                        &mut max_packets,
+                        &mut packet_threshold,
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}

@@ -309,6 +309,12 @@ impl Rocks {
         let oldest_slot = OldestSlot::default();
 
         // Get column family descriptors and names
+        let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
+            new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(
+                &options.shred_storage_type,
+                &access_type,
+                &oldest_slot,
+            );
         let cfs = vec![
             new_cf_descriptor::<SlotMeta>(&access_type, &oldest_slot),
             new_cf_descriptor::<DeadSlots>(&access_type, &oldest_slot),
@@ -318,18 +324,8 @@ impl Rocks {
             new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
             new_cf_descriptor::<Root>(&access_type, &oldest_slot),
             new_cf_descriptor::<Index>(&access_type, &oldest_slot),
-            new_cf_descriptor_shreds::<ShredData>(
-                &options.shred_storage_type,
-                &access_type,
-                &oldest_slot,
-                &options.shred_data_cf_size,
-            ),
-            new_cf_descriptor_shreds::<ShredCode>(
-                &options.shred_storage_type,
-                &access_type,
-                &oldest_slot,
-                &options.shred_code_cf_size,
-            ),
+            cf_descriptor_shred_data,
+            cf_descriptor_shred_code,
             new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
             new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
             new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
@@ -981,7 +977,7 @@ pub enum ShredStorageType {
     // (Experimental) Stores shreds under RocksDB's FIFO compaction which
     // allows ledger store to reclaim storage more efficiently with
     // lower I/O overhead.
-    RocksFifo,
+    RocksFifo(BlockstoreRocksFifoOptions),
 }
 
 pub struct BlockstoreOptions {
@@ -993,22 +989,6 @@ pub struct BlockstoreOptions {
     pub enforce_ulimit_nofile: bool,
     // Determine how to store both data and coding shreds. Default: RocksLevel.
     pub shred_storage_type: ShredStorageType,
-    // The maximum storage size for storing data shreds in column family
-    // [`cf::DataShred`].  Typically, data shreds contribute around 25% of the
-    // ledger store storage size if the RPC service is enabled, or 50% if RPC
-    // service is not enabled.
-    //
-    // Currently, this setting is only used when shred_storage_type is set to
-    // [`ShredStorageType::RocksFifo`].
-    pub shred_data_cf_size: u64,
-    // The maximum storage size for storing coding shreds in column family
-    // [`cf::CodeShred`].  Typically, coding shreds contribute around 20% of the
-    // ledger store storage size if the RPC service is enabled, or 40% if RPC
-    // service is not enabled.
-    //
-    // Currently, this setting is only used when shred_storage_type is set to
-    // [`ShredStorageType::RocksFifo`].
-    pub shred_code_cf_size: u64,
 }
 
 impl Default for BlockstoreOptions {
@@ -1019,11 +999,37 @@ impl Default for BlockstoreOptions {
             recovery_mode: None,
             enforce_ulimit_nofile: true,
             shred_storage_type: ShredStorageType::RocksLevel,
-            // Maximum size of cf::DataShred.  Used when `shred_storage_type`
-            // is set to ShredStorageType::RocksFifo.
+        }
+    }
+}
+
+pub struct BlockstoreRocksFifoOptions {
+    // The maximum storage size for storing data shreds in column family
+    // [`cf::DataShred`].  Typically, data shreds contribute around 25% of the
+    // ledger store storage size if the RPC service is enabled, or 50% if RPC
+    // service is not enabled.
+    //
+    // Note that this number must be greater than FIFO_WRITE_BUFFER_SIZE
+    // otherwise we won't be able to write any file.  If not, the blockstore
+    // will panic.
+    pub shred_data_cf_size: u64,
+    // The maximum storage size for storing coding shreds in column family
+    // [`cf::CodeShred`].  Typically, coding shreds contribute around 20% of the
+    // ledger store storage size if the RPC service is enabled, or 40% if RPC
+    // service is not enabled.
+    //
+    // Note that this number must be greater than FIFO_WRITE_BUFFER_SIZE
+    // otherwise we won't be able to write any file.  If not, the blockstore
+    // will panic.
+    pub shred_code_cf_size: u64,
+}
+
+impl Default for BlockstoreRocksFifoOptions {
+    fn default() -> Self {
+        Self {
+            // Maximum size of cf::ShredData.
             shred_data_cf_size: DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE,
-            // Maximum size of cf::CodeShred.  Used when `shred_storage_type`
-            // is set to ShredStorageType::RocksFifo.
+            // Maximum size of cf::ShredCode.
             shred_code_cf_size: DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE,
         }
     }
@@ -1415,39 +1421,42 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options
 }
 
-/// Constructs and returns a ColumnFamilyDescriptor based on the
-/// specified ShredStorageType.
-fn new_cf_descriptor_shreds<C: 'static + Column + ColumnName>(
-    storage_type: &ShredStorageType,
+/// Creates and returns the column family descriptors for both data shreds and
+/// coding shreds column families.
+///
+/// @return a pair of ColumnFamilyDescriptor where the first / second elements
+/// are associated to the first / second template class respectively.
+fn new_cf_descriptor_pair_shreds<
+    D: 'static + Column + ColumnName, // Column Family for Data Shred
+    C: 'static + Column + ColumnName, // Column Family for Coding Shred
+>(
+    shred_storage_type: &ShredStorageType,
     access_type: &AccessType,
     oldest_slot: &OldestSlot,
-    max_cf_size: &u64,
-) -> ColumnFamilyDescriptor {
-    match storage_type {
-        ShredStorageType::RocksLevel => new_cf_descriptor::<C>(access_type, oldest_slot),
-        ShredStorageType::RocksFifo => {
-            if *max_cf_size > FIFO_WRITE_BUFFER_SIZE {
-                new_cf_descriptor_fifo::<C>(max_cf_size)
-            } else {
-                warn!(
-                    "{} cf_size must be greater than {} when using ShredStorageType::RocksFifo.",
-                    C::NAME,
-                    FIFO_WRITE_BUFFER_SIZE
-                );
-                warn!(
-                    "Fall back to ShredStorageType::RocksLevel for cf::{}.",
-                    C::NAME
-                );
-                new_cf_descriptor::<C>(access_type, oldest_slot)
-            }
-        }
+) -> (ColumnFamilyDescriptor, ColumnFamilyDescriptor) {
+    match shred_storage_type {
+        ShredStorageType::RocksLevel => (
+            new_cf_descriptor::<D>(access_type, oldest_slot),
+            new_cf_descriptor::<C>(access_type, oldest_slot),
+        ),
+        ShredStorageType::RocksFifo(fifo_options) => (
+            new_cf_descriptor_fifo::<D>(&fifo_options.shred_data_cf_size),
+            new_cf_descriptor_fifo::<C>(&fifo_options.shred_code_cf_size),
+        ),
     }
 }
 
 fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(
     max_cf_size: &u64,
 ) -> ColumnFamilyDescriptor {
-    ColumnFamilyDescriptor::new(C::NAME, get_cf_options_fifo::<C>(max_cf_size))
+    if *max_cf_size > FIFO_WRITE_BUFFER_SIZE {
+        ColumnFamilyDescriptor::new(C::NAME, get_cf_options_fifo::<C>(max_cf_size))
+    } else {
+        panic!(
+            "{} cf_size must be greater than write buffer size {} when using ShredStorageType::RocksFifo.",
+            C::NAME, FIFO_WRITE_BUFFER_SIZE
+        );
+    }
 }
 
 /// Returns the RocksDB Column Family Options which use FIFO Compaction.

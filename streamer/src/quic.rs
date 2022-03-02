@@ -256,10 +256,12 @@ pub fn spawn_server(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crossbeam_channel::unbounded;
-    use quinn::{ClientConfig, NewConnection};
-    use std::{net::SocketAddr, time::Instant};
+    use {
+        super::*,
+        crossbeam_channel::unbounded,
+        quinn::{ClientConfig, NewConnection},
+        std::{net::SocketAddr, time::Instant},
+    };
 
     struct SkipServerVerification;
 

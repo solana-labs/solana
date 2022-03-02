@@ -25,10 +25,13 @@ use {
         short_vec::decode_shortu16_len,
         signature::Signature,
     },
-    std::hash::Hasher,
-    std::sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    std::time::{Duration, Instant},
-    std::{convert::TryFrom, mem::size_of},
+    std::{
+        convert::TryFrom,
+        hash::Hasher,
+        mem::size_of,
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        time::{Duration, Instant},
+    },
 };
 
 // Representing key tKeYE4wtowRb8yRroZShTipE18YVnqwXjsSAoNsFU6g
@@ -504,7 +507,7 @@ impl Deduper {
 }
 
 //inplace shrink a batch of packets
-pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
+pub fn shrink_batches(batches: &mut [PacketBatch]) -> usize {
     let mut valid_batch_ix = 0;
     let mut valid_packet_ix = 0;
     let mut last_valid_batch = 0;
@@ -567,7 +570,7 @@ pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
     inc_new_counter_debug!("ed25519_verify_disabled", packet_count);
 }
 
-pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut Vec<Vec<u8>>) {
+pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut [Vec<u8>]) {
     let mut num = 0;
     for (vs, sig_vs) in rvs.iter_mut().zip(sig_lens.iter()) {
         for (v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
@@ -1528,9 +1531,9 @@ mod tests {
 
         // No batches
         // truncate of 1 on len 0 is a noop
-        assert_eq!(shrink_batches(&mut vec![]), 0);
+        assert_eq!(shrink_batches(&mut []), 0);
         // One empty batch
-        assert_eq!(shrink_batches(&mut vec![PacketBatch::with_capacity(0)]), 0);
+        assert_eq!(shrink_batches(&mut [PacketBatch::with_capacity(0)]), 0);
         // Many empty batches
         let mut batches = (0..BATCH_COUNT)
             .map(|_| PacketBatch::with_capacity(0))

@@ -776,6 +776,16 @@ pub fn main() {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
+            Arg::with_name("tpu_host_addr")
+                .long("tpu-host-addr")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Specify TPU address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
+
+        )
+        .arg(
             Arg::with_name("public_rpc_addr")
                 .long("public-rpc-address")
                 .value_name("HOST:PORT")
@@ -1334,7 +1344,6 @@ pub fn main() {
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .hidden(true)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
@@ -1479,6 +1488,12 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
                 .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
+        )
+        .arg(
+            Arg::with_name("disable_accounts_disk_index")
+                .long("disable-accounts-disk-index")
+                .help("Disable the disk-based accounts index if it is enabled by default.")
+                .conflicts_with("accounts_index_memory_limit_mb")
         )
         .arg(
             Arg::with_name("accounts_index_bins")
@@ -2117,13 +2132,18 @@ pub fn main() {
             _ => unreachable!(),
         };
 
-    let mut accounts_index_config = AccountsIndexConfig::default();
+    let mut accounts_index_config = AccountsIndexConfig {
+        started_from_validator: true, // this is the only place this is set
+        ..AccountsIndexConfig::default()
+    };
     if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
         accounts_index_config.bins = Some(bins);
     }
 
     if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
         accounts_index_config.index_limit_mb = Some(limit);
+    } else if matches.is_present("disable_accounts_disk_index") {
+        accounts_index_config.index_limit_mb = None;
     }
 
     {
@@ -2592,6 +2612,13 @@ pub fn main() {
         }),
     );
 
+    let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
+        solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --overwrite-tpu-addr: {}", err);
+            exit(1);
+        })
+    });
+
     let cluster_entrypoints = entrypoint_addrs
         .iter()
         .map(ContactInfo::new_gossip_entry_point)
@@ -2602,6 +2629,7 @@ pub fn main() {
         &gossip_addr,
         dynamic_port_range,
         bind_address,
+        overwrite_tpu_addr,
     );
 
     if restricted_repair_only_mode {

@@ -24,8 +24,9 @@ use {
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     },
     solana_sdk::{
-        clock::Slot,
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::Instruction,
         message::Message,
         native_token::{lamports_to_sol, sol_to_lamports},
@@ -48,7 +49,7 @@ use {
             Arc,
         },
         thread::sleep,
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -346,7 +347,7 @@ fn build_messages(
         let message = Message::new_with_blockhash(
             &instructions,
             Some(&fee_payer_pubkey),
-            &client.get_latest_blockhash()?,
+            &Hash::default(), // populated by a real blockhash for balance check and submission
         );
         messages.push(message);
         stake_extras.push((new_stake_account_keypair, lockup_date));
@@ -729,6 +730,25 @@ fn log_transaction_confirmations(
     Ok(())
 }
 
+pub fn get_fees_for_messages(messages: &[Message], client: &RpcClient) -> Result<u64, Error> {
+    // This is an arbitrary value to get regular blockhash updates for balance checks without
+    // hitting the RPC node with too many requests
+    const BLOCKHASH_REFRESH_MILLIS: u64 = DEFAULT_MS_PER_SLOT * 32;
+
+    let mut latest_blockhash = client.get_latest_blockhash()?;
+    let mut now = Instant::now();
+    let mut fees = 0;
+    for mut message in messages.iter().cloned() {
+        if now.elapsed() > Duration::from_millis(BLOCKHASH_REFRESH_MILLIS) {
+            latest_blockhash = client.get_latest_blockhash()?;
+            now = Instant::now();
+        }
+        message.recent_blockhash = latest_blockhash;
+        fees += client.get_fee_for_message(&message)?;
+    }
+    Ok(fees)
+}
+
 fn check_payer_balances(
     messages: &[Message],
     allocations: &[Allocation],
@@ -736,14 +756,7 @@ fn check_payer_balances(
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     let mut undistributed_tokens: u64 = allocations.iter().map(|x| x.amount).sum();
-
-    let fees = messages
-        .iter()
-        .map(|message| client.get_fee_for_message(message))
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .iter()
-        .sum();
+    let fees = get_fees_for_messages(messages, client)?;
 
     let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
         let total_unlocked_sol = allocations.len() as u64 * stake_args.unlocked_sol;
