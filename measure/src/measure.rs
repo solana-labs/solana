@@ -271,8 +271,8 @@ mod tests {
 
         // Ensure that mesure_this can be called with closure accepting multiple args
         {
-            let (result, _measure) = measure_this!("test", |x, y, z| x * y * z, 1, 2, 3);
-            assert_eq!(result, 1 * 2 * 3);
+            let (result, _measure) = measure_this!("test", |x, y, z| x * y * z, 2, 2, 3);
+            assert_eq!(result, 2 * 3 * 2);
         }
 
         // Ensure measure_this! can be called with function accepting 0 arguments
@@ -334,7 +334,7 @@ mod tests {
 
             let some_struct = SomeStruct { x: 42 };
             let (result, _measure) =
-                measure_this!("test", |obj, x| SomeStruct::add_to(obj, x), &some_struct, 4,);
+                measure_this!("test", SomeStruct::add_to, &some_struct, 4,);
             assert_eq!(result, 42 + 4);
             assert_eq!(some_struct.add_to(6), 42 + 6);
         }
