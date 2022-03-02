@@ -303,9 +303,11 @@ fn process_instruction_common(
     let program =
         instruction_context.try_borrow_account(transaction_context, program_account_index)?;
     if program.is_executable() {
+        // First instruction account can only be zero if called from CPI, which
+        // means stack height better be greater than one
         debug_assert_eq!(
-            first_instruction_account,
-            1_usize.saturating_sub((invoke_context.get_stack_height() > 1) as usize),
+            first_instruction_account == 0,
+            invoke_context.get_stack_height() > 1
         );
 
         if !check_loader_id(program.get_owner()) {
