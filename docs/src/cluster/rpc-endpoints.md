@@ -58,4 +58,7 @@ prior notice.
 ## Common HTTP Error Codes
 
 - 403 -- Your IP address or website has been blocked. It is time to run your own RPC server(s) or find a private service.
-- 429 -- Your IP address is exceeding the rate limits. Slow down!
+- 429 -- Your IP address is exceeding the rate limits. Slow down! Use the
+[Retry-After](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After)
+HTTP response header to determine how long to wait before making another
+request.
