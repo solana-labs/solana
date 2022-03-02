@@ -29,7 +29,7 @@ static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
     ),
     (
         spl_associated_token_account::ID,
-        include_bytes!("programs/spl_associated-token-account-1.0.4.so"),
+        include_bytes!("programs/spl_associated_token_account-1.0.5.so"),
     ),
 ];
 
