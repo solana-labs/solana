@@ -64,10 +64,6 @@ tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
 
 [dev-dependencies]
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
-jsonrpc-derive = "18.0.0"
-jsonrpc-pubsub = "18.0.0"
 matches = "0.1.9"
 raptorq = "1.6.5"
 reqwest = { version = "0.11.9", default-features = false, features = ["blocking", "rustls-tls", "json"] }
