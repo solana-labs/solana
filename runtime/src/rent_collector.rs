@@ -232,7 +232,7 @@ mod tests {
     fn test_collect_from_account_created_and_existing() {
         let old_lamports = 1000;
         let old_epoch = 1;
-        let new_epoch = 3;
+        let new_epoch = 2;
 
         let (mut created_account, mut existing_account) = {
             let account = AccountSharedData::from(Account {
@@ -336,7 +336,7 @@ mod tests {
             rent_epoch: account_rent_epoch,
             ..Account::default()
         });
-        let rent_collector = default_rent_collector_clone_with_epoch(account_rent_epoch + 2);
+        let rent_collector = default_rent_collector_clone_with_epoch(account_rent_epoch + 1);
 
         let collected =
             rent_collector.collect_from_existing_account(&Pubkey::new_unique(), &mut account, None);
