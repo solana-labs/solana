@@ -148,18 +148,23 @@ for locked_account_key in transaction_accounts {
 }
 ```
 
-5. Run until all `N` BankingStage threads got one transaction (i.e. hit step 3 above).
+5. Run until all `N` BankingStage threads have been sent `processing_batch` transactions (i.e. hit step 3 above).
+
+#### Banking Threads
+1. Banking threads maintain a queue of transactions sent to them by the scheduler, sorted by priority.
+2. Because the scheduler has guaranteed that there are no locking conflicts, the banking thread can process
+some `M` of these transactions at a time and pack them into entries
 
 #### Handling Completion Signals from BankingStage Threads
 
 Outside of the main loop above, we rely on BankingThreads threads signaling us they've finished their
 task to schedule the next transactions.
 
-1. Once a BankingStage thread finishes processing a transaction `completed_transaction` ,
-it sends `completed_transaction` back to the scheduler via the same channel to signal of completion.
+1. Once a BankingStage thread finishes processing a batch of transactions `completed_transactions_batch` ,
+it sends the `completed_transactions_batch` back to the scheduler via the same channel to signal of completion.
 
 2. Upon receiving this signal, the BankingStage thread processes the locked accounts
-`transaction_accounts` in `T`:
+`transaction_accounts` for each `completed_transaction` in `completed_transactions_batch`:
 ```
 let mut unlocked_accounts = vec![];
 // First remove all the locks from the tracking list
