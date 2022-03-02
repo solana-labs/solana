@@ -776,6 +776,16 @@ pub fn main() {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
+            Arg::with_name("tpu_host_addr")
+                .long("tpu-host-addr")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Specify TPU address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
+
+        )
+        .arg(
             Arg::with_name("public_rpc_addr")
                 .long("public-rpc-address")
                 .value_name("HOST:PORT")
@@ -2602,6 +2612,13 @@ pub fn main() {
         }),
     );
 
+    let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
+        solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --overwrite-tpu-addr: {}", err);
+            exit(1);
+        })
+    });
+
     let cluster_entrypoints = entrypoint_addrs
         .iter()
         .map(ContactInfo::new_gossip_entry_point)
@@ -2612,6 +2629,7 @@ pub fn main() {
         &gossip_addr,
         dynamic_port_range,
         bind_address,
+        overwrite_tpu_addr,
     );
 
     if restricted_repair_only_mode {
