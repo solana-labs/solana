@@ -8623,8 +8623,9 @@ pub(crate) mod tests {
         let zero_lamports = 0;
         let little_lamports = 1234;
         let large_lamports = 123_456_789;
-        let some_slot = 1000;
-        let rent_collected = 22; // this is a function of 'some_slot'
+        // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
+        let some_slot = MINIMUM_SLOTS_PER_EPOCH; // chosen to cause epoch to be +1
+        let rent_collected = 1; // this is a function of 'some_slot'
 
         bank.store_account(
             &zero_lamport_pubkey,
@@ -8645,7 +8646,7 @@ pub(crate) mod tests {
         let previous_epoch = bank.epoch();
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), some_slot));
         let current_epoch = bank.epoch();
-        assert!(previous_epoch < current_epoch);
+        assert_eq!(previous_epoch + 1, current_epoch);
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
         assert_eq!(
@@ -8731,12 +8732,14 @@ pub(crate) mod tests {
             .accounts_index
             .purge_roots(&zero_lamport_pubkey);
 
-        let some_slot = 1000;
+        // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
+        let some_slot = MINIMUM_SLOTS_PER_EPOCH; // 1 epoch
         let bank2_with_zero = Arc::new(Bank::new_from_parent(
             &bank1_with_zero,
             &Pubkey::default(),
             some_slot,
         ));
+        assert_eq!(bank1_with_zero.epoch() + 1, bank2_with_zero.epoch());
         let bank2_without_zero = Arc::new(Bank::new_from_parent(
             &bank1_without_zero,
             &Pubkey::default(),
