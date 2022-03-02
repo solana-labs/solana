@@ -6802,6 +6802,7 @@ mod tests {
                                 expected_destination_stake_delegation,
                                 destination_stake.delegation.stake
                             );
+                            assert!(destination_stake.delegation.stake >= MINIMUM_STAKE_DELEGATION,);
                         } else {
                             panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
                         }
