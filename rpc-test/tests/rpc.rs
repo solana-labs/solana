@@ -9,13 +9,14 @@ use {
     solana_account_decoder::UiAccount,
     solana_client::{
         client_error::{ClientErrorKind, Result as ClientResult},
+        nonblocking::pubsub_client::PubsubClient,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
         rpc_request::RpcError,
         rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
         tpu_client::{TpuClient, TpuClientConfig},
     },
-    solana_rpc::rpc_pubsub::gen_client::Client as PubsubClient,
+    solana_rpc::rpc_pubsub::gen_client::Client as GenPubsubClient,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,
@@ -171,23 +172,21 @@ fn test_rpc_slot_updates() {
     let test_validator =
         TestValidator::with_no_fees(Pubkey::new_unique(), None, SocketAddrSpace::Unspecified);
 
+    // Track when slot updates are ready
+    let (update_sender, update_receiver) = unbounded::<SlotUpdate>();
     // Create the pub sub runtime
     let rt = Runtime::new().unwrap();
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
-    let (update_sender, update_receiver) = unbounded::<Arc<SlotUpdate>>();
 
-    // Subscribe to slot updates
     rt.spawn(async move {
-        let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
-        let client = connect.await.unwrap();
+        let pubsub_client = PubsubClient::new(&rpc_pubsub_url).await.unwrap();
+        let (mut slot_notifications, slot_unsubscribe) =
+            pubsub_client.slot_updates_subscribe().await.unwrap();
 
-        tokio::spawn(async move {
-            let mut update_sub = client.slots_updates_subscribe().unwrap();
-            loop {
-                let response = update_sub.next().await.unwrap();
-                update_sender.send(response.unwrap()).unwrap();
-            }
-        });
+        while let Some(slot_update) = slot_notifications.next().await {
+            update_sender.send(slot_update).unwrap();
+        }
+        slot_unsubscribe().await;
     });
 
     let first_update = update_receiver
@@ -212,7 +211,7 @@ fn test_rpc_slot_updates() {
             .recv_timeout(Duration::from_secs(2))
             .unwrap();
         if update.slot() == verify_slot {
-            let update_name = match *update {
+            let update_name = match update {
                 SlotUpdate::CreatedBank { .. } => "CreatedBank",
                 SlotUpdate::Completed { .. } => "Completed",
                 SlotUpdate::Frozen { .. } => "Frozen",
@@ -275,7 +274,7 @@ fn test_rpc_subscriptions() {
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
     let signature_set_clone = signature_set.clone();
     rt.spawn(async move {
-        let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
+        let connect = ws::try_connect::<GenPubsubClient>(&rpc_pubsub_url).unwrap();
         let client = connect.await.unwrap();
 
         // Subscribe to signature notifications
