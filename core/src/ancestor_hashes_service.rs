@@ -3,6 +3,7 @@ use {
         cluster_slots::ClusterSlots,
         duplicate_repair_status::{DeadSlotAncestorRequestStatus, DuplicateAncestorDecision},
         outstanding_requests::OutstandingRequests,
+        packet_threshold::DynamicPacketToProcessThreshold,
         repair_response::{self},
         repair_service::{DuplicateSlotsResetSender, RepairInfo, RepairStatsGroup},
         replay_stage::DUPLICATE_THRESHOLD,
@@ -12,7 +13,6 @@ use {
     crossbeam_channel::{unbounded, Receiver, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE},
-    solana_measure::measure::Measure,
     solana_perf::{
         packet::{limited_deserialize, Packet, PacketBatch},
         recycler::Recycler,
@@ -208,7 +208,7 @@ impl AncestorHashesService {
             .spawn(move || {
                 let mut last_stats_report = Instant::now();
                 let mut stats = AncestorHashesResponsesStats::default();
-                let mut max_packets = 1024;
+                let mut packet_threshold = DynamicPacketToProcessThreshold::default();
                 loop {
                     let result = Self::process_new_packets_from_channel(
                         &ancestor_hashes_request_statuses,
@@ -216,13 +216,13 @@ impl AncestorHashesService {
                         &blockstore,
                         &outstanding_requests,
                         &mut stats,
-                        &mut max_packets,
+                        &mut packet_threshold,
                         &duplicate_slots_reset_sender,
                         &retryable_slots_sender,
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
-                        Err(err) => info!("ancestors hashes reponses listener error: {:?}", err),
+                        Err(err) => info!("ancestors hashes responses listener error: {:?}", err),
                     };
                     if exit.load(Ordering::Relaxed) {
                         return;
@@ -243,7 +243,7 @@ impl AncestorHashesService {
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
-        max_packets: &mut usize,
+        packet_threshold: &mut DynamicPacketToProcessThreshold,
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         retryable_slots_sender: &RetryableSlotsSender,
     ) -> Result<()> {
@@ -254,18 +254,17 @@ impl AncestorHashesService {
         let mut dropped_packets = 0;
         while let Ok(batch) = response_receiver.try_recv() {
             total_packets += batch.packets.len();
-            if total_packets < *max_packets {
-                // Drop the rest in the channel in case of DOS
-                packet_batches.push(batch);
-            } else {
+            if packet_threshold.should_drop(total_packets) {
                 dropped_packets += batch.packets.len();
+            } else {
+                packet_batches.push(batch);
             }
         }
 
         stats.dropped_packets += dropped_packets;
         stats.total_packets += total_packets;
 
-        let mut time = Measure::start("ancestor_hashes::handle_packets");
+        let timer = Instant::now();
         for packet_batch in packet_batches {
             Self::process_packet_batch(
                 ancestor_hashes_request_statuses,
@@ -277,14 +276,7 @@ impl AncestorHashesService {
                 retryable_slots_sender,
             );
         }
-        time.stop();
-        if total_packets >= *max_packets {
-            if time.as_ms() > 1000 {
-                *max_packets = (*max_packets * 9) / 10;
-            } else {
-                *max_packets = (*max_packets * 10) / 9;
-            }
-        }
+        packet_threshold.update(total_packets, timer.elapsed());
         Ok(())
     }
 
