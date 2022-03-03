@@ -509,7 +509,8 @@ impl<'a> InvokeContext<'a> {
             if cap_accounts_data_len {
                 self.accounts_data_meter.adjust_delta(data_len_delta)?;
             } else {
-                self.accounts_data_meter.consume_unchecked(data_len_delta);
+                self.accounts_data_meter
+                    .adjust_delta_unchecked(data_len_delta);
             }
 
             Ok(())
@@ -602,7 +603,8 @@ impl<'a> InvokeContext<'a> {
                         if cap_accounts_data_len {
                             self.accounts_data_meter.adjust_delta(data_len_delta)?;
                         } else {
-                            self.accounts_data_meter.consume_unchecked(data_len_delta);
+                            self.accounts_data_meter
+                                .adjust_delta_unchecked(data_len_delta);
                         }
 
                         return Ok(());

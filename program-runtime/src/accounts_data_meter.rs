@@ -82,12 +82,13 @@ impl AccountsDataMeter {
         if amount > self.remaining() as i64 {
             return Err(InstructionError::AccountsDataBudgetExceeded);
         }
-        self.consume_unchecked(amount);
+        self.adjust_delta_unchecked(amount);
         Ok(())
     }
 
-    /// Unconditionally consume accounts data space.  Refer to `consume()` for more documentation.
-    pub fn consume_unchecked(&mut self, amount: i64) {
+    /// Unconditionally adjust accounts data space.  Refer to `adjust_delta()` for more
+    /// documentation.
+    pub fn adjust_delta_unchecked(&mut self, amount: i64) {
         self.delta = self.delta.saturating_add(amount);
     }
 }
