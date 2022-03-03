@@ -505,6 +505,7 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
+            system_program,
             sysvar::{self, stake_history::StakeHistory},
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
@@ -1445,8 +1446,9 @@ mod tests {
 
     #[test]
     fn test_authorize() {
+        let authority_address = solana_sdk::pubkey::new_rand();
+        let authority_address_2 = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let new_authority_address = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -1455,17 +1457,25 @@ mod tests {
             &id(),
         )
         .unwrap();
-        let transaction_accounts = vec![
-            (stake_address, stake_account.clone()),
+        let to_address = solana_sdk::pubkey::new_rand();
+        let to_account = AccountSharedData::new(1, 0, &system_program::id());
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (to_address, to_account),
+            (authority_address, AccountSharedData::default()),
             (
                 sysvar::clock::id(),
                 account::create_account_shared_data_for_test(&Clock::default()),
             ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
         ];
-        let instruction_accounts = vec![
+        let mut instruction_accounts = vec![
             AccountMeta {
                 pubkey: stake_address,
-                is_signer: false,
+                is_signer: true,
                 is_writable: false,
             },
             AccountMeta {
@@ -1478,13 +1488,131 @@ mod tests {
         // should fail, uninit
         process_instruction(
             &serialize(&StakeInstruction::Authorize(
-                new_authority_address,
+                authority_address,
                 StakeAuthorize::Staker,
             ))
             .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        // should pass
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta::auto(&stake_address)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        transaction_accounts[0] = (stake_address, stake_account);
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Withdrawer,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        if let StakeState::Initialized(Meta { authorized, .. }) = from(&accounts[0]).unwrap() {
+            assert_eq!(authorized.staker, authority_address);
+            assert_eq!(authorized.withdrawer, authority_address);
+        } else {
+            panic!();
+        }
+
+        // A second authorization signed by the stake account should fail
+        process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address_2,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Test a second authorization by the new authority_address
+        instruction_accounts[0].is_signer = false;
+        instruction_accounts.push(AccountMeta {
+            pubkey: authority_address,
+            is_signer: true,
+            is_writable: false,
+        });
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address_2,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        if let StakeState::Initialized(Meta { authorized, .. }) = from(&accounts[0]).unwrap() {
+            assert_eq!(authorized.staker, authority_address_2);
+        } else {
+            panic!();
+        }
+
+        // Test a successful action by the currently authorized withdrawer
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authority_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+
+        // Test that withdrawal to account fails without authorized withdrawer
+        instruction_accounts[4].is_signer = false;
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::MissingRequiredSignature),
         );
     }
 
