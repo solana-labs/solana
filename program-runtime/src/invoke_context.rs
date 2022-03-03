@@ -507,9 +507,10 @@ impl<'a> InvokeContext<'a> {
             let post_data_len = account.data().len() as i64;
             let data_len_delta = post_data_len.saturating_sub(pre_data_len);
             if cap_accounts_data_len {
-                self.accounts_data_meter.consume(data_len_delta)?;
+                self.accounts_data_meter.adjust_delta(data_len_delta)?;
             } else {
-                self.accounts_data_meter.consume_unchecked(data_len_delta);
+                self.accounts_data_meter
+                    .adjust_delta_unchecked(data_len_delta);
             }
 
             Ok(())
@@ -600,9 +601,10 @@ impl<'a> InvokeContext<'a> {
                         let post_data_len = account.data().len() as i64;
                         let data_len_delta = post_data_len.saturating_sub(pre_data_len);
                         if cap_accounts_data_len {
-                            self.accounts_data_meter.consume(data_len_delta)?;
+                            self.accounts_data_meter.adjust_delta(data_len_delta)?;
                         } else {
-                            self.accounts_data_meter.consume_unchecked(data_len_delta);
+                            self.accounts_data_meter
+                                .adjust_delta_unchecked(data_len_delta);
                         }
 
                         return Ok(());
