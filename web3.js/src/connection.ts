@@ -2594,7 +2594,10 @@ export class Connection {
     }
     return accounts;
   }
-  
+
+  /**
+   * Fetch all the account info for multiple accounts specified by an array of public keys
+   */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
     commitment?: Commitment,
@@ -2604,7 +2607,7 @@ export class Connection {
       commitment,
     );
     return res.value;
-  }  
+  }
 
   /**
    * Returns epoch activation information for a stake account that has been delegated
