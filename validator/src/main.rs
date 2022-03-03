@@ -32,7 +32,10 @@ use {
         cluster_info::{Node, VALIDATOR_PORT_RANGE},
         contact_info::ContactInfo,
     },
-    solana_ledger::blockstore_db::BlockstoreRecoveryMode,
+    solana_ledger::blockstore_db::{
+        BlockstoreRecoveryMode, BlockstoreRocksFifoOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
@@ -451,6 +454,8 @@ pub fn main() {
     let default_accounts_shrink_optimize_total_space =
         &DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE.to_string();
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
+    let default_rocksdb_fifo_shred_storage_size =
+        &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -959,6 +964,32 @@ pub fn main() {
                 .max_values(1)
                 /* .default_value() intentionally not used here! */
                 .help("Keep this amount of shreds in root slots."),
+        )
+        .arg(
+            Arg::with_name("rocksdb_shred_compaction")
+                .hidden(true)
+                .long("rocksdb-shred-compaction")
+                .value_name("ROCKSDB_COMPACTION_STYLE")
+                .takes_value(true)
+                .possible_values(&["level", "fifo"])
+                .default_value("level")
+                .help("EXPERIMENTAL: Controls how RocksDB compacts shreds. \
+                       *WARNING*: You will lose your ledger data when you switch between options. \
+                       Possible values are: \
+                       'level': stores shreds using RocksDB's default (level) compaction. \
+                       'fifo': stores shreds under RocksDB's FIFO compaction. \
+                           This option is more efficient on disk-write-bytes of the ledger store."),
+        )
+        .arg(
+            Arg::with_name("rocksdb_fifo_shred_storage_size")
+                .hidden(true)
+                .long("rocksdb-fifo-shred-storage-size")
+                .value_name("SHRED_STORAGE_SIZE_BYTES")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .default_value(default_rocksdb_fifo_shred_storage_size)
+                .help("The shred storage size in bytes. \
+                       The suggested value is 50% of your ledger storage size in bytes."),
         )
         .arg(
             Arg::with_name("skip_poh_verify")
@@ -2521,6 +2552,25 @@ pub fn main() {
         }
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
+
+    validator_config.shred_storage_type = match matches.value_of("rocksdb_shred_compaction") {
+        None => ShredStorageType::default(),
+        Some(shred_compaction_string) => match shred_compaction_string {
+            "level" => ShredStorageType::RocksLevel,
+            "fifo" => {
+                let shred_storage_size =
+                    value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
+                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+                    shred_data_cf_size: shred_storage_size / 2,
+                    shred_code_cf_size: shred_storage_size / 2,
+                })
+            }
+            _ => panic!(
+                "Unrecognized rocksdb-shred-compaction: {}",
+                shred_compaction_string
+            ),
+        },
+    };
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
         validator_config.halt_on_known_validators_accounts_hash_mismatch = true;

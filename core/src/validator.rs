@@ -36,7 +36,7 @@ use {
     solana_ledger::{
         bank_forks_utils,
         blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
-        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode},
+        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, ShredStorageType},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
@@ -165,6 +165,7 @@ pub struct ValidatorConfig {
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
     pub wait_to_vote_slot: Option<Slot>,
+    pub shred_storage_type: ShredStorageType,
 }
 
 impl Default for ValidatorConfig {
@@ -225,6 +226,7 @@ impl Default for ValidatorConfig {
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
             wait_to_vote_slot: None,
+            shred_storage_type: ShredStorageType::RocksLevel,
         }
     }
 }
@@ -1256,6 +1258,7 @@ fn new_banks_from_ledger(
         BlockstoreOptions {
             recovery_mode: config.wal_recovery_mode.clone(),
             enforce_ulimit_nofile,
+            shred_storage_type: config.shred_storage_type.clone(),
             ..BlockstoreOptions::default()
         },
     )
