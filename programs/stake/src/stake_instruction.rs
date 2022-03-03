@@ -1416,9 +1416,30 @@ mod tests {
         );
         process_instruction(
             &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // incorrect account sizes
+        let stake_account =
+            AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>() + 1, &id());
+        transaction_accounts[0] = (stake_address, stake_account);
+        process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        let stake_account =
+            AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>() - 1, &id());
+        transaction_accounts[0] = (stake_address, stake_account);
+        process_instruction(
+            &instruction_data,
             transaction_accounts,
             instruction_accounts,
-            Err(InstructionError::InsufficientFunds),
+            Err(InstructionError::InvalidAccountData),
         );
     }
 
