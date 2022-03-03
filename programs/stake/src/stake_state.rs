@@ -647,13 +647,22 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         (remaining_stake_delta, remaining_stake_delta)
                     } else {
                         // Otherwise, the new split stake should reflect the entire split
-                        // requested, less any lamports needed to cover the split_rent_exempt_reserve
+                        // requested, less any lamports needed to cover the split_rent_exempt_reserve.
+                        let split_lamports = split.lamports()?;
+                        let split_rent_exempt_reserve_deficit = validated_split_info
+                            .destination_rent_exempt_reserve
+                            .saturating_sub(split_lamports);
+                        let minimum_split_amount = MINIMUM_STAKE_DELEGATION
+                            .saturating_add(split_rent_exempt_reserve_deficit);
+                        if lamports < minimum_split_amount {
+                            return Err(InstructionError::InsufficientFunds);
+                        }
                         (
                             lamports,
                             lamports.saturating_sub(
                                 validated_split_info
                                     .destination_rent_exempt_reserve
-                                    .saturating_sub(split.lamports()?),
+                                    .saturating_sub(split_lamports),
                             ),
                         )
                     };
@@ -847,12 +856,10 @@ struct ValidatedSplitInfo {
     destination_rent_exempt_reserve: u64,
 }
 
-/// Ensure the split amount is valid.  This checks:
-/// 1. Both the source and destination accounts meet the minimum balance requirements, which is the
-///    rent exempt reserve plus the minimum stake delegation.
-/// 2. The source account has enough lamports for the requested split amount.
-/// 3. The destination ends up with enough lamports to meet the minimum stake delegation.
-/// If not, return an error.
+/// Ensure the split amount is valid.  This checks the source and destination accounts meet the
+/// minimum balance requirements, which is the rent exempt reserve plus the minimum stake
+/// delegation, and that the source account has enough lamports for the request split amount.  If
+/// not, return an error.
 fn validate_split_amount(
     source_account: &KeyedAccount,
     destination_account: &KeyedAccount,
@@ -892,10 +899,8 @@ fn validate_split_amount(
 
     // Verify the destination account also meets the minimum balance requirements
     // This must account for:
-    // 1. The destination account having a different rent exempt reserve due to data size changes.
-    // 2. The destination account being prefunded, which would lower the minimum split amount.
-    // 3. The destination account must have enough lamports to meet the minimum stake delegation,
-    //    which would raise the minimum split amount.
+    // 1. The destination account having a different rent exempt reserve due to data size changes
+    // 2. The destination account being prefunded, which would lower the minimum split amount
     let destination_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
         source_meta.rent_exempt_reserve,
         source_account.data_len()? as u64,
@@ -903,9 +908,8 @@ fn validate_split_amount(
     );
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(MINIMUM_STAKE_DELEGATION);
-    let destination_balance_deficit =
+    let minimum_split_amount =
         destination_minimum_balance.saturating_sub(destination_account.lamports()?);
-    let minimum_split_amount = std::cmp::max(MINIMUM_STAKE_DELEGATION, destination_balance_deficit);
     if lamports < minimum_split_amount {
         return Err(InstructionError::InsufficientFunds);
     }
