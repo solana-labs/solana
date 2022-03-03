@@ -208,7 +208,7 @@ function PingBarChart({ pingInfo }: { pingInfo: PingRollupInfo }) {
     <div className="card-body py-3">
       <div className="align-box-row align-items-start justify-content-between">
         <div className="d-flex justify-content-between w-100">
-          <span className="mb-0 font-size-sm">Average Confirmation Time</span>
+          <span className="mb-0 font-size-sm">Average Ping Time</span>
 
           <div className="font-size-sm">
             {SERIES.map((key) => (

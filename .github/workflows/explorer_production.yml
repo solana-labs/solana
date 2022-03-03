@@ -28,9 +28,7 @@ jobs:
     Explorer_production_deploy:
       needs: Explorer_production_build_test
       runs-on: ubuntu-latest
-      defaults:
-        run:
-          working-directory: explorer
+    
       steps:
        - uses: actions/checkout@v2
          with:
@@ -42,5 +40,4 @@ jobs:
            vercel-args: '--prod' #for production
            vercel-org-id: ${{ secrets.ORG_ID}}  #Required
            vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
-           working-directory: ./explorer
            scope: ${{ secrets.TEAM_ID }}

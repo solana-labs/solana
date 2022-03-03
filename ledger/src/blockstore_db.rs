@@ -971,6 +971,7 @@ pub struct WriteBatch<'a> {
     map: HashMap<&'static str, &'a ColumnFamily>,
 }
 
+#[derive(Clone)]
 pub enum ShredStorageType {
     // Stores shreds under RocksDB's default compaction (level).
     RocksLevel,
@@ -978,6 +979,12 @@ pub enum ShredStorageType {
     // allows ledger store to reclaim storage more efficiently with
     // lower I/O overhead.
     RocksFifo(BlockstoreRocksFifoOptions),
+}
+
+impl Default for ShredStorageType {
+    fn default() -> Self {
+        Self::RocksLevel
+    }
 }
 
 pub struct BlockstoreOptions {
@@ -1003,6 +1010,7 @@ impl Default for BlockstoreOptions {
     }
 }
 
+#[derive(Clone)]
 pub struct BlockstoreRocksFifoOptions {
     // The maximum storage size for storing data shreds in column family
     // [`cf::DataShred`].  Typically, data shreds contribute around 25% of the
