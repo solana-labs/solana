@@ -15,7 +15,7 @@ solana-runtime = { path = "../runtime", version = "=1.10.1" }
 solana-measure = { path = "../measure", version = "=1.10.1" }
 solana-sdk = { path = "../sdk", version = "=1.10.1" }
 solana-version = { path = "../version", version = "=1.10.1" }
-clap = "2.33.1"
+clap = "3.1.5"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
