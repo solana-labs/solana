@@ -1,12 +1,15 @@
 //! calculate and collect rent from Accounts
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    clock::Epoch,
-    epoch_schedule::EpochSchedule,
-    genesis_config::GenesisConfig,
-    incinerator,
-    pubkey::Pubkey,
-    rent::{Rent, RentDue},
+use {
+    log::*,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        clock::Epoch,
+        epoch_schedule::EpochSchedule,
+        genesis_config::GenesisConfig,
+        incinerator,
+        pubkey::Pubkey,
+        rent::{Rent, RentDue},
+    },
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
@@ -89,7 +92,8 @@ impl RentCollector {
         {
             RentDue::Exempt
         } else {
-            let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
+            let account_rent_epoch = account.rent_epoch();
+            let slots_elapsed: u64 = (account_rent_epoch..=self.epoch)
                 .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
                 .sum();
 
@@ -101,7 +105,21 @@ impl RentCollector {
             };
 
             // we know this account is not exempt
-            RentDue::Paying(self.rent.due_amount(account.data().len(), years_elapsed))
+            let due = self.rent.due_amount(account.data().len(), years_elapsed);
+
+            // we expect rent_epoch to always be one of: {0, self.epoch-1, self.epoch, self.epoch+1}
+            if account_rent_epoch != 0
+                && (account_rent_epoch + 1 < self.epoch || account_rent_epoch > self.epoch + 1)
+            {
+                // this should not occur in a running validator
+                if due == 0 {
+                    inc_new_counter_info!("rent-collector-rent-epoch-range-large-exempt", 1);
+                } else {
+                    inc_new_counter_info!("rent-collector-rent-epoch-range-large-paying", 1);
+                }
+            }
+
+            RentDue::Paying(due)
         }
     }
 
