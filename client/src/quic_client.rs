@@ -1,5 +1,5 @@
 //! Simple client that connects to a given UDP port with the QUIC protocol and provides
-//! an interface for sending transactions which is restricted by the servers flow control.
+//! an interface for sending transactions which is restricted by the server's flow control.
 
 use {
     crate::tpu_connection::TpuConnection,
@@ -66,8 +66,7 @@ impl TpuConnection for QuicTpuConnection {
     fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
         let _guard = self.client.runtime.enter();
         let send_buffer = self.client.send_buffer(&data[..]);
-        self.client.runtime.block_on(send_buffer)?;
-        Ok(())
+        self.client.runtime.block_on(send_buffer)
     }
 
     fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
@@ -79,8 +78,7 @@ impl TpuConnection for QuicTpuConnection {
         let slices = buffers.par_iter().map(|buf| &buf[..]).collect::<Vec<_>>();
         let _guard = self.client.runtime.enter();
         let send_batch = self.client.send_batch(slices);
-        self.client.runtime.block_on(send_batch)?;
-        Ok(())
+        self.client.runtime.block_on(send_batch)
     }
 }
 
@@ -161,12 +159,12 @@ impl QuicClient {
         }
     }
 
-    pub async fn send_buffer(&self, data: &[u8]) -> Result<(), WriteError> {
+    pub async fn send_buffer(&self, data: &[u8]) -> TransportResult<()> {
         self._send_buffer(data).await?;
         Ok(())
     }
 
-    pub async fn send_batch(&self, buffers: Vec<&[u8]>) -> Result<(), WriteError> {
+    pub async fn send_batch(&self, buffers: Vec<&[u8]>) -> TransportResult<()> {
         // Start off by "testing" the connection by sending the first transaction
         // This will also connect to the server if not already connected
         // and reconnect and retry if the first send attempt failed
@@ -178,7 +176,6 @@ impl QuicClient {
         // where reconnecting and retrying in the middle of a batch send
         // (i.e. we encounter a connection error in the middle of a batch send, which presumably cannot
         // be due to a timed out connection) has succeeded
-
         if buffers.is_empty() {
             return Ok(());
         }
