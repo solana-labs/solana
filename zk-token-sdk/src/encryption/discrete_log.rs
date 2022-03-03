@@ -6,9 +6,11 @@ use {
     std::collections::HashMap,
 };
 
+#[allow(dead_code)]
 const TWO15: u32 = 32768;
 const TWO14: u32 = 16384; // 2^14
                           // const TWO16: u32 = 65536; // 2^16
+#[allow(dead_code)]
 const TWO18: u32 = 262144; // 2^18
 
 /// Type that captures a discrete log challenge.
@@ -26,6 +28,7 @@ pub struct DiscreteLog {
 pub struct DecodeU32Precomputation(HashMap<[u8; 32], u32>);
 
 /// Builds a HashMap of 2^18 elements
+#[allow(dead_code)]
 fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodeU32Precomputation {
     let mut hashmap = HashMap::new();
 
@@ -65,7 +68,7 @@ impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
     pub(crate) fn decode_u32(self) -> Option<u32> {
-        self.decode_u32_online(&decode_u32_precomputation(self.generator))
+        self.decode_u32_online(&DECODE_U32_PRECOMPUTATION_FOR_G)
     }
 
     /// Solves the discrete log instance using the pre-computed HashMap by enumerating through 2^14
