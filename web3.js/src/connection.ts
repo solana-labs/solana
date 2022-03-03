@@ -2594,6 +2594,17 @@ export class Connection {
     }
     return accounts;
   }
+  
+  async getMultipleAccountsInfo(
+    publicKeys: PublicKey[],
+    commitment?: Commitment,
+  ): Promise<(AccountInfo<Buffer> | null)[]> {
+    const res = await this.getMultipleAccountsInfoAndContext(
+      publicKeys,
+      commitment,
+    );
+    return res.value;
+  }  
 
   /**
    * Returns epoch activation information for a stake account that has been delegated
