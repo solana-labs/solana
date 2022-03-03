@@ -424,18 +424,18 @@ impl ClusterNodes<RetransmitStage> {
         root_bank: &Bank,
         fanout: usize,
         leader_schedule_cache: &LeaderScheduleCache,
-    ) -> f64 {
+    ) -> (f64, Vec<u64>) {
         if slot_stats.turbine_index_set.is_empty() || root_bank.total_epoch_stake() == 0 {
             warn!(
                 "slot_stats.turbine_index_set.len()={} total_epoch_stake={}",
                 slot_stats.turbine_index_set.len(),
                 root_bank.total_epoch_stake()
             );
-            return 0.0;
+            return (0.0, Vec::default());
         }
 
         let indices: Vec<_> = slot_stats.turbine_index_set.into_iter().collect();
-        let stakes: u64 = PAR_THREAD_POOL.with(|thread_pool| {
+        let stakes: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 indices
                     .into_par_iter()
@@ -451,11 +451,16 @@ impl ClusterNodes<RetransmitStage> {
                             );
                         shred_stakes.total()
                     })
-                    .sum()
+                    .collect()
             })
         });
 
-        stakes as f64 / slot_stats.num_shreds as f64 / root_bank.total_epoch_stake() as f64 * 100.0
+        let stakes_sum: u64 = stakes.iter().sum();
+        let pct: f64 =
+            stakes_sum as f64 / slot_stats.num_shreds as f64 / root_bank.total_epoch_stake() as f64
+                * 100.0;
+
+        (pct, stakes)
     }
 
     pub fn get_shred_distribution_stakes(
@@ -502,33 +507,6 @@ impl ClusterNodes<RetransmitStage> {
 
         stakes
     }
-
-    /*
-    pub fn get_shred_distribution_stakes_pct(
-        &self,
-        shreds: &[Shred],
-        root_bank: &Bank,
-        fanout: usize,
-        leader_schedule_cache: &LeaderScheduleCache,
-    ) -> f64 {
-        if shreds.is_empty() || root_bank.total_epoch_stake() == 0 {
-            debug_assert!(
-                false,
-                "shreds.len={} total_epoch_stake={}",
-                shreds.len(),
-                root_bank.total_epoch_stake()
-            );
-            return 0.0;
-        }
-        let mut stakes: u64 = 0;
-        for shred in shreds {
-            let shred_stakes =
-                self.get_shred_distribution_stakes(shred, root_bank, fanout, leader_schedule_cache);
-            stakes += shred_stakes.total();
-        }
-        stakes as f64 / shreds.len() as f64 / root_bank.total_epoch_stake() as f64 * 100.0
-    }
-    */
 }
 
 pub fn new_cluster_nodes<T: 'static>(
