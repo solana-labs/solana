@@ -112,6 +112,8 @@ impl QuicClient {
         }
     }
 
+    // If this function becomes public, it should be changed to
+    // not expose details of the specific Quic implementation we're using
     async fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
         quinn::Endpoint::new(config, None, client_socket).unwrap().0
     }
@@ -128,7 +130,7 @@ impl QuicClient {
 
     // Attempts to send data, connecting/reconnecting as necessary
     // On success, returns the connection used to successfully send the data
-    pub async fn send_buffer(&self, data: &[u8]) -> Result<Arc<NewConnection>, WriteError> {
+    async fn _send_buffer(&self, data: &[u8]) -> Result<Arc<NewConnection>, WriteError> {
         let connection = {
             let mut conn_guard = self.connection.lock().await;
 
@@ -159,6 +161,11 @@ impl QuicClient {
         }
     }
 
+    pub async fn send_buffer(&self, data: &[u8]) -> Result<(), WriteError> {
+        self._send_buffer(data).await?;
+        Ok(())
+    }
+
     pub async fn send_batch(&self, buffers: Vec<&[u8]>) -> Result<(), WriteError> {
         // Start off by "testing" the connection by sending the first transaction
         // This will also connect to the server if not already connected
@@ -175,7 +182,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self.send_buffer(buffers[0]).await?;
+        let connection = self._send_buffer(buffers[0]).await?;
 
         let futures = buffers[1..buffers.len()]
             .iter()
