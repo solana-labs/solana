@@ -4,9 +4,10 @@
 use {
     async_mutex::Mutex,
     futures::future::join_all,
-    itertools::Itertools,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
-    rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    rayon::iter::{
+        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+    },
     solana_sdk::{transaction::Transaction, transport::Result as TransportResult},
     std::{
         net::{SocketAddr, UdpSocket},
@@ -201,30 +202,28 @@ impl QuicClient {
         // where reconnecting and retrying in the middle of a batch send
         // (i.e. we encounter a connection error in the middle of a batch send, which presumably cannot
         // be due to a timed out connection) has succeeded
-        let mut iter = buffers.into_iter();
-        let maybe_first = iter.next();
 
-        match maybe_first {
-            Some(data) => {
-                let connection = self.send_buffer(data).await?;
-                let futures = iter
-                    .chunks(2048)
-                    .into_iter()
-                    .map(|buffs| {
-                        join_all(
-                            buffs
-                                .into_iter()
-                                .map(|buf| Self::_send_buffer_using_conn(buf, &connection)),
-                        )
-                    })
+        if buffers.is_empty() {
+            return Ok(());
+        }
+        let connection = self.send_buffer(buffers[0]).await?;
+
+        let futures = buffers[1..buffers.len()]
+            .par_iter()
+            .chunks(2048)
+            .map(|buffs| {
+                let send_futures = buffs
+                    .into_par_iter()
+                    .map(|buf| Self::_send_buffer_using_conn(buf, &connection))
                     .collect::<Vec<_>>();
 
-                for f in futures {
-                    f.await.into_iter().try_for_each(|res| res)?;
-                }
-                Ok(())
-            }
-            None => Ok(()),
+                join_all(send_futures)
+            })
+            .collect::<Vec<_>>();
+
+        for f in futures {
+            f.await.into_iter().try_for_each(|res| res)?;
         }
+        Ok(())
     }
 }
