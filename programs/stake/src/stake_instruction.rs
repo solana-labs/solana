@@ -1444,6 +1444,51 @@ mod tests {
     }
 
     #[test]
+    fn test_authorize() {
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let new_authority_address = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::default(),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account.clone()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // should fail, uninit
+        process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                new_authority_address,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InvalidAccountData),
+        );
+    }
+
+    #[test]
     fn test_stake_delegate() {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {

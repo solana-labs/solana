@@ -3244,33 +3244,6 @@ mod tests {
     }
 
     #[test]
-    fn test_authorize_uninit() {
-        let new_authority = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
-            stake_lamports,
-            &StakeState::default(),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let stake_keyed_account = KeyedAccount::new(&new_authority, true, &stake_account);
-        let signers = vec![new_authority].into_iter().collect();
-        assert_eq!(
-            stake_keyed_account.authorize(
-                &signers,
-                &new_authority,
-                StakeAuthorize::Staker,
-                false,
-                &Clock::default(),
-                None
-            ),
-            Err(InstructionError::InvalidAccountData)
-        );
-    }
-
-    #[test]
     fn test_authorize_lockup() {
         let stake_authority = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
