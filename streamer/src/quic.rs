@@ -3,7 +3,7 @@ use {
     futures_util::stream::StreamExt,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
-    quinn::{Endpoint, EndpointConfig, ServerConfig},
+    quinn::{Endpoint, EndpointConfig, IncomingUniStreams, ServerConfig},
     rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
@@ -17,7 +17,7 @@ use {
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, Mutex,
         },
         thread,
         time::{Duration, Instant},
@@ -196,22 +196,23 @@ fn handle_chunk(
     false
 }
 
+#[derive(Debug)]
 struct ConnectionEntry {
-    count: usize,
     exit: Arc<AtomicBool>,
-    last_update: AtomicU64,
+    last_update: Arc<AtomicU64>,
+    port: u16,
 }
 
 impl ConnectionEntry {
-    fn new(exit: Arc<AtomicBool>, start: u64) -> Self {
+    fn new(exit: Arc<AtomicBool>, last_update: Arc<AtomicU64>, port: u16) -> Self {
         Self {
-            count: 0,
             exit,
-            last_update: AtomicU64::new(start),
+            last_update,
+            port,
         }
     }
 
-    pub fn last_update(&self) -> u64 {
+    fn last_update(&self) -> u64 {
         self.last_update.load(Ordering::Relaxed)
     }
 }
@@ -222,26 +223,171 @@ impl Drop for ConnectionEntry {
     }
 }
 
+// Map of IP to list of connection entries
+#[derive(Default, Debug)]
+struct ConnectionTable {
+    table: HashMap<IpAddr, Vec<ConnectionEntry>>,
+    total_size: usize,
+}
+
+// Prune the connection which has the oldest update
 // Return number pruned
-fn prune_oldest_from_connection_table(
-    table: &mut HashMap<IpAddr, ConnectionEntry>,
-    max_size: usize,
-) -> usize {
-    let mut num_pruned = 0;
-    while table.len() > max_size {
-        let mut oldest = std::u64::MAX;
-        let mut oldest_ip = None;
-        for (ip, entry) in table.iter() {
-            let last_update = entry.last_update();
-            if last_update < oldest {
-                oldest = last_update;
-                oldest_ip = Some(*ip);
+impl ConnectionTable {
+    fn prune_oldest(&mut self, max_size: usize) -> usize {
+        let mut num_pruned = 0;
+        while self.total_size > max_size {
+            let mut oldest = std::u64::MAX;
+            let mut oldest_ip = None;
+            for (ip, connections) in self.table.iter() {
+                for entry in connections {
+                    let last_update = entry.last_update();
+                    if last_update < oldest {
+                        oldest = last_update;
+                        oldest_ip = Some(*ip);
+                    }
+                }
+            }
+            self.table.remove(&oldest_ip.unwrap());
+            self.total_size -= 1;
+            num_pruned += 1;
+        }
+        num_pruned
+    }
+
+    fn try_add_connection(
+        &mut self,
+        addr: &SocketAddr,
+        last_update: u64,
+        max_connections_per_ip: usize,
+    ) -> Option<(Arc<AtomicU64>, Arc<AtomicBool>)> {
+        let connection_entry = self.table.entry(addr.ip()).or_insert_with(Vec::new);
+        let has_connection_capacity = connection_entry
+            .len()
+            .checked_add(1)
+            .map(|c| c <= max_connections_per_ip)
+            .unwrap_or(false);
+        if has_connection_capacity {
+            let exit = Arc::new(AtomicBool::new(false));
+            let last_update = Arc::new(AtomicU64::new(last_update));
+            connection_entry.push(ConnectionEntry::new(
+                exit.clone(),
+                last_update.clone(),
+                addr.port(),
+            ));
+            self.total_size += 1;
+            Some((last_update, exit))
+        } else {
+            None
+        }
+    }
+
+    fn remove_connection(&mut self, addr: &SocketAddr) {
+        if let Entry::Occupied(mut e) = self.table.entry(addr.ip()) {
+            let e_ref = e.get_mut();
+            e_ref.retain(|connection| connection.port != addr.port());
+            if e_ref.is_empty() {
+                e.remove_entry();
+            }
+            self.total_size -= 1;
+        }
+    }
+}
+
+#[derive(Default)]
+struct StreamStats {
+    total_connections: AtomicUsize,
+    total_new_connections: AtomicUsize,
+    total_streams: AtomicUsize,
+    total_new_streams: AtomicUsize,
+    num_evictions: AtomicUsize,
+}
+
+impl StreamStats {
+    fn report(&self) {
+        datapoint_info!(
+            "quic-connections",
+            (
+                "active_connections",
+                self.total_connections.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "active_streams",
+                self.total_streams.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "new_connections",
+                self.total_new_connections.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "new_streams",
+                self.total_new_streams.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "evictions",
+                self.num_evictions.swap(0, Ordering::Relaxed),
+                i64
+            ),
+        );
+    }
+}
+
+fn handle_connection(
+    mut uni_streams: IncomingUniStreams,
+    packet_sender: Sender<PacketBatch>,
+    remote_addr: SocketAddr,
+    last_update: Arc<AtomicU64>,
+    connection_table: Arc<Mutex<ConnectionTable>>,
+    stream_exit: Arc<AtomicBool>,
+    stats: Arc<StreamStats>,
+) {
+    tokio::spawn(async move {
+        debug!(
+            "quic new connection {} streams: {} connections: {}",
+            remote_addr,
+            stats.total_streams.load(Ordering::Relaxed),
+            stats.total_connections.load(Ordering::Relaxed),
+        );
+        while !stream_exit.load(Ordering::Relaxed) {
+            match uni_streams.next().await {
+                Some(stream_result) => match stream_result {
+                    Ok(mut stream) => {
+                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                        let mut maybe_batch = None;
+                        while !stream_exit.load(Ordering::Relaxed) {
+                            if handle_chunk(
+                                &stream.read_chunk(PACKET_DATA_SIZE, false).await,
+                                &mut maybe_batch,
+                                &remote_addr,
+                                &packet_sender,
+                            ) {
+                                last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug!("stream error: {:?}", e);
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                        break;
+                    }
+                },
+                None => {
+                    stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                    break;
+                }
             }
         }
-        table.remove(&oldest_ip.unwrap());
-        num_pruned += 1;
-    }
-    num_pruned
+        connection_table
+            .lock()
+            .unwrap()
+            .remove_connection(&remote_addr);
+        stats.total_connections.fetch_sub(1, Ordering::Relaxed);
+    });
 }
 
 pub fn spawn_server(
@@ -261,17 +407,13 @@ pub fn spawn_server(
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
 
-    let total_streams = Arc::new(AtomicUsize::new(0));
-    let total_new_streams = Arc::new(AtomicUsize::new(0));
+    let stats = Arc::new(StreamStats::default());
     let handle = thread::spawn(move || {
         let handle = runtime.spawn(async move {
             debug!("spawn quic server");
-            let total_connections = Arc::new(AtomicUsize::new(0));
-            let num_evictions = Arc::new(AtomicUsize::new(0));
-            let total_new_connections = Arc::new(AtomicUsize::new(0));
             let mut last_datapoint = Instant::now();
-            let connection_table: Arc<RwLock<HashMap<IpAddr, ConnectionEntry>>> =
-                Arc::new(RwLock::new(HashMap::new()));
+            let connection_table: Arc<Mutex<ConnectionTable>> =
+                Arc::new(Mutex::new(ConnectionTable::default()));
             while !exit.load(Ordering::Relaxed) {
                 const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
                 let timeout_connection = timeout(
@@ -281,129 +423,47 @@ pub fn spawn_server(
                 .await;
 
                 if last_datapoint.elapsed().as_secs() >= 5 {
-                    datapoint_info!(
-                        "quic-connections",
-                        (
-                            "active_connections",
-                            total_connections.load(Ordering::Relaxed),
-                            i64
-                        ),
-                        ("active_streams", total_streams.load(Ordering::Relaxed), i64),
-                        (
-                            "new_connections",
-                            total_new_connections.swap(0, Ordering::Relaxed),
-                            i64
-                        ),
-                        (
-                            "new_streams",
-                            total_new_streams.swap(0, Ordering::Relaxed),
-                            i64
-                        ),
-                        ("evictions", num_evictions.swap(0, Ordering::Relaxed), i64),
-                    );
+                    stats.report();
                     last_datapoint = Instant::now();
                 }
 
                 if let Ok(Some(connection)) = timeout_connection {
                     if let Ok(new_connection) = connection.await {
-                        let total_connections = total_connections.clone();
-                        total_connections.fetch_add(1, Ordering::Relaxed);
-                        total_new_connections.fetch_add(1, Ordering::Relaxed);
+                        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+                        stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
                         let quinn::NewConnection {
                             connection,
-                            mut uni_streams,
+                            uni_streams,
                             ..
                         } = new_connection;
 
                         let remote_addr = connection.remote_address();
 
-                        let mut connection_table_w = connection_table.write().unwrap();
+                        let mut connection_table_l = connection_table.lock().unwrap();
                         const MAX_CONNECTION_TABLE_SIZE: usize = 5000;
-                        let num_pruned = prune_oldest_from_connection_table(
-                            &mut connection_table_w,
-                            MAX_CONNECTION_TABLE_SIZE,
-                        );
-                        num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                        let connection_entry = connection_table_w
-                            .entry(remote_addr.ip())
-                            .or_insert_with(|| {
-                                ConnectionEntry::new(
-                                    Arc::new(AtomicBool::new(false)),
-                                    timing::timestamp(),
-                                )
-                            });
-                        if (connection_entry.count + 1) <= max_connections_per_ip {
-                            connection_entry.count += 1;
-                            let stream_exit = connection_entry.exit.clone();
-                            drop(connection_table_w);
+                        let num_pruned = connection_table_l.prune_oldest(MAX_CONNECTION_TABLE_SIZE);
+                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+
+                        if let Some((last_update, stream_exit)) = connection_table_l
+                            .try_add_connection(
+                                &remote_addr,
+                                timing::timestamp(),
+                                max_connections_per_ip,
+                            )
+                        {
+                            drop(connection_table_l);
                             let packet_sender = packet_sender.clone();
-                            let total_streams = total_streams.clone();
-                            let total_new_streams = total_new_streams.clone();
-                            let total_connections1 = total_connections.clone();
+                            let stats = stats.clone();
                             let connection_table1 = connection_table.clone();
-                            tokio::spawn(async move {
-                                debug!(
-                                    "quic new connection {} streams: {} connections: {}",
-                                    remote_addr,
-                                    total_streams.load(Ordering::Relaxed),
-                                    total_connections1.load(Ordering::Relaxed),
-                                );
-                                while !stream_exit.load(Ordering::Relaxed) {
-                                    match uni_streams.next().await {
-                                        Some(stream_result) => match stream_result {
-                                            Ok(mut stream) => {
-                                                total_streams.fetch_add(1, Ordering::Relaxed);
-                                                total_new_streams.fetch_add(1, Ordering::Relaxed);
-                                                let mut maybe_batch = None;
-                                                while !stream_exit.load(Ordering::Relaxed) {
-                                                    if handle_chunk(
-                                                        &stream
-                                                            .read_chunk(PACKET_DATA_SIZE, false)
-                                                            .await,
-                                                        &mut maybe_batch,
-                                                        &remote_addr,
-                                                        &packet_sender,
-                                                    ) {
-                                                        let connection_table_r =
-                                                            connection_table1.read().unwrap();
-                                                        if let Some(e) = connection_table_r
-                                                            .get(&remote_addr.ip())
-                                                        {
-                                                            e.last_update.store(
-                                                                timing::timestamp(),
-                                                                Ordering::Relaxed,
-                                                            );
-                                                        }
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                debug!("stream error: {:?}", e);
-                                                total_streams.fetch_sub(1, Ordering::Relaxed);
-                                                break;
-                                            }
-                                        },
-                                        None => {
-                                            total_streams.fetch_sub(1, Ordering::Relaxed);
-                                            break;
-                                        }
-                                    }
-                                }
-                                {
-                                    let mut connection_table_w = connection_table1.write().unwrap();
-                                    if let Entry::Occupied(mut e) =
-                                        connection_table_w.entry(remote_addr.ip())
-                                    {
-                                        let e_ref = e.get_mut();
-                                        e_ref.count -= 1;
-                                        if e_ref.count == 0 {
-                                            e.remove_entry();
-                                        }
-                                    }
-                                }
-                                total_connections.fetch_sub(1, Ordering::Relaxed);
-                            });
+                            handle_connection(
+                                uni_streams,
+                                packet_sender,
+                                remote_addr,
+                                last_update,
+                                connection_table1,
+                                stream_exit,
+                                stats,
+                            );
                         }
                     }
                 }
@@ -616,21 +676,32 @@ mod test {
     fn test_prune_table() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = HashMap::new();
-        let exit = Arc::new(AtomicBool::new(false));
+        let mut table = ConnectionTable::default();
         let num_entries = 5;
-        for i in 0..num_entries {
-            table.insert(
-                IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)),
-                ConnectionEntry::new(exit.clone(), (i + 1) as u64),
-            );
+        let max_connections_per_ip = 10;
+        let sockets: Vec<_> = (0..num_entries)
+            .into_iter()
+            .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
+            .collect();
+        for (i, socket) in sockets.iter().enumerate() {
+            table
+                .try_add_connection(socket, i as u64, max_connections_per_ip)
+                .unwrap();
         }
         let new_size = 3;
-        let pruned = prune_oldest_from_connection_table(&mut table, new_size);
+        let pruned = table.prune_oldest(new_size);
         assert_eq!(pruned, num_entries as usize - new_size);
-        for v in table.values() {
-            assert!(v.last_update() >= (num_entries as u64 - new_size as u64));
+        for v in table.table.values() {
+            for x in v {
+                assert!(x.last_update() >= (num_entries as u64 - new_size as u64));
+            }
         }
-        assert_eq!(table.len(), new_size);
+        assert_eq!(table.table.len(), new_size);
+        assert_eq!(table.total_size, new_size);
+        for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
+            table.remove_connection(socket);
+        }
+        info!("{:?}", table);
+        assert_eq!(table.total_size, 0);
     }
 }

@@ -35,6 +35,8 @@ use {
 };
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
+
+// allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
 
 pub struct TpuSockets {
