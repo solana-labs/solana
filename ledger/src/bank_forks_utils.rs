@@ -210,10 +210,11 @@ fn load_from_snapshot(
         incremental: starting_incremental_snapshot_hash,
     };
 
+    let bank_forks = BankForks::new(deserialized_bank);
     to_loadresult(
         blockstore_processor::process_blockstore_from_root(
             blockstore,
-            deserialized_bank,
+            bank_forks,
             &process_options,
             &VerifyRecyclers::default(),
             transaction_status_sender,
