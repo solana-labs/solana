@@ -33,6 +33,7 @@ struct Config<'a> {
     verbose: bool,
     workspace: bool,
     jobs: Option<String>,
+    arch: &'a str,
 }
 
 impl Default for Config<'_> {
@@ -57,6 +58,7 @@ impl Default for Config<'_> {
             verbose: false,
             workspace: false,
             jobs: None,
+            arch: "sbf",
         }
     }
 }
@@ -542,6 +544,17 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         env::remove_var("RUSTC")
     }
 
+    let mut target_rustflags = env::var("CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS")
+        .ok()
+        .unwrap_or_default();
+    if config.arch == "sbfv2" {
+        target_rustflags = format!("{} {}", "-C target_cpu=sbfv2", target_rustflags);
+        env::set_var(
+            "CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS",
+            &target_rustflags,
+        );
+    }
+
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
         "+sbf",
@@ -550,6 +563,9 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         "sbf-solana-solana",
         "--release",
     ];
+    if config.arch == "sbfv2" {
+        cargo_build_args.push("-Zbuild-std=std,panic_abort");
+    }
     if config.no_default_features {
         cargo_build_args.push("--no-default-features");
     }
@@ -833,6 +849,13 @@ fn main() {
                 .validator(|val| val.parse::<usize>().map_err(|e| e.to_string()))
                 .help("Number of parallel jobs, defaults to # of CPUs"),
         )
+        .arg(
+            Arg::new("arch")
+                .long("arch")
+                .possible_values(&["sbf", "sbfv2"])
+                .default_value("sbf")
+                .help("Build for the given SBF version"),
+        )
         .get_matches_from(args);
 
     let sbf_sdk: PathBuf = matches.value_of_t_or_exit("sbf_sdk");
@@ -869,6 +892,7 @@ fn main() {
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
         jobs: matches.value_of_t("jobs").ok(),
+        arch: matches.value_of("arch").unwrap(),
     };
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
     if config.verbose {
