@@ -32,6 +32,3 @@ mod tests {
         assert_eq!(pod_ciphertext.decrypt(&keypair.secret).unwrap(), 55);
     }
 }
-
-
-

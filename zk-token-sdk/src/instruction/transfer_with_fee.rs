@@ -123,7 +123,8 @@ impl TransferWithFeeData {
 
         // calculate and encrypt fee
         let (fee_amount, delta_fee) =
-            calculate_fee(transfer_amount, fee_parameters.fee_rate_basis_points).ok_or(ProofError::Generation)?;
+            calculate_fee(transfer_amount, fee_parameters.fee_rate_basis_points)
+                .ok_or(ProofError::Generation)?;
 
         let below_max = u64::ct_gt(&fee_parameters.maximum_fee, &fee_amount);
         let fee_to_encrypt =
@@ -711,4 +712,3 @@ mod test {
         assert!(fee_data.verify().is_ok());
     }
 }
-
