@@ -544,7 +544,6 @@ impl LeaderTpuService {
                     slots_in_epoch,
                 ) {
                     Ok(slot_leaders) => {
-                        // TODO(jstarry): Manage list of open connections for upcoming slot leaders
                         let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
                         leader_tpu_cache.first_slot = estimated_current_slot;
                         leader_tpu_cache.leaders = slot_leaders;
