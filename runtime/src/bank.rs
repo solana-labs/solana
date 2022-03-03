@@ -5777,7 +5777,7 @@ impl Bank {
     /// snapshot.
     /// Only called from startup or test code.
     #[must_use]
-    fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
+    pub fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
@@ -7129,7 +7129,7 @@ pub(crate) mod tests {
         let plenty_of_lamports = 264;
         let too_few_lamports = 10;
         // Initialize credit-debit and credit only accounts
-        let mut accounts = [
+        let accounts = [
             AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
             AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
             AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
@@ -7153,7 +7153,7 @@ pub(crate) mod tests {
         }
 
         for i in 0..accounts.len() {
-            let account = &mut accounts[i];
+            let account = &accounts[i];
             bank.store_account(&keypairs[i].pubkey(), account);
             bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
         }
@@ -8623,8 +8623,9 @@ pub(crate) mod tests {
         let zero_lamports = 0;
         let little_lamports = 1234;
         let large_lamports = 123_456_789;
-        let some_slot = 1000;
-        let rent_collected = 22; // this is a function of 'some_slot'
+        // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
+        let some_slot = MINIMUM_SLOTS_PER_EPOCH; // chosen to cause epoch to be +1
+        let rent_collected = 1; // this is a function of 'some_slot'
 
         bank.store_account(
             &zero_lamport_pubkey,
@@ -8645,7 +8646,7 @@ pub(crate) mod tests {
         let previous_epoch = bank.epoch();
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), some_slot));
         let current_epoch = bank.epoch();
-        assert!(previous_epoch < current_epoch);
+        assert_eq!(previous_epoch + 1, current_epoch);
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
         assert_eq!(
@@ -8731,12 +8732,14 @@ pub(crate) mod tests {
             .accounts_index
             .purge_roots(&zero_lamport_pubkey);
 
-        let some_slot = 1000;
+        // genesis_config.epoch_schedule.slots_per_epoch == 432_000 and is unsuitable for this test
+        let some_slot = MINIMUM_SLOTS_PER_EPOCH; // 1 epoch
         let bank2_with_zero = Arc::new(Bank::new_from_parent(
             &bank1_with_zero,
             &Pubkey::default(),
             some_slot,
         ));
+        assert_eq!(bank1_with_zero.epoch() + 1, bank2_with_zero.epoch());
         let bank2_without_zero = Arc::new(Bank::new_from_parent(
             &bank1_without_zero,
             &Pubkey::default(),
@@ -16282,12 +16285,22 @@ pub(crate) mod tests {
         let rent_paying_account = Keypair::new();
         genesis_config.accounts.insert(
             rent_paying_account.pubkey(),
-            Account::new(rent_exempt_minimum - 1, account_data_size, &mock_program_id),
+            Account::new_rent_epoch(
+                rent_exempt_minimum - 1,
+                account_data_size,
+                &mock_program_id,
+                INITIAL_RENT_EPOCH + 1,
+            ),
         );
         let rent_exempt_account = Keypair::new();
         genesis_config.accounts.insert(
             rent_exempt_account.pubkey(),
-            Account::new(rent_exempt_minimum, account_data_size, &mock_program_id),
+            Account::new_rent_epoch(
+                rent_exempt_minimum,
+                account_data_size,
+                &mock_program_id,
+                INITIAL_RENT_EPOCH + 1,
+            ),
         );
         // Activate features, including require_rent_exempt_accounts
         activate_all_features(&mut genesis_config);
@@ -16422,6 +16435,97 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
         assert!(check_account_is_rent_exempt(&rent_exempt_account.pubkey()));
+    }
+
+    #[test]
+    fn test_drained_created_account() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        activate_all_features(&mut genesis_config);
+
+        let mock_program_id = Pubkey::new_unique();
+        // small enough to not pay rent, thus bypassing the data clearing rent
+        // mechanism
+        let data_size_no_rent = 100;
+        // large enough to pay rent, will have data cleared
+        let data_size_rent = 10000;
+        let lamports_to_transfer = 100;
+
+        // Create legacy accounts of various kinds
+        let created_keypair = Keypair::new();
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.add_builtin(
+            "mock_program",
+            &mock_program_id,
+            mock_transfer_process_instruction,
+        );
+        let recent_blockhash = bank.last_blockhash();
+
+        // Create and drain a small data size account
+        let create_instruction = system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &created_keypair.pubkey(),
+            lamports_to_transfer,
+            data_size_no_rent,
+            &mock_program_id,
+        );
+        let account_metas = vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new(created_keypair.pubkey(), true),
+            AccountMeta::new(mint_keypair.pubkey(), false),
+        ];
+        let transfer_from_instruction = Instruction::new_with_bincode(
+            mock_program_id,
+            &MockTransferInstruction::Transfer(lamports_to_transfer),
+            account_metas,
+        );
+        let tx = Transaction::new_signed_with_payer(
+            &[create_instruction, transfer_from_instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair, &created_keypair],
+            recent_blockhash,
+        );
+
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        // account data is not stored because of zero balance even though its
+        // data wasn't cleared
+        assert!(bank.get_account(&created_keypair.pubkey()).is_none());
+
+        // Create and drain a large data size account
+        let create_instruction = system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &created_keypair.pubkey(),
+            lamports_to_transfer,
+            data_size_rent,
+            &mock_program_id,
+        );
+        let account_metas = vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new(created_keypair.pubkey(), true),
+            AccountMeta::new(mint_keypair.pubkey(), false),
+        ];
+        let transfer_from_instruction = Instruction::new_with_bincode(
+            mock_program_id,
+            &MockTransferInstruction::Transfer(lamports_to_transfer),
+            account_metas,
+        );
+        let tx = Transaction::new_signed_with_payer(
+            &[create_instruction, transfer_from_instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair, &created_keypair],
+            recent_blockhash,
+        );
+
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        // account data is not stored because of zero balance
+        assert!(bank.get_account(&created_keypair.pubkey()).is_none());
     }
 
     #[test]
@@ -16874,6 +16978,331 @@ pub(crate) mod tests {
                     CompiledInstruction::new_from_raw_parts(0, vec![6], vec![])
                 ]
             ]
+        );
+    }
+
+    #[derive(Serialize, Deserialize)]
+    enum MockReallocInstruction {
+        Realloc(usize, u64, Pubkey),
+    }
+
+    fn mock_realloc_process_instruction(
+        _first_instruction_account: usize,
+        data: &[u8],
+        invoke_context: &mut InvokeContext,
+    ) -> result::Result<(), InstructionError> {
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        if let Ok(instruction) = bincode::deserialize(data) {
+            match instruction {
+                MockReallocInstruction::Realloc(new_size, new_balance, _) => {
+                    // Set data length
+                    instruction_context
+                        .try_borrow_instruction_account(transaction_context, 1)?
+                        .set_data_length(new_size);
+
+                    // set balance
+                    let current_balance = instruction_context
+                        .try_borrow_instruction_account(transaction_context, 1)?
+                        .get_lamports();
+                    let diff_balance = (new_balance as i64).saturating_sub(current_balance as i64);
+                    let amount = diff_balance.abs() as u64;
+                    if diff_balance.is_positive() {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?
+                            .checked_sub_lamports(amount)?;
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 1)?
+                            .set_lamports(new_balance);
+                    } else {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?
+                            .checked_add_lamports(amount)?;
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 1)?
+                            .set_lamports(new_balance);
+                    }
+                    Ok(())
+                }
+            }
+        } else {
+            Err(InstructionError::InvalidInstructionData)
+        }
+    }
+
+    fn create_mock_realloc_tx(
+        payer: &Keypair,
+        funder: &Keypair,
+        reallocd: &Pubkey,
+        new_size: usize,
+        new_balance: u64,
+        mock_program_id: Pubkey,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        let account_metas = vec![
+            AccountMeta::new(funder.pubkey(), false),
+            AccountMeta::new(*reallocd, false),
+        ];
+        let instruction = Instruction::new_with_bincode(
+            mock_program_id,
+            &MockReallocInstruction::Realloc(new_size, new_balance, Pubkey::new_unique()),
+            account_metas,
+        );
+        Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&payer.pubkey()),
+            &[payer],
+            recent_blockhash,
+        )
+    }
+
+    #[test]
+    fn test_resize_and_rent() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(1_000_000_000, &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        activate_all_features(&mut genesis_config);
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+
+        let mock_program_id = Pubkey::new_unique();
+        bank.add_builtin(
+            "mock_realloc_program",
+            &mock_program_id,
+            mock_realloc_process_instruction,
+        );
+        let recent_blockhash = bank.last_blockhash();
+
+        let account_data_size_small = 1024;
+        let rent_exempt_minimum_small =
+            genesis_config.rent.minimum_balance(account_data_size_small);
+        let account_data_size_large = 2048;
+        let rent_exempt_minimum_large =
+            genesis_config.rent.minimum_balance(account_data_size_large);
+
+        let funding_keypair = Keypair::new();
+        bank.store_account(
+            &funding_keypair.pubkey(),
+            &AccountSharedData::new(1_000_000_000, 0, &mock_program_id),
+        );
+
+        let rent_paying_pubkey = solana_sdk::pubkey::new_rand();
+        let mut rent_paying_account = AccountSharedData::new(
+            rent_exempt_minimum_small - 1,
+            account_data_size_small,
+            &mock_program_id,
+        );
+        rent_paying_account.set_rent_epoch(1);
+
+        // restore program-owned account
+        bank.store_account(&rent_paying_pubkey, &rent_paying_account);
+
+        // rent paying, realloc larger, fail because not rent exempt
+        let tx = create_mock_realloc_tx(
+            &mint_keypair,
+            &funding_keypair,
+            &rent_paying_pubkey,
+            account_data_size_large,
+            rent_exempt_minimum_small - 1,
+            mock_program_id,
+            recent_blockhash,
+        );
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InvalidRentPayingAccount,
+        );
+        assert_eq!(
+            rent_exempt_minimum_small - 1,
+            bank.get_account(&rent_paying_pubkey).unwrap().lamports()
+        );
+
+        // rent paying, realloc larger and rent exempt
+        let tx = create_mock_realloc_tx(
+            &mint_keypair,
+            &funding_keypair,
+            &rent_paying_pubkey,
+            account_data_size_large,
+            rent_exempt_minimum_large,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_large,
+            bank.get_account(&rent_paying_pubkey).unwrap().lamports()
+        );
+
+        // rent exempt, realloc small, fail because not rent exempt
+        let tx = create_mock_realloc_tx(
+            &mint_keypair,
+            &funding_keypair,
+            &rent_paying_pubkey,
+            account_data_size_small,
+            rent_exempt_minimum_small - 1,
+            mock_program_id,
+            recent_blockhash,
+        );
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InvalidRentPayingAccount,
+        );
+        assert_eq!(
+            rent_exempt_minimum_large,
+            bank.get_account(&rent_paying_pubkey).unwrap().lamports()
+        );
+
+        // rent exempt, realloc smaller and rent exempt
+        let tx = create_mock_realloc_tx(
+            &mint_keypair,
+            &funding_keypair,
+            &rent_paying_pubkey,
+            account_data_size_small,
+            rent_exempt_minimum_small,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_small,
+            bank.get_account(&rent_paying_pubkey).unwrap().lamports()
+        );
+
+        // rent exempt, realloc large, fail because not rent exempt
+        let tx = create_mock_realloc_tx(
+            &mint_keypair,
+            &funding_keypair,
+            &rent_paying_pubkey,
+            account_data_size_large,
+            rent_exempt_minimum_large - 1,
+            mock_program_id,
+            recent_blockhash,
+        );
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InvalidRentPayingAccount,
+        );
+        assert_eq!(
+            rent_exempt_minimum_small,
+            bank.get_account(&rent_paying_pubkey).unwrap().lamports()
+        );
+
+        // rent exempt, realloc large and rent exempt
+        let tx = create_mock_realloc_tx(
+            &mint_keypair,
+            &funding_keypair,
+            &rent_paying_pubkey,
+            account_data_size_large,
+            rent_exempt_minimum_large,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_large,
+            bank.get_account(&rent_paying_pubkey).unwrap().lamports()
+        );
+
+        let created_keypair = Keypair::new();
+
+        // create account, not rent exempt
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &created_keypair,
+            recent_blockhash,
+            rent_exempt_minimum_small - 1,
+            account_data_size_small as u64,
+            &system_program::id(),
+        );
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InvalidRentPayingAccount,
+        );
+
+        // create account, rent exempt
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &created_keypair,
+            recent_blockhash,
+            rent_exempt_minimum_small,
+            account_data_size_small as u64,
+            &system_program::id(),
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_small,
+            bank.get_account(&created_keypair.pubkey())
+                .unwrap()
+                .lamports()
+        );
+
+        let created_keypair = Keypair::new();
+        // create account, no data
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &created_keypair,
+            recent_blockhash,
+            rent_exempt_minimum_small - 1,
+            0,
+            &system_program::id(),
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_small - 1,
+            bank.get_account(&created_keypair.pubkey())
+                .unwrap()
+                .lamports()
+        );
+
+        // alloc but not rent exempt
+        let tx = system_transaction::allocate(
+            &mint_keypair,
+            &created_keypair,
+            recent_blockhash,
+            (account_data_size_small + 1) as u64,
+        );
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InvalidRentPayingAccount,
+        );
+
+        // bring balance of account up to rent exemption
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &created_keypair.pubkey(),
+            1,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_small,
+            bank.get_account(&created_keypair.pubkey())
+                .unwrap()
+                .lamports()
+        );
+
+        // allocate as rent exempt
+        let tx = system_transaction::allocate(
+            &mint_keypair,
+            &created_keypair,
+            recent_blockhash,
+            account_data_size_small as u64,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert_eq!(
+            rent_exempt_minimum_small,
+            bank.get_account(&created_keypair.pubkey())
+                .unwrap()
+                .lamports()
         );
     }
 }

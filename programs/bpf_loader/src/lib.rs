@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 pub mod alloc;
 pub mod allocator_bump;
 pub mod deprecated;
@@ -192,16 +191,17 @@ fn write_program_data<'a>(
     log_collector: Option<Rc<RefCell<LogCollector>>>,
 ) -> Result<(), InstructionError> {
     let data = program.get_data_mut();
-    if data.len() < program_data_offset + bytes.len() {
+    let write_offset = program_data_offset.saturating_add(bytes.len());
+    if data.len() < write_offset {
         ic_logger_msg!(
             log_collector,
             "Write overflow: {} < {}",
             data.len(),
-            program_data_offset + bytes.len()
+            write_offset
         );
         return Err(InstructionError::AccountDataTooSmall);
     }
-    data[program_data_offset..program_data_offset + bytes.len()].copy_from_slice(bytes);
+    data[program_data_offset..write_offset].copy_from_slice(bytes);
     Ok(())
 }
 
@@ -224,10 +224,11 @@ pub fn create_vm<'a, 'b>(
         .feature_set
         .is_active(&requestable_heap_size::id())
     {
-        let _ = invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .consume((heap_size as u64 / (32 * 1024)).saturating_sub(1) * compute_budget.heap_cost);
+        let _ = invoke_context.get_compute_meter().borrow_mut().consume(
+            ((heap_size as u64).saturating_div(32_u64.saturating_mul(1024)))
+                .saturating_sub(1)
+                .saturating_mul(compute_budget.heap_cost),
+        );
     }
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
@@ -276,7 +277,7 @@ fn process_instruction_common(
         instruction_context.get_index_in_transaction(first_instruction_account)?,
     )?;
     let second_account_key = instruction_context
-        .get_index_in_transaction(first_instruction_account + 1)
+        .get_index_in_transaction(first_instruction_account.saturating_add(1))
         .and_then(|index_in_transaction| {
             transaction_context.get_key_of_account_at_index(index_in_transaction)
         });
@@ -287,7 +288,7 @@ fn process_instruction_common(
         .map(|key| key == program_id)
         .unwrap_or(false)
     {
-        first_instruction_account + 1
+        first_instruction_account.saturating_add(1)
     } else {
         if instruction_context
             .try_borrow_account(transaction_context, first_instruction_account)?
@@ -302,9 +303,11 @@ fn process_instruction_common(
     let program =
         instruction_context.try_borrow_account(transaction_context, program_account_index)?;
     if program.is_executable() {
+        // First instruction account can only be zero if called from CPI, which
+        // means stack height better be greater than one
         debug_assert_eq!(
-            first_instruction_account,
-            1 - (invoke_context.get_stack_height() > 1) as usize,
+            first_instruction_account == 0,
+            invoke_context.get_stack_height() > 1
         );
 
         if !check_loader_id(program.get_owner()) {
@@ -507,8 +510,9 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::IncorrectAuthority);
             }
             if !instruction_context.is_signer(
-                instruction_context.get_number_of_program_accounts()
-                    + upgradeable_ins_acc_idx::Write::Authority as usize,
+                instruction_context
+                    .get_number_of_program_accounts()
+                    .saturating_add(upgradeable_ins_acc_idx::Write::Authority as usize),
             )? {
                 ic_logger_msg!(log_collector, "Buffer authority did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
@@ -519,7 +523,7 @@ fn process_loader_upgradeable_instruction(
             )?;
             write_program_data(
                 &mut program,
-                UpgradeableLoaderState::buffer_data_offset()? + offset as usize,
+                UpgradeableLoaderState::buffer_data_offset()?.saturating_add(offset as usize),
                 &bytes,
                 invoke_context.get_log_collector(),
             )?;
@@ -582,8 +586,12 @@ fn process_loader_upgradeable_instruction(
                     return Err(InstructionError::IncorrectAuthority);
                 }
                 if !instruction_context.is_signer(
-                    instruction_context.get_number_of_program_accounts()
-                        + upgradeable_ins_acc_idx::DeployWithMaxDataLen::UpgradeAuthority as usize,
+                    instruction_context
+                        .get_number_of_program_accounts()
+                        .saturating_add(
+                            upgradeable_ins_acc_idx::DeployWithMaxDataLen::UpgradeAuthority
+                                as usize,
+                        ),
                 )? {
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
@@ -662,7 +670,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(
-                first_instruction_account + 3,
+                first_instruction_account.saturating_add(3),
                 buffer_data_offset,
                 invoke_context,
                 use_jit,
@@ -687,8 +695,8 @@ fn process_loader_upgradeable_instruction(
                     slot: clock.slot,
                     upgrade_authority_address,
                 })?;
-                programdata.get_data_mut()
-                    [programdata_data_offset..programdata_data_offset + buffer_data_len]
+                programdata.get_data_mut()[programdata_data_offset
+                    ..programdata_data_offset.saturating_add(buffer_data_len)]
                     .copy_from_slice(&buffer.get_data()[buffer_data_offset..]);
             }
 
@@ -783,8 +791,11 @@ fn process_loader_upgradeable_instruction(
                     return Err(InstructionError::IncorrectAuthority);
                 }
                 if !instruction_context.is_signer(
-                    instruction_context.get_number_of_program_accounts()
-                        + upgradeable_ins_acc_idx::Upgrade::UpgradeAuthority as usize,
+                    instruction_context
+                        .get_number_of_program_accounts()
+                        .saturating_add(
+                            upgradeable_ins_acc_idx::Upgrade::UpgradeAuthority as usize,
+                        ),
                 )? {
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
@@ -817,7 +828,11 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "ProgramData account not large enough");
                 return Err(InstructionError::AccountDataTooSmall);
             }
-            if programdata.get_lamports() + buffer.get_lamports() < programdata_balance_required {
+            if programdata
+                .get_lamports()
+                .saturating_add(buffer.get_lamports())
+                < programdata_balance_required
+            {
                 ic_logger_msg!(
                     log_collector,
                     "Buffer account balance too low to fund upgrade"
@@ -839,8 +854,11 @@ fn process_loader_upgradeable_instruction(
                     return Err(InstructionError::IncorrectAuthority);
                 }
                 if !instruction_context.is_signer(
-                    instruction_context.get_number_of_program_accounts()
-                        + upgradeable_ins_acc_idx::Upgrade::UpgradeAuthority as usize,
+                    instruction_context
+                        .get_number_of_program_accounts()
+                        .saturating_add(
+                            upgradeable_ins_acc_idx::Upgrade::UpgradeAuthority as usize,
+                        ),
                 )? {
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
@@ -853,7 +871,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(
-                first_instruction_account + 2,
+                first_instruction_account.saturating_add(2),
                 buffer_data_offset,
                 invoke_context,
                 use_jit,
@@ -878,9 +896,10 @@ fn process_loader_upgradeable_instruction(
                 upgrade_authority_address: current_upgrade_authority_address,
             })?;
             programdata.get_data_mut()
-                [programdata_data_offset..programdata_data_offset + buffer_data_len]
+                [programdata_data_offset..programdata_data_offset.saturating_add(buffer_data_len)]
                 .copy_from_slice(&buffer.get_data()[buffer_data_offset..]);
-            programdata.get_data_mut()[programdata_data_offset + buffer_data_len..].fill(0);
+            programdata.get_data_mut()[programdata_data_offset.saturating_add(buffer_data_len)..]
+                .fill(0);
 
             // Fund ProgramData to rent-exemption, spill the rest
             {
@@ -889,8 +908,10 @@ fn process_loader_upgradeable_instruction(
                     upgradeable_ins_acc_idx::Upgrade::Spill as usize,
                 )?;
                 spill.checked_add_lamports(
-                    (programdata.get_lamports() + buffer.get_lamports())
-                        .saturating_sub(programdata_balance_required),
+                    (programdata
+                        .get_lamports()
+                        .saturating_add(buffer.get_lamports()))
+                    .saturating_sub(programdata_balance_required),
                 )?;
                 buffer.set_lamports(0);
                 programdata.set_lamports(programdata_balance_required);
@@ -931,8 +952,11 @@ fn process_loader_upgradeable_instruction(
                         return Err(InstructionError::IncorrectAuthority);
                     }
                     if !instruction_context.is_signer(
-                        instruction_context.get_number_of_program_accounts()
-                            + upgradeable_ins_acc_idx::SetAuthority::CurrentAuthority as usize,
+                        instruction_context
+                            .get_number_of_program_accounts()
+                            .saturating_add(
+                                upgradeable_ins_acc_idx::SetAuthority::CurrentAuthority as usize,
+                            ),
                     )? {
                         ic_logger_msg!(log_collector, "Buffer authority did not sign");
                         return Err(InstructionError::MissingRequiredSignature);
@@ -954,8 +978,11 @@ fn process_loader_upgradeable_instruction(
                         return Err(InstructionError::IncorrectAuthority);
                     }
                     if !instruction_context.is_signer(
-                        instruction_context.get_number_of_program_accounts()
-                            + upgradeable_ins_acc_idx::SetAuthority::CurrentAuthority as usize,
+                        instruction_context
+                            .get_number_of_program_accounts()
+                            .saturating_add(
+                                upgradeable_ins_acc_idx::SetAuthority::CurrentAuthority as usize,
+                            ),
                     )? {
                         ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                         return Err(InstructionError::MissingRequiredSignature);
@@ -976,9 +1003,11 @@ fn process_loader_upgradeable_instruction(
         UpgradeableLoaderInstruction::Close => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             if instruction_context.get_index_in_transaction(
-                first_instruction_account + upgradeable_ins_acc_idx::Close::Account as usize,
+                first_instruction_account
+                    .saturating_add(upgradeable_ins_acc_idx::Close::Account as usize),
             )? == instruction_context.get_index_in_transaction(
-                first_instruction_account + upgradeable_ins_acc_idx::Close::Recipient as usize,
+                first_instruction_account
+                    .saturating_add(upgradeable_ins_acc_idx::Close::Recipient as usize),
             )? {
                 ic_logger_msg!(
                     log_collector,
@@ -1029,8 +1058,9 @@ fn process_loader_upgradeable_instruction(
                 } => {
                     instruction_context.check_number_of_instruction_accounts(4)?;
                     if !instruction_context.is_writable(
-                        instruction_context.get_number_of_program_accounts()
-                            + upgradeable_ins_acc_idx::Close::Program as usize,
+                        instruction_context
+                            .get_number_of_program_accounts()
+                            .saturating_add(upgradeable_ins_acc_idx::Close::Program as usize),
                     )? {
                         ic_logger_msg!(log_collector, "Program account is not writable");
                         return Err(InstructionError::InvalidArgument);
@@ -1105,8 +1135,9 @@ fn common_close_account(
         return Err(InstructionError::IncorrectAuthority);
     }
     if !instruction_context.is_signer(
-        instruction_context.get_number_of_program_accounts()
-            + upgradeable_ins_acc_idx::Close::Authority as usize,
+        instruction_context
+            .get_number_of_program_accounts()
+            .saturating_add(upgradeable_ins_acc_idx::Close::Authority as usize),
     )? {
         ic_logger_msg!(log_collector, "Authority did not sign");
         return Err(InstructionError::MissingRequiredSignature);
@@ -1158,8 +1189,9 @@ fn process_loader_instruction(
     match limited_deserialize(instruction_data)? {
         LoaderInstruction::Write { offset, bytes } => {
             if !instruction_context.is_signer(
-                instruction_context.get_number_of_program_accounts()
-                    + deprecated_ins_acc_idx::Write::Program as usize,
+                instruction_context
+                    .get_number_of_program_accounts()
+                    .saturating_add(deprecated_ins_acc_idx::Write::Program as usize),
             )? {
                 ic_msg!(invoke_context, "Program account did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
@@ -1176,8 +1208,9 @@ fn process_loader_instruction(
         }
         LoaderInstruction::Finalize => {
             if !instruction_context.is_signer(
-                instruction_context.get_number_of_program_accounts()
-                    + deprecated_ins_acc_idx::Finalize::Program as usize,
+                instruction_context
+                    .get_number_of_program_accounts()
+                    .saturating_add(deprecated_ins_acc_idx::Finalize::Program as usize),
             )? {
                 ic_msg!(invoke_context, "Program account did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
@@ -1281,7 +1314,7 @@ impl Executor for BpfExecutor {
                 log_collector,
                 "Program {} consumed {} of {} compute units",
                 &program_id,
-                before - after,
+                before.saturating_sub(after),
                 before
             );
             if log_enabled!(Trace) {

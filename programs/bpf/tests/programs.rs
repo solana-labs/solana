@@ -54,6 +54,7 @@ use {
         loader_instruction,
         message::{v0::LoadedAddresses, Message, SanitizedMessage},
         pubkey::Pubkey,
+        rent::Rent,
         signature::{keypair_from_seed, Keypair, Signer},
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         system_program,
@@ -2641,11 +2642,13 @@ fn test_program_bpf_ro_account_modify() {
 fn test_program_bpf_realloc() {
     solana_logger::setup();
 
+    const START_BALANCE: u64 = 100_000_000_000;
+
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(50);
+    } = create_genesis_config(1_000_000_000_000);
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
 
@@ -2665,7 +2668,7 @@ fn test_program_bpf_realloc() {
     let mut bump = 0;
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey();
-    let account = AccountSharedData::new(42, 5, &program_id);
+    let account = AccountSharedData::new(START_BALANCE, 5, &program_id);
     bank.store_account(&pubkey, &account);
 
     // Realloc RO account
@@ -2897,11 +2900,14 @@ fn test_program_bpf_realloc() {
 fn test_program_bpf_realloc_invoke() {
     solana_logger::setup();
 
+    const START_BALANCE: u64 = 100_000_000_000;
+
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(50);
+    } = create_genesis_config(1_000_000_000_000);
+    genesis_config.rent = Rent::default();
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
 
@@ -2928,7 +2934,7 @@ fn test_program_bpf_realloc_invoke() {
     let mut bump = 0;
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey().clone();
-    let account = AccountSharedData::new(42, 5, &realloc_program_id);
+    let account = AccountSharedData::new(START_BALANCE, 5, &realloc_program_id);
     bank.store_account(&pubkey, &account);
     let invoke_keypair = Keypair::new();
     let invoke_pubkey = invoke_keypair.pubkey().clone();
@@ -2954,6 +2960,8 @@ fn test_program_bpf_realloc_invoke() {
             .unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
     );
+    let account = bank.get_account(&pubkey).unwrap();
+    assert_eq!(account.lamports(), START_BALANCE);
 
     // Realloc account to 0
     bank_client
@@ -2965,6 +2973,8 @@ fn test_program_bpf_realloc_invoke() {
             ),
         )
         .unwrap();
+    let account = bank.get_account(&pubkey).unwrap();
+    assert_eq!(account.lamports(), START_BALANCE);
     let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
     assert_eq!(0, data.len());
 
@@ -3012,54 +3022,7 @@ fn test_program_bpf_realloc_invoke() {
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
 
-    // Realloc to max length in max increase increments
-    for i in 0..MAX_PERMITTED_DATA_LENGTH as usize / MAX_PERMITTED_DATA_INCREASE {
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_EXTEND_MAX, 1, i as u8, (i / 255) as u8],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
-                    Some(&mint_pubkey),
-                ),
-            )
-            .unwrap();
-        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-        assert_eq!((i + 1) * MAX_PERMITTED_DATA_INCREASE, data.len());
-    }
-    for i in 0..data.len() {
-        assert_eq!(data[i], 1);
-    }
-
-    // and one more time should fail
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_EXTEND_MAX, 2, 1, 1],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
-                    Some(&mint_pubkey),
-                )
-            )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
-    );
-
-    // Realloc to 0
+    // Realloc account to 0
     bank_client
         .send_and_confirm_message(
             signer,
@@ -3069,6 +3032,8 @@ fn test_program_bpf_realloc_invoke() {
             ),
         )
         .unwrap();
+    let account = bank.get_account(&pubkey).unwrap();
+    assert_eq!(account.lamports(), START_BALANCE);
     let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
     assert_eq!(0, data.len());
 
@@ -3169,7 +3134,7 @@ fn test_program_bpf_realloc_invoke() {
     assert_eq!(0, data.len());
 
     // Realloc to 100 and check via CPI
-    let invoke_account = AccountSharedData::new(42, 5, &realloc_invoke_program_id);
+    let invoke_account = AccountSharedData::new(START_BALANCE, 5, &realloc_invoke_program_id);
     bank.store_account(&invoke_pubkey, &invoke_account);
     bank_client
         .send_and_confirm_message(
@@ -3196,42 +3161,6 @@ fn test_program_bpf_realloc_invoke() {
         assert_eq!(data[i], 0);
     }
     for i in 5..data.len() {
-        assert_eq!(data[i], 2);
-    }
-
-    // Realloc rescursively and fill data
-    let invoke_keypair = Keypair::new();
-    let invoke_pubkey = invoke_keypair.pubkey().clone();
-    let invoke_account = AccountSharedData::new(42, 0, &realloc_invoke_program_id);
-    bank.store_account(&invoke_pubkey, &invoke_account);
-    let mut instruction_data = vec![];
-    instruction_data.extend_from_slice(&[INVOKE_REALLOC_RECURSIVE, 1]);
-    instruction_data.extend_from_slice(&100_usize.to_le_bytes());
-    bank_client
-        .send_and_confirm_message(
-            signer,
-            Message::new(
-                &[Instruction::new_with_bytes(
-                    realloc_invoke_program_id,
-                    &instruction_data,
-                    vec![
-                        AccountMeta::new(invoke_pubkey, false),
-                        AccountMeta::new_readonly(realloc_invoke_program_id, false),
-                    ],
-                )],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let data = bank_client
-        .get_account_data(&invoke_pubkey)
-        .unwrap()
-        .unwrap();
-    assert_eq!(200, data.len());
-    for i in 0..100 {
-        assert_eq!(data[i], 1);
-    }
-    for i in 100..200 {
         assert_eq!(data[i], 2);
     }
 
@@ -3267,7 +3196,7 @@ fn test_program_bpf_realloc_invoke() {
     // Invoke, dealloc, and assign
     let pre_len = 100;
     let new_len = pre_len * 2;
-    let mut invoke_account = AccountSharedData::new(42, pre_len, &realloc_program_id);
+    let mut invoke_account = AccountSharedData::new(START_BALANCE, pre_len, &realloc_program_id);
     invoke_account.set_data_from_slice(&vec![1; pre_len]);
     bank.store_account(&invoke_pubkey, &invoke_account);
     let mut instruction_data = vec![];
@@ -3347,6 +3276,102 @@ fn test_program_bpf_realloc_invoke() {
             .unwrap(),
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
+
+    // Realloc to 0
+    bank_client
+        .send_and_confirm_message(
+            signer,
+            Message::new(
+                &[realloc(&realloc_program_id, &pubkey, 0, &mut bump)],
+                Some(&mint_pubkey),
+            ),
+        )
+        .unwrap();
+    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+    assert_eq!(0, data.len());
+
+    // Realloc to max length in max increase increments
+    for i in 0..MAX_PERMITTED_DATA_LENGTH as usize / MAX_PERMITTED_DATA_INCREASE {
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[Instruction::new_with_bytes(
+                        realloc_invoke_program_id,
+                        &[INVOKE_REALLOC_EXTEND_MAX, 1, i as u8, (i / 255) as u8],
+                        vec![
+                            AccountMeta::new(pubkey, false),
+                            AccountMeta::new_readonly(realloc_program_id, false),
+                        ],
+                    )],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!((i + 1) * MAX_PERMITTED_DATA_INCREASE, data.len());
+    }
+    for i in 0..data.len() {
+        assert_eq!(data[i], 1);
+    }
+
+    // and one more time should fail
+    assert_eq!(
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[Instruction::new_with_bytes(
+                        realloc_invoke_program_id,
+                        &[INVOKE_REALLOC_EXTEND_MAX, 2, 1, 1],
+                        vec![
+                            AccountMeta::new(pubkey, false),
+                            AccountMeta::new_readonly(realloc_program_id, false),
+                        ],
+                    )],
+                    Some(&mint_pubkey),
+                )
+            )
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
+    );
+
+    // Realloc rescursively and fill data
+    let invoke_keypair = Keypair::new();
+    let invoke_pubkey = invoke_keypair.pubkey().clone();
+    let invoke_account = AccountSharedData::new(START_BALANCE, 0, &realloc_invoke_program_id);
+    bank.store_account(&invoke_pubkey, &invoke_account);
+    let mut instruction_data = vec![];
+    instruction_data.extend_from_slice(&[INVOKE_REALLOC_RECURSIVE, 1]);
+    instruction_data.extend_from_slice(&100_usize.to_le_bytes());
+    bank_client
+        .send_and_confirm_message(
+            signer,
+            Message::new(
+                &[Instruction::new_with_bytes(
+                    realloc_invoke_program_id,
+                    &instruction_data,
+                    vec![
+                        AccountMeta::new(invoke_pubkey, false),
+                        AccountMeta::new_readonly(realloc_invoke_program_id, false),
+                    ],
+                )],
+                Some(&mint_pubkey),
+            ),
+        )
+        .unwrap();
+    let data = bank_client
+        .get_account_data(&invoke_pubkey)
+        .unwrap()
+        .unwrap();
+    assert_eq!(200, data.len());
+    for i in 0..100 {
+        assert_eq!(data[i], 1);
+    }
+    for i in 100..200 {
+        assert_eq!(data[i], 2);
+    }
 }
 
 #[test]

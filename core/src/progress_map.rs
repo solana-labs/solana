@@ -339,7 +339,7 @@ pub struct RetransmitInfo {
 impl RetransmitInfo {
     pub fn reached_retransmit_threshold(&self) -> bool {
         let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
-        let backoff_duration_ms = 2_u64.pow(backoff) * RETRANSMIT_BASE_DELAY_MS;
+        let backoff_duration_ms = (1_u64 << backoff) * RETRANSMIT_BASE_DELAY_MS;
         self.retry_time
             .map(|time| time.elapsed().as_millis() > backoff_duration_ms.into())
             .unwrap_or(true)

@@ -790,4 +790,14 @@ mod tests {
             3,
         ));
     }
+
+    #[test]
+    fn test_bind_two_consecutive_in_range() {
+        solana_logger::setup();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        if let Ok(((port1, _), (port2, _))) = bind_two_consecutive_in_range(ip_addr, (1024, 65535))
+        {
+            assert!(port2 == port1 + 1);
+        }
+    }
 }
