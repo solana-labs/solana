@@ -13,11 +13,11 @@ use {
     serial_test::serial,
     solana_client::{
         pubsub_client::PubsubClient,
-        quic_client::UdpTpuConnection,
         rpc_client::RpcClient,
         rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
         rpc_response::RpcSignatureResult,
         thin_client::{create_client, ThinClient},
+        udp_client::UdpTpuConnection,
     },
     solana_core::{
         broadcast_stage::BroadcastStageType,

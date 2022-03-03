@@ -7,8 +7,8 @@ use {
     itertools::izip,
     log::*,
     solana_client::{
-        quic_client::UdpTpuConnection,
         thin_client::{create_client, ThinClient},
+        udp_client::UdpTpuConnection,
     },
     solana_core::{
         tower_storage::FileTowerStorage,

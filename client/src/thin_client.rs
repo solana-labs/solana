@@ -5,10 +5,8 @@
 
 use {
     crate::{
-        quic_client::{TpuConnection, UdpTpuConnection},
-        rpc_client::RpcClient,
-        rpc_config::RpcProgramAccountsConfig,
-        rpc_response::Response,
+        rpc_client::RpcClient, rpc_config::RpcProgramAccountsConfig, rpc_response::Response,
+        tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     log::*,
     solana_sdk::{

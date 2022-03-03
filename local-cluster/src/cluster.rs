@@ -1,5 +1,5 @@
 use {
-    solana_client::{quic_client::UdpTpuConnection, thin_client::ThinClient},
+    solana_client::{thin_client::ThinClient, udp_client::UdpTpuConnection},
     solana_core::validator::{Validator, ValidatorConfig},
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_sdk::{pubkey::Pubkey, signature::Keypair},

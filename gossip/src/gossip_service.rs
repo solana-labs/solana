@@ -8,8 +8,8 @@ use {
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
     solana_client::{
-        quic_client::UdpTpuConnection,
         thin_client::{create_client, ThinClient},
+        udp_client::UdpTpuConnection,
     },
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,

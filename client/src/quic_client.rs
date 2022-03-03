@@ -2,6 +2,7 @@
 //! an interface for sending transactions which is restricted by the servers flow control.
 
 use {
+    crate::tpu_connection::TpuConnection,
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
@@ -46,62 +47,13 @@ struct QuicClient {
     addr: SocketAddr,
 }
 
-pub trait TpuConnection {
-    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self;
-
-    fn tpu_addr(&self) -> &SocketAddr;
-
-    fn send_transaction(&self, tx: &Transaction) -> TransportResult<()> {
-        let data = bincode::serialize(tx).expect("serialize Transaction in send_transaction");
-        self.send_wire_transaction(data)
-    }
-
-    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()>;
-
-    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()>;
-}
-
-pub struct UdpTpuConnection {
-    socket: UdpSocket,
-    addr: SocketAddr,
-}
-
 pub struct QuicTpuConnection {
     client: Arc<QuicClient>,
 }
 
-impl TpuConnection for UdpTpuConnection {
-    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
-        let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
-        Self {
-            socket: client_socket,
-            addr: tpu_addr,
-        }
-    }
-
-    fn tpu_addr(&self) -> &SocketAddr {
-        &self.addr
-    }
-
-    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
-        self.socket.send_to(&data[..], self.addr)?;
-        Ok(())
-    }
-
-    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
-        transactions
-            .into_iter()
-            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
-            .try_for_each(|buff| -> TransportResult<()> {
-                self.socket.send_to(&buff[..], self.addr)?;
-                Ok(())
-            })?;
-        Ok(())
-    }
-}
-
 impl TpuConnection for QuicTpuConnection {
     fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
+        let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
         let client = Arc::new(QuicClient::new(client_socket, tpu_addr));
 
         Self { client }
