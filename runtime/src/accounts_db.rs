@@ -5956,7 +5956,7 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
-        let slot = accounts.target_slot();
+        let target_slot = accounts.target_slot();
         // using a thread pool here results in deadlock panics from bank_hashes.write()
         // so, instead we limit how many threads will be created to the same size as the bg thread pool
         let len = std::cmp::min(accounts.len(), infos.len());
@@ -5972,9 +5972,10 @@ impl AccountsDb {
                     let info = infos[i];
                     let pubkey_account = (accounts.pubkey(i), accounts.account(i));
                     let pubkey = pubkey_account.0;
+                    let old_slot = accounts.slot(i);
                     self.accounts_index.upsert(
-                        slot,
-                        slot,
+                        target_slot,
+                        old_slot,
                         pubkey,
                         pubkey_account.1,
                         &self.account_indexes,
