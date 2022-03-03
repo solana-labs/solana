@@ -484,10 +484,10 @@ fn notify_shred_stake_info(
 
     start.stop();
 
-    stakes.sort();
+    stakes.sort_unstable();
 
     let (stake_min, stake_max, stake_10pct, stake_50pct, stake_90pct, stake_mean, stake_sum) =
-        if stakes.len() > 0 {
+        if !stakes.is_empty() {
             let stake_sum: u64 = stakes.iter().sum();
             (
                 stakes[0],
