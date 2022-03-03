@@ -287,7 +287,10 @@ impl TransferWithFeeProof {
         let mut transcript = Transcript::new(b"FeeProof");
 
         transcript.append_pubkey(b"pubkey-source", &transfer_with_fee_pubkeys.source_pubkey);
-        transcript.append_pubkey(b"pubkey-dest", &transfer_with_fee_pubkeys.destination_pubkey);
+        transcript.append_pubkey(
+            b"pubkey-dest",
+            &transfer_with_fee_pubkeys.destination_pubkey,
+        );
         transcript.append_pubkey(b"pubkey-auditor", &transfer_with_fee_pubkeys.auditor_pubkey);
         transcript.append_pubkey(
             b"withdraw_withheld_authority_pubkey",
@@ -462,7 +465,10 @@ impl TransferWithFeeProof {
                 &transfer_with_fee_pubkeys.auditor_pubkey,
             ),
             (&ciphertext_lo.commitment, &ciphertext_hi.commitment),
-            (&ciphertext_lo.destination_handle, &ciphertext_hi.destination_handle),
+            (
+                &ciphertext_lo.destination_handle,
+                &ciphertext_hi.destination_handle,
+            ),
             (&ciphertext_lo.auditor_handle, &ciphertext_hi.auditor_handle),
             transcript,
         )?;
@@ -542,7 +548,8 @@ impl TransferWithFeePubkeys {
 
         let source_pubkey =
             ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Verification)?;
-        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Verification)?;
+        let destination_pubkey =
+            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Verification)?;
         let auditor_pubkey =
             ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Verification)?;
         let withdraw_withheld_authority_pubkey =
@@ -578,7 +585,8 @@ impl FeeEncryption {
         let fee_encryption = Self {
             commitment,
             destination_handle: destination_pubkey.decrypt_handle(&opening),
-            withdraw_withheld_authority_handle: withdraw_withheld_authority_pubkey.decrypt_handle(&opening),
+            withdraw_withheld_authority_handle: withdraw_withheld_authority_pubkey
+                .decrypt_handle(&opening),
         };
 
         (fee_encryption, opening)

@@ -383,7 +383,10 @@ impl TransferProof {
                 &transfer_pubkeys.auditor_pubkey,
             ),
             (&ciphertext_lo.commitment, &ciphertext_hi.commitment),
-            (&ciphertext_lo.destination_handle, &ciphertext_hi.destination_handle),
+            (
+                &ciphertext_lo.destination_handle,
+                &ciphertext_hi.destination_handle,
+            ),
             (&ciphertext_lo.auditor_handle, &ciphertext_hi.auditor_handle),
             transcript,
         )?;
@@ -431,7 +434,8 @@ impl TransferPubkeys {
 
         let source_pubkey =
             ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Verification)?;
-        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Verification)?;
+        let destination_pubkey =
+            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Verification)?;
         let auditor_pubkey =
             ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Verification)?;
 

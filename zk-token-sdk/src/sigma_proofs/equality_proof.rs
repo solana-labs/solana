@@ -172,17 +172,17 @@ impl CtxtCommEqualityProof {
                 &ww_negated,         // -ww
             ],
             vec![
-                P_source, // P_source
-                &(*H),    // H
-                &Y_0,     // Y_0
-                &(*G),    // G
-                D_source, // D_source
-                C_source, // C_source
-                &Y_1,     // Y_1
-                &(*G),    // G
-                &(*H),    // H
-                C_destination,   // C_destination
-                &Y_2,     // Y_2
+                P_source,      // P_source
+                &(*H),         // H
+                &Y_0,          // Y_0
+                &(*G),         // G
+                D_source,      // D_source
+                C_source,      // C_source
+                &Y_1,          // Y_1
+                &(*G),         // G
+                &(*H),         // H
+                C_destination, // C_destination
+                &Y_2,          // Y_2
             ],
         );
 
@@ -387,20 +387,20 @@ impl CtxtCtxtEqualityProof {
                 &www_negated,
             ],
             vec![
-                P_source, // P_source
-                &(*H),    // H
-                &Y_0,     // Y_0
-                &(*G),    // G
-                D_source, // D_source
-                C_source, // C_source
-                &Y_1,     // Y_1
-                &(*G),    // G
-                &(*H),    // H
-                C_destination,   // C_destination
-                &Y_2,     // Y_2
-                P_destination,   // P_destination
-                D_destination,   // D_destination
-                &Y_3,     // Y_3
+                P_source,      // P_source
+                &(*H),         // H
+                &Y_0,          // Y_0
+                &(*G),         // G
+                D_source,      // D_source
+                C_source,      // C_source
+                &Y_1,          // Y_1
+                &(*G),         // G
+                &(*H),         // H
+                C_destination, // C_destination
+                &Y_2,          // Y_2
+                P_destination, // P_destination
+                D_destination, // D_destination
+                &Y_3,          // Y_3
             ],
         );
 
@@ -642,7 +642,9 @@ mod test {
         let source_ciphertext = source_keypair.public.encrypt(message);
 
         let destination_opening = PedersenOpening::new_rand();
-        let destination_ciphertext = destination_keypair.public.encrypt_with(message, &destination_opening);
+        let destination_ciphertext = destination_keypair
+            .public
+            .encrypt_with(message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
