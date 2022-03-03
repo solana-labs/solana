@@ -28,13 +28,13 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawWithheldTokensData {
-    pub pubkey_withdraw_withheld_authority: pod::ElGamalPubkey,
+    pub withdraw_withheld_authority_pubkey: pod::ElGamalPubkey,
 
-    pub pubkey_dest: pod::ElGamalPubkey,
+    pub destination_pubkey: pod::ElGamalPubkey,
 
-    pub ciphertext_withdraw_withheld_authority: pod::ElGamalCiphertext,
+    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext,
 
-    pub ciphertext_dest: pod::ElGamalCiphertext,
+    pub destination_ciphertext: pod::ElGamalCiphertext,
 
     pub proof: WithdrawWithheldTokensProof,
 }
@@ -42,42 +42,42 @@ pub struct WithdrawWithheldTokensData {
 impl WithdrawWithheldTokensData {
     #[cfg(not(target_arch = "bpf"))]
     pub fn new(
-        keypair_withdraw_withheld_authority: &ElGamalKeypair,
-        pubkey_dest: &ElGamalPubkey,
-        ciphertext_withdraw_withheld_authority: &ElGamalCiphertext,
+        withdraw_withheld_authority_keypair: &ElGamalKeypair,
+        destination_pubkey: &ElGamalPubkey,
+        withdraw_withheld_authority_ciphertext: &ElGamalCiphertext,
         amount: u64,
     ) -> Result<Self, ProofError> {
-        let opening_dest = PedersenOpening::new_rand();
-        let ciphertext_dest = pubkey_dest.encrypt_with(amount, &opening_dest);
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_pubkey.encrypt_with(amount, &destination_opening);
 
-        let pod_pubkey_withdraw_withheld_authority =
-            pod::ElGamalPubkey(keypair_withdraw_withheld_authority.public.to_bytes());
-        let pod_pubkey_dest = pod::ElGamalPubkey(pubkey_dest.to_bytes());
-        let pod_ciphertext_withdraw_withheld_authority =
-            pod::ElGamalCiphertext(ciphertext_withdraw_withheld_authority.to_bytes());
-        let pod_ciphertext_dest = pod::ElGamalCiphertext(ciphertext_dest.to_bytes());
+        let pod_withdraw_withheld_authority_pubkey =
+            pod::ElGamalPubkey(withdraw_withheld_authority_keypair.public.to_bytes());
+        let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
+        let pod_withdraw_withheld_authority_ciphertext =
+            pod::ElGamalCiphertext(withdraw_withheld_authority_ciphertext.to_bytes());
+        let pod_destination_ciphertext = pod::ElGamalCiphertext(destination_ciphertext.to_bytes());
 
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
-            &pod_pubkey_withdraw_withheld_authority,
-            &pod_pubkey_dest,
-            &pod_ciphertext_withdraw_withheld_authority,
-            &pod_ciphertext_dest,
+            &pod_withdraw_withheld_authority_pubkey,
+            &pod_destination_pubkey,
+            &pod_withdraw_withheld_authority_ciphertext,
+            &pod_destination_ciphertext,
         );
 
         let proof = WithdrawWithheldTokensProof::new(
-            keypair_withdraw_withheld_authority,
-            pubkey_dest,
-            ciphertext_withdraw_withheld_authority,
+            withdraw_withheld_authority_keypair,
+            destination_pubkey,
+            withdraw_withheld_authority_ciphertext,
             amount,
-            &opening_dest,
+            &destination_opening,
             &mut transcript,
         );
 
         Ok(Self {
-            pubkey_withdraw_withheld_authority: pod_pubkey_withdraw_withheld_authority,
-            pubkey_dest: pod_pubkey_dest,
-            ciphertext_withdraw_withheld_authority: pod_ciphertext_withdraw_withheld_authority,
-            ciphertext_dest: pod_ciphertext_dest,
+            withdraw_withheld_authority_pubkey: pod_withdraw_withheld_authority_pubkey,
+            destination_pubkey: pod_destination_pubkey,
+            withdraw_withheld_authority_ciphertext: pod_withdraw_withheld_authority_ciphertext,
+            destination_ciphertext: pod_destination_ciphertext,
             proof,
         })
     }
@@ -87,24 +87,24 @@ impl WithdrawWithheldTokensData {
 impl Verifiable for WithdrawWithheldTokensData {
     fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
-            &self.pubkey_withdraw_withheld_authority,
-            &self.pubkey_dest,
-            &self.ciphertext_withdraw_withheld_authority,
-            &self.ciphertext_dest,
+            &self.withdraw_withheld_authority_pubkey,
+            &self.destination_pubkey,
+            &self.withdraw_withheld_authority_ciphertext,
+            &self.destination_ciphertext,
         );
 
-        let pubkey_withdraw_withheld_authority =
-            self.pubkey_withdraw_withheld_authority.try_into()?;
-        let pubkey_dest = self.pubkey_dest.try_into()?;
-        let ciphertext_withdraw_withheld_authority =
-            self.ciphertext_withdraw_withheld_authority.try_into()?;
-        let ciphertext_dest = self.ciphertext_dest.try_into()?;
+        let withdraw_withheld_authority_pubkey =
+            self.withdraw_withheld_authority_pubkey.try_into()?;
+        let destination_pubkey = self.destination_pubkey.try_into()?;
+        let withdraw_withheld_authority_ciphertext =
+            self.withdraw_withheld_authority_ciphertext.try_into()?;
+        let destination_ciphertext = self.destination_ciphertext.try_into()?;
 
         self.proof.verify(
-            &pubkey_withdraw_withheld_authority,
-            &pubkey_dest,
-            &ciphertext_withdraw_withheld_authority,
-            &ciphertext_dest,
+            &withdraw_withheld_authority_pubkey,
+            &destination_pubkey,
+            &withdraw_withheld_authority_ciphertext,
+            &destination_ciphertext,
             &mut transcript,
         )
     }
@@ -123,42 +123,42 @@ pub struct WithdrawWithheldTokensProof {
 #[cfg(not(target_arch = "bpf"))]
 impl WithdrawWithheldTokensProof {
     fn transcript_new(
-        pubkey_withdraw_withheld_authority: &pod::ElGamalPubkey,
-        pubkey_dest: &pod::ElGamalPubkey,
-        ciphertext_withdraw_withheld_authority: &pod::ElGamalCiphertext,
-        ciphertext_dest: &pod::ElGamalCiphertext,
+        withdraw_withheld_authority_pubkey: &pod::ElGamalPubkey,
+        destination_pubkey: &pod::ElGamalPubkey,
+        withdraw_withheld_authority_ciphertext: &pod::ElGamalCiphertext,
+        destination_ciphertext: &pod::ElGamalCiphertext,
     ) -> Transcript {
         let mut transcript = Transcript::new(b"WithdrawWithheldTokensProof");
 
         transcript.append_pubkey(
             b"withdraw-withheld-authority-pubkey",
-            pubkey_withdraw_withheld_authority,
+            withdraw_withheld_authority_pubkey,
         );
-        transcript.append_pubkey(b"dest-pubkey", pubkey_dest);
+        transcript.append_pubkey(b"dest-pubkey", destination_pubkey);
 
         transcript.append_ciphertext(
             b"ciphertext-withdraw-withheld-authority",
-            ciphertext_withdraw_withheld_authority,
+            withdraw_withheld_authority_ciphertext,
         );
-        transcript.append_ciphertext(b"ciphertext-dest", ciphertext_dest);
+        transcript.append_ciphertext(b"ciphertext-dest", destination_ciphertext);
 
         transcript
     }
 
     pub fn new(
-        keypair_withdraw_withheld_authority: &ElGamalKeypair,
-        pubkey_dest: &ElGamalPubkey,
-        ciphertext_withdraw_withheld_authority: &ElGamalCiphertext,
+        withdraw_withheld_authority_keypair: &ElGamalKeypair,
+        destination_pubkey: &ElGamalPubkey,
+        withdraw_withheld_authority_ciphertext: &ElGamalCiphertext,
         amount: u64,
-        opening_dest: &PedersenOpening,
+        destination_opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
         let equality_proof = CtxtCtxtEqualityProof::new(
-            keypair_withdraw_withheld_authority,
-            pubkey_dest,
-            ciphertext_withdraw_withheld_authority,
+            withdraw_withheld_authority_keypair,
+            destination_pubkey,
+            withdraw_withheld_authority_ciphertext,
             amount,
-            opening_dest,
+            destination_opening,
             transcript,
         );
 
@@ -169,18 +169,18 @@ impl WithdrawWithheldTokensProof {
 
     pub fn verify(
         &self,
-        pubkey_source: &ElGamalPubkey,
-        pubkey_dest: &ElGamalPubkey,
-        ciphertext_source: &ElGamalCiphertext,
-        ciphertext_dest: &ElGamalCiphertext,
+        source_pubkey: &ElGamalPubkey,
+        destination_pubkey: &ElGamalPubkey,
+        source_ciphertext: &ElGamalCiphertext,
+        destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
         let proof: CtxtCtxtEqualityProof = self.proof.try_into()?;
         proof.verify(
-            pubkey_source,
-            pubkey_dest,
-            ciphertext_source,
-            ciphertext_dest,
+            source_pubkey,
+            destination_pubkey,
+            source_ciphertext,
+            destination_ciphertext,
             transcript,
         )?;
 
@@ -194,17 +194,17 @@ mod test {
 
     #[test]
     fn test_close_account_correctness() {
-        let keypair_withdraw_withheld_authority = ElGamalKeypair::new_rand();
-        let keypair_dest = ElGamalKeypair::new_rand();
+        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+        let dest_keypair = ElGamalKeypair::new_rand();
 
         let amount: u64 = 55;
-        let ciphertext_withdraw_withheld_authority =
-            keypair_withdraw_withheld_authority.public.encrypt(amount);
+        let withdraw_withheld_authority_ciphertext =
+            withdraw_withheld_authority_keypair.public.encrypt(amount);
 
         let withdraw_withheld_tokens_data = WithdrawWithheldTokensData::new(
-            &keypair_withdraw_withheld_authority,
-            &keypair_dest.public,
-            &ciphertext_withdraw_withheld_authority,
+            &withdraw_withheld_authority_keypair,
+            &dest_keypair.public,
+            &withdraw_withheld_authority_ciphertext,
             amount,
         )
         .unwrap();

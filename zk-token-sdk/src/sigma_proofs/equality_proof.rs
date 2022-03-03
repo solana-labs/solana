@@ -59,14 +59,14 @@ impl CtxtCommEqualityProof {
     /// Note that the proof constructor does not take the actual Pedersen commitment as input; it
     /// takes the associated Pedersen opening instead.
     ///
-    /// * `elgamal_keypair` - The ElGamal keypair associated with the ciphertext to be proved
-    /// * `ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `source_keypair` - The ElGamal keypair associated with the first to be proved
+    /// * `source_ciphertext` - The main ElGamal ciphertext to be proved
     /// * `amount` - The message associated with the ElGamal ciphertext and Pedersen commitment
     /// * `opening` - The opening associated with the main Pedersen commitment to be proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
-        keypair_source: &ElGamalKeypair,
-        ciphertext_source: &ElGamalCiphertext,
+        source_keypair: &ElGamalKeypair,
+        source_ciphertext: &ElGamalCiphertext,
         amount: u64,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
@@ -74,10 +74,10 @@ impl CtxtCommEqualityProof {
         transcript.equality_proof_domain_sep();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = keypair_source.public.get_point();
-        let D_source = ciphertext_source.handle.get_point();
+        let P_source = source_keypair.public.get_point();
+        let D_source = source_ciphertext.handle.get_point();
 
-        let s = keypair_source.secret.get_scalar();
+        let s = source_keypair.secret.get_scalar();
         let x = Scalar::from(amount);
         let r = opening.get_scalar();
 
@@ -121,24 +121,24 @@ impl CtxtCommEqualityProof {
 
     /// Equality proof verifier. TODO: wrt commitment
     ///
-    /// * `elgamal_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
-    /// * `ciphertext` - The main ElGamal ciphertext to be proved
-    /// * `commitment` - The main Pedersen commitment to be proved
+    /// * `source_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
+    /// * `source_ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `destination_commitment` - The main Pedersen commitment to be proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
-        pubkey_source: &ElGamalPubkey,
-        ciphertext_source: &ElGamalCiphertext,
-        commitment_dest: &PedersenCommitment,
+        source_pubkey: &ElGamalPubkey,
+        source_ciphertext: &ElGamalCiphertext,
+        destination_commitment: &PedersenCommitment,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
         transcript.equality_proof_domain_sep();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = pubkey_source.get_point();
-        let C_source = ciphertext_source.commitment.get_point();
-        let D_source = ciphertext_source.handle.get_point();
-        let C_dest = commitment_dest.get_point();
+        let P_source = source_pubkey.get_point();
+        let C_source = source_ciphertext.commitment.get_point();
+        let D_source = source_ciphertext.handle.get_point();
+        let C_destination = destination_commitment.get_point();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
@@ -172,17 +172,17 @@ impl CtxtCommEqualityProof {
                 &ww_negated,         // -ww
             ],
             vec![
-                P_source, // P_source
-                &(*H),    // H
-                &Y_0,     // Y_0
-                &(*G),    // G
-                D_source, // D_source
-                C_source, // C_source
-                &Y_1,     // Y_1
-                &(*G),    // G
-                &(*H),    // H
-                C_dest,   // C_dest
-                &Y_2,     // Y_2
+                P_source,      // P_source
+                &(*H),         // H
+                &Y_0,          // Y_0
+                &(*G),         // G
+                D_source,      // D_source
+                C_source,      // C_source
+                &Y_1,          // Y_1
+                &(*G),         // G
+                &(*H),         // H
+                C_destination, // C_destination
+                &Y_2,          // Y_2
             ],
         );
 
@@ -256,29 +256,30 @@ impl CtxtCtxtEqualityProof {
     /// Note that the proof constructor does not take the actual Pedersen commitment as input; it
     /// takes the associated Pedersen opening instead.
     ///
-    /// * `elgamal_keypair` - The ElGamal keypair associated with the ciphertext to be proved
-    /// * `ciphertext` - The main ElGamal ciphertext to be proved
+    /// * `source_keypair` - The ElGamal keypair associated with the first ciphertext to be proved
+    /// * `destination_pubkey` - The ElGamal pubkey associated with the second ElGamal ciphertext
+    /// * `source_ciphertext` - The first ElGamal ciphertext
     /// * `amount` - The message associated with the ElGamal ciphertext and Pedersen commitment
-    /// * `opening` - The opening associated with the main Pedersen commitment to be proved
+    /// * `destination_opening` - The opening associated with the second ElGamal ciphertext
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
-        keypair_source: &ElGamalKeypair,
-        pubkey_dest: &ElGamalPubkey,
-        ciphertext_source: &ElGamalCiphertext,
+        source_keypair: &ElGamalKeypair,
+        destination_pubkey: &ElGamalPubkey,
+        source_ciphertext: &ElGamalCiphertext,
         amount: u64,
-        opening_dest: &PedersenOpening,
+        destination_opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
         transcript.equality_proof_domain_sep();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = keypair_source.public.get_point();
-        let D_source = ciphertext_source.handle.get_point();
-        let P_dest = pubkey_dest.get_point();
+        let P_source = source_keypair.public.get_point();
+        let D_source = source_ciphertext.handle.get_point();
+        let P_destination = destination_pubkey.get_point();
 
-        let s = keypair_source.secret.get_scalar();
+        let s = source_keypair.secret.get_scalar();
         let x = Scalar::from(amount);
-        let r = opening_dest.get_scalar();
+        let r = destination_opening.get_scalar();
 
         // generate random masking factors that also serves as nonces
         let mut y_s = Scalar::random(&mut OsRng);
@@ -289,7 +290,7 @@ impl CtxtCtxtEqualityProof {
         let Y_1 =
             RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_source]).compress();
         let Y_2 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_r], vec![&(*G), &(*H)]).compress();
-        let Y_3 = (&y_r * P_dest).compress();
+        let Y_3 = (&y_r * P_destination).compress();
 
         // record masking factors in the transcript
         transcript.append_point(b"Y_0", &Y_0);
@@ -321,30 +322,31 @@ impl CtxtCtxtEqualityProof {
         }
     }
 
-    /// Equality proof verifier. TODO: wrt commitment
+    /// Equality proof verifier.
     ///
-    /// * `elgamal_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
-    /// * `ciphertext` - The main ElGamal ciphertext to be proved
-    /// * `commitment` - The main Pedersen commitment to be proved
+    /// * `source_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
+    /// * `destination_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved
+    /// * `source_ciphertext` - The first ElGamal ciphertext to be proved
+    /// * `destination_ciphertext` - The second ElGamal ciphertext to be proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
-        pubkey_source: &ElGamalPubkey,
-        pubkey_dest: &ElGamalPubkey,
-        ciphertext_source: &ElGamalCiphertext,
-        ciphertext_dest: &ElGamalCiphertext,
+        source_pubkey: &ElGamalPubkey,
+        destination_pubkey: &ElGamalPubkey,
+        source_ciphertext: &ElGamalCiphertext,
+        destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
         transcript.equality_proof_domain_sep();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = pubkey_source.get_point();
-        let C_source = ciphertext_source.commitment.get_point();
-        let D_source = ciphertext_source.handle.get_point();
+        let P_source = source_pubkey.get_point();
+        let C_source = source_ciphertext.commitment.get_point();
+        let D_source = source_ciphertext.handle.get_point();
 
-        let P_dest = pubkey_dest.get_point();
-        let C_dest = ciphertext_dest.commitment.get_point();
-        let D_dest = ciphertext_dest.handle.get_point();
+        let P_destination = destination_pubkey.get_point();
+        let C_destination = destination_ciphertext.commitment.get_point();
+        let D_destination = destination_ciphertext.handle.get_point();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
@@ -385,20 +387,20 @@ impl CtxtCtxtEqualityProof {
                 &www_negated,
             ],
             vec![
-                P_source, // P_source
-                &(*H),    // H
-                &Y_0,     // Y_0
-                &(*G),    // G
-                D_source, // D_source
-                C_source, // C_source
-                &Y_1,     // Y_1
-                &(*G),    // G
-                &(*H),    // H
-                C_dest,   // C_dest
-                &Y_2,     // Y_2
-                P_dest,   // P_dest
-                D_dest,   // D_dest
-                &Y_3,     // Y_3
+                P_source,      // P_source
+                &(*H),         // H
+                &Y_0,          // Y_0
+                &(*G),         // G
+                D_source,      // D_source
+                C_source,      // C_source
+                &Y_1,          // Y_1
+                &(*G),         // G
+                &(*H),         // H
+                C_destination, // C_destination
+                &Y_2,          // Y_2
+                P_destination, // P_destination
+                D_destination, // D_destination
+                &Y_3,          // Y_3
             ],
         );
 
@@ -456,57 +458,57 @@ mod test {
     #[test]
     fn test_ciphertext_commitment_equality_proof_correctness() {
         // success case
-        let keypair_source = ElGamalKeypair::new_rand();
+        let source_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let ciphertext_source = keypair_source.public.encrypt(message);
-        let (commitment_dest, opening_dest) = Pedersen::new(message);
+        let source_ciphertext = source_keypair.public.encrypt(message);
+        let (destination_commitment, destination_opening) = Pedersen::new(message);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCommEqualityProof::new(
-            &keypair_source,
-            &ciphertext_source,
+            &source_keypair,
+            &source_ciphertext,
             message,
-            &opening_dest,
-            &mut transcript_prover,
+            &destination_opening,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &keypair_source.public,
-                &ciphertext_source,
-                &commitment_dest,
-                &mut transcript_verifier
+                &source_keypair.public,
+                &source_ciphertext,
+                &destination_commitment,
+                &mut verifier_transcript
             )
             .is_ok());
 
         // fail case: encrypted and committed messages are different
-        let keypair_source = ElGamalKeypair::new_rand();
+        let source_keypair = ElGamalKeypair::new_rand();
         let encrypted_message: u64 = 55;
         let committed_message: u64 = 77;
 
-        let ciphertext_source = keypair_source.public.encrypt(encrypted_message);
-        let (commitment_dest, opening_dest) = Pedersen::new(committed_message);
+        let source_ciphertext = source_keypair.public.encrypt(encrypted_message);
+        let (destination_commitment, destination_opening) = Pedersen::new(committed_message);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCommEqualityProof::new(
-            &keypair_source,
-            &ciphertext_source,
+            &source_keypair,
+            &source_ciphertext,
             message,
-            &opening_dest,
-            &mut transcript_prover,
+            &destination_opening,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &keypair_source.public,
-                &ciphertext_source,
-                &commitment_dest,
-                &mut transcript_verifier
+                &source_keypair.public,
+                &source_ciphertext,
+                &destination_commitment,
+                &mut verifier_transcript
             )
             .is_err());
     }
@@ -523,15 +525,15 @@ mod test {
         let ciphertext = elgamal_keypair.public.encrypt(message);
         let (commitment, opening) = Pedersen::new(message);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCommEqualityProof::new(
             &elgamal_keypair,
             &ciphertext,
             message,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
@@ -539,7 +541,7 @@ mod test {
                 &elgamal_keypair.public,
                 &ciphertext,
                 &commitment,
-                &mut transcript_verifier
+                &mut verifier_transcript
             )
             .is_err());
 
@@ -552,15 +554,15 @@ mod test {
         let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCommEqualityProof::new(
             &elgamal_keypair,
             &ciphertext,
             message,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
@@ -568,7 +570,7 @@ mod test {
                 &elgamal_keypair.public,
                 &ciphertext,
                 &commitment,
-                &mut transcript_verifier
+                &mut verifier_transcript
             )
             .is_ok());
 
@@ -581,15 +583,15 @@ mod test {
         let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCommEqualityProof::new(
             &elgamal_keypair,
             &ciphertext,
             message,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
@@ -597,7 +599,7 @@ mod test {
                 &elgamal_keypair.public,
                 &ciphertext,
                 &commitment,
-                &mut transcript_verifier
+                &mut verifier_transcript
             )
             .is_ok());
 
@@ -609,15 +611,15 @@ mod test {
         let ciphertext = ElGamalCiphertext::from_bytes(&[0u8; 64]).unwrap();
         let (commitment, opening) = Pedersen::new(message);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCommEqualityProof::new(
             &elgamal_keypair,
             &ciphertext,
             message,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
@@ -625,7 +627,7 @@ mod test {
                 &elgamal_keypair.public,
                 &ciphertext,
                 &commitment,
-                &mut transcript_verifier
+                &mut verifier_transcript
             )
             .is_ok());
     }
@@ -633,67 +635,69 @@ mod test {
     #[test]
     fn test_ciphertext_ciphertext_equality_proof_correctness() {
         // success case
-        let keypair_source = ElGamalKeypair::new_rand();
-        let keypair_dest = ElGamalKeypair::new_rand();
+        let source_keypair = ElGamalKeypair::new_rand();
+        let destination_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let ciphertext_source = keypair_source.public.encrypt(message);
+        let source_ciphertext = source_keypair.public.encrypt(message);
 
-        let opening_dest = PedersenOpening::new_rand();
-        let ciphertext_dest = keypair_dest.public.encrypt_with(message, &opening_dest);
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_keypair
+            .public
+            .encrypt_with(message, &destination_opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCtxtEqualityProof::new(
-            &keypair_source,
-            &keypair_dest.public,
-            &ciphertext_source,
+            &source_keypair,
+            &destination_keypair.public,
+            &source_ciphertext,
             message,
-            &opening_dest,
-            &mut transcript_prover,
+            &destination_opening,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &keypair_source.public,
-                &keypair_dest.public,
-                &ciphertext_source,
-                &ciphertext_dest,
-                &mut transcript_verifier
+                &source_keypair.public,
+                &destination_keypair.public,
+                &source_ciphertext,
+                &destination_ciphertext,
+                &mut verifier_transcript
             )
             .is_ok());
 
         // fail case: encrypted and committed messages are different
-        let message_source: u64 = 55;
-        let message_dest: u64 = 77;
+        let source_message: u64 = 55;
+        let destination_message: u64 = 77;
 
-        let ciphertext_source = keypair_source.public.encrypt(message_source);
+        let source_ciphertext = source_keypair.public.encrypt(source_message);
 
-        let opening_dest = PedersenOpening::new_rand();
-        let ciphertext_dest = keypair_dest
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_keypair
             .public
-            .encrypt_with(message_dest, &opening_dest);
+            .encrypt_with(destination_message, &destination_opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CtxtCtxtEqualityProof::new(
-            &keypair_source,
-            &keypair_dest.public,
-            &ciphertext_source,
+            &source_keypair,
+            &destination_keypair.public,
+            &source_ciphertext,
             message,
-            &opening_dest,
-            &mut transcript_prover,
+            &destination_opening,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &keypair_source.public,
-                &keypair_dest.public,
-                &ciphertext_source,
-                &ciphertext_dest,
-                &mut transcript_verifier
+                &source_keypair.public,
+                &destination_keypair.public,
+                &source_ciphertext,
+                &destination_ciphertext,
+                &mut verifier_transcript
             )
             .is_err());
     }

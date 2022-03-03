@@ -56,13 +56,13 @@ impl ValidityProof {
     /// Note that the proof constructor does not take the actual Pedersen commitment or decryption
     /// handles as input; it only takes the associated Pedersen opening instead.
     ///
-    /// * `(pubkey_dest, pubkey_auditor)` - The ElGamal public keys associated with the decryption
+    /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal public keys associated with the decryption
     /// handles
     /// * `amount` - The committed message in the commitment
     /// * `opening` - The opening associated with the Pedersen commitment
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new<T: Into<Scalar>>(
-        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey), // TODO: rename pubkey_auditor
+        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey), // TODO: rename auditor_pubkey
         amount: T,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
@@ -70,8 +70,8 @@ impl ValidityProof {
         transcript.validity_proof_domain_sep();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_dest = pubkey_dest.get_point();
-        let P_auditor = pubkey_auditor.get_point();
+        let P_dest = destination_pubkey.get_point();
+        let P_auditor = auditor_pubkey.get_point();
 
         let x = amount.into();
         let r = opening.get_scalar();
@@ -111,15 +111,15 @@ impl ValidityProof {
     /// The ciphertext validity proof verifier.
     ///
     /// * `commitment` - The Pedersen commitment
-    /// * `(pubkey_dest, pubkey_auditor)` - The ElGamal pubkeys associated with the decryption
+    /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal pubkeys associated with the decryption
     /// handles
-    /// * `(handle_dest, handle_audtior)` - The decryption handles
+    /// * `(destination_handle, auditor_handle)` - The decryption handles
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         commitment: &PedersenCommitment,
-        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
-        (handle_dest, handle_auditor): (&DecryptHandle, &DecryptHandle),
+        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
+        (destination_handle, auditor_handle): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
         transcript.validity_proof_domain_sep();
@@ -141,12 +141,12 @@ impl ValidityProof {
         let Y_1 = self.Y_1.decompress().ok_or(ValidityProofError::Format)?;
         let Y_2 = self.Y_2.decompress().ok_or(ValidityProofError::Format)?;
 
-        let P_dest = pubkey_dest.get_point();
-        let P_auditor = pubkey_auditor.get_point();
+        let P_dest = destination_pubkey.get_point();
+        let P_auditor = auditor_pubkey.get_point();
 
         let C = commitment.get_point();
-        let D_dest = handle_dest.get_point();
-        let D_auditor = handle_auditor.get_point();
+        let D_dest = destination_handle.get_point();
+        let D_auditor = auditor_handle.get_point();
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -217,9 +217,9 @@ impl ValidityProof {
 ///
 /// An aggregated ciphertext validity proof certifies the validity of two instances of a standard
 /// ciphertext validity proof. An instance of a standard validity proof consist of one ciphertext
-/// and two decryption handles `(commitment, handle_dest, handle_auditor)`. An instance of an
-/// aggregated ciphertext validity proof is a pair `(commitment_0, handle_dest_0,
-/// handle_auditor_0)` and `(commitment_1, handle_dest_1, handle_auditor_1)`. The proof certifies
+/// and two decryption handles `(commitment, destination_handle, auditor_handle)`. An instance of an
+/// aggregated ciphertext validity proof is a pair `(commitment_0, destination_handle_0,
+/// auditor_handle_0)` and `(commitment_1, destination_handle_1, auditor_handle_1)`. The proof certifies
 /// the analogous decryptable properties for each one of these pair of commitment and decryption
 /// handles.
 #[allow(non_snake_case)]
@@ -234,7 +234,7 @@ impl AggregatedValidityProof {
     /// The function simples aggregates the input openings and invokes the standard ciphertext
     /// validity proof constructor.
     pub fn new<T: Into<Scalar>>(
-        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         (amount_lo, amount_hi): (T, T),
         (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
         transcript: &mut Transcript,
@@ -247,7 +247,7 @@ impl AggregatedValidityProof {
         let aggregated_opening = opening_lo + &(opening_hi * &t);
 
         AggregatedValidityProof(ValidityProof::new(
-            (pubkey_dest, pubkey_auditor),
+            (destination_pubkey, auditor_pubkey),
             aggregated_message,
             &aggregated_opening,
             transcript,
@@ -263,10 +263,10 @@ impl AggregatedValidityProof {
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     pub fn verify(
         self,
-        (pubkey_dest, pubkey_auditor): (&ElGamalPubkey, &ElGamalPubkey),
+        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
-        (handle_lo_dest, handle_hi_dest): (&DecryptHandle, &DecryptHandle),
-        (handle_lo_auditor, handle_hi_auditor): (&DecryptHandle, &DecryptHandle),
+        (destination_handle_lo, destination_handle_hi): (&DecryptHandle, &DecryptHandle),
+        (auditor_handle_lo, auditor_handle_hi): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
         transcript.aggregated_validity_proof_domain_sep();
@@ -274,15 +274,15 @@ impl AggregatedValidityProof {
         let t = transcript.challenge_scalar(b"t");
 
         let aggregated_commitment = commitment_lo + commitment_hi * t;
-        let aggregated_handle_dest = handle_lo_dest + handle_hi_dest * t;
-        let aggregated_handle_auditor = handle_lo_auditor + handle_hi_auditor * t;
+        let destination_aggregated_handle = destination_handle_lo + destination_handle_hi * t;
+        let auditor_aggregated_handle = auditor_handle_lo + auditor_handle_hi * t;
 
         let AggregatedValidityProof(validity_proof) = self;
 
         validity_proof.verify(
             &aggregated_commitment,
-            (pubkey_dest, pubkey_auditor),
-            (&aggregated_handle_dest, &aggregated_handle_auditor),
+            (destination_pubkey, auditor_pubkey),
+            (&destination_aggregated_handle, &auditor_aggregated_handle),
             transcript,
         )
     }
@@ -305,31 +305,31 @@ mod test {
 
     #[test]
     fn test_validity_proof_correctness() {
-        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
-        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+        let destination_pubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
-        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+        let destination_handle = destination_pubkey.decrypt_handle(&opening);
+        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = ValidityProof::new(
-            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
                 &commitment,
-                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
-                (&handle_dest, &handle_auditor),
-                &mut transcript_verifier,
+                (&destination_pubkey, &auditor_pubkey),
+                (&destination_handle, &auditor_handle),
+                &mut verifier_transcript,
             )
             .is_ok());
     }
@@ -337,127 +337,127 @@ mod test {
     #[test]
     fn test_validity_proof_edge_cases() {
         // if destination public key zeroed, then the proof should always reject
-        let elgamal_pubkey_dest = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
-        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+        let destination_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
-        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+        let destination_handle = destination_pubkey.decrypt_handle(&opening);
+        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = ValidityProof::new(
-            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
                 &commitment,
-                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
-                (&handle_dest, &handle_auditor),
-                &mut transcript_verifier,
+                (&destination_pubkey, &auditor_pubkey),
+                (&destination_handle, &auditor_handle),
+                &mut verifier_transcript,
             )
             .is_err());
 
         // if auditor public key zeroed, then the proof should always reject
-        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
-        let elgamal_pubkey_auditor = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+        let destination_pubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
-        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+        let destination_handle = destination_pubkey.decrypt_handle(&opening);
+        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = ValidityProof::new(
-            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
                 &commitment,
-                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
-                (&handle_dest, &handle_auditor),
-                &mut transcript_verifier,
+                (&destination_pubkey, &auditor_pubkey),
+                (&destination_handle, &auditor_handle),
+                &mut verifier_transcript,
             )
             .is_err());
 
         // all zeroed ciphertext should still be valid
-        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
-        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+        let destination_pubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
         let amount: u64 = 0;
         let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
 
-        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
-        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+        let destination_handle = destination_pubkey.decrypt_handle(&opening);
+        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = ValidityProof::new(
-            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
                 &commitment,
-                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
-                (&handle_dest, &handle_auditor),
-                &mut transcript_verifier,
+                (&destination_pubkey, &auditor_pubkey),
+                (&destination_handle, &auditor_handle),
+                &mut verifier_transcript,
             )
             .is_ok());
 
         // decryption handles can be zero as long as the Pedersen commitment is valid
-        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
-        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+        let destination_pubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let handle_dest = elgamal_pubkey_dest.decrypt_handle(&opening);
-        let handle_auditor = elgamal_pubkey_auditor.decrypt_handle(&opening);
+        let destination_handle = destination_pubkey.decrypt_handle(&opening);
+        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = ValidityProof::new(
-            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
                 &commitment,
-                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
-                (&handle_dest, &handle_auditor),
-                &mut transcript_verifier,
+                (&destination_pubkey, &auditor_pubkey),
+                (&destination_handle, &auditor_handle),
+                &mut verifier_transcript,
             )
             .is_ok());
     }
 
     #[test]
     fn test_aggregated_validity_proof() {
-        let elgamal_pubkey_dest = ElGamalKeypair::new_rand().public;
-        let elgamal_pubkey_auditor = ElGamalKeypair::new_rand().public;
+        let destination_pubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
         let amount_lo: u64 = 55;
         let amount_hi: u64 = 77;
@@ -465,29 +465,29 @@ mod test {
         let (commitment_lo, open_lo) = Pedersen::new(amount_lo);
         let (commitment_hi, open_hi) = Pedersen::new(amount_hi);
 
-        let handle_lo_dest = elgamal_pubkey_dest.decrypt_handle(&open_lo);
-        let handle_hi_dest = elgamal_pubkey_dest.decrypt_handle(&open_hi);
+        let destination_handle_lo = destination_pubkey.decrypt_handle(&open_lo);
+        let destination_handle_hi = destination_pubkey.decrypt_handle(&open_hi);
 
-        let handle_lo_auditor = elgamal_pubkey_auditor.decrypt_handle(&open_lo);
-        let handle_hi_auditor = elgamal_pubkey_auditor.decrypt_handle(&open_hi);
+        let auditor_handle_lo = auditor_pubkey.decrypt_handle(&open_lo);
+        let auditor_handle_hi = auditor_pubkey.decrypt_handle(&open_hi);
 
-        let mut transcript_prover = Transcript::new(b"Test");
-        let mut transcript_verifier = Transcript::new(b"Test");
+        let mut prover_transcript = Transcript::new(b"Test");
+        let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = AggregatedValidityProof::new(
-            (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+            (&destination_pubkey, &auditor_pubkey),
             (amount_lo, amount_hi),
             (&open_lo, &open_hi),
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                (&elgamal_pubkey_dest, &elgamal_pubkey_auditor),
+                (&destination_pubkey, &auditor_pubkey),
                 (&commitment_lo, &commitment_hi),
-                (&handle_lo_dest, &handle_hi_dest),
-                (&handle_lo_auditor, &handle_hi_auditor),
-                &mut transcript_verifier,
+                (&destination_handle_lo, &destination_handle_hi),
+                (&auditor_handle_lo, &auditor_handle_hi),
+                &mut verifier_transcript,
             )
             .is_ok());
     }
