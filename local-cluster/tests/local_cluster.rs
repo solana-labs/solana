@@ -13,6 +13,7 @@ use {
     serial_test::serial,
     solana_client::{
         pubsub_client::PubsubClient,
+        quic_client::UdpTpuConnection,
         rpc_client::RpcClient,
         rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
         rpc_response::RpcSignatureResult,
@@ -2648,8 +2649,8 @@ fn setup_transfer_scan_threads(
     num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
     scan_commitment: CommitmentConfig,
-    update_client_receiver: Receiver<ThinClient>,
-    scan_client_receiver: Receiver<ThinClient>,
+    update_client_receiver: Receiver<ThinClient<UdpTpuConnection>>,
+    scan_client_receiver: Receiver<ThinClient<UdpTpuConnection>>,
 ) -> (
     JoinHandle<()>,
     JoinHandle<()>,

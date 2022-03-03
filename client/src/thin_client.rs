@@ -5,7 +5,9 @@
 
 use {
     crate::{
-        quic_client::TpuConnection, rpc_client::RpcClient, rpc_config::RpcProgramAccountsConfig,
+        quic_client::{TpuConnection, UdpTpuConnection},
+        rpc_client::RpcClient,
+        rpc_config::RpcProgramAccountsConfig,
         rpc_response::Response,
     },
     log::*,
@@ -20,7 +22,6 @@ use {
         instruction::Instruction,
         message::Message,
         pubkey::Pubkey,
-        quic::QUIC_PORT_OFFSET,
         signature::{Keypair, Signature, Signer},
         signers::Signers,
         system_instruction,
@@ -119,28 +120,18 @@ impl ClientOptimizer {
 }
 
 /// An object for querying and sending transactions to the network.
-pub struct ThinClient {
+pub struct ThinClient<C: 'static + TpuConnection> {
     rpc_clients: Vec<RpcClient>,
-    tpu_connections: Vec<TpuConnection>,
+    tpu_connections: Vec<C>,
     optimizer: ClientOptimizer,
 }
 
-impl ThinClient {
+impl<C: 'static + TpuConnection> ThinClient<C> {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `quic_tpu_addr` over `transactions_socket` using QUIC.
     /// TODO: Add UDP support if quic is set to false
-    pub fn new(
-        rpc_addr: SocketAddr,
-        tpu_addr: SocketAddr,
-        transactions_socket: UdpSocket,
-        quic: bool,
-    ) -> Self {
-        let tpu_connection = if quic {
-            let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
-            TpuConnection::new_quic(transactions_socket, tpu_addr)
-        } else {
-            TpuConnection::new_udp(transactions_socket, tpu_addr)
-        };
+    pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: UdpSocket) -> Self {
+        let tpu_connection = C::new(transactions_socket, tpu_addr);
 
         Self::new_from_clients(RpcClient::new_socket(rpc_addr), tpu_connection)
     }
@@ -150,19 +141,13 @@ impl ThinClient {
         tpu_addr: SocketAddr,
         transactions_socket: UdpSocket,
         timeout: Duration,
-        quic: bool,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
-        let tpu_connection = if quic {
-            let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
-            TpuConnection::new_quic(transactions_socket, tpu_addr)
-        } else {
-            TpuConnection::new_udp(transactions_socket, tpu_addr)
-        };
+        let tpu_connection = C::new(transactions_socket, tpu_addr);
         Self::new_from_clients(rpc_client, tpu_connection)
     }
 
-    fn new_from_clients(rpc_client: RpcClient, tpu_connection: TpuConnection) -> Self {
+    fn new_from_clients(rpc_client: RpcClient, tpu_connection: C) -> Self {
         Self {
             rpc_clients: vec![rpc_client],
             tpu_connections: vec![tpu_connection],
@@ -174,7 +159,6 @@ impl ThinClient {
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
         transactions_socket: UdpSocket,
-        quic: bool,
     ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
@@ -183,15 +167,7 @@ impl ThinClient {
         let optimizer = ClientOptimizer::new(rpc_clients.len());
         let tpu_connections: Vec<_> = tpu_addrs
             .into_iter()
-            .map(|tpu_addr| {
-                if quic {
-                    let tpu_addr =
-                        SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
-                    TpuConnection::new_quic(transactions_socket.try_clone().unwrap(), tpu_addr)
-                } else {
-                    TpuConnection::new_udp(transactions_socket.try_clone().unwrap(), tpu_addr)
-                }
-            })
+            .map(|tpu_addr| C::new(transactions_socket.try_clone().unwrap(), tpu_addr))
             .collect();
         Self {
             rpc_clients,
@@ -200,7 +176,7 @@ impl ThinClient {
         }
     }
 
-    fn tpu_connection(&self) -> &TpuConnection {
+    fn tpu_connection(&self) -> &C {
         &self.tpu_connections[self.optimizer.best()]
     }
 
@@ -339,13 +315,13 @@ impl ThinClient {
     }
 }
 
-impl Client for ThinClient {
+impl<C: 'static + TpuConnection> Client for ThinClient<C> {
     fn tpu_addr(&self) -> String {
         self.tpu_connection().tpu_addr().to_string()
     }
 }
 
-impl SyncClient for ThinClient {
+impl<C: 'static + TpuConnection> SyncClient for ThinClient<C> {
     fn send_and_confirm_message<T: Signers>(
         &self,
         keypairs: &T,
@@ -625,7 +601,7 @@ impl SyncClient for ThinClient {
     }
 }
 
-impl AsyncClient for ThinClient {
+impl<C: 'static + TpuConnection> AsyncClient for ThinClient<C> {
     fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
         self.tpu_connection().send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
@@ -666,20 +642,23 @@ impl AsyncClient for ThinClient {
     }
 }
 
-pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr), range: (u16, u16)) -> ThinClient {
+pub fn create_client(
+    (rpc, tpu): (SocketAddr, SocketAddr),
+    range: (u16, u16),
+) -> ThinClient<UdpTpuConnection> {
     let (_, transactions_socket) =
         solana_net_utils::bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
-    ThinClient::new(rpc, tpu, transactions_socket, true)
+    ThinClient::<UdpTpuConnection>::new(rpc, tpu, transactions_socket)
 }
 
 pub fn create_client_with_timeout(
     (rpc, tpu): (SocketAddr, SocketAddr),
     range: (u16, u16),
     timeout: Duration,
-) -> ThinClient {
+) -> ThinClient<UdpTpuConnection> {
     let (_, transactions_socket) =
         solana_net_utils::bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
-    ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout, true)
+    ThinClient::<UdpTpuConnection>::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
 }
 
 #[cfg(test)]

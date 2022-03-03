@@ -4,11 +4,12 @@
 use {
     async_mutex::Mutex,
     futures::future::join_all,
+    itertools::Itertools,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
-    rayon::iter::{
-        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+    rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    solana_sdk::{
+        quic::QUIC_PORT_OFFSET, transaction::Transaction, transport::Result as TransportResult,
     },
-    solana_sdk::{transaction::Transaction, transport::Result as TransportResult},
     std::{
         net::{SocketAddr, UdpSocket},
         sync::Arc,
@@ -38,80 +39,96 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-pub struct QuicClient {
+struct QuicClient {
     runtime: Runtime,
     endpoint: Endpoint,
     connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
     addr: SocketAddr,
 }
 
-pub enum TpuConnection {
-    Udp(UdpSocket, SocketAddr),
-    Quic(Arc<QuicClient>),
-}
+pub trait TpuConnection {
+    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self;
 
-impl TpuConnection {
-    pub fn new_quic(client_socket: UdpSocket, tpu_addr: SocketAddr) -> TpuConnection {
-        let client = Arc::new(QuicClient::new(client_socket, tpu_addr));
+    fn tpu_addr(&self) -> &SocketAddr;
 
-        Self::Quic(client)
-    }
-
-    pub fn new_udp(client_socket: UdpSocket, tpu_addr: SocketAddr) -> TpuConnection {
-        Self::Udp(client_socket, tpu_addr)
-    }
-
-    pub fn tpu_addr(&self) -> &SocketAddr {
-        match self {
-            Self::Udp(_socket, addr) => addr,
-            Self::Quic(client) => &client.addr,
-        }
-    }
-
-    pub fn send_transaction(&self, tx: &Transaction) -> TransportResult<()> {
+    fn send_transaction(&self, tx: &Transaction) -> TransportResult<()> {
         let data = bincode::serialize(tx).expect("serialize Transaction in send_transaction");
         self.send_wire_transaction(data)
     }
 
-    pub fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
-        match self {
-            Self::Udp(socket, addr) => {
-                socket.send_to(&data[..], addr)?;
-                Ok(())
-            }
-            Self::Quic(client) => {
-                let _guard = client.runtime.enter();
-                let send_buffer = client.send_buffer(&data[..]);
-                client.runtime.block_on(send_buffer)?;
-                Ok(())
-            }
+    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()>;
+
+    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()>;
+}
+
+pub struct UdpTpuConnection {
+    socket: UdpSocket,
+    addr: SocketAddr,
+}
+
+pub struct QuicTpuConnection {
+    client: Arc<QuicClient>,
+}
+
+impl TpuConnection for UdpTpuConnection {
+    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
+        let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
+        Self {
+            socket: client_socket,
+            addr: tpu_addr,
         }
     }
 
-    pub fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
+    fn tpu_addr(&self) -> &SocketAddr {
+        &self.addr
+    }
+
+    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
+        self.socket.send_to(&data[..], self.addr)?;
+        Ok(())
+    }
+
+    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
+        transactions
+            .into_iter()
+            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
+            .try_for_each(|buff| -> TransportResult<()> {
+                self.socket.send_to(&buff[..], self.addr)?;
+                Ok(())
+            })?;
+        Ok(())
+    }
+}
+
+impl TpuConnection for QuicTpuConnection {
+    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
+        let client = Arc::new(QuicClient::new(client_socket, tpu_addr));
+
+        Self { client }
+    }
+
+    fn tpu_addr(&self) -> &SocketAddr {
+        &self.client.addr
+    }
+
+    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
+        let _guard = self.client.runtime.enter();
+        let send_buffer = self.client.send_buffer(&data[..]);
+        self.client.runtime.block_on(send_buffer)?;
+        Ok(())
+    }
+
+    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
         let buffers = transactions
             .into_par_iter()
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .collect::<Vec<_>>();
 
-        match self {
-            Self::Udp(socket, addr) => {
-                buffers
-                    .into_iter()
-                    .try_for_each(|buff| -> TransportResult<()> {
-                        socket.send_to(&buff[..], addr)?;
-                        Ok(())
-                    })?;
-                Ok(())
-            }
-            Self::Quic(client) => {
-                let slices = buffers.par_iter().map(|buf| &buf[..]).collect::<Vec<_>>();
-                let _guard = client.runtime.enter();
-                let send_batch = client.send_batch(slices);
-                client.runtime.block_on(send_batch)?;
-                Ok(())
-            }
-        }
+        let slices = buffers.par_iter().map(|buf| &buf[..]).collect::<Vec<_>>();
+        let _guard = self.client.runtime.enter();
+        let send_batch = self.client.send_batch(slices);
+        self.client.runtime.block_on(send_batch)?;
+        Ok(())
     }
 }
 
@@ -209,11 +226,12 @@ impl QuicClient {
         let connection = self.send_buffer(buffers[0]).await?;
 
         let futures = buffers[1..buffers.len()]
-            .par_iter()
+            .iter()
             .chunks(2048)
+            .into_iter()
             .map(|buffs| {
                 let send_futures = buffs
-                    .into_par_iter()
+                    .into_iter()
                     .map(|buf| Self::_send_buffer_using_conn(buf, &connection))
                     .collect::<Vec<_>>();
 
