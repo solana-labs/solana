@@ -153,9 +153,10 @@ impl<T: Default + Reset> RecyclerX<T> {
             if gc.len() > RECYCLER_SHRINK_SIZE
                 && self.size_factor.load(Ordering::Acquire) >= SIZE_FACTOR_AFTER_SHRINK
             {
-                self.stats
-                    .freed
-                    .fetch_add(gc.len() - RECYCLER_SHRINK_SIZE, Ordering::Relaxed);
+                self.stats.freed.fetch_add(
+                    gc.len().saturating_sub(RECYCLER_SHRINK_SIZE),
+                    Ordering::Relaxed,
+                );
                 for mut x in gc.drain(RECYCLER_SHRINK_SIZE..) {
                     x.set_recycler(Weak::default());
                 }
