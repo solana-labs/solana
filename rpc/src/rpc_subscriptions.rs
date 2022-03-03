@@ -1192,7 +1192,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank_tracker::{
                 BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
             },
-            rpc::create_test_transactions_and_populate_blockstore,
+            rpc::{create_test_transaction_entries, populate_blockstore_for_tests},
             rpc_pubsub::RpcSolPubSubInternal,
             rpc_pubsub_service,
         },
@@ -1411,9 +1411,12 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
         bank.transfer(rent_exempt_amount, &mint_keypair, &keypair2.pubkey())
             .unwrap();
-        let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
-            vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
-            0,
+        populate_blockstore_for_tests(
+            create_test_transaction_entries(
+                vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
+                bank.clone(),
+            )
+            .0,
             bank,
             blockstore.clone(),
             max_complete_transaction_status_slot,
@@ -1527,9 +1530,12 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
         bank.transfer(rent_exempt_amount, &mint_keypair, &keypair2.pubkey())
             .unwrap();
-        let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
-            vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
-            0,
+        populate_blockstore_for_tests(
+            create_test_transaction_entries(
+                vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
+                bank.clone(),
+            )
+            .0,
             bank,
             blockstore.clone(),
             max_complete_transaction_status_slot,
@@ -1638,9 +1644,12 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
         bank.transfer(rent_exempt_amount, &mint_keypair, &keypair2.pubkey())
             .unwrap();
-        let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
-            vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
-            0,
+        populate_blockstore_for_tests(
+            create_test_transaction_entries(
+                vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
+                bank.clone(),
+            )
+            .0,
             bank,
             blockstore.clone(),
             max_complete_transaction_status_slot,

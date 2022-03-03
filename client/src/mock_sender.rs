@@ -192,7 +192,7 @@ impl RpcSender for MockSender {
             "getTransaction" => serde_json::to_value(EncodedConfirmedTransactionWithStatusMeta {
                 slot: 2,
                 transaction: EncodedTransactionWithStatusMeta {
-                    version: Some(TransactionVersion::Legacy),
+                    version: Some(TransactionVersion::LEGACY),
                     transaction: EncodedTransaction::Json(
                         UiTransaction {
                             signatures: vec!["3AsdoALgZFuq2oUVWrDYhg2pNeaLJKPLf8hU2mQ6U8qJxeJ6hsrPVpMn9ma39DtfYCrDQSvngWRP8NnTpEhezJpE".to_string()],
@@ -384,7 +384,7 @@ impl RpcSender for MockSender {
                         UiTransactionEncoding::Base58,
                     ),
                     meta: None,
-                    version: Some(TransactionVersion::Legacy),
+                    version: Some(TransactionVersion::LEGACY),
                 }],
                 rewards: Rewards::new(),
                 block_time: None,

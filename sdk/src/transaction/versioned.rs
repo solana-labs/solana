@@ -17,11 +17,22 @@ use {
     std::cmp::Ordering,
 };
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Type that serializes to the string "legacy"
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Legacy {
+    Legacy,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum TransactionVersion {
-    Legacy,
+    Legacy(Legacy),
     Number(u8),
+}
+
+impl TransactionVersion {
+    pub const LEGACY: Self = Self::Legacy(Legacy::Legacy);
 }
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
@@ -103,7 +114,7 @@ impl VersionedTransaction {
     /// Returns the version of the transaction
     pub fn version(&self) -> TransactionVersion {
         match self.message {
-            VersionedMessage::Legacy(_) => TransactionVersion::Legacy,
+            VersionedMessage::Legacy(_) => TransactionVersion::LEGACY,
             VersionedMessage::V0(_) => TransactionVersion::Number(0),
         }
     }

@@ -689,11 +689,11 @@ impl VersionedTransactionWithStatusMeta {
             self.transaction.version(),
         ) {
             // Set to none because old clients can't handle this field
-            (None, TransactionVersion::Legacy) => Ok(None),
+            (None, TransactionVersion::LEGACY) => Ok(None),
             (None, TransactionVersion::Number(version)) => {
                 Err(EncodeError::UnsupportedTransactionVersion(version))
             }
-            (Some(_), TransactionVersion::Legacy) => Ok(Some(TransactionVersion::Legacy)),
+            (Some(_), TransactionVersion::LEGACY) => Ok(Some(TransactionVersion::LEGACY)),
             (Some(max_version), TransactionVersion::Number(version)) => {
                 if version <= max_version {
                     Ok(Some(TransactionVersion::Number(version)))
