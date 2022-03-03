@@ -6,7 +6,7 @@ use {
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
             columns as cf, AccessType, BlockstoreOptions, Column, Database, IteratorDirection,
-            IteratorMode, LedgerColumn, Result, WriteBatch,
+            IteratorMode, LedgerColumn, Result, ShredStorageType, WriteBatch,
         },
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
@@ -72,7 +72,8 @@ pub use {
 
 pub mod blockstore_purge;
 
-pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
+pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
+pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -354,8 +355,17 @@ impl Blockstore {
         self.db
     }
 
+    /// The path to the ledger store
     pub fn ledger_path(&self) -> &PathBuf {
         &self.ledger_path
+    }
+
+    /// The directory under `ledger_path` to the underlying blockstore.
+    pub fn blockstore_directory(shred_storage_type: &ShredStorageType) -> &str {
+        match shred_storage_type {
+            ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
+            ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+        }
     }
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
@@ -369,7 +379,8 @@ impl Blockstore {
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
-        let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
+        let blockstore_path =
+            ledger_path.join(Self::blockstore_directory(&options.shred_storage_type));
 
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
@@ -547,11 +558,15 @@ impl Blockstore {
     }
 
     /// Deletes the blockstore at the specified path.
+    ///
+    /// Note that if the `ledger_path` has multiple rocksdb instances, this
+    /// function will destroy all.
     pub fn destroy(ledger_path: &Path) -> Result<()> {
-        // Database::destroy() fails if the path doesn't exist
+        // Database::destroy() fails if the root directory doesn't exist
         fs::create_dir_all(ledger_path)?;
-        let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
-        Database::destroy(&blockstore_path)
+        Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)).and(
+            Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)),
+        )
     }
 
     /// Returns the SlotMeta of the specified slot.
@@ -3783,18 +3798,20 @@ pub fn create_new_ledger(
     genesis_config: &GenesisConfig,
     max_genesis_archive_unpacked_size: u64,
     access_type: AccessType,
+    shred_storage_type: ShredStorageType,
 ) -> Result<Hash> {
     Blockstore::destroy(ledger_path)?;
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
+    let blockstore_dir = Blockstore::blockstore_directory(&shred_storage_type);
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
             access_type,
             recovery_mode: None,
             enforce_ulimit_nofile: false,
-            ..BlockstoreOptions::default()
+            shred_storage_type: shred_storage_type.clone(),
         },
     )?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -3827,7 +3844,7 @@ pub fn create_new_ledger(
         "-C",
         ledger_path.to_str().unwrap(),
         DEFAULT_GENESIS_FILE,
-        "rocksdb",
+        blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
         .args(&args)
@@ -3884,11 +3901,11 @@ pub fn create_new_ledger(
                 )
             });
             fs::rename(
-                &ledger_path.join("rocksdb"),
-                ledger_path.join("rocksdb.failed"),
+                &ledger_path.join(blockstore_dir),
+                ledger_path.join(format!("{}.failed", blockstore_dir)),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!("/failed to stash problematic rocksdb: {}", e)
+                error_messages += &format!("/failed to stash problematic {}: {}", blockstore_dir, e)
             });
 
             return Err(BlockstoreError::Io(IoError::new(
@@ -3964,6 +3981,7 @@ macro_rules! create_new_tmp_ledger {
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_db::AccessType::PrimaryOnly,
+            $crate::blockstore_db::ShredStorageType::default(),
         )
     };
 }
@@ -3975,6 +3993,21 @@ macro_rules! create_new_tmp_ledger_auto_delete {
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_db::AccessType::PrimaryOnly,
+            $crate::blockstore_db::ShredStorageType::default(),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! create_new_tmp_ledger_fifo_auto_delete {
+    ($genesis_config:expr) => {
+        $crate::blockstore::create_new_ledger_from_name_auto_delete(
+            $crate::tmp_ledger_name!(),
+            $genesis_config,
+            $crate::blockstore_db::AccessType::PrimaryOnly,
+            $crate::blockstore_db::ShredStorageType::RocksFifo(
+                $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
+            ),
         )
     };
 }
@@ -4005,9 +4038,14 @@ pub fn create_new_ledger_from_name(
     name: &str,
     genesis_config: &GenesisConfig,
     access_type: AccessType,
+    shred_storage_type: ShredStorageType,
 ) -> (PathBuf, Hash) {
-    let (ledger_path, blockhash) =
-        create_new_ledger_from_name_auto_delete(name, genesis_config, access_type);
+    let (ledger_path, blockhash) = create_new_ledger_from_name_auto_delete(
+        name,
+        genesis_config,
+        access_type,
+        shred_storage_type,
+    );
     (ledger_path.into_path(), blockhash)
 }
 
@@ -4019,6 +4057,7 @@ pub fn create_new_ledger_from_name_auto_delete(
     name: &str,
     genesis_config: &GenesisConfig,
     access_type: AccessType,
+    shred_storage_type: ShredStorageType,
 ) -> (TempDir, Hash) {
     let ledger_path = get_ledger_path_from_name_auto_delete(name);
     let blockhash = create_new_ledger(
@@ -4026,6 +4065,7 @@ pub fn create_new_ledger_from_name_auto_delete(
         genesis_config,
         MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         access_type,
+        shred_storage_type,
     )
     .unwrap();
     (ledger_path, blockhash)
@@ -4168,6 +4208,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            blockstore_db::BlockstoreRocksFifoOptions,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
             shred::{max_ticks_per_n_shreds, DataShredHeader},
@@ -4224,6 +4265,53 @@ pub mod tests {
         let entries = blockstore.get_slot_entries(0, 0).unwrap();
 
         assert_eq!(ticks, entries);
+        assert!(Path::new(ledger_path.path())
+            .join(Blockstore::blockstore_directory(
+                &ShredStorageType::RocksLevel,
+            ))
+            .exists());
+    }
+
+    #[test]
+    fn test_create_new_ledger_with_options_fifo() {
+        solana_logger::setup();
+        let mint_total = 1_000_000_000_000;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_fifo_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open_with_options(
+            ledger_path.path(),
+            BlockstoreOptions {
+                shred_storage_type: ShredStorageType::RocksFifo(
+                    BlockstoreRocksFifoOptions::default(),
+                ),
+                ..BlockstoreOptions::default()
+            },
+        )
+        .unwrap();
+
+        let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
+        let entries = blockstore.get_slot_entries(0, 0).unwrap();
+
+        assert_eq!(ticks, entries);
+        assert!(Path::new(ledger_path.path())
+            .join(Blockstore::blockstore_directory(
+                &ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
+            ))
+            .exists());
+    }
+
+    #[test]
+    fn test_rocksdb_directory() {
+        assert_eq!(
+            Blockstore::blockstore_directory(&ShredStorageType::RocksLevel),
+            BLOCKSTORE_DIRECTORY_ROCKS_LEVEL
+        );
+        assert_eq!(
+            Blockstore::blockstore_directory(&ShredStorageType::RocksFifo(
+                BlockstoreRocksFifoOptions::default()
+            )),
+            BLOCKSTORE_DIRECTORY_ROCKS_FIFO
+        );
     }
 
     #[test]
