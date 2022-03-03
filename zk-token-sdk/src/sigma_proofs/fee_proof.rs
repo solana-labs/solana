@@ -40,18 +40,18 @@ impl FeeSigmaProof {
     /// Creates a fee sigma proof assuming that the committed fee is greater than the maximum fee
     /// bound.
     ///
-    /// * `(fee_amount, commitment_fee, opening_fee)` - The amount, Pedersen commitment, and
+    /// * `(fee_amount, fee_commitment, fee_opening)` - The amount, Pedersen commitment, and
     /// opening of the transfer fee
-    /// * `(delta_fee, commitment_delta, opening_delta)` - The amount, Pedersen commitment, and
+    /// * `(delta_fee, delta_commitment, delta_opening)` - The amount, Pedersen commitment, and
     /// opening of the "real" delta amount
-    /// * `(commitment_claimed, opening_claimed)` - The Pedersen commitment and opening of the
+    /// * `(claimed_commitment, claimed_opening)` - The Pedersen commitment and opening of the
     /// "claimed" delta amount
     /// * `max_fee` - The maximum fee bound
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
-        (fee_amount, commitment_fee, opening_fee): (u64, &PedersenCommitment, &PedersenOpening),
-        (delta_fee, commitment_delta, opening_delta): (u64, &PedersenCommitment, &PedersenOpening),
-        (commitment_claimed, opening_claimed): (&PedersenCommitment, &PedersenOpening),
+        (fee_amount, fee_commitment, fee_opening): (u64, &PedersenCommitment, &PedersenOpening),
+        (delta_fee, delta_commitment, delta_opening): (u64, &PedersenCommitment, &PedersenOpening),
+        (claimed_commitment, claimed_opening): (&PedersenCommitment, &PedersenOpening),
         max_fee: u64,
         transcript: &mut Transcript,
     ) -> Self {
@@ -60,16 +60,16 @@ impl FeeSigmaProof {
 
         // compute proof for both cases `fee_amount' >= `max_fee` and `fee_amount` < `max_fee`
         let proof_fee_above_max = Self::create_proof_fee_above_max(
-            opening_fee,
-            commitment_delta,
-            commitment_claimed,
+            fee_opening,
+            delta_commitment,
+            claimed_commitment,
             &mut transcript_fee_above_max,
         );
 
         let proof_fee_below_max = Self::create_proof_fee_below_max(
-            commitment_fee,
-            (delta_fee, opening_delta),
-            opening_claimed,
+            fee_commitment,
+            (delta_fee, delta_opening),
+            claimed_opening,
             max_fee,
             &mut transcript_fee_below_max,
         );
@@ -100,19 +100,19 @@ impl FeeSigmaProof {
     /// Creates a fee sigma proof assuming that the committed fee is greater than the maximum fee
     /// bound.
     ///
-    /// * `opening_fee` - The opening of the Pedersen commitment of the transfer fee
-    /// * `commitment_delta` - The Pedersen commitment of the "real" delta value
-    /// * `commitment_claimed` - The Pedersen commitment of the "claimed" delta value
+    /// * `fee_opening` - The opening of the Pedersen commitment of the transfer fee
+    /// * `delta_commitment` - The Pedersen commitment of the "real" delta value
+    /// * `claimed_commitment` - The Pedersen commitment of the "claimed" delta value
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     fn create_proof_fee_above_max(
-        opening_fee: &PedersenOpening,
-        commitment_delta: &PedersenCommitment,
-        commitment_claimed: &PedersenCommitment,
+        fee_opening: &PedersenOpening,
+        delta_commitment: &PedersenCommitment,
+        claimed_commitment: &PedersenCommitment,
         transcript: &mut Transcript,
     ) -> Self {
         // simulate equality proof
-        let C_delta = commitment_delta.get_point();
-        let C_claimed = commitment_claimed.get_point();
+        let C_delta = delta_commitment.get_point();
+        let C_claimed = claimed_commitment.get_point();
 
         let z_x = Scalar::random(&mut OsRng);
         let z_delta = Scalar::random(&mut OsRng);
@@ -140,7 +140,7 @@ impl FeeSigmaProof {
         };
 
         // generate max proof
-        let r_fee = opening_fee.get_scalar();
+        let r_fee = fee_opening.get_scalar();
 
         let y_max_proof = Scalar::random(&mut OsRng);
         let Y_max_proof = (y_max_proof * &(*H)).compress();
@@ -171,22 +171,22 @@ impl FeeSigmaProof {
     /// Creates a fee sigma proof assuming that the committed fee is less than the maximum fee
     /// bound.
     ///
-    /// * `commitment_fee` - The Pedersen commitment of the transfer fee
-    /// * `(delta_fee, opening_delta)` - The Pedersen commitment and opening of the "real" delta
+    /// * `fee_commitment` - The Pedersen commitment of the transfer fee
+    /// * `(delta_fee, delta_opening)` - The Pedersen commitment and opening of the "real" delta
     /// value
-    /// * `opening_claimed` - The opening of the Pedersen commitment of the "claimed" delta value
+    /// * `claimed_opening` - The opening of the Pedersen commitment of the "claimed" delta value
     /// * `max_fee` - The maximum fee bound
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     fn create_proof_fee_below_max(
-        commitment_fee: &PedersenCommitment,
-        (delta_fee, opening_delta): (u64, &PedersenOpening),
-        opening_claimed: &PedersenOpening,
+        fee_commitment: &PedersenCommitment,
+        (delta_fee, delta_opening): (u64, &PedersenOpening),
+        claimed_opening: &PedersenOpening,
         max_fee: u64,
         transcript: &mut Transcript,
     ) -> Self {
         // simulate max proof
         let m = Scalar::from(max_fee);
-        let C_fee = commitment_fee.get_point();
+        let C_fee = fee_commitment.get_point();
 
         let z_max_proof = Scalar::random(&mut OsRng);
         let c_max_proof = Scalar::random(&mut OsRng); // random challenge
@@ -207,8 +207,8 @@ impl FeeSigmaProof {
         // generate equality proof
         let x = Scalar::from(delta_fee);
 
-        let r_delta = opening_delta.get_scalar();
-        let r_claimed = opening_claimed.get_scalar();
+        let r_delta = delta_opening.get_scalar();
+        let r_claimed = claimed_opening.get_scalar();
 
         let y_x = Scalar::random(&mut OsRng);
         let y_delta = Scalar::random(&mut OsRng);
@@ -248,25 +248,25 @@ impl FeeSigmaProof {
 
     /// Fee sigma proof verifier.
     ///
-    /// * `commitment_fee` - The Pedersen commitment of the transfer fee
-    /// * `commitment_delta` - The Pedersen commitment of the "real" delta value
-    /// * `commitment_claimed` - The Pedersen commitment of the "claimed" delta value
+    /// * `fee_commitment` - The Pedersen commitment of the transfer fee
+    /// * `delta_commitment` - The Pedersen commitment of the "real" delta value
+    /// * `claimed_commitment` - The Pedersen commitment of the "claimed" delta value
     /// * `max_fee` - The maximum fee bound
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
-        commitment_fee: &PedersenCommitment,
-        commitment_delta: &PedersenCommitment,
-        commitment_claimed: &PedersenCommitment,
+        fee_commitment: &PedersenCommitment,
+        delta_commitment: &PedersenCommitment,
+        claimed_commitment: &PedersenCommitment,
         max_fee: u64,
         transcript: &mut Transcript,
     ) -> Result<(), FeeSigmaProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let m = Scalar::from(max_fee);
 
-        let C_max = commitment_fee.get_point();
-        let C_delta = commitment_delta.get_point();
-        let C_claimed = commitment_claimed.get_point();
+        let C_max = fee_commitment.get_point();
+        let C_delta = delta_commitment.get_point();
+        let C_claimed = claimed_commitment.get_point();
 
         transcript.validate_and_append_point(b"Y_max_proof", &self.fee_max_proof.Y_max_proof)?;
         transcript.validate_and_append_point(b"Y_delta", &self.fee_equality_proof.Y_delta)?;
@@ -455,39 +455,39 @@ mod test {
         let transfer_amount: u64 = 55;
         let max_fee: u64 = 3;
 
-        let rate_fee: u16 = 555; // 5.55%
-        let amount_fee: u64 = 4;
+        let fee_rate: u16 = 555; // 5.55%
+        let fee_amount: u64 = 4;
         let delta: u64 = 9475; // 4*10000 - 55*555
 
-        let (commitment_transfer, opening_transfer) = Pedersen::new(transfer_amount);
-        let (commitment_fee, opening_fee) = Pedersen::new(max_fee);
+        let (transfer_commitment, transfer_opening) = Pedersen::new(transfer_amount);
+        let (fee_commitment, fee_opening) = Pedersen::new(max_fee);
 
-        let scalar_rate = Scalar::from(rate_fee);
-        let commitment_delta =
-            &commitment_fee * &Scalar::from(10000_u64) - &commitment_transfer * &scalar_rate;
-        let opening_delta =
-            &opening_fee * &Scalar::from(10000_u64) - &opening_transfer * &scalar_rate;
+        let scalar_rate = Scalar::from(fee_rate);
+        let delta_commitment =
+            &fee_commitment * &Scalar::from(10000_u64) - &transfer_commitment * &scalar_rate;
+        let delta_opening =
+            &fee_opening * &Scalar::from(10000_u64) - &transfer_opening * &scalar_rate;
 
-        let (commitment_claimed, opening_claimed) = Pedersen::new(0_u64);
+        let (claimed_commitment, claimed_opening) = Pedersen::new(0_u64);
 
-        let mut transcript_prover = Transcript::new(b"test");
-        let mut transcript_verifier = Transcript::new(b"test");
+        let mut prover_transcript = Transcript::new(b"test");
+        let mut verifier_transcript = Transcript::new(b"test");
 
         let proof = FeeSigmaProof::new(
-            (amount_fee, &commitment_fee, &opening_fee),
-            (delta, &commitment_delta, &opening_delta),
-            (&commitment_claimed, &opening_claimed),
+            (fee_amount, &fee_commitment, &fee_opening),
+            (delta, &delta_commitment, &delta_opening),
+            (&claimed_commitment, &claimed_opening),
             max_fee,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &commitment_fee,
-                &commitment_delta,
-                &commitment_claimed,
+                &fee_commitment,
+                &delta_commitment,
+                &claimed_commitment,
                 max_fee,
-                &mut transcript_verifier,
+                &mut verifier_transcript,
             )
             .is_ok());
     }
@@ -497,44 +497,44 @@ mod test {
         let transfer_amount: u64 = 55;
         let max_fee: u64 = 77;
 
-        let rate_fee: u16 = 555; // 5.55%
-        let amount_fee: u64 = 4;
+        let fee_rate: u16 = 555; // 5.55%
+        let fee_amount: u64 = 4;
         let delta: u64 = 9475; // 4*10000 - 55*555
 
-        let (commitment_transfer, opening_transfer) = Pedersen::new(transfer_amount);
-        let (commitment_fee, opening_fee) = Pedersen::new(amount_fee);
+        let (transfer_commitment, transfer_opening) = Pedersen::new(transfer_amount);
+        let (fee_commitment, fee_opening) = Pedersen::new(fee_amount);
 
-        let scalar_rate = Scalar::from(rate_fee);
-        let commitment_delta =
-            &commitment_fee * &Scalar::from(10000_u64) - &commitment_transfer * &scalar_rate;
-        let opening_delta =
-            &opening_fee * &Scalar::from(10000_u64) - &opening_transfer * &scalar_rate;
+        let scalar_rate = Scalar::from(fee_rate);
+        let delta_commitment =
+            &fee_commitment * &Scalar::from(10000_u64) - &transfer_commitment * &scalar_rate;
+        let delta_opening =
+            &fee_opening * &Scalar::from(10000_u64) - &transfer_opening * &scalar_rate;
 
-        let (commitment_claimed, opening_claimed) = Pedersen::new(delta);
+        let (claimed_commitment, claimed_opening) = Pedersen::new(delta);
 
         assert_eq!(
-            commitment_delta.get_point() - opening_delta.get_scalar() * &(*H),
-            commitment_claimed.get_point() - opening_claimed.get_scalar() * &(*H)
+            delta_commitment.get_point() - delta_opening.get_scalar() * &(*H),
+            claimed_commitment.get_point() - claimed_opening.get_scalar() * &(*H)
         );
 
-        let mut transcript_prover = Transcript::new(b"test");
-        let mut transcript_verifier = Transcript::new(b"test");
+        let mut prover_transcript = Transcript::new(b"test");
+        let mut verifier_transcript = Transcript::new(b"test");
 
         let proof = FeeSigmaProof::new(
-            (amount_fee, &commitment_fee, &opening_fee),
-            (delta, &commitment_delta, &opening_delta),
-            (&commitment_claimed, &opening_claimed),
+            (fee_amount, &fee_commitment, &fee_opening),
+            (delta, &delta_commitment, &delta_opening),
+            (&claimed_commitment, &claimed_opening),
             max_fee,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &commitment_fee,
-                &commitment_delta,
-                &commitment_claimed,
+                &fee_commitment,
+                &delta_commitment,
+                &claimed_commitment,
                 max_fee,
-                &mut transcript_verifier,
+                &mut verifier_transcript,
             )
             .is_ok());
     }
@@ -544,39 +544,39 @@ mod test {
         let transfer_amount: u64 = 100;
         let max_fee: u64 = 3;
 
-        let rate_fee: u16 = 100; // 1.00%
-        let amount_fee: u64 = 1;
+        let fee_rate: u16 = 100; // 1.00%
+        let fee_amount: u64 = 1;
         let delta: u64 = 0; // 1*10000 - 100*100
 
-        let (commitment_transfer, opening_transfer) = Pedersen::new(transfer_amount);
-        let (commitment_fee, opening_fee) = Pedersen::new(amount_fee);
+        let (transfer_commitment, transfer_opening) = Pedersen::new(transfer_amount);
+        let (fee_commitment, fee_opening) = Pedersen::new(fee_amount);
 
-        let scalar_rate = Scalar::from(rate_fee);
-        let commitment_delta =
-            &(&commitment_fee * &Scalar::from(10000_u64)) - &(&commitment_transfer * &scalar_rate);
-        let opening_delta =
-            &(&opening_fee * &Scalar::from(10000_u64)) - &(&opening_transfer * &scalar_rate);
+        let scalar_rate = Scalar::from(fee_rate);
+        let delta_commitment =
+            &(&fee_commitment * &Scalar::from(10000_u64)) - &(&transfer_commitment * &scalar_rate);
+        let delta_opening =
+            &(&fee_opening * &Scalar::from(10000_u64)) - &(&transfer_opening * &scalar_rate);
 
-        let (commitment_claimed, opening_claimed) = Pedersen::new(delta);
+        let (claimed_commitment, claimed_opening) = Pedersen::new(delta);
 
-        let mut transcript_prover = Transcript::new(b"test");
-        let mut transcript_verifier = Transcript::new(b"test");
+        let mut prover_transcript = Transcript::new(b"test");
+        let mut verifier_transcript = Transcript::new(b"test");
 
         let proof = FeeSigmaProof::new(
-            (amount_fee, &commitment_fee, &opening_fee),
-            (delta, &commitment_delta, &opening_delta),
-            (&commitment_claimed, &opening_claimed),
+            (fee_amount, &fee_commitment, &fee_opening),
+            (delta, &delta_commitment, &delta_opening),
+            (&claimed_commitment, &claimed_opening),
             max_fee,
-            &mut transcript_prover,
+            &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                &commitment_fee,
-                &commitment_delta,
-                &commitment_claimed,
+                &fee_commitment,
+                &delta_commitment,
+                &claimed_commitment,
                 max_fee,
-                &mut transcript_verifier,
+                &mut verifier_transcript,
             )
             .is_ok());
     }

@@ -194,35 +194,35 @@ impl Default for AeCiphertext {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubkeys {
-    pub pubkey_source: ElGamalPubkey,
-    pub pubkey_dest: ElGamalPubkey,
-    pub pubkey_auditor: ElGamalPubkey,
+    pub source_pubkey: ElGamalPubkey,
+    pub destination_pubkey: ElGamalPubkey,
+    pub auditor_pubkey: ElGamalPubkey,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeePubkeys {
-    pub pubkey_source: ElGamalPubkey,
-    pub pubkey_dest: ElGamalPubkey,
-    pub pubkey_auditor: ElGamalPubkey,
-    pub pubkey_withdraw_withheld_authority: ElGamalPubkey,
+    pub source_pubkey: ElGamalPubkey,
+    pub destination_pubkey: ElGamalPubkey,
+    pub auditor_pubkey: ElGamalPubkey,
+    pub withdraw_withheld_authority_pubkey: ElGamalPubkey,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferAmountEncryption {
     pub commitment: PedersenCommitment,
-    pub handle_source: DecryptHandle,
-    pub handle_dest: DecryptHandle,
-    pub handle_auditor: DecryptHandle,
+    pub source_handle: DecryptHandle,
+    pub destination_handle: DecryptHandle,
+    pub auditor_handle: DecryptHandle,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct FeeEncryption {
     pub commitment: PedersenCommitment,
-    pub handle_dest: DecryptHandle,
-    pub handle_withdraw_withheld_authority: DecryptHandle,
+    pub destination_handle: DecryptHandle,
+    pub withdraw_withheld_authority_handle: DecryptHandle,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
