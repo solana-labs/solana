@@ -9,14 +9,15 @@ use {
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
         signature::Keypair,
+        timing,
     },
     std::{
         collections::{hash_map::Entry, HashMap},
         error::Error,
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, Mutex,
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+            Arc, Mutex, RwLock,
         },
         thread,
         time::{Duration, Instant},
@@ -198,16 +199,20 @@ fn handle_chunk(
 struct ConnectionEntry {
     count: usize,
     exit: Arc<AtomicBool>,
-    start: Instant,
+    last_update: AtomicU64,
 }
 
 impl ConnectionEntry {
-    fn new(exit: Arc<AtomicBool>, start: Instant) -> Self {
+    fn new(exit: Arc<AtomicBool>, start: u64) -> Self {
         Self {
             count: 0,
             exit,
-            start,
+            last_update: AtomicU64::new(start),
         }
+    }
+
+    pub fn last_update(&self) -> u64 {
+        self.last_update.load(Ordering::Relaxed)
     }
 }
 
@@ -217,21 +222,26 @@ impl Drop for ConnectionEntry {
     }
 }
 
+// Return number pruned
 fn prune_oldest_from_connection_table(
     table: &mut HashMap<IpAddr, ConnectionEntry>,
     max_size: usize,
-) {
+) -> usize {
+    let mut num_pruned = 0;
     while table.len() > max_size {
-        let mut oldest = 0;
+        let mut oldest = std::u64::MAX;
         let mut oldest_ip = None;
         for (ip, entry) in table.iter() {
-            if (entry.start.elapsed().as_micros() as u64) > oldest {
-                oldest = entry.start.elapsed().as_micros() as u64;
+            let last_update = entry.last_update();
+            if last_update < oldest {
+                oldest = last_update;
                 oldest_ip = Some(*ip);
             }
         }
         table.remove(&oldest_ip.unwrap());
+        num_pruned += 1;
     }
+    num_pruned
 }
 
 pub fn spawn_server(
@@ -257,10 +267,11 @@ pub fn spawn_server(
         let handle = runtime.spawn(async move {
             debug!("spawn quic server");
             let total_connections = Arc::new(AtomicUsize::new(0));
+            let num_evictions = Arc::new(AtomicUsize::new(0));
             let total_new_connections = Arc::new(AtomicUsize::new(0));
             let mut last_datapoint = Instant::now();
-            let connection_table: Arc<Mutex<HashMap<IpAddr, ConnectionEntry>>> =
-                Arc::new(Mutex::new(HashMap::new()));
+            let connection_table: Arc<RwLock<HashMap<IpAddr, ConnectionEntry>>> =
+                Arc::new(RwLock::new(HashMap::new()));
             while !exit.load(Ordering::Relaxed) {
                 const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
                 let timeout_connection = timeout(
@@ -288,6 +299,7 @@ pub fn spawn_server(
                             total_new_streams.swap(0, Ordering::Relaxed),
                             i64
                         ),
+                        ("evictions", num_evictions.swap(0, Ordering::Relaxed), i64),
                     );
                     last_datapoint = Instant::now();
                 }
@@ -305,24 +317,25 @@ pub fn spawn_server(
 
                         let remote_addr = connection.remote_address();
 
-                        let mut connection_table_l = connection_table.lock().unwrap();
+                        let mut connection_table_w = connection_table.write().unwrap();
                         const MAX_CONNECTION_TABLE_SIZE: usize = 5000;
-                        prune_oldest_from_connection_table(
-                            &mut connection_table_l,
+                        let num_pruned = prune_oldest_from_connection_table(
+                            &mut connection_table_w,
                             MAX_CONNECTION_TABLE_SIZE,
                         );
-                        let connection_entry = connection_table_l
+                        num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                        let connection_entry = connection_table_w
                             .entry(remote_addr.ip())
                             .or_insert_with(|| {
                                 ConnectionEntry::new(
                                     Arc::new(AtomicBool::new(false)),
-                                    Instant::now(),
+                                    timing::timestamp(),
                                 )
                             });
                         if (connection_entry.count + 1) <= max_connections_per_ip {
                             connection_entry.count += 1;
                             let stream_exit = connection_entry.exit.clone();
-                            drop(connection_table_l);
+                            drop(connection_table_w);
                             let packet_sender = packet_sender.clone();
                             let total_streams = total_streams.clone();
                             let total_new_streams = total_new_streams.clone();
@@ -351,6 +364,16 @@ pub fn spawn_server(
                                                         &remote_addr,
                                                         &packet_sender,
                                                     ) {
+                                                        let connection_table_r =
+                                                            connection_table1.read().unwrap();
+                                                        if let Some(e) = connection_table_r
+                                                            .get(&remote_addr.ip())
+                                                        {
+                                                            e.last_update.store(
+                                                                timing::timestamp(),
+                                                                Ordering::Relaxed,
+                                                            );
+                                                        }
                                                         break;
                                                     }
                                                 }
@@ -368,9 +391,9 @@ pub fn spawn_server(
                                     }
                                 }
                                 {
-                                    let mut connection_table_l = connection_table1.lock().unwrap();
+                                    let mut connection_table_w = connection_table1.write().unwrap();
                                     if let Entry::Occupied(mut e) =
-                                        connection_table_l.entry(remote_addr.ip())
+                                        connection_table_w.entry(remote_addr.ip())
                                     {
                                         let e_ref = e.get_mut();
                                         e_ref.count -= 1;
@@ -595,21 +618,19 @@ mod test {
         solana_logger::setup();
         let mut table = HashMap::new();
         let exit = Arc::new(AtomicBool::new(false));
-        let now = Instant::now();
-        for i in 0..5 {
+        let num_entries = 5;
+        for i in 0..num_entries {
             table.insert(
                 IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)),
-                ConnectionEntry::new(
-                    exit.clone(),
-                    now.checked_sub(Duration::from_secs((i + 1) as u64))
-                        .unwrap(),
-                ),
+                ConnectionEntry::new(exit.clone(), (i + 1) as u64),
             );
         }
-        prune_oldest_from_connection_table(&mut table, 3);
+        let new_size = 3;
+        let pruned = prune_oldest_from_connection_table(&mut table, new_size);
+        assert_eq!(pruned, num_entries as usize - new_size);
         for v in table.values() {
-            assert!(now.duration_since(v.start).as_secs() <= 3);
+            assert!(v.last_update() >= (num_entries as u64 - new_size as u64));
         }
-        assert_eq!(table.len(), 3);
+        assert_eq!(table.len(), new_size);
     }
 }
