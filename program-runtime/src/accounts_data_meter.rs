@@ -77,7 +77,7 @@ impl AccountsDataMeter {
     ///
     /// If `amount` is *positive*, we *increase* the space used by accounts data.  If `amount` is
     /// *negative*, we *decrease* the space used by accounts data.  If `amount` is greater than
-    /// the remaining space, return an error and *do not* consume more accounts data space.
+    /// the remaining space, return an error and *do not* adjust accounts data space.
     pub fn adjust_delta(&mut self, amount: i64) -> Result<(), InstructionError> {
         if amount > self.remaining() as i64 {
             return Err(InstructionError::AccountsDataBudgetExceeded);
