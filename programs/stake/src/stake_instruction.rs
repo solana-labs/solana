@@ -491,11 +491,12 @@ pub fn process_instruction(
 mod tests {
     use {
         super::*,
-        crate::stake_state::{Meta, StakeState},
+        crate::stake_state::{stake_from, Delegation, Meta, Stake, StakeState},
         bincode::serialize,
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
-            account::{self, AccountSharedData},
+            account::{self, AccountSharedData, WritableAccount},
+            account_utils::StateMut,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
             rent::Rent,
@@ -506,6 +507,7 @@ mod tests {
             },
             sysvar::{self, stake_history::StakeHistory},
         },
+        solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
         std::{collections::HashSet, str::FromStr},
     };
 
@@ -1335,6 +1337,244 @@ mod tests {
                 },
             ],
             Ok(()),
+        );
+    }
+
+    #[test]
+    fn test_stake_delegate() {
+        let mut vote_state = VoteState::default();
+        for i in 0..1000 {
+            vote_state.process_slot_vote_unchecked(i);
+        }
+        let vote_state_credits = vote_state.credits();
+        let vote_address = solana_sdk::pubkey::new_rand();
+        let vote_address_2 = solana_sdk::pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        let mut vote_account_2 =
+            vote_state::create_account(&vote_address_2, &solana_sdk::pubkey::new_rand(), 0, 100);
+        vote_account
+            .set_state(&VoteStateVersions::new_current(vote_state.clone()))
+            .unwrap();
+        vote_account_2
+            .set_state(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        let stake_lamports = 42;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let mut stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta {
+                authorized: Authorized {
+                    staker: stake_address,
+                    withdrawer: stake_address,
+                },
+                ..Meta::default()
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let mut clock = Clock {
+            epoch: 1,
+            ..Clock::default()
+        };
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account.clone()),
+            (vote_address, vote_account),
+            (vote_address_2, vote_account_2.clone()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                stake_config::id(),
+                config::create_account(0, &stake_config::Config::default()),
+            ),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: vote_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_config::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // should fail, unsigned stake account
+        instruction_accounts[0].is_signer = false;
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+        instruction_accounts[0].is_signer = true;
+
+        // should pass
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        // verify that delegate() looks right, compare against hand-rolled
+        assert_eq!(
+            stake_from(&accounts[0]).unwrap(),
+            Stake {
+                delegation: Delegation {
+                    voter_pubkey: vote_address,
+                    stake: stake_lamports,
+                    activation_epoch: clock.epoch,
+                    deactivation_epoch: std::u64::MAX,
+                    ..Delegation::default()
+                },
+                credits_observed: vote_state_credits,
+            }
+        );
+
+        // verify that delegate fails as stake is active and not deactivating
+        clock.epoch += 1;
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        transaction_accounts[3] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(StakeError::TooSoonToRedelegate.into()),
+        );
+
+        // deactivate
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Deactivate).unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+
+        // verify that delegate to a different vote account fails
+        // during deactivation
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        instruction_accounts[1].pubkey = vote_address_2;
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(StakeError::TooSoonToRedelegate.into()),
+        );
+        instruction_accounts[1].pubkey = vote_address;
+
+        // verify that delegate succeeds to same vote account
+        // when stake is deactivating
+        let accounts_2 = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        // verify that deactivation has been cleared
+        let stake = stake_from(&accounts_2[0]).unwrap();
+        assert_eq!(stake.delegation.deactivation_epoch, std::u64::MAX);
+
+        // verify that delegate to a different vote account fails
+        // if stake is still active
+        transaction_accounts[0] = (stake_address, accounts_2[0].clone());
+        instruction_accounts[1].pubkey = vote_address_2;
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(StakeError::TooSoonToRedelegate.into()),
+        );
+
+        // without stake history, cool down is instantaneous
+        clock.epoch += 1;
+        transaction_accounts[3] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+
+        // verify that delegate can be called to new vote account, 2nd is redelegate
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        instruction_accounts[1].pubkey = vote_address;
+        // verify that delegate() looks right, compare against hand-rolled
+        assert_eq!(
+            stake_from(&accounts[0]).unwrap(),
+            Stake {
+                delegation: Delegation {
+                    voter_pubkey: vote_address_2,
+                    stake: stake_lamports,
+                    activation_epoch: clock.epoch,
+                    deactivation_epoch: std::u64::MAX,
+                    ..Delegation::default()
+                },
+                credits_observed: vote_state_credits,
+            }
+        );
+
+        // signed but faked vote account
+        transaction_accounts[1] = (vote_address_2, vote_account_2);
+        transaction_accounts[1]
+            .1
+            .set_owner(solana_sdk::pubkey::new_rand());
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(solana_sdk::instruction::InstructionError::IncorrectProgramId),
+        );
+
+        // verify that non-stakes fail delegate()
+        let stake_state = StakeState::RewardsPool;
+        stake_account.set_state(&stake_state).unwrap();
+        transaction_accounts[0] = (stake_address, stake_account);
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(solana_sdk::instruction::InstructionError::IncorrectProgramId),
         );
     }
 }
