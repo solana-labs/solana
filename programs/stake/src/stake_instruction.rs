@@ -491,7 +491,7 @@ pub fn process_instruction(
 mod tests {
     use {
         super::*,
-        crate::stake_state::{stake_from, Delegation, Meta, Stake, StakeState},
+        crate::stake_state::{from, stake_from, Delegation, Meta, Stake, StakeState},
         bincode::serialize,
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
@@ -1337,6 +1337,88 @@ mod tests {
                 },
             ],
             Ok(()),
+        );
+    }
+
+    #[test]
+    fn test_stake_initialize() {
+        let stake_lamports = 42;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account =
+            AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+        let custodian_address = solana_sdk::pubkey::new_rand();
+        let lockup = Lockup {
+            epoch: 1,
+            unix_timestamp: 0,
+            custodian: custodian_address,
+        };
+        let instruction_data = serialize(&StakeInstruction::Initialize(
+            Authorized::auto(&stake_address),
+            lockup,
+        ))
+        .unwrap();
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account.clone()),
+            (
+                sysvar::rent::id(),
+                account::create_account_shared_data_for_test(&Rent::free()),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::rent::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // should pass
+        let accounts = process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        // check that we see what we expect
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeState::Initialized(Meta {
+                lockup,
+                ..Meta {
+                    authorized: Authorized::auto(&stake_address),
+                    ..Meta::default()
+                }
+            }),
+        );
+
+        // 2nd time fails, can't move it from anything other than uninit->init
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InvalidAccountData),
+        );
+        transaction_accounts[0] = (stake_address, stake_account);
+
+        // not enough balance for rent...
+        transaction_accounts[1] = (
+            sysvar::rent::id(),
+            account::create_account_shared_data_for_test(&Rent {
+                lamports_per_byte_year: 42,
+                ..Rent::free()
+            }),
+        );
+        process_instruction(
+            &instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InsufficientFunds),
         );
     }
 
