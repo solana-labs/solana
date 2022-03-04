@@ -291,8 +291,12 @@ pub fn process_set_validator_info(
     // Check existence of validator-info account
     let balance = rpc_client.get_balance(&info_pubkey).unwrap_or(0);
 
-    let lamports =
-        rpc_client.get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;
+    let keys = vec![
+        (validator_info::id(), false),
+        (config.signers[0].pubkey(), true),
+    ];
+    let data_len = ValidatorInfo::max_space() + ConfigKeys::serialized_size(keys.clone());
+    let lamports = rpc_client.get_minimum_balance_for_rent_exemption(data_len as usize)?;
 
     let signers = if balance == 0 {
         if info_pubkey != info_keypair.pubkey() {
@@ -308,10 +312,6 @@ pub fn process_set_validator_info(
     };
 
     let build_message = |lamports| {
-        let keys = vec![
-            (validator_info::id(), false),
-            (config.signers[0].pubkey(), true),
-        ];
         if balance == 0 {
             println!(
                 "Publishing info for Validator {:?}",
@@ -326,7 +326,7 @@ pub fn process_set_validator_info(
             instructions.extend_from_slice(&[config_instruction::store(
                 &info_pubkey,
                 true,
-                keys,
+                keys.clone(),
                 &validator_info,
             )]);
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
@@ -339,7 +339,7 @@ pub fn process_set_validator_info(
             let instructions = vec![config_instruction::store(
                 &info_pubkey,
                 false,
-                keys,
+                keys.clone(),
                 &validator_info,
             )];
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
