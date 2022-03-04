@@ -48,7 +48,7 @@ pub struct CtxtCommEqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl CtxtCommEqualityProof {
-    /// Equality proof constructor.
+    /// Equality proof constructor. The proof is with respect to a ciphertext and commitment.
     ///
     /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
     /// For security, the caller (the main protocol) should hash these public components prior to
@@ -119,7 +119,7 @@ impl CtxtCommEqualityProof {
         }
     }
 
-    /// Equality proof verifier. TODO: wrt commitment
+    /// Equality proof verifier. The proof is with respect to a single ciphertext and commitment.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
     /// * `source_ciphertext` - The main ElGamal ciphertext to be proved
@@ -245,7 +245,7 @@ pub struct CtxtCtxtEqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl CtxtCtxtEqualityProof {
-    /// Equality proof constructor.
+    /// Equality proof constructor. The proof is with respect to two ciphertexts.
     ///
     /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
     /// For security, the caller (the main protocol) should hash these public components prior to
@@ -322,7 +322,7 @@ impl CtxtCtxtEqualityProof {
         }
     }
 
-    /// Equality proof verifier.
+    /// Equality proof verifier. The proof is with respect to two ciphertexts.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
     /// * `destination_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved

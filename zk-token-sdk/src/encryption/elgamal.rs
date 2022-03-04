@@ -15,7 +15,7 @@
 
 use {
     crate::encryption::{
-        discrete_log::{DecodeU32Precomputation, DiscreteLog},
+        discrete_log::DiscreteLog,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
     arrayref::{array_ref, array_refs},
@@ -132,21 +132,9 @@ impl ElGamal {
     /// On input a secret key and a ciphertext, the function returns the decrypted message
     /// interpretted as type `u32`.
     #[cfg(not(target_arch = "bpf"))]
-    fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u32> {
+    fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u64> {
         let discrete_log_instance = Self::decrypt(secret, ciphertext);
         discrete_log_instance.decode_u32()
-    }
-
-    /// On input a secret key, a ciphertext, and a pre-computed hashmap, the function returns the
-    /// decrypted message interpretted as type `u32`.
-    #[cfg(not(target_arch = "bpf"))]
-    fn decrypt_u32_online(
-        secret: &ElGamalSecretKey,
-        ciphertext: &ElGamalCiphertext,
-        hashmap: &DecodeU32Precomputation,
-    ) -> Option<u32> {
-        let discrete_log_instance = Self::decrypt(secret, ciphertext);
-        discrete_log_instance.decode_u32_online(hashmap)
     }
 }
 
@@ -375,18 +363,8 @@ impl ElGamalSecretKey {
     }
 
     /// Decrypts a ciphertext using the ElGamal secret key interpretting the message as type `u32`.
-    pub fn decrypt_u32(&self, ciphertext: &ElGamalCiphertext) -> Option<u32> {
+    pub fn decrypt_u32(&self, ciphertext: &ElGamalCiphertext) -> Option<u64> {
         ElGamal::decrypt_u32(self, ciphertext)
-    }
-
-    /// Decrypts a ciphertext using the ElGamal secret key and a pre-computed hashmap. It
-    /// interprets the decrypted message as type `u32`.
-    pub fn decrypt_u32_online(
-        &self,
-        ciphertext: &ElGamalCiphertext,
-        hashmap: &DecodeU32Precomputation,
-    ) -> Option<u32> {
-        ElGamal::decrypt_u32_online(self, ciphertext, hashmap)
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -474,18 +452,8 @@ impl ElGamalCiphertext {
     }
 
     /// Decrypts the ciphertext using an ElGamal secret key interpretting the message as type `u32`.
-    pub fn decrypt_u32(&self, secret: &ElGamalSecretKey) -> Option<u32> {
+    pub fn decrypt_u32(&self, secret: &ElGamalSecretKey) -> Option<u64> {
         ElGamal::decrypt_u32(secret, self)
-    }
-
-    /// Decrypts the ciphertext using an ElGamal secret key and a pre-computed hashmap. It
-    /// interprets the decrypted message as type `u32`.
-    pub fn decrypt_u32_online(
-        &self,
-        secret: &ElGamalSecretKey,
-        hashmap: &DecodeU32Precomputation,
-    ) -> Option<u32> {
-        ElGamal::decrypt_u32_online(secret, self, hashmap)
     }
 }
 
@@ -606,7 +574,7 @@ define_mul_variants!(LHS = DecryptHandle, RHS = Scalar, Output = DecryptHandle);
 mod tests {
     use {
         super::*,
-        crate::encryption::{discrete_log::DECODE_U32_PRECOMPUTATION_FOR_G, pedersen::Pedersen},
+        crate::encryption::pedersen::Pedersen,
         solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
     };
 
@@ -622,12 +590,7 @@ mod tests {
         };
 
         assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ciphertext));
-        assert_eq!(
-            57_u32,
-            secret
-                .decrypt_u32_online(&ciphertext, &(*DECODE_U32_PRECOMPUTATION_FOR_G))
-                .unwrap()
-        );
+        assert_eq!(57_u64, secret.decrypt_u32(&ciphertext).unwrap());
     }
 
     #[test]

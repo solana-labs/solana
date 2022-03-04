@@ -6,7 +6,6 @@ use {
 use {
     crate::{
         encryption::{
-            discrete_log::*,
             elgamal::{
                 DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey,
             },
@@ -33,7 +32,9 @@ use {
 };
 
 #[cfg(not(target_arch = "bpf"))]
-const MAX_FEE_BASIS_POINTS: u64 = 10000;
+const MAX_FEE_BASIS_POINTS: u64 = 10_000;
+#[cfg(not(target_arch = "bpf"))]
+const ONE_IN_BASIS_POINTS: u128 = MAX_FEE_BASIS_POINTS as u128;
 
 #[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
@@ -121,7 +122,8 @@ impl TransferWithFeeData {
 
         // calculate and encrypt fee
         let (fee_amount, delta_fee) =
-            calculate_fee(transfer_amount, fee_parameters.fee_rate_basis_points);
+            calculate_fee(transfer_amount, fee_parameters.fee_rate_basis_points)
+                .ok_or(ProofError::Generation)?;
 
         let below_max = u64::ct_gt(&fee_parameters.maximum_fee, &fee_amount);
         let fee_to_encrypt =
@@ -219,11 +221,11 @@ impl TransferWithFeeData {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
-        let amount_lo = ciphertext_lo.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
-        let amount_hi = ciphertext_hi.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
+        let amount_lo = ciphertext_lo.decrypt_u32(sk);
+        let amount_hi = ciphertext_hi.decrypt_u32(sk);
 
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
-            Ok((amount_lo as u64) + (TWO_32 * amount_hi as u64))
+            Ok(amount_lo + TWO_32 * amount_hi)
         } else {
             Err(ProofError::Verification)
         }
@@ -632,17 +634,16 @@ impl FeeParameters {
 }
 
 #[cfg(not(target_arch = "bpf"))]
-fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> (u64, u64) {
-    let fee_scaled = (transfer_amount as u128) * (fee_rate_basis_points as u128);
-
-    let fee = (fee_scaled / MAX_FEE_BASIS_POINTS as u128) as u64;
-    let rem = (fee_scaled % MAX_FEE_BASIS_POINTS as u128) as u64;
-
-    if rem == 0 {
-        (fee, rem)
-    } else {
-        (fee + 1, rem)
+fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> Option<(u64, u64)> {
+    let numerator = (transfer_amount as u128).checked_mul(fee_rate_basis_points as u128)?;
+    let mut fee = numerator.checked_div(ONE_IN_BASIS_POINTS)?;
+    let remainder = numerator.checked_rem(ONE_IN_BASIS_POINTS)?;
+    if remainder > 0 {
+        fee = fee.checked_add(1)?;
     }
+
+    let fee = u64::try_from(fee).ok()?;
+    Some((fee as u64, remainder as u64))
 }
 
 #[cfg(not(target_arch = "bpf"))]
