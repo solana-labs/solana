@@ -129,6 +129,17 @@ pub struct SnapshotPackage {
     pub snapshot_type: SnapshotType,
 }
 
+impl SnapshotPackage {
+    pub fn is_full_snapshot(&self) -> bool {
+        self.path()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("snapshot")
+    }
+}
+
 impl From<AccountsPackage> for SnapshotPackage {
     fn from(accounts_package: AccountsPackage) -> Self {
         assert!(
