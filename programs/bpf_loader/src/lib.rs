@@ -529,7 +529,7 @@ fn process_loader_upgradeable_instruction(
             )?;
         }
         UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len } => {
-            instruction_context.check_number_of_instruction_accounts(1)?;
+            instruction_context.check_number_of_instruction_accounts(4)?;
             let programdata_address = *instruction_context.get_instruction_account_key(
                 transaction_context,
                 upgradeable_ins_acc_idx::DeployWithMaxDataLen::ProgramData as usize,
@@ -725,7 +725,7 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::Upgrade => {
-            instruction_context.check_number_of_instruction_accounts(1)?;
+            instruction_context.check_number_of_instruction_accounts(3)?;
             let current_programdata_address = *instruction_context.get_instruction_account_key(
                 transaction_context,
                 upgradeable_ins_acc_idx::Upgrade::ProgramData as usize,
