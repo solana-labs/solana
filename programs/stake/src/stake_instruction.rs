@@ -2165,5 +2165,21 @@ mod tests {
                 _ => unreachable!(),
             }
         }
+
+        // should fail, fake owner of destination
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &solana_sdk::pubkey::new_rand(),
+        )
+        .unwrap();
+        transaction_accounts[1] = (split_to_address, split_to_account);
+        process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::IncorrectProgramId),
+        );
     }
 }

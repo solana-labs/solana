@@ -3499,40 +3499,6 @@ mod tests {
     }
 
     #[test]
-    fn test_split_fake_stake_dest() {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let signers = vec![stake_pubkey].into_iter().collect();
-
-        let split_stake_account = AccountSharedData::new_ref_data_with_space(
-            0,
-            &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
-            &solana_sdk::pubkey::new_rand(),
-        )
-        .expect("stake_account");
-
-        let split_stake_keyed_account =
-            KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
-
-        let stake_account = AccountSharedData::new_ref_data_with_space(
-            stake_lamports,
-            &StakeState::Stake(Meta::auto(&stake_pubkey), just_stake(stake_lamports)),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-        assert_eq!(
-            stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
-            Err(InstructionError::IncorrectProgramId),
-        );
-    }
-
-    #[test]
     fn test_split_to_account_with_rent_exempt_reserve() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
