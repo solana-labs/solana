@@ -33,7 +33,7 @@ pub type StringDecimals = String;
 pub const MAX_BASE58_BYTES: usize = 128;
 
 /// A duplicate representation of an Account for pretty JSON serialization
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAccount {
     pub lamports: u64,
