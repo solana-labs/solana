@@ -54,8 +54,10 @@ pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8; // Save some bank snapshots but not too many
 pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 2;
 pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 4;
-pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
-pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
+pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX: &str = r"snapshot-";
+pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX: &str = r"incremental-snapshot-";
+pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = concat!("^", FULL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX, "(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$");
+pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = concat!("^", INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX,"(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
 pub const LOCAL_SNAPSHOT_FILE_NAME: &str = ".local_snapshot";
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -397,9 +399,11 @@ pub fn archive_snapshot_package(
         ("size", metadata.len(), i64)
     );
 
-    if snapshot_package.is_full_snapshot() {
-        info!("Create snapshot local file in {:?}", tar_dir);
-        create_local_snapshot_file(tar_dir)?;
+    if let Some(snapshot_type) = snapshot_package.get_snapshot_type() {
+        if snapshot_type.is_full_snapshot() {
+            info!("Create snapshot local file in {:?}", tar_dir);
+            create_local_snapshot_file(tar_dir)?;
+        }
     }
     Ok(())
 }

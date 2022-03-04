@@ -130,13 +130,15 @@ pub struct SnapshotPackage {
 }
 
 impl SnapshotPackage {
-    pub fn is_full_snapshot(&self) -> bool {
-        self.path()
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .starts_with("snapshot")
+    pub fn get_snapshot_type(&self) -> Option<SnapshotType> {
+        let file_name = self.path().file_name().unwrap().to_str().unwrap();
+        if file_name.starts_with("snapshot") {
+            Some(SnapshotType::FullSnapshot)
+        } else if file_name.starts_with("incremental-snapshot") {
+            Some(SnapshotType::IncrementalSnapshot(0))
+        } else {
+            None
+        }
     }
 }
 
