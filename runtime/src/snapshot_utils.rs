@@ -397,16 +397,7 @@ pub fn archive_snapshot_package(
         ("size", metadata.len(), i64)
     );
 
-    if parse_full_snapshot_archive_filename(
-        snapshot_package
-            .path()
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap(),
-    )
-    .is_ok()
-    {
+    if snapshot_package.is_full_snapshot() {
         info!("Create snapshot local file in {:?}", tar_dir);
         create_local_snapshot_file(tar_dir)?;
     }
