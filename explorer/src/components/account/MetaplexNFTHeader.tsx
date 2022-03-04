@@ -178,7 +178,7 @@ function getIsMutablePill(isMutable: boolean) {
 
 function getIsVerifiedCollection(isVerified?: boolean) {
   const onchainVerifiedToolTip =
-    "This NFT has been verified as member of an on-chain collection. This tag guarantees authenticity.";
+    "This NFT has been verified as a member of an on-chain collection. This tag guarantees authenticity.";
   return (
     <div className={"d-inline-flex align-items-center ms-2"}>
       <span className="badge badge-pill bg-dark">
