@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "bpf"))]
 use crate::{
     encryption::elgamal::{ElGamalCiphertext, ElGamalSecretKey},
     zk_token_elgamal::pod,
