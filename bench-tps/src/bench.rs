@@ -487,8 +487,8 @@ fn do_tx_transfers<T: Client>(
                 transactions.push(tx.0);
             }
 
-            if client.async_send_batch(transactions).is_err() {
-                warn!("send_batch_sync in do_tx_transfers failed");
+            if let Err(error) = client.async_send_batch(transactions) {
+                warn!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
 
             if old_transactions {
