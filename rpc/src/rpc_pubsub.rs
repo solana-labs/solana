@@ -808,7 +808,7 @@ mod tests {
         let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
-        assert_eq!(expected, result);
+        assert_eq!(result, expected);
 
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}"#;
@@ -817,7 +817,7 @@ mod tests {
         let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
-        assert_eq!(expected, result);
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -1071,7 +1071,7 @@ mod tests {
         let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
-        assert_eq!(expected, result);
+        assert_eq!(result, expected);
 
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}"#;
@@ -1080,7 +1080,7 @@ mod tests {
         let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
-        assert_eq!(expected, result);
+        assert_eq!(result, expected);
     }
 
     #[test]

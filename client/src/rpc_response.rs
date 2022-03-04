@@ -117,7 +117,7 @@ pub struct RpcInflationRate {
     pub epoch: Epoch,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcKeyedAccount {
     pub pubkey: String,
@@ -246,7 +246,7 @@ pub struct RpcBlockProductionRange {
     pub last_slot: Slot,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockProduction {
     /// Map of leader base58 identity pubkeys to a tuple of `(number of leader slots, number of blocks produced)`
@@ -363,7 +363,7 @@ pub struct RpcAccountBalance {
     pub lamports: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSupply {
     pub total: u64,
