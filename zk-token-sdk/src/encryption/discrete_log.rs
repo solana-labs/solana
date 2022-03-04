@@ -28,7 +28,7 @@ pub struct DiscreteLog {
 #[derive(Serialize, Deserialize, Default)]
 pub struct DecodePrecomputation(HashMap<[u8; 32], u16>);
 
-/// Builds a HashMap of 2^18 elements
+/// Builds a HashMap of 2^16 elements
 #[allow(dead_code)]
 fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodePrecomputation {
     let mut hashmap = HashMap::new();
@@ -56,7 +56,7 @@ lazy_static::lazy_static! {
     };
 }
 
-/// Solves the discrete log instance using a 18/14 bit offline/online split
+/// Solves the discrete log instance using a 16/16 bit offline/online split
 impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
