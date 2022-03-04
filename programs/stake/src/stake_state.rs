@@ -624,7 +624,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         match self.state()? {
             StakeState::Stake(meta, mut stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
-                let validated_split_info = validate_split_amount(self, split, lamports, &meta)?;
+                let validated_split_info =
+                    validate_split_amount(self, split, lamports, &meta, Some(&stake))?;
 
                 // split the stake, subtract rent_exempt_balance unless
                 // the destination account already has those lamports
@@ -633,11 +634,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 // lamports minus rent_exempt_reserve if it starts out with a zero balance
                 let (remaining_stake_delta, split_stake_amount) =
                     if validated_split_info.source_remaining_balance == 0 {
-                        // If split amount equals the full source stake, the new split stake must
-                        // equal the same amount, regardless of any current lamport balance in the
-                        // split account. Since split accounts retain the state of their source
-                        // account, this prevents any magic activation of stake by prefunding the
-                        // split account.
+                        // If split amount equals the full source stake (as implied by 0
+                        // source_remaining_balance), the new split stake must equal the same
+                        // amount, regardless of any current lamport balance in the split account.
+                        // Since split accounts retain the state of their source account, this
+                        // prevents any magic activation of stake by prefunding the split account.
+                        //
                         // The new split stake also needs to ignore any positive delta between the
                         // original rent_exempt_reserve and the split_rent_exempt_reserve, in order
                         // to prevent magic activation of stake by splitting between accounts of
@@ -648,21 +650,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     } else {
                         // Otherwise, the new split stake should reflect the entire split
                         // requested, less any lamports needed to cover the split_rent_exempt_reserve.
-                        let split_lamports = split.lamports()?;
-                        let split_rent_exempt_reserve_deficit = validated_split_info
-                            .destination_rent_exempt_reserve
-                            .saturating_sub(split_lamports);
-                        let minimum_split_amount = MINIMUM_STAKE_DELEGATION
-                            .saturating_add(split_rent_exempt_reserve_deficit);
-                        if lamports < minimum_split_amount {
-                            return Err(InstructionError::InsufficientFunds);
-                        }
                         (
                             lamports,
                             lamports.saturating_sub(
                                 validated_split_info
                                     .destination_rent_exempt_reserve
-                                    .saturating_sub(split_lamports),
+                                    .saturating_sub(split.lamports()?),
                             ),
                         )
                     };
@@ -676,7 +669,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
-                let validated_split_info = validate_split_amount(self, split, lamports, &meta)?;
+                let validated_split_info =
+                    validate_split_amount(self, split, lamports, &meta, None)?;
                 let mut split_meta = meta;
                 split_meta.rent_exempt_reserve =
                     validated_split_info.destination_rent_exempt_reserve;
@@ -865,8 +859,10 @@ fn validate_split_amount(
     destination_account: &KeyedAccount,
     lamports: u64,
     source_meta: &Meta,
+    source_stake: Option<&Stake>,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
     let source_lamports = source_account.lamports()?;
+    let destination_lamports = destination_account.lamports()?;
 
     // Split amount has to be something
     if lamports == 0 {
@@ -897,8 +893,8 @@ fn validate_split_amount(
         // nothing to do here
     }
 
-    // Verify the destination account also meets the minimum balance requirements
-    // This must account for:
+    // Verify the destination account meets the minimum balance requirements
+    // This must handle:
     // 1. The destination account having a different rent exempt reserve due to data size changes
     // 2. The destination account being prefunded, which would lower the minimum split amount
     let destination_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
@@ -908,10 +904,26 @@ fn validate_split_amount(
     );
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(MINIMUM_STAKE_DELEGATION);
-    let minimum_split_amount =
-        destination_minimum_balance.saturating_sub(destination_account.lamports()?);
-    if lamports < minimum_split_amount {
+    let destination_balance_deficit =
+        destination_minimum_balance.saturating_sub(destination_lamports);
+    if lamports < destination_balance_deficit {
         return Err(InstructionError::InsufficientFunds);
+    }
+
+    // If the source account is already staked, the destination will end up staked as well.  Verify
+    // the destination account's delegation amount is at least MINIMUM_STAKE_DELEGATION.
+    //
+    // The *delegation* requirements are different than the *balance* requirements.  If the
+    // destination account is prefunded with a balance of `rent exempt reserve + minimum stake
+    // delegation - 1`, the minimum split amount to satisfy the *balance* requirements is 1
+    // lamport.  And since *only* the split amount is immediately staked in the destination
+    // account, the split amount must be at least the minimum stake delegation.  So if the minimum
+    // stake delegation was 10 lamports, then a split amount of 1 lamport would not meet the
+    // *delegation* requirements.
+    if source_stake.is_some() {
+        if lamports < MINIMUM_STAKE_DELEGATION {
+            return Err(InstructionError::InsufficientFunds);
+        }
     }
 
     Ok(ValidatedSplitInfo {
