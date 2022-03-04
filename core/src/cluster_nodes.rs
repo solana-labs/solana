@@ -98,12 +98,7 @@ fn get_parent_index(index: usize, fanout: usize) -> Option<usize> {
         return None;
     }
     let offset = index % fanout;
-    let anchor = index - offset;
-    let neighborhood = anchor / fanout - 1;
-    let neighborhood_offset = neighborhood % fanout;
-    let parent_anchor = neighborhood - neighborhood_offset;
-    let parent_index = parent_anchor + offset;
-    Some(parent_index)
+    Some((index / fanout / fanout) * fanout + offset)
 }
 
 fn get_neighborhood_stake(index: usize, fanout: usize, nodes: &[&Node]) -> u64 {
@@ -963,5 +958,26 @@ mod tests {
             assert!(shred_stakes.neighborhood <= max_stake_per_neighborhood);
             assert!(shred_stakes.parent_neighborhood <= max_stake_per_neighborhood);
         }
+    }
+
+    #[test]
+    fn test_get_parent_index() {
+        assert_eq!(get_parent_index(0, 200), None);
+        assert_eq!(get_parent_index(100, 200), None);
+        assert_eq!(get_parent_index(199, 200), None);
+        assert_eq!(get_parent_index(200, 200), Some(0));
+        assert_eq!(get_parent_index(201, 200), Some(1));
+        assert_eq!(get_parent_index(300, 200), Some(100));
+        assert_eq!(get_parent_index(399, 200), Some(199));
+        assert_eq!(get_parent_index(400, 200), Some(0));
+        assert_eq!(get_parent_index(401, 200), Some(1));
+        assert_eq!(get_parent_index(599, 200), Some(199));
+        assert_eq!(get_parent_index(1674, 200), Some(74));
+        assert_eq!(get_parent_index(3211, 200), Some(11));
+        assert_eq!(get_parent_index(40200, 200), Some(200));
+        assert_eq!(get_parent_index(40201, 200), Some(201));
+        assert_eq!(get_parent_index(60000, 200), Some(200));
+        assert_eq!(get_parent_index(70007, 200), Some(207));
+        assert_eq!(get_parent_index(80200, 200), Some(400));
     }
 }
