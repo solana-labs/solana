@@ -18,6 +18,11 @@ use {
     tokio::runtime::Runtime,
 };
 
+// Empirically found max number of concurrent streams
+// that seems to maximize TPS on GCE (higher values don't seem to
+// give significant improvement or seem to impact stability)
+const MAX_CONCURRENT_STREAMS: usize = 2048;
+
 struct SkipServerVerification;
 
 impl SkipServerVerification {
@@ -183,7 +188,7 @@ impl QuicClient {
 
         let futures = buffers[1..buffers.len()]
             .iter()
-            .chunks(2048)
+            .chunks(MAX_CONCURRENT_STREAMS)
             .into_iter()
             .map(|buffs| {
                 let send_futures = buffs
