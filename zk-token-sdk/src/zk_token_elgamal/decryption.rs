@@ -6,7 +6,7 @@ use crate::{
 
 #[cfg(not(target_arch = "bpf"))]
 impl pod::ElGamalCiphertext {
-    pub fn decrypt(self, secret_key: &ElGamalSecretKey) -> Option<u32> {
+    pub fn decrypt(self, secret_key: &ElGamalSecretKey) -> Option<u64> {
         let deserialized_ciphertext: Option<ElGamalCiphertext> = self.try_into().ok();
         if let Some(ciphertext) = deserialized_ciphertext {
             ciphertext.decrypt_u32(secret_key)

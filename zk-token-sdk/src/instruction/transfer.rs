@@ -6,7 +6,6 @@ use {
 use {
     crate::{
         encryption::{
-            discrete_log::*,
             elgamal::{
                 DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey,
             },
@@ -211,11 +210,11 @@ impl TransferData {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
-        let amount_lo = ciphertext_lo.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
-        let amount_hi = ciphertext_hi.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
+        let amount_lo = ciphertext_lo.decrypt_u32(sk);
+        let amount_hi = ciphertext_hi.decrypt_u32(sk);
 
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
-            Ok((amount_lo as u64) + (TWO_32 * amount_hi as u64))
+            Ok(amount_lo + TWO_32 * amount_hi)
         } else {
             Err(ProofError::Verification)
         }
