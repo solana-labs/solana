@@ -1438,7 +1438,7 @@ mod with_incremental_snapshots {
         }
 
         info!("Delete snapshot local file {:?}", snapshot_archives_dir);
-        if let Err(e) = snapshot_utils::delete_snapshot_local_file(snapshot_archives_dir) {
+        if let Err(e) = snapshot_utils::delete_local_snapshot_file(snapshot_archives_dir) {
             info!("Unable to delete local snapshot file: {:?}", e);
         }
         Ok(())
