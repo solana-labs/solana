@@ -495,7 +495,7 @@ mod tests {
         bincode::serialize,
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
-            account::{self, AccountSharedData, WritableAccount},
+            account::{self, AccountSharedData, ReadableAccount, WritableAccount},
             account_utils::StateMut,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
@@ -2075,5 +2075,95 @@ mod tests {
             instruction_accounts,
             Err(solana_sdk::instruction::InstructionError::IncorrectProgramId),
         );
+    }
+
+    fn just_stake(meta: Meta, stake: u64) -> StakeState {
+        StakeState::Stake(
+            meta,
+            Stake {
+                delegation: Delegation {
+                    stake,
+                    ..Delegation::default()
+                },
+                ..Stake::default()
+            },
+        )
+    }
+
+    #[test]
+    fn test_split() {
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let mut transaction_accounts = vec![
+            (stake_address, AccountSharedData::default()),
+            (split_to_address, split_to_account),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        for state in [
+            StakeState::Initialized(Meta::auto(&stake_address)),
+            just_stake(Meta::auto(&stake_address), stake_lamports),
+        ] {
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            transaction_accounts[0] = (stake_address, stake_account);
+
+            // should fail, split more than available
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+
+            // should pass
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            // no lamport leakage
+            assert_eq!(
+                accounts[0].lamports() + accounts[1].lamports(),
+                stake_lamports
+            );
+
+            assert_eq!(from(&accounts[0]).unwrap(), from(&accounts[1]).unwrap());
+            match state {
+                StakeState::Initialized(_meta) => {
+                    assert_eq!(from(&accounts[0]).unwrap(), state);
+                }
+                StakeState::Stake(_meta, _stake) => {
+                    let stake_0 = from(&accounts[0]).unwrap().stake();
+                    assert_eq!(stake_0.unwrap().delegation.stake, stake_lamports / 2);
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }
