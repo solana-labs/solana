@@ -30,6 +30,7 @@ export function NFTHeader({
               : "No NFT name was found"}
           </h2>
           {getEditionPill(nftData.editionInfo)}
+          {getIsVerifiedCollection(metadata.collection?.verified)}
         </div>
         <h4 className="header-pretitle ms-1 mt-1 no-overflow-with-ellipsis">
           {metadata.data.symbol !== ""
@@ -172,5 +173,18 @@ function getIsMutablePill(isMutable: boolean) {
     <span className="badge badge-pill bg-dark">{`${
       isMutable ? "Mutable" : "Immutable"
     }`}</span>
+  );
+}
+
+function getIsVerifiedCollection(isVerified?: boolean) {
+  const onchainVerifiedToolTip =
+    "This NFT has been verified as a member of an no-chain collection. This tag guarantees authenticity.";
+  return (
+    <div className={"d-inline-flex align-items-center ms-2"}>
+      <span className="badge badge-pill bg-dark">
+        {`${isVerified ? "Verified Collection" : "Not Verified"}`}
+      </span>
+      <InfoTooltip bottom text={onchainVerifiedToolTip} />
+    </div>
   );
 }

@@ -343,6 +343,18 @@ function NonFungibleTokenMintAccountCard({
             </td>
           </tr>
         )}
+        {nftData?.metadata.collection?.verified && (
+          <tr>
+            <td>Verified Collection Address</td>
+            <td className="text-lg-end">
+              <Address
+                pubkey={new PublicKey(nftData.metadata.collection.key)}
+                alignRight
+                link
+              />
+            </td>
+          </tr>
+        )}
         {mintInfo.mintAuthority && (
           <tr>
             <td>Mint Authority</td>
