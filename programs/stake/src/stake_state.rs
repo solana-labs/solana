@@ -920,10 +920,8 @@ fn validate_split_amount(
     // account, the split amount must be at least the minimum stake delegation.  So if the minimum
     // stake delegation was 10 lamports, then a split amount of 1 lamport would not meet the
     // *delegation* requirements.
-    if source_stake.is_some() {
-        if lamports < MINIMUM_STAKE_DELEGATION {
-            return Err(InstructionError::InsufficientFunds);
-        }
+    if source_stake.is_some() && lamports < MINIMUM_STAKE_DELEGATION {
+        return Err(InstructionError::InsufficientFunds);
     }
 
     Ok(ValidatedSplitInfo {
