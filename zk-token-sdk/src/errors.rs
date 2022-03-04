@@ -4,7 +4,6 @@ use {
     thiserror::Error,
 };
 
-// TODO: clean up errors for encryption
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ProofError {
     #[error("proof generation failed")]
