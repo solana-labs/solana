@@ -312,6 +312,7 @@ pub fn process_set_validator_info(
     };
 
     let build_message = |lamports| {
+        let keys = keys.clone();
         if balance == 0 {
             println!(
                 "Publishing info for Validator {:?}",
@@ -326,7 +327,7 @@ pub fn process_set_validator_info(
             instructions.extend_from_slice(&[config_instruction::store(
                 &info_pubkey,
                 true,
-                keys.clone(),
+                keys,
                 &validator_info,
             )]);
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
@@ -339,7 +340,7 @@ pub fn process_set_validator_info(
             let instructions = vec![config_instruction::store(
                 &info_pubkey,
                 false,
-                keys.clone(),
+                keys,
                 &validator_info,
             )];
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
