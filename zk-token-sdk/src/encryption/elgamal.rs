@@ -590,12 +590,7 @@ mod tests {
         };
 
         assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ciphertext));
-        assert_eq!(
-            57_u64,
-            secret
-                .decrypt_u32(&ciphertext)
-                .unwrap()
-        );
+        assert_eq!(57_u64, secret.decrypt_u32(&ciphertext).unwrap());
     }
 
     #[test]

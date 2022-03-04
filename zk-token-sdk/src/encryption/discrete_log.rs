@@ -14,8 +14,6 @@ const TWO16: u64 = 65536; // 2^16
 #[allow(dead_code)]
 const TWO18: u64 = 262144; // 2^18
 
-
-
 /// Type that captures a discrete log challenge.
 ///
 /// The goal of discrete log is to find x such that x * generator = target.
@@ -71,13 +69,15 @@ impl DiscreteLog {
         let ristretto_iter = RistrettoIterator::new(self.target, -self.generator);
 
         let mut decoded = None;
-        ristretto_iter.zip(0..solution_bound).for_each(|(elem, x_lo)| {
-            let key = elem.compress().to_bytes();
-            if hashmap.0.contains_key(&key) {
-                let x_hi = hashmap.0[&key];
-                decoded = Some(x_lo + solution_bound * x_hi as u64);
-            }
-        });
+        ristretto_iter
+            .zip(0..solution_bound)
+            .for_each(|(elem, x_lo)| {
+                let key = elem.compress().to_bytes();
+                if hashmap.0.contains_key(&key) {
+                    let x_hi = hashmap.0[&key];
+                    decoded = Some(x_lo + solution_bound * x_hi as u64);
+                }
+            });
         decoded
     }
 }
