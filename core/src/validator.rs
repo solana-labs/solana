@@ -491,7 +491,7 @@ impl Validator {
 
         let (
             genesis_config,
-            mut bank_forks,
+            bank_forks,
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
@@ -522,7 +522,7 @@ impl Validator {
         let pending_accounts_package = PendingAccountsPackage::default();
         let last_full_snapshot_slot = process_blockstore(
             &blockstore,
-            &mut bank_forks,
+            &bank_forks,
             &leader_schedule_cache,
             &blockstore_process_options,
             transaction_status_sender.as_ref(),
@@ -535,7 +535,8 @@ impl Validator {
         let last_full_snapshot_slot =
             last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
 
-        maybe_warp_slot(config, ledger_path, &mut bank_forks, &leader_schedule_cache);
+        maybe_warp_slot(config, ledger_path, &bank_forks, &leader_schedule_cache);
+
         let tower = {
             let restored_tower = Tower::restore(config.tower_storage.as_ref(), &id);
             if let Ok(tower) = &restored_tower {
@@ -545,7 +546,13 @@ impl Validator {
                 });
             }
 
-            post_process_restored_tower(restored_tower, &id, vote_account, config, &bank_forks)
+            post_process_restored_tower(
+                restored_tower,
+                &id,
+                vote_account,
+                config,
+                &bank_forks.read().unwrap(),
+            )
         };
         info!("Tower state: {:?}", tower);
 
@@ -559,7 +566,6 @@ impl Validator {
         }
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let sample_performance_service =
             if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
@@ -1321,7 +1327,7 @@ fn load_blockstore(
     poh_timing_point_sender: Option<PohTimingSender>,
 ) -> (
     GenesisConfig,
-    BankForks,
+    Arc<RwLock<BankForks>>,
     Arc<Blockstore>,
     Receiver<bool>,
     CompletedSlotsReceiver,
@@ -1409,26 +1415,24 @@ fn load_blockstore(
             TransactionHistoryServices::default()
         };
 
-    let (
-        mut bank_forks,
-        mut leader_schedule_cache,
-        starting_snapshot_hashes,
-        pruned_banks_receiver,
-    ) = bank_forks_utils::load_bank_forks(
-        &genesis_config,
-        &blockstore,
-        config.account_paths.clone(),
-        config.account_shrink_paths.clone(),
-        config.snapshot_config.as_ref(),
-        &process_options,
-        transaction_history_services
-            .cache_block_meta_sender
-            .as_ref(),
-        accounts_update_notifier,
-    );
+    let (bank_forks, mut leader_schedule_cache, starting_snapshot_hashes, pruned_banks_receiver) =
+        bank_forks_utils::load_bank_forks(
+            &genesis_config,
+            &blockstore,
+            config.account_paths.clone(),
+            config.account_shrink_paths.clone(),
+            config.snapshot_config.as_ref(),
+            &process_options,
+            transaction_history_services
+                .cache_block_meta_sender
+                .as_ref(),
+            accounts_update_notifier,
+        );
 
     {
         let hard_forks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
             .working_bank()
             .hard_forks()
             .read()
@@ -1442,12 +1446,15 @@ fn load_blockstore(
     }
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
-    bank_forks.set_snapshot_config(config.snapshot_config.clone());
-    bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
-    if let Some(ref shrink_paths) = config.account_shrink_paths {
-        bank_forks
-            .working_bank()
-            .set_shrink_paths(shrink_paths.clone());
+    {
+        let mut bank_forks = bank_forks.write().unwrap();
+        bank_forks.set_snapshot_config(config.snapshot_config.clone());
+        bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
+        if let Some(ref shrink_paths) = config.account_shrink_paths {
+            bank_forks
+                .working_bank()
+                .set_shrink_paths(shrink_paths.clone());
+        }
     }
 
     (
@@ -1468,7 +1475,7 @@ fn load_blockstore(
 #[allow(clippy::too_many_arguments)]
 fn process_blockstore(
     blockstore: &Blockstore,
-    bank_forks: &mut BankForks,
+    bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     process_options: &blockstore_processor::ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -1502,7 +1509,7 @@ fn process_blockstore(
 fn maybe_warp_slot(
     config: &ValidatorConfig,
     ledger_path: &Path,
-    bank_forks: &mut BankForks,
+    bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
 ) {
     if let Some(warp_slot) = config.warp_slot {
@@ -1510,6 +1517,8 @@ fn maybe_warp_slot(
             error!("warp slot requires a snapshot config");
             abort();
         });
+
+        let mut bank_forks = bank_forks.write().unwrap();
 
         let working_bank = bank_forks.working_bank();
 
@@ -1523,8 +1532,9 @@ fn maybe_warp_slot(
         }
         info!("warping to slot {}", warp_slot);
 
+        let root_bank = bank_forks.root_bank();
         bank_forks.insert(Bank::warp_from_parent(
-            &bank_forks.root_bank(),
+            &root_bank,
             &Pubkey::default(),
             warp_slot,
         ));
