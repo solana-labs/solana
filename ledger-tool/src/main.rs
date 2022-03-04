@@ -729,7 +729,7 @@ fn load_bank_forks(
     blockstore: &Blockstore,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
-) -> Result<(BankForks, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
+) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
     let bank_snapshots_dir = blockstore
         .ledger_path()
         .join(if blockstore.is_primary_access() {
@@ -1812,7 +1812,15 @@ fn main() {
                             "{}",
                             compute_shred_version(
                                 &genesis_config.hash(),
-                                Some(&bank_forks.working_bank().hard_forks().read().unwrap())
+                                Some(
+                                    &bank_forks
+                                        .read()
+                                        .unwrap()
+                                        .working_bank()
+                                        .hard_forks()
+                                        .read()
+                                        .unwrap()
+                                )
                             )
                         );
                     }
@@ -1888,7 +1896,7 @@ fn main() {
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        println!("{}", &bank_forks.working_bank().hash());
+                        println!("{}", &bank_forks.read().unwrap().working_bank().hash());
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {:?}", err);
@@ -2143,7 +2151,7 @@ fn main() {
                     exit(1);
                 });
                 if print_accounts_stats {
-                    let working_bank = bank_forks.working_bank();
+                    let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank.print_accounts_stats();
                 }
                 exit_signal.store(true, Ordering::Relaxed);
@@ -2176,8 +2184,10 @@ fn main() {
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        let dot =
-                            graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
+                        let dot = graph_forks(
+                            &bank_forks.read().unwrap(),
+                            arg_matches.is_present("include_all_votes"),
+                        );
 
                         let extension = Path::new(&output_file).extension();
                         let result = if extension == Some(OsStr::new("pdf")) {
@@ -2295,6 +2305,8 @@ fn main() {
                 ) {
                     Ok((bank_forks, starting_snapshot_hashes)) => {
                         let mut bank = bank_forks
+                            .read()
+                            .unwrap()
                             .get(snapshot_slot)
                             .unwrap_or_else(|| {
                                 eprintln!("Error: Slot {} is not available", snapshot_slot);
@@ -2610,7 +2622,7 @@ fn main() {
                     exit(1);
                 });
 
-                let bank = bank_forks.working_bank();
+                let bank = bank_forks.read().unwrap().working_bank();
                 let mut measure = Measure::start("getting accounts");
                 let accounts: BTreeMap<_, _> = bank
                     .get_all_accounts_with_modified_slots()
@@ -2671,6 +2683,7 @@ fn main() {
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
+                        let bank_forks = bank_forks.read().unwrap();
                         let slot = bank_forks.working_bank().slot();
                         let bank = bank_forks.get(slot).unwrap_or_else(|| {
                             eprintln!("Error: Slot {} is not available", slot);
