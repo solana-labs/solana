@@ -1617,6 +1617,118 @@ mod tests {
     }
 
     #[test]
+    fn test_authorize_override() {
+        let authority_address = solana_sdk::pubkey::new_rand();
+        let mallory_address = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta::auto(&stake_address)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (authority_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // Authorize a staker pubkey and move the withdrawer key into cold storage.
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // Attack! The stake key (a hot key) is stolen and used to authorize a new staker.
+        instruction_accounts[0].is_signer = false;
+        instruction_accounts.push(AccountMeta {
+            pubkey: authority_address,
+            is_signer: true,
+            is_writable: false,
+        });
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                mallory_address,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // Verify the original staker no longer has access.
+        process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Verify the withdrawer (pulled from cold storage) can save the day.
+        instruction_accounts[0].is_signer = true;
+        instruction_accounts.pop();
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Withdrawer,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // Attack! Verify the staker cannot be used to authorize a withdraw.
+        instruction_accounts[0].is_signer = false;
+        instruction_accounts.push(AccountMeta {
+            pubkey: mallory_address,
+            is_signer: true,
+            is_writable: false,
+        });
+        process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Withdrawer,
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::MissingRequiredSignature),
+        );
+    }
+
+    #[test]
     fn test_stake_delegate() {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
