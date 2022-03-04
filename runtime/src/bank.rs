@@ -75,6 +75,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
+        accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::ComputeBudget,
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext, TransactionExecutor,
@@ -215,7 +216,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HdYCU65Jwfv9sF3C8k6ZmjUAaXSkJwazebuur21v8JtY")]
+#[frozen_abi(digest = "BQcJmh4VRCiNNtqjKPyphs9ULFbSUKGGfx6hz9SWBtqU")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -1220,7 +1221,7 @@ pub struct Bank {
 
     vote_only_bank: bool,
 
-    pub cost_tracker: RwLock<CostTracker>,
+    cost_tracker: RwLock<CostTracker>,
 
     sysvar_cache: RwLock<SysvarCache>,
 
@@ -1374,8 +1375,17 @@ impl Bank {
             fee_structure: FeeStructure::default(),
         };
 
-        let total_accounts_stats = bank.get_total_accounts_stats().unwrap();
-        bank.store_accounts_data_len(total_accounts_stats.data_len as u64);
+        let accounts_data_len = bank.get_total_accounts_stats().unwrap().data_len as u64;
+        if accounts_data_len != 0 {
+            bank.store_accounts_data_len(accounts_data_len);
+
+            let cost_tracker = CostTracker::new_with_account_data_size_limit(
+                bank.feature_set
+                    .is_active(&feature_set::cap_accounts_data_len::id())
+                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
+            );
+            *bank.write_cost_tracker().unwrap() = cost_tracker;
+        }
 
         bank
     }
@@ -1630,6 +1640,7 @@ impl Bank {
         let (feature_set, feature_set_time) =
             Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
 
+        let accounts_data_len = parent.load_accounts_data_len();
         let mut new = Bank {
             rc,
             src,
@@ -1682,7 +1693,7 @@ impl Bank {
             transaction_debug_keys,
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
-            feature_set,
+            feature_set: Arc::clone(&feature_set),
             drop_callback: RwLock::new(OptionalDropCallback(
                 parent
                     .drop_callback
@@ -1693,9 +1704,13 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
-            cost_tracker: RwLock::new(CostTracker::default()),
+            cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
+                feature_set
+                    .is_active(&feature_set::cap_accounts_data_len::id())
+                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
+            )),
             sysvar_cache: RwLock::new(SysvarCache::default()),
-            accounts_data_len: AtomicU64::new(parent.load_accounts_data_len()),
+            accounts_data_len: AtomicU64::new(accounts_data_len),
             fee_structure: parent.fee_structure.clone(),
         };
 
@@ -1926,6 +1941,7 @@ impl Bank {
         fn new<T: Default>() -> T {
             T::default()
         }
+        let feature_set = new();
         let mut bank = Self {
             rc: bank_rc,
             src: new(),
@@ -1978,11 +1994,15 @@ impl Bank {
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
-            feature_set: new(),
+            feature_set: Arc::clone(&feature_set),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
-            cost_tracker: RwLock::new(CostTracker::default()),
+            cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
+                feature_set
+                    .is_active(&feature_set::cap_accounts_data_len::id())
+                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
+            )),
             sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_len: AtomicU64::new(accounts_data_len),
             fee_structure: FeeStructure::default(),
@@ -3971,7 +3991,7 @@ impl Bank {
                 Err(TransactionError::WouldExceedMaxBlockCostLimit)
                 | Err(TransactionError::WouldExceedMaxVoteCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => Some(index),
+                | Err(TransactionError::WouldExceedAccountDataBlockLimit) => Some(index),
                 Err(_) => None,
                 Ok(_) => None,
             })

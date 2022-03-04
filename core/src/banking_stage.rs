@@ -46,6 +46,7 @@ use {
         feature_set,
         message::Message,
         pubkey::Pubkey,
+        saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
         transaction::{
             self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
@@ -325,11 +326,26 @@ impl BankingStageStats {
 }
 
 #[derive(Debug, Default)]
+pub struct BatchedTransactionDetails {
+    pub costs: BatchedTransactionCostDetails,
+    pub errors: BatchedTransactionErrorDetails,
+}
+
+#[derive(Debug, Default)]
 pub struct BatchedTransactionCostDetails {
     pub batched_signature_cost: u64,
     pub batched_write_lock_cost: u64,
     pub batched_data_bytes_cost: u64,
     pub batched_execute_cost: u64,
+}
+
+#[derive(Debug, Default)]
+pub struct BatchedTransactionErrorDetails {
+    pub batched_retried_txs_per_block_limit_count: u64,
+    pub batched_retried_txs_per_vote_limit_count: u64,
+    pub batched_retried_txs_per_account_limit_count: u64,
+    pub batched_retried_txs_per_account_data_block_limit_count: u64,
+    pub batched_dropped_txs_per_account_data_total_limit_count: u64,
 }
 
 #[derive(Debug, Default)]
@@ -1415,27 +1431,74 @@ impl BankingStage {
     fn accumulate_batched_transaction_costs<'a>(
         transactions_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
-    ) -> BatchedTransactionCostDetails {
-        let mut cost_details = BatchedTransactionCostDetails::default();
+    ) -> BatchedTransactionDetails {
+        let mut batched_transaction_details = BatchedTransactionDetails::default();
         transactions_costs
             .zip(transaction_results)
-            .for_each(|(cost, result)| {
-                if result.is_ok() {
-                    cost_details.batched_signature_cost = cost_details
-                        .batched_signature_cost
-                        .saturating_add(cost.signature_cost);
-                    cost_details.batched_write_lock_cost = cost_details
-                        .batched_write_lock_cost
-                        .saturating_add(cost.write_lock_cost);
-                    cost_details.batched_data_bytes_cost = cost_details
-                        .batched_data_bytes_cost
-                        .saturating_add(cost.data_bytes_cost);
-                    cost_details.batched_execute_cost = cost_details
-                        .batched_execute_cost
-                        .saturating_add(cost.execution_cost);
+            .for_each(|(cost, result)| match result {
+                Ok(_) => {
+                    saturating_add_assign!(
+                        batched_transaction_details.costs.batched_signature_cost,
+                        cost.signature_cost
+                    );
+                    saturating_add_assign!(
+                        batched_transaction_details.costs.batched_write_lock_cost,
+                        cost.write_lock_cost
+                    );
+                    saturating_add_assign!(
+                        batched_transaction_details.costs.batched_data_bytes_cost,
+                        cost.data_bytes_cost
+                    );
+                    saturating_add_assign!(
+                        batched_transaction_details.costs.batched_execute_cost,
+                        cost.execution_cost
+                    );
                 }
+                Err(transaction_error) => match transaction_error {
+                    TransactionError::WouldExceedMaxBlockCostLimit => {
+                        saturating_add_assign!(
+                            batched_transaction_details
+                                .errors
+                                .batched_retried_txs_per_block_limit_count,
+                            1
+                        );
+                    }
+                    TransactionError::WouldExceedMaxVoteCostLimit => {
+                        saturating_add_assign!(
+                            batched_transaction_details
+                                .errors
+                                .batched_retried_txs_per_vote_limit_count,
+                            1
+                        );
+                    }
+                    TransactionError::WouldExceedMaxAccountCostLimit => {
+                        saturating_add_assign!(
+                            batched_transaction_details
+                                .errors
+                                .batched_retried_txs_per_account_limit_count,
+                            1
+                        );
+                    }
+                    TransactionError::WouldExceedAccountDataBlockLimit => {
+                        saturating_add_assign!(
+                            batched_transaction_details
+                                .errors
+                                .batched_retried_txs_per_account_data_block_limit_count,
+                            1
+                        );
+                    }
+                    TransactionError::WouldExceedAccountDataTotalLimit => {
+                        saturating_add_assign!(
+                            batched_transaction_details
+                                .errors
+                                .batched_dropped_txs_per_account_data_total_limit_count,
+                            1
+                        );
+                    }
+                    _ => {}
+                },
             });
-        cost_details
+        batched_transaction_details
     }
 
     fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
@@ -4197,12 +4260,24 @@ mod tests {
         let expected_write_locks = 7;
         let expected_data_bytes = 9;
         let expected_executions = 30;
-        let cost_details =
+        let batched_transaction_details =
             BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
-        assert_eq!(expected_signatures, cost_details.batched_signature_cost);
-        assert_eq!(expected_write_locks, cost_details.batched_write_lock_cost);
-        assert_eq!(expected_data_bytes, cost_details.batched_data_bytes_cost);
-        assert_eq!(expected_executions, cost_details.batched_execute_cost);
+        assert_eq!(
+            expected_signatures,
+            batched_transaction_details.costs.batched_signature_cost
+        );
+        assert_eq!(
+            expected_write_locks,
+            batched_transaction_details.costs.batched_write_lock_cost
+        );
+        assert_eq!(
+            expected_data_bytes,
+            batched_transaction_details.costs.batched_data_bytes_cost
+        );
+        assert_eq!(
+            expected_executions,
+            batched_transaction_details.costs.batched_execute_cost
+        );
     }
 
     #[test]
