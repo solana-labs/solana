@@ -45,8 +45,10 @@ impl AsyncClient for BankClient {
         Ok(signature)
     }
 
-    fn async_send_batch(&self, _transactions: Vec<Transaction>) -> Result<()> {
-        //todo: implement
+    fn async_send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
+        for t in transactions {
+            self.async_send_transaction(t)?;
+        }
         Ok(())
     }
 
