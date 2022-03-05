@@ -45,11 +45,14 @@ export function GenericAnchorDetailsCard(props: {
       }
 
       // e.g. voter_stake_registry -> voter stake registry
-      const programName = idl!.name.replaceAll("_", " ").trim();
+      const programName = idl.name.replaceAll("_", " ").trim();
       setProgramName(programName);
 
-      const coder = new BorshInstructionCoder(idl!);
-      const decodedIx = coder.decode(ix.data)!;
+      const coder = new BorshInstructionCoder(idl);
+      const decodedIx = coder.decode(ix.data);
+      if (!decodedIx) {
+        return;
+      }
 
       // get ix title
       setIxTitle(decodedIx.name);
@@ -90,7 +93,7 @@ export function GenericAnchorDetailsCard(props: {
           <tr>
             <td>
               <div className="me-2 d-md-inline">
-                {keyIndex + 1}) {snakeCase(ixAccounts![keyIndex].name)}
+                {keyIndex + 1}) {snakeCase(ixAccounts[keyIndex].name)}
               </div>
               {am.isWritable && (
                 <span className="badge bg-info-soft me-1">Writable</span>
