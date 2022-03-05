@@ -143,7 +143,7 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, timings, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
@@ -199,7 +199,6 @@ fn load_from_snapshot(
             cache_block_meta_sender,
             Some(snapshot_config),
             accounts_package_sender,
-            timings,
             full_snapshot_archive_info.slot(),
         ),
         Some(starting_snapshot_hashes),

@@ -31,7 +31,7 @@ use {
         cost_model::CostModel,
         snapshot_config::SnapshotConfig,
         snapshot_package::{AccountsPackageSender, SnapshotType},
-        snapshot_utils::{self, BankFromArchiveTimings},
+        snapshot_utils,
         transaction_batch::TransactionBatch,
         transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccount,
@@ -610,7 +610,6 @@ pub fn process_blockstore(
         cache_block_meta_sender,
         snapshot_config,
         accounts_package_sender,
-        BankFromArchiveTimings::default(),
         None,
     )
 }
@@ -626,7 +625,6 @@ pub(crate) fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
-    timings: BankFromArchiveTimings,
     last_full_snapshot_slot: Slot,
 ) -> BlockstoreProcessorResult {
     do_process_blockstore_from_root(
@@ -638,7 +636,6 @@ pub(crate) fn process_blockstore_from_root(
         cache_block_meta_sender,
         snapshot_config,
         accounts_package_sender,
-        timings,
         Some(last_full_snapshot_slot),
     )
 }
@@ -653,7 +650,6 @@ fn do_process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
-    timings: BankFromArchiveTimings,
     mut last_full_snapshot_slot: Option<Slot>,
 ) -> BlockstoreProcessorResult {
     // Starting slot must be a root, and thus has no parents
@@ -754,26 +750,6 @@ fn do_process_blockstore_from_root(
         ("slot", bank_forks.root(), i64),
         ("forks", bank_forks.banks().len(), i64),
         ("calculate_capitalization_us", time_cap.as_us(), i64),
-        (
-            "full_snapshot_untar_us",
-            timings.full_snapshot_untar_us,
-            i64
-        ),
-        (
-            "incremental_snapshot_untar_us",
-            timings.incremental_snapshot_untar_us,
-            i64
-        ),
-        (
-            "rebuild_bank_from_snapshots_us",
-            timings.rebuild_bank_from_snapshots_us,
-            i64
-        ),
-        (
-            "verify_snapshot_bank_us",
-            timings.verify_snapshot_bank_us,
-            i64
-        ),
     );
 
     info!("ledger processing timing: {:?}", timing);
@@ -3194,7 +3170,6 @@ pub mod tests {
             None,
             None,
             accounts_package_sender,
-            BankFromArchiveTimings::default(),
             None,
         )
         .unwrap();
@@ -3304,7 +3279,6 @@ pub mod tests {
             None,
             Some(&snapshot_config),
             accounts_package_sender.clone(),
-            BankFromArchiveTimings::default(),
             None,
         )
         .unwrap();
