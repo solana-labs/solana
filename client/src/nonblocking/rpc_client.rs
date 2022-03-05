@@ -142,12 +142,12 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    /// Create an `RpcClient` from an [`RpcSender`] and an [`RpcClientConfig`].
+    /// Create an `RpcClient` from an `RpcSender` and an [`RpcClientConfig`].
     ///
     /// This is the basic constructor, allowing construction with any type of
     /// `RpcSender`. Most applications should use one of the other constructors,
-    /// such as [`new`] and [`new_mock`], which create an `RpcClient`
-    /// encapsulating an [`HttpSender`] and [`MockSender`] respectively.
+    /// such as [`RpcClient::new`], [`RpcClient::new_with_commitment`] or
+    /// [`RpcClient::new_with_timeout`].
     pub fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
         config: RpcClientConfig,
@@ -314,9 +314,6 @@ impl RpcClient {
 
     /// Create a mock `RpcClient`.
     ///
-    /// See the [`MockSender`] documentation for an explanation of
-    /// how it treats the `url` argument.
-    ///
     /// # Examples
     ///
     /// ```
@@ -340,9 +337,6 @@ impl RpcClient {
     }
 
     /// Create a mock `RpcClient`.
-    ///
-    /// See the [`MockSender`] documentation for an explanation of how it treats
-    /// the `url` argument.
     ///
     /// # Examples
     ///
