@@ -2,13 +2,13 @@
 //!
 //! All Solana Rust programs that run on-chain will link to this crate, which
 //! acts as a standard library for Solana programs. Solana programs also link to
-//! the [Rust standard library][std], though it is [modified][hm] for the
+//! the [Rust standard library][std], though it is [modified][sstd] for the
 //! Solana runtime environment. While off-chain programs that interact with the
 //! Solana network _can_ link to this crate, they typically instead use the
 //! [`solana-sdk`] crate, which reexports all modules from `solana-program`.
 //!
 //! [std]: https://doc.rust-lang.org/stable/std/
-//! [hm]: #limitations-to-the-solana-version-of-the-rust-standard-library
+//! [sstd]: https://docs.solana.com/developing/on-chain-programs/developing-rust#restrictions
 //! [`solana-sdk`]: https://docs.rs/solana-sdk/latest/solana_sdk/
 //!
 //! This library defines
@@ -29,7 +29,6 @@
 //! [np]: #native-programs
 //! [cpi]: #cross-program-instruction-execution
 //! [sysvar]: #sysvars
-//! [spec]: #other-special-accounts
 //!
 //! Idiomatic examples of `solana-program` usage can be found in
 //! [the Solana Program Library][spl].
@@ -50,12 +49,11 @@
 //!   by the Solana runtime.
 //! - They run in a constrained VM environment, and while they do have access to
 //!   the [Rust standard library][std], many features of the standard library,
-//!   particularly related to I/O, will fail at runtime, will silently do
-//!   nothing, or are not defined. See _[limitiations of the Solana version of
-//!   the Rust standard library][sstd]_.
+//!   particularly related to OS services, will fail at runtime, will silently
+//!   do nothing, or are not defined. See the [restrictions to the Rust standard
+//!   library][sstd] in the Solana documentation for more.
 //!
 //! [std]: https://doc.rust-lang.org/std/index.html
-//! [sstd]: #limitations-to-the-solana-version-of-the-rust-standard-library
 //! ["cdylib"]: https://doc.rust-lang.org/reference/linkage.html
 //!
 //! Because multiple crates that are linked together cannot all define
@@ -148,35 +146,45 @@
 //! well-reflected in the documentation.
 //!
 //! For a more complete description of Solana's implementation of eBPF and its
-//! limitations, see the main Solana documentation on [on-chain programs][ocp].
+//! limitations, see the main Solana documentation for [on-chain programs][ocp].
 //!
 //! [ocp]: https://docs.solana.com/developing/on-chain-programs/overview
 //!
 //! # Core data types
 //!
-//! - [`Pubkey`] - An [ed25519] public key. All Solana accounts are identified
-//!   by a `Pubkey`, though some may not have corresponding private keys. As
-//!   Solana programs do not handle secret keys, the full [`Keypair`] is not
-//!   defined in `solana-program` but in `solana-sdk`.
-//! - [`Hash`] - A [SHA-256] hash, used to uniquely identify blocks.
-//! - [`AccountInfo`] - A description of a single Solana account. All accounts
+//! - [`Pubkey`] &mdash; The address of a [Solana account][acc]. Some account
+//!   addresses are [ed25519] public keys, with corresponding secret keys that
+//!   are managed off-chain. Often though account addresses do not have
+//!   corresponding secret keys, as with [_program derived addresses_][pdas], or
+//!   the secret key is not relevant to the operation of a program, and may have
+//!   even been disposed of. As running Solana programs can not safely create or
+//!   manage secret keys, the full [`Keypair`] is not defined in
+//!   `solana-program` but in `solana-sdk`.
+//! - [`Hash`] &mdash; A [SHA-256] hash. Used to uniquely identify blocks, and
+//!   also for general purpose hashing.
+//! - [`AccountInfo`] &mdash; A description of a single Solana account. All accounts
 //!   that might be accessed by a program invocation are provided to the program
 //!   entrypoint as `AccountInfo`.
-//! - [`Instruction`] - A directive telling the runtime to execute a program,
+//! - [`Instruction`] &mdash; A directive telling the runtime to execute a program,
 //!   passing it a set of accounts and program-specific data.
-//! - [`ProgramError`] and [`ProgramResult`] - The error type that all programs
+//! - [`ProgramError`] and [`ProgramResult`] &mdash; The error type that all programs
 //!   must return, reported to the runtime as a `u64`.
+//! - [`Sol`] &mdash; The Solana native token type, with conversions to and from
+//!   [_lamports_], the smallest fractional unit of SOL, in the [`native_token`]
+//!   module.
 //!
+//! [acc]: https://docs.solana.com/developing/programming-model/accounts
 //! [`Pubkey`]: pubkey::Pubkey
 //! [`Hash`]: hash::Hash
 //! [`Instruction`]: instruction::Instruction
 //! [`AccountInfo`]: account_info::AccountInfo
 //! [`ProgramError`]: program_error::ProgramError
 //! [`ProgramResult`]: entrypoint::ProgramResult
-//!
 //! [ed25519]: https://ed25519.cr.yp.to/
 //! [`Keypair`]: https://docs.rs/solana-sdk/latest/solana_sdk/signer/keypair/struct.Keypair.html
 //! [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
+//! [`Sol`]: native_token::Sol
+//! [_lamports_]: https://docs.solana.com/introduction#what-are-sols
 //!
 //! # Serialization
 //!
@@ -184,9 +192,12 @@
 //! serialization formats are used, and `solana-program` provides access to
 //! those needed by programs.
 //!
-//! In user-written Solana program code, serialization is primarily used for accessing
-//! [`AccountInfo`] data and [`Instruction`] data, both of which are program-specific
-//! binary data, the format up to the author.
+//! In user-written Solana program code, serialization is primarily used for
+//! accessing [`AccountInfo`] data and [`Instruction`] data, both of which are
+//! program-specific binary data. Every program is free to decide their own
+//! serialization format, but data recieved from other sources &mdash;
+//! [sysvars][sysvar] for example &mdash; must be deserialized using the methods
+//! indicated by the documentation for that data or data type.
 //!
 //! [`AccountInfo`]: account_info::AccountInfo
 //! [`Instruction`]: instruction::Instruction
@@ -203,7 +214,8 @@
 //!   utilities in its [`borsh` module][borshmod] that are not available in the
 //!   `borsh` library.
 //!
-//!   The `Instruction` type has built-in support for borsh.
+//!   The [`Instruction::new_with_borsh`] function creates an `Instruction` by
+//!   serializing a value with borsh.
 //!
 //!   [Borsh]: https://borsh.io/
 //!   [NEAR]: https://near.org/
@@ -211,20 +223,24 @@
 //!   [bjs]: https://github.com/near/borsh-js
 //!   [`borsh`]: https://docs.rs/borsh
 //!   [borshmod]: crate::borsh
+//!   [`Instruction::new_with_borsh`]: instruction::Instruction::new_with_borsh
 //!
 //! - __[Bincode]__, a compact serialization format that implements the [Serde]
 //!   Rust APIs. As it does not have a specification nor a JavaScript
-//!   implementation, it is not recommend for new code.
+//!   implementation, and uses more CPU than borsh, it is not recommend for new
+//!   code.
 //!
 //!   Many system program and native program instructions are serialized with
 //!   bincode, and it is used for other purposes in the runtime. In these cases
 //!   Rust programmers are generally not directly exposed to the encoding format
 //!   as it is hidden behind APIs.
 //!
-//!   The `Instruction` type has built-in support for bincode.
+//!   The [`Instruction::new_with_bincode`] function creates an `Instruction` by
+//!   serializing a value with bincode.
 //!
 //!   [Bincode]: https://docs.rs/bincode
 //!   [Serde]: https://serde.rs/
+//!   [`Instruction::new_with_bincode`]: instruction::Instruction::new_with_bincode
 //!
 //! - __[`Pack`]__, a Solana-specific serialization API that is used by many
 //!   older programs in the [Solana Program Library][spl] to define their
@@ -233,6 +249,14 @@
 //!   for new code.
 //!
 //!   [`Pack`]: program_pack::Pack
+//!
+//! Developers should carefully consider the CPU cost of serialization, balanced
+//! against the need for correctness and ease of use: off-the-shelf
+//! serialization formats tend to be more expensive than carefully hand-written
+//! application-specific formats; but application-specific formats are more
+//! difficult to ensure the correctness of, and to provide multi-language
+//! implementations for. It is not uncommon for programs to pack and unpack
+//! their data with hand-written code.
 //!
 //! # Cross-program instruction execution
 //!
@@ -373,135 +397,118 @@
 //!
 //! [np2]: https://docs.solana.com/developing/runtime-facilities/programs
 //!
-//! Native programs are divided into several categories:
+//! Some native programs can be [invoked][cpi] by other programs, but some can
+//! only be executed as "top-level" instructions included by off-chain clients
+//! in a [`Transaction`].
 //!
-//! __Built-ins__ act just like other Solana programs, in that they can
-//! be [invoked] from within Solana programs or from within [transactions]
-//! submitted by clients. They implement fundamental operations that require
-//! direct access to the runtime.
+//! [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
 //!
-//! [invoked]: #cross-program-instruction-execution
-//! [transactions]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/index.html
-//!
-//! __Special built-ins__ include a few programs that are defined like built-ins,
-//! but do not work when invoked from another program, instead only functioning
-//! when submitted as part of a transaction. The exact behavior when invoked
-//! from another program depends on the built-in.
-//!
-//! __Precompiles__ are extremely compute-intensive operations. These can not be
-//! invoked by other programs, and can only be executed as instructions within
-//! transactions submitted by clients. Precompile instructions may be
-//! batch-executed in parallel with other precompiles prior to execution of
-//! other instructions. Invoking a precompile from another program will return
-//! an error.
-//!
-//! __Program loaders__ are responsible for loading and executing Solana programs.
-//! There may be multiple program loaders. Today the only program loaders are
-//! for [eBPF] programs. When an executable program's ownership is assigned to a
-//! particular program loader then that loader will be used to run the program.
-//! Program loaders are typically invoked by the CLI `solana deploy` command,
-//! to deploy programs, and by the runtime to execute programs. Invoking a
-//! program loader from another program will return an error.
-//!
-//! This crate defines the program IDs for most native programs: even though
+//! This crate defines the program IDs for most native programs. Even though
 //! some native programs cannot be invoked by other programs, a Solana program
-//! may need to verify that certain accounts represent those native programs,
-//! e.g. when verifying that the ed25519 precompile verified a signature.
+//! may need access to their program IDs. For example, a program may need to
+//! verify that an ed25519 signature verification instruction was included in
+//! the same transaction as its own instruction. For many native programs, this
+//! crate also defines enums that represent the instructions they process, and
+//! constructors for building the instructions.
 //!
-//! For many built-ins, this crate also defines enums that represent the
-//! instructions they process, and constructors for building the instructions.
-//! Some built-ins' instructions and constructors, though technically callable
-//! from Solana programs, are not defined somewhere accessible to Solana
-//! programs. This is a historical artifact due to lack of use cases for
-//! invocation from other programs.
-//!
-//! Locations of program IDs and instruction constructors are noted in the lists
-//! below.
+//! Locations of program IDs and instruction constructors are noted in the list
+//! below, as well as whether they are invokable by other programs.
 //!
 //! While some native programs have been active since the genesis block, others
-//! are activated dynamically after a specific slot, and some are not yet
+//! are activated dynamically after a specific [slot], and some are not yet
 //! active. This documentation does not distinguish which native programs are
-//! actually active on any particular network. The `solana feature status` CLI
-//! command can help in determining active features.
+//! active on any particular network. The `solana feature status` CLI command
+//! can help in determining active features.
 //!
-//! The native programs are:
+//! [slot]: https://docs.solana.com/terminology#slot
 //!
-//! ## Built-ins
+//! Native programs important to Solana program authors include:
 //!
 //! - __System Program__: Creates new accounts, allocates account data, assigns
 //!   accounts to owning programs, transfers lamports from System Program owned
 //!   accounts and pays transaction fees.
 //!   - ID: [`solana_program::system_program`]
 //!   - Instruction: [`solana_program::system_instruction`]
-//!
-//! - __Stake Program__: Creates and manages accounts representing stake and
-//!   rewards for delegations to validators.
-//!   - ID: [`solana_program::stake::program`]
-//!   - Instruction: [`solana_program::stake::instruction`]
-//!
-//! - __Vote Program__: Creates and manage accounts that track validator voting
-//!   state and rewards.
-//!   - ID: [`solana_program::vote::program`]
-//!   - Instruction: [`solana_vote_program::vote_instruction`](https://docs.rs/solana-vote-program/latest/solana_vote_program/vote_instruction/index.html)
-//!
-//! - __Config Program__: Adds configuration data to the chain and the list of
-//!   public keys that are permitted to modify it.
-//!   - ID: [`solana_program::config::program`]
-//!   - Instruction: [`solana_config_program::config_instruction`](https://docs.rs/solana-config-program/latest/solana_config_program/config_instruction/index.html)
-//!
-//! - __Address Lookup Table Program__: Support for [on-chain address lookup tables][lut].
-//!   - ID: [`solana_address_lookup_table_program`](https://docs.rs/solana-address-lookup-table-program/latest/solana_address_lookup_table_program/)
-//!   - Instruction: [`solana_address_lookup_table_program::instruction`](https://docs.rs/solana-address-lookup-table-program/latest/solana_address_lookup_table_program/instruction/index.html)
-//!
-//! [lut]: https://docs.solana.com/proposals/transactions-v2
-//!
-//! ## Special built-ins
+//!   - Invokable by programs? yes
 //!
 //! - __Compute Budget Program__: Requests additional CPU or memory resources
 //!   for a transaction. This program does nothing when called from another
 //!   program.
 //!   - ID: [`solana_sdk::compute_budget`](https://docs.rs/solana-sdk/latest/solana_sdk/compute_budget/index.html)
 //!   - Instruction: [`solana_sdk::compute_budget`](https://docs.rs/solana-sdk/latest/solana_sdk/compute_budget/index.html)
+//!   - Invokable by programs? no
 //!
-//! ## Precompiles
+//! - __Address Lookup Table Program__: Support for [on-chain address lookup tables][lut].
+//!   - ID: [`solana_address_lookup_table_program`](https://docs.rs/solana-address-lookup-table-program/latest/solana_address_lookup_table_program/)
+//!   - Instruction: [`solana_address_lookup_table_program::instruction`](https://docs.rs/solana-address-lookup-table-program/latest/solana_address_lookup_table_program/instruction/index.html)
+//!   - Invokable by programs? yes
 //!
 //! - __ed25519 Program__: Verifies an ed25519 signature.
 //!   - ID: [`solana_program::ed25519_program`]
 //!   - Instruction: [`solana_sdk::ed25519_instruction`](https://docs.rs/solana-sdk/latest/solana_sdk/ed25519_instruction/index.html)
+//!   - Invokable by programs? no
 //!
 //! - __secp256k1 Program__: Verifies secp256k1 public key recovery operations.
 //!   - ID: [`solana_program::secp256k1_program`]
 //!   - Instruction: [`solana_sdk::secp256k1_instruction`](https://docs.rs/solana-sdk/latest/solana_sdk/secp256k1_instruction/index.html)
-//!
-//! ## Program loaders
+//!   - Invokable by programs? no
 //!
 //! - __BPF Loader__: Deploys, and executes immutable programs on the chain.
 //!   - ID: [`solana_program::bpf_loader`]
 //!   - Instruction: [`solana_program::loader_instruction`]
+//!   - Invokable by programs? yes
 //!
 //! - __Upgradable BPF Loader__: Deploys, upgrades, and executes upgradable
 //!   programs on the chain.
 //!   - ID: [`solana_program::bpf_loader_upgradeable`]
 //!   - Instruction: [`solana_program::loader_upgradeable_instruction`]
+//!   - Invokable by programs? yes
 //!
 //! - __Deprecated BPF Loader__: Deploys, and executes immutable programs on the
 //!   chain.
 //!   - ID: [`solana_program::bpf_loader_deprecated`]
 //!   - Instruction: [`solana_program::loader_instruction`]
+//!   - Invokable by programs? yes
+//!
+//! [lut]: https://docs.solana.com/proposals/transactions-v2
 //!
 //! # Sysvars
 //!
-//! Sysvars are special accounts that contain dynamically updating data about
+//! Sysvars are special accounts that contain dynamically-updating data about
 //! the network cluster, the blockchain history, and the executing transaction.
 //!
-//! The program IDs and deserializers for sysvars are defined in the [`sysvar`]
-//! module, and simple sysvars implement the [`Sysvar`] trait. Since to a Solana
-//! program sysvars are just accounts, if the `AccountInfo` is provided to the
+//! The program IDs for sysvars are defined in the [`sysvar`] module, and simple
+//! sysvars implement the [`Sysvar::get`] method, which loads a sysvar directly
+//! from the runtime, as in this example that logs the `clock` sysvar:
+//!
+//! [`Sysvar::get`]: sysvar::Sysvar::get
+//!
+//! ```
+//! use solana_program::{
+//!     account_info::AccountInfo,
+//!     clock,
+//!     entrypoint::ProgramResult,
+//!     msg,
+//!     pubkey::Pubkey,
+//!     sysvar::Sysvar,
+//! };
+//!
+//! fn process_instruction(
+//!     program_id: &Pubkey,
+//!     accounts: &[AccountInfo],
+//!     instruction_data: &[u8],
+//! ) -> ProgramResult {
+//!     let clock = clock::Clock::get()?;
+//!     msg!("clock: {:#?}", clock);
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Since Solana sysvars are accounts, if the `AccountInfo` is provided to the
 //! program, then the program can deserialize the sysvar with
 //! [`Sysvar::from_account_info`] to access its data, as in this example that
-//! logs the [`clock`][clk] sysvar.
+//! again logs the [`clock`][clk] sysvar.
 //!
-//! [`Sysvar`]: sysvar::Sysvar
 //! [`Sysvar::from_account_info`]: sysvar::Sysvar::from_account_info
 //! [clk]: sysvar::clock
 //!
@@ -528,33 +535,13 @@
 //! }
 //! ```
 //!
-//! As an optimization, to avoid including sysvar accounts in instructions and deserializing them
-//! in the program, some sysvars implement [`Sysvar::get`], which loads
-//! a deserialized sysvar directly from the runtime, as in this
-//! example, again using the `clock` sysvar:
-//!
-//! [`Sysvar::get`]: sysvar::Sysvar::get
-//!
-//! ```
-//! use solana_program::{
-//!     account_info::AccountInfo,
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
-//!
-//! fn process_instruction(
-//!     program_id: &Pubkey,
-//!     accounts: &[AccountInfo],
-//!     instruction_data: &[u8],
-//! ) -> ProgramResult {
-//!     let clock = clock::Clock::get()?;
-//!     msg!("clock: {:#?}", clock);
-//!     Ok(())
-//! }
-//! ```
+//! When possible, programs should prefer to call `Sysvar::get` instead of
+//! deserializing with `Sysvar::from_account_info`, as the latter imposes extra
+//! overhead of deserialization while also requiring the sysvar account address
+//! be passed to the program, wasting the limited space available to
+//! transactions. Deserializing sysvars that can instead be retrieved with
+//! `Sysvar::get` should be only be considered for compatibility with older
+//! programs that pass around sysvar accounts.
 //!
 //! Some sysvars are too large to deserialize within a program, and
 //! `Sysvar::from_account_info` returns an error. Some sysvars are too large
@@ -567,83 +554,6 @@
 //! For more details see the Solana [documentation on sysvars][sysvardoc].
 //!
 //! [sysvardoc]: https://docs.solana.com/developing/runtime-facilities/sysvars
-//!
-//! # Limitations to the Solana version of the Rust standard library
-//!
-//! Solana programs, and the `solana-program` crate, are linked to the [Rust
-//! standard library][std], which allows Solana programs greater compatibility
-//! with the Rust crate ecosystem than would be possible if Solana programs only
-//! had access to the [Rust core library][core]. The Solana version of the
-//! standard library though is heavily modified in [Solana's Rust fork][fork].
-//! Some APIs are re-defined to be non-functional, and some are removed
-//! completely. The following is a partial list of Solana modifications to `std`.
-//!
-//! [std]: https://doc.rust-lang.org/stable/std/
-//! [core]: https://doc.rust-lang.org/stable/core/
-//! [fork]: https://github.com/solana-labs/rust
-//!
-//! - Standard I/O functions partially work:
-//!   - [`Stdin`] has no inherent methods and its implementation of [`Read`] always
-//!     successfully reads no bytes.
-//!   - [`Stdout`] has no inherent methods and its [`Write`] implementation writes
-//!     to the Solana program log. Users should use the [`msg!`] macro instead.
-//!   - [`Stderr`] has no inherent methods and its [`Write`] implementation writes
-//!     to the Solana program log. Users should use the [`msg!`] macro instead.
-//! - [`HashMap`] works but is not seeded with a random number and will produce
-//!   deterministic access patterns.
-//! - All file and networking operations return an error.
-//! - Most functions in [`std::env`] either panic, return an error, or return `None`.
-//! - Most functions in [`std::process`] either panic, return an error, or return `None`.
-//! - [`std::process::exit`] aborts &mdash; to exit successfully a Solana program
-//!   must return 0 from its initial stack frame.
-//! - Most functions in [`std::thread`] either panic, return an error, or return `None`.
-//! - Synchronization types like [`Mutex`] and [`RwLock`] work, though Solana
-//!   programs are single-threaded. Likewise for [atomics]. These types are only
-//!   required for compatibility with other Rust crates.
-//! - Waiting on an [`Condvar`] panics.
-//! - The following functions are not defined:
-//!   - [`std::alloc::set_alloc_error_hook`]
-//!   - [`std::alloc::take_alloc_error_hook`]
-//! - [`std::backtrace`] is not defined
-//! - [`std::error::Error::backtrace`] is not defined.
-//! - The BPF target does not support mutable static storage, so features
-//!   typically used for mutating statics will not work in that context,
-//!   including [`std::sync::atomic`], [`Lazy`] and [`OnceCell`]. Attempting to mutate
-//!   static storage will result in an executable that cannot be deployed.
-//! - [`std::panic::set_hook`] is a no-op. Custom panic handling in Solana
-//!   uses the [`custom_panic_default!`] macro.
-//! - The Solana runtime does not support thread local storage and using the
-//!   [`thread_local!`] macro will result in an executable that cannot be
-//!   deployed.
-//! - The Solana runtime does not support traditional notions of time:
-//!   - [`Instant::now`] always returns the zero instant.
-//!   - [`SystemTime::now`] panics.
-//!
-//! [`Stdin`]: https://doc.rust-lang.org/std/io/struct.Stdin.html
-//! [`Stdout`]: https://doc.rust-lang.org/std/io/struct.Stdout.html
-//! [`Stderr`]: https://doc.rust-lang.org/std/io/struct.Stderr.html
-//! [`Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
-//! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
-//! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-//! [`std::env`]: https://doc.rust-lang.org/std/env/index.html
-//! [`std::process`]: https://doc.rust-lang.org/std/process/index.html
-//! [`std::process::exit`]: https://doc.rust-lang.org/std/process/fn.exit.html
-//! [`std::thread`]: https://doc.rust-lang.org/std/thread/index.html
-//! [`Mutex`]: https://doc.rust-lang.org/std/sync/struct.Mutex.html
-//! [`RwLock`]: https://doc.rust-lang.org/std/sync/struct.RwLock.html
-//! [atomics]: https://doc.rust-lang.org/std/sync/atomic/index.html
-//! [`Condvar`]: https://doc.rust-lang.org/std/sync/struct.Condvar.html
-//! [`std::alloc::set_alloc_error_hook`]: https://doc.rust-lang.org/std/alloc/fn.set_alloc_error_hook.html
-//! [`std::alloc::take_alloc_error_hook`]: https://doc.rust-lang.org/std/alloc/fn.take_alloc_error_hook.html
-//! [`std::backtrace`]: https://doc.rust-lang.org/std/backtrace/index.html
-//! [`std::error::Error::backtrace`]: https://doc.rust-lang.org/std/error/trait.Error.html#method.backtrace
-//! [`std::sync::atomic`]: https://doc.rust-lang.org/std/sync/atomic/index.html
-//! [`Lazy`]: https://doc.rust-lang.org/std/lazy/struct.Lazy.html
-//! [`OnceCell`]: https://doc.rust-lang.org/std/lazy/struct.OnceCell.html
-//! [`std::panic::set_hook`]: https://doc.rust-lang.org/std/panic/fn.set_hook.html
-//! [`thread_local!`]: https://doc.rust-lang.org/std/macro.thread_local.html
-//! [`Instant::now`]: https://doc.rust-lang.org/std/time/struct.Instant.html#method.now
-//! [`SystemTime::now`]: https://doc.rust-lang.org/std/time/struct.SystemTime.html#method.now
 
 #![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
