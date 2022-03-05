@@ -54,11 +54,11 @@ pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8; // Save some bank snapshots but not too many
 pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 2;
 pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 4;
-pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX: &str = r"snapshot-";
-pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX: &str = r"incremental-snapshot-";
-pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = concat!("^", FULL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX, "(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$");
-pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = concat!("^", INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX,"(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
-pub const LOCAL_SNAPSHOT_FILE_NAME: &str = ".local_snapshot";
+pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX: &str = "snapshot-";
+pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_PREFIX: &str = "incremental-snapshot-";
+pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
+pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
+pub const LOCAL_SNAPSHOT_FILENAME: &str = ".local_snapshot";
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -399,11 +399,9 @@ pub fn archive_snapshot_package(
         ("size", metadata.len(), i64)
     );
 
-    if let Some(snapshot_type) = snapshot_package.get_snapshot_type() {
-        if snapshot_type.is_full_snapshot() {
-            info!("Create snapshot local file in {:?}", tar_dir);
-            create_local_snapshot_file(tar_dir)?;
-        }
+    if snapshot_package.snapshot_type.is_full_snapshot() {
+        info!("Create snapshot local file in {:?}", tar_dir);
+        create_local_snapshot_file(tar_dir)?;
     }
     Ok(())
 }
@@ -411,25 +409,21 @@ pub fn archive_snapshot_package(
 pub fn has_local_snapshot_file<P: AsRef<Path>>(snapshot_archives_dir: P) -> bool {
     snapshot_archives_dir
         .as_ref()
-        .join(LOCAL_SNAPSHOT_FILE_NAME)
+        .join(LOCAL_SNAPSHOT_FILENAME)
         .exists()
 }
 
 pub fn create_local_snapshot_file<P: AsRef<Path>>(snapshot_archives_dir: P) -> Result<()> {
-    let _local_file = File::create(
-        snapshot_archives_dir
-            .as_ref()
-            .join(LOCAL_SNAPSHOT_FILE_NAME),
-    )?;
+    let _local_file = File::create(snapshot_archives_dir.as_ref().join(LOCAL_SNAPSHOT_FILENAME))?;
     Ok(())
 }
 
 pub fn delete_local_snapshot_file<P: AsRef<Path>>(snapshot_archives_dir: P) -> Result<()> {
-    let _ = fs::remove_file(
-        snapshot_archives_dir
-            .as_ref()
-            .join(LOCAL_SNAPSHOT_FILE_NAME),
-    );
+    if let Err(e) = fs::remove_file(snapshot_archives_dir.as_ref().join(LOCAL_SNAPSHOT_FILENAME)) {
+        match e.kind() {
+            std::io::ErrorKind::NotFound => return Ok(()),
+            _ => return Err(SnapshotError::IoWithSource(e, "delete local snapshot file")),
+        }
     Ok(())
 }
 

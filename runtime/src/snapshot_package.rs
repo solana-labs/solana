@@ -129,19 +129,6 @@ pub struct SnapshotPackage {
     pub snapshot_type: SnapshotType,
 }
 
-impl SnapshotPackage {
-    pub fn get_snapshot_type(&self) -> Option<SnapshotType> {
-        let file_name = self.path().file_name().unwrap().to_str().unwrap();
-        if file_name.starts_with("snapshot") {
-            Some(SnapshotType::FullSnapshot)
-        } else if file_name.starts_with("incremental-snapshot") {
-            Some(SnapshotType::IncrementalSnapshot(0))
-        } else {
-            None
-        }
-    }
-}
-
 impl From<AccountsPackage> for SnapshotPackage {
     fn from(accounts_package: AccountsPackage) -> Self {
         assert!(

@@ -1437,9 +1437,12 @@ mod with_incremental_snapshots {
             }
         }
 
-        info!("Delete snapshot local file {:?}", snapshot_archives_dir);
+        info!(
+            "Delete snapshot local file {}",
+            snapshot_archives_dir.display()
+        );
         if let Err(e) = snapshot_utils::delete_local_snapshot_file(snapshot_archives_dir) {
-            info!("Unable to delete local snapshot file: {:?}", e);
+            info!("Unable to delete local snapshot file: {}", e);
         }
         Ok(())
     }
