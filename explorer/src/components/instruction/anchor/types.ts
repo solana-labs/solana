@@ -1,5 +1,4 @@
 import { TransactionInstruction } from "@solana/web3.js";
-import { Idl } from "@project-serum/anchor";
 
 // list of programs written in anchor
 // - should have idl on-chain for GenericAnchorDetailsCard to work out of the box
