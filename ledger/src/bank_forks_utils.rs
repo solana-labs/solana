@@ -8,7 +8,6 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     log::*,
-    solana_entry::entry::VerifyRecyclers,
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
@@ -194,7 +193,6 @@ fn load_from_snapshot(
             blockstore,
             bank_forks,
             &process_options,
-            &VerifyRecyclers::default(),
             transaction_status_sender,
             cache_block_meta_sender,
             Some(snapshot_config),

@@ -576,15 +576,34 @@ pub fn process_blockstore(
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> BlockstoreProcessorResult {
-    if let Some(num_threads) = opts.override_num_threads {
-        PAR_THREAD_POOL.with(|pool| {
-            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap()
-        });
-    }
+    let bank_forks = process_blockstore_for_bank_0(
+        genesis_config,
+        blockstore,
+        account_paths,
+        &opts,
+        cache_block_meta_sender,
+        accounts_update_notifier,
+    );
+    do_process_blockstore_from_root(
+        blockstore,
+        bank_forks,
+        &opts,
+        None,
+        cache_block_meta_sender,
+        snapshot_config,
+        accounts_package_sender,
+        None,
+    )
+}
 
+fn process_blockstore_for_bank_0(
+    genesis_config: &GenesisConfig,
+    blockstore: &Blockstore,
+    account_paths: Vec<PathBuf>,
+    opts: &ProcessOptions,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+) -> BankForks {
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
         genesis_config,
@@ -601,25 +620,14 @@ pub fn process_blockstore(
     let bank_forks = BankForks::new(bank0);
 
     info!("processing ledger for slot 0...");
-    let recyclers = VerifyRecyclers::default();
     process_bank_0(
         &bank_forks.root_bank(),
         blockstore,
-        &opts,
-        &recyclers,
+        opts,
+        &VerifyRecyclers::default(),
         cache_block_meta_sender,
     );
-    do_process_blockstore_from_root(
-        blockstore,
-        bank_forks,
-        &opts,
-        &recyclers,
-        None,
-        cache_block_meta_sender,
-        snapshot_config,
-        accounts_package_sender,
-        None,
-    )
+    bank_forks
 }
 
 /// Process blockstore from a known root bank
@@ -628,7 +636,6 @@ pub(crate) fn process_blockstore_from_root(
     blockstore: &Blockstore,
     bank_forks: BankForks,
     opts: &ProcessOptions,
-    recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
@@ -639,7 +646,6 @@ pub(crate) fn process_blockstore_from_root(
         blockstore,
         bank_forks,
         opts,
-        recyclers,
         transaction_status_sender,
         cache_block_meta_sender,
         snapshot_config,
@@ -653,13 +659,21 @@ fn do_process_blockstore_from_root(
     blockstore: &Blockstore,
     mut bank_forks: BankForks,
     opts: &ProcessOptions,
-    recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
     mut last_full_snapshot_slot: Option<Slot>,
 ) -> BlockstoreProcessorResult {
+    if let Some(num_threads) = opts.override_num_threads {
+        PAR_THREAD_POOL.with(|pool| {
+            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
+                .num_threads(num_threads)
+                .build()
+                .unwrap()
+        });
+    }
+
     // Starting slot must be a root, and thus has no parents
     assert_eq!(bank_forks.banks().len(), 1);
     let bank = bank_forks.root_bank();
@@ -720,7 +734,6 @@ fn do_process_blockstore_from_root(
             blockstore,
             &leader_schedule_cache,
             opts,
-            recyclers,
             transaction_status_sender,
             cache_block_meta_sender,
             snapshot_config,
@@ -1142,7 +1155,6 @@ fn load_frozen_forks(
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     opts: &ProcessOptions,
-    recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
@@ -1150,6 +1162,7 @@ fn load_frozen_forks(
     timing: &mut ExecuteTimings,
     last_full_snapshot_slot: &mut Option<Slot>,
 ) -> result::Result<(), BlockstoreProcessorError> {
+    let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut last_free = Instant::now();
@@ -1201,7 +1214,7 @@ fn load_frozen_forks(
                 blockstore,
                 &bank,
                 opts,
-                recyclers,
+                &recyclers,
                 &mut progress,
                 transaction_status_sender,
                 cache_block_meta_sender,
@@ -3197,7 +3210,6 @@ pub mod tests {
             &blockstore,
             bank_forks,
             &opts,
-            &recyclers,
             None,
             None,
             None,
@@ -3306,7 +3318,6 @@ pub mod tests {
             &blockstore,
             bank_forks,
             &opts,
-            &recyclers,
             None,
             None,
             Some(&snapshot_config),
