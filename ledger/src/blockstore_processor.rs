@@ -590,7 +590,6 @@ pub fn test_process_blockstore(
         None,
         None,
         accounts_package_sender,
-        None,
     )
     .unwrap()
 }
@@ -639,7 +638,6 @@ pub(crate) fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
-    mut last_full_snapshot_slot: Option<Slot>,
 ) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -698,6 +696,8 @@ pub(crate) fn process_blockstore_from_root(
     if opts.full_leader_cache {
         leader_schedule_cache.set_max_schedules(std::usize::MAX);
     }
+
+    let mut last_full_snapshot_slot = None;
 
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
