@@ -2,7 +2,7 @@ use {
     crate::{
         blockstore::Blockstore,
         blockstore_processor::{
-            self, BlockstoreProcessorError, BlockstoreProcessorResult, CacheBlockMetaSender,
+            self, BlockstoreProcessorError, CacheBlockMetaSender,
             ProcessOptions, TransactionStatusSender,
         },
         leader_schedule_cache::LeaderScheduleCache,
@@ -30,22 +30,6 @@ pub type LoadResult = result::Result<
     ),
     BlockstoreProcessorError,
 >;
-
-fn to_loadresult(
-    bpr: BlockstoreProcessorResult,
-    starting_snapshot_hashes: Option<StartingSnapshotHashes>,
-) -> LoadResult {
-    bpr.map(
-        |(bank_forks, leader_schedule_cache, last_full_snapshot_slot)| {
-            (
-                bank_forks,
-                leader_schedule_cache,
-                last_full_snapshot_slot,
-                starting_snapshot_hashes,
-            )
-        },
-    )
-}
 
 /// Load the banks and accounts
 ///
@@ -123,18 +107,25 @@ pub fn load(
         )
     };
 
-    to_loadresult(
-        blockstore_processor::process_blockstore_from_root(
-            blockstore,
-            bank_forks,
-            &process_options,
-            transaction_status_sender,
-            cache_block_meta_sender,
-            snapshot_config,
-            accounts_package_sender,
-            last_full_snapshot_slot,
-        ),
-        starting_snapshot_hashes,
+    blockstore_processor::process_blockstore_from_root(
+        blockstore,
+        bank_forks,
+        &process_options,
+        transaction_status_sender,
+        cache_block_meta_sender,
+        snapshot_config,
+        accounts_package_sender,
+        last_full_snapshot_slot,
+    )
+    .map(
+        |(bank_forks, leader_schedule_cache, last_full_snapshot_slot)| {
+            (
+                bank_forks,
+                leader_schedule_cache,
+                last_full_snapshot_slot,
+                starting_snapshot_hashes,
+            )
+        },
     )
 }
 
