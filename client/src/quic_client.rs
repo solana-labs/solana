@@ -191,12 +191,11 @@ impl QuicClient {
             .chunks(MAX_CONCURRENT_STREAMS)
             .into_iter()
             .map(|buffs| {
-                let send_futures = buffs
-                    .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(buf, &connection))
-                    .collect::<Vec<_>>();
-
-                join_all(send_futures)
+                join_all(
+                    buffs
+                        .into_iter()
+                        .map(|buf| Self::_send_buffer_using_conn(buf, &connection)),
+                )
             })
             .collect::<Vec<_>>();
 
