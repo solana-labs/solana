@@ -98,7 +98,7 @@ export function GenericAnchorDetailsCard(props: {
           <tr>
             <td>
               <div className="me-2 d-md-inline">
-                {keyIndex + 1}) {snakeCase(ixAccounts[keyIndex].name)}
+                {snakeCase(ixAccounts[keyIndex].name)}
               </div>
               {am.isWritable && (
                 <span className="badge bg-info-soft me-1">Writable</span>
