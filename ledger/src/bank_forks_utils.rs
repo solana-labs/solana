@@ -2,8 +2,8 @@ use {
     crate::{
         blockstore::Blockstore,
         blockstore_processor::{
-            self, BlockstoreProcessorError, CacheBlockMetaSender,
-            ProcessOptions, TransactionStatusSender,
+            self, BlockstoreProcessorError, CacheBlockMetaSender, ProcessOptions,
+            TransactionStatusSender,
         },
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -72,7 +72,7 @@ pub fn load(
         false
     };
 
-    let (bank_forks, last_full_snapshot_slot, starting_snapshot_hashes) = if snapshot_present {
+    let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
         bank_forks_from_snapshot(
             genesis_config,
             account_paths,
@@ -103,7 +103,6 @@ pub fn load(
                 accounts_update_notifier,
             ),
             None,
-            None,
         )
     };
 
@@ -115,10 +114,11 @@ pub fn load(
         cache_block_meta_sender,
         snapshot_config,
         accounts_package_sender,
-        last_full_snapshot_slot,
     )
     .map(
         |(bank_forks, leader_schedule_cache, last_full_snapshot_slot)| {
+            let last_full_snapshot_slot =
+                last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
             (
                 bank_forks,
                 leader_schedule_cache,
@@ -137,7 +137,7 @@ fn bank_forks_from_snapshot(
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> (BankForks, Option<Slot>, Option<StartingSnapshotHashes>) {
+) -> (BankForks, Option<StartingSnapshotHashes>) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
         error!("Account paths not present when booting from snapshot");
@@ -168,7 +168,7 @@ fn bank_forks_from_snapshot(
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
 
-    let starting_full_snapshot_hash = FullSnapshotHash {
+    let full_snapshot_hash = FullSnapshotHash {
         hash: (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -177,22 +177,20 @@ fn bank_forks_from_snapshot(
     let starting_incremental_snapshot_hash =
         incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
             IncrementalSnapshotHash {
-                base: starting_full_snapshot_hash.hash,
+                base: full_snapshot_hash.hash,
                 hash: (
                     incremental_snapshot_archive_info.slot(),
                     *incremental_snapshot_archive_info.hash(),
                 ),
             }
         });
-    let starting_snapshot_hashes = Some(StartingSnapshotHashes {
-        full: starting_full_snapshot_hash,
+    let starting_snapshot_hashes = StartingSnapshotHashes {
+        full: full_snapshot_hash,
         incremental: starting_incremental_snapshot_hash,
-    });
-    let last_full_snapshot_slot = Some(full_snapshot_archive_info.slot());
+    };
 
     (
         BankForks::new(deserialized_bank),
-        last_full_snapshot_slot,
-        starting_snapshot_hashes,
+        Some(starting_snapshot_hashes),
     )
 }
