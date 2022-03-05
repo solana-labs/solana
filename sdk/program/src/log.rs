@@ -4,19 +4,21 @@
 //! running Solana programs, and there are several functions available for doing
 //! so efficiently, depending on the type of data being logged.
 //!
-//! The primary logging mechanism is the [`msg!`] macro, which logs simple
-//! strings, as well as [formatted strings][fs].
+//! The most common way to emit logs is through the [`msg!`] macro, which logs
+//! simple strings, as well as [formatted strings][fs].
 //!
 //! [`msg!`]: msg
 //! [fs]: https://doc.rust-lang.org/std/fmt/
 //!
 //! Logs can be viewed in multiple ways:
 //!
-//! - The `solana logs` command displays logs for all transactions on a network.
+//! - The `solana logs` command displays logs for all transactions executed on a
+//!   network. Note though that transactions that fail during pre-flight
+//!   simulation are not displayed here.
 //! - When submitting transactions via [`RpcClient`], if Rust's own logging is
-//!   active then the `solana_client::rpc_client` module logs Solana logs at the
-//!   "debug" level. If using [`env_logger`] this level can be activated by
-//!   setting `RUST_LOG=solana_client::rpc_client=debug`.
+//!   active then the `solana_client` crate logs at the "debug" level any logs
+//!   for transactions that failed during simulation. If using [`env_logger`]
+//!   these logs can be activated by setting `RUST_LOG=solana_client=debug`.
 //! - Logs can be retrieved from a finalized transaction by calling
 //!   [`RpcClient::get_transaction`].
 //! - Block explorers may display logs.
