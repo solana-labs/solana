@@ -108,16 +108,25 @@ pub fn load(
     }
 
     info!("Processing ledger from genesis");
+
+    let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
+        genesis_config,
+        blockstore,
+        account_paths,
+        &process_options,
+        cache_block_meta_sender,
+        accounts_update_notifier,
+    );
     to_loadresult(
-        blockstore_processor::process_blockstore(
-            genesis_config,
+        blockstore_processor::process_blockstore_from_root(
             blockstore,
-            account_paths,
-            process_options,
+            bank_forks,
+            &process_options,
+            transaction_status_sender,
             cache_block_meta_sender,
             snapshot_config,
             accounts_package_sender,
-            accounts_update_notifier,
+            None,
         ),
         None,
     )
@@ -197,7 +206,7 @@ fn load_from_snapshot(
             cache_block_meta_sender,
             Some(snapshot_config),
             accounts_package_sender,
-            full_snapshot_archive_info.slot(),
+            Some(full_snapshot_archive_info.slot()),
         ),
         Some(starting_snapshot_hashes),
     )
