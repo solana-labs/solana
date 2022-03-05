@@ -64,7 +64,7 @@ pub fn load(
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> LoadResult {
-    if let Some(snapshot_config) = snapshot_config {
+    let snapshot_present = if let Some(snapshot_config) = snapshot_config {
         info!(
             "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
@@ -78,45 +78,51 @@ pub fn load(
         )
         .is_some()
         {
-            return load_from_snapshot(
-                genesis_config,
-                blockstore,
-                account_paths,
-                shrink_paths,
-                snapshot_config,
-                process_options,
-                transaction_status_sender,
-                cache_block_meta_sender,
-                accounts_package_sender,
-                accounts_update_notifier,
-            );
+            true
         } else {
             info!("No snapshot package available; will load from genesis");
+            false
         }
     } else {
         info!("Snapshots disabled; will load from genesis");
-    }
+        false
+    };
 
-    if process_options
-        .accounts_db_config
-        .as_ref()
-        .and_then(|config| config.filler_account_count)
-        .unwrap_or_default()
-        > 0
-    {
-        panic!("filler accounts specified, but not loading from snapshot");
-    }
+    let (bank_forks, last_full_snapshot_slot, starting_snapshot_hashes) = if snapshot_present {
+        bank_forks_from_snapshot(
+            genesis_config,
+            account_paths,
+            shrink_paths,
+            snapshot_config.as_ref().unwrap(),
+            &process_options,
+            accounts_update_notifier,
+        )
+    } else {
+        if process_options
+            .accounts_db_config
+            .as_ref()
+            .and_then(|config| config.filler_account_count)
+            .unwrap_or_default()
+            > 0
+        {
+            panic!("filler accounts specified, but not loading from snapshot");
+        }
 
-    info!("Processing ledger from genesis");
+        info!("Processing ledger from genesis");
+        (
+            blockstore_processor::process_blockstore_for_bank_0(
+                genesis_config,
+                blockstore,
+                account_paths,
+                &process_options,
+                cache_block_meta_sender,
+                accounts_update_notifier,
+            ),
+            None,
+            None,
+        )
+    };
 
-    let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
-        genesis_config,
-        blockstore,
-        account_paths,
-        &process_options,
-        cache_block_meta_sender,
-        accounts_update_notifier,
-    );
     to_loadresult(
         blockstore_processor::process_blockstore_from_root(
             blockstore,
@@ -126,25 +132,21 @@ pub fn load(
             cache_block_meta_sender,
             snapshot_config,
             accounts_package_sender,
-            None,
+            last_full_snapshot_slot,
         ),
-        None,
+        starting_snapshot_hashes,
     )
 }
 
 #[allow(clippy::too_many_arguments)]
-fn load_from_snapshot(
+fn bank_forks_from_snapshot(
     genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: &SnapshotConfig,
-    process_options: ProcessOptions,
-    transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    accounts_package_sender: AccountsPackageSender,
+    process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> LoadResult {
+) -> (BankForks, Option<Slot>, Option<StartingSnapshotHashes>) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
         error!("Account paths not present when booting from snapshot");
@@ -191,23 +193,15 @@ fn load_from_snapshot(
                 ),
             }
         });
-    let starting_snapshot_hashes = StartingSnapshotHashes {
+    let starting_snapshot_hashes = Some(StartingSnapshotHashes {
         full: starting_full_snapshot_hash,
         incremental: starting_incremental_snapshot_hash,
-    };
+    });
+    let last_full_snapshot_slot = Some(full_snapshot_archive_info.slot());
 
-    let bank_forks = BankForks::new(deserialized_bank);
-    to_loadresult(
-        blockstore_processor::process_blockstore_from_root(
-            blockstore,
-            bank_forks,
-            &process_options,
-            transaction_status_sender,
-            cache_block_meta_sender,
-            Some(snapshot_config),
-            accounts_package_sender,
-            Some(full_snapshot_archive_info.slot()),
-        ),
-        Some(starting_snapshot_hashes),
+    (
+        BankForks::new(deserialized_bank),
+        last_full_snapshot_slot,
+        starting_snapshot_hashes,
     )
 }
