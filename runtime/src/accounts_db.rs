@@ -170,14 +170,14 @@ type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AccountShrinkThreshold {
-    /// Measure the total space sparseness across all candididates
-    /// And select the candidiates by using the top sparse account storage entries to shrink.
+    /// Measure the total space sparseness across all candidates
+    /// And select the candidates by using the top sparse account storage entries to shrink.
     /// The value is the overall shrink threshold measured as ratio of the total live bytes
     /// over the total bytes.
     TotalSpace { shrink_ratio: f64 },
     /// Use the following option to shrink all stores whose alive ratio is below
     /// the specified threshold.
-    IndividalStore { shrink_ratio: f64 },
+    IndividualStore { shrink_ratio: f64 },
 }
 pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = true;
 pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
@@ -6038,7 +6038,7 @@ impl AccountsDb {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
                 Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
             }
-            AccountShrinkThreshold::IndividalStore { shrink_ratio } => {
+            AccountShrinkThreshold::IndividualStore { shrink_ratio } => {
                 (Self::page_align(store.alive_bytes() as u64) as f64 / store.total_bytes() as f64)
                     < shrink_ratio
             }
@@ -13185,7 +13185,7 @@ pub mod tests {
                     (shrink_ratio * 100.) as u64
                 )
             }
-            AccountShrinkThreshold::IndividalStore { shrink_ratio: _ } => {
+            AccountShrinkThreshold::IndividualStore { shrink_ratio: _ } => {
                 panic!("Expect the default to be TotalSpace")
             }
         }
@@ -13196,7 +13196,7 @@ pub mod tests {
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
         entry.alive_bytes.store(3000, Ordering::Release);
         assert!(accounts.is_candidate_for_shrink(&entry));
-        accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
+        accounts.shrink_ratio = AccountShrinkThreshold::IndividualStore { shrink_ratio: 0.3 };
         assert!(!accounts.is_candidate_for_shrink(&entry));
     }
 
