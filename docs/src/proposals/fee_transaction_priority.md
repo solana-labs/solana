@@ -69,7 +69,7 @@ transaction signature, and maps to a `BlockedTransactionsQueue` defined as:
 /// Represents a heap of transactions that cannot be scheduled because they
 /// would take locks on accounts needed by a higher paying transaction
 struct BlockedTransactionsQueue {
-    // The higher priority transactin blocking all the other transactions in
+    // The higher priority transaction blocking all the other transactions in
     // `blocked_transactions` below
     highest_priority_blocked_transaction: Transaction,
     other_blocked_transactions: BinaryHeap<Transaction>
@@ -85,7 +85,7 @@ Assume `N` BankingStage threads:
 The scheduler will run for each banking thread a function `find_next_highest_transaction()`:
 
 1. Pop off the highest priority transaction `next_highest_transaction` from `self.all_transaction_queues[0]`.
-If ``self.all_transaction_queues[0]` is empty, pop off the first entry and continue.
+If ``self.all_transaction_queues[0]` is empty, pop off the first deque item and continue.
 
 2. Let `transaction_accounts` be the set of `LockedPubkey` keys needed by
 `next_highest_transaction`. We run the following:
@@ -143,7 +143,7 @@ for locked_account_key in transaction_accounts {
             // Insert into the `blocked_transactions` hashmap to indicate this set of transactions
             // is blocked by `next_highest_transaction`
             self.blocked_transactions.insert(
-                next_highest_transaction.siganture(),
+                next_highest_transaction.signature(),
                 new_blocked_transaction_queue
             );
         }
@@ -201,7 +201,7 @@ for account_key in unlocked_accounts {
 ```
 if let Some(blocked_transaction_queue) = self.blocked_transactions.get(completed_transaction.signature) {
     // Now push the rest of the queue to the head of `all_transaction_queues`, since we know
-    // everything in this blocked qeuue must be of higher priority, (since they were
+    // everything in this blocked queue must be of higher priority, (since they were
     // added to this queue earlier, this means they must have been peopped off the main
     // `transaction_accounts` queue earlier, hence higher priority)
     self.all_transaction_queues.push_front(blocked_transaction_queue.other_blocked_transactions);
