@@ -2458,7 +2458,7 @@ mod tests {
             &expected_snapshots,
         );
 
-        // retaiing 2, expecting the 2 newest to be retained
+        // retaining 2, expecting the 2 newest to be retained
         let expected_snapshots = vec![&snap2_name, &snap3_name];
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
