@@ -99,43 +99,63 @@ export function GenericAnchorDetailsCard(props: {
   ]);
 
   return (
-    <InstructionCard
-      ix={ix}
-      index={index}
-      result={result}
-      title={`${programName || "Unknown"}: ${snakeCase(ixTitle || "Unknown")}`}
-      innerCards={innerCards}
-      childIndex={childIndex}
-    >
-      <tr key={ix.programId.toBase58()}>
-        <td>Program</td>
-        <td className="text-lg-end">
-          <Address pubkey={ix.programId} alignRight link />
-        </td>
-      </tr>
-
-      {ixAccounts != null &&
-        ix.keys.map((am, keyIndex) => (
-          <tr key={keyIndex}>
-            <td>
-              <div className="me-2 d-md-inline">
-                {/* remaining accounts would not have a name */}
-                {ixAccounts[keyIndex] && snakeCase(ixAccounts[keyIndex].name)}
-                {!ixAccounts[keyIndex] &&
-                  "remaining account #" + (keyIndex - ixAccounts.length + 1)}
-              </div>
-              {am.isWritable && (
-                <span className="badge bg-info-soft me-1">Writable</span>
-              )}
-              {am.isSigner && (
-                <span className="badge bg-info-soft me-1">Signer</span>
-              )}
-            </td>
-            <td>
-              <Address pubkey={am.pubkey} alignRight link />
+    <div>
+      {idl && (
+        <InstructionCard
+          ix={ix}
+          index={index}
+          result={result}
+          title={`${programName || "Unknown"}: ${snakeCase(
+            ixTitle || "Unknown"
+          )}`}
+          innerCards={innerCards}
+          childIndex={childIndex}
+          defaultRaw
+        >
+          <tr key={ix.programId.toBase58()}>
+            <td>Program</td>
+            <td className="text-lg-end">
+              <Address pubkey={ix.programId} alignRight link />
             </td>
           </tr>
-        ))}
-    </InstructionCard>
+
+          {ixAccounts != null &&
+            ix.keys.map((am, keyIndex) => (
+              <tr key={keyIndex}>
+                <td>
+                  <div className="me-2 d-md-inline">
+                    {/* remaining accounts would not have a name */}
+                    {ixAccounts[keyIndex] &&
+                      snakeCase(ixAccounts[keyIndex].name)}
+                    {!ixAccounts[keyIndex] &&
+                      "remaining account #" +
+                        (keyIndex - ixAccounts.length + 1)}
+                  </div>
+                  {am.isWritable && (
+                    <span className="badge bg-info-soft me-1">Writable</span>
+                  )}
+                  {am.isSigner && (
+                    <span className="badge bg-info-soft me-1">Signer</span>
+                  )}
+                </td>
+                <td>
+                  <Address pubkey={am.pubkey} alignRight link />
+                </td>
+              </tr>
+            ))}
+        </InstructionCard>
+      )}
+      {!idl && (
+        <InstructionCard
+          ix={ix}
+          index={index}
+          result={result}
+          title={`Unknown Program: Unknown Instruction`}
+          innerCards={innerCards}
+          childIndex={childIndex}
+          defaultRaw
+        />
+      )}
+    </div>
   );
 }
