@@ -4,7 +4,7 @@ use {
         blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
-    crossbeam_channel::Sender,
+    crossbeam_channel::{unbounded, Sender},
     itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
@@ -566,37 +566,28 @@ pub struct ProcessOptions {
     pub shrink_ratio: AccountShrinkThreshold,
 }
 
-pub fn process_blockstore(
+pub fn test_process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
-    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
-    accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> BlockstoreProcessorResult {
-    let bank_forks = process_blockstore_for_bank_0(
-        genesis_config,
-        blockstore,
-        account_paths,
-        &opts,
-        cache_block_meta_sender,
-        accounts_update_notifier,
-    );
-    do_process_blockstore_from_root(
+) -> BlockstoreProcessorInner {
+    let (accounts_package_sender, _) = unbounded();
+    let bank_forks =
+        process_blockstore_for_bank_0(genesis_config, blockstore, Vec::new(), &opts, None, None);
+    process_blockstore_from_root(
         blockstore,
         bank_forks,
         &opts,
         None,
-        cache_block_meta_sender,
-        snapshot_config,
+        None,
+        None,
         accounts_package_sender,
         None,
     )
+    .unwrap()
 }
 
-fn process_blockstore_for_bank_0(
+pub(crate) fn process_blockstore_for_bank_0(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
@@ -633,29 +624,6 @@ fn process_blockstore_for_bank_0(
 /// Process blockstore from a known root bank
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn process_blockstore_from_root(
-    blockstore: &Blockstore,
-    bank_forks: BankForks,
-    opts: &ProcessOptions,
-    transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
-    last_full_snapshot_slot: Slot,
-) -> BlockstoreProcessorResult {
-    do_process_blockstore_from_root(
-        blockstore,
-        bank_forks,
-        opts,
-        transaction_status_sender,
-        cache_block_meta_sender,
-        snapshot_config,
-        accounts_package_sender,
-        Some(last_full_snapshot_slot),
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn do_process_blockstore_from_root(
     blockstore: &Blockstore,
     mut bank_forks: BankForks,
     opts: &ProcessOptions,
@@ -1592,7 +1560,6 @@ pub mod tests {
         crate::genesis_utils::{
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
         },
-        crossbeam_channel::unbounded,
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
@@ -1618,25 +1585,6 @@ pub mod tests {
         tempfile::TempDir,
         trees::tr,
     };
-
-    fn test_process_blockstore(
-        genesis_config: &GenesisConfig,
-        blockstore: &Blockstore,
-        opts: ProcessOptions,
-    ) -> BlockstoreProcessorInner {
-        let (accounts_package_sender, _) = unbounded();
-        process_blockstore(
-            genesis_config,
-            blockstore,
-            Vec::new(),
-            opts,
-            None,
-            None,
-            accounts_package_sender,
-            None,
-        )
-        .unwrap()
-    }
 
     #[test]
     fn test_process_blockstore_with_missing_hashes() {
@@ -3206,7 +3154,7 @@ pub mod tests {
 
         // Test process_blockstore_from_root() from slot 1 onwards
         let (accounts_package_sender, _) = unbounded();
-        let (bank_forks, ..) = do_process_blockstore_from_root(
+        let (bank_forks, ..) = process_blockstore_from_root(
             &blockstore,
             bank_forks,
             &opts,
@@ -3314,7 +3262,7 @@ pub mod tests {
 
         let (accounts_package_sender, accounts_package_receiver) = unbounded();
 
-        do_process_blockstore_from_root(
+        process_blockstore_from_root(
             &blockstore,
             bank_forks,
             &opts,

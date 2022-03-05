@@ -529,7 +529,7 @@ mod tests {
         super::*,
         solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
-            blockstore_processor::{process_blockstore, ProcessOptions},
+            blockstore_processor::{test_process_blockstore, ProcessOptions},
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
@@ -550,18 +550,11 @@ mod tests {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
-        let (accounts_package_sender, _) = unbounded();
-        let (bank_forks, cached_leader_schedule, _) = process_blockstore(
+        let (bank_forks, cached_leader_schedule, _) = test_process_blockstore(
             &genesis_config,
             &blockstore,
-            Vec::new(),
             opts,
-            None,
-            None,
-            accounts_package_sender,
-            None,
-        )
-        .unwrap();
+        );
         let leader_schedule_cache = Arc::new(cached_leader_schedule);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
