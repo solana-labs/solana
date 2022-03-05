@@ -1,11 +1,17 @@
+import React from "react";
 import "bootstrap/dist/js/bootstrap.min.js";
-import { NFTData } from "providers/accounts";
+import {
+  NFTData,
+  useFetchAccountInfo,
+  useMintAccountInfo,
+} from "providers/accounts";
 import { programs } from "@metaplex/js";
 import { ArtContent } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { clusterPath } from "utils/url";
 import { Link } from "react-router-dom";
 import { EditionInfo } from "providers/accounts/utils/getEditionInfo";
+import { PublicKey } from "@solana/web3.js";
 
 export function NFTHeader({
   nftData,
@@ -14,8 +20,22 @@ export function NFTHeader({
   nftData: NFTData;
   address: string;
 }) {
+  const collectionAddress = nftData.metadata.collection?.key;
+  const collectionMintInfo = useMintAccountInfo(collectionAddress);
+  const fetchAccountInfo = useFetchAccountInfo();
+
+  React.useEffect(() => {
+    if (collectionAddress && !collectionMintInfo) {
+      fetchAccountInfo(new PublicKey(collectionAddress));
+    }
+  }, [fetchAccountInfo, collectionAddress]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const metadata = nftData.metadata;
   const data = nftData.json;
+  const isVerifiedCollection =
+    metadata.collection != null &&
+    metadata.collection?.verified &&
+    collectionMintInfo !== undefined;
   return (
     <div className="row">
       <div className="col-auto ms-2 d-flex align-items-center">
@@ -30,6 +50,7 @@ export function NFTHeader({
               : "No NFT name was found"}
           </h2>
           {getEditionPill(nftData.editionInfo)}
+          {isVerifiedCollection && getVerifiedCollectionPill()}
         </div>
         <h4 className="header-pretitle ms-1 mt-1 no-overflow-with-ellipsis">
           {metadata.data.symbol !== ""
@@ -172,5 +193,16 @@ function getIsMutablePill(isMutable: boolean) {
     <span className="badge badge-pill bg-dark">{`${
       isMutable ? "Mutable" : "Immutable"
     }`}</span>
+  );
+}
+
+function getVerifiedCollectionPill() {
+  const onchainVerifiedToolTip =
+    "This NFT has been verified as a member of an on-chain collection. This tag guarantees authenticity.";
+  return (
+    <div className={"d-inline-flex align-items-center ms-2"}>
+      <span className="badge badge-pill bg-dark">{"Verified Collection"}</span>
+      <InfoTooltip bottom text={onchainVerifiedToolTip} />
+    </div>
   );
 }
