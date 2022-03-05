@@ -571,9 +571,17 @@ pub fn test_process_blockstore(
     blockstore: &Blockstore,
     opts: ProcessOptions,
 ) -> BlockstoreProcessorInner {
+    let (bank_forks, ..) = crate::bank_forks_utils::load_bank_forks(
+        genesis_config,
+        blockstore,
+        Vec::new(),
+        None,
+        None,
+        &opts,
+        None,
+        None,
+    );
     let (accounts_package_sender, _) = unbounded();
-    let bank_forks =
-        process_blockstore_for_bank_0(genesis_config, blockstore, Vec::new(), &opts, None, None);
     process_blockstore_from_root(
         blockstore,
         bank_forks,
