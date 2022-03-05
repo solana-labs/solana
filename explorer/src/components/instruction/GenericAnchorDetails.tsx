@@ -121,6 +121,8 @@ export function GenericAnchorDetailsCard(props: {
               <div className="me-2 d-md-inline">
                 {/* remaining accounts would not have a name */}
                 {ixAccounts[keyIndex] && snakeCase(ixAccounts[keyIndex].name)}
+                {!ixAccounts[keyIndex] &&
+                  "remaining account #" + (keyIndex - ixAccounts.length + 1)}
               </div>
               {am.isWritable && (
                 <span className="badge bg-info-soft me-1">Writable</span>
