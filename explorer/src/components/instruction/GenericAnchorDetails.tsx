@@ -88,6 +88,11 @@ export function GenericAnchorDetailsCard(props: {
       innerCards={innerCards}
       childIndex={childIndex}
     >
+      <td>Program</td>
+      <td className="text-lg-end">
+        <Address pubkey={ix.programId} alignRight link />
+      </td>
+
       {ixAccounts != null &&
         ix.keys.map((am, keyIndex) => (
           <tr>
