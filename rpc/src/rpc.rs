@@ -47,6 +47,7 @@ use {
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
+        snapshot_archive_info::SnapshotArchivesRoot,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -2545,12 +2546,13 @@ pub mod rpc_minimal {
                 .map(|snapshot_config| snapshot_config.snapshot_archives_dir)
                 .unwrap();
 
-            let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(&snapshot_archives_dir)
-                    .ok_or(RpcCustomError::NoSnapshot)?;
+            let full_snapshot_slot = snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &SnapshotArchivesRoot::new(&snapshot_archives_dir),
+            )
+            .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &snapshot_archives_dir,
+                    &SnapshotArchivesRoot::new(&snapshot_archives_dir),
                     full_snapshot_slot,
                 );
 
@@ -3903,7 +3905,7 @@ pub mod rpc_deprecated_v1_9 {
             meta.snapshot_config
                 .and_then(|snapshot_config| {
                     snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.snapshot_archives_dir,
+                        &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
                     )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())

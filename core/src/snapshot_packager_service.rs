@@ -4,7 +4,7 @@ use {
     },
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
         snapshot_config::SnapshotConfig,
         snapshot_hash::{
             FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash,
@@ -82,12 +82,14 @@ impl SnapshotPackagerService {
                     // Archiving the snapshot package is not allowed to fail.
                     // AccountsBackgroundService calls `clean_accounts()` with a value for
                     // last_full_snapshot_slot that requires this archive call to succeed.
-                    snapshot_utils::archive_snapshot_package(
-                        &snapshot_package,
+                    snapshot_utils::archive_snapshot_package(&snapshot_package)
+                        .expect("failed to archive snapshot package");
+
+                    snapshot_utils::purge_old_snapshot_archives(
+                        &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
                         snapshot_config.maximum_full_snapshot_archives_to_retain,
                         snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-                    )
-                    .expect("failed to archive snapshot package");
+                    );
 
                     if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                         snapshot_gossip_manager.push_snapshot_hash(

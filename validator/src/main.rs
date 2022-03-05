@@ -47,6 +47,7 @@ use {
             AccountsIndexConfig,
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        snapshot_archive_info::SnapshotArchivesRoot,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -2673,7 +2674,7 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
-            &snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir),
             &vote_account,
             authorized_voter_keypairs.clone(),
             &cluster_entrypoints,

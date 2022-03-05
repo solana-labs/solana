@@ -28,8 +28,10 @@ use {
     solana_perf::thread::renice_this_thread,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
-        bank_forks::BankForks, commitment::BlockCommitmentCache,
-        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
+        bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
+        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
+        snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
     solana_sdk::{
@@ -221,7 +223,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 // Convenience redirect to the latest snapshot
                 return if let Some(full_snapshot_archive_info) =
                     snapshot_utils::get_highest_full_snapshot_archive_info(
-                        &snapshot_config.snapshot_archives_dir,
+                        &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
                     ) {
                     RpcRequestMiddleware::redirect(&format!(
                         "/{}",

@@ -12,6 +12,7 @@ use {
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
+            SnapshotArchivesRoot,
         },
         snapshot_package::{
             AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
@@ -242,11 +243,7 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
 }
 
 /// Make a snapshot archive out of the snapshot package
-pub fn archive_snapshot_package(
-    snapshot_package: &SnapshotPackage,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
-) -> Result<()> {
+pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.slot()
@@ -374,12 +371,6 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
     fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
-
-    purge_old_snapshot_archives(
-        tar_dir,
-        maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain,
-    );
 
     timer.stop();
     info!(
@@ -806,7 +797,7 @@ pub fn bank_from_snapshot_archives(
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
-        accounts_db_skip_shrink,
+        accounts_db_skip_shrink || full_snapshot_archive_info.is_local(),
         Some(full_snapshot_archive_info.slot()),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -831,7 +822,7 @@ pub fn bank_from_snapshot_archives(
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_latest_snapshot_archives(
     bank_snapshots_dir: impl AsRef<Path>,
-    snapshot_archives_dir: impl AsRef<Path>,
+    snapshot_archives_root: &SnapshotArchivesRoot,
     account_paths: &[PathBuf],
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -851,11 +842,12 @@ pub fn bank_from_latest_snapshot_archives(
     FullSnapshotArchiveInfo,
     Option<IncrementalSnapshotArchiveInfo>,
 )> {
-    let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
-        .ok_or(SnapshotError::NoSnapshotArchives)?;
+    let full_snapshot_archive_info =
+        get_highest_full_snapshot_archive_info(&snapshot_archives_root)
+            .ok_or(SnapshotError::NoSnapshotArchives)?;
 
     let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
-        &snapshot_archives_dir,
+        &snapshot_archives_root,
         full_snapshot_archive_info.slot(),
     );
 
@@ -1140,7 +1132,7 @@ pub fn parse_incremental_snapshot_archive_filename(
 }
 
 /// Get a list of the full snapshot archives in a directory
-pub fn get_full_snapshot_archives<P>(snapshot_archives_dir: P) -> Vec<FullSnapshotArchiveInfo>
+fn get_full_snapshot_archives_impl<P>(snapshot_archives_dir: P) -> Vec<FullSnapshotArchiveInfo>
 where
     P: AsRef<Path>,
 {
@@ -1163,8 +1155,19 @@ where
     }
 }
 
+/// Get a list of the full snapshot archives from snapshot root directory
+pub fn get_full_snapshot_archives(
+    snapshot_archives_root: &SnapshotArchivesRoot,
+) -> Vec<FullSnapshotArchiveInfo> {
+    [
+        get_full_snapshot_archives_impl(snapshot_archives_root.get_local_path()),
+        get_full_snapshot_archives_impl(snapshot_archives_root.get_remote_path()),
+    ]
+    .concat()
+}
+
 /// Get a list of the incremental snapshot archives in a directory
-pub fn get_incremental_snapshot_archives<P>(
+fn get_incremental_snapshot_archives_impl<P>(
     snapshot_archives_dir: P,
 ) -> Vec<IncrementalSnapshotArchiveInfo>
 where
@@ -1189,51 +1192,55 @@ where
     }
 }
 
-/// Get the highest slot of the full snapshot archives in a directory
-pub fn get_highest_full_snapshot_archive_slot<P>(snapshot_archives_dir: P) -> Option<Slot>
-where
-    P: AsRef<Path>,
-{
-    get_highest_full_snapshot_archive_info(snapshot_archives_dir)
+/// Get a list of the incremental snapshot archives from the snapshot root directory
+pub fn get_incremental_snapshot_archives(
+    snapshot_archives_root: &SnapshotArchivesRoot,
+) -> Vec<IncrementalSnapshotArchiveInfo> {
+    [
+        get_incremental_snapshot_archives_impl(snapshot_archives_root.get_local_path()),
+        get_incremental_snapshot_archives_impl(snapshot_archives_root.get_remote_path()),
+    ]
+    .concat()
+}
+
+/// Get the highest slot of the full snapshot archives from the snapshot root directory
+pub fn get_highest_full_snapshot_archive_slot(
+    snapshot_archives_root: &SnapshotArchivesRoot,
+) -> Option<Slot> {
+    get_highest_full_snapshot_archive_info(snapshot_archives_root)
         .map(|full_snapshot_archive_info| full_snapshot_archive_info.slot())
 }
 
-/// Get the highest slot of the incremental snapshot archives in a directory, for a given full
+/// Get the highest slot of the incremental snapshot archives in snapshot root directory, for a given full
 /// snapshot slot
-pub fn get_highest_incremental_snapshot_archive_slot<P: AsRef<Path>>(
-    snapshot_archives_dir: P,
+pub fn get_highest_incremental_snapshot_archive_slot(
+    snapshot_archives_root: &SnapshotArchivesRoot,
     full_snapshot_slot: Slot,
 ) -> Option<Slot> {
-    get_highest_incremental_snapshot_archive_info(snapshot_archives_dir, full_snapshot_slot)
+    get_highest_incremental_snapshot_archive_info(snapshot_archives_root, full_snapshot_slot)
         .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
-pub fn get_highest_full_snapshot_archive_info<P>(
-    snapshot_archives_dir: P,
-) -> Option<FullSnapshotArchiveInfo>
-where
-    P: AsRef<Path>,
-{
-    let mut full_snapshot_archives = get_full_snapshot_archives(snapshot_archives_dir);
+pub fn get_highest_full_snapshot_archive_info(
+    snapshot_archives_root: &SnapshotArchivesRoot,
+) -> Option<FullSnapshotArchiveInfo> {
+    let mut full_snapshot_archives = get_full_snapshot_archives(snapshot_archives_root);
     full_snapshot_archives.sort_unstable();
     full_snapshot_archives.into_iter().rev().next()
 }
 
 /// Get the path for the incremental snapshot archive with the highest slot, for a given full
 /// snapshot slot, in a directory
-pub fn get_highest_incremental_snapshot_archive_info<P>(
-    snapshot_archives_dir: P,
+pub fn get_highest_incremental_snapshot_archive_info(
+    snapshot_archives_root: &SnapshotArchivesRoot,
     full_snapshot_slot: Slot,
-) -> Option<IncrementalSnapshotArchiveInfo>
-where
-    P: AsRef<Path>,
-{
+) -> Option<IncrementalSnapshotArchiveInfo> {
     // Since we want to filter down to only the incremental snapshot archives that have the same
     // full snapshot slot as the value passed in, perform the filtering before sorting to avoid
     // doing unnecessary work.
     let mut incremental_snapshot_archives =
-        get_incremental_snapshot_archives(snapshot_archives_dir)
+        get_incremental_snapshot_archives(snapshot_archives_root)
             .into_iter()
             .filter(|incremental_snapshot_archive_info| {
                 incremental_snapshot_archive_info.base_slot() == full_snapshot_slot
@@ -1243,20 +1250,18 @@ where
     incremental_snapshot_archives.into_iter().rev().next()
 }
 
-pub fn purge_old_snapshot_archives<P>(
-    snapshot_archives_dir: P,
+pub fn purge_old_snapshot_archives(
+    snapshot_archives_root: &SnapshotArchivesRoot,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
-) where
-    P: AsRef<Path>,
-{
+) {
     info!(
         "Purging old snapshot archives in {}, retaining {} full snapshots and {} incremental snapshots",
-        snapshot_archives_dir.as_ref().display(),
+        snapshot_archives_root.root.display(),
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain
     );
-    let mut snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
+    let mut snapshot_archives = get_full_snapshot_archives(snapshot_archives_root);
     snapshot_archives.sort_unstable();
     snapshot_archives.reverse();
     let max_snaps = max(1, maximum_full_snapshot_archives_to_retain); // Always keep at least one snapshot
@@ -1284,10 +1289,11 @@ pub fn purge_old_snapshot_archives<P>(
     // `maximum_incremental_snapshot_archives_to_retain`.
     //
     // Purge all the rest.
-    let highest_full_snapshot_slot = get_highest_full_snapshot_archive_slot(&snapshot_archives_dir);
+    let highest_full_snapshot_slot =
+        get_highest_full_snapshot_archive_slot(&snapshot_archives_root);
     let mut incremental_snapshot_archives_with_same_base_slot = vec![];
     let mut incremental_snapshot_archives_with_different_base_slot = vec![];
-    get_incremental_snapshot_archives(&snapshot_archives_dir)
+    get_incremental_snapshot_archives(&snapshot_archives_root)
         .drain(..)
         .for_each(|incremental_snapshot_archive| {
             if Some(incremental_snapshot_archive.base_slot()) == highest_full_snapshot_slot {
@@ -1692,7 +1698,7 @@ pub fn bank_to_full_snapshot_archive(
     bank_snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
     snapshot_version: Option<SnapshotVersion>,
-    snapshot_archives_dir: impl AsRef<Path>,
+    snapshot_archives_root: &SnapshotArchivesRoot,
     archive_format: ArchiveFormat,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
@@ -1715,7 +1721,7 @@ pub fn bank_to_full_snapshot_archive(
         bank,
         &bank_snapshot_info,
         &temp_dir,
-        snapshot_archives_dir,
+        snapshot_archives_root,
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1735,7 +1741,7 @@ pub fn bank_to_incremental_snapshot_archive(
     bank: &Bank,
     full_snapshot_slot: Slot,
     snapshot_version: Option<SnapshotVersion>,
-    snapshot_archives_dir: impl AsRef<Path>,
+    snapshot_archives_root: &SnapshotArchivesRoot,
     archive_format: ArchiveFormat,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
@@ -1760,7 +1766,7 @@ pub fn bank_to_incremental_snapshot_archive(
         full_snapshot_slot,
         &bank_snapshot_info,
         &temp_dir,
-        snapshot_archives_dir,
+        snapshot_archives_root,
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1774,7 +1780,7 @@ pub fn package_and_archive_full_snapshot(
     bank: &Bank,
     bank_snapshot_info: &BankSnapshotInfo,
     bank_snapshots_dir: impl AsRef<Path>,
-    snapshot_archives_dir: impl AsRef<Path>,
+    snapshot_archives_root: &SnapshotArchivesRoot,
     snapshot_storages: SnapshotStorages,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
@@ -1786,7 +1792,7 @@ pub fn package_and_archive_full_snapshot(
         bank_snapshot_info,
         bank_snapshots_dir,
         bank.src.slot_deltas(&bank.src.roots()),
-        snapshot_archives_dir,
+        snapshot_archives_root.get_local_path(),
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1795,11 +1801,13 @@ pub fn package_and_archive_full_snapshot(
     )?;
 
     let snapshot_package = SnapshotPackage::from(accounts_package);
-    archive_snapshot_package(
-        &snapshot_package,
+    archive_snapshot_package(&snapshot_package)?;
+
+    purge_old_snapshot_archives(
+        snapshot_archives_root,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
-    )?;
+    );
 
     Ok(FullSnapshotArchiveInfo::new(
         snapshot_package.snapshot_archive_info,
@@ -1813,7 +1821,7 @@ pub fn package_and_archive_incremental_snapshot(
     incremental_snapshot_base_slot: Slot,
     bank_snapshot_info: &BankSnapshotInfo,
     bank_snapshots_dir: impl AsRef<Path>,
-    snapshot_archives_dir: impl AsRef<Path>,
+    snapshot_archives_root: &SnapshotArchivesRoot,
     snapshot_storages: SnapshotStorages,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
@@ -1825,7 +1833,7 @@ pub fn package_and_archive_incremental_snapshot(
         bank_snapshot_info,
         bank_snapshots_dir,
         bank.src.slot_deltas(&bank.src.roots()),
-        snapshot_archives_dir,
+        snapshot_archives_root.get_local_path(),
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1836,11 +1844,13 @@ pub fn package_and_archive_incremental_snapshot(
     )?;
 
     let snapshot_package = SnapshotPackage::from(accounts_package);
-    archive_snapshot_package(
-        &snapshot_package,
+    archive_snapshot_package(&snapshot_package)?;
+
+    purge_old_snapshot_archives(
+        snapshot_archives_root,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
-    )?;
+    );
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         incremental_snapshot_base_slot,
@@ -3200,6 +3210,19 @@ mod tests {
                 .get_account_modified_slot(&key1.pubkey())
                 .is_none(),
             "Ensure Account1 has not been brought back from the dead"
+        );
+    }
+
+    #[test]
+    fn test_snapshot_archive_root() {
+        let root = SnapshotArchivesRoot::new(".");
+        assert_eq!(
+            root.get_local_path().as_path(),
+            Path::new(".").join("local")
+        );
+        assert_eq!(
+            root.get_remote_path().as_path(),
+            Path::new(".").join("remote")
         );
     }
 }

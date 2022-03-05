@@ -4,6 +4,7 @@ use {
     indicatif::{ProgressBar, ProgressStyle},
     log::*,
     solana_runtime::{
+        snapshot_archive_info::SnapshotArchivesRoot,
         snapshot_package::SnapshotType,
         snapshot_utils::{self, ArchiveFormat},
     },
@@ -263,7 +264,7 @@ pub fn download_snapshot_archive<'a, 'b>(
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
 ) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(
-        snapshot_archives_dir,
+        &SnapshotArchivesRoot::new(snapshot_archives_dir),
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
     );

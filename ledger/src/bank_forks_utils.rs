@@ -12,7 +12,7 @@ use {
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
         snapshot_package::AccountsPackageSender,
@@ -74,9 +74,9 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
             .expect("Couldn't create snapshot directory");
 
-        if snapshot_utils::get_highest_full_snapshot_archive_info(
+        if snapshot_utils::get_highest_full_snapshot_archive_info(&SnapshotArchivesRoot::new(
             &snapshot_config.snapshot_archives_dir,
-        )
+        ))
         .is_some()
         {
             return load_from_snapshot(
@@ -168,7 +168,7 @@ fn load_from_snapshot(
     let (deserialized_bank, timings, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
             &account_paths,
             genesis_config,
             process_options.debug_keys.clone(),

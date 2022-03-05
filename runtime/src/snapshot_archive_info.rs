@@ -3,7 +3,10 @@
 use {
     crate::snapshot_utils::{self, ArchiveFormat, Result},
     solana_sdk::{clock::Slot, hash::Hash},
-    std::{cmp::Ordering, path::PathBuf},
+    std::{
+        cmp::Ordering,
+        path::{Path, PathBuf},
+    },
 };
 
 /// Trait to query the snapshot archive information
@@ -43,6 +46,38 @@ pub struct SnapshotArchiveInfo {
     pub archive_format: ArchiveFormat,
 }
 
+pub enum SnapshotArchiveSource {
+    Remote,
+    Local,
+}
+
+pub struct SnapshotArchivesRoot {
+    pub root: PathBuf,
+}
+
+impl SnapshotArchivesRoot {
+    fn get_path(&self, source: SnapshotArchiveSource) -> PathBuf {
+        match source {
+            SnapshotArchiveSource::Local => self.root.join("local"),
+            SnapshotArchiveSource::Remote => self.root.join("remote"),
+        }
+    }
+
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        SnapshotArchivesRoot {
+            root: path.as_ref().to_path_buf(),
+        }
+    }
+
+    pub fn get_local_path(&self) -> PathBuf {
+        self.get_path(SnapshotArchiveSource::Local)
+    }
+
+    pub fn get_remote_path(&self) -> PathBuf {
+        self.get_path(SnapshotArchiveSource::Remote)
+    }
+}
+
 /// Information about a full snapshot archive: its path, slot, hash, and archive format
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfo);
@@ -65,6 +100,10 @@ impl FullSnapshotArchiveInfo {
     pub(crate) fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
         Self(snapshot_archive_info)
     }
+
+    pub fn is_local(&self) -> bool {
+        self.path().parent().unwrap().ends_with("local")
+    }
 }
 
 impl SnapshotArchiveInfoGetter for FullSnapshotArchiveInfo {
@@ -79,7 +118,7 @@ impl PartialOrd for FullSnapshotArchiveInfo {
     }
 }
 
-// Order `FullSnapshotArchiveInfo` by slot (ascending), which practially is sorting chronologically
+// Order `FullSnapshotArchiveInfo` by slot (ascending), which practically is sorting chronologically
 impl Ord for FullSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.slot().cmp(&other.slot())
@@ -141,7 +180,7 @@ impl PartialOrd for IncrementalSnapshotArchiveInfo {
 }
 
 // Order `IncrementalSnapshotArchiveInfo` by base slot (ascending), then slot (ascending), which
-// practially is sorting chronologically
+// practically is sorting chronologically
 impl Ord for IncrementalSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.base_slot()
