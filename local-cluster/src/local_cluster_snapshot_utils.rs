@@ -4,6 +4,7 @@ use {
     solana_runtime::{
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
+            SnapshotArchivesRoot,
         },
         snapshot_utils,
     },
@@ -69,7 +70,9 @@ impl LocalCluster {
         );
         loop {
             if let Some(full_snapshot_archive_info) =
-                snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
+                snapshot_utils::get_highest_full_snapshot_archive_info(&SnapshotArchivesRoot::new(
+                    &snapshot_archives_dir,
+                ))
             {
                 match next_snapshot_type {
                     NextSnapshotType::FullSnapshot => {
@@ -80,7 +83,7 @@ impl LocalCluster {
                     NextSnapshotType::IncrementalAndFullSnapshot => {
                         if let Some(incremental_snapshot_archive_info) =
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                                &snapshot_archives_dir,
+                                &SnapshotArchivesRoot::new(&snapshot_archives_dir),
                                 full_snapshot_archive_info.slot(),
                             )
                         {
