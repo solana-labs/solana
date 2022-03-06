@@ -67,10 +67,14 @@ impl SnapshotArchivesRoot {
     }
 
     fn create_dirs(&self) {
-        fs::create_dir_all(self.get_local_path())
-            .expect("Failed to create local archive directory");
-        fs::create_dir_all(self.get_remote_path())
-            .expect("Failed to create remote archive directory");
+        fs::create_dir_all(self.get_local_path()).expect(&format!(
+            "Failed to create local archive directory:{}",
+            self.get_local_path().display()
+        ));
+        fs::create_dir_all(self.get_remote_path()).expect(&format!(
+            "Failed to create remote archive directory:{}",
+            self.get_remote_path().display()
+        ));
     }
 
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
