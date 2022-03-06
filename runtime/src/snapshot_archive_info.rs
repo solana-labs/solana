@@ -5,6 +5,7 @@ use {
     solana_sdk::{clock::Slot, hash::Hash},
     std::{
         cmp::Ordering,
+        fs,
         path::{Path, PathBuf},
     },
 };
@@ -46,11 +47,13 @@ pub struct SnapshotArchiveInfo {
     pub archive_format: ArchiveFormat,
 }
 
+/// Source where snapshot archive comes from
 pub enum SnapshotArchiveSource {
     Remote,
     Local,
 }
 
+/// Root directory of snapshot archives
 pub struct SnapshotArchivesRoot {
     pub root: PathBuf,
 }
@@ -63,10 +66,19 @@ impl SnapshotArchivesRoot {
         }
     }
 
+    fn create_dirs(&self) {
+        fs::create_dir_all(self.get_local_path())
+            .expect("Failed to create local archive directory");
+        fs::create_dir_all(self.get_remote_path())
+            .expect("Failed to create remote archive directory");
+    }
+
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        SnapshotArchivesRoot {
+        let ret = SnapshotArchivesRoot {
             root: path.as_ref().to_path_buf(),
-        }
+        };
+        ret.create_dirs();
+        ret
     }
 
     pub fn get_local_path(&self) -> PathBuf {
