@@ -36,7 +36,7 @@ use {
         validator_configs::*,
     },
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
         snapshot_utils::{self, ArchiveFormat},
@@ -996,9 +996,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     )
     .unwrap();
     let downloaded_full_snapshot_archive_info =
-        snapshot_utils::get_highest_full_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
-        )
+        snapshot_utils::get_highest_full_snapshot_archive_info(&SnapshotArchivesRoot::new(
+            &validator_snapshot_test_config.snapshot_archives_dir,
+        ))
         .unwrap();
     debug!(
         "Downloaded full snapshot, slot: {}",
@@ -1032,7 +1032,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     .unwrap();
     let downloaded_incremental_snapshot_archive_info =
         snapshot_utils::get_highest_incremental_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&validator_snapshot_test_config.snapshot_archives_dir),
             full_snapshot_archive_info.slot(),
         )
         .unwrap();
@@ -1136,13 +1136,13 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Putting this all in its own block so its clear we're only intended to keep the leader's info
     let leader_full_snapshot_archive_info_for_comparison = {
         let validator_full_snapshot = snapshot_utils::get_highest_full_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&validator_snapshot_test_config.snapshot_archives_dir),
         )
         .unwrap();
 
         // Now get the same full snapshot on the LEADER that we just got from the validator
         let mut leader_full_snapshots = snapshot_utils::get_full_snapshot_archives(
-            leader_snapshot_test_config.snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&validator_snapshot_test_config.snapshot_archives_dir),
         );
         leader_full_snapshots.retain(|full_snapshot| {
             full_snapshot.slot() == validator_full_snapshot.slot()
@@ -1177,9 +1177,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     // Get the highest full snapshot slot *before* restarting, as a comparison
     let validator_full_snapshot_slot_at_startup =
-        snapshot_utils::get_highest_full_snapshot_archive_slot(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
-        )
+        snapshot_utils::get_highest_full_snapshot_archive_slot(&SnapshotArchivesRoot::new(
+            &validator_snapshot_test_config.snapshot_archives_dir,
+        ))
         .unwrap();
 
     info!("Restarting the validator...");
@@ -1198,14 +1198,16 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         _validator_highest_incremental_snapshot_archive_info,
     ) = loop {
         if let Some(highest_full_snapshot_info) =
-            snapshot_utils::get_highest_full_snapshot_archive_info(
-                validator_snapshot_test_config.snapshot_archives_dir.path(),
-            )
+            snapshot_utils::get_highest_full_snapshot_archive_info(&SnapshotArchivesRoot::new(
+                &validator_snapshot_test_config.snapshot_archives_dir,
+            ))
         {
             if highest_full_snapshot_info.slot() > validator_full_snapshot_slot_at_startup {
                 if let Some(highest_incremental_snapshot_info) =
                     snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                        validator_snapshot_test_config.snapshot_archives_dir.path(),
+                        &SnapshotArchivesRoot::new(
+                            &validator_snapshot_test_config.snapshot_archives_dir,
+                        ),
                         highest_full_snapshot_info.slot(),
                     )
                 {
@@ -1390,8 +1392,9 @@ fn test_snapshots_blockstore_floor() {
     trace!("Waiting for snapshot tar to be generated with slot",);
 
     let archive_info = loop {
-        let archive =
-            snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir);
+        let archive = snapshot_utils::get_highest_full_snapshot_archive_info(
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir),
+        );
         if archive.is_some() {
             trace!("snapshot exists");
             break archive.unwrap();
