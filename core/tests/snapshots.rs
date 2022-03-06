@@ -66,7 +66,7 @@ mod tests {
             bank::{Bank, BankSlotDelta},
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            snapshot_archive_info::FullSnapshotArchiveInfo,
+            snapshot_archive_info::{FullSnapshotArchiveInfo, SnapshotArchivesRoot},
             snapshot_config::SnapshotConfig,
             snapshot_package::{
                 AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
@@ -291,12 +291,13 @@ mod tests {
         )
         .unwrap();
         let snapshot_package = SnapshotPackage::from(accounts_package);
-        snapshot_utils::archive_snapshot_package(
-            &snapshot_package,
+        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+
+        snapshot_utils::purge_old_snapshot_archives(
+            &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-        )
-        .unwrap();
+        );
 
         // Restore bank from snapshot
         let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
@@ -432,7 +433,7 @@ mod tests {
                 // Only save off the files returned by `get_snapshot_storages`. This is because
                 // some of the storage entries in the accounts directory may be filtered out by
                 // `get_snapshot_storages()` and will not be included in the snapshot. Ultimately,
-                // this means copying naitvely everything in `accounts_dir` to the `saved_accounts_dir`
+                // this means copying natively everything in `accounts_dir` to the `saved_accounts_dir`
                 // will lead to test failure by mismatch when `saved_accounts_dir` is compared to
                 // the unpacked snapshot later in this test's call to `verify_snapshot_archive()`.
                 for file in snapshot_storage_files {
@@ -770,7 +771,7 @@ mod tests {
             bank,
             &bank_snapshot_info,
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
             bank.get_snapshot_storages(None),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -807,7 +808,7 @@ mod tests {
             incremental_snapshot_base_slot,
             &bank_snapshot_info,
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
             storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -826,7 +827,7 @@ mod tests {
     ) -> snapshot_utils::Result<()> {
         let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_config.snapshot_archives_dir),
             &[accounts_dir],
             genesis_config,
             None,
@@ -1005,7 +1006,7 @@ mod tests {
 
         let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_test_config.snapshot_config.bank_snapshots_dir,
-            &snapshot_test_config.snapshot_config.snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_test_config.snapshot_archives_dir),
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
             &snapshot_test_config.genesis_config_info.genesis_config,
             None,

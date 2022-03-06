@@ -2319,7 +2319,8 @@ mod tests {
             0,
         );
 
-        let snapshot_archives = get_full_snapshot_archives(temp_snapshot_archives_dir);
+        let snapshot_archives =
+            get_full_snapshot_archives(&SnapshotArchivesRoot::new(&temp_snapshot_archives_dir));
         assert_eq!(snapshot_archives.len() as Slot, max_slot - min_slot);
     }
 
@@ -2339,8 +2340,9 @@ mod tests {
             max_incremental_snapshot_slot,
         );
 
-        let incremental_snapshot_archives =
-            get_incremental_snapshot_archives(temp_snapshot_archives_dir);
+        let incremental_snapshot_archives = get_incremental_snapshot_archives(
+            &SnapshotArchivesRoot::new(&temp_snapshot_archives_dir),
+        );
         assert_eq!(
             incremental_snapshot_archives.len() as Slot,
             (max_full_snapshot_slot - min_full_snapshot_slot)
@@ -2363,7 +2365,9 @@ mod tests {
         );
 
         assert_eq!(
-            get_highest_full_snapshot_archive_slot(temp_snapshot_archives_dir.path()),
+            get_highest_full_snapshot_archive_slot(&SnapshotArchivesRoot::new(
+                &temp_snapshot_archives_dir.path()
+            )),
             Some(max_slot - 1)
         );
     }
@@ -2387,7 +2391,7 @@ mod tests {
         for full_snapshot_slot in min_full_snapshot_slot..max_full_snapshot_slot {
             assert_eq!(
                 get_highest_incremental_snapshot_archive_slot(
-                    temp_snapshot_archives_dir.path(),
+                    &SnapshotArchivesRoot::new(&temp_snapshot_archives_dir.path()),
                     full_snapshot_slot
                 ),
                 Some(max_incremental_snapshot_slot - 1)
@@ -2396,7 +2400,7 @@ mod tests {
 
         assert_eq!(
             get_highest_incremental_snapshot_archive_slot(
-                temp_snapshot_archives_dir.path(),
+                &SnapshotArchivesRoot::new(&temp_snapshot_archives_dir.path()),
                 max_full_snapshot_slot
             ),
             None
@@ -2416,7 +2420,7 @@ mod tests {
             let mut _snap_file = File::create(snap_path);
         }
         purge_old_snapshot_archives(
-            temp_snap_dir.path(),
+            &SnapshotArchivesRoot::new(&temp_snap_dir.path()),
             maximum_full_snapshot_archives_to_retain,
             maximum_incremental_snapshot_archives_to_retain,
         );
@@ -2515,11 +2519,12 @@ mod tests {
             }
 
             purge_old_snapshot_archives(
-                &snapshot_archives_dir,
+                &SnapshotArchivesRoot::new(&snapshot_archives_dir),
                 maximum_snapshots_to_retain,
                 usize::MAX,
             );
-            let mut full_snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
+            let mut full_snapshot_archives =
+                get_full_snapshot_archives(&SnapshotArchivesRoot::new(&snapshot_archives_dir));
             full_snapshot_archives.sort_unstable();
             assert_eq!(full_snapshot_archives.len(), maximum_snapshots_to_retain,);
             assert_eq!(full_snapshot_archives.last().unwrap().slot(), slot);
@@ -2573,7 +2578,7 @@ mod tests {
             });
 
         purge_old_snapshot_archives(
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             maximum_full_snapshot_archives_to_retain,
             maximum_incremental_snapshot_archives_to_retain,
         );
@@ -2581,7 +2586,7 @@ mod tests {
         // Ensure correct number of full snapshot archives are purged/retained
         // NOTE: One extra full snapshot is always kept (the oldest), hence the `+1`
         let mut remaining_full_snapshot_archives =
-            get_full_snapshot_archives(snapshot_archives_dir.path());
+            get_full_snapshot_archives(&SnapshotArchivesRoot::new(&snapshot_archives_dir.path()));
         assert_eq!(
             remaining_full_snapshot_archives.len(),
             maximum_full_snapshot_archives_to_retain,
@@ -2589,8 +2594,9 @@ mod tests {
         remaining_full_snapshot_archives.sort_unstable();
 
         // Ensure correct number of incremental snapshot archives are purged/retained
-        let mut remaining_incremental_snapshot_archives =
-            get_incremental_snapshot_archives(snapshot_archives_dir.path());
+        let mut remaining_incremental_snapshot_archives = get_incremental_snapshot_archives(
+            &SnapshotArchivesRoot::new(snapshot_archives_dir.path()),
+        );
         assert_eq!(
             remaining_incremental_snapshot_archives.len(),
             maximum_incremental_snapshot_archives_to_retain
@@ -2647,10 +2653,15 @@ mod tests {
             File::create(snapshot_path).unwrap();
         }
 
-        purge_old_snapshot_archives(snapshot_archives_dir.path(), usize::MAX, usize::MAX);
+        purge_old_snapshot_archives(
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
+            usize::MAX,
+            usize::MAX,
+        );
 
-        let remaining_incremental_snapshot_archives =
-            get_incremental_snapshot_archives(snapshot_archives_dir.path());
+        let remaining_incremental_snapshot_archives = get_incremental_snapshot_archives(
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
+        );
         assert!(remaining_incremental_snapshot_archives.is_empty());
     }
 
@@ -2675,7 +2686,7 @@ mod tests {
             &bank_snapshots_dir,
             &original_bank,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -2766,7 +2777,7 @@ mod tests {
             bank_snapshots_dir.path(),
             &bank4,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -2843,7 +2854,7 @@ mod tests {
             bank_snapshots_dir.path(),
             &bank1,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -2876,7 +2887,7 @@ mod tests {
             &bank4,
             full_snapshot_slot,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -2943,7 +2954,7 @@ mod tests {
             &bank_snapshots_dir,
             &bank1,
             None,
-            &snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -2976,7 +2987,7 @@ mod tests {
             &bank4,
             full_snapshot_slot,
             None,
-            &snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -2985,7 +2996,7 @@ mod tests {
 
         let (deserialized_bank, ..) = bank_from_latest_snapshot_archives(
             &bank_snapshots_dir,
-            &snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir),
             &[accounts_dir.as_ref().to_path_buf()],
             &genesis_config,
             None,
@@ -3074,7 +3085,7 @@ mod tests {
             bank_snapshots_dir.path(),
             &bank1,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -3114,7 +3125,7 @@ mod tests {
             &bank2,
             full_snapshot_slot,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -3175,7 +3186,7 @@ mod tests {
             &bank4,
             full_snapshot_slot,
             None,
-            snapshot_archives_dir.path(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir.path()),
             snapshot_archive_format,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
