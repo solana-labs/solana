@@ -735,11 +735,16 @@ impl ReplayStage {
                                         restored_tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
                                     }).
                                     unwrap_or_else(|err| {
-                                        // It's a fatal error if the tower is not present.  This is
-                                        // necessary to prevent the validator from violating
-                                        // lockouts for its new identity
-                                        error!("Failed to load tower for {}: {}", my_pubkey, err);
-                                        std::process::exit(1);
+                                        if err.is_file_missing() {
+                                            Tower::new_from_bankforks(
+                                                &bank_forks.read().unwrap(),
+                                                &my_pubkey,
+                                                &vote_account,
+                                            )
+                                        } else {
+                                            error!("Failed to load tower for {}: {}", my_pubkey, err);
+                                            std::process::exit(1);
+                                        }
                                     });
 
                                 // Ensure the validator can land votes with the new identity before
