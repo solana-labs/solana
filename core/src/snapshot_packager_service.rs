@@ -219,7 +219,7 @@ mod tests {
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_package::{SnapshotPackage, SnapshotType},
             snapshot_utils::{
-                self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME,
+                self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILENAME,
             },
         },
         solana_sdk::hash::Hash,
@@ -335,7 +335,7 @@ mod tests {
         // the source dir for snapshots
         let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
-            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
+            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
             |stream| {
                 serialize_into(stream, &dummy_slot_deltas)?;
                 Ok(())
