@@ -16,6 +16,7 @@ use {
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
+        ledger_metric_report_service::LedgerMetricReportService,
         replay_stage::{ReplayStage, ReplayStageConfig},
         retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
@@ -70,6 +71,7 @@ pub struct Tvu {
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     ledger_cleanup_service: Option<LedgerCleanupService>,
+    ledger_metric_report_service: LedgerMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
     cost_update_service: CostUpdateService,
@@ -357,6 +359,8 @@ impl Tvu {
             )
         });
 
+        let ledger_metric_report_service = LedgerMetricReportService::new(blockstore, exit);
+
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
             exit,
@@ -373,6 +377,7 @@ impl Tvu {
             retransmit_stage,
             replay_stage,
             ledger_cleanup_service,
+            ledger_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
             cost_update_service,
@@ -389,6 +394,7 @@ impl Tvu {
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
         }
+        self.ledger_metric_report_service.join()?;
         self.accounts_background_service.join()?;
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
