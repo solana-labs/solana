@@ -85,10 +85,12 @@ impl SnapshotArchivesRoot {
         ret
     }
 
+    /// get snapshot archive directory for locally generated archives
     pub fn get_local_path(&self) -> PathBuf {
         self.get_path(SnapshotArchiveSource::Local)
     }
 
+    /// get snapshot archive directory for remote download archives
     pub fn get_remote_path(&self) -> PathBuf {
         self.get_path(SnapshotArchiveSource::Remote)
     }

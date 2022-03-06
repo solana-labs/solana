@@ -16,8 +16,10 @@ use {
     },
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
-        accounts_index::AccountSecondaryIndexes, snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_config::SnapshotConfig, snapshot_utils,
+        accounts_index::AccountSecondaryIndexes,
+        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
+        snapshot_config::SnapshotConfig,
+        snapshot_utils,
     },
     solana_sdk::{
         client::SyncClient,
@@ -62,7 +64,9 @@ fn wait_for_next_snapshot(
     );
     loop {
         if let Some(full_snapshot_archive_info) =
-            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_dir)
+            snapshot_utils::get_highest_full_snapshot_archive_info(&SnapshotArchivesRoot::new(
+                &snapshot_archives_dir,
+            ))
         {
             trace!(
                 "full snapshot for slot {} exists",

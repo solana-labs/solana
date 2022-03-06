@@ -23,7 +23,8 @@ use {
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes, bank_forks::BankForks,
         commitment::BlockCommitmentCache, hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_config::SnapshotConfig, snapshot_package::SnapshotType, snapshot_utils,
+        snapshot_archive_info::SnapshotArchivesRoot, snapshot_config::SnapshotConfig,
+        snapshot_package::SnapshotType, snapshot_utils,
     },
     solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
     solana_send_transaction_service::send_transaction_service,
@@ -103,7 +104,7 @@ fn initialize_from_snapshot(
         .expect("Couldn't create bank snapshot directory");
 
     let archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
-        &replica_config.snapshot_archives_dir,
+        &SnapshotArchivesRoot::new(&replica_config.snapshot_archives_dir),
     )
     .unwrap();
 
