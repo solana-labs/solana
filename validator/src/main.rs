@@ -2100,7 +2100,7 @@ pub fn main() {
     let accounts_shrink_ratio = if accounts_shrink_optimize_total_space {
         AccountShrinkThreshold::TotalSpace { shrink_ratio }
     } else {
-        AccountShrinkThreshold::IndividalStore { shrink_ratio }
+        AccountShrinkThreshold::IndividualStore { shrink_ratio }
     };
     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
         .unwrap_or_default()
