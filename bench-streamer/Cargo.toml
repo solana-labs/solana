@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 crossbeam-channel = "0.5"
-clap = "3.1.5"
+clap = { version = "3.1.5", features = ["cargo"] }
 solana-streamer = { path = "../streamer", version = "=1.10.1" }
 solana-net-utils = { path = "../net-utils", version = "=1.10.1" }
 solana-version = { path = "../version", version = "=1.10.1" }
