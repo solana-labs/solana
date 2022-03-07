@@ -1150,14 +1150,12 @@ fn get_snapshot_archives<T>(dir: &Path, cb: fn(PathBuf) -> Result<T>, output: &m
             return;
         }
 
-        for entry in entry_iter.unwrap() {
-            if let Ok(e) = entry {
-                let p = e.path();
-                if p.is_dir() && p.ends_with(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR) {
-                    get_snapshot_archives::<T>(&p, cb, output);
-                } else if let Ok(info) = cb(p) {
-                    output.push(info);
-                }
+        for entry in entry_iter.unwrap().flatten() {
+            let p = entry.path();
+            if p.is_dir() && p.ends_with(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR) {
+                get_snapshot_archives::<T>(&p, cb, output);
+            } else if let Ok(info) = cb(p) {
+                output.push(info);
             }
         }
     }
