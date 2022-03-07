@@ -1,8 +1,6 @@
 use {
     bzip2::bufread::BzDecoder,
-    clap::{
-        crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
-    },
+    clap::{crate_description, crate_name, crate_version, Arg},
     regex::Regex,
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
@@ -714,11 +712,11 @@ fn main() {
     // separate cargo caches according to the version of sbf-tools.
     let bpf_tools_version = "v1.23";
     let version = format!("{}\nbpf-tools {}", crate_version!(), bpf_tools_version);
-    let matches = App::new(crate_name!())
+    let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
         .version(version.as_str())
         .arg(
-            Arg::with_name("bpf_out_dir")
+            Arg::new("bpf_out_dir")
                 .env("BPF_OUT_PATH")
                 .long("bpf-out-dir")
                 .value_name("DIRECTORY")
@@ -726,7 +724,7 @@ fn main() {
                 .help("Place final BPF build artifacts in this directory"),
         )
         .arg(
-            Arg::with_name("bpf_sdk")
+            Arg::new("bpf_sdk")
                 .env("BPF_SDK_PATH")
                 .long("bpf-sdk")
                 .value_name("PATH")
@@ -735,59 +733,61 @@ fn main() {
                 .help("Path to the Solana BPF SDK"),
         )
         .arg(
-            Arg::with_name("cargo_args")
+            Arg::new("cargo_args")
                 .help("Arguments passed directly to `cargo build`")
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .last(true),
         )
         .arg(
-            Arg::with_name("dump")
+            Arg::new("dump")
                 .long("dump")
                 .takes_value(false)
                 .help("Dump ELF information to a text file on success"),
         )
         .arg(
-            Arg::with_name("features")
+            Arg::new("features")
                 .long("features")
                 .value_name("FEATURES")
                 .takes_value(true)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .help("Space-separated list of features to activate"),
         )
         .arg(
-            Arg::with_name("generate_child_script_on_failure")
+            Arg::new("generate_child_script_on_failure")
                 .long("generate-child-script-on-failure")
                 .takes_value(false)
                 .help("Generate a shell script to rerun a failed subcommand"),
         )
         .arg(
-            Arg::with_name("manifest_path")
+            Arg::new("manifest_path")
                 .long("manifest-path")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Path to Cargo.toml"),
         )
         .arg(
-            Arg::with_name("no_default_features")
+            Arg::new("no_default_features")
                 .long("no-default-features")
                 .takes_value(false)
                 .help("Do not activate the `default` feature"),
         )
         .arg(
-            Arg::with_name("offline")
+            Arg::new("offline")
                 .long("offline")
                 .takes_value(false)
                 .help("Run without accessing the network"),
         )
         .arg(
-            Arg::with_name("verbose")
-                .short("v")
+            Arg::new("verbose")
+                .short('v')
                 .long("verbose")
                 .takes_value(false)
                 .help("Use verbose output"),
         )
         .arg(
-            Arg::with_name("workspace")
+            Arg::new("workspace")
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
@@ -795,8 +795,8 @@ fn main() {
         )
         .get_matches_from(args);
 
-    let bpf_sdk = value_t_or_exit!(matches, "bpf_sdk", PathBuf);
-    let bpf_out_dir = value_t!(matches, "bpf_out_dir", PathBuf).ok();
+    let bpf_sdk: PathBuf = matches.value_of_t_or_exit("bpf_sdk");
+    let bpf_out_dir: Option<PathBuf> = matches.value_of_t("bpf_out_dir").ok();
 
     let config = Config {
         cargo_args: matches
@@ -821,15 +821,13 @@ fn main() {
         }),
         bpf_tools_version,
         dump: matches.is_present("dump"),
-        features: values_t!(matches, "features", String)
-            .ok()
-            .unwrap_or_default(),
+        features: matches.values_of_t("features").ok().unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
     };
-    let manifest_path = value_t!(matches, "manifest_path", PathBuf).ok();
+    let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
     build_bpf(config, manifest_path);
 }
