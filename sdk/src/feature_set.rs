@@ -251,7 +251,6 @@ pub mod reject_empty_instruction_without_program {
     solana_sdk::declare_id!("9kdtFSrXHQg3hKkbXkQ6trJ3Ja1xpJ22CTFSNAciEwmL");
 }
 
-<<<<<<< HEAD
 pub mod reject_non_rent_exempt_vote_withdraws {
     solana_sdk::declare_id!("7txXZZD6Um59YoLMF7XUNimbMjsqsWhc7g2EniiTrmp1");
 }
@@ -302,10 +301,10 @@ pub mod disable_bpf_unresolved_symbols_at_runtime {
 
 pub mod add_get_processed_sibling_instruction_syscall {
     solana_sdk::declare_id!("CFK1hRCNy8JJuAAY8Pb2GjLFNdCThS2qwZNe3izzBMgn");
-=======
+}
+
 pub mod fixed_memcpy_nonoverlapping_check {
     solana_sdk::declare_id!("36PRUK2Dz6HWYdG9SpjeAsF5F3KxnFCakA2BZMbtMhSb");
->>>>>>> df2b44899 (Fix incorrect nonoverlapping test in sol_memcpy (#21007))
 }
 
 lazy_static! {
@@ -365,7 +364,6 @@ lazy_static! {
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (leave_nonce_on_success::id(), "leave nonce as is on success"),
         (reject_empty_instruction_without_program::id(), "fail instructions which have native_loader as program_id directly"),
-<<<<<<< HEAD
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (cap_accounts_data_len::id(), "cap the accounts data len"),
@@ -379,9 +377,7 @@ lazy_static! {
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
-=======
         (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
->>>>>>> df2b44899 (Fix incorrect nonoverlapping test in sol_memcpy (#21007))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

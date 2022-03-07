@@ -183,7 +183,6 @@ pub(crate) fn sol_log_data(data: &[&[u8]]) {
     SYSCALL_STUBS.read().unwrap().sol_log_data(data)
 }
 
-<<<<<<< HEAD
 pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
     SYSCALL_STUBS
         .read()
@@ -193,7 +192,8 @@ pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Inst
 
 pub(crate) fn sol_get_stack_height() -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
-=======
+}
+
 /// Check that two regions do not overlap.
 ///
 /// Adapted from libcore, hidden to share with bpf_loader without being part of
@@ -224,5 +224,4 @@ mod tests {
         assert!(!is_nonoverlapping(10, 12, 3));
         assert!(is_nonoverlapping(10, 13, 3));
     }
->>>>>>> df2b44899 (Fix incorrect nonoverlapping test in sol_memcpy (#21007))
 }

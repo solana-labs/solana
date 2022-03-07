@@ -21,19 +21,11 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-<<<<<<< HEAD
             add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
-            disable_fees_sysvar, do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            update_syscall_base_costs,
-=======
-            blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
-            do_support_realloc, fixed_memcpy_nonoverlapping_check,
+            disable_fees_sysvar, do_support_realloc, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
             return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            sol_log_data_syscall_enabled,
->>>>>>> df2b44899 (Fix incorrect nonoverlapping test in sol_memcpy (#21007))
+            sol_log_data_syscall_enabled, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
