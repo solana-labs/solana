@@ -1154,7 +1154,7 @@ fn get_snapshot_archives<T>(dir: &Path, cb: fn(PathBuf) -> Result<T>, output: &m
             if entry.is_ok() {
                 let entry = entry.unwrap();
                 let path = entry.path();
-                if path.is_dir() {
+                if path.is_dir() && path.ends_with(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR) {
                     get_snapshot_archives::<T>(&path, cb, output);
                 } else {
                     if let Ok(info) = cb(entry.path()) {
