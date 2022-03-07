@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-clap-utils"
 edition = "2021"
 
 [dependencies]
-clap = "3.1.5"
+clap = { version = "3.1.5", features = ["cargo"] }
 rpassword = "5.0"
 solana-perf = { path = "../perf", version = "=1.10.1" }
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.1", default-features = false}
