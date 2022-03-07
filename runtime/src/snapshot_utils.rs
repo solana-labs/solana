@@ -43,7 +43,7 @@ use {
     thiserror::Error,
 };
 
-pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
+pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
@@ -258,7 +258,7 @@ pub fn archive_snapshot_package(
         &snapshot_package
             .snapshot_links
             .path()
-            .join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
+            .join(SNAPSHOT_STATUS_CACHE_FILENAME),
     )?;
 
     let mut timer = Measure::start("snapshot_package-package_snapshots");
@@ -1508,7 +1508,7 @@ fn rebuild_bank_from_snapshots(
                     .as_path()
             },
         )
-        .join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
+        .join(SNAPSHOT_STATUS_CACHE_FILENAME);
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
         info!(
             "Rebuilding status cache from {}",

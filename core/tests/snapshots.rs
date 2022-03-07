@@ -544,7 +544,7 @@ mod tests {
         snapshot_utils::serialize_snapshot_data_file(
             &saved_snapshots_dir
                 .path()
-                .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME),
+                .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME),
             |stream| {
                 serialize_into(stream, &[] as &[BankSlotDelta])?;
                 Ok(())
