@@ -7,7 +7,7 @@ use {
     futures::future::join_all,
     itertools::Itertools,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
-    rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_sdk::{
         quic::QUIC_PORT_OFFSET, transaction::Transaction, transport::Result as TransportResult,
     },
@@ -80,9 +80,8 @@ impl TpuConnection for QuicTpuConnection {
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .collect::<Vec<_>>();
 
-        let slices = buffers.par_iter().map(|buf| &buf[..]).collect::<Vec<_>>();
         let _guard = self.client.runtime.enter();
-        let send_batch = self.client.send_batch(slices);
+        let send_batch = self.client.send_batch(&buffers[..]);
         self.client.runtime.block_on(send_batch)
     }
 }
@@ -169,7 +168,7 @@ impl QuicClient {
         Ok(())
     }
 
-    pub async fn send_batch(&self, buffers: Vec<&[u8]>) -> TransportResult<()> {
+    pub async fn send_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()> {
         // Start off by "testing" the connection by sending the first transaction
         // This will also connect to the server if not already connected
         // and reconnect and retry if the first send attempt failed
@@ -184,7 +183,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self._send_buffer(buffers[0]).await?;
+        let connection = self._send_buffer(&buffers[0][..]).await?;
 
         let futures = buffers[1..buffers.len()]
             .iter()
@@ -194,7 +193,7 @@ impl QuicClient {
                 join_all(
                     buffs
                         .into_iter()
-                        .map(|buf| Self::_send_buffer_using_conn(buf, &connection)),
+                        .map(|buf| Self::_send_buffer_using_conn(&buf[..], &connection)),
                 )
             })
             .collect::<Vec<_>>();
