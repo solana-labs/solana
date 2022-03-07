@@ -1,5 +1,5 @@
 use {
-    clap::{crate_version, App, Arg},
+    clap::{crate_version, Arg, Command},
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
@@ -53,7 +53,7 @@ fn load_accounts(path: &Path) -> Result<Input> {
 
 fn main() {
     solana_logger::setup();
-    let matches = App::new("Solana BPF CLI")
+    let matches = Command::new("Solana BPF CLI")
         .version(crate_version!())
         .author("Solana Maintainers <maintainers@solana.foundation>")
         .about(
@@ -88,7 +88,7 @@ and the following fields are required
         )
         .arg(
             Arg::new("PROGRAM")
-                .about(
+                .help(
                     "Program file to use. This is either an ELF shared-object file to be executed, \
                      or an assembly file to be assembled and executed.",
                 )
@@ -97,7 +97,7 @@ and the following fields are required
         )
         .arg(
             Arg::new("input")
-                .about(
+                .help(
                     "Input for the program to run on, where FILE is a name of a JSON file \
 with input data, or BYTES is the number of 0-valued bytes to allocate for program parameters",
                 )
@@ -109,7 +109,7 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
         )
         .arg(
             Arg::new("memory")
-                .about("Heap memory for the program to run on")
+                .help("Heap memory for the program to run on")
                 .short('m')
                 .long("memory")
                 .value_name("BYTES")
@@ -118,7 +118,7 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
         )
         .arg(
             Arg::new("use")
-                .about(
+                .help(
                     "Method of execution to use, where 'cfg' generates Control Flow Graph \
 of the program, 'disassembler' dumps disassembled code of the program, 'interpreter' runs \
 the program in the virtual machine's interpreter, and 'jit' precompiles the program to \
@@ -133,7 +133,7 @@ native machine code before execting it in the virtual machine.",
         )
         .arg(
             Arg::new("instruction limit")
-                .about("Limit the number of instructions to execute")
+                .help("Limit the number of instructions to execute")
                 .short('l')
                 .long("limit")
                 .takes_value(true)
@@ -142,25 +142,25 @@ native machine code before execting it in the virtual machine.",
         )
         .arg(
             Arg::new("trace")
-                .about("Output trace to 'trace.out' file using tracing instrumentation")
+                .help("Output trace to 'trace.out' file using tracing instrumentation")
                 .short('t')
                 .long("trace"),
         )
         .arg(
             Arg::new("profile")
-                .about("Output profile to 'profile.dot' file using tracing instrumentation")
+                .help("Output profile to 'profile.dot' file using tracing instrumentation")
                 .short('p')
                 .long("profile"),
         )
         .arg(
             Arg::new("verify")
-                .about("Run the verifier before execution or disassembly")
+                .help("Run the verifier before execution or disassembly")
                 .short('v')
                 .long("verify"),
         )
         .arg(
             Arg::new("output_format")
-                .about("Return information in specified output format")
+                .help("Return information in specified output format")
                 .long("output")
                 .value_name("FORMAT")
                 .global(true)
