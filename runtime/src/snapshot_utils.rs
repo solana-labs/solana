@@ -789,7 +789,7 @@ pub fn bank_from_snapshot_archives(
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
-        accounts_db_skip_shrink,
+        accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
         Some(full_snapshot_archive_info.slot()),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -1136,54 +1136,63 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
     })
 }
 
-/// Get a list of the full snapshot archives in a directory
+/// Walk down the snapshot archive directory recursively to collect snapshot archive file info
+fn get_snapshot_archives<T>(dir: &Path, cb: fn(PathBuf) -> Result<T>, output: &mut Vec<T>) {
+    if dir.is_dir() {
+        let entry_iter = fs::read_dir(dir);
+        if let Err(e) = entry_iter {
+            info!(
+                "Unable to read snapshot archives directory: err: {}, path: {}",
+                e,
+                dir.display()
+            );
+            return;
+        }
+
+        for entry in entry_iter.unwrap() {
+            if entry.is_ok() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if path.is_dir() {
+                    get_snapshot_archives::<T>(&path, cb, output);
+                } else {
+                    if let Ok(info) = cb(entry.path()) {
+                        output.push(info);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Get a list of the full snapshot archives from a directory
 pub fn get_full_snapshot_archives<P>(snapshot_archives_dir: P) -> Vec<FullSnapshotArchiveInfo>
 where
     P: AsRef<Path>,
 {
-    match fs::read_dir(&snapshot_archives_dir) {
-        Err(err) => {
-            info!(
-                "Unable to read snapshot archives directory: err: {}, path: {}",
-                err,
-                snapshot_archives_dir.as_ref().display()
-            );
-            vec![]
-        }
-        Ok(files) => files
-            .filter_map(|entry| {
-                entry.map_or(None, |entry| {
-                    FullSnapshotArchiveInfo::new_from_path(entry.path()).ok()
-                })
-            })
-            .collect(),
-    }
+    let mut ret = Vec::<FullSnapshotArchiveInfo>::new();
+    get_snapshot_archives(
+        snapshot_archives_dir.as_ref(),
+        FullSnapshotArchiveInfo::new_from_path,
+        &mut ret,
+    );
+    ret
 }
 
-/// Get a list of the incremental snapshot archives in a directory
+/// Get a list of the incremental snapshot archives from a directory
 pub fn get_incremental_snapshot_archives<P>(
     snapshot_archives_dir: P,
 ) -> Vec<IncrementalSnapshotArchiveInfo>
 where
     P: AsRef<Path>,
 {
-    match fs::read_dir(&snapshot_archives_dir) {
-        Err(err) => {
-            info!(
-                "Unable to read snapshot archives directory: err: {}, path: {}",
-                err,
-                snapshot_archives_dir.as_ref().display()
-            );
-            vec![]
-        }
-        Ok(files) => files
-            .filter_map(|entry| {
-                entry.map_or(None, |entry| {
-                    IncrementalSnapshotArchiveInfo::new_from_path(entry.path()).ok()
-                })
-            })
-            .collect(),
-    }
+    let mut ret = Vec::<IncrementalSnapshotArchiveInfo>::new();
+    get_snapshot_archives(
+        snapshot_archives_dir.as_ref(),
+        IncrementalSnapshotArchiveInfo::new_from_path,
+        &mut ret,
+    );
+    ret
 }
 
 /// Get the highest slot of the full snapshot archives in a directory

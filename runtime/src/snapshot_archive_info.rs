@@ -65,6 +65,10 @@ impl FullSnapshotArchiveInfo {
     pub(crate) fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
         Self(snapshot_archive_info)
     }
+
+    pub fn is_remote(&self) -> bool {
+        self.path().parent().unwrap().ends_with("remote")
+    }
 }
 
 impl SnapshotArchiveInfoGetter for FullSnapshotArchiveInfo {
