@@ -25,6 +25,15 @@ pub trait SnapshotArchiveInfoGetter {
     fn archive_format(&self) -> ArchiveFormat {
         self.snapshot_archive_info().archive_format
     }
+
+    fn is_remote(&self) -> bool {
+        self.snapshot_archive_info()
+            .path
+            .parent()
+            .map_or(false, |p| {
+                p.ends_with(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR)
+            })
+    }
 }
 
 /// Common information about a snapshot archive
@@ -64,13 +73,6 @@ impl FullSnapshotArchiveInfo {
 
     pub(crate) fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
         Self(snapshot_archive_info)
-    }
-
-    pub fn is_remote(&self) -> bool {
-        self.path()
-            .parent()
-            .unwrap()
-            .ends_with(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR)
     }
 }
 
