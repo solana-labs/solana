@@ -126,8 +126,8 @@ pub struct ThinClient<C: 'static + TpuConnection> {
 
 impl<C: 'static + TpuConnection> ThinClient<C> {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
-    /// and the Tpu at `quic_tpu_addr` over `transactions_socket` using QUIC.
-    /// TODO: Add UDP support if quic is set to false
+    /// and the Tpu at `quic_tpu_addr` over `transactions_socket` using Quic or UDP
+    /// (currently hardcoded to UDP)
     pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: UdpSocket) -> Self {
         let tpu_connection = C::new(transactions_socket, tpu_addr);
 
