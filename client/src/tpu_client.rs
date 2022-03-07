@@ -56,7 +56,6 @@ pub const MAX_FANOUT_SLOTS: u64 = 100;
 
 /// Config params for `TpuClient`
 #[derive(Clone, Debug)]
-#[non_exhaustive]
 pub struct TpuClientConfig {
     /// The range of upcoming slots to include when determining which
     /// leaders to send transactions to (min: 1, max: `MAX_FANOUT_SLOTS`)
