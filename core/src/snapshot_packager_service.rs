@@ -4,7 +4,9 @@ use {
     },
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
-        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
+        snapshot_archive_info::{
+            SnapshotArchiveInfoGetter, SnapshotArchiveSource, SnapshotArchivesRoot,
+        },
         snapshot_config::SnapshotConfig,
         snapshot_hash::{
             FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash,
@@ -261,8 +263,8 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let snapshot_archives_dir = temp_dir.join("snapshots_output");
-        fs::create_dir_all(&snapshot_archives_dir).unwrap();
+        let snapshot_archives_root = temp_dir.join("snapshots_output");
+        fs::create_dir_all(&snapshot_archives_root).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
@@ -304,7 +306,8 @@ mod tests {
         let hash = Hash::default();
         let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir,
+            &SnapshotArchivesRoot::new(&snapshot_archives_root),
+            SnapshotArchiveSource::Local,
             slot,
             &hash,
             archive_format,
@@ -328,7 +331,7 @@ mod tests {
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
         snapshot_utils::purge_old_snapshot_archives(
-            &SnapshotArchivesRoot::new(&output_tar_path),
+            &SnapshotArchivesRoot::new(&snapshot_archives_root),
             snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         );

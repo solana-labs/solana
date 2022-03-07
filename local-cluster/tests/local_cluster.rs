@@ -36,7 +36,9 @@ use {
         validator_configs::*,
     },
     solana_runtime::{
-        snapshot_archive_info::{SnapshotArchiveInfoGetter, SnapshotArchivesRoot},
+        snapshot_archive_info::{
+            SnapshotArchiveInfoGetter, SnapshotArchiveSource, SnapshotArchivesRoot,
+        },
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
         snapshot_utils::{self, ArchiveFormat},
@@ -1330,10 +1332,8 @@ fn test_snapshot_restart_tower() {
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-        validator_snapshot_test_config
-            .snapshot_archives_dir
-            .path()
-            .to_path_buf(),
+        &SnapshotArchivesRoot::new(&validator_snapshot_test_config.snapshot_archives_dir),
+        SnapshotArchiveSource::Local,
         full_snapshot_archive_info.slot(),
         full_snapshot_archive_info.hash(),
         full_snapshot_archive_info.archive_format(),
@@ -1404,10 +1404,8 @@ fn test_snapshots_blockstore_floor() {
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-        validator_snapshot_test_config
-            .snapshot_archives_dir
-            .path()
-            .to_path_buf(),
+        &SnapshotArchivesRoot::new(&validator_snapshot_test_config.snapshot_archives_dir),
+        SnapshotArchiveSource::Local,
         archive_info.slot(),
         archive_info.hash(),
         ArchiveFormat::TarBzip2,

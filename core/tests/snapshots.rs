@@ -66,7 +66,9 @@ mod tests {
             bank::{Bank, BankSlotDelta},
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            snapshot_archive_info::{FullSnapshotArchiveInfo, SnapshotArchivesRoot},
+            snapshot_archive_info::{
+                FullSnapshotArchiveInfo, SnapshotArchiveSource, SnapshotArchivesRoot,
+            },
             snapshot_config::SnapshotConfig,
             snapshot_package::{
                 AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
@@ -175,7 +177,8 @@ mod tests {
 
         let check_hash_calculation = false;
         let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir.to_path_buf(),
+            &SnapshotArchivesRoot::new(&snapshot_archives_dir),
+            SnapshotArchiveSource::Local,
             old_last_bank.slot(),
             &old_last_bank.get_accounts_hash(),
             ArchiveFormat::TarBzip2,
@@ -462,7 +465,8 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
-                    snapshot_archives_dir.to_path_buf(),
+                    &SnapshotArchivesRoot::new(&snapshot_archives_dir),
+                    SnapshotArchiveSource::Local,
                     slot,
                     &accounts_hash,
                     ArchiveFormat::TarBzip2,

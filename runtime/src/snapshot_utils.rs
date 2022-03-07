@@ -12,7 +12,7 @@ use {
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
-            SnapshotArchivesRoot,
+            SnapshotArchiveSource, SnapshotArchivesRoot,
         },
         snapshot_package::{
             AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
@@ -1019,15 +1019,22 @@ pub fn path_to_file_name_str(path: &Path) -> Result<&str> {
         .ok_or_else(|| SnapshotError::FileNameToStrError(path.to_path_buf()))
 }
 
-/// Build the full snapshot archive path from its components: the snapshot archives directory, the
-/// snapshot slot, the accounts hash, and the archive format.
+/// Build the full snapshot archive path from its components: the snapshot
+/// archives root, source, the snapshot slot, the accounts hash, and the archive
+/// format.
 pub fn build_full_snapshot_archive_path(
-    snapshot_archives_dir: PathBuf,
+    snapshot_archives_root: &SnapshotArchivesRoot,
+    snapshot_archive_source: SnapshotArchiveSource,
     slot: Slot,
     hash: &Hash,
     archive_format: ArchiveFormat,
 ) -> PathBuf {
-    snapshot_archives_dir.join(format!(
+    let dir = match snapshot_archive_source {
+        SnapshotArchiveSource::Local => snapshot_archives_root.get_local_path(),
+        SnapshotArchiveSource::Remote => snapshot_archives_root.get_remote_path(),
+    };
+
+    dir.join(format!(
         "snapshot-{}-{}.{}",
         slot,
         hash,
@@ -1035,17 +1042,24 @@ pub fn build_full_snapshot_archive_path(
     ))
 }
 
-/// Build the incremental snapshot archive path from its components: the snapshot archives
-/// directory, the snapshot base slot, the snapshot slot, the accounts hash, and the archive
-/// format.
+/// Build the incremental snapshot archive path from its components: the
+/// snapshot archives root, source, the snapshot base slot, the snapshot slot,
+/// the accounts hash, and the archive format.
 pub fn build_incremental_snapshot_archive_path(
-    snapshot_archives_dir: PathBuf,
+    //snapshot_archives_dir: PathBuf,
+    snapshot_archives_root: &SnapshotArchivesRoot,
+    snapshot_archive_source: SnapshotArchiveSource,
     base_slot: Slot,
     slot: Slot,
     hash: &Hash,
     archive_format: ArchiveFormat,
 ) -> PathBuf {
-    snapshot_archives_dir.join(format!(
+    let dir = match snapshot_archive_source {
+        SnapshotArchiveSource::Local => snapshot_archives_root.get_local_path(),
+        SnapshotArchiveSource::Remote => snapshot_archives_root.get_remote_path(),
+    };
+
+    dir.join(format!(
         "incremental-snapshot-{}-{}-{}.{}",
         base_slot,
         slot,
@@ -1608,7 +1622,7 @@ pub fn snapshot_bank(
     status_cache_slot_deltas: Vec<BankSlotDelta>,
     accounts_package_sender: &AccountsPackageSender,
     bank_snapshots_dir: impl AsRef<Path>,
-    snapshot_archives_dir: impl AsRef<Path>,
+    snapshot_archives_root: SnapshotArchivesRoot,
     snapshot_version: SnapshotVersion,
     archive_format: ArchiveFormat,
     hash_for_testing: Option<Hash>,
@@ -1631,7 +1645,7 @@ pub fn snapshot_bank(
         &bank_snapshot_info,
         bank_snapshots_dir,
         status_cache_slot_deltas,
-        snapshot_archives_dir,
+        snapshot_archives_root.get_local_path(),
         snapshot_storages,
         archive_format,
         snapshot_version,

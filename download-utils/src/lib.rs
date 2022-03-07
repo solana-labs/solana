@@ -4,7 +4,7 @@ use {
     indicatif::{ProgressBar, ProgressStyle},
     log::*,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchivesRoot,
+        snapshot_archive_info::{SnapshotArchiveSource, SnapshotArchivesRoot},
         snapshot_package::SnapshotType,
         snapshot_utils::{self, ArchiveFormat},
     },
@@ -277,14 +277,16 @@ pub fn download_snapshot_archive<'a, 'b>(
     ] {
         let destination_path = match snapshot_type {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
-                snapshot_archives_dir.to_path_buf(),
+                &SnapshotArchivesRoot::new(&snapshot_archives_dir),
+                SnapshotArchiveSource::Remote,
                 desired_snapshot_hash.0,
                 &desired_snapshot_hash.1,
                 archive_format,
             ),
             SnapshotType::IncrementalSnapshot(base_slot) => {
                 snapshot_utils::build_incremental_snapshot_archive_path(
-                    snapshot_archives_dir.to_path_buf(),
+                    &SnapshotArchivesRoot::new(&snapshot_archives_dir),
+                    SnapshotArchiveSource::Remote,
                     base_slot,
                     desired_snapshot_hash.0,
                     &desired_snapshot_hash.1,
