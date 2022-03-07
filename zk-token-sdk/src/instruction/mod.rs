@@ -53,7 +53,7 @@ fn combine_lo_hi_ciphertexts(
     ciphertext_hi: &ElGamalCiphertext,
     bit_length: usize,
 ) -> ElGamalCiphertext {
-    let two_power = (1 as u64) << bit_length;
+    let two_power = (1_u64) << bit_length;
     ciphertext_lo + &(ciphertext_hi * &Scalar::from(two_power))
 }
 
@@ -63,7 +63,7 @@ pub fn combine_lo_hi_commitments(
     comm_hi: &PedersenCommitment,
     bit_length: usize,
 ) -> PedersenCommitment {
-    let two_power = (1 as u64) << bit_length;
+    let two_power = (1_u64) << bit_length;
     comm_lo + comm_hi * &Scalar::from(two_power)
 }
 
@@ -73,6 +73,6 @@ pub fn combine_lo_hi_openings(
     opening_hi: &PedersenOpening,
     bit_length: usize,
 ) -> PedersenOpening {
-    let two_power = (1 as u64) << bit_length;
+    let two_power = (1_u64) << bit_length;
     opening_lo + opening_hi * &Scalar::from(two_power)
 }

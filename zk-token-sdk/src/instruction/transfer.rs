@@ -106,16 +106,6 @@ impl TransferData {
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Result<Self, ProofError> {
-        assert!(TRANSFER_AMOUNT_LO_BIT_LENGTH <= 32);
-        assert!(TRANSFER_AMOUNT_HI_BIT_LENGTH <= 32);
-        assert!(TRANSFER_AMOUNT_LO_BIT_LENGTH + TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH == 32);
-
-        // transfer amount must be at most 2^(TRANSFER_AMOUNT_LO_BIT_LENGTH + TRANSFER_AMOUNT_HI_BIT_LENGTH) - 1
-        assert!(
-            transfer_amount
-                <= 1 << (TRANSFER_AMOUNT_LO_BIT_LENGTH + TRANSFER_AMOUNT_HI_BIT_LENGTH) - 1
-        );
-
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BIT_LENGTH);
 
