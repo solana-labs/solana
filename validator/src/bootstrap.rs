@@ -381,11 +381,11 @@ fn get_highest_local_snapshot_hash(
     snapshot_archives_root: &SnapshotArchivesRoot,
 ) -> Option<(Slot, Hash)> {
     if let Some(full_snapshot_info) =
-        snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_root)
+        snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_root)
     {
         if let Some(incremental_snapshot_info) =
             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                &snapshot_archives_root,
+                snapshot_archives_root,
                 full_snapshot_info.slot(),
             )
         {
