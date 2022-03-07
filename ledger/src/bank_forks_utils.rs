@@ -17,7 +17,7 @@ use {
         snapshot_package::AccountsPackageSender,
         snapshot_utils,
     },
-    solana_sdk::{clock::Slot, genesis_config::GenesisConfig},
+    solana_sdk::genesis_config::GenesisConfig,
     std::{fs, path::PathBuf, process, result},
 };
 
@@ -25,13 +25,12 @@ pub type LoadResult = result::Result<
     (
         BankForks,
         LeaderScheduleCache,
-        Option<Slot>,
         Option<StartingSnapshotHashes>,
     ),
     BlockstoreProcessorError,
 >;
 
-/// Load the banks and accounts
+/// Load the banks via genesis or a snapshot then processes all full blocks in blockstore
 ///
 /// If a snapshot config is given, and a snapshot is found, it will be loaded.  Otherwise, load
 /// from genesis.
@@ -48,6 +47,42 @@ pub fn load(
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> LoadResult {
+    let (bank_forks, starting_snapshot_hashes) = load_bank_forks(
+        genesis_config,
+        blockstore,
+        account_paths,
+        shrink_paths,
+        snapshot_config,
+        &process_options,
+        cache_block_meta_sender,
+        accounts_update_notifier,
+    );
+
+    blockstore_processor::process_blockstore_from_root(
+        blockstore,
+        bank_forks,
+        &process_options,
+        transaction_status_sender,
+        cache_block_meta_sender,
+        snapshot_config,
+        accounts_package_sender,
+    )
+    .map(|(bank_forks, leader_schedule_cache, ..)| {
+        (bank_forks, leader_schedule_cache, starting_snapshot_hashes)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn load_bank_forks(
+    genesis_config: &GenesisConfig,
+    blockstore: &Blockstore,
+    account_paths: Vec<PathBuf>,
+    shrink_paths: Option<Vec<PathBuf>>,
+    snapshot_config: Option<&SnapshotConfig>,
+    process_options: &ProcessOptions,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+) -> (BankForks, Option<StartingSnapshotHashes>) {
     let snapshot_present = if let Some(snapshot_config) = snapshot_config {
         info!(
             "Initializing bank snapshot path: {}",
@@ -72,13 +107,13 @@ pub fn load(
         false
     };
 
-    let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
+    if snapshot_present {
         bank_forks_from_snapshot(
             genesis_config,
             account_paths,
             shrink_paths,
             snapshot_config.as_ref().unwrap(),
-            &process_options,
+            process_options,
             accounts_update_notifier,
         )
     } else {
@@ -98,35 +133,13 @@ pub fn load(
                 genesis_config,
                 blockstore,
                 account_paths,
-                &process_options,
+                process_options,
                 cache_block_meta_sender,
                 accounts_update_notifier,
             ),
             None,
         )
-    };
-
-    blockstore_processor::process_blockstore_from_root(
-        blockstore,
-        bank_forks,
-        &process_options,
-        transaction_status_sender,
-        cache_block_meta_sender,
-        snapshot_config,
-        accounts_package_sender,
-    )
-    .map(
-        |(bank_forks, leader_schedule_cache, last_full_snapshot_slot)| {
-            let last_full_snapshot_slot =
-                last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
-            (
-                bank_forks,
-                leader_schedule_cache,
-                last_full_snapshot_slot,
-                starting_snapshot_hashes,
-            )
-        },
-    )
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

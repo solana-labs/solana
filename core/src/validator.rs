@@ -1322,31 +1322,40 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
-    let (
-        mut bank_forks,
-        mut leader_schedule_cache,
-        last_full_snapshot_slot,
-        starting_snapshot_hashes,
-    ) = bank_forks_utils::load(
+    let cache_block_meta_sender = transaction_history_services
+        .cache_block_meta_sender
+        .as_ref();
+
+    let (bank_forks, starting_snapshot_hashes) = bank_forks_utils::load_bank_forks(
         &genesis_config,
         &blockstore,
         config.account_paths.clone(),
         config.account_shrink_paths.clone(),
         config.snapshot_config.as_ref(),
-        process_options,
-        transaction_history_services
-            .transaction_status_sender
-            .as_ref(),
-        transaction_history_services
-            .cache_block_meta_sender
-            .as_ref(),
-        accounts_package_sender,
+        &process_options,
+        cache_block_meta_sender,
         accounts_update_notifier,
-    )
-    .unwrap_or_else(|err| {
-        error!("Failed to load ledger: {:?}", err);
-        abort()
-    });
+    );
+
+    let (mut bank_forks, mut leader_schedule_cache, last_full_snapshot_slot) =
+        blockstore_processor::process_blockstore_from_root(
+            &blockstore,
+            bank_forks,
+            &process_options,
+            transaction_history_services
+                .transaction_status_sender
+                .as_ref(),
+            cache_block_meta_sender,
+            config.snapshot_config.as_ref(),
+            accounts_package_sender,
+        )
+        .unwrap_or_else(|err| {
+            error!("Failed to load ledger: {:?}", err);
+            abort()
+        });
+
+    let last_full_snapshot_slot =
+        last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
 
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {

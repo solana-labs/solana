@@ -27,7 +27,7 @@ use {
             self, AccessType, BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRecoveryMode,
             Database,
         },
-        blockstore_processor::ProcessOptions,
+        blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
     },
     solana_measure::measure::Measure,
@@ -41,6 +41,7 @@ use {
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
+        snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -711,7 +712,7 @@ fn load_bank_forks(
     blockstore: &Blockstore,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
-) -> bank_forks_utils::LoadResult {
+) -> Result<(BankForks, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
     let bank_snapshots_dir = blockstore
         .ledger_path()
         .join(if blockstore.is_primary_access() {
@@ -764,6 +765,7 @@ fn load_bank_forks(
         accounts_package_sender,
         None,
     )
+    .map(|(bank_forks, .., starting_snapshot_hashes)| (bank_forks, starting_snapshot_hashes))
 }
 
 fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
@@ -2221,7 +2223,7 @@ fn main() {
                     },
                     snapshot_archive_path,
                 ) {
-                    Ok((bank_forks, .., starting_snapshot_hashes)) => {
+                    Ok((bank_forks, starting_snapshot_hashes)) => {
                         let mut bank = bank_forks
                             .get(snapshot_slot)
                             .unwrap_or_else(|| {
@@ -2439,10 +2441,11 @@ fn main() {
                             }
                             let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.hash.0;
                             if bank.slot() <= full_snapshot_slot {
-                                eprintln!("Unable to create incremental snapshot: Slot must be greater than full snapshot slot. slot: {}, full snapshot slot: {}",
-                                bank.slot(),
-                                full_snapshot_slot,
-                            );
+                                eprintln!(
+                                    "Unable to create incremental snapshot: Slot must be greater than full snapshot slot. slot: {}, full snapshot slot: {}",
+                                    bank.slot(),
+                                    full_snapshot_slot,
+                                );
                                 exit(1);
                             }
 
@@ -2463,12 +2466,12 @@ fn main() {
                                 });
 
                             println!(
-                            "Successfully created incremental snapshot for slot {}, hash {}, base slot: {}: {}",
-                            bank.slot(),
-                            bank.hash(),
-                            full_snapshot_slot,
-                            incremental_snapshot_archive_info.path().display(),
-                        );
+                                "Successfully created incremental snapshot for slot {}, hash {}, base slot: {}: {}",
+                                bank.slot(),
+                                bank.hash(),
+                                full_snapshot_slot,
+                                incremental_snapshot_archive_info.path().display(),
+                            );
                         } else {
                             let full_snapshot_archive_info =
                                 snapshot_utils::bank_to_full_snapshot_archive(

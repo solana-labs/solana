@@ -630,7 +630,7 @@ pub(crate) fn process_blockstore_for_bank_0(
 
 /// Process blockstore from a known root bank
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn process_blockstore_from_root(
+pub fn process_blockstore_from_root(
     blockstore: &Blockstore,
     mut bank_forks: BankForks,
     opts: &ProcessOptions,
@@ -3170,7 +3170,6 @@ pub mod tests {
             None,
             None,
             accounts_package_sender,
-            None,
         )
         .unwrap();
 
@@ -3278,7 +3277,6 @@ pub mod tests {
             None,
             Some(&snapshot_config),
             accounts_package_sender.clone(),
-            None,
         )
         .unwrap();
 
