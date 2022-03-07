@@ -13,8 +13,8 @@ use {
         },
         errors::ProofError,
         instruction::{
-            combine_u32_ciphertexts, combine_u32_commitments, combine_u32_openings,
-            split_u64_into_u32, transfer::TransferAmountEncryption, Role, Verifiable, TWO_32,
+            combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
+            split_u64, transfer::TransferAmountEncryption, Role, Verifiable,
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -39,7 +39,9 @@ const ONE_IN_BASIS_POINTS: u128 = MAX_FEE_BASIS_POINTS as u128;
 #[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH: usize = 32;
+const TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH: usize = 16;
+#[cfg(not(target_arch = "bpf"))]
+const TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH: usize = 16;
 #[cfg(not(target_arch = "bpf"))]
 const TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH: usize = 32;
 #[cfg(not(target_arch = "bpf"))]
@@ -47,6 +49,8 @@ const TRANSFER_WITH_FEE_DELTA_BIT_LENGTH: usize = 64;
 
 #[cfg(not(target_arch = "bpf"))]
 lazy_static::lazy_static! {
+    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode(1_u64 <<
+                                                                         TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH);
     pub static ref COMMITMENT_MAX_FEE_BASIS_POINTS: PedersenCommitment = Pedersen::encode(MAX_FEE_BASIS_POINTS);
 }
 
@@ -87,7 +91,8 @@ impl TransferWithFeeData {
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
+        let (amount_lo, amount_hi) =
+            split_u64(transfer_amount, TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH);
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -118,7 +123,11 @@ impl TransferWithFeeData {
         };
 
         let new_source_ciphertext = old_source_ciphertext
-            - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
+            - combine_lo_hi_ciphertexts(
+                &transfer_amount_lo_source,
+                &transfer_amount_hi_source,
+                TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+            );
 
         // calculate and encrypt fee
         let (fee_amount, delta_fee) =
@@ -212,11 +221,6 @@ impl TransferWithFeeData {
     }
 
     /// Decrypts transfer amount from transfer-with-fee data
-    ///
-    /// TODO: This function should run in constant time. Use `subtle::Choice` for the if statement
-    /// and make sure that the function does not terminate prematurely due to errors
-    ///
-    /// TODO: Define specific error type for decryption error
     pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
@@ -225,7 +229,8 @@ impl TransferWithFeeData {
         let amount_hi = ciphertext_hi.decrypt_u32(sk);
 
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
-            Ok(amount_lo + TWO_32 * amount_hi)
+            let two_power = 1 << TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH;
+            Ok(amount_lo + two_power * amount_hi)
         } else {
             Err(ProofError::Verification)
         }
@@ -324,8 +329,8 @@ impl TransferWithFeeProof {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::many_single_char_names)]
     pub fn new(
-        transfer_amount_lo_data: (u32, &TransferAmountEncryption, &PedersenOpening),
-        transfer_amount_hi_data: (u32, &TransferAmountEncryption, &PedersenOpening),
+        transfer_amount_lo_data: (u64, &TransferAmountEncryption, &PedersenOpening),
+        transfer_amount_hi_data: (u64, &TransferAmountEncryption, &PedersenOpening),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         (source_new_balance, new_source_ciphertext): (u64, &ElGamalCiphertext),
@@ -388,31 +393,66 @@ impl TransferWithFeeProof {
             transcript,
         );
 
+        // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
-        let range_proof = RangeProof::new(
-            vec![
-                source_new_balance,
-                transfer_amount_lo as u64,
-                transfer_amount_hi as u64,
-                delta_fee,
-                MAX_FEE_BASIS_POINTS - delta_fee,
-            ],
-            vec![
-                TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH,
-                TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
-                TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH,
-                TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
-                TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
-            ],
-            vec![
-                &opening_source,
-                opening_lo,
-                opening_hi,
-                &opening_claimed,
-                &opening_claimed_negated,
-            ],
-            transcript,
-        );
+        let range_proof = if TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH == 32 {
+            RangeProof::new(
+                vec![
+                    source_new_balance,
+                    transfer_amount_lo as u64,
+                    transfer_amount_hi as u64,
+                    delta_fee,
+                    MAX_FEE_BASIS_POINTS - delta_fee,
+                ],
+                vec![
+                    TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
+                ],
+                vec![
+                    &opening_source,
+                    opening_lo,
+                    opening_hi,
+                    &opening_claimed,
+                    &opening_claimed_negated,
+                ],
+                transcript,
+            )
+        } else {
+            let transfer_amount_lo_negated =
+                (1 << TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH) - transfer_amount_lo as u64;
+            let opening_lo_negated = &PedersenOpening::default() - opening_lo;
+
+            RangeProof::new(
+                vec![
+                    source_new_balance,
+                    transfer_amount_lo as u64,
+                    transfer_amount_lo_negated,
+                    transfer_amount_hi as u64,
+                    delta_fee,
+                    MAX_FEE_BASIS_POINTS - delta_fee,
+                ],
+                vec![
+                    TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
+                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
+                ],
+                vec![
+                    &opening_source,
+                    opening_lo,
+                    &opening_lo_negated,
+                    opening_hi,
+                    &opening_claimed,
+                    &opening_claimed_negated,
+                ],
+                transcript,
+            )
+        };
 
         Self {
             new_source_commitment: pod_new_source_commitment,
@@ -458,8 +498,6 @@ impl TransferWithFeeProof {
             transcript,
         )?;
 
-        println!("here");
-
         // verify that the transfer amount is encrypted correctly
         ciphertext_amount_validity_proof.verify(
             (
@@ -504,18 +542,38 @@ impl TransferWithFeeProof {
             transcript,
         )?;
 
+        // verify range proof
+        let new_source_commitment = self.new_source_commitment.try_into()?;
         let claimed_commitment_negated = &(*COMMITMENT_MAX_FEE_BASIS_POINTS) - &claimed_commitment;
-        range_proof.verify(
-            vec![
-                &new_source_commitment,
-                &ciphertext_lo.commitment,
-                &ciphertext_hi.commitment,
-                &claimed_commitment,
-                &claimed_commitment_negated,
-            ],
-            vec![64, 32, 32, 64, 64],
-            transcript,
-        )?;
+
+        if TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH == 32 {
+            range_proof.verify(
+                vec![
+                    &new_source_commitment,
+                    &ciphertext_lo.commitment,
+                    &ciphertext_hi.commitment,
+                    &claimed_commitment,
+                    &claimed_commitment_negated,
+                ],
+                vec![64, 32, 32, 64, 64],
+                transcript,
+            )?;
+        } else {
+            let commitment_lo_negated = &(*COMMITMENT_MAX) - &ciphertext_lo.commitment;
+
+            range_proof.verify(
+                vec![
+                    &new_source_commitment,
+                    &ciphertext_lo.commitment,
+                    &commitment_lo_negated,
+                    &ciphertext_hi.commitment,
+                    &claimed_commitment,
+                    &claimed_commitment_negated,
+                ],
+                vec![64, 16, 16, 32, 64, 64],
+                transcript,
+            )?;
+        }
 
         Ok(())
     }
@@ -656,10 +714,18 @@ fn compute_delta_commitment_and_opening(
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
     let delta_commitment = fee_commitment * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_u32_commitments(commitment_lo, commitment_hi) * &fee_rate_scalar);
+        - &(&combine_lo_hi_commitments(
+            commitment_lo,
+            commitment_hi,
+            TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+        ) * &fee_rate_scalar);
 
     let opening_delta = opening_fee * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_u32_openings(opening_lo, opening_hi) * &fee_rate_scalar);
+        - &(&combine_lo_hi_openings(
+            opening_lo,
+            opening_hi,
+            TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+        ) * &fee_rate_scalar);
 
     (delta_commitment, opening_delta)
 }
@@ -674,7 +740,11 @@ fn compute_delta_commitment(
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
     fee_commitment * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_u32_commitments(commitment_lo, commitment_hi) * &fee_rate_scalar)
+        - &(&combine_lo_hi_commitments(
+            commitment_lo,
+            commitment_hi,
+            TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+        ) * &fee_rate_scalar)
 }
 
 #[cfg(test)]

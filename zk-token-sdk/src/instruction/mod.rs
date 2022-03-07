@@ -21,10 +21,6 @@ pub use {
     withdraw_withheld::WithdrawWithheldTokensData,
 };
 
-/// Constant for 2^32
-#[cfg(not(target_arch = "bpf"))]
-const TWO_32: u64 = 4294967296;
-
 #[cfg(not(target_arch = "bpf"))]
 pub trait Verifiable {
     fn verify(&self) -> Result<(), ProofError>;
@@ -38,35 +34,45 @@ pub enum Role {
     Auditor,
 }
 
-/// Split u64 number into two u32 numbers
+/// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
+///  - the `bit_length` low bits of `amount` interpretted as u64
+///  - the (64 - `bit_length`) high bits of `amount` interpretted as u64
 #[cfg(not(target_arch = "bpf"))]
-pub fn split_u64_into_u32(amount: u64) -> (u32, u32) {
-    let lo = amount as u32;
-    let hi = (amount >> 32) as u32;
+pub fn split_u64(amount: u64, bit_length: usize) -> (u64, u64) {
+    assert!(bit_length <= 64);
+
+    let lo = amount << (64 - bit_length) >> (64 - bit_length);
+    let hi = amount >> bit_length;
 
     (lo, hi)
 }
 
 #[cfg(not(target_arch = "bpf"))]
-fn combine_u32_ciphertexts(
+fn combine_lo_hi_ciphertexts(
     ciphertext_lo: &ElGamalCiphertext,
     ciphertext_hi: &ElGamalCiphertext,
+    bit_length: usize,
 ) -> ElGamalCiphertext {
-    ciphertext_lo + &(ciphertext_hi * &Scalar::from(TWO_32))
+    let two_power = (1_u64) << bit_length;
+    ciphertext_lo + &(ciphertext_hi * &Scalar::from(two_power))
 }
 
 #[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_commitments(
+pub fn combine_lo_hi_commitments(
     comm_lo: &PedersenCommitment,
     comm_hi: &PedersenCommitment,
+    bit_length: usize,
 ) -> PedersenCommitment {
-    comm_lo + comm_hi * &Scalar::from(TWO_32)
+    let two_power = (1_u64) << bit_length;
+    comm_lo + comm_hi * &Scalar::from(two_power)
 }
 
 #[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_openings(
+pub fn combine_lo_hi_openings(
     opening_lo: &PedersenOpening,
     opening_hi: &PedersenOpening,
+    bit_length: usize,
 ) -> PedersenOpening {
-    opening_lo + opening_hi * &Scalar::from(TWO_32)
+    let two_power = (1_u64) << bit_length;
+    opening_lo + opening_hi * &Scalar::from(two_power)
 }

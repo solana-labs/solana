@@ -12,7 +12,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{combine_u32_ciphertexts, split_u64_into_u32, Role, Verifiable, TWO_32},
+        instruction::{combine_lo_hi_ciphertexts, split_u64, Role, Verifiable},
         range_proof::RangeProof,
         sigma_proofs::{
             equality_proof::CtxtCommEqualityProof, validity_proof::AggregatedValidityProof,
@@ -27,9 +27,17 @@ use {
 #[cfg(not(target_arch = "bpf"))]
 const TRANSFER_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_AMOUNT_LO_BIT_LENGTH: usize = 32;
+const TRANSFER_AMOUNT_LO_BIT_LENGTH: usize = 16;
+#[cfg(not(target_arch = "bpf"))]
+const TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH: usize = 16;
 #[cfg(not(target_arch = "bpf"))]
 const TRANSFER_AMOUNT_HI_BIT_LENGTH: usize = 32;
+
+#[cfg(not(target_arch = "bpf"))]
+lazy_static::lazy_static! {
+    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode(1_u64 <<
+                                                                         TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH);
+}
 
 #[derive(Clone)]
 #[repr(C)]
@@ -44,7 +52,7 @@ pub struct TransferAmountEncryption {
 #[cfg(not(target_arch = "bpf"))]
 impl TransferAmountEncryption {
     pub fn new(
-        amount: u32,
+        amount: u64,
         source_pubkey: &ElGamalPubkey,
         destination_pubkey: &ElGamalPubkey,
         auditor_pubkey: &ElGamalPubkey,
@@ -99,7 +107,7 @@ impl TransferData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
+        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BIT_LENGTH);
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -107,6 +115,7 @@ impl TransferData {
             destination_pubkey,
             auditor_pubkey,
         );
+
         let (ciphertext_hi, opening_hi) = TransferAmountEncryption::new(
             amount_hi,
             &source_keypair.public,
@@ -130,7 +139,11 @@ impl TransferData {
         };
 
         let new_source_ciphertext = ciphertext_old_source
-            - combine_u32_ciphertexts(&transfer_amount_lo_source, &transfer_amount_hi_source);
+            - combine_lo_hi_ciphertexts(
+                &transfer_amount_lo_source,
+                &transfer_amount_hi_source,
+                TRANSFER_AMOUNT_LO_BIT_LENGTH,
+            );
 
         // generate transcript and append all public inputs
         let pod_transfer_pubkeys = pod::TransferPubkeys {
@@ -201,11 +214,6 @@ impl TransferData {
     }
 
     /// Decrypts transfer amount from transfer data
-    ///
-    /// TODO: This function should run in constant time. Use `subtle::Choice` for the if statement
-    /// and make sure that the function does not terminate prematurely due to errors
-    ///
-    /// TODO: Define specific error type for decryption error
     pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
@@ -214,9 +222,10 @@ impl TransferData {
         let amount_hi = ciphertext_hi.decrypt_u32(sk);
 
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
-            Ok(amount_lo + TWO_32 * amount_hi)
+            let two_power = 1 << TRANSFER_AMOUNT_LO_BIT_LENGTH;
+            Ok(amount_lo + two_power * amount_hi)
         } else {
-            Err(ProofError::Verification)
+            Err(ProofError::Decryption)
         }
     }
 }
@@ -252,7 +261,7 @@ impl Verifiable for TransferData {
 #[repr(C)]
 pub struct TransferProof {
     /// New Pedersen commitment for the remaining balance in source
-    pub commitment_new_source: pod::PedersenCommitment,
+    pub new_source_commitment: pod::PedersenCommitment,
 
     /// Associated equality proof
     pub equality_proof: pod::CtxtCommEqualityProof,
@@ -295,7 +304,7 @@ impl TransferProof {
     }
 
     pub fn new(
-        (transfer_amount_lo, transfer_amount_hi): (u32, u32),
+        (transfer_amount_lo, transfer_amount_hi): (u64, u64),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         opening_lo: &PedersenOpening,
@@ -304,10 +313,10 @@ impl TransferProof {
         transcript: &mut Transcript,
     ) -> Self {
         // generate a Pedersen commitment for the remaining balance in source
-        let (commitment_new_source, source_opening) = Pedersen::new(source_new_balance);
+        let (new_source_commitment, source_opening) = Pedersen::new(source_new_balance);
 
-        let pod_commitment_new_source: pod::PedersenCommitment = commitment_new_source.into();
-        transcript.append_commitment(b"commitment-new-source", &pod_commitment_new_source);
+        let pod_new_source_commitment: pod::PedersenCommitment = new_source_commitment.into();
+        transcript.append_commitment(b"commitment-new-source", &pod_new_source_commitment);
 
         // generate equality_proof
         let equality_proof = CtxtCommEqualityProof::new(
@@ -327,23 +336,46 @@ impl TransferProof {
         );
 
         // generate the range proof
-        let range_proof = RangeProof::new(
-            vec![
-                source_new_balance,
-                transfer_amount_lo as u64,
-                transfer_amount_hi as u64,
-            ],
-            vec![
-                TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
-                TRANSFER_AMOUNT_LO_BIT_LENGTH,
-                TRANSFER_AMOUNT_HI_BIT_LENGTH,
-            ],
-            vec![&source_opening, opening_lo, opening_hi],
-            transcript,
-        );
+        let range_proof = if TRANSFER_AMOUNT_LO_BIT_LENGTH == 32 {
+            RangeProof::new(
+                vec![
+                    source_new_balance,
+                    transfer_amount_lo as u64,
+                    transfer_amount_hi as u64,
+                ],
+                vec![
+                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
+                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
+                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                ],
+                vec![&source_opening, opening_lo, opening_hi],
+                transcript,
+            )
+        } else {
+            let transfer_amount_lo_negated =
+                (1 << TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH) - transfer_amount_lo as u64;
+            let opening_lo_negated = &PedersenOpening::default() - opening_lo;
+
+            RangeProof::new(
+                vec![
+                    source_new_balance,
+                    transfer_amount_lo as u64,
+                    transfer_amount_lo_negated,
+                    transfer_amount_hi as u64,
+                ],
+                vec![
+                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
+                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
+                    TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH,
+                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                ],
+                vec![&source_opening, opening_lo, &opening_lo_negated, opening_hi],
+                transcript,
+            )
+        };
 
         Self {
-            commitment_new_source: pod_commitment_new_source,
+            new_source_commitment: pod_new_source_commitment,
             equality_proof: equality_proof.into(),
             validity_proof: validity_proof.into(),
             range_proof: range_proof.try_into().expect("range proof: length error"),
@@ -358,9 +390,9 @@ impl TransferProof {
         ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        transcript.append_commitment(b"commitment-new-source", &self.commitment_new_source);
+        transcript.append_commitment(b"commitment-new-source", &self.new_source_commitment);
 
-        let commitment: PedersenCommitment = self.commitment_new_source.try_into()?;
+        let commitment: PedersenCommitment = self.new_source_commitment.try_into()?;
         let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
@@ -391,16 +423,40 @@ impl TransferProof {
         )?;
 
         // verify range proof
-        let commitment_new_source = self.commitment_new_source.try_into()?;
-        range_proof.verify(
-            vec![
-                &commitment_new_source,
-                &ciphertext_lo.commitment,
-                &ciphertext_hi.commitment,
-            ],
-            vec![64_usize, 32_usize, 32_usize],
-            transcript,
-        )?;
+        let new_source_commitment = self.new_source_commitment.try_into()?;
+        if TRANSFER_AMOUNT_LO_BIT_LENGTH == 32 {
+            range_proof.verify(
+                vec![
+                    &new_source_commitment,
+                    &ciphertext_lo.commitment,
+                    &ciphertext_hi.commitment,
+                ],
+                vec![
+                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
+                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
+                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                ],
+                transcript,
+            )?;
+        } else {
+            let commitment_lo_negated = &(*COMMITMENT_MAX) - &ciphertext_lo.commitment;
+
+            range_proof.verify(
+                vec![
+                    &new_source_commitment,
+                    &ciphertext_lo.commitment,
+                    &commitment_lo_negated,
+                    &ciphertext_hi.commitment,
+                ],
+                vec![
+                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
+                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
+                    TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH,
+                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                ],
+                transcript,
+            )?;
+        }
 
         Ok(())
     }
@@ -492,11 +548,11 @@ mod test {
         } = ElGamalKeypair::new_rand();
 
         // create source account spendable ciphertext
-        let spendable_balance: u64 = 77;
+        let spendable_balance: u64 = 770000;
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
         // transfer amount
-        let transfer_amount: u64 = 55;
+        let transfer_amount: u64 = 550000;
 
         // create transfer data
         let transfer_data = TransferData::new(
@@ -511,19 +567,19 @@ mod test {
             transfer_data
                 .decrypt_amount(Role::Source, &source_keypair.secret)
                 .unwrap(),
-            55_u64,
+            550000_u64,
         );
 
         assert_eq!(
             transfer_data.decrypt_amount(Role::Dest, &dest_sk).unwrap(),
-            55_u64,
+            550000_u64,
         );
 
         assert_eq!(
             transfer_data
                 .decrypt_amount(Role::Auditor, &auditor_sk)
                 .unwrap(),
-            55_u64,
+            550000_u64,
         );
     }
 }
