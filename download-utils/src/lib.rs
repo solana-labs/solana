@@ -268,17 +268,17 @@ pub fn download_snapshot_archive<'a, 'b>(
         maximum_incremental_snapshot_archives_to_retain,
     );
 
+    let snapshot_archives_remote_dir = snapshot_archives_dir
+        .to_path_buf()
+        .join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR);
+    fs::create_dir_all(snapshot_archives_remote_dir.to_path_buf()).unwrap();
+
     for archive_format in [
         ArchiveFormat::TarZstd,
         ArchiveFormat::TarGzip,
         ArchiveFormat::TarBzip2,
         ArchiveFormat::Tar, // `solana-test-validator` creates uncompressed snapshots
     ] {
-        let snapshot_archives_remote_dir = snapshot_archives_dir
-            .to_path_buf()
-            .join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR);
-        fs::create_dir_all(snapshot_archives_remote_dir.to_path_buf()).unwrap();
-
         let destination_path = match snapshot_type {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 snapshot_archives_remote_dir,
