@@ -2185,6 +2185,267 @@ mod tests {
     }
 
     #[test]
+    fn test_withdraw_stake() {
+        let recipient_address = solana_sdk::pubkey::new_rand();
+        let authority_address = solana_sdk::pubkey::new_rand();
+        let custodian_address = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let vote_address = solana_sdk::pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        vote_account
+            .set_state(&VoteStateVersions::new_current(VoteState::default()))
+            .unwrap();
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (vote_address, vote_account),
+            (recipient_address, AccountSharedData::default()),
+            (
+                authority_address,
+                AccountSharedData::new(42, 0, &system_program::id()),
+            ),
+            (custodian_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+            (
+                sysvar::rent::id(),
+                account::create_account_shared_data_for_test(&Rent::free()),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                stake_config::id(),
+                config::create_account(0, &stake_config::Config::default()),
+            ),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: recipient_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        // should fail, no signer
+        instruction_accounts[4].is_signer = false;
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+        instruction_accounts[4].is_signer = true;
+
+        // should pass, signed keyed account and uninitialized
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        assert_eq!(accounts[0].lamports(), 0);
+        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+
+        // initialize stake
+        let lockup = Lockup {
+            unix_timestamp: 0,
+            epoch: 0,
+            custodian: custodian_address,
+        };
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Initialize(
+                Authorized::auto(&stake_address),
+                lockup,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::rent::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // should fail, signed keyed account and locked up, more than available
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports + 1)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // Stake some lamports (available lamports for withdrawals will reduce to zero)
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: vote_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::stake_history::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: stake_config::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // simulate rewards
+        transaction_accounts[0].1.checked_add_lamports(10).unwrap();
+
+        // withdrawal before deactivate works for rewards amount
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(10)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // withdrawal of rewards fails if not in excess of stake
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(11)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // deactivate the stake before withdrawal
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Deactivate).unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // simulate time passing
+        let clock = Clock {
+            epoch: 100,
+            ..Clock::default()
+        };
+        transaction_accounts[5] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+
+        // Try to withdraw more than what's available
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports + 11)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // Try to withdraw all lamports
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports + 10)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        assert_eq!(accounts[0].lamports(), 0);
+        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+
+        // overflow
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_account = AccountSharedData::new_data_with_space(
+            1_000_000_000,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                authorized: Authorized {
+                    staker: authority_address,
+                    withdrawer: authority_address,
+                },
+                lockup: Lockup::default(),
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        transaction_accounts[0] = (stake_address, stake_account.clone());
+        transaction_accounts[2] = (recipient_address, stake_account);
+        instruction_accounts[4].pubkey = authority_address;
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(u64::MAX - 10)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InsufficientFunds),
+        );
+    }
+
+    #[test]
     fn test_deactivate() {
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
