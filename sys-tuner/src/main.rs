@@ -1,5 +1,5 @@
 #[cfg(not(target_family = "windows"))]
-use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, Arg, Command};
 use log::*;
 
 #[cfg(target_os = "linux")]
@@ -98,11 +98,11 @@ fn tune_kernel_udp_buffers_and_vmmap() {
 #[cfg(unix)]
 fn main() {
     solana_logger::setup();
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("user")
+            Arg::new("user")
                 .long("user")
                 .value_name("user name")
                 .takes_value(true)
@@ -111,7 +111,7 @@ fn main() {
         )
         .get_matches();
 
-    let user = value_t_or_exit!(matches, "user", String);
+    let user: String = matches.value_of_t_or_exit("user");
 
     #[cfg(target_os = "linux")]
     tune_kernel_udp_buffers_and_vmmap();
