@@ -2112,35 +2112,6 @@ mod tests {
     }
 
     #[test]
-    fn test_withdraw_stake_invalid_state() {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let total_lamports = 100;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
-            total_lamports,
-            &StakeState::RewardsPool,
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let to = solana_sdk::pubkey::new_rand();
-        let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
-        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-        assert_eq!(
-            stake_keyed_account.withdraw(
-                total_lamports,
-                &to_keyed_account,
-                &Clock::default(),
-                &StakeHistory::default(),
-                &stake_keyed_account,
-                None,
-            ),
-            Err(InstructionError::InvalidAccountData)
-        );
-    }
-
-    #[test]
     fn test_withdraw_lockup() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let custodian = solana_sdk::pubkey::new_rand();

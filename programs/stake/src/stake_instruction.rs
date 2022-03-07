@@ -2439,9 +2439,25 @@ mod tests {
         instruction_accounts[4].pubkey = authority_address;
         process_instruction(
             &serialize(&StakeInstruction::Withdraw(u64::MAX - 10)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // should fail, invalid state
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::RewardsPool,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        transaction_accounts[0] = (stake_address, stake_account);
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Err(InstructionError::InsufficientFunds),
+            Err(InstructionError::InvalidAccountData),
         );
     }
 
