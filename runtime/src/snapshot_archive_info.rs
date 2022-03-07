@@ -67,14 +67,19 @@ impl SnapshotArchivesRoot {
     }
 
     fn create_dirs(&self) {
-        fs::create_dir_all(self.get_local_path()).expect(&format!(
-            "Failed to create local archive directory:{}",
-            self.get_local_path().display()
-        ));
-        fs::create_dir_all(self.get_remote_path()).expect(&format!(
-            "Failed to create remote archive directory:{}",
-            self.get_remote_path().display()
-        ));
+        fs::create_dir_all(self.get_local_path()).unwrap_or_else(|_| {
+            panic!(
+                "Failed to create local archive directory:{}",
+                self.get_local_path().display()
+            )
+        });
+
+        fs::create_dir_all(self.get_remote_path()).unwrap_or_else(|_| {
+            panic!(
+                "Failed to create remote archive directory:{}",
+                self.get_remote_path().display()
+            )
+        });
     }
 
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
@@ -90,7 +95,7 @@ impl SnapshotArchivesRoot {
         self.get_path(SnapshotArchiveSource::Local)
     }
 
-    /// get snapshot archive directory for remote download archives
+    /// get snapshot archive directory for remote downloaded archives
     pub fn get_remote_path(&self) -> PathBuf {
         self.get_path(SnapshotArchiveSource::Remote)
     }

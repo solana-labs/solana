@@ -842,12 +842,11 @@ pub fn bank_from_latest_snapshot_archives(
     FullSnapshotArchiveInfo,
     Option<IncrementalSnapshotArchiveInfo>,
 )> {
-    let full_snapshot_archive_info =
-        get_highest_full_snapshot_archive_info(&snapshot_archives_root)
-            .ok_or(SnapshotError::NoSnapshotArchives)?;
+    let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(snapshot_archives_root)
+        .ok_or(SnapshotError::NoSnapshotArchives)?;
 
     let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
-        &snapshot_archives_root,
+        snapshot_archives_root,
         full_snapshot_archive_info.slot(),
     );
 
@@ -1289,11 +1288,10 @@ pub fn purge_old_snapshot_archives(
     // `maximum_incremental_snapshot_archives_to_retain`.
     //
     // Purge all the rest.
-    let highest_full_snapshot_slot =
-        get_highest_full_snapshot_archive_slot(&snapshot_archives_root);
+    let highest_full_snapshot_slot = get_highest_full_snapshot_archive_slot(snapshot_archives_root);
     let mut incremental_snapshot_archives_with_same_base_slot = vec![];
     let mut incremental_snapshot_archives_with_different_base_slot = vec![];
-    get_incremental_snapshot_archives(&snapshot_archives_root)
+    get_incremental_snapshot_archives(snapshot_archives_root)
         .drain(..)
         .for_each(|incremental_snapshot_archive| {
             if Some(incremental_snapshot_archive.base_slot()) == highest_full_snapshot_slot {
