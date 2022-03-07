@@ -21,7 +21,7 @@ solana-version = { path = "../version", version = "=1.10.1" }
 unix_socket2 = "0.5.4"
 users = "0.10.0"
 nix = "0.23.1"
-sysctl = "0.4.3"
+sysctl = "0.4.4"
 
 [lib]
 name = "solana_sys_tuner"
