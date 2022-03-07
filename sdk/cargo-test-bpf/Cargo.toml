@@ -10,7 +10,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-clap = "2.33.3"
+clap = { version = "3.1.5", features = ["cargo"] }
 cargo_metadata = "0.14.2"
 
 [[bin]]
