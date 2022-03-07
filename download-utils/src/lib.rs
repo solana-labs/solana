@@ -271,7 +271,7 @@ pub fn download_snapshot_archive<'a, 'b>(
     let snapshot_archives_remote_dir = snapshot_archives_dir
         .to_path_buf()
         .join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR);
-    fs::create_dir_all(snapshot_archives_remote_dir.to_path_buf()).unwrap();
+    fs::create_dir_all(&snapshot_archives_remote_dir).unwrap();
 
     for archive_format in [
         ArchiveFormat::TarZstd,
