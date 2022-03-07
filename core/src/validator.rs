@@ -481,11 +481,8 @@ impl Validator {
             vote_account,
             config,
             ledger_path,
-            config.poh_verify,
             &exit,
-            config.enforce_ulimit_nofile,
             &start_progress,
-            config.no_poh_speed_test,
             accounts_package_channel.0.clone(),
             accounts_update_notifier,
             transaction_notifier,
@@ -1197,17 +1194,14 @@ fn post_process_restored_tower(
         })
 }
 
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 fn new_banks_from_ledger(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
     config: &ValidatorConfig,
     ledger_path: &Path,
-    poh_verify: bool,
     exit: &Arc<AtomicBool>,
-    enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
-    no_poh_speed_test: bool,
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
@@ -1245,7 +1239,7 @@ fn new_banks_from_ledger(
         }
     }
 
-    if !no_poh_speed_test {
+    if !config.no_poh_speed_test {
         check_poh_speed(&genesis_config, None);
     }
 
@@ -1258,7 +1252,6 @@ fn new_banks_from_ledger(
         ledger_path,
         BlockstoreOptions {
             recovery_mode: config.wal_recovery_mode.clone(),
-            enforce_ulimit_nofile,
             advanced_options: config.blockstore_advanced_options.clone(),
             ..BlockstoreOptions::default()
         },
@@ -1293,7 +1286,7 @@ fn new_banks_from_ledger(
 
     let process_options = blockstore_processor::ProcessOptions {
         bpf_jit: config.bpf_jit,
-        poh_verify,
+        poh_verify: config.poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
