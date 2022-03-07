@@ -1,7 +1,5 @@
 use {
-    clap::{
-        crate_description, crate_name, crate_version, value_t, values_t, App, AppSettings, Arg,
-    },
+    clap::{crate_description, crate_name, crate_version, Arg},
     std::{
         env,
         ffi::OsStr,
@@ -217,104 +215,105 @@ fn main() {
     let em_dash = "--".to_string();
     let args_contain_dashash = args.contains(&em_dash);
 
-    let matches = App::new(crate_name!())
+    let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
-        .setting(AppSettings::TrailingVarArg)
+        .trailing_var_arg(true)
         .arg(
-            Arg::with_name("bpf_sdk")
+            Arg::new("bpf_sdk")
                 .long("bpf-sdk")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Path to the Solana BPF SDK"),
         )
         .arg(
-            Arg::with_name("features")
+            Arg::new("features")
                 .long("features")
                 .value_name("FEATURES")
                 .takes_value(true)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .help("Space-separated list of features to activate"),
         )
         .arg(
-            Arg::with_name("no_default_features")
+            Arg::new("no_default_features")
                 .long("no-default-features")
                 .takes_value(false)
                 .help("Do not activate the `default` feature"),
         )
         .arg(
-            Arg::with_name("test")
+            Arg::new("test")
                 .long("test")
                 .value_name("NAME")
                 .takes_value(true)
                 .help("Test only the specified test target"),
         )
         .arg(
-            Arg::with_name("manifest_path")
+            Arg::new("manifest_path")
                 .long("manifest-path")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Path to Cargo.toml"),
         )
         .arg(
-            Arg::with_name("bpf_out_dir")
+            Arg::new("bpf_out_dir")
                 .long("bpf-out-dir")
                 .value_name("DIRECTORY")
                 .takes_value(true)
                 .help("Place final BPF build artifacts in this directory"),
         )
         .arg(
-            Arg::with_name("no_run")
+            Arg::new("no_run")
                 .long("no-run")
                 .takes_value(false)
                 .help("Compile, but don't run tests"),
         )
         .arg(
-            Arg::with_name("offline")
+            Arg::new("offline")
                 .long("offline")
                 .takes_value(false)
                 .help("Run without accessing the network"),
         )
         .arg(
-            Arg::with_name("generate_child_script_on_failure")
+            Arg::new("generate_child_script_on_failure")
                 .long("generate-child-script-on-failure")
                 .takes_value(false)
                 .help("Generate a shell script to rerun a failed subcommand"),
         )
         .arg(
-            Arg::with_name("verbose")
-                .short("v")
+            Arg::new("verbose")
+                .short('v')
                 .long("verbose")
                 .takes_value(false)
                 .help("Use verbose output"),
         )
         .arg(
-            Arg::with_name("workspace")
+            Arg::new("workspace")
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
                 .help("Test all BPF packages in the workspace"),
         )
         .arg(
-            Arg::with_name("extra_cargo_test_args")
+            Arg::new("extra_cargo_test_args")
                 .value_name("extra args for cargo test and the test binary")
                 .index(1)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .help("All extra arguments are passed through to cargo test"),
         )
         .get_matches_from(args);
 
     let mut config = Config {
-        bpf_sdk: value_t!(matches, "bpf_sdk", String).ok(),
-        bpf_out_dir: value_t!(matches, "bpf_out_dir", String).ok(),
-        extra_cargo_test_args: values_t!(matches, "extra_cargo_test_args", String)
+        bpf_sdk: matches.value_of_t("bpf_sdk").ok(),
+        bpf_out_dir: matches.value_of_t("bpf_out_dir").ok(),
+        extra_cargo_test_args: matches
+            .values_of_t("extra_cargo_test_args")
             .ok()
             .unwrap_or_default(),
-        features: values_t!(matches, "features", String)
-            .ok()
-            .unwrap_or_default(),
+        features: matches.values_of_t("features").ok().unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
-        test_name: value_t!(matches, "test", String).ok(),
+        test_name: matches.value_of_t("test").ok(),
         no_default_features: matches.is_present("no_default_features"),
         no_run: matches.is_present("no_run"),
         offline: matches.is_present("offline"),
@@ -345,6 +344,6 @@ fn main() {
         config.extra_cargo_test_args.insert(0, em_dash);
     }
 
-    let manifest_path = value_t!(matches, "manifest_path", PathBuf).ok();
+    let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
     test_bpf(config, manifest_path);
 }
