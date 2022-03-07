@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    clap::{crate_description, crate_name, value_t, App, Arg},
+    clap::{crate_description, crate_name, Arg, Command},
     crossbeam_channel::unbounded,
     solana_streamer::{
         packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
@@ -57,18 +57,18 @@ fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketBatchReceiver) ->
 fn main() -> Result<()> {
     let mut num_sockets = 1usize;
 
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("num-recv-sockets")
+            Arg::new("num-recv-sockets")
                 .long("num-recv-sockets")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Use NUM receive sockets"),
         )
         .arg(
-            Arg::with_name("num-producers")
+            Arg::new("num-producers")
                 .long("num-producers")
                 .value_name("NUM")
                 .takes_value(true)
@@ -80,7 +80,7 @@ fn main() -> Result<()> {
         num_sockets = max(num_sockets, n.to_string().parse().expect("integer"));
     }
 
-    let num_producers = value_t!(matches, "num_producers", u64).unwrap_or(4);
+    let num_producers: u64 = matches.value_of_t("num_producers").unwrap_or(4);
 
     let port = 0;
     let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
