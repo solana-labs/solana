@@ -1300,7 +1300,6 @@ mod tests {
         solana_program_runtime::invoke_context::InvokeContext,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
-            clock::UnixTimestamp,
             native_token,
             pubkey::Pubkey,
             stake::MINIMUM_STAKE_DELEGATION,
@@ -2041,117 +2040,6 @@ mod tests {
 
             prev_total_effective_stake = total_effective_stake;
         }
-    }
-
-    #[test]
-    fn test_optional_lockup_for_stake_program() {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
-            stake_lamports,
-            &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
-
-        let custodian = solana_sdk::pubkey::new_rand();
-        stake_keyed_account
-            .initialize(
-                &Authorized::auto(&stake_pubkey),
-                &Lockup {
-                    unix_timestamp: 1,
-                    epoch: 1,
-                    custodian,
-                },
-                &Rent::free(),
-            )
-            .unwrap();
-
-        // Lockup in force: authorized withdrawer cannot change it
-        assert_eq!(
-            stake_keyed_account.set_lockup(
-                &LockupArgs {
-                    unix_timestamp: Some(2),
-                    epoch: None,
-                    custodian: None
-                },
-                &vec![stake_pubkey].into_iter().collect(),
-                &Clock::default()
-            ),
-            Err(InstructionError::MissingRequiredSignature)
-        );
-
-        // Lockup in force: custodian can change it
-        assert_eq!(
-            stake_keyed_account.set_lockup(
-                &LockupArgs {
-                    unix_timestamp: Some(2),
-                    epoch: None,
-                    custodian: None
-                },
-                &vec![custodian].into_iter().collect(),
-                &Clock::default()
-            ),
-            Ok(())
-        );
-
-        // Lockup expired: custodian cannot change it
-        assert_eq!(
-            stake_keyed_account.set_lockup(
-                &LockupArgs::default(),
-                &vec![custodian].into_iter().collect(),
-                &Clock {
-                    unix_timestamp: UnixTimestamp::MAX,
-                    epoch: Epoch::MAX,
-                    ..Clock::default()
-                }
-            ),
-            Err(InstructionError::MissingRequiredSignature)
-        );
-
-        // Lockup expired: authorized withdrawer can change it
-        assert_eq!(
-            stake_keyed_account.set_lockup(
-                &LockupArgs::default(),
-                &vec![stake_pubkey].into_iter().collect(),
-                &Clock {
-                    unix_timestamp: UnixTimestamp::MAX,
-                    epoch: Epoch::MAX,
-                    ..Clock::default()
-                }
-            ),
-            Ok(())
-        );
-
-        // Change authorized withdrawer
-        let new_withdraw_authority = solana_sdk::pubkey::new_rand();
-        assert_eq!(
-            stake_keyed_account.authorize(
-                &vec![stake_pubkey].into_iter().collect(),
-                &new_withdraw_authority,
-                StakeAuthorize::Withdrawer,
-                false,
-                &Clock::default(),
-                None
-            ),
-            Ok(())
-        );
-
-        // Previous authorized withdrawer cannot change the lockup anymore
-        assert_eq!(
-            stake_keyed_account.set_lockup(
-                &LockupArgs::default(),
-                &vec![stake_pubkey].into_iter().collect(),
-                &Clock {
-                    unix_timestamp: UnixTimestamp::MAX,
-                    epoch: Epoch::MAX,
-                    ..Clock::default()
-                }
-            ),
-            Err(InstructionError::MissingRequiredSignature)
-        );
     }
 
     #[test]

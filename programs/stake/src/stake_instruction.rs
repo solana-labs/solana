@@ -497,6 +497,7 @@ mod tests {
         solana_sdk::{
             account::{self, AccountSharedData, ReadableAccount, WritableAccount},
             account_utils::StateMut,
+            clock::{Epoch, UnixTimestamp},
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
             rent::Rent,
@@ -2303,6 +2304,7 @@ mod tests {
     #[test]
     fn test_set_lockup() {
         let custodian_address = solana_sdk::pubkey::new_rand();
+        let authorized_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_data_with_space(
@@ -2327,6 +2329,7 @@ mod tests {
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
+            (authorized_address, AccountSharedData::default()),
             (custodian_address, AccountSharedData::default()),
             (
                 sysvar::clock::id(),
@@ -2469,6 +2472,95 @@ mod tests {
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
+        );
+
+        // Lockup in force
+        let instruction_data = serialize(&StakeInstruction::SetLockup(LockupArgs {
+            unix_timestamp: Some(2),
+            epoch: None,
+            custodian: None,
+        }))
+        .unwrap();
+
+        // should fail, authorized withdrawer cannot change it
+        instruction_accounts[0].is_signer = true;
+        instruction_accounts[2].is_signer = false;
+        process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+        instruction_accounts[0].is_signer = false;
+        instruction_accounts[2].is_signer = true;
+
+        // should pass, custodian can change it
+        process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // Lockup expired
+        let clock = Clock {
+            unix_timestamp: UnixTimestamp::MAX,
+            epoch: Epoch::MAX,
+            ..Clock::default()
+        };
+        transaction_accounts[3] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+
+        // should fail, custodian cannot change it
+        process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // should pass, authorized withdrawer can change it
+        instruction_accounts[0].is_signer = true;
+        instruction_accounts[2].is_signer = false;
+        process_instruction(
+            &instruction_data,
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // Change authorized withdrawer
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authorized_address,
+                StakeAuthorize::Withdrawer,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // should fail, previous authorized withdrawer cannot change the lockup anymore
+        process_instruction(
+            &instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::MissingRequiredSignature),
         );
     }
 }
