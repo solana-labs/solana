@@ -3476,8 +3476,7 @@ pub mod rpc_full {
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
-            let finalized_bank = &*meta.bank(Some(CommitmentConfig::finalized()));
-            let transaction = sanitize_transaction(unsanitized_tx, finalized_bank)?;
+            let transaction = sanitize_transaction(unsanitized_tx, preflight_bank)?;
             let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
@@ -3585,8 +3584,7 @@ pub mod rpc_full {
                     .set_recent_blockhash(bank.last_blockhash());
             }
 
-            let finalized_bank = &*meta.bank(Some(CommitmentConfig::finalized()));
-            let transaction = sanitize_transaction(unsanitized_tx, finalized_bank)?;
+            let transaction = sanitize_transaction(unsanitized_tx, bank)?;
             if config.sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
