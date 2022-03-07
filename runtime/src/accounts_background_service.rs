@@ -6,6 +6,7 @@ use {
     crate::{
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
+        snapshot_archive_info::SnapshotArchivesRoot,
         snapshot_config::SnapshotConfig,
         snapshot_package::{AccountsPackageSender, SnapshotType},
         snapshot_utils::{self, SnapshotError},
@@ -200,7 +201,7 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                     &self.accounts_package_sender,
                     &self.snapshot_config.bank_snapshots_dir,
-                    &self.snapshot_config.snapshot_archives_dir,
+                    SnapshotArchivesRoot::new(&self.snapshot_config.snapshot_archives_dir),
                     self.snapshot_config.snapshot_version,
                     self.snapshot_config.archive_format,
                     hash_for_testing,

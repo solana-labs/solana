@@ -2,7 +2,10 @@ use {
     crate::{
         accounts_db::SnapshotStorages,
         bank::{Bank, BankSlotDelta},
-        snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
+        snapshot_archive_info::{
+            SnapshotArchiveInfo, SnapshotArchiveInfoGetter, SnapshotArchiveSource,
+            SnapshotArchivesRoot,
+        },
         snapshot_utils::{
             self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion,
             TMP_BANK_SNAPSHOT_PREFIX,
@@ -42,7 +45,7 @@ pub struct AccountsPackage {
     pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
-    pub snapshot_archives_dir: PathBuf,
+    pub snapshot_archives_root: SnapshotArchivesRoot,
     pub expected_capitalization: u64,
     pub hash_for_testing: Option<Hash>,
     pub cluster_type: ClusterType,
@@ -57,7 +60,7 @@ impl AccountsPackage {
         bank_snapshot_info: &BankSnapshotInfo,
         bank_snapshots_dir: impl AsRef<Path>,
         slot_deltas: Vec<BankSlotDelta>,
-        snapshot_archives_dir: impl AsRef<Path>,
+        snapshot_archives_root: SnapshotArchivesRoot,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -110,7 +113,7 @@ impl AccountsPackage {
             hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
-            snapshot_archives_dir: snapshot_archives_dir.as_ref().to_path_buf(),
+            snapshot_archives_root: snapshot_archives_root,
             expected_capitalization: bank.capitalization(),
             hash_for_testing,
             cluster_type: bank.cluster_type(),
@@ -138,14 +141,16 @@ impl From<AccountsPackage> for SnapshotPackage {
 
         let snapshot_archive_path = match accounts_package.snapshot_type.unwrap() {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
-                accounts_package.snapshot_archives_dir,
+                &accounts_package.snapshot_archives_root,
+                SnapshotArchiveSource::Local,
                 accounts_package.slot,
                 &accounts_package.hash,
                 accounts_package.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
                 snapshot_utils::build_incremental_snapshot_archive_path(
-                    accounts_package.snapshot_archives_dir,
+                    &accounts_package.snapshot_archives_root,
+                    SnapshotArchiveSource::Local,
                     incremental_snapshot_base_slot,
                     accounts_package.slot,
                     &accounts_package.hash,

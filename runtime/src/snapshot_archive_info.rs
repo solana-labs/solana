@@ -54,6 +54,7 @@ pub enum SnapshotArchiveSource {
 }
 
 /// Root directory of snapshot archives
+#[derive(Debug, Clone)]
 pub struct SnapshotArchivesRoot {
     pub root: PathBuf,
 }
