@@ -41,7 +41,6 @@ jobs:
         with:
           run: |
                echo "$(cat .env.preview1)"
-       
       - name: Fetching PR commit URL
         uses: mathiasvr/command-output@v1
         id: test2
