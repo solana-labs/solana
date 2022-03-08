@@ -1084,15 +1084,18 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     let copy_files_with_remote = |from: &Path, to: &Path| {
         copy_files(from, to);
-        let _ = fs::create_dir_all(&from.join("remote"));
-        let _ = fs::create_dir_all(&to.join("remote"));
-        copy_files(&from.join("remote"), &to.join("remote"));
+        let _ = fs::create_dir_all(&from.join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR));
+        let _ = fs::create_dir_all(&to.join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR));
+        copy_files(
+            &from.join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR),
+            &to.join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR),
+        );
     };
 
     let delete_files_with_remote = |from: &Path| {
         delete_files(from);
-        let _ = fs::create_dir_all(&from.join("remote"));
-        delete_files(&from.join("remote"));
+        let _ = fs::create_dir_all(&from.join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR));
+        delete_files(&from.join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR));
     };
 
     // After downloading the snapshots, copy them over to a backup directory.  Later we'll need to
