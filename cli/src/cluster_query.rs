@@ -33,12 +33,14 @@ use {
         rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
         rpc_response::SlotInfo,
     },
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
         account_utils::StateMut,
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
+        compute_budget::ComputeBudgetInstruction,
         epoch_schedule::Epoch,
         hash::Hash,
         message::Message,
@@ -268,6 +270,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
+                )
+                .arg(
+                    Arg::with_name("additional_fee")
+                        .long("additional-fee")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .help("Request additional-fee for transaction"),
                 )
                 .arg(blockhash_arg()),
         )
@@ -513,6 +522,7 @@ pub fn parse_cluster_ping(
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
     let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let print_timestamp = matches.is_present("print_timestamp");
+    let additional_fee = value_of(matches, "additional_fee");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             interval,
@@ -520,6 +530,7 @@ pub fn parse_cluster_ping(
             timeout,
             blockhash,
             print_timestamp,
+            additional_fee,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -1350,6 +1361,7 @@ pub fn process_ping(
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
+    additional_fee: &Option<u32>,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
@@ -1374,6 +1386,7 @@ pub fn process_ping(
             blockhash_from_cluster = true;
         }
     }
+
     'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
         let now = Instant::now();
         if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
@@ -1388,8 +1401,18 @@ pub fn process_ping(
         lamports += 1;
 
         let build_message = |lamports| {
-            let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
-            Message::new(&[ix], Some(&config.signers[0].pubkey()))
+            let mut ixs = vec![system_instruction::transfer(
+                &config.signers[0].pubkey(),
+                &to,
+                lamports,
+            )];
+            if let Some(additional_fee) = additional_fee {
+                ixs.push(ComputeBudgetInstruction::request_units(
+                    ComputeBudget::new(false).max_units as u32,
+                    *additional_fee,
+                ));
+            }
+            Message::new(&ixs, Some(&config.signers[0].pubkey()))
         };
         let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
@@ -2312,6 +2335,7 @@ mod tests {
                         Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
                     ),
                     print_timestamp: true,
+                    additional_fee: None,
                 },
                 signers: vec![default_keypair.into()],
             }
