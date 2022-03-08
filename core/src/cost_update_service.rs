@@ -270,8 +270,9 @@ mod tests {
             let accumulated_us: u64 = 2000;
             let accumulated_units: u64 = 200;
             let count: u32 = 10;
-            // to expect new cost = (mean + 2 * std)
-            expected_cost = 24;
+            // to expect new cost = (mean + 2 * std) of [10, 20] = 25, where
+            //   mean = (10+20)/2 = 15; std=5
+            expected_cost = 25;
 
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
@@ -366,7 +367,7 @@ mod tests {
             //  100,  // original program_cost
             //  1000, // cost_per_error
             // ]
-            let expected_cost = 1342u64;
+            let expected_cost = 1450u64;
             assert_eq!(1, updated_program_costs.len());
             assert_eq!(
                 Some(&expected_cost),
@@ -400,7 +401,7 @@ mod tests {
             //  1000, // cost_per_error from above test
             //  1450, // the smaller_cost_per_error will be coalesced to prev cost
             // ]
-            let expected_cost = 1915u64;
+            let expected_cost = 1973u64;
             assert_eq!(1, updated_program_costs.len());
             assert_eq!(
                 Some(&expected_cost),
