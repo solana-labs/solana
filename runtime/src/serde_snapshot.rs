@@ -528,11 +528,11 @@ where
     let mut measure_notify = Measure::start("accounts_notify");
 
     let accounts_db = Arc::new(accounts_db);
-    let accoounts_db_clone = accounts_db.clone();
+    let accounts_db_clone = accounts_db.clone();
     let handle = Builder::new()
         .name("notify_account_restore_from_snapshot".to_string())
         .spawn(move || {
-            accoounts_db_clone.notify_account_restore_from_snapshot();
+            accounts_db_clone.notify_account_restore_from_snapshot();
         })
         .unwrap();
 
