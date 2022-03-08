@@ -508,6 +508,7 @@ mod tests {
                 config as stake_config,
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
+                MINIMUM_STAKE_DELEGATION,
             },
             system_program,
             sysvar::{self, stake_history::StakeHistory},
@@ -2712,6 +2713,107 @@ mod tests {
             Ok(()),
         );
         assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+    }
+
+    #[test]
+    fn test_withdraw_rent_exempt() {
+        let recipient_address = solana_sdk::pubkey::new_rand();
+        let custodian_address = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = 7 * MINIMUM_STAKE_DELEGATION;
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports + rent_exempt_reserve,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&stake_address)
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account),
+            (recipient_address, AccountSharedData::default()),
+            (custodian_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: recipient_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        // should pass, withdrawing account down to minimum balance
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(
+                stake_lamports - MINIMUM_STAKE_DELEGATION,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // should fail, withdrawing account down to only rent-exempt reserve
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // should fail, withdrawal that would leave less than rent-exempt reserve
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(
+                stake_lamports + MINIMUM_STAKE_DELEGATION,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // should pass, withdrawal of complete account
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(
+                stake_lamports + rent_exempt_reserve,
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+        );
     }
 
     #[test]
