@@ -26,10 +26,6 @@ pub enum ClientErrorKind {
     TransactionError(#[from] TransactionError),
     #[error(transparent)]
     FaucetError(#[from] FaucetError),
-    #[error(transparent)]
-    SendError(#[from] WriteError),
-    #[error(transparent)]
-    ConnectError(#[from] ConnectError),
     #[error("Custom: {0}")]
     Custom(String),
 }
@@ -72,10 +68,20 @@ impl From<ClientErrorKind> for TransportError {
             ClientErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::FaucetError(err) => Self::Custom(format!("{:?}", err)),
-            ClientErrorKind::ConnectError(err) => Self::Custom(format!("{:?}", err)),
-            ClientErrorKind::SendError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
         }
+    }
+}
+
+impl From<WriteError> for ClientErrorKind {
+    fn from(write_error: WriteError) -> Self {
+        Self::Custom(format!("{:?}", write_error))
+    }
+}
+
+impl From<ConnectError> for ClientErrorKind {
+    fn from(connect_error: ConnectError) -> Self {
+        Self::Custom(format!("{:?}", connect_error))
     }
 }
 
