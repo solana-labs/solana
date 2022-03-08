@@ -411,12 +411,13 @@ impl Rocks {
     ) -> Vec<ColumnFamilyDescriptor> {
         use columns::*;
         let access_type = &options.access_type;
+        let advanced_options = &options.advanced_options;
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
             new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(
-                &options.shred_storage_type,
                 access_type,
                 oldest_slot,
+                advanced_options,
             );
         vec![
             new_cf_descriptor::<SlotMeta>(access_type, oldest_slot),
@@ -996,6 +997,23 @@ impl Default for ShredStorageType {
     }
 }
 
+/// Advanced options for blockstore.
+/// The each advanced option might also be used as a tag that supports
+/// group-by operation when reporting Blockstore metrics.
+#[derive(Clone)]
+pub struct BlockstoreAdvancedOptions {
+    // Determine how to store both data and coding shreds. Default: RocksLevel.
+    pub shred_storage_type: ShredStorageType,
+}
+
+impl Default for BlockstoreAdvancedOptions {
+    fn default() -> Self {
+        Self {
+            shred_storage_type: ShredStorageType::RocksLevel,
+        }
+    }
+}
+
 pub struct BlockstoreOptions {
     // The access type of blockstore. Default: PrimaryOnly
     pub access_type: AccessType,
@@ -1003,8 +1021,7 @@ pub struct BlockstoreOptions {
     pub recovery_mode: Option<BlockstoreRecoveryMode>,
     // Whether to allow unlimited number of open files. Default: true.
     pub enforce_ulimit_nofile: bool,
-    // Determine how to store both data and coding shreds. Default: RocksLevel.
-    pub shred_storage_type: ShredStorageType,
+    pub advanced_options: BlockstoreAdvancedOptions,
 }
 
 impl Default for BlockstoreOptions {
@@ -1014,7 +1031,7 @@ impl Default for BlockstoreOptions {
             access_type: AccessType::PrimaryOnly,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
-            shred_storage_type: ShredStorageType::RocksLevel,
+            advanced_options: BlockstoreAdvancedOptions::default(),
         }
     }
 }
@@ -1445,11 +1462,11 @@ fn new_cf_descriptor_pair_shreds<
     D: 'static + Column + ColumnName, // Column Family for Data Shred
     C: 'static + Column + ColumnName, // Column Family for Coding Shred
 >(
-    shred_storage_type: &ShredStorageType,
     access_type: &AccessType,
     oldest_slot: &OldestSlot,
+    advanced_options: &BlockstoreAdvancedOptions,
 ) -> (ColumnFamilyDescriptor, ColumnFamilyDescriptor) {
-    match shred_storage_type {
+    match &advanced_options.shred_storage_type {
         ShredStorageType::RocksLevel => (
             new_cf_descriptor::<D>(access_type, oldest_slot),
             new_cf_descriptor::<C>(access_type, oldest_slot),
