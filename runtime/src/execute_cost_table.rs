@@ -15,17 +15,10 @@ const OCCURRENCES_WEIGHT: i64 = 100;
 
 const DEFAULT_CAPACITY: usize = 1024;
 
-#[derive(Debug, Default)]
-struct AggregatedVarianceStats {
-    count: u64,
-    mean: f64,
-    squared_mean_distance: f64,
-}
-
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct ExecuteCostTable {
     capacity: usize,
-    table: HashMap<Pubkey, AggregatedVarianceStats>,
+    table: HashMap<Pubkey, u64>,
     occurrences: HashMap<Pubkey, (usize, u128)>,
 }
 
@@ -44,50 +37,55 @@ impl ExecuteCostTable {
         }
     }
 
-    // number of programs in table
+    pub fn get_cost_table(&self) -> &HashMap<Pubkey, u64> {
+        &self.table
+    }
+
     pub fn get_count(&self) -> usize {
         self.table.len()
     }
 
-    // default prorgam cost to max
-    pub fn get_default(&self) -> u64 {
-        // default max comoute units per program
-        200_000u64
-    }
-
-    // returns None if program doesn't exist in table. In this case,
-    // it is advised to call `get_default()` for default program costdefault/
-    // using Welford's Algorithm to calculate mean and std:
-    // https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
-    // Program cost is estimated as 2 standard deviations above mean, eg
-    // cost = (mean + 2 * std)
-    pub fn get_cost(&self, key: &Pubkey) -> Option<u64> {
-        let aggregated = self.table.get(key)?;
-        if aggregated.count < 1 {
-            None
+    // instead of assigning unknown program with a configured/hard-coded cost
+    // use average or mode function to make a educated guess.
+    pub fn get_average(&self) -> u64 {
+        if self.table.is_empty() {
+            0
         } else {
-            let variance = aggregated.squared_mean_distance / aggregated.count as f64;
-            Some((aggregated.mean + 2.0 * variance.sqrt()).ceil() as u64)
+            self.table.iter().map(|(_, value)| value).sum::<u64>() / self.get_count() as u64
         }
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
-        let need_to_add = !self.table.contains_key(key);
+    pub fn get_mode(&self) -> u64 {
+        if self.occurrences.is_empty() {
+            0
+        } else {
+            let key = self
+                .occurrences
+                .iter()
+                .max_by_key(|&(_, count)| count)
+                .map(|(key, _)| key)
+                .expect("cannot find mode from cost table");
+
+            *self.table.get(key).unwrap()
+        }
+    }
+
+    // returns None if program doesn't exist in table. In this case,
+    // client is advised to call `get_average()` or `get_mode()` to
+    // assign a 'default' value for new program.
+    pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
+        self.table.get(key)
+    }
+
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) -> Option<u64> {
+        let need_to_add = self.table.get(key).is_none();
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
         }
 
-        // Welford's algorithm
-        let aggregated = self
-            .table
-            .entry(*key)
-            .or_insert_with(AggregatedVarianceStats::default);
-        aggregated.count += 1;
-        let delta = value as f64 - aggregated.mean;
-        aggregated.mean += delta / aggregated.count as f64;
-        let delta_2 = value as f64 - aggregated.mean;
-        aggregated.squared_mean_distance += delta * delta_2;
+        let program_cost = self.table.entry(*key).or_insert(value);
+        *program_cost = (*program_cost + value) / 2;
 
         let (count, timestamp) = self
             .occurrences
@@ -95,6 +93,8 @@ impl ExecuteCostTable {
             .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
         *timestamp = Self::micros_since_epoch();
+
+        Some(*program_cost)
     }
 
     // prune the old programs so the table contains `new_size` of records,
@@ -219,21 +219,25 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(cost1, testee.get_average());
+        assert_eq!(cost1, testee.get_mode());
+        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
-        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average());
+        assert_eq!(cost2, testee.get_mode());
+        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // update 1st record
         testee.upsert(&key1, cost2);
         assert_eq!(2, testee.get_count());
-        // expected key1 cost = (mean + 2*std) = (105 + 2*5) = 115
-        let expected_cost = 115;
-        assert_eq!(expected_cost, testee.get_cost(&key1).unwrap());
-        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!(((cost1 + cost2) / 2 + cost2) / 2, testee.get_average());
+        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
+        assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key1).unwrap());
+        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
     }
 
     #[test]
@@ -254,31 +258,33 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
-        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
+        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // insert 3rd record, pushes out the oldest (eg 1st) record
         testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
+        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average());
+        assert_eq!(cost3, testee.get_mode());
         assert!(testee.get_cost(&key1).is_none());
-        assert_eq!(cost2, testee.get_cost(&key2).unwrap());
-        assert_eq!(cost3, testee.get_cost(&key3).unwrap());
+        assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
+        assert_eq!(&cost3, testee.get_cost(&key3).unwrap());
 
         // update 2nd record, so the 3rd becomes the oldest
         // add 4th record, pushes out 3rd key
         testee.upsert(&key2, cost1);
         testee.upsert(&key4, cost4);
+        assert_eq!(((cost1 + cost2) / 2 + cost4) / 2_u64, testee.get_average());
+        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
-        // expected key2 cost = (mean + 2*std) = (105 + 2*5) = 115
-        let expected_cost_2 = 115;
-        assert_eq!(expected_cost_2, testee.get_cost(&key2).unwrap());
+        assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key2).unwrap());
         assert!(testee.get_cost(&key3).is_none());
-        assert_eq!(cost4, testee.get_cost(&key4).unwrap());
+        assert_eq!(&cost4, testee.get_cost(&key4).unwrap());
     }
 }
