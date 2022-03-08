@@ -29,6 +29,7 @@ use {
         },
         rpc_response::{Response as RpcResponse, *},
     },
+    solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
@@ -69,8 +70,7 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{
-            self, DisabledAddressLoader, SanitizedTransaction, TransactionError,
-            VersionedTransaction,
+            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
         },
     },
     solana_send_transaction_service::{
@@ -80,9 +80,9 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, Encodable, EncodedConfirmedTransactionWithStatusMeta,
-        Reward, RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
+        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
+        RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
         UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
@@ -991,8 +991,11 @@ impl JsonRpcRequestProcessor {
                 .map(|config| config.convert_to_current())
                 .unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
-            let transaction_details = config.transaction_details.unwrap_or_default();
-            let show_rewards = config.rewards.unwrap_or(true);
+            let encoding_options = BlockEncodingOptions {
+                transaction_details: config.transaction_details.unwrap_or_default(),
+                show_rewards: config.rewards.unwrap_or(true),
+                max_supported_transaction_version: config.max_supported_transaction_version,
+            };
             let commitment = config.commitment.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
 
@@ -1007,31 +1010,29 @@ impl JsonRpcRequestProcessor {
                 self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
-                let configure_block = |confirmed_block: ConfirmedBlock| {
-                    let legacy_block = confirmed_block
-                        .into_legacy_block()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-                    let mut confirmed_block =
-                        legacy_block.configure(encoding, transaction_details, show_rewards);
+                let encode_block = |confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
+                    let mut encoded_block = confirmed_block
+                        .encode_with_options(encoding, encoding_options)
+                        .map_err(RpcCustomError::from)?;
                     if slot == 0 {
-                        confirmed_block.block_time = Some(self.genesis_creation_time());
-                        confirmed_block.block_height = Some(0);
+                        encoded_block.block_time = Some(self.genesis_creation_time());
+                        encoded_block.block_height = Some(0);
                     }
-                    Ok(confirmed_block)
+                    Ok(encoded_block)
                 };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return bigtable_result.ok().map(configure_block).transpose();
+                        return bigtable_result.ok().map(encode_block).transpose();
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
                 return result
                     .ok()
                     .map(ConfirmedBlock::from)
-                    .map(configure_block)
+                    .map(encode_block)
                     .transpose();
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
@@ -1042,27 +1043,26 @@ impl JsonRpcRequestProcessor {
                     return result
                         .ok()
                         .map(ConfirmedBlock::from)
-                        .map(|confirmed_block| -> Result<UiConfirmedBlock> {
-                            let mut legacy_block = confirmed_block
-                                .into_legacy_block()
-                                .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                            if legacy_block.block_time.is_none()
-                                || legacy_block.block_height.is_none()
+                        .map(|mut confirmed_block| -> Result<UiConfirmedBlock> {
+                            if confirmed_block.block_time.is_none()
+                                || confirmed_block.block_height.is_none()
                             {
                                 let r_bank_forks = self.bank_forks.read().unwrap();
                                 let bank = r_bank_forks.get(slot).cloned();
                                 if let Some(bank) = bank {
-                                    if legacy_block.block_time.is_none() {
-                                        legacy_block.block_time = Some(bank.clock().unix_timestamp);
+                                    if confirmed_block.block_time.is_none() {
+                                        confirmed_block.block_time =
+                                            Some(bank.clock().unix_timestamp);
                                     }
-                                    if legacy_block.block_height.is_none() {
-                                        legacy_block.block_height = Some(bank.block_height());
+                                    if confirmed_block.block_height.is_none() {
+                                        confirmed_block.block_height = Some(bank.block_height());
                                     }
                                 }
                             }
 
-                            Ok(legacy_block.configure(encoding, transaction_details, show_rewards))
+                            Ok(confirmed_block
+                                .encode_with_options(encoding, encoding_options)
+                                .map_err(RpcCustomError::from)?)
                         })
                         .transpose();
                 }
@@ -1384,6 +1384,7 @@ impl JsonRpcRequestProcessor {
             .map(|config| config.convert_to_current())
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+        let max_supported_transaction_version = config.max_supported_transaction_version;
         let commitment = config.commitment.unwrap_or_default();
         check_is_at_least_confirmed(commitment)?;
 
@@ -1399,10 +1400,7 @@ impl JsonRpcRequestProcessor {
 
             let encode_transaction =
                 |confirmed_tx_with_meta: ConfirmedTransactionWithStatusMeta| -> Result<EncodedConfirmedTransactionWithStatusMeta> {
-                    let legacy_tx_with_meta = confirmed_tx_with_meta.into_legacy_confirmed_transaction()
-                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
-
-                    Ok(legacy_tx_with_meta.encode(encoding))
+                    Ok(confirmed_tx_with_meta.encode(encoding, max_supported_transaction_version).map_err(RpcCustomError::from)?)
                 };
 
             match confirmed_transaction.unwrap_or(None) {
@@ -3478,7 +3476,7 @@ pub mod rpc_full {
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let transaction = sanitize_transaction(unsanitized_tx, preflight_bank)?;
             let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
@@ -3586,7 +3584,7 @@ pub mod rpc_full {
                     .set_recent_blockhash(bank.last_blockhash());
             }
 
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let transaction = sanitize_transaction(unsanitized_tx, bank)?;
             if config.sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
@@ -4271,9 +4269,12 @@ where
         .map(|output| (wire_output, output))
 }
 
-fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
+fn sanitize_transaction(
+    transaction: VersionedTransaction,
+    address_loader: &impl AddressLoader,
+) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, &DisabledAddressLoader)
+    SanitizedTransaction::try_create(transaction, message_hash, None, address_loader)
         .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
@@ -4284,22 +4285,18 @@ pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>>
     Arc::new(RwLock::new(validator_exit))
 }
 
-// Used for tests
-pub fn create_test_transactions_and_populate_blockstore(
+pub fn create_test_transaction_entries(
     keypairs: Vec<&Keypair>,
-    previous_slot: Slot,
     bank: Arc<Bank>,
-    blockstore: Arc<Blockstore>,
-    max_complete_transaction_status_slot: Arc<AtomicU64>,
-) -> Vec<Signature> {
+) -> (Vec<Entry>, Vec<Signature>) {
     let mint_keypair = keypairs[0];
     let keypair1 = keypairs[1];
     let keypair2 = keypairs[2];
     let keypair3 = keypairs[3];
-    let slot = bank.slot();
     let blockhash = bank.confirmed_last_blockhash();
     let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
 
+    let mut signatures = Vec::new();
     // Generate transactions for processing
     // Successful transaction
     let success_tx = solana_sdk::system_transaction::transfer(
@@ -4308,7 +4305,7 @@ pub fn create_test_transactions_and_populate_blockstore(
         rent_exempt_amount,
         blockhash,
     );
-    let success_signature = success_tx.signatures[0];
+    signatures.push(success_tx.signatures[0]);
     let entry_1 = solana_entry::entry::next_entry(&blockhash, 1, vec![success_tx]);
     // Failed transaction, InstructionError
     let ix_error_tx = solana_sdk::system_transaction::transfer(
@@ -4317,12 +4314,21 @@ pub fn create_test_transactions_and_populate_blockstore(
         2 * rent_exempt_amount,
         blockhash,
     );
-    let ix_error_signature = ix_error_tx.signatures[0];
+    signatures.push(ix_error_tx.signatures[0]);
     let entry_2 = solana_entry::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
-    let entries = vec![entry_1, entry_2];
+    (vec![entry_1, entry_2], signatures)
+}
 
+pub fn populate_blockstore_for_tests(
+    entries: Vec<Entry>,
+    bank: Arc<Bank>,
+    blockstore: Arc<Blockstore>,
+    max_complete_transaction_status_slot: Arc<AtomicU64>,
+) {
+    let slot = bank.slot();
+    let parent_slot = bank.parent_slot();
     let shreds =
-        solana_ledger::blockstore::entries_to_test_shreds(&entries, slot, previous_slot, true, 0);
+        solana_ledger::blockstore::entries_to_test_shreds(&entries, slot, parent_slot, true, 0);
     blockstore.insert_shreds(shreds, None, false).unwrap();
     blockstore.set_roots(std::iter::once(&slot)).unwrap();
 
@@ -4357,8 +4363,6 @@ pub fn create_test_transactions_and_populate_blockstore(
     );
 
     transaction_status_service.join().unwrap();
-
-    vec![success_signature, ix_error_signature]
 }
 
 #[cfg(test)]
@@ -4377,13 +4381,16 @@ pub mod tests {
         jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value},
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
+        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_client::{
             rpc_custom_error::{
                 JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE,
                 JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE,
+                JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION,
             },
             rpc_filter::{Memcmp, MemcmpEncodedBytes},
         },
+        solana_entry::entry::next_versioned_entry,
         solana_gossip::{contact_info::ContactInfo, socketaddr},
         solana_ledger::{
             blockstore_meta::PerfSample,
@@ -4400,11 +4407,15 @@ pub mod tests {
             fee_calculator::DEFAULT_BURN_PERCENT,
             hash::{hash, Hash},
             instruction::InstructionError,
+            message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
             nonce, rpc_port,
             signature::{Keypair, Signer},
+            slot_hashes::SlotHashes,
             system_program, system_transaction,
             timing::slot_duration_from_slots_per_year,
-            transaction::{self, Transaction, TransactionError},
+            transaction::{
+                self, DisabledAddressLoader, Transaction, TransactionError, TransactionVersion,
+            },
         },
         solana_transaction_status::{
             EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
@@ -4418,7 +4429,7 @@ pub mod tests {
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},
         },
-        std::collections::HashMap,
+        std::{borrow::Cow, collections::HashMap},
     };
 
     fn spl_token_id() -> Pubkey {
@@ -4554,22 +4565,107 @@ pub mod tests {
             serde_json::from_str(response).expect("failed to deserialize response")
         }
 
+        fn overwrite_working_bank_entries(&self, entries: Vec<Entry>) {
+            populate_blockstore_for_tests(
+                entries,
+                self.working_bank(),
+                self.blockstore.clone(),
+                self.max_complete_transaction_status_slot.clone(),
+            );
+        }
+
         fn create_test_transactions_and_populate_blockstore(&self) -> Vec<Signature> {
             let mint_keypair = &self.mint_keypair;
             let keypair1 = Keypair::new();
             let keypair2 = Keypair::new();
             let keypair3 = Keypair::new();
-            let bank = self.bank_forks.read().unwrap().working_bank();
+            let bank = self.working_bank();
             let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
             bank.transfer(rent_exempt_amount, mint_keypair, &keypair2.pubkey())
                 .unwrap();
-            create_test_transactions_and_populate_blockstore(
+
+            let (entries, signatures) = create_test_transaction_entries(
                 vec![&self.mint_keypair, &keypair1, &keypair2, &keypair3],
-                0,
                 bank,
-                self.blockstore.clone(),
-                self.max_complete_transaction_status_slot.clone(),
-            )
+            );
+            self.overwrite_working_bank_entries(entries);
+            signatures
+        }
+
+        fn create_test_versioned_transactions_and_populate_blockstore(
+            &self,
+            address_table_key: Option<Pubkey>,
+        ) -> Vec<Signature> {
+            let address_table_key =
+                address_table_key.unwrap_or_else(|| self.store_address_lookup_table());
+
+            let bank = self.working_bank();
+            let recent_blockhash = bank.confirmed_last_blockhash();
+            let legacy_message = VersionedMessage::Legacy(Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 0,
+                },
+                recent_blockhash,
+                account_keys: vec![self.mint_keypair.pubkey()],
+                instructions: vec![],
+            });
+            let version_0_message = VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 0,
+                },
+                recent_blockhash,
+                account_keys: vec![self.mint_keypair.pubkey()],
+                address_table_lookups: vec![MessageAddressTableLookup {
+                    account_key: address_table_key,
+                    writable_indexes: vec![0],
+                    readonly_indexes: vec![],
+                }],
+                instructions: vec![],
+            });
+
+            let mut signatures = Vec::new();
+            let legacy_tx =
+                VersionedTransaction::try_new(legacy_message, &[&self.mint_keypair]).unwrap();
+            signatures.push(legacy_tx.signatures[0]);
+            let version_0_tx =
+                VersionedTransaction::try_new(version_0_message, &[&self.mint_keypair]).unwrap();
+            signatures.push(version_0_tx.signatures[0]);
+            let entry1 = next_versioned_entry(&recent_blockhash, 1, vec![legacy_tx]);
+            let entry2 = next_versioned_entry(&entry1.hash, 1, vec![version_0_tx]);
+            let entries = vec![entry1, entry2];
+            self.overwrite_working_bank_entries(entries);
+            signatures
+        }
+
+        fn store_address_lookup_table(&self) -> Pubkey {
+            let bank = self.working_bank();
+            let address_table_pubkey = Pubkey::new_unique();
+            let address_table_account = {
+                let address_table_state = AddressLookupTable {
+                    meta: LookupTableMeta {
+                        // ensure that active address length is 1 at slot 0
+                        last_extended_slot_start_index: 1,
+                        ..LookupTableMeta::default()
+                    },
+                    addresses: Cow::Owned(vec![Pubkey::new_unique()]),
+                };
+                let address_table_data = address_table_state.serialize_for_tests().unwrap();
+                let min_balance_lamports =
+                    bank.get_minimum_balance_for_rent_exemption(address_table_data.len());
+                AccountSharedData::create(
+                    min_balance_lamports,
+                    address_table_data,
+                    solana_address_lookup_table_program::id(),
+                    false,
+                    0,
+                )
+            };
+            bank.store_account(&address_table_pubkey, &address_table_account);
+            address_table_pubkey
         }
 
         fn add_roots_to_blockstore(&self, mut roots: Vec<Slot>) {
@@ -6308,6 +6404,45 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_block_with_versioned_tx() {
+        let rpc = RpcHandler::start();
+
+        let bank = rpc.working_bank();
+        // Slot hashes is necessary for processing versioned txs.
+        bank.set_sysvar_for_tests(&SlotHashes::default());
+        // Add both legacy and version #0 transactions to the block
+        rpc.create_test_versioned_transactions_and_populate_blockstore(None);
+
+        let request = create_test_request(
+            "getBlock",
+            Some(json!([
+                0u64,
+                {"maxSupportedTransactionVersion": 0},
+            ])),
+        );
+        let result: Option<EncodedConfirmedBlock> =
+            parse_success_result(rpc.handle_request_sync(request));
+        let confirmed_block = result.unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 2);
+        assert_eq!(
+            confirmed_block.transactions[0].version,
+            Some(TransactionVersion::LEGACY)
+        );
+        assert_eq!(
+            confirmed_block.transactions[1].version,
+            Some(TransactionVersion::Number(0))
+        );
+
+        let request = create_test_request("getBlock", Some(json!([0u64,])));
+        let response = parse_failure_response(rpc.handle_request_sync(request));
+        let expected = (
+            JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION,
+            String::from("Transaction version (0) is not supported"),
+        );
+        assert_eq!(response, expected);
+    }
+
+    #[test]
     fn test_get_block() {
         let mut rpc = RpcHandler::start();
         let confirmed_block_signatures = rpc.create_test_transactions_and_populate_blockstore();
@@ -6320,9 +6455,16 @@ pub mod tests {
         assert_eq!(confirmed_block.transactions.len(), 2);
         assert_eq!(confirmed_block.rewards, vec![]);
 
-        for EncodedTransactionWithStatusMeta { transaction, meta } in
-            confirmed_block.transactions.into_iter()
+        for EncodedTransactionWithStatusMeta {
+            transaction,
+            meta,
+            version,
+        } in confirmed_block.transactions.into_iter()
         {
+            assert_eq!(
+                version, None,
+                "requests which don't set max_supported_transaction_version shouldn't receive a version"
+            );
             if let EncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     let meta = meta.unwrap();
@@ -6357,9 +6499,16 @@ pub mod tests {
         assert_eq!(confirmed_block.transactions.len(), 2);
         assert_eq!(confirmed_block.rewards, vec![]);
 
-        for EncodedTransactionWithStatusMeta { transaction, meta } in
-            confirmed_block.transactions.into_iter()
+        for EncodedTransactionWithStatusMeta {
+            transaction,
+            meta,
+            version,
+        } in confirmed_block.transactions.into_iter()
         {
+            assert_eq!(
+                version, None,
+                "requests which don't set max_supported_transaction_version shouldn't receive a version"
+            );
             if let EncodedTransaction::LegacyBinary(transaction) = transaction {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
@@ -6414,6 +6563,7 @@ pub mod tests {
                     transaction_details: Some(TransactionDetails::Signatures),
                     rewards: Some(false),
                     commitment: None,
+                    max_supported_transaction_version: None,
                 },
             ])),
         );
@@ -6436,6 +6586,7 @@ pub mod tests {
                     transaction_details: Some(TransactionDetails::None),
                     rewards: Some(true),
                     commitment: None,
+                    max_supported_transaction_version: None,
                 },
             ])),
         );
@@ -7662,8 +7813,30 @@ pub mod tests {
                 .to_string(),
         );
         assert_eq!(
-            sanitize_transaction(unsanitary_versioned_tx).unwrap_err(),
+            sanitize_transaction(unsanitary_versioned_tx, &DisabledAddressLoader).unwrap_err(),
             expect58
+        );
+    }
+
+    #[test]
+    fn test_sanitize_unsupported_transaction_version() {
+        let versioned_tx = VersionedTransaction {
+            signatures: vec![Signature::default()],
+            message: VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys: vec![Pubkey::new_unique()],
+                ..v0::Message::default()
+            }),
+        };
+
+        assert_eq!(
+            sanitize_transaction(versioned_tx, &DisabledAddressLoader).unwrap_err(),
+            Error::invalid_params(
+                "invalid transaction: Transaction version is unsupported".to_string(),
+            )
         );
     }
 }

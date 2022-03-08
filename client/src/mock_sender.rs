@@ -28,7 +28,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         sysvar::epoch_schedule::EpochSchedule,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, Transaction, TransactionError, TransactionVersion},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
@@ -192,6 +192,7 @@ impl RpcSender for MockSender {
             "getTransaction" => serde_json::to_value(EncodedConfirmedTransactionWithStatusMeta {
                 slot: 2,
                 transaction: EncodedTransactionWithStatusMeta {
+                    version: Some(TransactionVersion::LEGACY),
                     transaction: EncodedTransaction::Json(
                         UiTransaction {
                             signatures: vec!["3AsdoALgZFuq2oUVWrDYhg2pNeaLJKPLf8hU2mQ6U8qJxeJ6hsrPVpMn9ma39DtfYCrDQSvngWRP8NnTpEhezJpE".to_string()],
@@ -213,6 +214,7 @@ impl RpcSender for MockSender {
                                         accounts: vec![0, 1],
                                         data: "3Bxs49DitAvXtoDR".to_string(),
                                     }],
+                                    address_table_lookups: None,
                                 })
                         }),
                     meta: Some(UiTransactionStatusMeta {
@@ -226,6 +228,7 @@ impl RpcSender for MockSender {
                             pre_token_balances: None,
                             post_token_balances: None,
                             rewards: None,
+                            loaded_addresses: None,
                         }),
                 },
                 block_time: Some(1628633791),
@@ -381,6 +384,7 @@ impl RpcSender for MockSender {
                         UiTransactionEncoding::Base58,
                     ),
                     meta: None,
+                    version: Some(TransactionVersion::LEGACY),
                 }],
                 rewards: Rewards::new(),
                 block_time: None,

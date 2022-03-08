@@ -197,6 +197,7 @@ pub struct RpcBlockSubscribeConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub transaction_details: Option<TransactionDetails>,
     pub show_rewards: Option<bool>,
+    pub max_supported_transaction_version: Option<u8>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -248,6 +249,7 @@ pub struct RpcBlockConfig {
     pub rewards: Option<bool>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub max_supported_transaction_version: Option<u8>,
 }
 
 impl EncodingConfig for RpcBlockConfig {
@@ -288,6 +290,7 @@ pub struct RpcTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub max_supported_transaction_version: Option<u8>,
 }
 
 impl EncodingConfig for RpcTransactionConfig {

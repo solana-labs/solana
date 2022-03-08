@@ -3384,9 +3384,7 @@ mod tests {
         account_address: Pubkey,
         address_lookup_table: AddressLookupTable<'static>,
     ) -> AccountSharedData {
-        let mut data = Vec::new();
-        address_lookup_table.serialize_for_tests(&mut data).unwrap();
-
+        let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
             AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
         account.set_data(data);

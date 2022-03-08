@@ -178,13 +178,13 @@ impl<'a> AddressLookupTable<'a> {
     }
 
     /// Serialize an address table including its addresses
-    pub fn serialize_for_tests(self, data: &mut Vec<u8>) -> Result<(), InstructionError> {
-        data.resize(LOOKUP_TABLE_META_SIZE, 0);
-        Self::overwrite_meta_data(data, self.meta)?;
+    pub fn serialize_for_tests(self) -> Result<Vec<u8>, InstructionError> {
+        let mut data = vec![0; LOOKUP_TABLE_META_SIZE];
+        Self::overwrite_meta_data(&mut data, self.meta)?;
         self.addresses.iter().for_each(|address| {
             data.extend_from_slice(address.as_ref());
         });
-        Ok(())
+        Ok(data)
     }
 
     /// Efficiently deserialize an address table without allocating
@@ -352,9 +352,8 @@ mod tests {
         fn test_case(num_addresses: usize) {
             let lookup_table_meta = LookupTableMeta::new_for_tests();
             let address_table = AddressLookupTable::new_for_tests(lookup_table_meta, num_addresses);
-            let mut address_table_data = Vec::new();
-            AddressLookupTable::serialize_for_tests(address_table.clone(), &mut address_table_data)
-                .unwrap();
+            let address_table_data =
+                AddressLookupTable::serialize_for_tests(address_table.clone()).unwrap();
             assert_eq!(
                 AddressLookupTable::deserialize(&address_table_data).unwrap(),
                 address_table,

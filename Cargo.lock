@@ -5505,6 +5505,7 @@ dependencies = [
  "serial_test",
  "soketto",
  "solana-account-decoder",
+ "solana-address-lookup-table-program",
  "solana-client",
  "solana-entry",
  "solana-faucet",
