@@ -2044,64 +2044,6 @@ mod tests {
     }
 
     #[test]
-    fn test_withdraw_identical_authorities() {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let custodian = stake_pubkey;
-        let total_lamports = 100;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
-            total_lamports,
-            &StakeState::Initialized(Meta {
-                lockup: Lockup {
-                    unix_timestamp: 0,
-                    epoch: 1,
-                    custodian,
-                },
-                ..Meta::auto(&stake_pubkey)
-            }),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let to = solana_sdk::pubkey::new_rand();
-        let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
-        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
-
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-        let clock = Clock::default();
-
-        // lockup is still in force, even though custodian is the same as the withdraw authority
-        assert_eq!(
-            stake_keyed_account.withdraw(
-                total_lamports,
-                &to_keyed_account,
-                &clock,
-                &StakeHistory::default(),
-                &stake_keyed_account,
-                None,
-            ),
-            Err(StakeError::LockupInForce.into())
-        );
-
-        {
-            let custodian_keyed_account = KeyedAccount::new(&custodian, true, &stake_account);
-            assert_eq!(
-                stake_keyed_account.withdraw(
-                    total_lamports,
-                    &to_keyed_account,
-                    &clock,
-                    &StakeHistory::default(),
-                    &stake_keyed_account,
-                    Some(&custodian_keyed_account),
-                ),
-                Ok(())
-            );
-            assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
-        }
-    }
-
-    #[test]
     fn test_withdraw_rent_exempt() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let clock = Clock::default();

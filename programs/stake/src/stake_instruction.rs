@@ -2599,23 +2599,24 @@ mod tests {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let total_lamports = 100;
+        let mut meta = Meta {
+            lockup: Lockup {
+                unix_timestamp: 0,
+                epoch: 1,
+                custodian: custodian_address,
+            },
+            ..Meta::auto(&stake_address)
+        };
         let stake_account = AccountSharedData::new_data_with_space(
             total_lamports,
-            &StakeState::Initialized(Meta {
-                lockup: Lockup {
-                    unix_timestamp: 0,
-                    epoch: 1,
-                    custodian: custodian_address,
-                },
-                ..Meta::auto(&stake_address)
-            }),
+            &StakeState::Initialized(meta),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
         .unwrap();
         let mut clock = Clock::default();
         let mut transaction_accounts = vec![
-            (stake_address, stake_account),
+            (stake_address, stake_account.clone()),
             (recipient_address, AccountSharedData::default()),
             (custodian_address, AccountSharedData::default()),
             (
@@ -2669,12 +2670,33 @@ mod tests {
             is_signer: true,
             is_writable: false,
         });
-        process_instruction(
+        let accounts = process_instruction(
             &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
         );
+        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+
+        // should pass, custodian is the same as the withdraw authority
+        instruction_accounts[5].pubkey = stake_address;
+        meta.lockup.custodian = stake_address;
+        let stake_account_self_as_custodian = AccountSharedData::new_data_with_space(
+            total_lamports,
+            &StakeState::Initialized(meta),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        transaction_accounts[0] = (stake_address, stake_account_self_as_custodian);
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        transaction_accounts[0] = (stake_address, stake_account);
 
         // should pass, lockup has expired
         instruction_accounts.pop();
