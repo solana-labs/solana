@@ -281,38 +281,52 @@ macro_rules! rocksdb_metric_header {
 
     (@compression_type $metric_name:literal, $cf_name:literal, $column_options:expr, $storage_type:literal) => {
         match $column_options.compression_type {
-            BlockstoreCompressionType::None => rocksdb_metric_header!(@all_fields
+            BlockstoreCompressionType::None => rocksdb_metric_header!(@dynamic_size
                 $metric_name,
                 $cf_name,
+                $column_options,
                 $storage_type,
                 "None"
             ),
-            BlockstoreCompressionType::Snappy => rocksdb_metric_header!(@all_fields
+            BlockstoreCompressionType::Snappy => rocksdb_metric_header!(@dynamic_size
                 $metric_name,
                 $cf_name,
+                $column_options,
                 $storage_type,
                 "Snappy"
             ),
-            BlockstoreCompressionType::Lz4 => rocksdb_metric_header!(@all_fields
+            BlockstoreCompressionType::Lz4 => rocksdb_metric_header!(@dynamic_size
                 $metric_name,
                 $cf_name,
+                $column_options,
                 $storage_type,
                 "Lz4"
             ),
-            BlockstoreCompressionType::Zlib => rocksdb_metric_header!(@all_fields
+            BlockstoreCompressionType::Zlib => rocksdb_metric_header!(@dynamic_size
                 $metric_name,
                 $cf_name,
+                $column_options,
                 $storage_type,
                 "Zlib"
             ),
         }
     };
 
-    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal, $compression_type:literal) => {
+    (@dynamic_size $metric_name:literal, $cf_name:literal, $column_options:expr, $storage_type:literal, $compression_type:literal) => {
+        if $column_options.dynamic_size_with_fixed_level {
+            rocksdb_metric_header!(@all_fields $metric_name, $cf_name, $storage_type, $compression_type, "true")
+        } else {
+            rocksdb_metric_header!(@all_fields $metric_name, $cf_name, $storage_type, $compression_type, "false")
+        }
+    };
+
+
+    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal, $compression_type:literal, $dynamic_size:literal) => {
         concat!($metric_name,
             ",cf_name=", $cf_name,
             ",storage=", $storage_type,
             ",compression=", $compression_type,
+            ",dynamic_size=", $dynamic_size,
         )
     };
 }
@@ -1989,19 +2003,37 @@ impl BlockstoreCompressionType {
 /// reporting metrics.
 #[derive(Debug, Clone)]
 pub struct LedgerColumnOptions {
-    // Determine how to store both data and coding shreds. Default: RocksLevel.
+    /// Determine how to store both data and coding shreds. Default: RocksLevel.
     pub shred_storage_type: ShredStorageType,
 
-    // Determine the way to compress column families which are eligible for
-    // compression.
+    /// Determine the way to compress column families which are eligible for
+    /// compression.
     pub compression_type: BlockstoreCompressionType,
+
+    /// If true, then each RocksDB column family with level compaction will
+    /// dynamically change the size of each level and using at most 4 levels
+    /// (i.e., L0, L1, L2, and L3).  This setting allows the blockstore to
+    /// flexibly handle different workload by adapting the size of each level
+    /// over time to maintain the same read amplification.  This setting also
+    /// avoids the corner case in the usual setting where small amount of data
+    /// could introduce additional unwanted level in the LSM tree that
+    /// increases additional read amplification.  Such corner case is especially
+    /// common when the size of the column family grows big.
+    ///
+    /// Warning: based on the RocksDB's documentation, it is suggested not to use
+    /// this options to open an existing rocksdb instance without this option
+    /// enabled.
+    /// https://github.com/facebook/rocksdb/blame/08864df2125d777527b642052a70edc824f0a5c0/include/rocksdb/advanced_options.h#L391-L392
+    pub dynamic_size_with_fixed_level: bool,
 }
 
+const DYNAMIC_SIZE_MAX_NUM_LEVELS: i32 = 4;
 impl Default for LedgerColumnOptions {
     fn default() -> Self {
         Self {
             shred_storage_type: ShredStorageType::RocksLevel,
             compression_type: BlockstoreCompressionType::default(),
+            dynamic_size_with_fixed_level: false,
         }
     }
 }
@@ -2800,6 +2832,23 @@ fn process_cf_options_advanced<C: 'static + Column + ColumnName>(
                 .compression_type
                 .to_rocksdb_compression_type(),
         );
+    }
+    if column_options.dynamic_size_with_fixed_level {
+        // Limiting the number of levels to three allows us to answer read requests
+        // with capped read amplification.  From the data-points in mainnet-beta,
+        // the majority of the data can fit in three levels.  For those data which
+        // does not fit within three levels, we use the next option to dynamically
+        // change the size of each level to allow the level structure to be adapted
+        // over time.
+        cf_options.set_num_levels(DYNAMIC_SIZE_MAX_NUM_LEVELS);
+
+        // This option allows rocksdb to dynamically change the size of each level
+        // to reach the target number of levels.  This setting together with the
+        // above `set_num_levels` allows the column family to be packed within
+        // three levels -- no matter whether the column familly is big or small.
+        // Note that this option cannot be used to reopen an existing db without
+        // this setting.
+        cf_options.set_level_compaction_dynamic_level_bytes(true);
     }
 }
 

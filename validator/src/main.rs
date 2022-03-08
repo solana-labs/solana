@@ -1030,6 +1030,19 @@ pub fn main() {
                        Turning on compression can save ~10% of the ledger size."),
         )
         .arg(
+            Arg::with_name("rocksdb_dynamic_size_with_fixed_level")
+                .hidden(true)
+                .long("rocksdb-dynamic-size-with-fixed-level")
+                .takes_value(false)
+                .help("EXPERIMENTAL: This setting allows the blockstore to \
+                       flexibly handle different workload by dynamically adapting \
+                       the size of each level over time to maintain the same read \
+                       amplification. \
+                       WARNING: based on the RocksDB's documentation, it is \
+                       suggested not to use this options to open an existing \
+                       rocksdb instance without this option enabled"),
+        )
+        .arg(
             Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
@@ -2726,6 +2739,7 @@ pub fn main() {
                 ),
             },
         },
+        dynamic_size_with_fixed_level: matches.is_present("rocksdb_dynamic_size_with_fixed_level"),
     };
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
