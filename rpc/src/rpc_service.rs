@@ -153,6 +153,18 @@ impl RpcRequestMiddleware {
         tokio::fs::File::open(path).await
     }
 
+    fn find_snapshot_file(&self, stem: &Path) -> PathBuf {
+        let root = &self.snapshot_config.as_ref().unwrap().snapshot_archives_dir;
+        let local_path = root.join(stem);
+        let remote_path = root.join("remote").join(stem);
+
+        if local_path.exists() {
+            local_path
+        } else {
+            remote_path
+        }
+    }
+
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
@@ -163,11 +175,7 @@ impl RpcRequestMiddleware {
                 }
                 _ => {
                     inc_new_counter_info!("rpc-get_snapshot", 1);
-                    self.snapshot_config
-                        .as_ref()
-                        .unwrap()
-                        .snapshot_archives_dir
-                        .join(stem)
+                    self.find_snapshot_file(stem.as_ref())
                 }
             }
         };
