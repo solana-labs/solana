@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-poh-bench"
 publish = false
 
 [dependencies]
-clap = "2.33.1"
+clap = { version = "3.1.5", features = ["cargo"] }
 log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
