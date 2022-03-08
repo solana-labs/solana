@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, values_t, App, Arg},
+    clap::{crate_description, crate_name, Arg, Command},
     log::*,
     solana_clap_utils::input_parsers::{lamports_of_sol, value_of},
     solana_faucet::{
@@ -21,28 +21,27 @@ async fn main() {
 
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("faucet", /*version:*/ None);
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("keypair")
-                .short("k")
+            Arg::new("keypair")
+                .short('k')
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .required(true)
                 .default_value(&default_keypair)
                 .help("File from which to read the faucet's keypair"),
         )
         .arg(
-            Arg::with_name("slice")
+            Arg::new("slice")
                 .long("slice")
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Time slice over which to limit requests to faucet"),
         )
         .arg(
-            Arg::with_name("per_time_cap")
+            Arg::new("per_time_cap")
                 .long("per-time-cap")
                 .alias("cap")
                 .value_name("NUM")
@@ -50,18 +49,19 @@ async fn main() {
                 .help("Request limit for time slice, in SOL"),
         )
         .arg(
-            Arg::with_name("per_request_cap")
+            Arg::new("per_request_cap")
                 .long("per-request-cap")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Request limit for a single request, in SOL"),
         )
         .arg(
-            Arg::with_name("allowed_ip")
+            Arg::new("allowed_ip")
                 .long("allow-ip")
                 .value_name("IP_ADDRESS")
                 .takes_value(true)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .help(
                     "Allow requests from a particular IP address without request limit; \
                     recipient address will be used to check request limits instead",
@@ -76,7 +76,8 @@ async fn main() {
     let per_time_cap = lamports_of_sol(&matches, "per_time_cap");
     let per_request_cap = lamports_of_sol(&matches, "per_request_cap");
 
-    let allowed_ips: HashSet<_> = values_t!(matches.values_of("allowed_ip"), IpAddr)
+    let allowed_ips: HashSet<_> = matches
+        .values_of_t::<IpAddr>("allowed_ip")
         .unwrap_or_default()
         .into_iter()
         .collect();
