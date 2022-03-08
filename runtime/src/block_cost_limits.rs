@@ -16,10 +16,10 @@ pub const MAX_BLOCK_REPLAY_TIME_US: u64 = 400_000;
 /// number of concurrent processes,
 pub const MAX_CONCURRENCY: u64 = 4;
 
-/// Cluster data, method of collecting at https://github.com/solana-labs/solana/issues/19627
-/// Dashboard: https://metrics.solana.com:8889/sources/0/dashboards/10?refresh=Paused&lower=now%28%29%20-%2012h
-///
-/// cluster averaged compute unit to micro-sec conversion rate
+// Cluster data, method of collecting at https://github.com/solana-labs/solana/issues/19627
+// Dashboard: https://metrics.solana.com:8889/sources/0/dashboards/10?refresh=Paused&lower=now%28%29%20-%2012h
+
+/// Cluster averaged compute unit to micro-sec conversion rate
 pub const COMPUTE_UNIT_TO_US_RATIO: u64 = 30;
 /// Number of compute units for one signature verification.
 pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 24;
