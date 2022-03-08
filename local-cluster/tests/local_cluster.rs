@@ -1082,6 +1082,16 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         }
     };
 
+    let copy_files_with_remote = |from: &Path, to: &Path| {
+        copy_files(from, to);
+        copy_files(&from.join("remote"), &to.join("remote"));
+    };
+
+    let delete_files_with_remote = |from: &Path| {
+        delete_files(from);
+        delete_files(&from.join("remote"));
+    };
+
     // After downloading the snapshots, copy them over to a backup directory.  Later we'll need to
     // restart the node and guarantee that the only snapshots present are these initial ones.  So,
     // the easiest way to do that is create a backup now, delete the ones on the node before
@@ -1091,7 +1101,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         "Backing up validator snapshots to dir: {}...",
         backup_validator_snapshot_archives_dir.path().display()
     );
-    copy_files(
+    copy_files_with_remote(
         validator_snapshot_test_config.snapshot_archives_dir.path(),
         backup_validator_snapshot_archives_dir.path(),
     );
@@ -1169,8 +1179,8 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     trace!(
         "Delete all the snapshots on the validator and restore the originals from the backup..."
     );
-    delete_files(validator_snapshot_test_config.snapshot_archives_dir.path());
-    copy_files(
+    delete_files_with_remote(validator_snapshot_test_config.snapshot_archives_dir.path());
+    copy_files_with_remote(
         backup_validator_snapshot_archives_dir.path(),
         validator_snapshot_test_config.snapshot_archives_dir.path(),
     );
