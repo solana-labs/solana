@@ -627,9 +627,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "3.2.0"
+version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
+checksum = "90f9d052967f590a76e62eb387bd0bbb1b000182c3cefe5364db6b7211651bc0"
 dependencies = [
  "byteorder 1.4.3",
  "digest 0.9.0",
@@ -776,7 +776,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 3.2.1",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -3258,7 +3258,7 @@ dependencies = [
  "bincode",
  "bv",
  "caps",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 3.2.1",
  "dlopen",
  "dlopen_derive",
  "fnv",
@@ -3326,7 +3326,7 @@ dependencies = [
  "bytemuck",
  "console_error_panic_hook",
  "console_log",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 3.2.1",
  "getrandom 0.1.14",
  "itertools 0.10.3",
  "js-sys",
@@ -3660,7 +3660,7 @@ dependencies = [
  "bytemuck",
  "byteorder 1.4.3",
  "cipher 0.4.3",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 3.2.1",
  "getrandom 0.1.14",
  "lazy_static",
  "merlin",
