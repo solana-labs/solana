@@ -5653,7 +5653,6 @@ dependencies = [
  "num-traits",
  "pbkdf2 0.10.1",
  "qstring",
- "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version 0.4.0",

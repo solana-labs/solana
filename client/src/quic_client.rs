@@ -2,7 +2,7 @@
 //! an interface for sending transactions which is restricted by the server's flow control.
 
 use {
-    crate::tpu_connection::TpuConnection,
+    crate::{client_error::ClientErrorKind, tpu_connection::TpuConnection},
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
@@ -71,7 +71,8 @@ impl TpuConnection for QuicTpuConnection {
     fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
         let _guard = self.client.runtime.enter();
         let send_buffer = self.client.send_buffer(&data[..]);
-        self.client.runtime.block_on(send_buffer)
+        self.client.runtime.block_on(send_buffer)?;
+        Ok(())
     }
 
     fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
@@ -82,7 +83,8 @@ impl TpuConnection for QuicTpuConnection {
 
         let _guard = self.client.runtime.enter();
         let send_batch = self.client.send_batch(&buffers[..]);
-        self.client.runtime.block_on(send_batch)
+        self.client.runtime.block_on(send_batch)?;
+        Ok(())
     }
 }
 
@@ -163,12 +165,12 @@ impl QuicClient {
         }
     }
 
-    pub async fn send_buffer(&self, data: &[u8]) -> TransportResult<()> {
+    pub async fn send_buffer(&self, data: &[u8]) -> Result<(), ClientErrorKind> {
         self._send_buffer(data).await?;
         Ok(())
     }
 
-    pub async fn send_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()> {
+    pub async fn send_batch(&self, buffers: &[Vec<u8>]) -> Result<(), ClientErrorKind> {
         // Start off by "testing" the connection by sending the first transaction
         // This will also connect to the server if not already connected
         // and reconnect and retry if the first send attempt failed

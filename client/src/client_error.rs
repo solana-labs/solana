@@ -1,6 +1,7 @@
 pub use reqwest;
 use {
     crate::{rpc_request, rpc_response},
+    quinn::{ConnectError, WriteError},
     solana_faucet::faucet::FaucetError,
     solana_sdk::{
         signature::SignerError, transaction::TransactionError, transport::TransportError,
@@ -25,6 +26,10 @@ pub enum ClientErrorKind {
     TransactionError(#[from] TransactionError),
     #[error(transparent)]
     FaucetError(#[from] FaucetError),
+    #[error(transparent)]
+    SendError(#[from] WriteError),
+    #[error(transparent)]
+    ConnectError(#[from] ConnectError),
     #[error("Custom: {0}")]
     Custom(String),
 }
@@ -53,8 +58,6 @@ impl From<TransportError> for ClientErrorKind {
             TransportError::IoError(err) => Self::Io(err),
             TransportError::TransactionError(err) => Self::TransactionError(err),
             TransportError::Custom(err) => Self::Custom(err),
-            TransportError::ConnectError(err) => Self::Custom(format!("ConnectError: {:?}", err)),
-            TransportError::SendError(err) => Self::Custom(format!("SendError: {:?}", err)),
         }
     }
 }
@@ -69,6 +72,8 @@ impl From<ClientErrorKind> for TransportError {
             ClientErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::FaucetError(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::ConnectError(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::SendError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
         }
     }
