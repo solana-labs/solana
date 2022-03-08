@@ -276,7 +276,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("additional-fee")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("Request additional-fee for transaction, use default if zero(0)"),
+                        .help("Request additional-fee for transaction"),
                 )
                 .arg(blockhash_arg()),
         )
