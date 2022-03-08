@@ -127,7 +127,7 @@ impl BlockhashQuery {
         }
     }
 
-    pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
+    pub fn new_from_matches(matches: &ArgMatches) -> Self {
         let blockhash = value_of(matches, BLOCKHASH_ARG.name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
         let nonce_account = pubkey_of(matches, NONCE_ARG.name);
@@ -190,7 +190,7 @@ mod tests {
             rpc_request::RpcRequest,
             rpc_response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
         },
-        clap::App,
+        clap::Command,
         serde_json::{self, json},
         solana_account_decoder::{UiAccount, UiAccountEncoding},
         solana_sdk::{account::Account, hash::hash, nonce, system_program},
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_blockhash_query_new_from_matches_ok() {
-        let test_commands = App::new("blockhash_query_test")
+        let test_commands = Command::new("blockhash_query_test")
             .nonce_args(false)
             .offline_args();
         let blockhash = hash(&[1u8]);
@@ -316,7 +316,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_blockhash_query_new_from_matches_without_nonce_fail() {
-        let test_commands = App::new("blockhash_query_test")
+        let test_commands = Command::new("blockhash_query_test")
             .arg(blockhash_arg())
             // We can really only hit this case if the arg requirements
             // are broken, so unset the requires() to recreate that condition
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_blockhash_query_new_from_matches_with_nonce_fail() {
-        let test_commands = App::new("blockhash_query_test")
+        let test_commands = Command::new("blockhash_query_test")
             .arg(blockhash_arg())
             // We can really only hit this case if the arg requirements
             // are broken, so unset the requires() to recreate that condition
