@@ -3,7 +3,7 @@
 extern crate lazy_static;
 
 use {
-    clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_utils::{
         input_parsers::pubkey_of,
         input_validators::{is_pubkey, is_url},
@@ -38,10 +38,7 @@ pub fn is_explicit_release(string: String) -> Result<(), String> {
     is_semver(&string).or_else(|_| is_release_channel(&string))
 }
 
-pub fn explicit_release_of(
-    matches: &ArgMatches<'_>,
-    name: &str,
-) -> Option<config::ExplicitRelease> {
+pub fn explicit_release_of(matches: &ArgMatches, name: &str) -> Option<config::ExplicitRelease> {
     matches
         .value_of(name)
         .map(ToString::to_string)
@@ -58,7 +55,7 @@ pub fn explicit_release_of(
         })
 }
 
-fn handle_init(matches: &ArgMatches<'_>, config_file: &str) -> Result<(), String> {
+fn handle_init(matches: &ArgMatches, config_file: &str) -> Result<(), String> {
     let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
     let update_manifest_pubkey = pubkey_of(matches, "update_manifest_pubkey");
     let data_dir = matches.value_of("data_dir").unwrap();
@@ -85,13 +82,14 @@ fn handle_init(matches: &ArgMatches<'_>, config_file: &str) -> Result<(), String
 pub fn main() -> Result<(), String> {
     solana_logger::setup();
 
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand_required(true)
+        .arg_required_else_help(true)
         .arg({
-            let arg = Arg::with_name("config_file")
-                .short("c")
+            let arg = Arg::new("config_file")
+                .short('c')
                 .long("config")
                 .value_name("PATH")
                 .takes_value(true)
@@ -103,12 +101,12 @@ pub fn main() -> Result<(), String> {
             }
         })
         .subcommand(
-            SubCommand::with_name("init")
+            Command::new("init")
                 .about("initializes a new installation")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg({
-                    let arg = Arg::with_name("data_dir")
-                        .short("d")
+                    let arg = Arg::new("data_dir")
+                        .short('d')
                         .long("data-dir")
                         .value_name("PATH")
                         .takes_value(true)
@@ -120,61 +118,61 @@ pub fn main() -> Result<(), String> {
                     }
                 })
                 .arg(
-                    Arg::with_name("json_rpc_url")
-                        .short("u")
+                    Arg::new("json_rpc_url")
+                        .short('u')
                         .long("url")
                         .value_name("URL")
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
-                        .validator(is_url)
+                        .validator(|s| is_url(s))
                         .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
-                    Arg::with_name("no_modify_path")
+                    Arg::new("no_modify_path")
                         .long("no-modify-path")
                         .help("Don't configure the PATH environment variable"),
                 )
                 .arg(
-                    Arg::with_name("update_manifest_pubkey")
-                        .short("p")
+                    Arg::new("update_manifest_pubkey")
+                        .short('p')
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey)
+                        .validator(|s| is_pubkey(s.to_string()))
                         .help("Public key of the update manifest"),
                 )
                 .arg(
-                    Arg::with_name("explicit_release")
+                    Arg::new("explicit_release")
                         .value_name("release")
                         .index(1)
                         .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
-                        .validator(is_explicit_release)
+                        .validator(|s| is_explicit_release(s.to_string()))
                         .help("The release version or channel to install"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("info")
+            Command::new("info")
                 .about("Displays information about the current installation")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("local_info_only")
-                        .short("l")
+                    Arg::new("local_info_only")
+                        .short('l')
                         .long("local")
                         .help("only display local information, don't check for updates"),
                 )
                 .arg(
-                    Arg::with_name("eval")
+                    Arg::new("eval")
                         .long("eval")
                         .help("display information in a format that can be used with `eval`"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("deploy")
+            Command::new("deploy")
                 .about("Deploys a new update")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg({
-                    let arg = Arg::with_name("from_keypair_file")
-                        .short("k")
+                    let arg = Arg::new("from_keypair_file")
+                        .short('k')
                         .long("keypair")
                         .value_name("PATH")
                         .takes_value(true)
@@ -186,54 +184,55 @@ pub fn main() -> Result<(), String> {
                     }
                 })
                 .arg(
-                    Arg::with_name("json_rpc_url")
-                        .short("u")
+                    Arg::new("json_rpc_url")
+                        .short('u')
                         .long("url")
                         .value_name("URL")
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
-                        .validator(is_url)
+                        .validator(|s| is_url(s))
                         .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
-                    Arg::with_name("download_url")
+                    Arg::new("download_url")
                         .index(1)
                         .required(true)
-                        .validator(is_url)
+                        .validator(|s| is_url(s))
                         .help("URL to the solana release archive"),
                 )
                 .arg(
-                    Arg::with_name("update_manifest_keypair_file")
+                    Arg::new("update_manifest_keypair_file")
                         .index(2)
                         .required(true)
                         .help("Keypair file for the update manifest (/path/to/keypair.json)"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("gc")
+            Command::new("gc")
                 .about("Delete older releases from the install cache to reclaim disk space")
-                .setting(AppSettings::DisableVersion),
+                .disable_version_flag(true),
         )
         .subcommand(
-            SubCommand::with_name("update")
+            Command::new("update")
                 .about("Checks for an update, and if available downloads and applies it")
-                .setting(AppSettings::DisableVersion),
+                .disable_version_flag(true),
         )
         .subcommand(
-            SubCommand::with_name("run")
+            Command::new("run")
                 .about("Runs a program while periodically checking and applying software updates")
                 .after_help("The program will be restarted upon a successful software update")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("program_name")
+                    Arg::new("program_name")
                         .index(1)
                         .required(true)
                         .help("program to run"),
                 )
                 .arg(
-                    Arg::with_name("program_arguments")
+                    Arg::new("program_arguments")
                         .index(2)
-                        .multiple(true)
+                        .multiple_occurrences(true)
+                        .multiple_values(true)
                         .help("arguments to supply to the program"),
                 ),
         )
@@ -242,13 +241,13 @@ pub fn main() -> Result<(), String> {
     let config_file = matches.value_of("config_file").unwrap();
 
     match matches.subcommand() {
-        ("init", Some(matches)) => handle_init(matches, config_file),
-        ("info", Some(matches)) => {
+        Some(("init", matches)) => handle_init(matches, config_file),
+        Some(("info", matches)) => {
             let local_info_only = matches.is_present("local_info_only");
             let eval = matches.is_present("eval");
             command::info(config_file, local_info_only, eval).map(|_| ())
         }
-        ("deploy", Some(matches)) => {
+        Some(("deploy", matches)) => {
             let from_keypair_file = matches.value_of("from_keypair_file").unwrap();
             let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
             let download_url = matches.value_of("download_url").unwrap();
@@ -261,9 +260,9 @@ pub fn main() -> Result<(), String> {
                 update_manifest_keypair_file,
             )
         }
-        ("gc", Some(_matches)) => command::gc(config_file),
-        ("update", Some(_matches)) => command::update(config_file, false).map(|_| ()),
-        ("run", Some(matches)) => {
+        Some(("gc", _matches)) => command::gc(config_file),
+        Some(("update", _matches)) => command::update(config_file, false).map(|_| ()),
+        Some(("run", matches)) => {
             let program_name = matches.value_of("program_name").unwrap();
             let program_arguments = matches
                 .values_of("program_arguments")
@@ -279,12 +278,12 @@ pub fn main() -> Result<(), String> {
 pub fn main_init() -> Result<(), String> {
     solana_logger::setup();
 
-    let matches = App::new("solana-install-init")
+    let matches = Command::new("solana-install-init")
         .about("Initializes a new installation")
         .version(solana_version::version!())
         .arg({
-            let arg = Arg::with_name("config_file")
-                .short("c")
+            let arg = Arg::new("config_file")
+                .short('c')
                 .long("config")
                 .value_name("PATH")
                 .takes_value(true)
@@ -295,8 +294,8 @@ pub fn main_init() -> Result<(), String> {
             }
         })
         .arg({
-            let arg = Arg::with_name("data_dir")
-                .short("d")
+            let arg = Arg::new("data_dir")
+                .short('d')
                 .long("data-dir")
                 .value_name("PATH")
                 .takes_value(true)
@@ -308,35 +307,35 @@ pub fn main_init() -> Result<(), String> {
             }
         })
         .arg(
-            Arg::with_name("json_rpc_url")
-                .short("u")
+            Arg::new("json_rpc_url")
+                .short('u')
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
                 .default_value(defaults::JSON_RPC_URL)
-                .validator(is_url)
+                .validator(|s| is_url(s.to_string()))
                 .help("JSON RPC URL for the solana cluster"),
         )
         .arg(
-            Arg::with_name("no_modify_path")
+            Arg::new("no_modify_path")
                 .long("no-modify-path")
                 .help("Don't configure the PATH environment variable"),
         )
         .arg(
-            Arg::with_name("update_manifest_pubkey")
-                .short("p")
+            Arg::new("update_manifest_pubkey")
+                .short('p')
                 .long("pubkey")
                 .value_name("PUBKEY")
                 .takes_value(true)
-                .validator(is_pubkey)
+                .validator(|s| is_pubkey(s.to_string()))
                 .help("Public key of the update manifest"),
         )
         .arg(
-            Arg::with_name("explicit_release")
+            Arg::new("explicit_release")
                 .value_name("release")
                 .index(1)
                 .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
-                .validator(is_explicit_release)
+                .validator(|s| is_explicit_release(s.to_string()))
                 .help("The release version or channel to install"),
         )
         .get_matches();
