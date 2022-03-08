@@ -3,7 +3,7 @@ use {
         Args, AuthorizeArgs, Command, CountArgs, MoveArgs, NewArgs, QueryArgs, RebaseArgs,
         SetLockupArgs,
     },
-    clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches},
     solana_clap_utils::{
         input_parsers::unix_timestamp_from_rfc3339_datetime,
         input_validators::{is_amount, is_rfc3339_datetime, is_valid_pubkey, is_valid_signer},
@@ -13,113 +13,113 @@ use {
     std::{ffi::OsString, process::exit},
 };
 
-fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn fee_payer_arg<'a>() -> Arg<'a> {
     solana_clap_utils::fee_payer::fee_payer_arg().required(true)
 }
 
-fn funding_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("funding_keypair")
+fn funding_keypair_arg<'a>() -> Arg<'a> {
+    Arg::new("funding_keypair")
         .required(true)
         .takes_value(true)
         .value_name("FUNDING_KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help("Keypair to fund accounts")
 }
 
-fn base_pubkey_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("base_pubkey")
+fn base_pubkey_arg<'a>() -> Arg<'a> {
+    Arg::new("base_pubkey")
         .required(true)
         .takes_value(true)
         .value_name("BASE_PUBKEY")
-        .validator(is_valid_pubkey)
+        .validator(|s| is_valid_pubkey(s))
         .help("Public key which stake account addresses are derived from")
 }
 
-fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("custodian")
+fn custodian_arg<'a>() -> Arg<'a> {
+    Arg::new("custodian")
         .required(true)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help("Authority to modify lockups")
 }
 
-fn new_custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_custodian")
+fn new_custodian_arg<'a>() -> Arg<'a> {
+    Arg::new("new_custodian")
         .takes_value(true)
         .value_name("PUBKEY")
-        .validator(is_valid_pubkey)
+        .validator(|s| is_valid_pubkey(s))
         .help("New authority to modify lockups")
 }
 
-fn new_base_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_base_keypair")
+fn new_base_keypair_arg<'a>() -> Arg<'a> {
+    Arg::new("new_base_keypair")
         .required(true)
         .takes_value(true)
         .value_name("NEW_BASE_KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help("New keypair which stake account addresses are derived from")
 }
 
-fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("stake_authority")
+fn stake_authority_arg<'a>() -> Arg<'a> {
+    Arg::new("stake_authority")
         .long("stake-authority")
         .required(true)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help("Stake authority")
 }
 
-fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("withdraw_authority")
+fn withdraw_authority_arg<'a>() -> Arg<'a> {
+    Arg::new("withdraw_authority")
         .long("withdraw-authority")
         .required(true)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help("Withdraw authority")
 }
 
-fn new_stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_stake_authority")
+fn new_stake_authority_arg<'a>() -> Arg<'a> {
+    Arg::new("new_stake_authority")
         .long("new-stake-authority")
         .required(true)
         .takes_value(true)
         .value_name("PUBKEY")
-        .validator(is_valid_pubkey)
+        .validator(|s| is_valid_pubkey(s))
         .help("New stake authority")
 }
 
-fn new_withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_withdraw_authority")
+fn new_withdraw_authority_arg<'a>() -> Arg<'a> {
+    Arg::new("new_withdraw_authority")
         .long("new-withdraw-authority")
         .required(true)
         .takes_value(true)
         .value_name("PUBKEY")
-        .validator(is_valid_pubkey)
+        .validator(|s| is_valid_pubkey(s))
         .help("New withdraw authority")
 }
 
-fn lockup_epoch_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("lockup_epoch")
+fn lockup_epoch_arg<'a>() -> Arg<'a> {
+    Arg::new("lockup_epoch")
         .long("lockup-epoch")
         .takes_value(true)
         .value_name("NUMBER")
         .help("The epoch height at which each account will be available for withdrawl")
 }
 
-fn lockup_date_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("lockup_date")
+fn lockup_date_arg<'a>() -> Arg<'a> {
+    Arg::new("lockup_date")
         .long("lockup-date")
         .value_name("RFC3339 DATETIME")
-        .validator(is_rfc3339_datetime)
+        .validator(|s| is_rfc3339_datetime(s))
         .takes_value(true)
         .help("The date and time at which each account will be available for withdrawl")
 }
 
-fn num_accounts_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("num_accounts")
+fn num_accounts_arg<'a>() -> Arg<'a> {
+    Arg::new("num_accounts")
         .long("num-accounts")
         .required(true)
         .takes_value(true)
@@ -127,17 +127,17 @@ fn num_accounts_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Number of derived stake accounts")
 }
 
-pub(crate) fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
+pub(crate) fn get_matches<I, T>(args: I) -> ArgMatches
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
     let default_config_file = CONFIG_FILE.as_ref().unwrap();
-    App::new("solana-stake-accounts")
+    clap::Command::new("solana-stake-accounts")
         .about("about")
         .version("version")
         .arg(
-            Arg::with_name("config_file")
+            Arg::new("config_file")
                 .long("config")
                 .takes_value(true)
                 .value_name("FILEPATH")
@@ -145,7 +145,7 @@ where
                 .help("Config file"),
         )
         .arg(
-            Arg::with_name("url")
+            Arg::new("url")
                 .long("url")
                 .global(true)
                 .takes_value(true)
@@ -153,48 +153,48 @@ where
                 .help("RPC entrypoint address. i.e. http://api.devnet.solana.com"),
         )
         .subcommand(
-            SubCommand::with_name("new")
+            clap::Command::new("new")
                 .about("Create derived stake accounts")
                 .arg(fee_payer_arg())
                 .arg(funding_keypair_arg().index(1))
                 .arg(
-                    Arg::with_name("base_keypair")
+                    Arg::new("base_keypair")
                         .required(true)
                         .index(2)
                         .takes_value(true)
                         .value_name("BASE_KEYPAIR")
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Keypair which stake account addresses are derived from"),
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .required(true)
                         .index(3)
                         .takes_value(true)
                         .value_name("AMOUNT")
-                        .validator(is_amount)
+                        .validator(|s| is_amount(s))
                         .help("Amount to move into the new stake accounts, in SOL"),
                 )
                 .arg(
-                    Arg::with_name("stake_authority")
+                    Arg::new("stake_authority")
                         .long("stake-authority")
                         .required(true)
                         .takes_value(true)
                         .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
+                        .validator(|s| is_valid_pubkey(s))
                         .help("Stake authority"),
                 )
                 .arg(
-                    Arg::with_name("withdraw_authority")
+                    Arg::new("withdraw_authority")
                         .long("withdraw-authority")
                         .required(true)
                         .takes_value(true)
                         .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
+                        .validator(|s| is_valid_pubkey(s))
                         .help("Withdraw authority"),
                 )
                 .arg(
-                    Arg::with_name("index")
+                    Arg::new("index")
                         .long("index")
                         .takes_value(true)
                         .default_value("0")
@@ -203,24 +203,24 @@ where
                 ),
         )
         .subcommand(
-            SubCommand::with_name("count")
+            clap::Command::new("count")
                 .about("Count derived stake accounts")
                 .arg(base_pubkey_arg().index(1)),
         )
         .subcommand(
-            SubCommand::with_name("addresses")
+            clap::Command::new("addresses")
                 .about("Show public keys of all derived stake accounts")
                 .arg(base_pubkey_arg().index(1))
                 .arg(num_accounts_arg()),
         )
         .subcommand(
-            SubCommand::with_name("balance")
+            clap::Command::new("balance")
                 .about("Sum balances of all derived stake accounts")
                 .arg(base_pubkey_arg().index(1))
                 .arg(num_accounts_arg()),
         )
         .subcommand(
-            SubCommand::with_name("authorize")
+            clap::Command::new("authorize")
                 .about("Set new authorities in all derived stake accounts")
                 .arg(fee_payer_arg())
                 .arg(base_pubkey_arg().index(1))
@@ -231,7 +231,7 @@ where
                 .arg(num_accounts_arg()),
         )
         .subcommand(
-            SubCommand::with_name("set-lockup")
+            clap::Command::new("set-lockup")
                 .about("Set new lockups in all derived stake accounts")
                 .arg(fee_payer_arg())
                 .arg(base_pubkey_arg().index(1))
@@ -241,12 +241,12 @@ where
                 .arg(new_custodian_arg())
                 .arg(num_accounts_arg())
                 .arg(
-                    Arg::with_name("no_wait")
+                    Arg::new("no_wait")
                         .long("no-wait")
                         .help("Send transactions without waiting for confirmation"),
                 )
                 .arg(
-                    Arg::with_name("unlock_years")
+                    Arg::new("unlock_years")
                         .long("unlock-years")
                         .takes_value(true)
                         .value_name("NUMBER")
@@ -254,7 +254,7 @@ where
                 ),
         )
         .subcommand(
-            SubCommand::with_name("rebase")
+            clap::Command::new("rebase")
                 .about("Relocate derived stake accounts")
                 .arg(fee_payer_arg())
                 .arg(base_pubkey_arg().index(1))
@@ -263,7 +263,7 @@ where
                 .arg(num_accounts_arg()),
         )
         .subcommand(
-            SubCommand::with_name("move")
+            clap::Command::new("move")
                 .about("Rebase and set new authorities in all derived stake accounts")
                 .arg(fee_payer_arg())
                 .arg(base_pubkey_arg().index(1))
@@ -277,68 +277,68 @@ where
         .get_matches_from(args)
 }
 
-fn parse_new_args(matches: &ArgMatches<'_>) -> NewArgs<String, String> {
+fn parse_new_args(matches: &ArgMatches) -> NewArgs<String, String> {
     NewArgs {
-        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
-        funding_keypair: value_t_or_exit!(matches, "funding_keypair", String),
-        lamports: sol_to_lamports(value_t_or_exit!(matches, "amount", f64)),
-        base_keypair: value_t_or_exit!(matches, "base_keypair", String),
-        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
-        withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),
-        index: value_t_or_exit!(matches, "index", usize),
+        fee_payer: matches.value_of_t_or_exit("fee_payer"),
+        funding_keypair: matches.value_of_t_or_exit("funding_keypair"),
+        lamports: sol_to_lamports(matches.value_of_t_or_exit::<f64>("amount")),
+        base_keypair: matches.value_of_t_or_exit("base_keypair"),
+        stake_authority: matches.value_of_t_or_exit("stake_authority"),
+        withdraw_authority: matches.value_of_t_or_exit("withdraw_authority"),
+        index: matches.value_of_t_or_exit("index"),
     }
 }
 
-fn parse_count_args(matches: &ArgMatches<'_>) -> CountArgs<String> {
+fn parse_count_args(matches: &ArgMatches) -> CountArgs<String> {
     CountArgs {
-        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
+        base_pubkey: matches.value_of_t_or_exit("base_pubkey"),
     }
 }
 
-fn parse_query_args(matches: &ArgMatches<'_>) -> QueryArgs<String> {
+fn parse_query_args(matches: &ArgMatches) -> QueryArgs<String> {
     QueryArgs {
-        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
-        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
+        base_pubkey: matches.value_of_t_or_exit("base_pubkey"),
+        num_accounts: matches.value_of_t_or_exit("num_accounts"),
     }
 }
 
-fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeArgs<String, String> {
+fn parse_authorize_args(matches: &ArgMatches) -> AuthorizeArgs<String, String> {
     AuthorizeArgs {
-        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
-        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
-        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
-        withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),
-        new_stake_authority: value_t_or_exit!(matches, "new_stake_authority", String),
-        new_withdraw_authority: value_t_or_exit!(matches, "new_withdraw_authority", String),
-        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
+        fee_payer: matches.value_of_t_or_exit("fee_payer"),
+        base_pubkey: matches.value_of_t_or_exit("base_pubkey"),
+        stake_authority: matches.value_of_t_or_exit("stake_authority"),
+        withdraw_authority: matches.value_of_t_or_exit("withdraw_authority"),
+        new_stake_authority: matches.value_of_t_or_exit("new_stake_authority"),
+        new_withdraw_authority: matches.value_of_t_or_exit("new_withdraw_authority"),
+        num_accounts: matches.value_of_t_or_exit("num_accounts"),
     }
 }
 
-fn parse_set_lockup_args(matches: &ArgMatches<'_>) -> SetLockupArgs<String, String> {
+fn parse_set_lockup_args(matches: &ArgMatches) -> SetLockupArgs<String, String> {
     SetLockupArgs {
-        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
-        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
-        custodian: value_t_or_exit!(matches, "custodian", String),
-        lockup_epoch: value_t!(matches, "lockup_epoch", u64).ok(),
+        fee_payer: matches.value_of_t_or_exit("fee_payer"),
+        base_pubkey: matches.value_of_t_or_exit("base_pubkey"),
+        custodian: matches.value_of_t_or_exit("custodian"),
+        lockup_epoch: matches.value_of_t("lockup_epoch").ok(),
         lockup_date: unix_timestamp_from_rfc3339_datetime(matches, "lockup_date"),
-        new_custodian: value_t!(matches, "new_custodian", String).ok(),
-        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
+        new_custodian: matches.value_of_t("new_custodian").ok(),
+        num_accounts: matches.value_of_t_or_exit("num_accounts"),
         no_wait: matches.is_present("no_wait"),
-        unlock_years: value_t!(matches, "unlock_years", f64).ok(),
+        unlock_years: matches.value_of_t("unlock_years").ok(),
     }
 }
 
-fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseArgs<String, String> {
+fn parse_rebase_args(matches: &ArgMatches) -> RebaseArgs<String, String> {
     RebaseArgs {
-        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
-        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
-        new_base_keypair: value_t_or_exit!(matches, "new_base_keypair", String),
-        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
-        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
+        fee_payer: matches.value_of_t_or_exit("fee_payer"),
+        base_pubkey: matches.value_of_t_or_exit("base_pubkey"),
+        new_base_keypair: matches.value_of_t_or_exit("new_base_keypair"),
+        stake_authority: matches.value_of_t_or_exit("stake_authority"),
+        num_accounts: matches.value_of_t_or_exit("num_accounts"),
     }
 }
 
-fn parse_move_args(matches: &ArgMatches<'_>) -> MoveArgs<String, String> {
+fn parse_move_args(matches: &ArgMatches) -> MoveArgs<String, String> {
     MoveArgs {
         rebase_args: parse_rebase_args(matches),
         authorize_args: parse_authorize_args(matches),
@@ -355,16 +355,15 @@ where
     let url = matches.value_of("url").map(|x| x.to_string());
 
     let command = match matches.subcommand() {
-        ("new", Some(matches)) => Command::New(parse_new_args(matches)),
-        ("count", Some(matches)) => Command::Count(parse_count_args(matches)),
-        ("addresses", Some(matches)) => Command::Addresses(parse_query_args(matches)),
-        ("balance", Some(matches)) => Command::Balance(parse_query_args(matches)),
-        ("authorize", Some(matches)) => Command::Authorize(parse_authorize_args(matches)),
-        ("set-lockup", Some(matches)) => Command::SetLockup(parse_set_lockup_args(matches)),
-        ("rebase", Some(matches)) => Command::Rebase(parse_rebase_args(matches)),
-        ("move", Some(matches)) => Command::Move(Box::new(parse_move_args(matches))),
+        Some(("new", matches)) => Command::New(parse_new_args(matches)),
+        Some(("count", matches)) => Command::Count(parse_count_args(matches)),
+        Some(("addresses", matches)) => Command::Addresses(parse_query_args(matches)),
+        Some(("balance", matches)) => Command::Balance(parse_query_args(matches)),
+        Some(("authorize", matches)) => Command::Authorize(parse_authorize_args(matches)),
+        Some(("set-lockup", matches)) => Command::SetLockup(parse_set_lockup_args(matches)),
+        Some(("rebase", matches)) => Command::Rebase(parse_rebase_args(matches)),
+        Some(("move", matches)) => Command::Move(Box::new(parse_move_args(matches))),
         _ => {
-            eprintln!("{}", matches.usage());
             exit(1);
         }
     };

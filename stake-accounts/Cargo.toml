@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-stake-accounts"
 
 [dependencies]
-clap = "2.33.1"
+clap = { version = "3.1.5", features = ["cargo"] }
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.4" }
 solana-cli-config = { path = "../cli-config", version = "=1.10.4" }
 solana-client = { path = "../client", version = "=1.10.4" }
