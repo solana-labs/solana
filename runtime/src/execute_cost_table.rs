@@ -4,10 +4,7 @@
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
 use log::*;
-use {
-    solana_sdk::pubkey::Pubkey,
-    std::collections::{hash_map::Entry, HashMap},
-};
+use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
 
 // prune is rather expensive op, free up bulk space in each operation
 // would be more efficient. PRUNE_RATIO defines the after prune table
@@ -21,8 +18,7 @@ const DEFAULT_CAPACITY: usize = 1024;
 // The coefficient represents the degree of weighting decrease in EMA,
 // a constant smoothing factor between 0 and 1. A higher alpha
 // discounts older observations faster.
-// Setting it using `2/(N+1)` where N is 200 samples
-const COEFFICIENT: f64 = 0.01;
+const COEFFICIENT: f64 = 0.4;
 
 #[derive(Debug, Default)]
 struct AggregatedVarianceStats {
@@ -57,27 +53,19 @@ impl ExecuteCostTable {
         self.table.len()
     }
 
-    // default program cost to max
+    // default prorgam cost to max
     pub fn get_default(&self) -> u64 {
-        // default max compute units per program
+        // default max comoute units per program
         200_000u64
     }
 
     // returns None if program doesn't exist in table. In this case,
-    // it is advised to call `get_default()` for default program cost.
+    // it is advised to call `get_default()` for default program costdefault/
     // Program cost is estimated as 2 standard deviations above mean, eg
     // cost = (mean + 2 * std)
     pub fn get_cost(&self, key: &Pubkey) -> Option<u64> {
         let aggregated = self.table.get(key)?;
-        let cost_f64 = (aggregated.ema + 2.0 * aggregated.ema_var.sqrt()).ceil();
-
-        // check if cost:f64 can be losslessly convert to u64, otherwise return None
-        let cost_u64 = cost_f64 as u64;
-        if cost_f64 == cost_u64 as f64 {
-            Some(cost_u64)
-        } else {
-            None
-        }
+        Some((aggregated.ema + 2.0 * aggregated.ema_var.sqrt()).ceil() as u64)
     }
 
     pub fn upsert(&mut self, key: &Pubkey, value: u64) {
@@ -89,21 +77,21 @@ impl ExecuteCostTable {
 
         // exponential moving average algorithm
         // https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation
-        match self.table.entry(*key) {
-            Entry::Occupied(mut entry) => {
-                let aggregated = entry.get_mut();
-                let theta = value as f64 - aggregated.ema;
-                aggregated.ema += theta * COEFFICIENT;
-                aggregated.ema_var =
-                    (1.0 - COEFFICIENT) * (aggregated.ema_var + COEFFICIENT * theta * theta);
-            }
-            Entry::Vacant(entry) => {
-                // the starting values
-                entry.insert(AggregatedVarianceStats {
+        if self.table.contains_key(key) {
+            let aggregated = self.table.get_mut(key).unwrap();
+            let theta = value as f64 - aggregated.ema;
+            aggregated.ema += theta * COEFFICIENT;
+            aggregated.ema_var =
+                (1.0 - COEFFICIENT) * (aggregated.ema_var + COEFFICIENT * theta * theta)
+        } else {
+            // the starting values
+            self.table.insert(
+                *key,
+                AggregatedVarianceStats {
                     ema: value as f64,
                     ema_var: 0.0,
-                });
-            }
+                },
+            );
         }
 
         let (count, timestamp) = self
@@ -112,10 +100,6 @@ impl ExecuteCostTable {
             .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
         *timestamp = Self::micros_since_epoch();
-    }
-
-    pub fn get_program_keys(&self) -> Vec<&Pubkey> {
-        self.table.keys().collect()
     }
 
     // prune the old programs so the table contains `new_size` of records,
@@ -205,9 +189,9 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        // simulate a lot of occurrences to key1, so even there're longer than
+        // simulate a lot of occurences to key1, so even there're longer than
         // usual delay between upsert(key1..) and upsert(key2, ..), test
-        // would still satisfy as key1 has enough occurrences to compensate
+        // would still satisfy as key1 has enough occurences to compensate
         // its age.
         for i in 0..1000 {
             testee.upsert(&key1, i);
@@ -251,8 +235,8 @@ mod tests {
         // update 1st record
         testee.upsert(&key1, cost2);
         assert_eq!(2, testee.get_count());
-        // expected key1 cost is EMA of [100, 110] with alpha=0.01 => 103
-        let expected_cost = 103;
+        // expected key1 cost = (mean + 2*std) = (105 + 2*5) = 115
+        let expected_cost = 114;
         assert_eq!(expected_cost, testee.get_cost(&key1).unwrap());
         assert_eq!(cost2, testee.get_cost(&key2).unwrap());
     }
@@ -296,29 +280,10 @@ mod tests {
         testee.upsert(&key4, cost4);
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
-        // expected key2 cost = (mean + 2*std) of [110, 100] => 112
-        let expected_cost_2 = 112;
+        // expected key2 cost = (mean + 2*std) = (105 + 2*5) = 115
+        let expected_cost_2 = 116;
         assert_eq!(expected_cost_2, testee.get_cost(&key2).unwrap());
         assert!(testee.get_cost(&key3).is_none());
         assert_eq!(cost4, testee.get_cost(&key4).unwrap());
-    }
-
-    #[test]
-    fn test_get_cost_overflow_u64() {
-        solana_logger::setup();
-        let mut testee = ExecuteCostTable::default();
-
-        let key1 = Pubkey::new_unique();
-        let cost1: u64 = f64::MAX as u64;
-        let cost2: u64 = u64::MAX / 2; // create large variance so the final result will overflow
-
-        // insert one record
-        testee.upsert(&key1, cost1);
-        assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_cost(&key1).unwrap());
-
-        // update cost
-        testee.upsert(&key1, cost2);
-        assert!(testee.get_cost(&key1).is_none());
     }
 }
