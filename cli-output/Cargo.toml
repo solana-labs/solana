@@ -13,7 +13,7 @@ documentation = "https://docs.rs/solana-cli-output"
 Inflector = "0.11.4"
 base64 = "0.13.0"
 chrono = { version = "0.4.11", features = ["serde"] }
-clap = "2.33.0"
+clap = { version = "3.1.5", features = ["cargo"] }
 console = "0.15.0"
 humantime = "2.0.1"
 indicatif = "0.16.2"
@@ -22,7 +22,7 @@ semver = "1.0.9"
 serde = "1.0.137"
 serde_json = "1.0.81"
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.0" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
+solana-clap-v3-utils = { path = "../clap-v3-utils", version = "=1.11.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.11.0" }
 solana-client = { path = "../client", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }

@@ -4615,7 +4615,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-account-decoder",
- "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-client",
  "solana-sdk 1.11.0",

@@ -16,7 +16,7 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::{Map, Value},
     solana_account_decoder::parse_token::UiTokenAccount,
-    solana_clap_utils::keypair::SignOnly,
+    solana_clap_v3_utils::keypair::SignOnly,
     solana_client::rpc_response::{
         RpcAccountBalance, RpcContactInfo, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount,
         RpcSupply, RpcVoteAccountInfo,
@@ -83,7 +83,7 @@ impl OutputFormat {
         }
     }
 
-    pub fn from_matches(matches: &ArgMatches<'_>, output_name: &str, verbose: bool) -> Self {
+    pub fn from_matches(matches: &ArgMatches, output_name: &str, verbose: bool) -> Self {
         matches
             .value_of(output_name)
             .map(|value| match value {
@@ -2714,7 +2714,7 @@ impl VerboseDisplay for CliPingConfirmationStats {}
 mod tests {
     use {
         super::*,
-        clap::{App, Arg},
+        clap::{Arg, Command},
         solana_sdk::{
             message::Message,
             pubkey::Pubkey,
@@ -2868,8 +2868,8 @@ mod tests {
 
     #[test]
     fn test_output_format_from_matches() {
-        let app = App::new("test").arg(
-            Arg::with_name("output_format")
+        let app = Command::new("test").arg(
+            Arg::new("output_format")
                 .long("output")
                 .value_name("FORMAT")
                 .global(true)
