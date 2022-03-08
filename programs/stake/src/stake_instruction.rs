@@ -491,7 +491,10 @@ pub fn process_instruction(
 mod tests {
     use {
         super::*,
-        crate::stake_state::{from, stake_from, Delegation, Meta, Stake, StakeState},
+        crate::stake_state::{
+            create_stake_history_from_delegations, from, stake_from, Delegation, Meta, Stake,
+            StakeState,
+        },
         bincode::serialize,
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
@@ -600,6 +603,19 @@ mod tests {
             transaction_accounts,
             instruction.accounts.clone(),
             expected_result,
+        )
+    }
+
+    fn just_stake(meta: Meta, stake: u64) -> StakeState {
+        StakeState::Stake(
+            meta,
+            Stake {
+                delegation: Delegation {
+                    stake,
+                    ..Delegation::default()
+                },
+                ..Stake::default()
+            },
         )
     }
 
@@ -2078,19 +2094,6 @@ mod tests {
         );
     }
 
-    fn just_stake(meta: Meta, stake: u64) -> StakeState {
-        StakeState::Stake(
-            meta,
-            Stake {
-                delegation: Delegation {
-                    stake,
-                    ..Delegation::default()
-                },
-                ..Stake::default()
-            },
-        )
-    }
-
     #[test]
     fn test_split() {
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -2458,6 +2461,135 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Err(InstructionError::InvalidAccountData),
+        );
+    }
+
+    #[test]
+    fn test_withdraw_stake_before_warmup() {
+        let recipient_address = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let total_lamports = 100;
+        let stake_account = AccountSharedData::new_data_with_space(
+            total_lamports,
+            &StakeState::Initialized(Meta::auto(&stake_address)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let vote_address = solana_sdk::pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        vote_account
+            .set_state(&VoteStateVersions::new_current(VoteState::default()))
+            .unwrap();
+        let mut clock = Clock {
+            epoch: 16,
+            ..Clock::default()
+        };
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (vote_address, vote_account),
+            (recipient_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                stake_config::id(),
+                config::create_account(0, &stake_config::Config::default()),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: recipient_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        // Stake some lamports (available lamports for withdrawals will reduce to zero)
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: vote_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::stake_history::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: stake_config::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // Try to withdraw stake
+        let stake_history = create_stake_history_from_delegations(
+            None,
+            0..clock.epoch,
+            &[stake_from(&accounts[0]).unwrap().delegation],
+        );
+        transaction_accounts[4] = (
+            sysvar::stake_history::id(),
+            account::create_account_shared_data_for_test(&stake_history),
+        );
+        clock.epoch = 0;
+        transaction_accounts[3] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(
+                total_lamports - stake_lamports + 1,
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InsufficientFunds),
         );
     }
 

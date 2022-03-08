@@ -1191,6 +1191,36 @@ where
     })
 }
 
+// utility function, used by tests
+pub fn create_stake_history_from_delegations(
+    bootstrap: Option<u64>,
+    epochs: std::ops::Range<Epoch>,
+    delegations: &[Delegation],
+) -> StakeHistory {
+    let mut stake_history = StakeHistory::default();
+
+    let bootstrap_delegation = if let Some(bootstrap) = bootstrap {
+        vec![Delegation {
+            activation_epoch: std::u64::MAX,
+            stake: bootstrap,
+            ..Delegation::default()
+        }]
+    } else {
+        vec![]
+    };
+
+    for epoch in epochs {
+        let entry = new_stake_history_entry(
+            epoch,
+            delegations.iter().chain(bootstrap_delegation.iter()),
+            Some(&stake_history),
+        );
+        stake_history.add(epoch, entry);
+    }
+
+    stake_history
+}
+
 // genesis investor accounts
 pub fn create_lockup_stake_account(
     authorized: &Authorized,
@@ -1471,35 +1501,6 @@ mod tests {
             ..Delegation::default()
         }
         .is_bootstrap());
-    }
-
-    fn create_stake_history_from_delegations(
-        bootstrap: Option<u64>,
-        epochs: std::ops::Range<Epoch>,
-        delegations: &[Delegation],
-    ) -> StakeHistory {
-        let mut stake_history = StakeHistory::default();
-
-        let bootstrap_delegation = if let Some(bootstrap) = bootstrap {
-            vec![Delegation {
-                activation_epoch: std::u64::MAX,
-                stake: bootstrap,
-                ..Delegation::default()
-            }]
-        } else {
-            vec![]
-        };
-
-        for epoch in epochs {
-            let entry = new_stake_history_entry(
-                epoch,
-                delegations.iter().chain(bootstrap_delegation.iter()),
-                Some(&stake_history),
-            );
-            stake_history.add(epoch, entry);
-        }
-
-        stake_history
     }
 
     #[test]
@@ -2040,75 +2041,6 @@ mod tests {
 
             prev_total_effective_stake = total_effective_stake;
         }
-    }
-
-    #[test]
-    fn test_withdraw_stake_before_warmup() {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let total_lamports = 100;
-        let stake_lamports = 42;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
-            total_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let clock = Clock::default();
-        let mut future = Clock::default();
-        future.epoch += 16;
-
-        let to = solana_sdk::pubkey::new_rand();
-        let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
-        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
-
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-        // Stake some lamports (available lamports for withdrawals will reduce)
-        let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let vote_account = RefCell::new(vote_state::create_account(
-            &vote_pubkey,
-            &solana_sdk::pubkey::new_rand(),
-            0,
-            100,
-        ));
-        let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
-        vote_keyed_account
-            .set_state(&VoteStateVersions::new_current(VoteState::default()))
-            .unwrap();
-        let signers = vec![stake_pubkey].into_iter().collect();
-        assert_eq!(
-            stake_keyed_account.delegate(
-                &vote_keyed_account,
-                &future,
-                &StakeHistory::default(),
-                &Config::default(),
-                &signers,
-            ),
-            Ok(())
-        );
-
-        let stake_history = create_stake_history_from_delegations(
-            None,
-            0..future.epoch,
-            &[stake_from(&stake_keyed_account.account.borrow())
-                .unwrap()
-                .delegation],
-        );
-
-        // Try to withdraw stake
-        assert_eq!(
-            stake_keyed_account.withdraw(
-                total_lamports - stake_lamports + 1,
-                &to_keyed_account,
-                &clock,
-                &stake_history,
-                &stake_keyed_account,
-                None,
-            ),
-            Err(InstructionError::InsufficientFunds)
-        );
     }
 
     #[test]
