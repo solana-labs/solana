@@ -2594,6 +2594,105 @@ mod tests {
     }
 
     #[test]
+    fn test_withdraw_lockup() {
+        let recipient_address = solana_sdk::pubkey::new_rand();
+        let custodian_address = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let total_lamports = 100;
+        let stake_account = AccountSharedData::new_data_with_space(
+            total_lamports,
+            &StakeState::Initialized(Meta {
+                lockup: Lockup {
+                    unix_timestamp: 0,
+                    epoch: 1,
+                    custodian: custodian_address,
+                },
+                ..Meta::auto(&stake_address)
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let mut clock = Clock::default();
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (recipient_address, AccountSharedData::default()),
+            (custodian_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: recipient_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        // should fail, lockup is still in force
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(StakeError::LockupInForce.into()),
+        );
+
+        // should pass
+        instruction_accounts.push(AccountMeta {
+            pubkey: custodian_address,
+            is_signer: true,
+            is_writable: false,
+        });
+        process_instruction(
+            &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // should pass, lockup has expired
+        instruction_accounts.pop();
+        clock.epoch += 1;
+        transaction_accounts[3] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+        );
+        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+    }
+
+    #[test]
     fn test_deactivate() {
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
