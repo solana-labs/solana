@@ -107,12 +107,11 @@ impl CostUpdateService {
 
     fn service_loop(
         exit: Arc<AtomicBool>,
-        blockstore: Arc<Blockstore>,
+        _blockstore: Arc<Blockstore>,
         cost_model: Arc<RwLock<CostModel>>,
         cost_update_receiver: CostUpdateReceiver,
     ) {
         let mut cost_update_service_timing = CostUpdateServiceTiming::default();
-        let mut dirty: bool;
         let mut update_count: u64;
         let wait_timer = Duration::from_millis(100);
 
@@ -121,7 +120,6 @@ impl CostUpdateService {
                 break;
             }
 
-            dirty = false;
             update_count = 0_u64;
             let mut update_cost_model_time = Measure::start("update_cost_model_time");
             for cost_update in cost_update_receiver.try_iter() {
@@ -132,24 +130,14 @@ impl CostUpdateService {
                     CostUpdate::ExecuteTiming {
                         mut execute_timings,
                     } => {
-                        dirty |= Self::update_cost_model(&cost_model, &mut execute_timings);
+                        Self::update_cost_model(&cost_model, &mut execute_timings);
                         update_count += 1;
                     }
                 }
             }
             update_cost_model_time.stop();
 
-            let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
-            if dirty {
-                Self::persist_cost_table(&blockstore, &cost_model);
-            }
-            persist_cost_table_time.stop();
-
-            cost_update_service_timing.update(
-                update_count,
-                update_cost_model_time.as_us(),
-                persist_cost_table_time.as_us(),
-            );
+            cost_update_service_timing.update(update_count, update_cost_model_time.as_us(), 0);
 
             thread::sleep(wait_timer);
         }
@@ -199,6 +187,7 @@ impl CostUpdateService {
         dirty
     }
 
+    #[allow(dead_code)]
     fn persist_cost_table(blockstore: &Blockstore, cost_model: &RwLock<CostModel>) {
         let cost_model_read = cost_model.read().unwrap();
         let cost_table = cost_model_read.get_instruction_cost_table();
