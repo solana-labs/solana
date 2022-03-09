@@ -4229,7 +4229,7 @@ dependencies = [
 name = "solana-bench-streamer"
 version = "1.11.0"
 dependencies = [
- "clap 2.34.0",
+ "clap 3.1.6",
  "crossbeam-channel",
  "solana-net-utils",
  "solana-streamer",
@@ -5028,7 +5028,7 @@ name = "solana-log-analyzer"
 version = "1.11.0"
 dependencies = [
  "byte-unit",
- "clap 2.34.0",
+ "clap 3.1.6",
  "serde",
  "serde_json",
  "solana-logger",
@@ -5094,7 +5094,7 @@ dependencies = [
 name = "solana-net-shaper"
 version = "1.11.0"
 dependencies = [
- "clap 2.34.0",
+ "clap 3.1.6",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -5106,7 +5106,7 @@ name = "solana-net-utils"
 version = "1.11.0"
 dependencies = [
  "bincode",
- "clap 2.34.0",
+ "clap 3.1.6",
  "crossbeam-channel",
  "log",
  "nix",
@@ -5183,7 +5183,7 @@ dependencies = [
 name = "solana-poh-bench"
 version = "1.11.0"
 dependencies = [
- "clap 2.34.0",
+ "clap 3.1.6",
  "log",
  "rand 0.7.3",
  "rayon",
