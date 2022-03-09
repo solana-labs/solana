@@ -43,6 +43,9 @@ use {
     thiserror::Error,
 };
 
+mod archive_format;
+pub use archive_format::*;
+
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
@@ -110,15 +113,6 @@ impl SnapshotVersion {
     fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
         version_string.parse::<Self>().ok()
     }
-}
-
-/// The different archive formats used for snapshots
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ArchiveFormat {
-    TarBzip2,
-    TarGzip,
-    TarZstd,
-    Tar,
 }
 
 /// A slot and the path to its bank snapshot
@@ -208,15 +202,6 @@ pub enum SnapshotError {
     MismatchedSlotHash((Slot, Hash), (Slot, Hash)),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
-
-fn get_archive_ext(archive_format: ArchiveFormat) -> &'static str {
-    match archive_format {
-        ArchiveFormat::TarBzip2 => "tar.bz2",
-        ArchiveFormat::TarGzip => "tar.gz",
-        ArchiveFormat::TarZstd => "tar.zst",
-        ArchiveFormat::Tar => "tar",
-    }
-}
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
@@ -322,14 +307,12 @@ pub fn archive_snapshot_package(
             .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
     }
 
-    let file_ext = get_archive_ext(snapshot_package.archive_format());
-
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
         staging_dir_prefix,
         snapshot_package.slot(),
-        file_ext
+        snapshot_package.archive_format().extension(),
     ));
 
     {
@@ -1062,7 +1045,7 @@ pub fn build_full_snapshot_archive_path(
         "snapshot-{}-{}.{}",
         slot,
         hash,
-        get_archive_ext(archive_format),
+        archive_format.extension(),
     ))
 }
 
@@ -1081,18 +1064,8 @@ pub fn build_incremental_snapshot_archive_path(
         base_slot,
         slot,
         hash,
-        get_archive_ext(archive_format),
+        archive_format.extension(),
     ))
-}
-
-fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
-    match archive_format {
-        "tar.bz2" => Some(ArchiveFormat::TarBzip2),
-        "tar.gz" => Some(ArchiveFormat::TarGzip),
-        "tar.zst" => Some(ArchiveFormat::TarZstd),
-        "tar" => Some(ArchiveFormat::Tar),
-        _ => None,
-    }
 }
 
 /// Parse a full snapshot archive filename into its Slot, Hash, and Archive Format
@@ -1115,7 +1088,8 @@ pub(crate) fn parse_full_snapshot_archive_filename(
                 .ok()?;
             let archive_format = captures
                 .name("ext")
-                .map(|x| archive_format_from_str(x.as_str()))??;
+                .map(|x| x.as_str().parse::<ArchiveFormat>())?
+                .ok()?;
 
             Some((slot, hash, archive_format))
         })
@@ -1150,7 +1124,8 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
                 .ok()?;
             let archive_format = captures
                 .name("ext")
-                .map(|x| archive_format_from_str(x.as_str()))??;
+                .map(|x| x.as_str().parse::<ArchiveFormat>())?
+                .ok()?;
 
             Some((base_slot, slot, hash, archive_format))
         })
