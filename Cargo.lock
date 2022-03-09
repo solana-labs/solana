@@ -684,33 +684,18 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.0-beta.5"
+version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feff3878564edb93745d58cf63e17b63f24142506e7a20c87a5521ed7bfb1d63"
+checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive",
  "indexmap",
  "lazy_static",
  "os_str_bytes",
  "strsim 0.10.0",
  "termcolor",
- "textwrap 0.14.2",
- "unicase",
-]
-
-[[package]]
-name = "clap_derive"
-version = "3.0.0-beta.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b15c6b4f786ffb6192ffe65a36855bc1fc2444bcd0945ae16748dcd6ed7d0d3"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.81",
+ "textwrap 0.15.0",
 ]
 
 [[package]]
@@ -2730,9 +2715,9 @@ dependencies = [
 
 [[package]]
 name = "os_str_bytes"
-version = "4.2.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "addaa943333a514159c80c97ff4a93306530d965d27e139188283cd13e06a799"
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
 dependencies = [
  "memchr",
 ]
@@ -3442,7 +3427,7 @@ dependencies = [
 name = "rbpf-cli"
 version = "1.10.1"
 dependencies = [
- "clap 3.0.0-beta.5",
+ "clap 3.1.6",
  "serde",
  "serde_json",
  "solana-bpf-loader-program",
@@ -4440,7 +4425,7 @@ version = "1.10.1"
 dependencies = [
  "bzip2",
  "cargo_metadata",
- "clap 2.33.3",
+ "clap 3.1.6",
  "regex",
  "serial_test",
  "solana-download-utils",
@@ -4453,7 +4438,7 @@ name = "solana-cargo-test-bpf"
 version = "1.10.1"
 dependencies = [
  "cargo_metadata",
- "clap 2.33.3",
+ "clap 3.1.6",
 ]
 
 [[package]]
@@ -6441,12 +6426,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
-dependencies = [
- "unicode-width",
-]
+checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thiserror"
