@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+use solana_client::transaction_executor::TransactionExecutor;
 use {
     clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
     log::*,
@@ -11,7 +12,7 @@ use {
         hash::Hash,
         instruction::{AccountMeta, CompiledInstruction, Instruction},
         pubkey::Pubkey,
-        signature::{read_keypair_file, Keypair, Signer},
+        signature::{read_keypair_file, Keypair, Signature, Signer},
         stake,
         system_instruction::SystemInstruction,
         system_program,
@@ -88,7 +89,7 @@ impl TransactionGenerator {
             )
         } else if self.transaction_params.valid_signatures {
             // Since we don't provide a payer, this transaction will
-            // end up filtered at legacy.rs#L217 (banking_stage) with error "a program cannot be payer"
+            // end up filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
             let kpvals: Vec<Keypair> = (0..self.transaction_params.num_sign)
                 .map(|_| Keypair::new())
                 .collect();
@@ -108,7 +109,9 @@ impl TransactionGenerator {
                 instructions,
             )
         } else {
-            // it will be filtered on the sigverify_stage
+            // Since we provided invalid signatures
+            // this transaction will end up filtered at legacy.rs (banking_stage) because
+            // num_required_signatures == 0
             let instructions = vec![CompiledInstruction::new(
                 0,
                 &transfer_instruction,
@@ -122,8 +125,7 @@ impl TransactionGenerator {
                 program_ids,
                 instructions,
             );
-            tx.signatures =
-                vec![Transaction::get_invalid_signature(); self.transaction_params.num_sign];
+            tx.signatures = vec![Signature::new_unique(); self.transaction_params.num_sign];
             tx
         };
 
@@ -223,7 +225,6 @@ fn run_dos(
         DataType::GetProgramAccounts => {}
     }
 
-    info!("TARGET = {}, NODE = {}", target, nodes[1].rpc);
     let mut last_log = Instant::now();
     let mut count = 0;
     let mut error_count = 0;
@@ -446,6 +447,12 @@ fn validate_input(params: &DosClientParameters) {
             println!("Arguments valid-blockhash, valid-sign, unique-trans, payer are ignored if data-type != transaction");
         }
     }
+
+    if params.transaction_params.payer_filename.is_some()
+        && params.transaction_params.valid_signatures
+    {
+        println!("Arguments valid-signatures is ignored if payer is provided");
+    }
 }
 
 fn main() {
@@ -552,6 +559,159 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
+            },
+        );
+    }
+
+    #[test]
+    fn test_dos_local_cluster_transactions() {
+        let num_nodes = 1;
+        let cluster =
+            LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
+        assert_eq!(cluster.validators.len(), num_nodes);
+
+        let nodes = cluster.get_node_pubkeys();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let nodes_slice = [node];
+
+        // send random transactions to TPU
+        // will be discarded on sigverify stage
+        run_dos(
+            &nodes_slice,
+            1,
+            None,
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 1024,
+                data_type: DataType::Random,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams::default(),
+            },
+        );
+
+        // send transactions to TPU with varied number of random signatures
+        // will be filtered on dedup (because transactions are not unique)
+        run_dos(
+            &nodes_slice,
+            1,
+            None,
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_sign: 2,
+                    valid_blockhash: false,
+                    valid_signatures: false,
+                    unique_transactions: false,
+                    payer_filename: None,
+                },
+            },
+        );
+
+        // send *unique* transactions to TPU with varied number of random signatures
+        // will be discarded on banking stage in legacy.rs
+        // ("there should be at least 1 RW fee-payer account")
+        run_dos(
+            &nodes_slice,
+            1,
+            None,
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_sign: 2,
+                    valid_blockhash: false,
+                    valid_signatures: false,
+                    unique_transactions: true,
+                    payer_filename: None,
+                },
+            },
+        );
+
+        // send unique transactions to TPU with varied number of random signatures
+        // will be discarded on banking stage in legacy.rs (A program cannot be a payer)
+        // because we haven't provided a valid payer
+        run_dos(
+            &nodes_slice,
+            1,
+            None,
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_sign: 2,
+                    valid_blockhash: false, // irrelevant without valid payer, because
+                    // it will be filtered before blockhash validity checks
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    payer_filename: None,
+                },
+            },
+        );
+
+        // send unique transaction to TPU with valid blockhash
+        // will be discarded due to invalid hash
+        run_dos(
+            &nodes_slice,
+            1,
+            Some(&cluster.funding_keypair),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_sign: 2,
+                    valid_blockhash: false,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    payer_filename: None,
+                },
+            },
+        );
+
+        // send unique transaction to TPU with valid blockhash
+        // will fail with error processing Instruction 0: missing required signature for instruction
+        run_dos(
+            &nodes_slice,
+            1,
+            Some(&cluster.funding_keypair),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_sign: 2,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    payer_filename: None,
+                },
             },
         );
     }
