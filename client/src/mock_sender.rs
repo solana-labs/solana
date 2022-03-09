@@ -32,9 +32,9 @@ use {
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
-        EncodedTransactionWithStatusMeta, Rewards, TransactionConfirmationStatus,
-        TransactionStatus, UiCompiledInstruction, UiMessage, UiRawMessage, UiTransaction,
-        UiTransactionEncoding, UiTransactionStatusMeta,
+        EncodedTransactionWithStatusMeta, Rewards, TransactionBinaryEncoding,
+        TransactionConfirmationStatus, TransactionStatus, UiCompiledInstruction, UiMessage,
+        UiRawMessage, UiTransaction, UiTransactionStatusMeta,
     },
     solana_version::Version,
     std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::RwLock},
@@ -381,7 +381,7 @@ impl RpcSender for MockSender {
                                  pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
                                  hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
                             .to_string(),
-                        UiTransactionEncoding::Base58,
+                        TransactionBinaryEncoding::Base58,
                     ),
                     meta: None,
                     version: Some(TransactionVersion::LEGACY),
