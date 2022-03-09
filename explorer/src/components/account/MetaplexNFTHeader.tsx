@@ -50,7 +50,7 @@ export function NFTHeader({
               : "No NFT name was found"}
           </h2>
           {getEditionPill(nftData.editionInfo)}
-          {isVerifiedCollection && getVerifiedCollectionPill()}
+          {isVerifiedCollection ? getVerifiedCollectionPill() : null}
         </div>
         <h4 className="header-pretitle ms-1 mt-1 no-overflow-with-ellipsis">
           {metadata.data.symbol !== ""
