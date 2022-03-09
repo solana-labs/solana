@@ -3,6 +3,7 @@ import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {expect} from 'chai';
 
+import {Connection} from '../src/connection';
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
 import {Transaction, TransactionInstruction} from '../src/transaction';
@@ -11,6 +12,7 @@ import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
 import invariant from '../src/util/assert';
 import {toBuffer} from '../src/util/to-buffer';
+import {helpers} from './mocks/rpc-http';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -110,6 +112,28 @@ describe('Transaction', () => {
       expect(message.header.numReadonlySignedAccounts).to.eq(0);
       expect(message.header.numReadonlyUnsignedAccounts).to.eq(1);
     });
+  });
+
+  it('getEstimatedFee', async () => {
+    const connection = new Connection('https://api.testnet.solana.com');
+    const accountFrom = Keypair.generate();
+    const accountTo = Keypair.generate();
+
+    const {blockhash} = await helpers.latestBlockhash({connection});
+
+    const transaction = new Transaction({
+      feePayer: accountFrom.publicKey,
+      recentBlockhash: blockhash,
+    }).add(
+      SystemProgram.transfer({
+        fromPubkey: accountFrom.publicKey,
+        toPubkey: accountTo.publicKey,
+        lamports: 10,
+      }),
+    );
+
+    const fee = await transaction.getEstimatedFee(connection);
+    expect(fee).to.eq(5000);
   });
 
   it('partialSign', () => {
