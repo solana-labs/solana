@@ -4,7 +4,7 @@ use {
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     bincode::deserialize,
-    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches, Command},
     reqwest::blocking::Client,
     serde_json::{Map, Value},
     solana_account_decoder::validator_info::{
@@ -90,7 +90,7 @@ fn verify_keybase(
     }
 }
 
-fn parse_args(matches: &ArgMatches<'_>) -> Value {
+fn parse_args(matches: &ArgMatches) -> Value {
     let mut map = Map::new();
     map.insert(
         "name".to_string(),
@@ -133,77 +133,78 @@ pub trait ValidatorInfoSubCommands {
     fn validator_info_subcommands(self) -> Self;
 }
 
-impl ValidatorInfoSubCommands for App<'_, '_> {
+impl ValidatorInfoSubCommands for Command<'_> {
     fn validator_info_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("validator-info")
+            Command::new("validator-info")
                 .about("Publish/get Validator info on Solana")
-                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .subcommand_required(true)
+                .arg_required_else_help(true)
                 .subcommand(
-                    SubCommand::with_name("publish")
+                    Command::new("publish")
                         .about("Publish Validator info on Solana")
                         .arg(
-                            Arg::with_name("info_pubkey")
-                                .short("p")
+                            Arg::new("info_pubkey")
+                                .short('p')
                                 .long("info-pubkey")
                                 .value_name("PUBKEY")
                                 .takes_value(true)
-                                .validator(is_pubkey)
+                                .validator(|s| is_pubkey(s))
                                 .help("The pubkey of the Validator info account to update"),
                         )
                         .arg(
-                            Arg::with_name("name")
+                            Arg::new("name")
                                 .index(1)
                                 .value_name("NAME")
                                 .takes_value(true)
                                 .required(true)
-                                .validator(is_short_field)
+                                .validator(|s| is_short_field(s.to_string()))
                                 .help("Validator name"),
                         )
                         .arg(
-                            Arg::with_name("website")
-                                .short("w")
+                            Arg::new("website")
+                                .short('w')
                                 .long("website")
                                 .value_name("URL")
                                 .takes_value(true)
-                                .validator(check_url)
+                                .validator(|s| check_url(s.to_string()))
                                 .help("Validator website url"),
                         )
                         .arg(
-                            Arg::with_name("keybase_username")
-                                .short("n")
+                            Arg::new("keybase_username")
+                                .short('n')
                                 .long("keybase")
                                 .value_name("USERNAME")
                                 .takes_value(true)
-                                .validator(is_short_field)
+                                .validator(|s| is_short_field(s.to_string()))
                                 .help("Validator Keybase username"),
                         )
                         .arg(
-                            Arg::with_name("details")
-                                .short("d")
+                            Arg::new("details")
+                                .short('d')
                                 .long("details")
                                 .value_name("DETAILS")
                                 .takes_value(true)
-                                .validator(check_details_length)
+                                .validator(|s| check_details_length(s.to_string()))
                                 .help("Validator description")
                         )
                         .arg(
-                            Arg::with_name("force")
+                            Arg::new("force")
                                 .long("force")
                                 .takes_value(false)
-                                .hidden(true) // Don't document this argument to discourage its use
+                                .hide(true) // Don't document this argument to discourage its use
                                 .help("Override keybase username validity check"),
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("get")
+                    Command::new("get")
                         .about("Get and parse Solana Validator info")
                         .arg(
-                            Arg::with_name("info_pubkey")
+                            Arg::new("info_pubkey")
                                 .index(1)
                                 .value_name("PUBKEY")
                                 .takes_value(true)
-                                .validator(is_pubkey)
+                                .validator(|s| is_pubkey(s))
                                 .help("The pubkey of the Validator info account; without this argument, returns all"),
                         ),
                 )
@@ -212,7 +213,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
 }
 
 pub fn parse_validator_info_command(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -229,9 +230,7 @@ pub fn parse_validator_info_command(
     })
 }
 
-pub fn parse_get_validator_info_command(
-    matches: &ArgMatches<'_>,
-) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_validator_info_command(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     Ok(CliCommandInfo {
         command: CliCommand::GetValidatorInfo(info_pubkey),
@@ -474,12 +473,14 @@ mod tests {
             "alice_keybase",
         ]);
         let subcommand_matches = matches.subcommand();
+        assert!(subcommand_matches.is_some());
+        let subcommand_matches = subcommand_matches.unwrap();
         assert_eq!(subcommand_matches.0, "validator-info");
-        assert!(subcommand_matches.1.is_some());
-        let subcommand_matches = subcommand_matches.1.unwrap().subcommand();
+        let subcommand_matches = subcommand_matches.1.subcommand();
+        assert!(subcommand_matches.is_some());
+        let subcommand_matches = subcommand_matches.unwrap();
         assert_eq!(subcommand_matches.0, "publish");
-        assert!(subcommand_matches.1.is_some());
-        let matches = subcommand_matches.1.unwrap();
+        let matches = subcommand_matches.1;
         let expected = json!({
             "name": "Alice",
             "keybaseUsername": "alice_keybase",

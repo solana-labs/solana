@@ -1,6 +1,6 @@
 use {
     crate::cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    clap::{App, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches, Command},
     solana_clap_utils::{
         input_parsers::{pubkeys_of, value_of},
         input_validators::is_valid_pubkey,
@@ -25,24 +25,25 @@ pub trait InflationSubCommands {
     fn inflation_subcommands(self) -> Self;
 }
 
-impl InflationSubCommands for App<'_, '_> {
+impl InflationSubCommands for Command<'_> {
     fn inflation_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("inflation")
+            Command::new("inflation")
                 .about("Show inflation information")
                 .subcommand(
-                    SubCommand::with_name("rewards")
+                    Command::new("rewards")
                         .about("Show inflation rewards for a set of addresses")
                         .arg(pubkey!(
-                            Arg::with_name("addresses")
+                            Arg::new("addresses")
                                 .value_name("ADDRESS")
                                 .index(1)
-                                .multiple(true)
+                                .multiple_occurrences(true)
+                                .multiple_values(true)
                                 .required(true),
                             "Address of account to query for rewards. "
                         ))
                         .arg(
-                            Arg::with_name("rewards_epoch")
+                            Arg::new("rewards_epoch")
                                 .long("rewards-epoch")
                                 .takes_value(true)
                                 .value_name("EPOCH")
@@ -54,12 +55,12 @@ impl InflationSubCommands for App<'_, '_> {
 }
 
 pub fn parse_inflation_subcommand(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     _default_signer: &DefaultSigner,
     _wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let command = match matches.subcommand() {
-        ("rewards", Some(matches)) => {
+        Some(("rewards", matches)) => {
             let addresses = pubkeys_of(matches, "addresses").unwrap();
             let rewards_epoch = value_of(matches, "rewards_epoch");
             InflationCliCommand::Rewards(addresses, rewards_epoch)

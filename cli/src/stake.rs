@@ -9,7 +9,7 @@ use {
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    clap::{value_t, App, Arg, ArgGroup, ArgMatches, SubCommand},
+    clap::{Arg, ArgGroup, ArgMatches, Command},
     solana_clap_utils::{
         fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
         input_parsers::*,
@@ -70,30 +70,30 @@ pub const CUSTODIAN_ARG: ArgConstant<'static> = ArgConstant {
     help: "Authority to override account lockup",
 };
 
-fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(STAKE_AUTHORITY_ARG.name)
+fn stake_authority_arg<'a>() -> Arg<'a> {
+    Arg::new(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help(STAKE_AUTHORITY_ARG.help)
 }
 
-fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
+fn withdraw_authority_arg<'a>() -> Arg<'a> {
+    Arg::new(WITHDRAW_AUTHORITY_ARG.name)
         .long(WITHDRAW_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help(WITHDRAW_AUTHORITY_ARG.help)
 }
 
-fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(CUSTODIAN_ARG.name)
+fn custodian_arg<'a>() -> Arg<'a> {
+    Arg::new(CUSTODIAN_ARG.name)
         .long(CUSTODIAN_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_valid_signer)
+        .validator(|s| is_valid_signer(s))
         .help(CUSTODIAN_ARG.help)
 }
 
@@ -115,37 +115,37 @@ pub trait StakeSubCommands {
     fn stake_subcommands(self) -> Self;
 }
 
-impl StakeSubCommands for App<'_, '_> {
+impl StakeSubCommands for Command<'_> {
     fn stake_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("create-stake-account")
+            Command::new("create-stake-account")
                 .about("Create a stake account")
                 .arg(
-                    Arg::with_name("stake_account")
+                    Arg::new("stake_account")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Stake account to create (or base of derived address if --seed is used)")
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount_or_all)
+                        .validator(|s| is_amount_or_all(s))
                         .required(true)
                         .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("custodian")
+                    pubkey!(Arg::new("custodian")
                         .long("custodian")
                         .value_name("PUBKEY"),
                         "Authority to modify lockups. ")
                 )
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
@@ -153,42 +153,42 @@ impl StakeSubCommands for App<'_, '_> {
                                will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey")
                 )
                 .arg(
-                    Arg::with_name("lockup_epoch")
+                    Arg::new("lockup_epoch")
                         .long("lockup-epoch")
                         .value_name("NUMBER")
                         .takes_value(true)
                         .help("The epoch height at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name("lockup_date")
+                    Arg::new("lockup_date")
                         .long("lockup-date")
                         .value_name("RFC3339 DATETIME")
-                        .validator(is_rfc3339_datetime)
+                        .validator(|s| is_rfc3339_datetime(s))
                         .takes_value(true)
                         .help("The date and time at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name(STAKE_AUTHORITY_ARG.name)
+                    Arg::new(STAKE_AUTHORITY_ARG.name)
                         .long(STAKE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_pubkey)
+                        .validator(|s| is_valid_pubkey(s))
                         .help(STAKE_AUTHORITY_ARG.help)
                 )
                 .arg(
-                    Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
+                    Arg::new(WITHDRAW_AUTHORITY_ARG.name)
                         .long(WITHDRAW_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_pubkey)
+                        .validator(|s| is_valid_pubkey(s))
                         .help(WITHDRAW_AUTHORITY_ARG.help)
                 )
                 .arg(
-                    Arg::with_name("from")
+                    Arg::new("from")
                         .long("from")
                         .takes_value(true)
                         .value_name("KEYPAIR")
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Source account of funds [default: cli config keypair]"),
                 )
                 .offline_args()
@@ -197,28 +197,28 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("create-stake-account-checked")
+            Command::new("create-stake-account-checked")
                 .about("Create a stake account, checking the withdraw authority as a signer")
                 .arg(
-                    Arg::with_name("stake_account")
+                    Arg::new("stake_account")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Stake account to create (or base of derived address if --seed is used)")
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount_or_all)
+                        .validator(|s| is_amount_or_all(s))
                         .required(true)
                         .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
                 )
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
@@ -226,27 +226,27 @@ impl StakeSubCommands for App<'_, '_> {
                                will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey")
                 )
                 .arg(
-                    Arg::with_name(STAKE_AUTHORITY_ARG.name)
+                    Arg::new(STAKE_AUTHORITY_ARG.name)
                         .long(STAKE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_pubkey)
+                        .validator(|s| is_valid_pubkey(s))
                         .help(STAKE_AUTHORITY_ARG.help)
                 )
                 .arg(
-                    Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
+                    Arg::new(WITHDRAW_AUTHORITY_ARG.name)
                         .long(WITHDRAW_AUTHORITY_ARG.long)
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help(WITHDRAW_AUTHORITY_ARG.help)
                 )
                 .arg(
-                    Arg::with_name("from")
+                    Arg::new("from")
                         .long("from")
                         .takes_value(true)
                         .value_name("KEYPAIR")
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Source account of funds [default: cli config keypair]"),
                 )
                 .offline_args()
@@ -255,24 +255,24 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("delegate-stake")
+            Command::new("delegate-stake")
                 .about("Delegate stake to a vote account")
                 .arg(
-                    Arg::with_name("force")
+                    Arg::new("force")
                         .long("force")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
+                        .hide(true) // Don't document this argument to discourage its use
                         .help("Override vote account sanity checks (use carefully!)")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account to delegate")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::new("vote_account_pubkey")
                         .index(2)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
@@ -285,26 +285,26 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("stake-authorize")
+            Command::new("stake-authorize")
                 .about("Authorize a new signing keypair for the given stake account")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .required(true)
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS"),
                         "Stake account in which to set a new authority. ")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("new_stake_authority")
+                    pubkey!(Arg::new("new_stake_authority")
                         .long("new-stake-authority")
-                        .required_unless("new_withdraw_authority")
+                        .required_unless_present("new_withdraw_authority")
                         .value_name("PUBKEY"),
                         "New authorized staker")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("new_withdraw_authority")
+                    pubkey!(Arg::new("new_withdraw_authority")
                         .long("new-withdraw-authority")
-                        .required_unless("new_stake_authority")
+                        .required_unless_present("new_stake_authority")
                         .value_name("PUBKEY"),
                         "New authorized withdrawer. ")
                 )
@@ -315,7 +315,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
                 .arg(custodian_arg())
                 .arg(
-                    Arg::with_name("no_wait")
+                    Arg::new("no_wait")
                         .long("no-wait")
                         .takes_value(false)
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
@@ -323,29 +323,29 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("stake-authorize-checked")
+            Command::new("stake-authorize-checked")
                 .about("Authorize a new signing keypair for the given stake account, checking the authority as a signer")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .required(true)
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS"),
                         "Stake account in which to set a new authority. ")
                 )
                 .arg(
-                    Arg::with_name("new_stake_authority")
+                    Arg::new("new_stake_authority")
                         .long("new-stake-authority")
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("New authorized staker")
                 )
                 .arg(
-                    Arg::with_name("new_withdraw_authority")
+                    Arg::new("new_withdraw_authority")
                         .long("new-withdraw-authority")
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("New authorized withdrawer")
                 )
                 .arg(stake_authority_arg())
@@ -355,7 +355,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
                 .arg(custodian_arg())
                 .arg(
-                    Arg::with_name("no_wait")
+                    Arg::new("no_wait")
                         .long("no-wait")
                         .takes_value(false)
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
@@ -363,17 +363,17 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("deactivate-stake")
+            Command::new("deactivate-stake")
                 .about("Deactivate the delegated stake from the stake account")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account to be deactivated (or base of derived address if --seed is used). ")
                 )
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
@@ -381,7 +381,7 @@ impl StakeSubCommands for App<'_, '_> {
                                will be at a derived address of STAKE_ACCOUNT_ADDRESS")
                 )
                 .arg(
-                    Arg::with_name("delinquent")
+                    Arg::new("delinquent")
                         .long("delinquent")
                         .takes_value(false)
                         .conflicts_with(SIGN_ONLY_ARG.name)
@@ -394,35 +394,35 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("split-stake")
+            Command::new("split-stake")
                 .about("Duplicate a stake account, splitting the tokens between the two")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account to split (or base of derived address if --seed is used). ")
                 )
                 .arg(
-                    Arg::with_name("split_stake_account")
+                    Arg::new("split_stake_account")
                         .index(2)
                         .value_name("SPLIT_STAKE_ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Keypair of the new stake account")
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(3)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount)
+                        .validator(|s| is_amount(s))
                         .required(true)
                         .help("The amount to move into the new stake account, in SOL")
                 )
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
@@ -436,17 +436,17 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("merge-stake")
+            Command::new("merge-stake")
                 .about("Merges one stake account into another")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account to merge into")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("source_stake_account_pubkey")
+                    pubkey!(Arg::new("source_stake_account_pubkey")
                         .index(2)
                         .value_name("SOURCE_STAKE_ACCOUNT_ADDRESS")
                         .required(true),
@@ -460,33 +460,33 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("withdraw-stake")
+            Command::new("withdraw-stake")
                 .about("Withdraw the unstaked SOL from the stake account")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account from which to withdraw (or base of derived address if --seed is used). ")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    pubkey!(Arg::new("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
                         "Recipient of withdrawn SOL")
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(3)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount_or_all)
+                        .validator(|s| is_amount_or_all(s))
                         .required(true)
                         .help("The amount to withdraw from the stake account, in SOL; accepts keyword ALL")
                 )
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
@@ -501,46 +501,46 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("stake-set-lockup")
+            Command::new("stake-set-lockup")
                 .about("Set Lockup for the stake account")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account for which to set lockup parameters. ")
                 )
                 .arg(
-                    Arg::with_name("lockup_epoch")
+                    Arg::new("lockup_epoch")
                         .long("lockup-epoch")
                         .value_name("NUMBER")
                         .takes_value(true)
                         .help("The epoch height at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name("lockup_date")
+                    Arg::new("lockup_date")
                         .long("lockup-date")
                         .value_name("RFC3339 DATETIME")
-                        .validator(is_rfc3339_datetime)
+                        .validator(|s| is_rfc3339_datetime(s))
                         .takes_value(true)
                         .help("The date and time at which this account will be available for withdrawal")
                 )
                 .arg(
-                    pubkey!(Arg::with_name("new_custodian")
+                    pubkey!(Arg::new("new_custodian")
                         .long("new-custodian")
                         .value_name("PUBKEY"),
                         "Identity of a new lockup custodian. ")
                 )
-                .group(ArgGroup::with_name("lockup_details")
+                .group(ArgGroup::new("lockup_details")
                     .args(&["lockup_epoch", "lockup_date", "new_custodian"])
                     .multiple(true)
                     .required(true))
                 .arg(
-                    Arg::with_name("custodian")
+                    Arg::new("custodian")
                         .long("custodian")
                         .takes_value(true)
                         .value_name("KEYPAIR")
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Keypair of the existing custodian [default: cli config pubkey]")
                 )
                 .offline_args()
@@ -549,48 +549,48 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("stake-set-lockup-checked")
+            Command::new("stake-set-lockup-checked")
                 .about("Set Lockup for the stake account, checking the new authority as a signer")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Stake account for which to set lockup parameters. ")
                 )
                 .arg(
-                    Arg::with_name("lockup_epoch")
+                    Arg::new("lockup_epoch")
                         .long("lockup-epoch")
                         .value_name("NUMBER")
                         .takes_value(true)
                         .help("The epoch height at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name("lockup_date")
+                    Arg::new("lockup_date")
                         .long("lockup-date")
                         .value_name("RFC3339 DATETIME")
-                        .validator(is_rfc3339_datetime)
+                        .validator(|s| is_rfc3339_datetime(s))
                         .takes_value(true)
                         .help("The date and time at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name("new_custodian")
+                    Arg::new("new_custodian")
                         .long("new-custodian")
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Keypair of a new lockup custodian")
                 )
-                .group(ArgGroup::with_name("lockup_details")
+                .group(ArgGroup::new("lockup_details")
                     .args(&["lockup_epoch", "lockup_date", "new_custodian"])
                     .multiple(true)
                     .required(true))
                 .arg(
-                    Arg::with_name("custodian")
+                    Arg::new("custodian")
                         .long("custodian")
                         .takes_value(true)
                         .value_name("KEYPAIR")
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Keypair of the existing custodian [default: cli config pubkey]")
                 )
                 .offline_args()
@@ -599,51 +599,51 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
-            SubCommand::with_name("stake-account")
+            Command::new("stake-account")
                 .about("Show the contents of a stake account")
                 .alias("show-stake-account")
                 .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::new("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
                         "The stake account to display. ")
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL")
                 )
                 .arg(
-                    Arg::with_name("with_rewards")
+                    Arg::new("with_rewards")
                         .long("with-rewards")
                         .takes_value(false)
                         .help("Display inflation rewards"),
                 )
                 .arg(
-                    Arg::with_name("num_rewards_epochs")
+                    Arg::new("num_rewards_epochs")
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1, 10))
-                        .default_value_if("with_rewards", None, "1")
+                        .validator(|s| is_within_range(s.to_string(), 1, 10))
+                        .default_value_if("with_rewards", None, Some("1"))
                         .requires("with_rewards")
                         .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("stake-history")
+            Command::new("stake-history")
                 .about("Show the stake history")
                 .alias("show-stake-history")
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL")
                 )
                 .arg(
-                    Arg::with_name("limit")
+                    Arg::new("limit")
                         .long("limit")
                         .takes_value(true)
                         .value_name("NUM")
@@ -660,7 +660,7 @@ impl StakeSubCommands for App<'_, '_> {
 }
 
 pub fn parse_create_stake_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     checked: bool,
@@ -734,7 +734,7 @@ pub fn parse_create_stake_account(
 }
 
 pub fn parse_stake_delegate_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -780,7 +780,7 @@ pub fn parse_stake_delegate_stake(
 }
 
 pub fn parse_stake_authorize(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     checked: bool,
@@ -902,7 +902,7 @@ pub fn parse_stake_authorize(
 }
 
 pub fn parse_split_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -951,7 +951,7 @@ pub fn parse_split_stake(
 }
 
 pub fn parse_merge_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -996,7 +996,7 @@ pub fn parse_merge_stake(
 }
 
 pub fn parse_stake_deactivate_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -1008,7 +1008,7 @@ pub fn parse_stake_deactivate_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
-    let seed = value_t!(matches, "seed", String).ok();
+    let seed: Option<String> = matches.value_of_t("seed").ok();
 
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
@@ -1042,7 +1042,7 @@ pub fn parse_stake_deactivate_stake(
 }
 
 pub fn parse_stake_withdraw_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -1056,7 +1056,7 @@ pub fn parse_stake_withdraw_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
-    let seed = value_t!(matches, "seed", String).ok();
+    let seed: Option<String> = matches.value_of_t("seed").ok();
     let (withdraw_authority, withdraw_authority_pubkey) =
         signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -1095,7 +1095,7 @@ pub fn parse_stake_withdraw_stake(
 }
 
 pub fn parse_stake_set_lockup(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     checked: bool,
@@ -1162,7 +1162,7 @@ pub fn parse_stake_set_lockup(
 }
 
 pub fn parse_show_stake_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
@@ -1183,7 +1183,7 @@ pub fn parse_show_stake_account(
     })
 }
 
-pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_show_stake_history(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
     let limit_results = value_of(matches, "limit").unwrap();
     Ok(CliCommandInfo {

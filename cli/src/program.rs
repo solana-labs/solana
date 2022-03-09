@@ -7,7 +7,7 @@ use {
         },
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
-    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches, Command},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter},
@@ -110,60 +110,61 @@ pub trait ProgramSubCommands {
     fn program_subcommands(self) -> Self;
 }
 
-impl ProgramSubCommands for App<'_, '_> {
+impl ProgramSubCommands for Command<'_> {
     fn program_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("program")
+            Command::new("program")
                 .about("Program management")
-                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .subcommand_required(true)
+                .arg_required_else_help(true)
                 .arg(
-                    Arg::with_name("skip_fee_check")
+                    Arg::new("skip_fee_check")
                         .long("skip-fee-check")
-                        .hidden(true)
+                        .hide(true)
                         .takes_value(false)
                         .global(true)
                 )
                 .subcommand(
-                    SubCommand::with_name("deploy")
+                    Command::new("deploy")
                         .about("Deploy a program")
                         .arg(
-                            Arg::with_name("program_location")
+                            Arg::new("program_location")
                                 .index(1)
                                 .value_name("PROGRAM_FILEPATH")
                                 .takes_value(true)
                                 .help("/path/to/program.so"),
                         )
                         .arg(
-                            Arg::with_name("buffer")
+                            Arg::new("buffer")
                                 .long("buffer")
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
                                       [default: random address]")
                         )
                         .arg(
-                            Arg::with_name("upgrade_authority")
+                            Arg::new("upgrade_authority")
                                 .long("upgrade-authority")
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("program_id")
+                            pubkey!(Arg::new("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
                                 "Executable program's address, must be a keypair for initial deploys, can be a pubkey for upgrades \
                                 [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
                         )
                         .arg(
-                            Arg::with_name("final")
+                            Arg::new("final")
                                 .long("final")
                                 .help("The program will not be upgradeable")
                         )
                         .arg(
-                            Arg::with_name("max_len")
+                            Arg::new("max_len")
                                 .long("max-len")
                                 .value_name("max_len")
                                 .takes_value(true)
@@ -172,17 +173,17 @@ impl ProgramSubCommands for App<'_, '_> {
                                       [default: twice the length of the original deployed program]")
                         )
                         .arg(
-                            Arg::with_name("allow_excessive_balance")
+                            Arg::new("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("write-buffer")
+                    Command::new("write-buffer")
                         .about("Writes a program into a buffer account")
                         .arg(
-                            Arg::with_name("program_location")
+                            Arg::new("program_location")
                                 .index(1)
                                 .value_name("PROGRAM_FILEPATH")
                                 .takes_value(true)
@@ -190,23 +191,23 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("/path/to/program.so"),
                         )
                         .arg(
-                            Arg::with_name("buffer")
+                            Arg::new("buffer")
                                 .long("buffer")
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Buffer account to write data into [default: random address]")
                         )
                         .arg(
-                            Arg::with_name("buffer_authority")
+                            Arg::new("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Buffer authority [default: the default configured keypair]")
                         )
                         .arg(
-                            Arg::with_name("max_len")
+                            Arg::new("max_len")
                                 .long("max-len")
                                 .value_name("max_len")
                                 .takes_value(true)
@@ -216,10 +217,10 @@ impl ProgramSubCommands for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("set-buffer-authority")
+                    Command::new("set-buffer-authority")
                         .about("Set a new buffer authority")
                         .arg(
-                            Arg::with_name("buffer")
+                            Arg::new("buffer")
                                 .index(1)
                                 .value_name("BUFFER_PUBKEY")
                                 .takes_value(true)
@@ -227,15 +228,15 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("Public key of the buffer")
                         )
                         .arg(
-                            Arg::with_name("buffer_authority")
+                            Arg::new("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Buffer authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_buffer_authority")
+                            pubkey!(Arg::new("new_buffer_authority")
                                 .long("new-buffer-authority")
                                 .value_name("NEW_BUFFER_AUTHORITY")
                                 .required(true),
@@ -243,10 +244,10 @@ impl ProgramSubCommands for App<'_, '_> {
                         )
                 )
                 .subcommand(
-                    SubCommand::with_name("set-upgrade-authority")
+                    Command::new("set-upgrade-authority")
                         .about("Set a new program authority")
                         .arg(
-                            Arg::with_name("program_id")
+                            Arg::new("program_id")
                                 .index(1)
                                 .value_name("PROGRAM_ADDRESS")
                                 .takes_value(true)
@@ -254,79 +255,79 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("Address of the program to upgrade")
                         )
                         .arg(
-                            Arg::with_name("upgrade_authority")
+                            Arg::new("upgrade_authority")
                                 .long("upgrade-authority")
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_upgrade_authority")
+                            pubkey!(Arg::new("new_upgrade_authority")
                                 .long("new-upgrade-authority")
-                                .required_unless("final")
+                                .required_unless_present("final")
                                 .value_name("NEW_UPGRADE_AUTHORITY"),
                                 "Address of the new upgrade authority"),
                         )
                         .arg(
-                            Arg::with_name("final")
+                            Arg::new("final")
                                 .long("final")
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
                 )
                 .subcommand(
-                    SubCommand::with_name("show")
+                    Command::new("show")
                         .about("Display information about a buffer or program")
                         .arg(
-                            Arg::with_name("account")
+                            Arg::new("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .help("Address of the buffer or program to show")
                         )
                         .arg(
-                            Arg::with_name("programs")
+                            Arg::new("programs")
                                 .long("programs")
                                 .conflicts_with("account")
                                 .conflicts_with("buffers")
-                                .required_unless_one(&["account", "buffers"])
+                                .required_unless_present_any(&["account", "buffers"])
                                 .help("Show every upgradeable program that matches the authority")
                         )
                         .arg(
-                            Arg::with_name("buffers")
+                            Arg::new("buffers")
                                 .long("buffers")
                                 .conflicts_with("account")
                                 .conflicts_with("programs")
-                                .required_unless_one(&["account", "programs"])
+                                .required_unless_present_any(&["account", "programs"])
                                 .help("Show every upgradeable buffer that matches the authority")
                         )
                         .arg(
-                            Arg::with_name("all")
+                            Arg::new("all")
                                 .long("all")
                                 .conflicts_with("account")
                                 .conflicts_with("buffer_authority")
                                 .help("Show accounts for all authorities")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("buffer_authority")
+                            pubkey!(Arg::new("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("AUTHORITY")
                                 .conflicts_with("all"),
                                 "Authority [default: the default configured keypair]"),
                         )
                         .arg(
-                            Arg::with_name("lamports")
+                            Arg::new("lamports")
                                 .long("lamports")
                                 .takes_value(false)
                                 .help("Display balance in lamports instead of SOL"),
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("dump")
+                    Command::new("dump")
                         .about("Write the program data to a file")
                         .arg(
-                            Arg::with_name("account")
+                            Arg::new("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
@@ -334,7 +335,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("Address of the buffer or program")
                         )
                         .arg(
-                            Arg::with_name("output_location")
+                            Arg::new("output_location")
                                 .index(2)
                                 .value_name("OUTPUT_FILEPATH")
                                 .takes_value(true)
@@ -343,40 +344,40 @@ impl ProgramSubCommands for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("close")
+                    Command::new("close")
                         .about("Close a program or buffer account and withdraw all lamports")
                         .arg(
-                            Arg::with_name("account")
+                            Arg::new("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .help("Address of the program or buffer account to close"),
                         )
                         .arg(
-                            Arg::with_name("buffers")
+                            Arg::new("buffers")
                                 .long("buffers")
                                 .conflicts_with("account")
-                                .required_unless("account")
+                                .required_unless_present("account")
                                 .help("Close all buffer accounts that match the authority")
                         )
                         .arg(
-                            Arg::with_name("authority")
+                            Arg::new("authority")
                                 .long("authority")
                                 .alias("buffer-authority")
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .help("Upgrade or buffer authority [default: the default configured keypair]")
                         )
 
                         .arg(
-                            pubkey!(Arg::with_name("recipient_account")
+                            pubkey!(Arg::new("recipient_account")
                                 .long("recipient")
                                 .value_name("RECIPIENT_ADDRESS"),
                                 "Address of the account to deposit the closed account's lamports [default: the default configured keypair]"),
                         )
                         .arg(
-                            Arg::with_name("lamports")
+                            Arg::new("lamports")
                                 .long("lamports")
                                 .takes_value(false)
                                 .help("Display balance in lamports instead of SOL"),
@@ -384,11 +385,11 @@ impl ProgramSubCommands for App<'_, '_> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("deploy")
+            Command::new("deploy")
                 .about("Deploy a program")
-                .setting(AppSettings::Hidden)
+                .hide(true)
                 .arg(
-                    Arg::with_name("program_location")
+                    Arg::new("program_location")
                         .index(1)
                         .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
@@ -396,30 +397,30 @@ impl ProgramSubCommands for App<'_, '_> {
                         .help("/path/to/program.o"),
                 )
                 .arg(
-                    Arg::with_name("address_signer")
+                    Arg::new("address_signer")
                         .index(2)
                         .value_name("PROGRAM_ADDRESS_SIGNER")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("The signer for the desired address of the program [default: new random address]")
                 )
                 .arg(
-                    Arg::with_name("use_deprecated_loader")
+                    Arg::new("use_deprecated_loader")
                         .long("use-deprecated-loader")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
+                        .hide(true) // Don't document this argument to discourage its use
                         .help("Use the deprecated BPF loader")
                 )
                 .arg(
-                    Arg::with_name("allow_excessive_balance")
+                    Arg::new("allow_excessive_balance")
                         .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
                         .help("Use the designated program id, even if the account already holds a large balance of SOL")
                 )
                 .arg(
-                    Arg::with_name("skip_fee_check")
+                    Arg::new("skip_fee_check")
                         .long("skip-fee-check")
-                        .hidden(true)
+                        .hide(true)
                         .takes_value(false)
                 ),
         )
@@ -427,19 +428,17 @@ impl ProgramSubCommands for App<'_, '_> {
 }
 
 pub fn parse_program_subcommand(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let (subcommand, sub_matches) = matches.subcommand();
+    let (subcommand, sub_matches) = matches.subcommand().unwrap();
     let matches_skip_fee_check = matches.is_present("skip_fee_check");
-    let sub_matches_skip_fee_check = sub_matches
-        .map(|m| m.is_present("skip_fee_check"))
-        .unwrap_or(false);
+    let sub_matches_skip_fee_check = sub_matches.is_present("skip_fee_check");
     let skip_fee_check = matches_skip_fee_check || sub_matches_skip_fee_check;
 
     let response = match (subcommand, sub_matches) {
-        ("deploy", Some(matches)) => {
+        ("deploy", matches) => {
             let mut bulk_signers = vec![Some(
                 default_signer.signer_from_path(matches, wallet_manager)?,
             )];
@@ -503,7 +502,7 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("write-buffer", Some(matches)) => {
+        ("write-buffer", matches) => {
             let mut bulk_signers = vec![Some(
                 default_signer.signer_from_path(matches, wallet_manager)?,
             )];
@@ -549,7 +548,7 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("set-buffer-authority", Some(matches)) => {
+        ("set-buffer-authority", matches) => {
             let buffer_pubkey = pubkey_of(matches, "buffer").unwrap();
 
             let (buffer_authority_signer, buffer_authority_pubkey) =
@@ -575,7 +574,7 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("set-upgrade-authority", Some(matches)) => {
+        ("set-upgrade-authority", matches) => {
             let (upgrade_authority_signer, upgrade_authority_pubkey) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
             let program_pubkey = pubkey_of(matches, "program_id").unwrap();
@@ -603,7 +602,7 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("show", Some(matches)) => {
+        ("show", matches) => {
             let authority_pubkey = if let Some(authority_pubkey) =
                 pubkey_of_signer(matches, "buffer_authority", wallet_manager)?
             {
@@ -626,14 +625,14 @@ pub fn parse_program_subcommand(
                 signers: vec![],
             }
         }
-        ("dump", Some(matches)) => CliCommandInfo {
+        ("dump", matches) => CliCommandInfo {
             command: CliCommand::Program(ProgramCliCommand::Dump {
                 account_pubkey: pubkey_of(matches, "account"),
                 output_location: matches.value_of("output_location").unwrap().to_string(),
             }),
             signers: vec![],
         },
-        ("close", Some(matches)) => {
+        ("close", matches) => {
             let account_pubkey = if matches.is_present("buffers") {
                 None
             } else {

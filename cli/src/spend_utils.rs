@@ -34,7 +34,7 @@ impl SpendAmount {
         }
     }
 
-    pub fn new_from_matches(matches: &ArgMatches<'_>, name: &str) -> Self {
+    pub fn new_from_matches(matches: &ArgMatches, name: &str) -> Self {
         let amount = lamports_of_sol(matches, name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
         SpendAmount::new(amount, sign_only)
