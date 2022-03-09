@@ -158,7 +158,11 @@ fn output_entry(
 
                 if let Some(legacy_tx) = transaction.into_legacy_transaction() {
                     solana_cli_output::display::println_transaction(
-                        &legacy_tx, &tx_status, "      ", None, None,
+                        &legacy_tx,
+                        tx_status.as_ref(),
+                        "      ",
+                        None,
+                        None,
                     );
                 } else {
                     eprintln!(

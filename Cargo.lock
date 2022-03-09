@@ -4540,6 +4540,7 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "console",
+ "ed25519-dalek",
  "humantime",
  "indicatif",
  "serde",
