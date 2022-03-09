@@ -15,7 +15,7 @@ use {
     crate::{
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
         http_sender::HttpSender,
-        mock_sender::{MockSender, Mocks},
+        mock_sender::MockSender,
         rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
         rpc_config::{RpcAccountInfoConfig, *},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
@@ -56,6 +56,8 @@ use {
     },
     tokio::{sync::RwLock, time::sleep},
 };
+
+pub use crate::mock_sender::Mocks;
 
 /// A client of a remote Solana node.
 ///
@@ -314,6 +316,35 @@ impl RpcClient {
 
     /// Create a mock `RpcClient`.
     ///
+    /// A mock `RpcClient` contains an implementation of [`RpcSender`] that does
+    /// not use the network, and instead returns synthetic responses, for use in
+    /// tests.
+    ///
+    /// It is primarily for internal use, with limited customizability, and
+    /// behaviors determined by internal Solana test cases. New users should
+    /// consider implementing `RpcSender` themselves and constructing
+    /// `RpcClient` with [`RpcClient::new_sender`] to get mock behavior.
+    ///
+    /// Unless directed otherwise, a mock `RpcClient` will generally return a
+    /// reasonable default response to any request, at least for [`RpcRequest`]
+    /// values for which responses have been implemented.
+    ///
+    /// This mock can be customized by changing the `url` argument, which is not
+    /// actually a URL, but a simple string directive that changes the mock
+    /// behavior in specific scenarios:
+    ///
+    /// - It is customary to set the `url` to "succeeds" for mocks that should
+    ///   return sucessfully, though this value is not actually interpreted.
+    ///
+    /// - If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
+    ///
+    /// - Other possible values of `url` are specific to different `RpcRequest`
+    ///   values. Read the implementation of (non-public) `MockSender` for
+    ///   details.
+    ///
+    /// The [`RpcClient::new_mock_with_mocks`] function offers further
+    /// customization options.
+    ///
     /// # Examples
     ///
     /// ```
@@ -337,6 +368,44 @@ impl RpcClient {
     }
 
     /// Create a mock `RpcClient`.
+    ///
+    /// A mock `RpcClient` contains an implementation of [`RpcSender`] that does
+    /// not use the network, and instead returns synthetic responses, for use in
+    /// tests.
+    ///
+    /// It is primarily for internal use, with limited customizability, and
+    /// behaviors determined by internal Solana test cases. New users should
+    /// consider implementing `RpcSender` themselves and constructing
+    /// `RpcClient` with [`RpcClient::new_sender`] to get mock behavior.
+    ///
+    /// Unless directed otherwise, a mock `RpcClient` will generally return a
+    /// reasonable default response to any request, at least for [`RpcRequest`]
+    /// values for which responses have been implemented.
+    ///
+    /// This mock can be customized in two ways:
+    ///
+    /// 1) By changing the `url` argument, which is not actually a URL, but a
+    ///    simple string directive that changes the mock behavior in specific
+    ///    scenarios.
+    ///
+    ///    It is customary to set the `url` to "succeeds" for mocks that should
+    ///    return sucessfully, though this value is not actually interpreted.
+    ///
+    ///    If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
+    ///
+    ///    Other possible values of `url` are specific to different `RpcRequest`
+    ///    values. Read the implementation of `MockSender` (which is non-public)
+    ///    for details.
+    ///
+    /// 2) Custom responses can be configured by providing [`Mocks`]. This type
+    ///    is a [`HashMap`] from [`RpcRequest`] to a JSON [`Value`] response,
+    ///    Any entries in this map override the default behavior for the given
+    ///    request.
+    ///
+    /// The [`RpcClient::new_mock_with_mocks`] function offers further
+    /// customization options.
+    ///
+    /// [`HashMap`]: std::collections::HashMap
     ///
     /// # Examples
     ///
