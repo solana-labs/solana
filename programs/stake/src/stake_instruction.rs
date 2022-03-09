@@ -2274,6 +2274,217 @@ mod tests {
     }
 
     #[test]
+    fn test_redelegate_consider_balance_changes() {
+        let mut clock = Clock::default();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let initial_lamports = 4242424242;
+        let stake_lamports = rent_exempt_reserve + initial_lamports;
+        let recipient_address = solana_sdk::pubkey::new_rand();
+        let authority_address = solana_sdk::pubkey::new_rand();
+        let vote_address = solana_sdk::pubkey::new_rand();
+        let vote_account =
+            vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&authority_address)
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (vote_address, vote_account),
+            (
+                recipient_address,
+                AccountSharedData::new(1, 0, &system_program::id()),
+            ),
+            (authority_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                stake_config::id(),
+                config::create_account(0, &stake_config::Config::default()),
+            ),
+        ];
+        let delegate_instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: vote_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_config::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authority_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+        let deactivate_instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authority_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            delegate_instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        clock.epoch += 1;
+        transaction_accounts[2] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Deactivate).unwrap(),
+            transaction_accounts.clone(),
+            deactivate_instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // Once deactivated, we withdraw stake to new account
+        clock.epoch += 1;
+        transaction_accounts[2] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        let withdraw_lamports = initial_lamports / 2;
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Withdraw(withdraw_lamports)).unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: recipient_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::stake_history::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: authority_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        let expected_balance = rent_exempt_reserve + initial_lamports - withdraw_lamports;
+        assert_eq!(accounts[0].lamports(), expected_balance);
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        clock.epoch += 1;
+        transaction_accounts[2] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            delegate_instruction_accounts.clone(),
+            Ok(()),
+        );
+        assert_eq!(
+            stake_from(&accounts[0]).unwrap().delegation.stake,
+            accounts[0].lamports() - rent_exempt_reserve,
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        clock.epoch += 1;
+        transaction_accounts[2] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Deactivate).unwrap(),
+            transaction_accounts.clone(),
+            deactivate_instruction_accounts,
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // Out of band deposit
+        transaction_accounts[0]
+            .1
+            .checked_add_lamports(withdraw_lamports)
+            .unwrap();
+
+        clock.epoch += 1;
+        transaction_accounts[2] = (
+            sysvar::clock::id(),
+            account::create_account_shared_data_for_test(&clock),
+        );
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts,
+            delegate_instruction_accounts,
+            Ok(()),
+        );
+        assert_eq!(
+            stake_from(&accounts[0]).unwrap().delegation.stake,
+            accounts[0].lamports() - rent_exempt_reserve,
+        );
+    }
+
+    #[test]
     fn test_split() {
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
