@@ -933,7 +933,7 @@ mod tests {
             signature::{Keypair, Signer},
             system_transaction,
             transaction::{
-                DisabledAddressLoader, Result, SanitizedTransaction, VersionedTransaction,
+                Result, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
             },
         },
     };
@@ -1022,7 +1022,7 @@ mod tests {
                         versioned_tx,
                         message_hash,
                         None,
-                        &DisabledAddressLoader,
+                        SimpleAddressLoader::Disabled,
                     )
                 }?;
 

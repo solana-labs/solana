@@ -58,7 +58,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeState},
         system_program,
-        transaction::{DisabledAddressLoader, MessageHash, SanitizedTransaction},
+        transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -242,7 +242,7 @@ fn output_slot(
                     transaction,
                     MessageHash::Compute,
                     None,
-                    &DisabledAddressLoader,
+                    SimpleAddressLoader::Disabled,
                 );
 
                 match sanitize_result {
@@ -793,7 +793,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     transaction,
                     MessageHash::Compute,
                     None,
-                    &DisabledAddressLoader,
+                    SimpleAddressLoader::Disabled,
                 )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);

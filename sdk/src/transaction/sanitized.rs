@@ -39,14 +39,22 @@ pub struct TransactionAccountLocks<'a> {
     pub writable: Vec<&'a Pubkey>,
 }
 
-pub trait AddressLoader {
-    fn load_addresses(&self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
+pub trait AddressLoader: Clone {
+    fn load_addresses(self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
 }
 
-pub struct DisabledAddressLoader;
-impl AddressLoader for DisabledAddressLoader {
-    fn load_addresses(&self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
-        Err(TransactionError::UnsupportedVersion)
+#[derive(Clone)]
+pub enum SimpleAddressLoader {
+    Disabled,
+    Enabled(LoadedAddresses),
+}
+
+impl AddressLoader for SimpleAddressLoader {
+    fn load_addresses(self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
+        match self {
+            Self::Disabled => Err(TransactionError::AddressLookupTableNotFound),
+            Self::Enabled(loaded_addresses) => Ok(loaded_addresses),
+        }
     }
 }
 
@@ -71,7 +79,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: impl Into<MessageHash>,
         is_simple_vote_tx: Option<bool>,
-        address_loader: &impl AddressLoader,
+        address_loader: impl AddressLoader,
     ) -> Result<Self> {
         tx.sanitize()?;
 

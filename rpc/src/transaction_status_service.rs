@@ -225,7 +225,7 @@ pub(crate) mod tests {
             signature::{Keypair, Signature, Signer},
             system_transaction,
             transaction::{
-                DisabledAddressLoader, MessageHash, SanitizedTransaction, Transaction,
+                MessageHash, SanitizedTransaction, SimpleAddressLoader, Transaction,
                 VersionedTransaction,
             },
         },
@@ -311,7 +311,7 @@ pub(crate) mod tests {
             transaction,
             MessageHash::Compute,
             None,
-            &DisabledAddressLoader,
+            SimpleAddressLoader::Disabled,
         )
         .unwrap();
 
