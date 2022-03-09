@@ -1,3 +1,6 @@
+#![deny(clippy::integer_arithmetic)]
+#![deny(clippy::indexing_slicing)]
+
 pub mod alloc;
 pub mod allocator_bump;
 pub mod deprecated;
@@ -141,7 +144,10 @@ pub fn create_executor(
         create_executor_metrics.program_id = programdata.get_key().to_string();
         let mut load_elf_time = Measure::start("load_elf_time");
         let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
-            &programdata.get_data()[programdata_offset..],
+            programdata
+                .get_data()
+                .get(programdata_offset..)
+                .ok_or(InstructionError::AccountDataTooSmall)?,
             None,
             config,
             syscall_registry,
@@ -192,7 +198,7 @@ fn write_program_data<'a>(
 ) -> Result<(), InstructionError> {
     let data = program.get_data_mut();
     let write_offset = program_data_offset.saturating_add(bytes.len());
-    if data.len() < write_offset {
+    if data.len() < write_offset || (program_data_offset..write_offset).len() != bytes.len() {
         ic_logger_msg!(
             log_collector,
             "Write overflow: {} < {}",
@@ -201,7 +207,9 @@ fn write_program_data<'a>(
         );
         return Err(InstructionError::AccountDataTooSmall);
     }
-    data[program_data_offset..write_offset].copy_from_slice(bytes);
+    data.get_mut(program_data_offset..write_offset)
+        .ok_or(InstructionError::AccountDataTooSmall)?
+        .copy_from_slice(bytes);
     Ok(())
 }
 
@@ -695,9 +703,22 @@ fn process_loader_upgradeable_instruction(
                     slot: clock.slot,
                     upgrade_authority_address,
                 })?;
-                programdata.get_data_mut()[programdata_data_offset
-                    ..programdata_data_offset.saturating_add(buffer_data_len)]
-                    .copy_from_slice(&buffer.get_data()[buffer_data_offset..]);
+
+                let to_slice = programdata
+                    .get_data_mut()
+                    .get_mut(
+                        programdata_data_offset
+                            ..programdata_data_offset.saturating_add(buffer_data_len),
+                    )
+                    .ok_or(InstructionError::AccountDataTooSmall)?;
+                let from_slice = buffer
+                    .get_data()
+                    .get(buffer_data_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?;
+                if to_slice.len() != from_slice.len() {
+                    return Err(InstructionError::AccountDataTooSmall);
+                }
+                to_slice.copy_from_slice(from_slice);
             }
 
             // Update the Program account
@@ -895,10 +916,25 @@ fn process_loader_upgradeable_instruction(
                 slot: clock.slot,
                 upgrade_authority_address: current_upgrade_authority_address,
             })?;
-            programdata.get_data_mut()
-                [programdata_data_offset..programdata_data_offset.saturating_add(buffer_data_len)]
-                .copy_from_slice(&buffer.get_data()[buffer_data_offset..]);
-            programdata.get_data_mut()[programdata_data_offset.saturating_add(buffer_data_len)..]
+            let to_slice = programdata
+                .get_data_mut()
+                .get_mut(
+                    programdata_data_offset
+                        ..programdata_data_offset.saturating_add(buffer_data_len),
+                )
+                .ok_or(InstructionError::AccountDataTooSmall)?;
+            let from_slice = buffer
+                .get_data()
+                .get(buffer_data_offset..)
+                .ok_or(InstructionError::AccountDataTooSmall)?;
+            if to_slice.len() != from_slice.len() {
+                return Err(InstructionError::AccountDataTooSmall);
+            }
+            to_slice.copy_from_slice(from_slice);
+            programdata
+                .get_data_mut()
+                .get_mut(programdata_data_offset.saturating_add(buffer_data_len)..)
+                .ok_or(InstructionError::AccountDataTooSmall)?
                 .fill(0);
 
             // Fund ProgramData to rent-exemption, spill the rest
@@ -1555,7 +1591,7 @@ mod tests {
             }],
             Ok(()),
         );
-        assert_eq!(&vec![0, 0, 0, 1, 2, 3], accounts[0].data());
+        assert_eq!(&vec![0, 0, 0, 1, 2, 3], accounts.first().unwrap().data());
 
         // Case: Overflow
         program_account.set_data(vec![0; 5]);
@@ -1619,10 +1655,10 @@ mod tests {
             }],
             Ok(()),
         );
-        assert!(accounts[0].executable());
+        assert!(accounts.first().unwrap().executable());
 
         // Case: Finalize bad ELF
-        program_account.data_as_mut_slice()[0] = 0;
+        *program_account.data_as_mut_slice().get_mut(0).unwrap() = 0;
         process_instruction(
             &loader_id,
             &[],
@@ -1856,7 +1892,7 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::Buffer {
@@ -1870,13 +1906,13 @@ mod tests {
             &[],
             &instruction_data,
             vec![
-                (buffer_address, accounts[0].clone()),
-                (authority_address, accounts[1].clone()),
+                (buffer_address, accounts.first().unwrap().clone()),
+                (authority_address, accounts.get(1).unwrap().clone()),
             ],
             instruction_accounts,
             Err(InstructionError::AccountAlreadyInitialized),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::Buffer {
@@ -1941,7 +1977,7 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::Buffer {
@@ -1949,7 +1985,12 @@ mod tests {
             }
         );
         assert_eq!(
-            &accounts[0].data()[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+            &accounts
+                .first()
+                .unwrap()
+                .data()
+                .get(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .unwrap(),
             &[42; 9]
         );
 
@@ -1977,7 +2018,7 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::Buffer {
@@ -1985,7 +2026,12 @@ mod tests {
             }
         );
         assert_eq!(
-            &accounts[0].data()[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+            &accounts
+                .first()
+                .unwrap()
+                .data()
+                .get(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .unwrap(),
             &[0, 0, 0, 42, 42, 42, 42, 42, 42]
         );
 
@@ -2173,7 +2219,10 @@ mod tests {
                     authority_address: Some(upgrade_authority_keypair.pubkey()),
                 })
                 .unwrap();
-            account.data_as_mut_slice()[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+            account
+                .data_as_mut_slice()
+                .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .unwrap()
                 .copy_from_slice(&elf);
             account
         };
@@ -2259,12 +2308,14 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_keypair.pubkey())
             }
         );
-        for (i, byte) in post_programdata_account.data()
-            [UpgradeableLoaderState::programdata_data_offset().unwrap()..]
+        for (i, byte) in post_programdata_account
+            .data()
+            .get(UpgradeableLoaderState::programdata_data_offset().unwrap()..)
+            .unwrap()
             .iter()
             .enumerate()
         {
-            assert_eq!(elf[i], *byte);
+            assert_eq!(*elf.get(i).unwrap(), *byte);
         }
 
         // Invoke deployed program
@@ -2470,7 +2521,7 @@ mod tests {
             elf.len(),
         )
         .unwrap();
-        instructions[0] = system_instruction::create_account(
+        *instructions.get_mut(0).unwrap() = system_instruction::create_account(
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
             min_program_balance,
@@ -2503,7 +2554,7 @@ mod tests {
             elf.len(),
         )
         .unwrap();
-        instructions[0] = system_instruction::create_account(
+        *instructions.get_mut(0).unwrap() = system_instruction::create_account(
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
             min_program_balance,
@@ -2635,7 +2686,12 @@ mod tests {
             elf.len(),
         )
         .unwrap();
-        instructions[1].accounts[6] = AccountMeta::new_readonly(Pubkey::new_unique(), false);
+        *instructions
+            .get_mut(1)
+            .unwrap()
+            .accounts
+            .get_mut(6)
+            .unwrap() = AccountMeta::new_readonly(Pubkey::new_unique(), false);
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
         assert_eq!(
             TransactionError::InstructionError(1, InstructionError::MissingAccount),
@@ -2693,8 +2749,10 @@ mod tests {
                 authority_address: Some(upgrade_authority_keypair.pubkey()),
             })
             .unwrap();
-        modified_buffer_account.data_as_mut_slice()
-            [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        modified_buffer_account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+            .unwrap()
             .copy_from_slice(&elf);
         truncate_data(&mut modified_buffer_account, 5);
         bank.store_account(&buffer_address, &modified_buffer_account);
@@ -2735,8 +2793,10 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        modified_buffer_account.data_as_mut_slice()
-            [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        modified_buffer_account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+            .unwrap()
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
@@ -2776,8 +2836,10 @@ mod tests {
                 authority_address: None,
             })
             .unwrap();
-        modified_buffer_account.data_as_mut_slice()
-            [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        modified_buffer_account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+            .unwrap()
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
@@ -2847,8 +2909,10 @@ mod tests {
                     authority_address: Some(*buffer_authority),
                 })
                 .unwrap();
-            buffer_account.data_as_mut_slice()
-                [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+            buffer_account
+                .data_as_mut_slice()
+                .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .unwrap()
                 .copy_from_slice(elf_new);
             let mut programdata_account = AccountSharedData::new(
                 min_programdata_balance,
@@ -2958,10 +3022,13 @@ mod tests {
         let min_programdata_balance = Rent::default().minimum_balance(
             UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),
         );
-        assert_eq!(min_programdata_balance, accounts[0].lamports());
-        assert_eq!(0, accounts[2].lamports());
-        assert_eq!(1, accounts[3].lamports());
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        assert_eq!(
+            min_programdata_balance,
+            accounts.first().unwrap().lamports()
+        );
+        assert_eq!(0, accounts.get(2).unwrap().lamports());
+        assert_eq!(1, accounts.get(3).unwrap().lamports());
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
@@ -2969,13 +3036,19 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address)
             }
         );
-        for (i, byte) in accounts[0].data()[UpgradeableLoaderState::programdata_data_offset()
+        for (i, byte) in accounts
+            .first()
             .unwrap()
-            ..UpgradeableLoaderState::programdata_data_offset().unwrap() + elf_new.len()]
+            .data()
+            .get(
+                UpgradeableLoaderState::programdata_data_offset().unwrap()
+                    ..UpgradeableLoaderState::programdata_data_offset().unwrap() + elf_new.len(),
+            )
+            .unwrap()
             .iter()
             .enumerate()
         {
-            assert_eq!(elf_new[i], *byte);
+            assert_eq!(*elf_new.get(i).unwrap(), *byte);
         }
 
         // Case: not upgradable
@@ -2986,7 +3059,9 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[0]
+        transaction_accounts
+            .get_mut(0)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::ProgramData {
                 slot: SLOT,
@@ -3008,8 +3083,8 @@ mod tests {
             &elf_new,
         );
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        transaction_accounts[6].0 = invalid_upgrade_authority_address;
-        instruction_accounts[6].pubkey = invalid_upgrade_authority_address;
+        transaction_accounts.get_mut(6).unwrap().0 = invalid_upgrade_authority_address;
+        instruction_accounts.get_mut(6).unwrap().pubkey = invalid_upgrade_authority_address;
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3024,7 +3099,7 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        instruction_accounts[6].is_signer = false;
+        instruction_accounts.get_mut(6).unwrap().is_signer = false;
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3039,7 +3114,11 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[1].1.set_executable(false);
+        transaction_accounts
+            .get_mut(1)
+            .unwrap()
+            .1
+            .set_executable(false);
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3054,7 +3133,11 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[1].1.set_owner(Pubkey::new_unique());
+        transaction_accounts
+            .get_mut(1)
+            .unwrap()
+            .1
+            .set_owner(Pubkey::new_unique());
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3069,7 +3152,7 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        instruction_accounts[1].is_writable = false;
+        instruction_accounts.get_mut(1).unwrap().is_writable = false;
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3084,7 +3167,9 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[1]
+        transaction_accounts
+            .get_mut(1)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
@@ -3103,8 +3188,8 @@ mod tests {
             &elf_new,
         );
         let invalid_programdata_address = Pubkey::new_unique();
-        transaction_accounts[0].0 = invalid_programdata_address;
-        instruction_accounts[0].pubkey = invalid_programdata_address;
+        transaction_accounts.get_mut(0).unwrap().0 = invalid_programdata_address;
+        instruction_accounts.get_mut(0).unwrap().pubkey = invalid_programdata_address;
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3119,7 +3204,9 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[2]
+        transaction_accounts
+            .get_mut(2)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
@@ -3137,12 +3224,14 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[2].1 = AccountSharedData::new(
+        transaction_accounts.get_mut(2).unwrap().1 = AccountSharedData::new(
             1,
             UpgradeableLoaderState::buffer_len(elf_orig.len().max(elf_new.len()) + 1).unwrap(),
             &bpf_loader_upgradeable::id(),
         );
-        transaction_accounts[2]
+        transaction_accounts
+            .get_mut(2)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(upgrade_authority_address),
@@ -3162,13 +3251,15 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[2]
+        transaction_accounts
+            .get_mut(2)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        truncate_data(&mut transaction_accounts[2].1, 5);
+        truncate_data(&mut transaction_accounts.get_mut(2).unwrap().1, 5);
         process_instruction(
             transaction_accounts,
             instruction_accounts,
@@ -3197,7 +3288,9 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[2]
+        transaction_accounts
+            .get_mut(2)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: None,
@@ -3217,14 +3310,18 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts[0]
+        transaction_accounts
+            .get_mut(0)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::ProgramData {
                 slot: SLOT,
                 upgrade_authority_address: None,
             })
             .unwrap();
-        transaction_accounts[2]
+        transaction_accounts
+            .get_mut(2)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: None,
@@ -3298,7 +3395,7 @@ mod tests {
             ],
             Ok(()),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
@@ -3319,7 +3416,7 @@ mod tests {
             vec![programdata_meta.clone(), upgrade_authority_meta.clone()],
             Ok(()),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
@@ -3462,7 +3559,7 @@ mod tests {
             vec![buffer_meta.clone(), authority_meta.clone()],
             Err(InstructionError::IncorrectAuthority),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::Buffer {
@@ -3488,7 +3585,7 @@ mod tests {
             ],
             Ok(()),
         );
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(
             state,
             UpgradeableLoaderState::Buffer {
@@ -3547,7 +3644,9 @@ mod tests {
         );
 
         // Case: Set to no authority
-        transaction_accounts[0]
+        transaction_accounts
+            .get_mut(0)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: None,
@@ -3567,7 +3666,9 @@ mod tests {
         );
 
         // Case: Not a Buffer account
-        transaction_accounts[0]
+        transaction_accounts
+            .get_mut(0)
+            .unwrap()
             .1
             .set_state(&UpgradeableLoaderState::Program {
                 programdata_address: Pubkey::new_unique(),
@@ -3670,9 +3771,9 @@ mod tests {
             ],
             Ok(()),
         );
-        assert_eq!(0, accounts[0].lamports());
-        assert_eq!(2, accounts[1].lamports());
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        assert_eq!(0, accounts.first().unwrap().lamports());
+        assert_eq!(2, accounts.get(1).unwrap().lamports());
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
 
         // Case: close with wrong authority
@@ -3718,9 +3819,9 @@ mod tests {
             ],
             Ok(()),
         );
-        assert_eq!(0, accounts[0].lamports());
-        assert_eq!(2, accounts[1].lamports());
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        assert_eq!(0, accounts.first().unwrap().lamports());
+        assert_eq!(2, accounts.get(1).unwrap().lamports());
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
 
         // Case: close a program account
@@ -3750,9 +3851,9 @@ mod tests {
             ],
             Ok(()),
         );
-        assert_eq!(0, accounts[0].lamports());
-        assert_eq!(2, accounts[1].lamports());
-        let state: UpgradeableLoaderState = accounts[0].state().unwrap();
+        assert_eq!(0, accounts.first().unwrap().lamports());
+        assert_eq!(2, accounts.get(1).unwrap().lamports());
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
 
         // Try to invoke closed account
@@ -3786,7 +3887,7 @@ mod tests {
             for _ in 0..inner_iters {
                 let offset = rng.gen_range(offset.start, offset.end);
                 let value = rng.gen_range(value.start, value.end);
-                mangled_bytes[offset] = value;
+                *mangled_bytes.get_mut(offset).unwrap() = value;
                 work(&mut mangled_bytes);
             }
         }
