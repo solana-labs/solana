@@ -131,7 +131,7 @@ impl<C: 'static + TpuConnection> ThinClient<C> {
     pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: UdpSocket) -> Self {
         let tpu_connection = C::new(transactions_socket, tpu_addr);
 
-        Self::new_from_clients(RpcClient::new_socket(rpc_addr), tpu_connection)
+        Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_connection)
     }
 
     pub fn new_socket_with_timeout(
@@ -142,10 +142,10 @@ impl<C: 'static + TpuConnection> ThinClient<C> {
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
         let tpu_connection = C::new(transactions_socket, tpu_addr);
-        Self::new_from_clients(rpc_client, tpu_connection)
+        Self::new_from_client(rpc_client, tpu_connection)
     }
 
-    fn new_from_clients(rpc_client: RpcClient, tpu_connection: C) -> Self {
+    fn new_from_client(rpc_client: RpcClient, tpu_connection: C) -> Self {
         Self {
             rpc_clients: vec![rpc_client],
             tpu_connections: vec![tpu_connection],
