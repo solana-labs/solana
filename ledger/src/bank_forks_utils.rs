@@ -108,28 +108,6 @@ pub fn load(
         panic!("filler accounts specified, but not loading from snapshot");
     }
 
-    load_from_genesis(
-        genesis_config,
-        blockstore,
-        account_paths,
-        process_options,
-        cache_block_meta_sender,
-        snapshot_config,
-        accounts_package_sender,
-        accounts_update_notifier,
-    )
-}
-
-fn load_from_genesis(
-    genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
-    account_paths: Vec<PathBuf>,
-    process_options: ProcessOptions,
-    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
-    accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> LoadResult {
     info!("Processing ledger from genesis");
     to_loadresult(
         blockstore_processor::process_blockstore(
@@ -165,7 +143,7 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, timings, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
@@ -221,7 +199,6 @@ fn load_from_snapshot(
             cache_block_meta_sender,
             Some(snapshot_config),
             accounts_package_sender,
-            timings,
             full_snapshot_archive_info.slot(),
         ),
         Some(starting_snapshot_hashes),

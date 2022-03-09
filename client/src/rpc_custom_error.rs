@@ -3,6 +3,7 @@ use {
     crate::rpc_response::RpcSimulateTransactionResult,
     jsonrpc_core::{Error, ErrorCode},
     solana_sdk::clock::Slot,
+    solana_transaction_status::EncodeError,
     thiserror::Error,
 };
 
@@ -59,13 +60,23 @@ pub enum RpcCustomError {
     #[error("BlockStatusNotAvailableYet")]
     BlockStatusNotAvailableYet { slot: Slot },
     #[error("UnsupportedTransactionVersion")]
-    UnsupportedTransactionVersion,
+    UnsupportedTransactionVersion(u8),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeUnhealthyErrorData {
     pub num_slots_behind: Option<Slot>,
+}
+
+impl From<EncodeError> for RpcCustomError {
+    fn from(err: EncodeError) -> Self {
+        match err {
+            EncodeError::UnsupportedTransactionVersion(version) => {
+                Self::UnsupportedTransactionVersion(version)
+            }
+        }
+    }
 }
 
 impl From<RpcCustomError> for Error {
@@ -172,9 +183,9 @@ impl From<RpcCustomError> for Error {
                 message: format!("Block status not yet available for slot {}", slot),
                 data: None,
             },
-            RpcCustomError::UnsupportedTransactionVersion => Self {
+            RpcCustomError::UnsupportedTransactionVersion(version) => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION),
-                message: "Versioned transactions are not supported".to_string(),
+                message: format!("Transaction version ({}) is not supported", version),
                 data: None,
             },
         }

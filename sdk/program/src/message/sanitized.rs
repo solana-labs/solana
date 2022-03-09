@@ -24,7 +24,7 @@ pub enum SanitizedMessage {
     /// Sanitized legacy message
     Legacy(LegacyMessage),
     /// Sanitized version #0 message with dynamically loaded addresses
-    V0(v0::LoadedMessage),
+    V0(v0::LoadedMessage<'static>),
 }
 
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
@@ -69,7 +69,7 @@ impl SanitizedMessage {
     pub fn header(&self) -> &MessageHeader {
         match self {
             Self::Legacy(message) => &message.header,
-            Self::V0(message) => &message.header,
+            Self::V0(loaded_msg) => &loaded_msg.message.header,
         }
     }
 
@@ -93,7 +93,7 @@ impl SanitizedMessage {
     pub fn recent_blockhash(&self) -> &Hash {
         match self {
             Self::Legacy(message) => &message.recent_blockhash,
-            Self::V0(message) => &message.recent_blockhash,
+            Self::V0(loaded_msg) => &loaded_msg.message.recent_blockhash,
         }
     }
 
@@ -102,7 +102,7 @@ impl SanitizedMessage {
     pub fn instructions(&self) -> &[CompiledInstruction] {
         match self {
             Self::Legacy(message) => &message.instructions,
-            Self::V0(message) => &message.instructions,
+            Self::V0(loaded_msg) => &loaded_msg.message.instructions,
         }
     }
 
@@ -111,11 +111,7 @@ impl SanitizedMessage {
     pub fn program_instructions_iter(
         &self,
     ) -> impl Iterator<Item = (&Pubkey, &CompiledInstruction)> {
-        match self {
-            Self::Legacy(message) => message.instructions.iter(),
-            Self::V0(message) => message.instructions.iter(),
-        }
-        .map(move |ix| {
+        self.instructions().iter().map(move |ix| {
             (
                 self.account_keys()
                     .get(usize::from(ix.program_id_index))
@@ -347,8 +343,8 @@ mod tests {
 
         assert_eq!(legacy_message.num_readonly_accounts(), 2);
 
-        let v0_message = SanitizedMessage::V0(v0::LoadedMessage {
-            message: v0::Message {
+        let v0_message = SanitizedMessage::V0(v0::LoadedMessage::new(
+            v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 2,
                     num_readonly_signed_accounts: 1,
@@ -357,11 +353,11 @@ mod tests {
                 account_keys: vec![key0, key1, key2, key3],
                 ..v0::Message::default()
             },
-            loaded_addresses: LoadedAddresses {
+            LoadedAddresses {
                 writable: vec![key4],
                 readonly: vec![key5],
             },
-        });
+        ));
 
         assert_eq!(v0_message.num_readonly_accounts(), 3);
     }
@@ -414,8 +410,8 @@ mod tests {
         })
         .unwrap();
 
-        let v0_message = SanitizedMessage::V0(v0::LoadedMessage {
-            message: v0::Message {
+        let v0_message = SanitizedMessage::V0(v0::LoadedMessage::new(
+            v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
                     num_readonly_signed_accounts: 0,
@@ -424,11 +420,11 @@ mod tests {
                 account_keys: vec![key0, key1],
                 ..v0::Message::default()
             },
-            loaded_addresses: LoadedAddresses {
+            LoadedAddresses {
                 writable: vec![key2],
                 readonly: vec![program_id],
             },
-        });
+        ));
 
         for message in vec![legacy_message, v0_message] {
             assert_eq!(

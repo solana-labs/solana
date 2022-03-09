@@ -16,7 +16,10 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
-    solana_transaction_status::{Encodable, LegacyConfirmedBlock, UiTransactionEncoding},
+    solana_transaction_status::{
+        BlockEncodingOptions, Encodable, EncodeError, LegacyConfirmedBlock, TransactionDetails,
+        UiTransactionEncoding,
+    },
     std::{
         collections::HashSet,
         path::Path,
@@ -72,12 +75,26 @@ async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn st
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
     let confirmed_block = bigtable.get_confirmed_block(slot).await?;
-    let legacy_block = confirmed_block
-        .into_legacy_block()
-        .ok_or_else(|| "Failed to read versioned transaction in block".to_string())?;
+    let encoded_block = confirmed_block
+        .encode_with_options(
+            UiTransactionEncoding::Base64,
+            BlockEncodingOptions {
+                transaction_details: TransactionDetails::Full,
+                show_rewards: true,
+                max_supported_transaction_version: None,
+            },
+        )
+        .map_err(|err| match err {
+            EncodeError::UnsupportedTransactionVersion(version) => {
+                format!(
+                    "Failed to process unsupported transaction version ({}) in block",
+                    version
+                )
+            }
+        })?;
 
     let cli_block = CliBlock {
-        encoded_confirmed_block: legacy_block.encode(UiTransactionEncoding::Base64),
+        encoded_confirmed_block: encoded_block.into(),
         slot,
     };
     println!("{}", output_format.formatted_string(&cli_block));

@@ -735,11 +735,16 @@ impl ReplayStage {
                                         restored_tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
                                     }).
                                     unwrap_or_else(|err| {
-                                        // It's a fatal error if the tower is not present.  This is
-                                        // necessary to prevent the validator from violating
-                                        // lockouts for its new identity
-                                        error!("Failed to load tower for {}: {}", my_pubkey, err);
-                                        std::process::exit(1);
+                                        if err.is_file_missing() {
+                                            Tower::new_from_bankforks(
+                                                &bank_forks.read().unwrap(),
+                                                &my_pubkey,
+                                                &vote_account,
+                                            )
+                                        } else {
+                                            error!("Failed to load tower for {}: {}", my_pubkey, err);
+                                            std::process::exit(1);
+                                        }
                                     });
 
                                 // Ensure the validator can land votes with the new identity before
@@ -3129,7 +3134,7 @@ pub mod tests {
         },
         solana_rpc::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-            rpc::create_test_transactions_and_populate_blockstore,
+            rpc::{create_test_transaction_entries, populate_blockstore_for_tests},
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender,
@@ -3998,15 +4003,18 @@ pub mod tests {
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             let slot = bank1.slot();
 
-            let mut test_signatures_iter = create_test_transactions_and_populate_blockstore(
+            let (entries, test_signatures) = create_test_transaction_entries(
                 vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
-                bank0.slot(),
+                bank1.clone(),
+            );
+            populate_blockstore_for_tests(
+                entries,
                 bank1,
                 blockstore.clone(),
                 Arc::new(AtomicU64::default()),
-            )
-            .into_iter();
+            );
 
+            let mut test_signatures_iter = test_signatures.into_iter();
             let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
             let actual_tx_results: Vec<_> = confirmed_block
                 .transactions

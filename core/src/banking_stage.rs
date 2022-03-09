@@ -3130,10 +3130,6 @@ mod tests {
             ..
         } = create_slow_genesis_config(lamports);
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        // set cost tracker limits to MAX so it will not filter out TXs
-        bank.write_cost_tracker()
-            .unwrap()
-            .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
         // Transfer more than the balance of the mint keypair, should cause a
         // InstructionError::InsufficientFunds that is then committed. Needs to be
@@ -3190,10 +3186,6 @@ mod tests {
             ..
         } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        // set cost tracker limits to MAX so it will not filter out TXs
-        bank.write_cost_tracker()
-            .unwrap()
-            .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
         // Make all repetitive transactions that conflict on the `mint_keypair`, so only 1 should be executed
         let mut transactions = vec![
@@ -3384,9 +3376,7 @@ mod tests {
         account_address: Pubkey,
         address_lookup_table: AddressLookupTable<'static>,
     ) -> AccountSharedData {
-        let mut data = Vec::new();
-        address_lookup_table.serialize_for_tests(&mut data).unwrap();
-
+        let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
             AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
         account.set_data(data);

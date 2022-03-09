@@ -432,8 +432,8 @@ pub enum RpcBlockUpdateError {
     #[error("block store error")]
     BlockStoreError,
 
-    #[error("unsupported transaction version")]
-    UnsupportedTransactionVersion,
+    #[error("unsupported transaction version ({0})")]
+    UnsupportedTransactionVersion(u8),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

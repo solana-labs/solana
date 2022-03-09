@@ -2057,14 +2057,9 @@ mod tests {
                 meta: LookupTableMeta::default(),
                 addresses: Cow::Owned(table_addresses.clone()),
             };
-            let table_data = {
-                let mut data = vec![];
-                table_state.serialize_for_tests(&mut data).unwrap();
-                data
-            };
             AccountSharedData::create(
                 1,
-                table_data,
+                table_state.serialize_for_tests().unwrap(),
                 solana_address_lookup_table_program::id(),
                 false,
                 0,

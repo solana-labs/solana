@@ -847,7 +847,6 @@ pub fn bank_from_latest_snapshot_archives(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(
     Bank,
-    BankFromArchiveTimings,
     FullSnapshotArchiveInfo,
     Option<IncrementalSnapshotArchiveInfo>,
 )> {
@@ -890,6 +889,30 @@ pub fn bank_from_latest_snapshot_archives(
         accounts_update_notifier,
     )?;
 
+    datapoint_info!(
+        "bank_from_snapshot_archives",
+        (
+            "full_snapshot_untar_us",
+            timings.full_snapshot_untar_us,
+            i64
+        ),
+        (
+            "incremental_snapshot_untar_us",
+            timings.incremental_snapshot_untar_us,
+            i64
+        ),
+        (
+            "rebuild_bank_from_snapshots_us",
+            timings.rebuild_bank_from_snapshots_us,
+            i64
+        ),
+        (
+            "verify_snapshot_bank_us",
+            timings.verify_snapshot_bank_us,
+            i64
+        ),
+    );
+
     verify_bank_against_expected_slot_hash(
         &bank,
         incremental_snapshot_archive_info.as_ref().map_or(
@@ -904,7 +927,6 @@ pub fn bank_from_latest_snapshot_archives(
 
     Ok((
         bank,
-        timings,
         full_snapshot_archive_info,
         incremental_snapshot_archive_info,
     ))

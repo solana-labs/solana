@@ -257,38 +257,12 @@ impl AdminRpc for AdminRpcImpl {
         })?;
 
         meta.with_post_init(|post_init| {
-            // Ensure a Tower exists for the new identity and exit gracefully.
-            // ReplayStage will be less forgiving if it fails to load the new tower.
-            if let Err(err) =
-                Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey()).map_err(
-                    |err| {
+            if require_tower {
+                let _ = Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey())
+                    .map_err(|err| {
                         jsonrpc_core::error::Error::invalid_params(format!(
                             "Unable to load tower file for identity {}: {}",
                             identity_keypair.pubkey(),
-                            err
-                        ))
-                    },
-                )
-            {
-                if require_tower {
-                    return Err(err);
-                }
-
-                let root_bank = post_init.bank_forks.read().unwrap().root_bank();
-                let mut tower = Tower::new(
-                    &identity_keypair.pubkey(),
-                    &post_init.vote_account,
-                    root_bank.slot(),
-                    &root_bank,
-                );
-                // Forge a single vote to pacify `Tower::adjust_lockouts_after_replay` when its called
-                // by replay_stage
-                tower.record_bank_vote(&root_bank, &post_init.vote_account);
-                tower
-                    .save(meta.tower_storage.as_ref(), &identity_keypair)
-                    .map_err(|err| {
-                        jsonrpc_core::error::Error::invalid_params(format!(
-                            "Unable to create default tower file for ephemeral identity: {}",
                             err
                         ))
                     })?;

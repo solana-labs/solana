@@ -26,7 +26,7 @@ use {
             disable_fees_sysvar, do_support_realloc, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
             return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            sol_log_data_syscall_enabled, update_syscall_base_costs,
+            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1544,10 +1544,20 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
             let a = s1[i];
             let b = s2[i];
             if a != b {
-                *cmp_result = (a as i32).saturating_sub(b as i32);
+                *cmp_result = if invoke_context
+                    .feature_set
+                    .is_active(&syscall_saturated_math::id())
+                {
+                    (a as i32).saturating_sub(b as i32)
+                } else {
+                    #[allow(clippy::integer_arithmetic)]
+                    {
+                        a as i32 - b as i32
+                    }
+                };
                 *result = Ok(0);
                 return;
-            }
+            };
             i = i.saturating_add(1);
         }
         *cmp_result = 0;
@@ -1933,10 +1943,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                             .sha256_byte_cost
                             .saturating_mul((val.len() as u64).saturating_div(2)),
                     )
-                } else {
+                } else if invoke_context
+                    .feature_set
+                    .is_active(&syscall_saturated_math::id())
+                {
                     compute_budget
                         .sha256_byte_cost
                         .saturating_mul((val.len() as u64).saturating_div(2))
+                } else {
+                    #[allow(clippy::integer_arithmetic)]
+                    {
+                        compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
+                    }
                 };
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
@@ -2376,7 +2394,17 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
 
             let first_info_addr = &account_infos[0] as *const _ as u64;
             let addr = &account_info.data_len as *const u64 as u64;
-            let vm_addr = account_infos_addr.saturating_add(addr.saturating_sub(first_info_addr));
+            let vm_addr = if invoke_context
+                .feature_set
+                .is_active(&syscall_saturated_math::id())
+            {
+                account_infos_addr.saturating_add(addr.saturating_sub(first_info_addr))
+            } else {
+                #[allow(clippy::integer_arithmetic)]
+                {
+                    account_infos_addr + (addr - first_info_addr)
+                }
+            };
             let _ = translate(
                 memory_mapping,
                 AccessType::Store,
@@ -2592,9 +2620,18 @@ fn check_account_infos(
     len: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    if len.saturating_mul(size_of::<Pubkey>())
-        > invoke_context.get_compute_budget().max_cpi_instruction_size
+    let adjusted_len = if invoke_context
+        .feature_set
+        .is_active(&syscall_saturated_math::id())
     {
+        len.saturating_mul(size_of::<Pubkey>())
+    } else {
+        #[allow(clippy::integer_arithmetic)]
+        {
+            len * size_of::<Pubkey>()
+        }
+    };
+    if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
         // Cap the number of account_infos a caller can pass to approximate
         // maximum that accounts that could be passed in an instruction
         return Err(SyscallError::TooManyAccounts.into());
@@ -2724,16 +2761,34 @@ fn call<'a, 'b: 'a>(
                     );
                 }
                 let data_overflow = if do_support_realloc {
-                    new_len
-                        > caller_account
-                            .original_data_len
-                            .saturating_add(MAX_PERMITTED_DATA_INCREASE)
-                } else {
+                    if invoke_context
+                        .feature_set
+                        .is_active(&syscall_saturated_math::id())
+                    {
+                        new_len
+                            > caller_account
+                                .original_data_len
+                                .saturating_add(MAX_PERMITTED_DATA_INCREASE)
+                    } else {
+                        #[allow(clippy::integer_arithmetic)]
+                        {
+                            new_len > caller_account.original_data_len + MAX_PERMITTED_DATA_INCREASE
+                        }
+                    }
+                } else if invoke_context
+                    .feature_set
+                    .is_active(&syscall_saturated_math::id())
+                {
                     new_len
                         > caller_account
                             .data
                             .len()
                             .saturating_add(MAX_PERMITTED_DATA_INCREASE)
+                } else {
+                    #[allow(clippy::integer_arithmetic)]
+                    {
+                        new_len > caller_account.data.len() + MAX_PERMITTED_DATA_INCREASE
+                    }
                 };
                 if data_overflow {
                     ic_msg!(
@@ -2790,13 +2845,19 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
         let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let budget = invoke_context.get_compute_budget();
 
-        question_mark!(
-            invoke_context.get_compute_meter().consume(
-                len.saturating_div(budget.cpi_bytes_per_unit)
-                    .saturating_add(budget.syscall_base_cost)
-            ),
-            result
-        );
+        let cost = if invoke_context
+            .feature_set
+            .is_active(&syscall_saturated_math::id())
+        {
+            len.saturating_div(budget.cpi_bytes_per_unit)
+                .saturating_add(budget.syscall_base_cost)
+        } else {
+            #[allow(clippy::integer_arithmetic)]
+            {
+                len / budget.cpi_bytes_per_unit + budget.syscall_base_cost
+            }
+        };
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         if len > MAX_RETURN_DATA as u64 {
             *result = Err(SyscallError::ReturnDataTooLarge(len, MAX_RETURN_DATA as u64).into());
@@ -2866,13 +2927,20 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
         let (program_id, return_data) = invoke_context.transaction_context.get_return_data();
         length = length.min(return_data.len() as u64);
         if length != 0 {
-            question_mark!(
-                invoke_context.get_compute_meter().consume(
-                    (length.saturating_add(size_of::<Pubkey>() as u64))
-                        .saturating_div(budget.cpi_bytes_per_unit)
-                ),
-                result
-            );
+            let cost = if invoke_context
+                .feature_set
+                .is_active(&syscall_saturated_math::id())
+            {
+                length
+                    .saturating_add(size_of::<Pubkey>() as u64)
+                    .saturating_div(budget.cpi_bytes_per_unit)
+            } else {
+                #[allow(clippy::integer_arithmetic)]
+                {
+                    (length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit
+                }
+            };
+            question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
             let return_data_result = question_mark!(
                 translate_slice_mut::<u8>(memory_mapping, return_data_addr, length, loader_id),
