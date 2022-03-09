@@ -25,19 +25,12 @@ pub struct CostUpdateServiceTiming {
     last_print: u64,
     update_cost_model_count: u64,
     update_cost_model_elapsed: u64,
-    persist_cost_table_elapsed: u64,
 }
 
 impl CostUpdateServiceTiming {
-    fn update(
-        &mut self,
-        update_cost_model_count: u64,
-        update_cost_model_elapsed: u64,
-        persist_cost_table_elapsed: u64,
-    ) {
+    fn update(&mut self, update_cost_model_count: u64, update_cost_model_elapsed: u64) {
         self.update_cost_model_count += update_cost_model_count;
         self.update_cost_model_elapsed += update_cost_model_elapsed;
-        self.persist_cost_table_elapsed += persist_cost_table_elapsed;
 
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
@@ -53,11 +46,6 @@ impl CostUpdateServiceTiming {
                 (
                     "update_cost_model_elapsed",
                     self.update_cost_model_elapsed as i64,
-                    i64
-                ),
-                (
-                    "persist_cost_table_elapsed",
-                    self.persist_cost_table_elapsed as i64,
                     i64
                 ),
             );
@@ -137,7 +125,7 @@ impl CostUpdateService {
             }
             update_cost_model_time.stop();
 
-            cost_update_service_timing.update(update_count, update_cost_model_time.as_us(), 0);
+            cost_update_service_timing.update(update_count, update_cost_model_time.as_us());
 
             thread::sleep(wait_timer);
         }
@@ -185,28 +173,6 @@ impl CostUpdateService {
            cost_model.read().unwrap().get_instruction_cost_table()
         );
         dirty
-    }
-
-    #[allow(dead_code)]
-    fn persist_cost_table(blockstore: &Blockstore, cost_model: &RwLock<CostModel>) {
-        let cost_model_read = cost_model.read().unwrap();
-        let cost_table = cost_model_read.get_instruction_cost_table();
-        let db_records = blockstore.read_program_costs().expect("read programs");
-
-        // delete records from blockstore if they are no longer in cost_table
-        db_records.iter().for_each(|(pubkey, _)| {
-            if cost_table.get(pubkey).is_none() {
-                blockstore
-                    .delete_program_cost(pubkey)
-                    .expect("delete old program");
-            }
-        });
-
-        for (key, cost) in cost_table.iter() {
-            blockstore
-                .write_program_cost(key, cost)
-                .expect("persist program costs to blockstore");
-        }
     }
 }
 
