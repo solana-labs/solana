@@ -184,6 +184,10 @@ impl QuicClient {
         }
         let connection = self._send_buffer(&buffers[0][..]).await?;
 
+        // Used to avoid dereferencing the Arc multiple times below
+        // by just getting a reference to the NewConnection once
+        let connection_ref: &NewConnection = &connection;
+
         let chunks = buffers[1..buffers.len()]
             .iter()
             .chunks(QUIC_MAX_CONCURRENT_STREAMS);
@@ -192,7 +196,7 @@ impl QuicClient {
             join_all(
                 buffs
                     .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(&buf[..], &connection)),
+                    .map(|buf| Self::_send_buffer_using_conn(&buf[..], connection_ref)),
             )
         });
 
