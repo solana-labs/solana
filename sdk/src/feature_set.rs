@@ -319,6 +319,10 @@ pub mod syscall_saturated_math {
     solana_sdk::declare_id!("HyrbKftCdJ5CrUfEti6x26Cj7rZLNe32weugk7tLcWb8");
 }
 
+pub mod check_physical_overlapping {
+    solana_sdk::declare_id!("nWBqjr3gpETbiaVj3CBJ3HFC5TMdnJDGt21hnvSTvVZ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -383,7 +387,7 @@ lazy_static! {
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
-        (update_syscall_base_costs::id(), "Update syscall base costs"),
+        (update_syscall_base_costs::id(), "update syscall base costs"),
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
         (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
@@ -392,7 +396,8 @@ lazy_static! {
         (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved BPF symbols at runtime"),
         (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
-        (syscall_saturated_math::id(), "Syscalls use saturated math"),
+        (syscall_saturated_math::id(), "syscalls use saturated math"),
+        (check_physical_overlapping::id(), "check physical overlapping regions"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
