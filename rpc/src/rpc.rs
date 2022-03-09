@@ -70,7 +70,8 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{
-            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
+            self, AddressLoader, MessageHash, SanitizedTransaction, TransactionError,
+            VersionedTransaction,
         },
     },
     solana_send_transaction_service::{
@@ -4279,8 +4280,7 @@ fn sanitize_transaction(
     transaction: VersionedTransaction,
     address_loader: &impl AddressLoader,
 ) -> Result<SanitizedTransaction> {
-    let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, address_loader)
+    SanitizedTransaction::try_create(transaction, MessageHash::Compute, None, address_loader)
         .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 

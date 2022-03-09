@@ -50,17 +50,35 @@ impl AddressLoader for DisabledAddressLoader {
     }
 }
 
+/// Type that represents whether the transaction message has been precomputed or
+/// not.
+pub enum MessageHash {
+    Precomputed(Hash),
+    Compute,
+}
+
+impl From<Hash> for MessageHash {
+    fn from(hash: Hash) -> Self {
+        Self::Precomputed(hash)
+    }
+}
+
 impl SanitizedTransaction {
     /// Create a sanitized transaction from an unsanitized transaction.
     /// If the input transaction uses address tables, attempt to lookup
     /// the address for each table index.
     pub fn try_create(
         tx: VersionedTransaction,
-        message_hash: Hash,
+        message_hash: impl Into<MessageHash>,
         is_simple_vote_tx: Option<bool>,
         address_loader: &impl AddressLoader,
     ) -> Result<Self> {
         tx.sanitize()?;
+
+        let message_hash = match message_hash.into() {
+            MessageHash::Compute => tx.message.hash(),
+            MessageHash::Precomputed(hash) => hash,
+        };
 
         let signatures = tx.signatures;
         let message = match tx.message {

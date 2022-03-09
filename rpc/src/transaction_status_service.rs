@@ -225,7 +225,8 @@ pub(crate) mod tests {
             signature::{Keypair, Signature, Signer},
             system_transaction,
             transaction::{
-                DisabledAddressLoader, SanitizedTransaction, Transaction, VersionedTransaction,
+                DisabledAddressLoader, MessageHash, SanitizedTransaction, Transaction,
+                VersionedTransaction,
             },
         },
         solana_transaction_status::{
@@ -304,13 +305,12 @@ pub(crate) mod tests {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
         let blockstore = Arc::new(blockstore);
 
-        let message_hash = Hash::new_unique();
         let transaction = build_test_transaction_legacy();
         let transaction = VersionedTransaction::from(transaction);
         let transaction = SanitizedTransaction::try_create(
             transaction,
-            message_hash,
-            Some(true),
+            MessageHash::Compute,
+            None,
             &DisabledAddressLoader,
         )
         .unwrap();

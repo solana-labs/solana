@@ -3401,10 +3401,13 @@ mod tests {
         });
 
         let tx = VersionedTransaction::try_new(message, &[&keypair]).unwrap();
-        let message_hash = tx.message.hash();
-        let sanitized_tx =
-            SanitizedTransaction::try_create(tx.clone(), message_hash, Some(false), bank.as_ref())
-                .unwrap();
+        let sanitized_tx = SanitizedTransaction::try_create(
+            tx.clone(),
+            MessageHash::Compute,
+            Some(false),
+            bank.as_ref(),
+        )
+        .unwrap();
 
         let entry = next_versioned_entry(&genesis_config.hash(), 1, vec![tx]);
         let entries = vec![entry];

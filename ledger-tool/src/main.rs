@@ -58,7 +58,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeState},
         system_program,
-        transaction::{DisabledAddressLoader, SanitizedTransaction},
+        transaction::{DisabledAddressLoader, MessageHash, SanitizedTransaction},
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -240,7 +240,7 @@ fn output_slot(
                 let tx_signature = transaction.signatures[0];
                 let sanitize_result = SanitizedTransaction::try_create(
                     transaction,
-                    Hash::default(),
+                    MessageHash::Compute,
                     None,
                     &DisabledAddressLoader,
                 );
@@ -791,7 +791,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .filter_map(|transaction| {
                 SanitizedTransaction::try_create(
                     transaction,
-                    Hash::default(),
+                    MessageHash::Compute,
                     None,
                     &DisabledAddressLoader,
                 )
