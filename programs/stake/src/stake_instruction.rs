@@ -492,8 +492,8 @@ mod tests {
     use {
         super::*,
         crate::stake_state::{
-            create_stake_history_from_delegations, from, stake_from, Delegation, Meta, Stake,
-            StakeState,
+            authorized_from, create_stake_history_from_delegations, from, stake_from, Delegation,
+            Meta, Stake, StakeState,
         },
         bincode::serialize,
         solana_program_runtime::invoke_context::mock_process_instruction,
@@ -1854,6 +1854,184 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Err(InstructionError::MissingRequiredSignature),
+        );
+    }
+
+    #[test]
+    fn test_authorize_delegated_stake() {
+        let authority_address = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta::auto(&stake_address)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let vote_address = solana_sdk::pubkey::new_rand();
+        let vote_account =
+            vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        let vote_address_2 = solana_sdk::pubkey::new_rand();
+        let mut vote_account_2 =
+            vote_state::create_account(&vote_address_2, &solana_sdk::pubkey::new_rand(), 0, 100);
+        vote_account_2.set_state(&VoteState::default()).unwrap();
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (vote_address, vote_account),
+            (vote_address_2, vote_account_2),
+            (
+                authority_address,
+                AccountSharedData::new(42, 0, &system_program::id()),
+            ),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                stake_config::id(),
+                config::create_account(0, &stake_config::Config::default()),
+            ),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: vote_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_config::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // delegate stake
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // deactivate, so we can re-delegate
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Deactivate).unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+
+        // authorize
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Authorize(
+                authority_address,
+                StakeAuthorize::Staker,
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        assert_eq!(
+            authorized_from(&accounts[0]).unwrap().staker,
+            authority_address
+        );
+
+        // Random other account should fail
+        instruction_accounts[0].is_signer = false;
+        instruction_accounts[1].pubkey = vote_address_2;
+        process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Authorized staker should succeed
+        instruction_accounts.push(AccountMeta {
+            pubkey: authority_address,
+            is_signer: true,
+            is_writable: false,
+        });
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::DelegateStake).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts,
+            Ok(()),
+        );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
+        assert_eq!(
+            stake_from(&accounts[0]).unwrap().delegation.voter_pubkey,
+            vote_address_2,
+        );
+
+        // Test another staking action
+        process_instruction(
+            &serialize(&StakeInstruction::Deactivate).unwrap(),
+            transaction_accounts,
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: authority_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
         );
     }
 
