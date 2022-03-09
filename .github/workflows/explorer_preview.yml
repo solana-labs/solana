@@ -35,17 +35,24 @@ jobs:
               #filtered_url=$(cat vercelfile2.txt )
               #echo "$filtered_url" >> .env.preview1 
 
-
-      - name: Run tests
+      - name: Fetching Vercel Preview Deployment Link
         uses: mathiasvr/command-output@v1
-        id: tests2
+        id: test1
         with:
           run: |
                echo "$(cat .env.preview1)"
+      - name: Fetching PR commit URL
+        uses: mathiasvr/command-output@v1
+        id: test2
+        with:
+          run: |
+               HEAD_SHA=$(curl -H "Accept: application/vnd.github.v3+json"  https://api.github.com/repos/solana-labs/solana/pulls | jq .[0] | jq -r .head.sha)
+               USER_NAME=$(curl -H "Accept: application/vnd.github.v3+json"  https://api.github.com/repos/solana-labs/solana/pulls | jq .[0] | jq -r .head.user.login)
+               echo "github.com/$USER_NAME/solana/commit/$HEAD_SHA"
       
-      - name: Slack Notification1
+      - name: Slack Notification4
         uses: rtCamp/action-slack-notify@master
         env:
-         SLACK_MESSAGE: ${{ steps.tests2.outputs.stdout }}
-         SLACK_TITLE: Vercel "Explorer" Preview Deployment Link
+         SLACK_MESSAGE: ' Vercel Link: ${{ steps.test1.outputs.stdout }} PR Commit: ${{steps.test2.outputs.stdout}}'
+         SLACK_TITLE: Vercel "Explorer" Preview Deployment Link , PR Commit
          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
