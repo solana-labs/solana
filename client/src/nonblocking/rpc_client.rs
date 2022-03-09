@@ -142,7 +142,7 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    /// Create an `RpcClient` from an `RpcSender` and an [`RpcClientConfig`].
+    /// Create an `RpcClient` from an [`RpcSender`] and an [`RpcClientConfig`].
     ///
     /// This is the basic constructor, allowing construction with any type of
     /// `RpcSender`. Most applications should use one of the other constructors,

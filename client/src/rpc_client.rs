@@ -161,16 +161,12 @@ impl Drop for RpcClient {
 }
 
 impl RpcClient {
-    /// Create an `RpcClient` from an `RpcSender` and an [`RpcClientConfig`].
+    /// Create an `RpcClient` from an [`RpcSender`] and an [`RpcClientConfig`].
     ///
     /// This is the basic constructor, allowing construction with any type of
     /// `RpcSender`. Most applications should use one of the other constructors,
     /// such as [`RpcClient::new`], [`RpcClient::new_with_commitment`] or
     /// [`RpcClient::new_with_timeout`].
-    ///
-    /// Note that `RpcSender` is not a public trait and has no public
-    /// implementations, making it effectively impossible to call this public
-    /// function.
     pub fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
         config: RpcClientConfig,
