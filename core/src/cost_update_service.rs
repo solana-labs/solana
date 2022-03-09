@@ -10,18 +10,8 @@ use {
     solana_runtime::{bank::Bank, cost_model::CostModel},
     solana_sdk::timing::timestamp,
     std::{
-<<<<<<< HEAD
-<<<<<<< HEAD
+        sync::atomic::{AtomicBool, Ordering},
         sync::{mpsc::Receiver, Arc, RwLock},
-=======
-        collections::HashMap,
-=======
->>>>>>> 5a0cd0586 (Revert "- estimate a program cost as 2 standard deviation above mean")
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
->>>>>>> c878c9e2c (Revert "1. Persist to blockstore less frequently;")
         thread::{self, Builder, JoinHandle},
         time::Duration,
     },

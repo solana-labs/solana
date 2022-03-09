@@ -97,6 +97,10 @@ impl ExecuteCostTable {
         Some(*program_cost)
     }
 
+    pub fn get_program_keys(&self) -> Vec<&Pubkey> {
+        self.table.keys().collect()
+    }
+
     // prune the old programs so the table contains `new_size` of records,
     // where `old` is defined as weighted age, which is negatively correlated
     // with program's age and

@@ -7,15 +7,8 @@
 use {
     crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
     log::*,
-<<<<<<< HEAD
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
-=======
-    solana_sdk::{
-        instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
-        system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
-    },
     std::collections::HashMap,
->>>>>>> 5a0cd0586 (Revert "- estimate a program cost as 2 standard deviation above mean")
 };
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
@@ -148,6 +141,10 @@ impl CostModel {
         }
     }
 
+    pub fn get_program_keys(&self) -> Vec<&Pubkey> {
+        self.instruction_execution_cost_table.get_program_keys()
+    }
+
     fn get_signature_cost(&self, transaction: &SanitizedTransaction) -> u64 {
         transaction.signatures().len() as u64 * SIGNATURE_COST
     }
@@ -256,7 +253,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_iterating_instruction_cost_by_program_keys() {
         solana_logger::setup();
         let mut testee = CostModel::default();
@@ -267,7 +263,7 @@ mod tests {
         });
 
         test_key_and_cost.iter().for_each(|(key, cost)| {
-            testee.upsert_instruction_cost(key, *cost);
+            let _ = testee.upsert_instruction_cost(key, *cost).unwrap();
             info!("key {:?} cost {}", key, cost);
         });
 
@@ -283,52 +279,6 @@ mod tests {
             );
             assert_eq!(*expected_cost, testee.find_instruction_cost(key));
         });
-=======
-    fn test_cost_model_data_len_cost() {
-        let lamports = 0;
-        let owner = Pubkey::default();
-        let seed = String::default();
-        let space = 100;
-        let base = Pubkey::default();
-        for instruction in [
-            SystemInstruction::CreateAccount {
-                lamports,
-                space,
-                owner,
-            },
-            SystemInstruction::CreateAccountWithSeed {
-                base,
-                seed: seed.clone(),
-                lamports,
-                space,
-                owner,
-            },
-            SystemInstruction::Allocate { space },
-            SystemInstruction::AllocateWithSeed {
-                base,
-                seed,
-                space,
-                owner,
-            },
-        ] {
-            assert_eq!(
-                space,
-                CostModel::calculate_account_data_size_on_deserialized_system_instruction(
-                    instruction
-                )
-            );
-        }
-        assert_eq!(
-            0,
-            CostModel::calculate_account_data_size_on_deserialized_system_instruction(
-                SystemInstruction::TransferWithSeed {
-                    lamports,
-                    from_seed: String::default(),
-                    from_owner: Pubkey::default(),
-                }
-            )
-        );
->>>>>>> c878c9e2c (Revert "1. Persist to blockstore less frequently;")
     }
 
     #[test]
