@@ -8,7 +8,7 @@ use {
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches, Command},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_clap_utils::{
         fee_payer::*,
@@ -50,84 +50,84 @@ pub trait WalletSubCommands {
     fn wallet_subcommands(self) -> Self;
 }
 
-impl WalletSubCommands for App<'_, '_> {
+impl WalletSubCommands for Command<'_> {
     fn wallet_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("account")
+            Command::new("account")
                 .about("Show the contents of an account")
                 .alias("account")
                 .arg(
-                    pubkey!(Arg::with_name("account_pubkey")
+                    pubkey!(Arg::new("account_pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS")
                         .required(true),
                         "Account key URI. ")
                 )
                 .arg(
-                    Arg::with_name("output_file")
+                    Arg::new("output_file")
                         .long("output-file")
-                        .short("o")
+                        .short('o')
                         .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Write the account data to this file"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("address")
+            Command::new("address")
                 .about("Get your public key")
                 .arg(
-                    Arg::with_name("confirm_key")
+                    Arg::new("confirm_key")
                         .long("confirm-key")
                         .takes_value(false)
                         .help("Confirm key on device; only relevant if using remote wallet"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("airdrop")
+            Command::new("airdrop")
                 .about("Request SOL from a faucet")
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(1)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount)
+                        .validator(|s| is_amount(s))
                         .required(true)
                         .help("The airdrop amount to request, in SOL"),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("to")
+                    pubkey!(Arg::new("to")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS"),
                         "The account address of airdrop recipient. "),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("balance")
+            Command::new("balance")
                 .about("Get your balance")
                 .arg(
-                    pubkey!(Arg::with_name("pubkey")
+                    pubkey!(Arg::new("pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS"),
                         "The account address of the balance to check. ")
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("confirm")
+            Command::new("confirm")
                 .about("Confirm transaction by signature")
                 .arg(
-                    Arg::with_name("signature")
+                    Arg::new("signature")
                         .index(1)
                         .value_name("TRANSACTION_SIGNATURE")
                         .takes_value(true)
@@ -147,19 +147,19 @@ impl WalletSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("create-address-with-seed")
+            Command::new("create-address-with-seed")
                 .about("Generate a derived account address with a seed")
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .index(1)
                         .value_name("SEED_STRING")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_derived_address_seed)
+                        .validator(|s| is_derived_address_seed(s))
                         .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
                 )
                 .arg(
-                    Arg::with_name("program_id")
+                    Arg::new("program_id")
                         .index(2)
                         .value_name("PROGRAM_ID")
                         .takes_value(true)
@@ -170,7 +170,7 @@ impl WalletSubCommands for App<'_, '_> {
                         ),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("from")
+                    pubkey!(Arg::new("from")
                         .long("from")
                         .value_name("FROM_PUBKEY")
                         .required(false),
@@ -178,10 +178,10 @@ impl WalletSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("decode-transaction")
+            Command::new("decode-transaction")
                 .about("Decode a serialized transaction")
                 .arg(
-                    Arg::with_name("transaction")
+                    Arg::new("transaction")
                         .index(1)
                         .value_name("TRANSACTION")
                         .takes_value(true)
@@ -189,7 +189,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .help("transaction to decode"),
                 )
                 .arg(
-                    Arg::with_name("encoding")
+                    Arg::new("encoding")
                         .index(2)
                         .value_name("ENCODING")
                         .possible_values(&["base58", "base64"]) // Variants of `TransactionBinaryEncoding` enum
@@ -200,69 +200,69 @@ impl WalletSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("resolve-signer")
+            Command::new("resolve-signer")
                 .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
                 .arg(
-                    Arg::with_name("signer")
+                    Arg::new("signer")
                         .index(1)
                         .value_name("SIGNER_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("The signer path to resolve")
                 )
         )
         .subcommand(
-            SubCommand::with_name("transfer")
+            Command::new("transfer")
                 .about("Transfer funds between system accounts")
                 .alias("pay")
                 .arg(
-                    pubkey!(Arg::with_name("to")
+                    pubkey!(Arg::new("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
                         "The account address of recipient. "),
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount_or_all)
+                        .validator(|s| is_amount_or_all(s))
                         .required(true)
                         .help("The amount to send, in SOL; accepts keyword ALL"),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("from")
+                    pubkey!(Arg::new("from")
                         .long("from")
                         .value_name("FROM_ADDRESS"),
                         "Source account of funds (if different from client local account). "),
                 )
                 .arg(
-                    Arg::with_name("no_wait")
+                    Arg::new("no_wait")
                         .long("no-wait")
                         .takes_value(false)
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
                 .arg(
-                    Arg::with_name("derived_address_seed")
+                    Arg::new("derived_address_seed")
                         .long("derived-address-seed")
                         .takes_value(true)
                         .value_name("SEED_STRING")
                         .requires("derived_address_program_id")
-                        .validator(is_derived_address_seed)
-                        .hidden(true)
+                        .validator(|s| is_derived_address_seed(s))
+                        .hide(true)
                 )
                 .arg(
-                    Arg::with_name("derived_address_program_id")
+                    Arg::new("derived_address_program_id")
                         .long("derived-address-program-id")
                         .takes_value(true)
                         .value_name("PROGRAM_ID")
                         .requires("derived_address_seed")
-                        .hidden(true)
+                        .hide(true)
                 )
                 .arg(
-                    Arg::with_name("allow_unfunded_recipient")
+                    Arg::new("allow_unfunded_recipient")
                         .long("allow-unfunded-recipient")
                         .takes_value(false)
                         .help("Complete the transfer even if the recipient address is not funded")
@@ -275,7 +275,7 @@ impl WalletSubCommands for App<'_, '_> {
     }
 }
 
-fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) -> Option<Pubkey> {
+fn resolve_derived_address_program_id(matches: &ArgMatches, arg_name: &str) -> Option<Pubkey> {
     matches.value_of(arg_name).and_then(|v| {
         let upper = v.to_ascii_uppercase();
         match upper.as_str() {
@@ -288,7 +288,7 @@ fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) 
 }
 
 pub fn parse_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_pubkey = pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
@@ -305,7 +305,7 @@ pub fn parse_account(
 }
 
 pub fn parse_airdrop(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -323,7 +323,7 @@ pub fn parse_airdrop(
 }
 
 pub fn parse_balance(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -342,8 +342,8 @@ pub fn parse_balance(
     })
 }
 
-pub fn parse_decode_transaction(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let blob = value_t_or_exit!(matches, "transaction", String);
+pub fn parse_decode_transaction(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
+    let blob: String = matches.value_of_t_or_exit("transaction");
     let binary_encoding = match matches.value_of("encoding").unwrap() {
         "base58" => TransactionBinaryEncoding::Base58,
         "base64" => TransactionBinaryEncoding::Base64,
@@ -364,7 +364,7 @@ pub fn parse_decode_transaction(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 }
 
 pub fn parse_create_address_with_seed(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -390,7 +390,7 @@ pub fn parse_create_address_with_seed(
 }
 
 pub fn parse_transfer(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

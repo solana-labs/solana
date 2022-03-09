@@ -3,7 +3,7 @@ use {
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
-    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches, Command},
     console::style,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*},
@@ -348,40 +348,43 @@ pub trait FeatureSubCommands {
     fn feature_subcommands(self) -> Self;
 }
 
-impl FeatureSubCommands for App<'_, '_> {
+impl FeatureSubCommands for Command<'_> {
     fn feature_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("feature")
+            Command::new("feature")
                 .about("Runtime feature management")
-                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .subcommand_required(true)
+                .arg_required_else_help(true)
                 .subcommand(
-                    SubCommand::with_name("status")
+                    Command::new("status")
                         .about("Query runtime feature status")
                         .arg(
-                            Arg::with_name("features")
+                            Arg::new("features")
                                 .value_name("ADDRESS")
-                                .validator(is_valid_pubkey)
+                                .validator(|s| is_valid_pubkey(s))
                                 .index(1)
-                                .multiple(true)
+                                .multiple_occurrences(true)
+                                .multiple_values(true)
                                 .help("Feature status to query [default: all known features]"),
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("activate")
+                    Command::new("activate")
                         .about("Activate a runtime feature")
                         .arg(
-                            Arg::with_name("feature")
+                            Arg::new("feature")
                                 .value_name("FEATURE_KEYPAIR")
-                                .validator(is_valid_signer)
+                                .validator(|s| is_valid_signer(s))
                                 .index(1)
                                 .required(true)
                                 .help("The signer for the feature to activate"),
                         )
                         .arg(
-                            Arg::with_name("force")
+                            Arg::new("force")
                                 .long("yolo")
-                                .hidden(true)
-                                .multiple(true)
+                                .hide(true)
+                                .multiple_occurrences(true)
+                                .multiple_values(true)
                                 .help("Override activation sanity checks. Don't use this flag"),
                         ),
                 ),
@@ -401,12 +404,12 @@ fn known_feature(feature: &Pubkey) -> Result<(), CliError> {
 }
 
 pub fn parse_feature_subcommand(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let response = match matches.subcommand() {
-        ("activate", Some(matches)) => {
+        Some(("activate", matches)) => {
             let (feature_signer, feature) = signer_of(matches, "feature", wallet_manager)?;
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
 
@@ -426,7 +429,7 @@ pub fn parse_feature_subcommand(
                 signers,
             }
         }
-        ("status", Some(matches)) => {
+        Some(("status", matches)) => {
             let mut features = if let Some(features) = pubkeys_of(matches, "features") {
                 for feature in &features {
                     known_feature(feature)?;

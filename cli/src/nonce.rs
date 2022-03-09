@@ -9,7 +9,7 @@ use {
         memo::WithMemo,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
-    clap::{App, Arg, ArgMatches, SubCommand},
+    clap::{Arg, ArgMatches, Command},
     solana_clap_utils::{
         input_parsers::*,
         input_validators::*,
@@ -43,20 +43,20 @@ pub trait NonceSubCommands {
     fn nonce_subcommands(self) -> Self;
 }
 
-impl NonceSubCommands for App<'_, '_> {
+impl NonceSubCommands for Command<'_> {
     fn nonce_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("authorize-nonce-account")
+            Command::new("authorize-nonce-account")
                 .about("Assign account authority to a new entity")
                 .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::new("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Address of the nonce account. "),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("new_authority")
+                    pubkey!(Arg::new("new_authority")
                         .index(2)
                         .value_name("AUTHORITY_PUBKEY")
                         .required(true),
@@ -66,34 +66,34 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(memo_arg()),
         )
         .subcommand(
-            SubCommand::with_name("create-nonce-account")
+            Command::new("create-nonce-account")
                 .about("Create a nonce account")
                 .arg(
-                    Arg::with_name("nonce_account_keypair")
+                    Arg::new("nonce_account_keypair")
                         .index(1)
                         .value_name("ACCOUNT_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(|s| is_valid_signer(s))
                         .help("Keypair of the nonce account to fund"),
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_amount_or_all)
+                        .validator(|s| is_amount_or_all(s))
                         .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
                 )
                 .arg(
-                    pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
+                    pubkey!(Arg::new(NONCE_AUTHORITY_ARG.name)
                         .long(NONCE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY"),
                         "Assign noncing authority to another entity. "),
                 )
                 .arg(
-                    Arg::with_name("seed")
+                    Arg::new("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
@@ -102,11 +102,11 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(memo_arg()),
         )
         .subcommand(
-            SubCommand::with_name("nonce")
+            Command::new("nonce")
                 .about("Get the current nonce value")
                 .alias("get-nonce")
                 .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::new("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
@@ -114,10 +114,10 @@ impl NonceSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("new-nonce")
+            Command::new("new-nonce")
                 .about("Generate a new nonce, rendering the existing nonce useless")
                 .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::new("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
@@ -127,47 +127,47 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(memo_arg()),
         )
         .subcommand(
-            SubCommand::with_name("nonce-account")
+            Command::new("nonce-account")
                 .about("Show the contents of a nonce account")
                 .alias("show-nonce-account")
                 .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::new("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Address of the nonce account to display. "),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("withdraw-from-nonce-account")
+            Command::new("withdraw-from-nonce-account")
                 .about("Withdraw SOL from the nonce account")
                 .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::new("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
                         "Nonce account to withdraw from. "),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    pubkey!(Arg::new("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
                         "The account to which the SOL should be transferred. "),
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .index(3)
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_amount)
+                        .validator(|s| is_amount(s))
                         .help("The amount to withdraw from the nonce account, in SOL"),
                 )
                 .arg(nonce_authority_arg())
@@ -177,7 +177,7 @@ impl NonceSubCommands for App<'_, '_> {
 }
 
 pub fn parse_authorize_nonce_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -206,7 +206,7 @@ pub fn parse_authorize_nonce_account(
 }
 
 pub fn parse_nonce_create_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -237,7 +237,7 @@ pub fn parse_nonce_create_account(
 }
 
 pub fn parse_get_nonce(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
@@ -250,7 +250,7 @@ pub fn parse_get_nonce(
 }
 
 pub fn parse_new_nonce(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -277,7 +277,7 @@ pub fn parse_new_nonce(
 }
 
 pub fn parse_show_nonce_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
@@ -294,7 +294,7 @@ pub fn parse_show_nonce_account(
 }
 
 pub fn parse_withdraw_from_nonce_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

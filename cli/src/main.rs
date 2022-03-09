@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, value_t_or_exit, ArgMatches},
+    clap::{crate_description, crate_name, ArgMatches},
     console::style,
     solana_clap_utils::{
         input_validators::normalize_to_url_if_moniker,
@@ -32,9 +32,9 @@ pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType)
     );
 }
 
-fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
+fn parse_settings(matches: &ArgMatches) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
-        ("config", Some(matches)) => {
+        Some(("config", matches)) => {
             let config_file = match matches.value_of("config_file") {
                 None => {
                     println!(
@@ -48,7 +48,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
             let mut config = Config::load(config_file).unwrap_or_default();
 
             match matches.subcommand() {
-                ("get", Some(subcommand_matches)) => {
+                Some(("get", subcommand_matches)) => {
                     let (url_setting_type, json_rpc_url) =
                         CliConfig::compute_json_rpc_url_setting("", &config.json_rpc_url);
                     let (ws_setting_type, websocket_url) = CliConfig::compute_websocket_url_setting(
@@ -87,7 +87,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         );
                     }
                 }
-                ("set", Some(subcommand_matches)) => {
+                Some(("set", subcommand_matches)) => {
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
                         config.json_rpc_url = normalize_to_url_if_moniker(url);
                         // Revert to a computed `websocket_url` value when `json_rpc_url` is
@@ -129,14 +129,14 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         commitment_setting_type,
                     );
                 }
-                ("import-address-labels", Some(subcommand_matches)) => {
-                    let filename = value_t_or_exit!(subcommand_matches, "filename", PathBuf);
+                Some(("import-address-labels", subcommand_matches)) => {
+                    let filename: PathBuf = subcommand_matches.value_of_t_or_exit("filename");
                     config.import_address_labels(&filename)?;
                     config.save(config_file)?;
                     println!("Address labels imported from {:?}", filename);
                 }
-                ("export-address-labels", Some(subcommand_matches)) => {
-                    let filename = value_t_or_exit!(subcommand_matches, "filename", PathBuf);
+                Some(("export-address-labels", subcommand_matches)) => {
+                    let filename: PathBuf = subcommand_matches.value_of_t_or_exit("filename");
                     config.export_address_labels(&filename)?;
                     println!("Address labels exported to {:?}", filename);
                 }
@@ -150,7 +150,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 }
 
 pub fn parse_args<'a>(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -163,11 +163,11 @@ pub fn parse_args<'a>(
         &config.json_rpc_url,
     );
 
-    let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
+    let rpc_timeout: u64 = matches.value_of_t_or_exit("rpc_timeout");
     let rpc_timeout = Duration::from_secs(rpc_timeout);
 
-    let confirm_transaction_initial_timeout =
-        value_t_or_exit!(matches, "confirm_transaction_initial_timeout", u64);
+    let confirm_transaction_initial_timeout: u64 =
+        matches.value_of_t_or_exit("confirm_transaction_initial_timeout");
     let confirm_transaction_initial_timeout =
         Duration::from_secs(confirm_transaction_initial_timeout);
 
@@ -247,7 +247,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
-fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
+fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     if parse_settings(matches)? {
         let mut wallet_manager = None;
 
