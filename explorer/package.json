@@ -12,6 +12,7 @@
     "@project-serum/serum": "^0.13.61",
     "@react-hook/debounce": "^4.0.0",
     "@sentry/react": "^6.16.1",
+    "@solana/buffer-layout": "^3.0.0",
     "@solana/spl-token-registry": "^0.2.1143",
     "@solana/web3.js": "^1.31.0",
     "@testing-library/jest-dom": "^5.16.1",
