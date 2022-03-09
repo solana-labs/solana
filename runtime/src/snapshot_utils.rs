@@ -1034,6 +1034,12 @@ pub fn path_to_file_name_str(path: &Path) -> Result<&str> {
         .ok_or_else(|| SnapshotError::FileNameToStrError(path.to_path_buf()))
 }
 
+pub fn build_snapshot_archives_remote_dir(snapshot_archives_dir: impl AsRef<Path>) -> PathBuf {
+    snapshot_archives_dir
+        .as_ref()
+        .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR)
+}
+
 /// Build the full snapshot archive path from its components: the snapshot archives directory, the
 /// snapshot slot, the accounts hash, and the archive format.
 pub fn build_full_snapshot_archive_path(

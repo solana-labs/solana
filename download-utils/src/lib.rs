@@ -268,9 +268,8 @@ pub fn download_snapshot_archive<'a, 'b>(
         maximum_incremental_snapshot_archives_to_retain,
     );
 
-    let snapshot_archives_remote_dir = snapshot_archives_dir
-        .to_path_buf()
-        .join(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR);
+    let snapshot_archives_remote_dir =
+        snapshot_utils::build_snapshot_archives_remote_dir(snapshot_archives_dir);
     fs::create_dir_all(&snapshot_archives_remote_dir).unwrap();
 
     for archive_format in [
