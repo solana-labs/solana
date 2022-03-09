@@ -276,14 +276,14 @@ pub fn download_snapshot_archive<'a, 'b>(
     ] {
         let destination_path = match snapshot_type {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
-                snapshot_archives_dir.to_path_buf(),
+                snapshot_archives_dir,
                 desired_snapshot_hash.0,
                 &desired_snapshot_hash.1,
                 archive_format,
             ),
             SnapshotType::IncrementalSnapshot(base_slot) => {
                 snapshot_utils::build_incremental_snapshot_archive_path(
-                    snapshot_archives_dir.to_path_buf(),
+                    snapshot_archives_dir,
                     base_slot,
                     desired_snapshot_hash.0,
                     &desired_snapshot_hash.1,
