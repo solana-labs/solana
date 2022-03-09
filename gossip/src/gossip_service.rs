@@ -238,7 +238,7 @@ pub fn get_multi_client(
     .unwrap();
     let num_nodes = tpu_addrs.len();
     (
-        //todo: make it configurable whether to use quic
+        //TODO: make it configurable whether to use quic
         ThinClient::<UdpTpuConnection>::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
         num_nodes,
     )
