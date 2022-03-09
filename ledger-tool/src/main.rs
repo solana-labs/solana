@@ -776,7 +776,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
 
     let mut program_ids = HashMap::new();
     let mut cost_model = CostModel::default();
+    // TODO TAO - arg to control if loads from blockstore
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+    // TODO TAO - -vv arg to control if to print what's loaded from table
     let mut cost_tracker = CostTracker::default();
 
     for entry in entries {
@@ -800,6 +802,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                 num_programs += transaction.message().instructions().len();
 
                 let tx_cost = cost_model.calculate_cost(&transaction);
+                // TODO TAO - -v-v to print transactino cost details here (may need to format a bit for
+                // accounts), and perhaps to add instruction cost details in to
+                //
                 let result = cost_tracker.try_add(&transaction, &tx_cost);
                 if result.is_err() {
                     println!(
@@ -820,6 +825,16 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     );
     println!("  Programs: {:?}", program_ids);
 
+    // TODO - below is to print block level stats (-v)
+    //
+    cost_tracker.report_stats(slot);
+    // TODO - then to print entire block cost tracker (-v-v-v), not sure how much value it is
+    println!("block cost tracker {:?}", cost_tracker);
+    // TODO - may as well to merge this entire thing into replay
+    //        so can to estimated/actual compare
+    //        plus, can report post-execution program cost to cost_model in realtime, to somewhat
+    //        make up the missing real-time-ness
+    
     Ok(())
 }
 
