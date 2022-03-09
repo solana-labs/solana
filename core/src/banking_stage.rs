@@ -812,7 +812,7 @@ impl BankingStage {
                         ),
                     )
                 };
-
+                slot_metrics_tracker.update_on_leader_slot_boundary(&bank_start);
                 Self::consume_or_forward_packets(
                     my_pubkey,
                     leader_at_slot_offset,
