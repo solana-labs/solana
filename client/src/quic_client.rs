@@ -9,7 +9,9 @@ use {
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_sdk::{
-        quic::QUIC_PORT_OFFSET, transaction::Transaction, transport::Result as TransportResult,
+        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
+        transaction::Transaction,
+        transport::Result as TransportResult,
     },
     std::{
         net::{SocketAddr, UdpSocket},
@@ -17,11 +19,6 @@ use {
     },
     tokio::runtime::Runtime,
 };
-
-// Empirically found max number of concurrent streams
-// that seems to maximize TPS on GCE (higher values don't seem to
-// give significant improvement or seem to impact stability)
-const MAX_CONCURRENT_STREAMS: usize = 2048;
 
 struct SkipServerVerification;
 
@@ -188,18 +185,16 @@ impl QuicClient {
         let connection = self._send_buffer(&buffers[0][..]).await?;
 
         let chunks = buffers[1..buffers.len()]
-        .iter()
-        .chunks(MAX_CONCURRENT_STREAMS);
+            .iter()
+            .chunks(QUIC_MAX_CONCURRENT_STREAMS);
 
-        let futures = chunks
-            .into_iter()
-            .map(|buffs| {
-                join_all(
-                    buffs
-                        .into_iter()
-                        .map(|buf| Self::_send_buffer_using_conn(&buf[..], &connection)),
-                )
-            });
+        let futures = chunks.into_iter().map(|buffs| {
+            join_all(
+                buffs
+                    .into_iter()
+                    .map(|buf| Self::_send_buffer_using_conn(&buf[..], &connection)),
+            )
+        });
 
         for f in futures {
             f.await.into_iter().try_for_each(|res| res)?;
