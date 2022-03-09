@@ -121,7 +121,7 @@ impl QuicClient {
 
     async fn _send_buffer_using_conn(
         data: &[u8],
-        connection: &Arc<NewConnection>,
+        connection: &NewConnection,
     ) -> Result<(), WriteError> {
         let mut send_stream = connection.connection.open_uni().await?;
         send_stream.write_all(data).await?;
