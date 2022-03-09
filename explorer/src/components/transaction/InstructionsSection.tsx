@@ -127,7 +127,9 @@ export function InstructionsSection({ signature }: SignatureProps) {
       <div className="container">
         <div className="header">
           <div className="header-body">
-            <h3 className="mb-0">Instruction(s)</h3>
+            <h3 className="mb-0">
+              {instructionDetails.length > 1 ? "Instructions" : "Instruction"}
+            </h3>
           </div>
         </div>
       </div>
