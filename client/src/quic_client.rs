@@ -187,9 +187,11 @@ impl QuicClient {
         }
         let connection = self._send_buffer(&buffers[0][..]).await?;
 
-        let futures = buffers[1..buffers.len()]
-            .iter()
-            .chunks(MAX_CONCURRENT_STREAMS)
+        let chunks = buffers[1..buffers.len()]
+        .iter()
+        .chunks(MAX_CONCURRENT_STREAMS);
+
+        let futures = chunks
             .into_iter()
             .map(|buffs| {
                 join_all(
@@ -197,8 +199,7 @@ impl QuicClient {
                         .into_iter()
                         .map(|buf| Self::_send_buffer_using_conn(&buf[..], &connection)),
                 )
-            })
-            .collect::<Vec<_>>();
+            });
 
         for f in futures {
             f.await.into_iter().try_for_each(|res| res)?;
