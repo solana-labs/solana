@@ -93,6 +93,8 @@ pub enum SyscallError {
     ReturnDataTooLarge(u64, u64),
     #[error("Hashing too many sequences")]
     TooManySlices,
+    #[error("InvalidLength")]
+    InvalidLength,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -618,9 +620,10 @@ fn translate_string_and_do(
         Some(i) => i,
         None => len as usize,
     };
-    match from_utf8(&buf[..i]) {
+    let msg = buf.get(..i).ok_or(SyscallError::InvalidLength)?;
+    match from_utf8(msg) {
         Ok(message) => work(message),
-        Err(err) => Err(SyscallError::InvalidString(err, buf[..i].to_vec()).into()),
+        Err(err) => Err(SyscallError::InvalidString(err, msg.to_vec()).into()),
     }
 }
 
@@ -1555,8 +1558,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
         );
         let mut i = 0;
         while i < n as usize {
-            let a = s1[i];
-            let b = s2[i];
+            let a = *question_mark!(s1.get(i).ok_or(SyscallError::InvalidLength,), result);
+            let b = *question_mark!(s2.get(i).ok_or(SyscallError::InvalidLength,), result);
             if a != b {
                 *cmp_result = if invoke_context
                     .feature_set
@@ -2406,7 +2409,9 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                 loader_id,
             )?;
 
-            let first_info_addr = &account_infos[0] as *const _ as u64;
+            let first_info_addr = account_infos.first().ok_or(SyscallError::InstructionError(
+                InstructionError::InvalidArgument,
+            ))? as *const _ as u64;
             let addr = &account_info.data_len as *const u64 as u64;
             let vm_addr = if invoke_context
                 .feature_set
@@ -2570,8 +2575,12 @@ where
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
         {
-            let mut caller_account =
-                do_translate(&account_infos[caller_account_index], invoke_context)?;
+            let mut caller_account = do_translate(
+                account_infos
+                    .get(caller_account_index)
+                    .ok_or(SyscallError::InvalidLength)?,
+                invoke_context,
+            )?;
             {
                 let mut account = account.borrow_mut();
                 account.copy_into_owner_from_slice(caller_account.owner.as_ref());
@@ -2585,7 +2594,9 @@ where
                     .index_in_caller
                     .saturating_sub(instruction_context.get_number_of_program_accounts());
                 if orig_data_len_index < orig_data_lens.len() {
-                    caller_account.original_data_len = orig_data_lens[orig_data_len_index];
+                    caller_account.original_data_len = *orig_data_lens
+                        .get(orig_data_len_index)
+                        .ok_or(SyscallError::InvalidLength)?;
                 } else {
                     ic_msg!(
                         invoke_context,
@@ -2815,7 +2826,13 @@ fn call<'a, 'b: 'a>(
                     );
                 }
                 if new_len < caller_account.data.len() {
-                    caller_account.data[new_len..].fill(0);
+                    caller_account
+                        .data
+                        .get_mut(new_len..)
+                        .ok_or(SyscallError::InstructionError(
+                            InstructionError::AccountDataTooSmall,
+                        ))?
+                        .fill(0);
                 }
                 caller_account.data = translate_slice_mut::<u8>(
                     memory_mapping,
@@ -2826,9 +2843,17 @@ fn call<'a, 'b: 'a>(
                 *caller_account.ref_to_len_in_vm = new_len as u64;
                 *caller_account.serialized_len_ptr = new_len as u64;
             }
-            caller_account
-                .data
-                .copy_from_slice(&callee_account.data()[0..new_len]);
+            let to_slice = &mut caller_account.data;
+            let from_slice = callee_account
+                .data()
+                .get(0..new_len)
+                .ok_or(SyscallError::InvalidLength)?;
+            if to_slice.len() != from_slice.len() {
+                return Err(
+                    SyscallError::InstructionError(InstructionError::AccountDataTooSmall).into(),
+                );
+            }
+            to_slice.copy_from_slice(from_slice);
         }
     }
 
@@ -2961,14 +2986,25 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
                 result
             );
 
-            return_data_result.copy_from_slice(&return_data[..length as usize]);
+            let to_slice = return_data_result;
+            let from_slice = question_mark!(
+                return_data
+                    .get(..length as usize)
+                    .ok_or(SyscallError::InvokeContextBorrowFailed),
+                result
+            );
+            if to_slice.len() != from_slice.len() {
+                *result = Err(SyscallError::InvalidLength.into());
+                return;
+            }
+            to_slice.copy_from_slice(from_slice);
 
             let program_id_result = question_mark!(
-                translate_slice_mut::<Pubkey>(memory_mapping, program_id_addr, 1, loader_id),
+                translate_type_mut::<Pubkey>(memory_mapping, program_id_addr, loader_id),
                 result
             );
 
-            program_id_result[0] = *program_id;
+            *program_id_result = *program_id;
         }
 
         // Return the actual length, rather the length returned
@@ -3089,7 +3125,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                 .checked_sub(2)
                 .and_then(|result| result.checked_sub(index as usize))
                 .and_then(|index| instruction_trace.get(index))
-                .and_then(|instruction_list| instruction_list.get(0))
+                .and_then(|instruction_list| instruction_list.first())
         } else {
             // Walk the last list of inner instructions
             instruction_trace.last().and_then(|inners| {
@@ -3419,7 +3455,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(data, translated_data);
-        data[0] = 10;
+        *data.first_mut().unwrap() = 10;
         assert_eq!(data, translated_data);
         assert!(translate_slice::<u8>(
             &memory_mapping,
@@ -3462,7 +3498,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(data, translated_data);
-        data[0] = 10;
+        *data.first_mut().unwrap() = 10;
         assert_eq!(data, translated_data);
         assert!(
             translate_slice::<u64>(&memory_mapping, 0x100000000, u64::MAX, &bpf_loader::id())
@@ -3494,7 +3530,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(data, translated_data);
-        data[0] = solana_sdk::pubkey::new_rand(); // Both should point to same place
+        *data.first_mut().unwrap() = solana_sdk::pubkey::new_rand(); // Both should point to same place
         assert_eq!(data, translated_data);
     }
 
@@ -3776,7 +3812,7 @@ mod tests {
         };
 
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
-        let addr = &pubkey.as_ref()[0] as *const _ as u64;
+        let addr = pubkey.as_ref().first().unwrap() as *const _ as u64;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
