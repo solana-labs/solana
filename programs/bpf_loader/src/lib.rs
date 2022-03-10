@@ -49,7 +49,7 @@ use {
         keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        program_error::ACCOUNTS_DATA_BUDGET_EXCEEDED,
+        program_error::MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         rent::Rent,
@@ -1098,13 +1098,13 @@ impl Executor for BpfExecutor {
             }
             match result {
                 Ok(status) if status != SUCCESS => {
-                    let error: InstructionError = if status == ACCOUNTS_DATA_BUDGET_EXCEEDED
+                    let error: InstructionError = if status == MAX_ACCOUNTS_DATA_SIZE_EXCEEDED
                         && !invoke_context
                             .feature_set
                             .is_active(&cap_accounts_data_len::id())
                     {
                         // Until the cap_accounts_data_len feature is enabled, map the
-                        // ACCOUNTS_DATA_BUDGET_EXCEEDED error to InvalidError
+                        // MAX_ACCOUNTS_DATA_SIZE_EXCEEDED error to InvalidError
                         InstructionError::InvalidError
                     } else {
                         status.into()

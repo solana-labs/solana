@@ -79,7 +79,7 @@ impl AccountsDataMeter {
     /// return an error and *do not* consume more accounts data space.
     pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
         if amount > self.remaining() as i64 {
-            return Err(InstructionError::AccountsDataBudgetExceeded);
+            return Err(InstructionError::MaxAccountsDataSizeExceeded);
         }
         self.consume_unchecked(amount);
         Ok(())
