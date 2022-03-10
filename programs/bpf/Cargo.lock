@@ -3227,6 +3227,7 @@ dependencies = [
  "indicatif",
  "itertools 0.10.3",
  "jsonrpc-core",
+ "lazy_static",
  "log",
  "quinn",
  "rayon",
