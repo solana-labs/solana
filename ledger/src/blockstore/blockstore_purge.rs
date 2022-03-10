@@ -546,6 +546,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_purge_huge() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
