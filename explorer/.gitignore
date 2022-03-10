@@ -24,5 +24,4 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
 #trigger worlflow to testing PR link 
