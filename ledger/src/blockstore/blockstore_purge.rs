@@ -426,99 +426,6 @@ pub mod tests {
         },
     };
 
-    // check that all columns are either empty or start at `min_slot`
-    fn test_all_empty_or_min(blockstore: &Blockstore, min_slot: Slot) {
-        let condition_met = blockstore
-            .db
-            .iter::<cf::SlotMeta>(IteratorMode::Start)
-            .unwrap()
-            .next()
-            .map(|(slot, _)| slot >= min_slot)
-            .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::Root>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::ShredData>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|((slot, _), _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::ShredCode>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|((slot, _), _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::DeadSlots>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::DuplicateSlots>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::ErasureMeta>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|((slot, _), _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::Orphans>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::Index>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::TransactionStatus>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|((primary_index, _, slot), _)| {
-                    slot >= min_slot || (primary_index == 2 && slot == 0)
-                })
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::AddressSignatures>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|((primary_index, _, slot, _), _)| {
-                    slot >= min_slot || (primary_index == 2 && slot == 0)
-                })
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::Rewards>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true);
-        assert!(condition_met);
-    }
-
     #[test]
     fn test_purge_slots() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -543,18 +450,6 @@ pub mod tests {
             .for_each(|(_, _)| {
                 panic!();
             });
-    }
-
-    #[test]
-    fn test_purge_huge() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        let (shreds, _) = make_many_slot_entries(0, 5000, 10);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-
-        blockstore.purge_and_compact_slots(0, 4999);
-        test_all_empty_or_min(&blockstore, 5000);
     }
 
     #[test]
