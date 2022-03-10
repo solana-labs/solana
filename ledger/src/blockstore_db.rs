@@ -1638,7 +1638,9 @@ pub mod tests {
             columns::TransactionStatusIndex::NAME
         ));
         assert!(should_exclude_from_compaction(columns::ProgramCosts::NAME));
-        assert!(should_exclude_from_compaction(columns::TransactionMemos::NAME));
+        assert!(should_exclude_from_compaction(
+            columns::TransactionMemos::NAME
+        ));
         assert!(!should_exclude_from_compaction("something else"));
     }
 }
