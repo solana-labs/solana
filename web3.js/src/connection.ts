@@ -2579,26 +2579,14 @@ export class Connection {
    */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
-    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
+    commitment?: Commitment,
   ): Promise<(AccountInfo<Buffer> | null)[]> {
     const keys = publicKeys.map(key => key.toBase58());
     const chunks = sliceIntoChunks(keys, 100);
     let accounts : (AccountInfo<Buffer> | null)[] = [];
 
     for (let i = 0; i < chunks.length; i++) {
-      let commitment;
-      let encoding: 'base64' | 'jsonParsed' = 'base64';
-      if (configOrCommitment) {
-        if (typeof configOrCommitment === 'string') {
-          commitment = configOrCommitment;
-          encoding = 'base64';
-        } else {
-          commitment = configOrCommitment.commitment;
-          encoding = configOrCommitment.encoding || 'base64';
-        }
-      }
-
-      const args = this._buildArgs([chunks[i]], commitment, encoding);
+      const args = this._buildArgs([chunks[i]], commitment, 'base64');
       const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
       const res = create(
         unsafeRes,
