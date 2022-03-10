@@ -27,6 +27,7 @@ rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
 solana-metrics = { path = "../metrics", version = "=1.11.2" }
 solana-perf = { path = "../perf", version = "=1.11.2" }
 solana-sdk = { path = "../sdk", version = "=1.11.2" }
+solana-measure = { path = "../measure", version = "=1.11.2" }
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 

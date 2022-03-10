@@ -5411,6 +5411,7 @@ dependencies = [
  "rand 0.7.3",
  "rcgen",
  "rustls 0.20.6",
+ "solana-measure",
  "solana-metrics",
  "solana-perf",
  "solana-sdk 1.11.2",

@@ -296,8 +296,14 @@ pub fn spawn_server(
 #[cfg(test)]
 mod test {
     use {
-        super::*, crate::nonblocking::quic::test::*, crossbeam_channel::unbounded,
-        std::net::SocketAddr,
+        super::*,
+        crate::nonblocking::quic::test::*,
+        crossbeam_channel::unbounded,
+        solana_measure::measure::Measure,
+        std::{
+            net::SocketAddr,
+            time::{Duration, Instant},
+        },
     };
 
     fn setup_quic_server() -> (
@@ -335,6 +341,133 @@ mod test {
         let (t, exit, _receiver, _server_address) = setup_quic_server();
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
+    }
+
+    // Run with --release and adjust parameters below
+    #[test]
+    fn test_bench_single_connect() {
+        solana_logger::setup();
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let stats = Arc::new(StreamStats::default());
+        let t = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes,
+            100,
+            10,
+            stats,
+        )
+        .unwrap();
+
+        let mut num_threads = std::env::var("NUM_THREADS")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(2);
+        let mut num_packets_per_thread = std::env::var("PACKETS_PER_THREAD")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(10);
+        let packet_size = std::env::var("PACKET_SIZE")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(200);
+        let batch_size = std::env::var("BATCH_SIZE")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(5);
+
+        let runtime = rt();
+        let _rt_guard = runtime.enter();
+        let conn = Arc::new(runtime.block_on(make_client_endpoint(&server_address)));
+
+        for _ in 0..1 {
+            let mut send_streams = Measure::start("send_streams");
+            let mut received_packets = Measure::start("received_packets");
+            let num_packets = num_packets_per_thread * num_threads;
+            let client_threads: Vec<_> = (0..num_threads)
+                .into_iter()
+                .map(|_tid| {
+                    let conn = conn.clone();
+                    tokio::spawn(async move {
+                        let num_batches = num_packets_per_thread / batch_size;
+                        for _ in 0..num_batches {
+                            let packet = vec![0u8; packet_size];
+                            let conn = conn.clone();
+                            for _ in 0..batch_size {
+                                let mut stream = conn.connection.open_uni().await.unwrap();
+                                stream.write_all(&packet).await.unwrap();
+                                stream.finish().await.unwrap();
+                            }
+                        }
+                    })
+                })
+                .collect();
+            for t in client_threads {
+                runtime.block_on(t).unwrap();
+            }
+            send_streams.stop();
+
+            let mut num_received_packets = 0;
+            let mut start = Instant::now();
+            loop {
+                let mut timeout = false;
+                loop {
+                    match receiver.recv_timeout(Duration::from_millis(1000)) {
+                        Ok(new) => {
+                            num_received_packets += new.len();
+                            if num_received_packets >= num_packets {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            info!("error: {:?}", e);
+                            timeout = true;
+                            break;
+                        }
+                    }
+                }
+                if timeout {
+                    break;
+                }
+                if num_received_packets >= num_packets {
+                    break;
+                }
+                if start.elapsed().as_secs() >= 10 {
+                    info!(
+                        "waiting... received: {} of {}",
+                        num_received_packets, num_packets
+                    );
+                    start = Instant::now();
+                }
+            }
+            received_packets.stop();
+            info!(
+                "sent {}x {}b packets with {} threads: kpps: {:.2} mbps: {:.2}\n {} {}",
+                num_packets,
+                packet_size,
+                num_threads,
+                num_received_packets as f32 / (1000.0f32 * received_packets.as_s()),
+                (num_received_packets * packet_size) as f32
+                    / (1000.0f32 * 1000.0f32 * received_packets.as_s()),
+                send_streams,
+                received_packets,
+            );
+            num_threads *= 2;
+            num_packets_per_thread /= 2;
+            assert!(num_packets_per_thread > 0);
+        }
+
+        exit.store(true, Ordering::Relaxed);
+        let mut after_store = Measure::start("after store");
+        t.join().unwrap();
+        after_store.stop();
+        info!("{}", after_store);
     }
 
     #[test]

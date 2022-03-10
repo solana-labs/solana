@@ -6113,6 +6113,7 @@ dependencies = [
  "rcgen",
  "rustls 0.20.6",
  "solana-logger 1.11.2",
+ "solana-measure",
  "solana-metrics",
  "solana-perf",
  "solana-sdk 1.11.2",
