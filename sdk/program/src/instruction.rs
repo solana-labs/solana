@@ -249,9 +249,9 @@ pub enum InstructionError {
     #[error("Provided owner is not allowed")]
     IllegalOwner,
 
-    /// Accounts data budget exceeded
-    #[error("Requested account data allocation exceeded the accounts data budget")]
-    AccountsDataBudgetExceeded,
+    /// Account data allocation exceeded the maximum accounts data size limit
+    #[error("Account data allocation exceeded the maximum accounts data size limit")]
+    MaxAccountsDataSizeExceeded,
 
     /// Active vote account close
     #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
