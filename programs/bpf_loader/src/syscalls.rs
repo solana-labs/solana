@@ -23,10 +23,11 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             self, add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
-            disable_fees_sysvar, do_support_realloc, fixed_memcpy_nonoverlapping_check,
-            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
-            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
+            check_physical_overlapping, disable_fees_sysvar, do_support_realloc,
+            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
+            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
+            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+            syscall_saturated_math, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1431,6 +1432,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         let use_fixed_nonoverlapping_check = invoke_context
             .feature_set
             .is_active(&fixed_memcpy_nonoverlapping_check::id());
+        let do_check_physical_overlapping = invoke_context
+            .feature_set
+            .is_active(&check_physical_overlapping::id());
 
         #[allow(clippy::collapsible_else_if)]
         if use_fixed_nonoverlapping_check {
@@ -1451,16 +1455,26 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         };
 
         let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
-        let dst = question_mark!(
+        let dst_ptr = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, dst_addr, n, loader_id),
             result
-        );
-        let src = question_mark!(
+        )
+        .as_mut_ptr();
+        let src_ptr = question_mark!(
             translate_slice::<u8>(memory_mapping, src_addr, n, loader_id),
             result
-        );
-        unsafe {
-            std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), n as usize);
+        )
+        .as_ptr();
+        if do_check_physical_overlapping
+            && !is_nonoverlapping(src_ptr as usize, dst_ptr as usize, n as usize)
+        {
+            unsafe {
+                std::ptr::copy(src_ptr, dst_ptr, n as usize);
+            }
+        } else {
+            unsafe {
+                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, n as usize);
+            }
         }
         *result = Ok(0);
     }
