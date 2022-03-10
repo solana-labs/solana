@@ -28,6 +28,7 @@ quinn-proto = { workspace = true }
 rand = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true, features = ["dangerous_configuration"] }
+solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
 solana-sdk = { workspace = true }
