@@ -214,7 +214,7 @@ pub mod columns {
 
     // When adding a new column ...
     // - Add struct below and implement `Column` and `ColumnName` traits
-    // - Add descriptor in Rocks::open() and name in Rocks::columns()
+    // - Add descriptor in Rocks::cf_descriptors() and name in Rocks::columns()
     // - Account for column in both `run_purge_with_stats()` and
     //   `compact_storage()` in ledger/src/blockstore/blockstore_purge.rs !!
     // - Account for column in `analyze_storage()` in ledger-tool/src/main.rs
@@ -302,7 +302,7 @@ impl Rocks {
         fs::create_dir_all(&path)?;
 
         // Use default database options
-        if disable_auto_compactions(access_type) {
+        if should_disable_auto_compactions(access_type) {
             warn!("Disabling rocksdb's auto compaction for maintenance bulk ledger update...");
         }
         let mut db_options = get_db_options(access_type);
@@ -350,7 +350,7 @@ impl Rocks {
             for cf_name in cf_names {
                 // these special column families must be excluded from LedgerCleanupService's rocksdb
                 // compactions
-                if exclude_column_from_compaction(cf_name) {
+                if should_exclude_from_compaction(cf_name) {
                     continue;
                 }
 
@@ -1420,12 +1420,12 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    let disable_auto_compactions = disable_auto_compactions(access_type);
+    let disable_auto_compactions = should_disable_auto_compactions(access_type);
     if disable_auto_compactions {
         options.set_disable_auto_compactions(true);
     }
 
-    if !disable_auto_compactions && !exclude_column_from_compaction(C::NAME) {
+    if !disable_auto_compactions && !should_exclude_from_compaction(C::NAME) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
@@ -1534,7 +1534,7 @@ fn get_db_options(access_type: &AccessType) -> Options {
     // Set max total wal size to 4G.
     options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
 
-    if disable_auto_compactions(access_type) {
+    if should_disable_auto_compactions(access_type) {
         options.set_disable_auto_compactions(true);
     }
 
@@ -1547,13 +1547,13 @@ fn get_db_options(access_type: &AccessType) -> Options {
 }
 
 // Returns whether automatic compactions should be disabled based upon access type
-fn disable_auto_compactions(access_type: &AccessType) -> bool {
+fn should_disable_auto_compactions(access_type: &AccessType) -> bool {
     // Disable automatic compactions in maintenance mode to prevent accidental cleaning
     matches!(access_type, AccessType::PrimaryOnlyForMaintenance)
 }
 
 // Returns whether the supplied column (name) should be excluded from compaction
-fn exclude_column_from_compaction(cf_name: &str) -> bool {
+fn should_exclude_from_compaction(cf_name: &str) -> bool {
     // List of column families to be excluded from compactions
     let no_compaction_cfs: HashSet<&'static str> = vec![
         columns::TransactionStatusIndex::NAME,
@@ -1632,15 +1632,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_exclude_column_from_compaction() {
+    fn test_should_exclude_from_compaction() {
         // currently there are three CFs excluded from compaction:
-        assert!(exclude_column_from_compaction(
+        assert!(should_exclude_from_compaction(
             columns::TransactionStatusIndex::NAME
         ));
-        assert!(exclude_column_from_compaction(columns::ProgramCosts::NAME));
-        assert!(exclude_column_from_compaction(
-            columns::TransactionMemos::NAME
-        ));
-        assert!(!exclude_column_from_compaction("something else"));
+        assert!(should_exclude_from_compaction(columns::ProgramCosts::NAME));
+        assert!(should_exclude_from_compaction(columns::TransactionMemos::NAME));
+        assert!(!should_exclude_from_compaction("something else"));
     }
 }
