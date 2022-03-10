@@ -2756,23 +2756,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bloom"
-version = "1.10.2"
-dependencies = [
- "bv",
- "fnv",
- "log",
- "rand 0.7.3",
- "rayon",
- "rustc_version 0.4.0",
- "serde",
- "serde_derive",
- "solana-frozen-abi 1.10.2",
- "solana-frozen-abi-macro 1.10.2",
- "solana-sdk",
-]
-
-[[package]]
 name = "solana-bpf-loader-program"
 version = "1.10.2"
 dependencies = [
@@ -3433,7 +3416,6 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
- "solana-bloom",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
@@ -3616,7 +3598,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-address-lookup-table-program",
- "solana-bloom",
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
