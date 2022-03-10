@@ -12,11 +12,11 @@ use {
 //try_insert seems promising but it's still nightly-only...
 lazy_static! {
     //TODO: all implementations of TpuConnection should be Sync + Send but make sure...
-    static ref CONNECTION_MAP: Mutex<HashMap<SocketAddr, Arc<dyn TpuConnection + Sync + Send>>> = Mutex::new(HashMap::new());
+    static ref CONNECTION_MAP: Mutex<HashMap<SocketAddr, Arc<dyn TpuConnection + 'static + Sync + Send>>> = Mutex::new(HashMap::new());
 }
 
 #[allow(dead_code)]
-pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection> {
+pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sync + Send> {
     //todo: implement eviction of old connections
     let mut map = (*CONNECTION_MAP).lock().unwrap();
     if let Some(conn) = map.get(addr) {
