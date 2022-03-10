@@ -2560,10 +2560,30 @@ export class Connection {
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<(AccountInfo<Buffer> | null)[]>> {
     const keys = publicKeys.map(key => key.toBase58());
+    const args = this._buildArgs([keys], commitment, 'base64');
+    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
+    );
+    if ('error' in res) {
+      throw new Error(
+        'failed to get info for accounts ' + keys + ': ' + res.error.message,
+      );
+    }
+    return res.result;
+  }
 
+  /**
+   * Fetch all the account info for multiple accounts specified by an array of public keys
+   */
+  async getMultipleAccountsInfo(
+    publicKeys: PublicKey[],
+    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
+  ): Promise<(AccountInfo<Buffer> | null)[]> {
+    const keys = publicKeys.map(key => key.toBase58());
     const chunks = sliceIntoChunks(keys, 100);
-
-    let accounts : (AccountInfo<Buffer | ParsedAccountData> | null)[] = [];
+    let accounts : (AccountInfo<Buffer> | null)[] = [];
 
     for (let i = 0; i < chunks.length; i++) {
       let commitment;
@@ -2582,7 +2602,7 @@ export class Connection {
       const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
       const res = create(
         unsafeRes,
-        jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
+        jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
       );
 
       if ('error' in res) {
@@ -2590,6 +2610,7 @@ export class Connection {
           'failed to get info for accounts ' + chunks[i] + ': ' + res.error.message,
         );
       }
+
       accounts = accounts.concat(res.result.value);
     }
     return accounts;
