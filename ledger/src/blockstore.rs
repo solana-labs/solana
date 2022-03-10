@@ -5,9 +5,9 @@ use {
     crate::{
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
-            columns as cf, AccessType, BlockstoreOptions, Column, ColumnName, Database,
-            IteratorDirection, IteratorMode, LedgerColumn, LedgerColumnOptions, Result,
-            ShredStorageType, WriteBatch,
+            columns as cf, AccessType, BlockstoreCompressionType, BlockstoreOptions, Column,
+            ColumnName, Database, IteratorDirection, IteratorMode, LedgerColumn,
+            LedgerColumnOptions, Result, ShredStorageType, WriteBatch,
         },
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
@@ -524,16 +524,46 @@ macro_rules! rocksdb_metric_header {
     ($metric_name:literal, $cf_name:literal, $column_options:expr) => {
         match $column_options.shred_storage_type {
             ShredStorageType::RocksLevel =>
-                rocksdb_metric_header!(@all_fields $metric_name, $cf_name, "rocks_level"),
+                rocksdb_metric_header!(@compression_type $metric_name, $cf_name, $column_options, "rocks_level"),
             ShredStorageType::RocksFifo(_) =>
-                rocksdb_metric_header!(@all_fields $metric_name, $cf_name, "rocks_fifo"),
+                rocksdb_metric_header!(@compression_type $metric_name, $cf_name, $column_options, "rocks_fifo"),
         }
     };
 
-    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal) => {
+    (@compression_type $metric_name:literal, $cf_name:literal, $column_options:expr, $storage_type:literal) => {
+        match $column_options.compression_type {
+            BlockstoreCompressionType::None => rocksdb_metric_header!(@all_fields
+                $metric_name,
+                $cf_name,
+                $storage_type,
+                "None"
+            ),
+            BlockstoreCompressionType::Snappy => rocksdb_metric_header!(@all_fields
+                $metric_name,
+                $cf_name,
+                $storage_type,
+                "Snappy"
+            ),
+            BlockstoreCompressionType::Lz4 => rocksdb_metric_header!(@all_fields
+                $metric_name,
+                $cf_name,
+                $storage_type,
+                "Lz4"
+            ),
+            BlockstoreCompressionType::Zlib => rocksdb_metric_header!(@all_fields
+                $metric_name,
+                $cf_name,
+                $storage_type,
+                "Zlib"
+            ),
+        }
+    };
+
+    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal, $compression_type:literal) => {
         concat!($metric_name,
             ",cf_name=", $cf_name,
             ",storage=", $storage_type,
+            ",compression=", $compression_type,
         )
     };
 }
@@ -4358,6 +4388,7 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
                 shred_storage_type: $crate::blockstore_db::ShredStorageType::RocksFifo(
                     $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
                 ),
+                ..$crate::blockstore_db::LedgerColumnOptions::default()
             },
         )
     };
@@ -4722,6 +4753,7 @@ pub mod tests {
                     shred_storage_type: ShredStorageType::RocksFifo(
                         BlockstoreRocksFifoOptions::default(),
                     ),
+                    ..LedgerColumnOptions::default()
                 },
                 ..BlockstoreOptions::default()
             },
