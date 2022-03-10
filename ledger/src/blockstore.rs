@@ -4387,6 +4387,99 @@ pub fn make_many_slot_entries(
     (shreds, entries)
 }
 
+// test-only: check that all columns are either empty or start at `min_slot`
+pub fn test_all_empty_or_min(blockstore: &Blockstore, min_slot: Slot) {
+    let condition_met = blockstore
+        .db
+        .iter::<cf::SlotMeta>(IteratorMode::Start)
+        .unwrap()
+        .next()
+        .map(|(slot, _)| slot >= min_slot)
+        .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::Root>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::ShredData>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|((slot, _), _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::ShredCode>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|((slot, _), _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::DeadSlots>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::DuplicateSlots>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::ErasureMeta>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|((slot, _), _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::Orphans>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::Index>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|((primary_index, _, slot), _)| {
+                slot >= min_slot || (primary_index == 2 && slot == 0)
+            })
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::AddressSignatures>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|((primary_index, _, slot, _), _)| {
+                slot >= min_slot || (primary_index == 2 && slot == 0)
+            })
+            .unwrap_or(true)
+        & blockstore
+            .db
+            .iter::<cf::Rewards>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true);
+    assert!(condition_met);
+}
+
 // used for tests only
 // Create `num_shreds` shreds for [start_slot, start_slot + num_slot) slots
 pub fn make_many_slot_shreds(
