@@ -4150,7 +4150,6 @@ pub fn create_new_ledger(
     ledger_path: &Path,
     genesis_config: &GenesisConfig,
     max_genesis_archive_unpacked_size: u64,
-    access_type: AccessType,
     advanced_options: BlockstoreAdvancedOptions,
 ) -> Result<Hash> {
     Blockstore::destroy(ledger_path)?;
@@ -4161,7 +4160,7 @@ pub fn create_new_ledger(
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
-            access_type,
+            access_type: AccessType::PrimaryOnly,
             recovery_mode: None,
             enforce_ulimit_nofile: false,
             advanced_options: advanced_options.clone(),
@@ -4333,7 +4332,6 @@ macro_rules! create_new_tmp_ledger {
         $crate::blockstore::create_new_ledger_from_name(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::AccessType::PrimaryOnly,
             $crate::blockstore_db::BlockstoreAdvancedOptions::default(),
         )
     };
@@ -4345,7 +4343,6 @@ macro_rules! create_new_tmp_ledger_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::AccessType::PrimaryOnly,
             $crate::blockstore_db::BlockstoreAdvancedOptions::default(),
         )
     };
@@ -4357,7 +4354,6 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::AccessType::PrimaryOnly,
             $crate::blockstore_db::BlockstoreAdvancedOptions {
                 shred_storage_type: $crate::blockstore_db::ShredStorageType::RocksFifo(
                     $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
@@ -4392,15 +4388,10 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> boo
 pub fn create_new_ledger_from_name(
     name: &str,
     genesis_config: &GenesisConfig,
-    access_type: AccessType,
     advanced_options: BlockstoreAdvancedOptions,
 ) -> (PathBuf, Hash) {
-    let (ledger_path, blockhash) = create_new_ledger_from_name_auto_delete(
-        name,
-        genesis_config,
-        access_type,
-        advanced_options,
-    );
+    let (ledger_path, blockhash) =
+        create_new_ledger_from_name_auto_delete(name, genesis_config, advanced_options);
     (ledger_path.into_path(), blockhash)
 }
 
@@ -4411,7 +4402,6 @@ pub fn create_new_ledger_from_name(
 pub fn create_new_ledger_from_name_auto_delete(
     name: &str,
     genesis_config: &GenesisConfig,
-    access_type: AccessType,
     advanced_options: BlockstoreAdvancedOptions,
 ) -> (TempDir, Hash) {
     let ledger_path = get_ledger_path_from_name_auto_delete(name);
@@ -4419,7 +4409,6 @@ pub fn create_new_ledger_from_name_auto_delete(
         ledger_path.path(),
         genesis_config,
         MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        access_type,
         advanced_options,
     )
     .unwrap();
