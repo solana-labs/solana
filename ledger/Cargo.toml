@@ -1,6 +1,6 @@
 [package]
 name = "solana-ledger"
-version = "1.10.1"
+version = "1.10.2"
 description = "Solana ledger"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -31,21 +31,21 @@ rayon = "1.5.1"
 serde = "1.0.136"
 serde_bytes = "0.11.5"
 sha2 = "0.10.2"
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.10.1" }
-solana-entry = { path = "../entry", version = "=1.10.1" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.1" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.1" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.10.1" }
-solana-measure = { path = "../measure", version = "=1.10.1" }
-solana-metrics = { path = "../metrics", version = "=1.10.1" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.10.1" }
-solana-perf = { path = "../perf", version = "=1.10.1" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.1" }
-solana-runtime = { path = "../runtime", version = "=1.10.1" }
-solana-sdk = { path = "../sdk", version = "=1.10.1" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.1" }
-solana-storage-proto = { path = "../storage-proto", version = "=1.10.1" }
-solana-vote-program = { path = "../programs/vote", version = "=1.10.1" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.10.2" }
+solana-entry = { path = "../entry", version = "=1.10.2" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.2" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.2" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.10.2" }
+solana-measure = { path = "../measure", version = "=1.10.2" }
+solana-metrics = { path = "../metrics", version = "=1.10.2" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.10.2" }
+solana-perf = { path = "../perf", version = "=1.10.2" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.2" }
+solana-runtime = { path = "../runtime", version = "=1.10.2" }
+solana-sdk = { path = "../sdk", version = "=1.10.2" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.2" }
+solana-storage-proto = { path = "../storage-proto", version = "=1.10.2" }
+solana-vote-program = { path = "../programs/vote", version = "=1.10.2" }
 tempfile = "3.3.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
@@ -63,8 +63,8 @@ features = ["lz4"]
 [dev-dependencies]
 assert_matches = "1.5.0"
 matches = "0.1.9"
-solana-account-decoder = { path = "../account-decoder", version = "=1.10.1" }
-solana-logger = { path = "../logger", version = "=1.10.1" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.10.2" }
+solana-logger = { path = "../logger", version = "=1.10.2" }
 
 [build-dependencies]
 rustc_version = "0.4"
