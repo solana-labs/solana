@@ -2,11 +2,11 @@
 //! node stakes
 use {
     crate::{
-        stake_delegations::StakeDelegations,
         stake_history::StakeHistory,
         vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     dashmap::DashMap,
+    im::HashMap as ImHashMap,
     num_derive::ToPrimitive,
     num_traits::ToPrimitive,
     rayon::{
@@ -151,7 +151,7 @@ pub struct Stakes {
     vote_accounts: VoteAccounts,
 
     /// stake_delegations
-    stake_delegations: StakeDelegations,
+    stake_delegations: ImHashMap<Pubkey, Delegation>,
 
     /// unused
     unused: u64,
@@ -337,7 +337,7 @@ impl Stakes {
         &self.vote_accounts
     }
 
-    pub fn stake_delegations(&self) -> &StakeDelegations {
+    pub(crate) fn stake_delegations(&self) -> &ImHashMap<Pubkey, Delegation> {
         &self.stake_delegations
     }
 

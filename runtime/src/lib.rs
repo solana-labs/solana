@@ -52,7 +52,6 @@ pub mod snapshot_hash;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod sorted_storages;
-pub mod stake_delegations;
 pub mod stake_history;
 pub mod stake_weighted_timestamp;
 pub mod stakes;

@@ -22,6 +22,7 @@ dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
 flate2 = "1.0.22"
 fnv = "1.0.7"
+im = { version = "15.0.0", features = ["rayon", "serde"] }
 index_list = "0.2.7"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
