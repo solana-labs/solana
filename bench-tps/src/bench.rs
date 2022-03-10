@@ -475,6 +475,7 @@ fn do_tx_transfers<T: Client>(
             let tx_len = txs0.len();
             let transfer_start = Instant::now();
             let mut old_transactions = false;
+            let mut transactions = Vec::<_>::new();
             for tx in txs0 {
                 let now = timestamp();
                 // Transactions that are too old will be rejected by the cluster Don't bother
@@ -483,10 +484,13 @@ fn do_tx_transfers<T: Client>(
                     old_transactions = true;
                     continue;
                 }
-                client
-                    .async_send_transaction(tx.0)
-                    .expect("async_send_transaction in do_tx_transfers");
+                transactions.push(tx.0);
             }
+
+            if let Err(error) = client.async_send_batch(transactions) {
+                warn!("send_batch_sync in do_tx_transfers failed: {}", error);
+            }
+
             if old_transactions {
                 let mut shared_txs_wl = shared_txs.write().expect("write lock in do_tx_transfers");
                 shared_txs_wl.clear();

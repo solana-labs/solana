@@ -7,7 +7,10 @@ use {
     },
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::thin_client::{create_client, ThinClient},
+    solana_client::{
+        thin_client::{create_client, ThinClient},
+        udp_client::UdpTpuConnection,
+    },
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
@@ -194,7 +197,10 @@ pub fn discover(
 }
 
 /// Creates a ThinClient per valid node
-pub fn get_clients(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -> Vec<ThinClient> {
+pub fn get_clients(
+    nodes: &[ContactInfo],
+    socket_addr_space: &SocketAddrSpace,
+) -> Vec<ThinClient<UdpTpuConnection>> {
     nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
@@ -203,7 +209,10 @@ pub fn get_clients(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -
 }
 
 /// Creates a ThinClient by selecting a valid node at random
-pub fn get_client(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -> ThinClient {
+pub fn get_client(
+    nodes: &[ContactInfo],
+    socket_addr_space: &SocketAddrSpace,
+) -> ThinClient<UdpTpuConnection> {
     let nodes: Vec<_> = nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
@@ -215,7 +224,7 @@ pub fn get_client(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) ->
 pub fn get_multi_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
-) -> (ThinClient, usize) {
+) -> (ThinClient<UdpTpuConnection>, usize) {
     let addrs: Vec<_> = nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
@@ -229,7 +238,8 @@ pub fn get_multi_client(
     .unwrap();
     let num_nodes = tpu_addrs.len();
     (
-        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
+        //TODO: make it configurable whether to use quic
+        ThinClient::<UdpTpuConnection>::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
         num_nodes,
     )
 }

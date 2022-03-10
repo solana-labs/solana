@@ -8,6 +8,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
+        quic::QUIC_MAX_CONCURRENT_STREAMS,
         signature::Keypair,
         timing,
     },
@@ -49,7 +50,8 @@ fn configure_server(
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
-    const MAX_CONCURRENT_UNI_STREAMS: u32 = 1;
+    // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
+    const MAX_CONCURRENT_UNI_STREAMS: u32 = (QUIC_MAX_CONCURRENT_STREAMS * 2) as u32;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
     config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
