@@ -16440,17 +16440,11 @@ pub(crate) mod tests {
 
     /// Test exceeding the max accounts data size by creating accounts in a loop
     #[test]
-<<<<<<< HEAD
-    fn test_accounts_data_budget_exceeded() {
-        use solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN;
-        use solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
-=======
     fn test_max_accounts_data_size_exceeded() {
         use {
             solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
             solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH,
         };
->>>>>>> 3c6840050 (Ensure blocks do not exceed the max accounts data size during Replay Stage (#23422))
 
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
