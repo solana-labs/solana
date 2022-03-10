@@ -36,7 +36,7 @@ fn process_instruction(
         REALLOC_EXTEND => {
             let pre_len = account.data_len();
             let (bytes, _) = instruction_data[2..].split_at(std::mem::size_of::<usize>());
-            let new_len = pre_len + usize::from_le_bytes(bytes.try_into().unwrap());
+            let new_len = pre_len.saturating_add(usize::from_le_bytes(bytes.try_into().unwrap()));
             msg!("realloc extend by {}", new_len);
             account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
@@ -45,7 +45,7 @@ fn process_instruction(
             let pre_len = account.data_len();
             let fill = instruction_data[2];
             let (bytes, _) = instruction_data[4..].split_at(std::mem::size_of::<usize>());
-            let new_len = pre_len + usize::from_le_bytes(bytes.try_into().unwrap());
+            let new_len = pre_len.saturating_add(usize::from_le_bytes(bytes.try_into().unwrap()));
             msg!("realloc extend by {}", new_len);
             account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
@@ -61,8 +61,11 @@ fn process_instruction(
         REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM => {
             msg!("realloc and assign to self via system program");
             let pre_len = account.data_len();
-            account.realloc(pre_len + MAX_PERMITTED_DATA_INCREASE, false)?;
-            assert_eq!(pre_len + MAX_PERMITTED_DATA_INCREASE, account.data_len());
+            account.realloc(pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE), false)?;
+            assert_eq!(
+                pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE),
+                account.data_len()
+            );
             invoke(
                 &system_instruction::assign(account.key, program_id),
                 accounts,
@@ -77,8 +80,11 @@ fn process_instruction(
                 accounts,
             )?;
             assert_eq!(account.owner, program_id);
-            account.realloc(pre_len + MAX_PERMITTED_DATA_INCREASE, false)?;
-            assert_eq!(account.data_len(), pre_len + MAX_PERMITTED_DATA_INCREASE);
+            account.realloc(pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE), false)?;
+            assert_eq!(
+                account.data_len(),
+                pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE)
+            );
         }
         DEALLOC_AND_ASSIGN_TO_CALLER => {
             msg!("dealloc and assign to caller");

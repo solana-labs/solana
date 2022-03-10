@@ -19,7 +19,7 @@ pub fn realloc(program_id: &Pubkey, address: &Pubkey, size: usize, bump: &mut u8
     let mut instruction_data = vec![REALLOC, *bump];
     instruction_data.extend_from_slice(&size.to_le_bytes());
 
-    *bump += 1;
+    *bump = bump.saturating_add(1);
 
     Instruction::new_with_bytes(
         *program_id,
@@ -37,7 +37,7 @@ pub fn realloc_extend(
     let mut instruction_data = vec![REALLOC_EXTEND, *bump];
     instruction_data.extend_from_slice(&size.to_le_bytes());
 
-    *bump += 1;
+    *bump = bump.saturating_add(1);
 
     Instruction::new_with_bytes(
         *program_id,
@@ -61,7 +61,7 @@ pub fn realloc_extend_and_fill(
     ];
     instruction_data.extend_from_slice(&size.to_le_bytes());
 
-    *bump += 1;
+    *bump = bump.saturating_add(1);
 
     Instruction::new_with_bytes(
         *program_id,

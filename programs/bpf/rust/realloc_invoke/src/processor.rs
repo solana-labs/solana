@@ -52,7 +52,7 @@ fn process_instruction(
                 &realloc(
                     invoke_program_id,
                     account.key,
-                    MAX_PERMITTED_DATA_INCREASE + 1,
+                    MAX_PERMITTED_DATA_INCREASE.saturating_add(1),
                     &mut bump,
                 ),
                 accounts,
@@ -69,7 +69,10 @@ fn process_instruction(
                 ),
                 accounts,
             )?;
-            assert_eq!(pre_len + MAX_PERMITTED_DATA_INCREASE, account.data_len());
+            assert_eq!(
+                pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE),
+                account.data_len()
+            );
         }
         INVOKE_REALLOC_MAX_TWICE => {
             msg!("invoke realloc max twice");
@@ -82,10 +85,13 @@ fn process_instruction(
                 ),
                 accounts,
             )?;
-            let new_len = pre_len + MAX_PERMITTED_DATA_INCREASE;
+            let new_len = pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE);
             assert_eq!(new_len, account.data_len());
-            account.realloc(new_len + MAX_PERMITTED_DATA_INCREASE, false)?;
-            assert_eq!(new_len + MAX_PERMITTED_DATA_INCREASE, account.data_len());
+            account.realloc(new_len.saturating_add(MAX_PERMITTED_DATA_INCREASE), false)?;
+            assert_eq!(
+                new_len.saturating_add(MAX_PERMITTED_DATA_INCREASE),
+                account.data_len()
+            );
         }
         INVOKE_REALLOC_AND_ASSIGN => {
             msg!("invoke realloc and assign");
@@ -97,7 +103,10 @@ fn process_instruction(
                 ),
                 accounts,
             )?;
-            assert_eq!(pre_len + MAX_PERMITTED_DATA_INCREASE, account.data_len());
+            assert_eq!(
+                pre_len.saturating_add(MAX_PERMITTED_DATA_INCREASE),
+                account.data_len()
+            );
             assert_eq!(*account.owner, system_program::id());
         }
         INVOKE_REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM => {
@@ -197,8 +206,8 @@ fn process_instruction(
                 accounts,
             )?;
             assert_eq!(pre_len, accounts[1].data_len());
-            accounts[1].realloc(pre_len + 1, false)?;
-            assert_eq!(pre_len + 1, accounts[1].data_len());
+            accounts[1].realloc(pre_len.saturating_add(1), false)?;
+            assert_eq!(pre_len.saturating_add(1), accounts[1].data_len());
             assert_eq!(accounts[1].owner, program_id);
             let final_len: usize = 200;
             let mut new_instruction_data = vec![];
@@ -221,7 +230,7 @@ fn process_instruction(
             msg!("realloc zerod");
             let (bytes, _) = instruction_data[2..].split_at(std::mem::size_of::<usize>());
             let pre_len = usize::from_le_bytes(bytes.try_into().unwrap());
-            let new_len = pre_len * 2;
+            let new_len = pre_len.saturating_mul(2);
             assert_eq!(pre_len, 100);
             {
                 let data = account.try_borrow_mut_data()?;
