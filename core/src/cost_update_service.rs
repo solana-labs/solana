@@ -157,8 +157,12 @@ impl CostUpdateService {
     ) -> u64 {
         let mut update_count = 0_u64;
         for (program_id, program_timings) in &mut execute_timings.details.per_program_timings {
-            let current_estimated_program_cost =
-                cost_model.read().unwrap().find_instruction_cost(program_id);
+            let current_estimated_program_cost = {
+                match cost_model.read().unwrap().find_instruction_cost_raw(program_id) {
+                    Some((_, ema, _)) => ema.ceil() as u64,
+                    None => 200_000u64,
+                }
+            };
             program_timings.coalesce_error_timings(current_estimated_program_cost);
 
             if program_timings.count < 1 {
@@ -413,4 +417,55 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_cndy_cost() {
+        solana_logger::setup();
+        let cost_model = Arc::new(RwLock::new(CostModel::default()));
+
+        const CNDY_FILE: &str = "/Users/taozhu/Solana/dv1/per.programs.timings.csv";
+        const CNDY_KEY: &str = "cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ";
+
+        use std::str::FromStr;
+        let cndy_key = Pubkey::from_str(&CNDY_KEY).unwrap();
+
+        let mut reader = csv::ReaderBuilder::new().has_headers(true).from_path(CNDY_FILE).expect("cannot open file");
+        for record in reader.records() {
+            let record = record.unwrap();
+            let units = record[1].trim().parse::<u64>().unwrap();
+            let count = record[2].trim().parse::<u32>().unwrap();
+            let err_count = record[3].trim().parse::<u64>().unwrap_or(0);
+            let err_units = record[4].trim().parse::<u64>().unwrap_or(0);
+            let execute_us = record[5].trim().parse::<u64>().unwrap();
+
+            let errored_txs_compute_consumed = if err_count > 0 {
+                vec![err_units / err_count; err_count as usize]
+            } else {
+                vec![]
+            };
+            let total_errored_units = errored_txs_compute_consumed.iter().sum();
+
+            let mut execute_timings = ExecuteTimings::default();
+            execute_timings.details.per_program_timings.insert(
+                cndy_key.clone(),
+                ProgramTiming {
+                    accumulated_us: execute_us, 
+                    accumulated_units: units,
+                    count,
+                    errored_txs_compute_consumed,
+                    total_errored_units,
+                },
+            );
+            let _ = CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
+            let (updated_cost, ema, ema_var) = cost_model
+                    .read()
+                    .unwrap()
+                    .find_instruction_cost_raw(&cndy_key)
+                    .unwrap_or((0.0, 0.0, 0.0));
+
+            info!("units {} count {} err_cout {} err_units {} cost {} ema {} ema_var {}", 
+                units, count, err_count, err_units, updated_cost, ema, ema_var);
+        }
+    }
+
 }

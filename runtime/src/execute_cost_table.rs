@@ -80,6 +80,17 @@ impl ExecuteCostTable {
         }
     }
 
+    // returns raw computational data
+    // (cost, ema, ema_var)
+    pub fn get_cost_raw(&self, key: &Pubkey) -> Option<(f64, f64, f64)> {
+        let aggregated = self.table.get(key)?;
+        Some((
+            aggregated.ema + 2.0 * aggregated.ema_var.sqrt(),
+            aggregated.ema,
+            aggregated.ema_var,
+        ))
+    }
+
     pub fn upsert(&mut self, key: &Pubkey, value: u64) {
         let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
@@ -320,5 +331,31 @@ mod tests {
         // update cost
         testee.upsert(&key1, cost2);
         assert!(testee.get_cost(&key1).is_none());
+    }
+
+    #[test]
+    fn test_cndy_cost() {
+        solana_logger::setup();
+        let mut testee = ExecuteCostTable::default();
+
+        const CNDY_FILE: &str = "/Users/taozhu/Solana/dv1/per.programs.timings.csv";
+        const CNDY_KEY: &str = "cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ";
+
+        use std::str::FromStr;
+        let cndy_key = Pubkey::from_str(&CNDY_KEY).unwrap();
+
+        let mut reader = csv::ReaderBuilder::new().has_headers(true).from_path(CNDY_FILE).expect("cannot open file");
+        for record in reader.records() {
+            let record = record.unwrap();
+            let units = record[1].trim().parse::<u64>().unwrap();
+            let count = record[2].trim().parse::<u64>().unwrap();
+            // NOTE: there are 2100 record of `"2022-03-09T15:10:16.987Z","0","0","171"`
+            //       these might be the failed execution, so it'd involve the coalease logic. try
+            //       it later
+            if count > 0 {
+                testee.upsert(&cndy_key, units/count);
+                info!("units {} count {} value {} cost {}", units, count, units/count, testee.get_cost(&cndy_key).unwrap());
+            }
+        }
     }
 }

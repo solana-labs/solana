@@ -117,6 +117,10 @@ impl CostModel {
         }
     }
 
+    pub fn find_instruction_cost_raw(&self, program_key: &Pubkey) -> Option<(f64, f64, f64)> {
+        self.instruction_execution_cost_table.get_cost_raw(program_key)
+    }
+
     pub fn get_program_keys(&self) -> Vec<&Pubkey> {
         self.instruction_execution_cost_table.get_program_keys()
     }
