@@ -110,7 +110,6 @@ export function GenericAnchorDetailsCard(props: {
           )}`}
           innerCards={innerCards}
           childIndex={childIndex}
-          defaultRaw
         >
           <tr key={ix.programId.toBase58()}>
             <td>Program</td>
