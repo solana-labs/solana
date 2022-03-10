@@ -6,6 +6,7 @@
 //!
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
 
+pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
 use crate::rpc_deprecated_config::{
     RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
@@ -56,8 +57,6 @@ use {
     },
     tokio::{sync::RwLock, time::sleep},
 };
-
-pub use crate::mock_sender::Mocks;
 
 /// A client of a remote Solana node.
 ///

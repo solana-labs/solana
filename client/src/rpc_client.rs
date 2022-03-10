@@ -6,6 +6,7 @@
 //!
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
 
+pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
 use crate::rpc_deprecated_config::{RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig};
 use {
@@ -43,8 +44,6 @@ use {
     },
     std::{net::SocketAddr, str::FromStr, time::Duration},
 };
-
-pub use crate::mock_sender::Mocks;
 
 #[derive(Default)]
 pub struct RpcClientConfig {
