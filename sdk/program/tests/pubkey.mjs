@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { init, Pubkey } from "crate";
-init();
+import { solana_program_init, Pubkey } from "crate";
+solana_program_init();
 
 // TODO: wasm_bindgen doesn't currently support exporting constants
 const MAX_SEED_LEN = 32;
