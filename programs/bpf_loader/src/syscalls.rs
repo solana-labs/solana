@@ -25,9 +25,9 @@ use {
             self, add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
             check_physical_overlapping, disable_fees_sysvar, do_support_realloc,
             fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            syscall_saturated_math, update_syscall_base_costs,
+            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1677,7 +1677,21 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
                 return;
             }
         };
-        let recovery_id = match libsecp256k1::RecoveryId::parse(recovery_id_val as u8) {
+        let adjusted_recover_id_val = if invoke_context
+            .feature_set
+            .is_active(&limit_secp256k1_recovery_id::id())
+        {
+            match recovery_id_val.try_into() {
+                Ok(adjusted_recover_id_val) => adjusted_recover_id_val,
+                Err(_) => {
+                    *result = Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
+                    return;
+                }
+            }
+        } else {
+            recovery_id_val as u8
+        };
+        let recovery_id = match libsecp256k1::RecoveryId::parse(adjusted_recover_id_val) {
             Ok(id) => id,
             Err(_) => {
                 *result = Ok(Secp256k1RecoverError::InvalidRecoveryId.into());

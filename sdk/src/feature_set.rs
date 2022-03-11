@@ -323,6 +323,10 @@ pub mod check_physical_overlapping {
     solana_sdk::declare_id!("nWBqjr3gpETbiaVj3CBJ3HFC5TMdnJDGt21hnvSTvVZ");
 }
 
+pub mod limit_secp256k1_recovery_id {
+    solana_sdk::declare_id!("7g9EUwj4j7CS21Yx1wvgWLjSZeh5aPq8x9kpoPwXM8n8");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -398,6 +402,7 @@ lazy_static! {
         (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
         (syscall_saturated_math::id(), "syscalls use saturated math"),
         (check_physical_overlapping::id(), "check physical overlapping regions"),
+        (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
