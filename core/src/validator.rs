@@ -1797,11 +1797,11 @@ mod tests {
         serial_test::serial,
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        std::fs::remove_dir_all,
+        std::{fs::remove_dir_all, thread, time},
     };
 
     #[test]
-    #[serial]
+    #[serial(serial_run_validator_exit)]
     fn validator_exit() {
         solana_logger::setup();
         let leader_keypair = Keypair::new();
@@ -1838,6 +1838,8 @@ mod tests {
         );
         validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
+
+        thread::sleep(time::Duration::from_millis(10));
     }
 
     #[test]
@@ -1882,7 +1884,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(serial_run_validator_exit)]
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -1928,6 +1930,8 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
+
+        thread::sleep(time::Duration::from_millis(10));
     }
 
     #[test]
