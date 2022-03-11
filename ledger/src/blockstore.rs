@@ -518,6 +518,13 @@ impl BlockstoreRocksDbColumnFamilyMetrics {
     }
 }
 
+macro_rules! rocksdb_metric_header {
+    ($metric_name:literal, $cf_name:literal) => {
+        concat!($metric_name, ",cf_name=", $cf_name)
+    };
+}
+use rocksdb_metric_header;
+
 impl Blockstore {
     pub fn db(self) -> Arc<Database> {
         self.db
@@ -937,33 +944,82 @@ impl Blockstore {
     /// Collects and reports [`BlockstoreRocksDbColumnFamilyMetrics`] for the
     /// all the column families.
     pub fn submit_rocksdb_cf_metrics_for_all_cfs(&self) {
-        self.submit_rocksdb_cf_metrics::<cf::SlotMeta>(rocksdb_cf_metric!("slot_meta"));
-        self.submit_rocksdb_cf_metrics::<cf::DeadSlots>(rocksdb_cf_metric!("dead_slots"));
-        self.submit_rocksdb_cf_metrics::<cf::DuplicateSlots>(rocksdb_cf_metric!("duplicate_slots"));
-        self.submit_rocksdb_cf_metrics::<cf::ErasureMeta>(rocksdb_cf_metric!("erasure_meta"));
-        self.submit_rocksdb_cf_metrics::<cf::Orphans>(rocksdb_cf_metric!("orphans"));
-        self.submit_rocksdb_cf_metrics::<cf::BankHash>(rocksdb_cf_metric!("bank_hash"));
-        self.submit_rocksdb_cf_metrics::<cf::Root>(rocksdb_cf_metric!("root"));
-        self.submit_rocksdb_cf_metrics::<cf::Index>(rocksdb_cf_metric!("index"));
-        self.submit_rocksdb_cf_metrics::<cf::ShredData>(rocksdb_cf_metric!("shred_data"));
-        self.submit_rocksdb_cf_metrics::<cf::ShredCode>(rocksdb_cf_metric!("shred_code"));
-        self.submit_rocksdb_cf_metrics::<cf::TransactionStatus>(rocksdb_cf_metric!(
+        self.submit_rocksdb_cf_metrics::<cf::SlotMeta>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "slot_meta"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::DeadSlots>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "dead_slots"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::DuplicateSlots>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "duplicate_slots"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::ErasureMeta>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "erasure_meta"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::Orphans>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "orphans"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::BankHash>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "bank_hash"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::Root>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "root"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::Index>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "index"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::ShredData>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "shred_data"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::ShredCode>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "shred_code"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::TransactionStatus>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
             "transaction_status"
         ));
-        self.submit_rocksdb_cf_metrics::<cf::AddressSignatures>(rocksdb_cf_metric!(
+        self.submit_rocksdb_cf_metrics::<cf::AddressSignatures>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
             "address_signature"
         ));
-        self.submit_rocksdb_cf_metrics::<cf::TransactionMemos>(rocksdb_cf_metric!(
+        self.submit_rocksdb_cf_metrics::<cf::TransactionMemos>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
             "transaction_memos"
         ));
-        self.submit_rocksdb_cf_metrics::<cf::TransactionStatusIndex>(rocksdb_cf_metric!(
+        self.submit_rocksdb_cf_metrics::<cf::TransactionStatusIndex>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
             "transaction_status_index"
         ));
-        self.submit_rocksdb_cf_metrics::<cf::Rewards>(rocksdb_cf_metric!("rewards"));
-        self.submit_rocksdb_cf_metrics::<cf::Blocktime>(rocksdb_cf_metric!("blocktime"));
-        self.submit_rocksdb_cf_metrics::<cf::PerfSamples>(rocksdb_cf_metric!("perf_sample"));
-        self.submit_rocksdb_cf_metrics::<cf::BlockHeight>(rocksdb_cf_metric!("block_height"));
-        self.submit_rocksdb_cf_metrics::<cf::ProgramCosts>(rocksdb_cf_metric!("program_costs"));
+        self.submit_rocksdb_cf_metrics::<cf::Rewards>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "rewards"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::Blocktime>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "blocktime"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::PerfSamples>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "perf_sample"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::BlockHeight>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "block_height"
+        ));
+        self.submit_rocksdb_cf_metrics::<cf::ProgramCosts>(rocksdb_metric_header!(
+            "blockstore_rocksdb_cfs",
+            "program_costs"
+        ));
     }
 
     /// Collects and reports [`BlockstoreRocksDbColumnFamilyMetrics`] for the
@@ -4201,13 +4257,6 @@ macro_rules! get_tmp_ledger_path_auto_delete {
         $crate::blockstore::get_ledger_path_from_name_auto_delete($crate::tmp_ledger_name!())
     };
 }
-
-macro_rules! rocksdb_cf_metric {
-    ($tag_name:literal) => {
-        concat!("blockstore_rocksdb_cfs,cf_name=", $tag_name)
-    };
-}
-use rocksdb_cf_metric;
 
 pub fn get_ledger_path_from_name_auto_delete(name: &str) -> TempDir {
     let mut path = get_ledger_path_from_name(name);
