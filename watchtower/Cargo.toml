@@ -11,8 +11,8 @@ documentation = "https://docs.rs/solana-watchtower"
 
 [dependencies]
 clap = "2.33.1"
-log = "0.4.14"
 humantime = "2.0.1"
+log = "0.4.14"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.2" }
 solana-cli-config = { path = "../cli-config", version = "=1.10.2" }
 solana-cli-output = { path = "../cli-output", version = "=1.10.2" }

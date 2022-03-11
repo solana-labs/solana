@@ -20,7 +20,7 @@ arrayref = "0.3.6"
 bincode = "1"
 byteorder = "1"
 cipher = "0.4"
-curve25519-dalek = { version = "3.2.1", features = ["serde"]}
+curve25519-dalek = { version = "3.2.1", features = ["serde"] }
 getrandom = { version = "0.1", features = ["dummy"] }
 lazy_static = "1.4.0"
 merlin = "3"

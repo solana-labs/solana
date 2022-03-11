@@ -10,8 +10,8 @@ documentation = "https://docs.rs/solana-merkle-tree"
 edition = "2021"
 
 [dependencies]
-solana-program = { path = "../sdk/program", version = "=1.10.2" }
 fast-math = "0.1"
+solana-program = { path = "../sdk/program", version = "=1.10.2" }
 
 # This can go once the BPF toolchain target Rust 1.42.0+
 [target.bpfel-unknown-unknown.dependencies]

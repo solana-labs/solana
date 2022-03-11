@@ -12,8 +12,8 @@ publish = true
 
 [dependencies]
 clap = "2.33.1"
-log = "0.4.14"
 libc = "0.2.119"
+log = "0.4.14"
 solana-logger = { path = "../logger", version = "=1.10.2" }
 solana-version = { path = "../version", version = "=1.10.2" }
 
