@@ -17,6 +17,5 @@ solana-metrics = { path = "../metrics", version = "=1.10.2" }
 name = "solana-upload-perf"
 path = "src/upload-perf.rs"
 
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

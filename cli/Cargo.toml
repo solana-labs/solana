@@ -13,13 +13,13 @@ documentation = "https://docs.rs/solana-cli"
 bincode = "1.3.3"
 bs58 = "0.4.0"
 clap = "2.33.1"
-criterion-stats = "0.3.0"
-ctrlc = { version = "3.2.1", features = ["termination"] }
 console = "0.15.0"
 const_format = "0.2.22"
+criterion-stats = "0.3.0"
 crossbeam-channel = "0.5"
-log = "0.4.14"
+ctrlc = { version = "3.2.1", features = ["termination"] }
 humantime = "2.0.1"
+log = "0.4.14"
 num-traits = "0.2"
 pretty-hex = "0.2.1"
 reqwest = { version = "0.11.9", default-features = false, features = ["blocking", "rustls-tls", "json"] }
@@ -37,12 +37,12 @@ solana-config-program = { path = "../programs/config", version = "=1.10.2" }
 solana-faucet = { path = "../faucet", version = "=1.10.2" }
 solana-logger = { path = "../logger", version = "=1.10.2" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.10.2" }
-solana_rbpf = "=0.2.24"
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.2" }
 solana-sdk = { path = "../sdk", version = "=1.10.2" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.2" }
 solana-version = { path = "../version", version = "=1.10.2" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.2" }
+solana_rbpf = "=0.2.24"
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"

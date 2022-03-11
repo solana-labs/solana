@@ -21,21 +21,20 @@ solana-gossip = { path = "../gossip", version = "=1.10.2" }
 solana-ledger = { path = "../ledger", version = "=1.10.2" }
 solana-logger = { path = "../logger", version = "=1.10.2" }
 solana-net-utils = { path = "../net-utils", version = "=1.10.2" }
-solana-rpc = { path = "../rpc", version = "=1.10.2" }
 solana-replica-lib = { path = "../replica-lib", version = "=1.10.2" }
+solana-rpc = { path = "../rpc", version = "=1.10.2" }
 solana-runtime = { path = "../runtime", version = "=1.10.2" }
 solana-sdk = { path = "../sdk", version = "=1.10.2" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.2" }
 solana-streamer = { path = "../streamer", version = "=1.10.2" }
-solana-version = { path = "../version", version = "=1.10.2" }
 solana-validator = { path = "../validator", version = "=1.10.2" }
+solana-version = { path = "../version", version = "=1.10.2" }
 
 [dev-dependencies]
 serial_test = "0.6.0"
 solana-core = { path = "../core", version = "=1.10.2" }
 solana-local-cluster = { path = "../local-cluster", version = "=1.10.2" }
 tempfile = "3.3.0"
-
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

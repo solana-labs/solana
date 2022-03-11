@@ -11,13 +11,13 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-solana-sdk = { path = "../sdk", version = "=1.10.2" }
-memmap2 = "0.5.3"
 log = { version = "0.4.11" }
-solana-measure = { path = "../measure", version = "=1.10.2" }
-rand = "0.7.0"
-tempfile = "3.3.0"
+memmap2 = "0.5.3"
 modular-bitfield = "0.11.2"
+rand = "0.7.0"
+solana-measure = { path = "../measure", version = "=1.10.2" }
+solana-sdk = { path = "../sdk", version = "=1.10.2" }
+tempfile = "3.3.0"
 
 [dev-dependencies]
 fs_extra = "1.2.0"

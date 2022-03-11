@@ -10,9 +10,9 @@ documentation = "https://docs.rs/solana-download-utils"
 edition = "2021"
 
 [dependencies]
-solana-sdk = { path = "../sdk", version = "=1.10.2" }
 solana-download-utils = { path = "../download-utils", version = "=1.10.2" }
 solana-runtime = { path = "../runtime", version = "=1.10.2" }
+solana-sdk = { path = "../sdk", version = "=1.10.2" }
 
 [lib]
 crate-type = ["lib"]

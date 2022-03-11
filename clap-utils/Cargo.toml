@@ -10,16 +10,16 @@ documentation = "https://docs.rs/solana-clap-utils"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4"
 clap = "2.33.0"
 rpassword = "5.0"
 solana-perf = { path = "../perf", version = "=1.10.2" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.2", default-features = false}
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.2", default-features = false }
 solana-sdk = { path = "../sdk", version = "=1.10.2" }
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 uriparse = "0.6.3"
 url = "2.2.2"
-chrono = "0.4"
 
 [dev-dependencies]
 tempfile = "3.3.0"

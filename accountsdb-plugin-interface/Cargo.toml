@@ -11,9 +11,9 @@ documentation = "https://docs.rs/solana-accountsdb-plugin-interface"
 
 [dependencies]
 log = "0.4.11"
-thiserror = "1.0.30"
 solana-sdk = { path = "../sdk", version = "=1.10.2" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.2" }
+thiserror = "1.0.30"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

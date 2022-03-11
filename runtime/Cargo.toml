@@ -17,8 +17,8 @@ bv = { version = "0.11.1", features = ["serde"] }
 bytemuck = "1.8.0"
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
-dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 crossbeam-channel = "0.5"
+dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
 flate2 = "1.0.22"
 fnv = "1.0.7"
@@ -27,9 +27,9 @@ itertools = "0.10.3"
 lazy_static = "1.4.0"
 log = "0.4.14"
 memmap2 = "0.5.3"
-num_cpus = "1.13.1"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
+num_cpus = "1.13.1"
 ouroboros = "0.14.2"
 rand = "0.7.0"
 rayon = "1.5.1"

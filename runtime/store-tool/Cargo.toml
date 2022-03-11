@@ -10,11 +10,11 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
+clap = "2.33.1"
 log = { version = "0.4.14" }
 solana-logger = { path = "../../logger", version = "=1.10.2" }
-solana-version = { path = "../../version", version = "=1.10.2" }
 solana-runtime = { path = "..", version = "=1.10.2" }
-clap = "2.33.1"
+solana-version = { path = "../../version", version = "=1.10.2" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -21,8 +21,8 @@ tokio = { version = "1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 
 [dev-dependencies]
-solana-runtime = { path = "../runtime", version = "=1.10.2" }
 solana-banks-server = { path = "../banks-server", version = "=1.10.2" }
+solana-runtime = { path = "../runtime", version = "=1.10.2" }
 
 [lib]
 crate-type = ["lib"]
