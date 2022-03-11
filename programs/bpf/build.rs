@@ -39,8 +39,7 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 fn main() {
     let bpf_c = env::var("CARGO_FEATURE_BPF_C").is_ok();
     if bpf_c {
-        let install_dir =
-            "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+        let install_dir = "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + "/bpf";
 
         println!("cargo:warning=(not a warning) Building C-based BPF programs");
         assert!(Command::new("make")
@@ -56,8 +55,7 @@ fn main() {
 
     let bpf_rust = env::var("CARGO_FEATURE_BPF_RUST").is_ok();
     if bpf_rust {
-        let install_dir =
-            "target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+        let install_dir = "target/".to_string() + &env::var("PROFILE").unwrap() + "/bpf";
 
         let rust_programs = [
             "128bit",
