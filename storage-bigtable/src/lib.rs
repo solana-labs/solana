@@ -466,7 +466,7 @@ impl LedgerStorage {
         );
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
-        let row_keys: Vec<RowKey> = slots.into_iter().map(|s| slot_to_blocks_key(s)).collect();
+        let row_keys: Vec<RowKey> = slots.into_iter().map(slot_to_blocks_key).collect();
         let data: Vec<(Slot, ConfirmedBlock)> = bigtable
             .get_protobuf_or_bincode_cells::<StoredConfirmedBlock, generated::ConfirmedBlock>(
                 "blocks",
@@ -479,7 +479,7 @@ impl LedgerStorage {
                     bigtable::CellData::Bincode(block) => block.into(),
                     bigtable::CellData::Protobuf(block) => block.try_into().ok()?,
                 };
-                Some((key_to_slot(&(row_key.to_string())).unwrap(), block))
+                Some((key_to_slot(&row_key).unwrap(), block))
             })
             .collect();
         Ok(data)
