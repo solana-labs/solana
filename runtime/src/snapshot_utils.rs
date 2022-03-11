@@ -1257,18 +1257,11 @@ pub fn purge_old_snapshot_archives<P>(
     snapshot_archives.sort_unstable();
     snapshot_archives.reverse();
     let max_snaps = max(1, maximum_full_snapshot_archives_to_retain); // Always keep at least one snapshot
-    if snapshot_archives.len() > max_snaps {
-        info!(
-            "There are {} full snapshot archives, purging {} of them",
-            snapshot_archives.len(),
-            snapshot_archives.len() - max_snaps
-        );
-    } else {
-        info!(
-            "There are {} full snapshot archives",
-            snapshot_archives.len()
-        );
-    }
+    trace!(
+        "There are {} full snapshot archives, purging {} of them",
+        snapshot_archives.len(),
+        snapshot_archives.len().saturating_sub(max_snaps)
+    );
 
     for old_archive in snapshot_archives.into_iter().skip(max_snaps) {
         trace!(
@@ -1310,30 +1303,19 @@ pub fn purge_old_snapshot_archives<P>(
         });
 
     if !incremental_snapshot_archives_with_different_base_slot.is_empty() {
-        info!(
+        trace!(
             "Purging {} incremental snapshot archives with a different base slot than the highest full snapshot slot",
             incremental_snapshot_archives_with_different_base_slot.len()
         );
-    } else {
-        info!("There are no incremental snapshot archives with a different base slot than the highest full snapshot slot");
     }
+    trace!(
+        "There are {} incremental snapshots with same base slot as the highest full snapshot slot, purging {} of them",
+        incremental_snapshot_archives_with_same_base_slot.len(),
+        incremental_snapshot_archives_with_same_base_slot.len()
+            .saturating_sub(maximum_incremental_snapshot_archives_to_retain)
+    );
+
     incremental_snapshot_archives_with_same_base_slot.sort_unstable();
-
-    if incremental_snapshot_archives_with_same_base_slot.len()
-        > maximum_incremental_snapshot_archives_to_retain
-    {
-        info!(
-            "There are {} incremental snapshots with same base slot than the highest full snapshot slot, purging {} of them",
-            incremental_snapshot_archives_with_same_base_slot.len(),
-            incremental_snapshot_archives_with_same_base_slot.len() - maximum_incremental_snapshot_archives_to_retain
-        );
-    } else {
-        info!(
-            "There are {} incremental snapshot archives with same base slot than the highest full snapshot slot",
-            incremental_snapshot_archives_with_same_base_slot.len()
-        );
-    }
-
     incremental_snapshot_archives_with_different_base_slot
         .iter()
         .chain(
