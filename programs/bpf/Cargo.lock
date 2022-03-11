@@ -2679,7 +2679,7 @@ name = "solana-account-decoder"
 version = "1.10.2"
 dependencies = [
  "Inflector",
- "base64 0.12.3",
+ "base64 0.13.0",
  "bincode",
  "bs58 0.4.0",
  "bv",
@@ -3523,7 +3523,7 @@ name = "solana-program-test"
 version = "1.10.2"
 dependencies = [
  "async-trait",
- "base64 0.12.3",
+ "base64 0.13.0",
  "bincode",
  "chrono-humanize",
  "log",
@@ -3728,7 +3728,7 @@ name = "solana-transaction-status"
 version = "1.10.2"
 dependencies = [
  "Inflector",
- "base64 0.12.3",
+ "base64 0.13.0",
  "bincode",
  "bs58 0.4.0",
  "lazy_static",
