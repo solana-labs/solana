@@ -5,11 +5,10 @@ import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
 import {
   LOADER_IDS,
-  PROGRAM_NAME_BY_ID,
+  PROGRAM_INFO_BY_ID,
   SPECIAL_IDS,
   SYSVAR_IDS,
   LoaderName,
-  programLabel,
 } from "utils/tx";
 import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
@@ -73,10 +72,9 @@ export function SearchBar() {
 }
 
 function buildProgramOptions(search: string, cluster: Cluster) {
-  const matchedPrograms = Object.entries(PROGRAM_NAME_BY_ID).filter(
-    ([address]) => {
-      const name = programLabel(address, cluster);
-      if (!name) return false;
+  const matchedPrograms = Object.entries(PROGRAM_INFO_BY_ID).filter(
+    ([address, { name, deployments }]) => {
+      if (!deployments.includes(cluster)) return false;
       return (
         name.toLowerCase().includes(search.toLowerCase()) ||
         address.includes(search)
@@ -87,10 +85,10 @@ function buildProgramOptions(search: string, cluster: Cluster) {
   if (matchedPrograms.length > 0) {
     return {
       label: "Programs",
-      options: matchedPrograms.map(([id, name]) => ({
+      options: matchedPrograms.map(([address, { name }]) => ({
         label: name,
-        value: [name, id],
-        pathname: "/address/" + id,
+        value: [name, address],
+        pathname: "/address/" + address,
       })),
     };
   }
