@@ -2273,6 +2273,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
 
 /// Rust representation of C's SolInstruction
 #[derive(Debug)]
+#[repr(C)]
 struct SolInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
@@ -2283,6 +2284,7 @@ struct SolInstruction {
 
 /// Rust representation of C's SolAccountMeta
 #[derive(Debug)]
+#[repr(C)]
 struct SolAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
@@ -2291,6 +2293,7 @@ struct SolAccountMeta {
 
 /// Rust representation of C's SolAccountInfo
 #[derive(Debug)]
+#[repr(C)]
 struct SolAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
@@ -2307,6 +2310,7 @@ struct SolAccountInfo {
 
 /// Rust representation of C's SolSignerSeed
 #[derive(Debug)]
+#[repr(C)]
 struct SolSignerSeedC {
     addr: u64,
     len: u64,
@@ -2314,6 +2318,7 @@ struct SolSignerSeedC {
 
 /// Rust representation of C's SolSignerSeeds
 #[derive(Debug)]
+#[repr(C)]
 struct SolSignerSeedsC {
     #[allow(dead_code)]
     addr: u64,
