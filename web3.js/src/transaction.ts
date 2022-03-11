@@ -2,6 +2,7 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
+import {Connection} from './connection';
 import {Message} from './message';
 import {PublicKey} from './publickey';
 import * as shortvec from './util/shortvec-encoding';
@@ -403,6 +404,13 @@ export class Transaction {
    */
   serializeMessage(): Buffer {
     return this._compile().serialize();
+  }
+
+  /**
+   * Get the estimated fee associated with a transaction
+   */
+  async getEstimatedFee(connection: Connection): Promise<number> {
+    return (await connection.getFeeForMessage(this.compileMessage())).value;
   }
 
   /**
