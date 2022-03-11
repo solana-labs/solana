@@ -1,4 +1,5 @@
 use {
+    retain_mut::RetainMut,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_sdk::{
         hash::Hash, message::Message, short_vec::decode_shortu16_len, signature::Signature,
@@ -9,8 +10,6 @@ use {
         mem::size_of,
     },
 };
-
-pub type UnprocessedPacketBatches = VecDeque<DeserializedPacketBatch>;
 
 /// hold deserialized messages, as well as computed message_hash and other things needed to create
 /// SanitizedTransaction
@@ -32,6 +31,52 @@ pub struct DeserializedPacketBatch {
     pub forwarded: bool,
     // indexes of valid packets in batch, and their corrersponding deserialized_packet
     pub unprocessed_packets: HashMap<usize, DeserializedPacket>,
+}
+
+pub struct UnprocessedPacketBatches(VecDeque<DeserializedPacketBatch>);
+
+impl std::ops::Deref for UnprocessedPacketBatches {
+    type Target = VecDeque<DeserializedPacketBatch>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for UnprocessedPacketBatches {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl RetainMut<DeserializedPacketBatch> for UnprocessedPacketBatches {
+    fn retain_mut<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut DeserializedPacketBatch) -> bool,
+    {
+        RetainMut::retain_mut(&mut self.0, f);
+    }
+}
+
+impl FromIterator<DeserializedPacketBatch> for UnprocessedPacketBatches {
+    fn from_iter<I: IntoIterator<Item = DeserializedPacketBatch>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl Default for UnprocessedPacketBatches {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UnprocessedPacketBatches {
+    pub fn new() -> Self {
+        UnprocessedPacketBatches(VecDeque::new())
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        UnprocessedPacketBatches(VecDeque::with_capacity(capacity))
+    }
 }
 
 impl DeserializedPacketBatch {

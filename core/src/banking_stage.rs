@@ -58,7 +58,7 @@ use {
     },
     std::{
         cmp,
-        collections::{HashMap, VecDeque},
+        collections::HashMap,
         env,
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -959,7 +959,7 @@ impl BankingStage {
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
+        let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
         let qos_service = QosService::new(cost_model, id);
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
