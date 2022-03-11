@@ -8,16 +8,16 @@ use {
     },
 };
 
-//TODO: figure out a way to get rid of this mutex if possible
-//try_insert seems promising but it's still nightly-only...
 lazy_static! {
-    //TODO: all implementations of TpuConnection should be Sync + Send but make sure...
+    // TODO: all implementations of TpuConnection should be Sync + Send but make sure...
+    // TODO: figure out a way to get rid of this mutex if possible
+    // try_insert seems promising but it's still nightly-only...
     static ref CONNECTION_MAP: Mutex<HashMap<SocketAddr, Arc<dyn TpuConnection + 'static + Sync + Send>>> = Mutex::new(HashMap::new());
 }
 
 #[allow(dead_code)]
 pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sync + Send> {
-    //todo: implement eviction of old connections
+    // TODO: implement eviction of old connections
     let mut map = (*CONNECTION_MAP).lock().unwrap();
     if let Some(conn) = map.get(addr) {
         conn.clone()
@@ -26,7 +26,7 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sy
         // in that case, should each (socket, addr) pair be considered unique?
         // it would seem pointless to have the socket caller-specified if not...
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        //TODO: make it configurable (e.g. via the command line) whether to use UDP or Quic
+        // TODO: make it configurable (e.g. via the command line) whether to use UDP or Quic
         let conn = Arc::new(UdpTpuConnection::new(send_socket, *addr));
         map.insert(*addr, conn.clone());
         conn
