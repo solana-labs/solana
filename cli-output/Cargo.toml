@@ -27,5 +27,8 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.10.2
 solana-vote-program = { path = "../programs/vote", version = "=1.10.2" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 
+[dev-dependencies]
+ed25519-dalek = "=1.0.1"
+
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
