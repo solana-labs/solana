@@ -2320,9 +2320,7 @@ struct SolSignerSeedC {
 #[derive(Debug)]
 #[repr(C)]
 struct SolSignerSeedsC {
-    #[allow(dead_code)]
     addr: u64,
-    #[allow(dead_code)]
     len: u64,
 }
 
@@ -2494,7 +2492,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         memory_mapping: &MemoryMapping,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         if signers_seeds_len > 0 {
-            let signers_seeds = translate_slice::<SolSignerSeedC>(
+            let signers_seeds = translate_slice::<SolSignerSeedsC>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
