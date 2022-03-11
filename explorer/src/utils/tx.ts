@@ -21,9 +21,6 @@ import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 
-export type ProgramName =
-  typeof PROGRAM_NAME_BY_ID[keyof typeof PROGRAM_NAME_BY_ID];
-
 export enum PROGRAM_NAMES {
   // native built-ins
   ADDRESS_MAP = "Address Map Program",
@@ -67,7 +64,9 @@ export enum PROGRAM_NAMES {
   ORCA_SWAP_2 = "Orca Swap Program v2",
   ORCA_AQUAFARM = "Orca Aquafarm Program",
   PORT = "Port Finance Program",
-  PYTH = "Pyth Oracle Program",
+  PYTH_DEVNET = "Pyth Oracle Program",
+  PYTH_TESTNET = "Pyth Oracle Program",
+  PYTH_MAINNET = "Pyth Oracle Program",
   QUARRY_MERGE_MINE = "Quarry Merge Mine",
   QUARRY_MINE = "Quarry Mine",
   QUARRY_MINT_WRAPPER = "Quarry Mint Wrapper",
@@ -99,148 +98,257 @@ const ALL_CLUSTERS = [
 ];
 
 const LIVE_CLUSTERS = [Cluster.Devnet, Cluster.Testnet, Cluster.MainnetBeta];
-const MAINNET_ONLY = [Cluster.MainnetBeta];
 
-export const PROGRAM_DEPLOYMENTS = {
+export type ProgramInfo = {
+  name: string;
+  deployments: Cluster[];
+};
+
+export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   // native built-ins
-  [PROGRAM_NAMES.ADDRESS_MAP]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.CONFIG]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.STAKE]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.SYSTEM]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.VOTE]: ALL_CLUSTERS,
+  AddressMap111111111111111111111111111111111: {
+    name: PROGRAM_NAMES.ADDRESS_MAP,
+    deployments: ALL_CLUSTERS,
+  },
+  Config1111111111111111111111111111111111111: {
+    name: PROGRAM_NAMES.CONFIG,
+    deployments: ALL_CLUSTERS,
+  },
+  [StakeProgram.programId.toBase58()]: {
+    name: PROGRAM_NAMES.STAKE,
+    deployments: ALL_CLUSTERS,
+  },
+  [SystemProgram.programId.toBase58()]: {
+    name: PROGRAM_NAMES.SYSTEM,
+    deployments: ALL_CLUSTERS,
+  },
+  [VOTE_PROGRAM_ID.toBase58()]: {
+    name: PROGRAM_NAMES.VOTE,
+    deployments: ALL_CLUSTERS,
+  },
 
   // native precompiles
-  [PROGRAM_NAMES.SECP256K1]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.ED25519]: ALL_CLUSTERS,
+  [Secp256k1Program.programId.toBase58()]: {
+    name: PROGRAM_NAMES.SECP256K1,
+    deployments: ALL_CLUSTERS,
+  },
+  [Ed25519Program.programId.toBase58()]: {
+    name: PROGRAM_NAMES.ED25519,
+    deployments: ALL_CLUSTERS,
+  },
 
   // spl
-  [PROGRAM_NAMES.ASSOCIATED_TOKEN]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.FEATURE_PROPOSAL]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.LENDING]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.MEMO]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.MEMO_2]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.NAME]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.STAKE_POOL]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.SWAP]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.TOKEN]: ALL_CLUSTERS,
-  [PROGRAM_NAMES.TOKEN_METADATA]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.TOKEN_VAULT]: LIVE_CLUSTERS,
+  ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: {
+    name: PROGRAM_NAMES.ASSOCIATED_TOKEN,
+    deployments: ALL_CLUSTERS,
+  },
+  Feat1YXHhH6t1juaWF74WLcfv4XoNocjXA6sPWHNgAse: {
+    name: PROGRAM_NAMES.FEATURE_PROPOSAL,
+    deployments: ALL_CLUSTERS,
+  },
+  LendZqTs7gn5CTSJU1jWKhKuVpjJGom45nnwPb2AMTi: {
+    name: PROGRAM_NAMES.LENDING,
+    deployments: LIVE_CLUSTERS,
+  },
+  Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: {
+    name: PROGRAM_NAMES.MEMO,
+    deployments: ALL_CLUSTERS,
+  },
+  MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: {
+    name: PROGRAM_NAMES.MEMO_2,
+    deployments: ALL_CLUSTERS,
+  },
+  namesLPneVptA9Z5rqUDD9tMTWEJwofgaYwp8cawRkX: {
+    name: PROGRAM_NAMES.NAME,
+    deployments: LIVE_CLUSTERS,
+  },
+  SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy: {
+    name: PROGRAM_NAMES.STAKE_POOL,
+    deployments: LIVE_CLUSTERS,
+  },
+  SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: {
+    name: PROGRAM_NAMES.SWAP,
+    deployments: LIVE_CLUSTERS,
+  },
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: {
+    name: PROGRAM_NAMES.TOKEN,
+    deployments: ALL_CLUSTERS,
+  },
+  metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s: {
+    name: PROGRAM_NAMES.TOKEN_METADATA,
+    deployments: LIVE_CLUSTERS,
+  },
+  vau1zxA2LbssAUEF7Gpw91zMM1LvXrvpzJtmZ58rPsn: {
+    name: PROGRAM_NAMES.TOKEN_VAULT,
+    deployments: LIVE_CLUSTERS,
+  },
 
   // other
-  [PROGRAM_NAMES.ACUMEN]: MAINNET_ONLY,
-  [PROGRAM_NAMES.BONFIDA_POOL]: MAINNET_ONLY,
-  [PROGRAM_NAMES.BREAK_SOLANA]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.MANGO_GOVERNANCE]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MANGO_ICO]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MANGO_1]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MANGO_2]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MANGO_3]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MARINADE]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MERCURIAL]: [Cluster.Devnet, Cluster.MainnetBeta] as Cluster[],
-  [PROGRAM_NAMES.METAPLEX]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.NFT_AUCTION]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.NFT_CANDY_MACHINE]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.ORCA_SWAP_1]: MAINNET_ONLY,
-  [PROGRAM_NAMES.ORCA_SWAP_2]: MAINNET_ONLY,
-  [PROGRAM_NAMES.ORCA_AQUAFARM]: MAINNET_ONLY,
-  [PROGRAM_NAMES.PORT]: MAINNET_ONLY,
-  [PROGRAM_NAMES.PYTH]: MAINNET_ONLY,
-  [PROGRAM_NAMES.QUARRY_MERGE_MINE]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.QUARRY_MINE]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.QUARRY_MINT_WRAPPER]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.QUARRY_REDEEMER]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.QUARRY_REGISTRY]: LIVE_CLUSTERS,
-  [PROGRAM_NAMES.RAYDIUM_AMM]: MAINNET_ONLY,
-  [PROGRAM_NAMES.RAYDIUM_IDO]: MAINNET_ONLY,
-  [PROGRAM_NAMES.RAYDIUM_LP_1]: MAINNET_ONLY,
-  [PROGRAM_NAMES.RAYDIUM_LP_2]: MAINNET_ONLY,
-  [PROGRAM_NAMES.RAYDIUM_STAKING]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SABER_ROUTER]: [
-    Cluster.Devnet,
-    Cluster.MainnetBeta,
-  ] as Cluster[],
-  [PROGRAM_NAMES.SABER_SWAP]: [
-    Cluster.Devnet,
-    Cluster.MainnetBeta,
-  ] as Cluster[],
-  [PROGRAM_NAMES.SERUM_1]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SERUM_2]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SERUM_3]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SERUM_SWAP]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SOLEND]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SOLIDO]: MAINNET_ONLY,
-  [PROGRAM_NAMES.STEP_SWAP]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SWITCHBOARD]: MAINNET_ONLY,
-  [PROGRAM_NAMES.WORMHOLE]: MAINNET_ONLY,
-} as const;
-
-export const PROGRAM_NAME_BY_ID = {
-  // native built-ins
-  AddressMap111111111111111111111111111111111: PROGRAM_NAMES.ADDRESS_MAP,
-  Config1111111111111111111111111111111111111: PROGRAM_NAMES.CONFIG,
-  [StakeProgram.programId.toBase58()]: PROGRAM_NAMES.STAKE,
-  [SystemProgram.programId.toBase58()]: PROGRAM_NAMES.SYSTEM,
-  [VOTE_PROGRAM_ID.toBase58()]: PROGRAM_NAMES.VOTE,
-
-  // native precompiles
-  [Secp256k1Program.programId.toBase58()]: PROGRAM_NAMES.SECP256K1,
-  [Ed25519Program.programId.toBase58()]: PROGRAM_NAMES.ED25519,
-
-  // spl
-  ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: PROGRAM_NAMES.ASSOCIATED_TOKEN,
-  Feat1YXHhH6t1juaWF74WLcfv4XoNocjXA6sPWHNgAse: PROGRAM_NAMES.FEATURE_PROPOSAL,
-  LendZqTs7gn5CTSJU1jWKhKuVpjJGom45nnwPb2AMTi: PROGRAM_NAMES.LENDING,
-  Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: PROGRAM_NAMES.MEMO,
-  MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: PROGRAM_NAMES.MEMO_2,
-  namesLPneVptA9Z5rqUDD9tMTWEJwofgaYwp8cawRkX: PROGRAM_NAMES.NAME,
-  SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy: PROGRAM_NAMES.STAKE_POOL,
-  SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: PROGRAM_NAMES.SWAP,
-  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: PROGRAM_NAMES.TOKEN,
-  metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s: PROGRAM_NAMES.TOKEN_METADATA,
-  vau1zxA2LbssAUEF7Gpw91zMM1LvXrvpzJtmZ58rPsn: PROGRAM_NAMES.TOKEN_VAULT,
-
-  // other
-  C64kTdg1Hzv5KoQmZrQRcm2Qz7PkxtFBgw7EpFhvYn8W: PROGRAM_NAMES.ACUMEN,
-  WvmTNLpGMVbwJVYztYL4Hnsy82cJhQorxjnnXcRm3b6: PROGRAM_NAMES.BONFIDA_POOL,
-  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: PROGRAM_NAMES.BREAK_SOLANA,
-  GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J: PROGRAM_NAMES.MANGO_GOVERNANCE,
-  "7sPptkymzvayoSbLXzBsXEF8TSf3typNnAWkrKrDizNb": PROGRAM_NAMES.MANGO_ICO,
-  JD3bq9hGdy38PuWQ4h2YJpELmHVGPPfFSuFkpzAd9zfu: PROGRAM_NAMES.MANGO_1,
-  "5fNfvyp5czQVX77yoACa3JJVEhdRaWjPuazuWgjhTqEH": PROGRAM_NAMES.MANGO_2,
-  mv3ekLzLbnVPNxjSKvqBpU3ZeZXPQdEC3bp5MDEBG68: PROGRAM_NAMES.MANGO_3,
-  MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD: PROGRAM_NAMES.MARINADE,
-  MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky: PROGRAM_NAMES.MERCURIAL,
-  p1exdMJcjVao65QdewkaZRUnU6VPSXhus9n2GzWfh98: PROGRAM_NAMES.METAPLEX,
-  auctxRXPeJoc4817jDhf4HbjnhEcr1cCXenosMhK5R8: PROGRAM_NAMES.NFT_AUCTION,
-  cndyAnrLdpjq1Ssp1z8xxDsB8dxe7u4HL5Nxi2K5WXZ: PROGRAM_NAMES.NFT_CANDY_MACHINE,
-  DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1: PROGRAM_NAMES.ORCA_SWAP_1,
-  "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP": PROGRAM_NAMES.ORCA_SWAP_2,
-  "82yxjeMsvaURa4MbZZ7WZZHfobirZYkH1zF8fmeGtyaQ": PROGRAM_NAMES.ORCA_AQUAFARM,
-  Port7uDYB3wk6GJAw4KT1WpTeMtSu9bTcChBHkX2LfR: PROGRAM_NAMES.PORT,
-  FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH: PROGRAM_NAMES.PYTH,
-  QMMD16kjauP5knBwxNUJRZ1Z5o3deBuFrqVjBVmmqto: PROGRAM_NAMES.QUARRY_MERGE_MINE,
-  QMNeHCGYnLVDn1icRAfQZpjPLBNkfGbSKRB83G5d8KB: PROGRAM_NAMES.QUARRY_MINE,
-  QMWoBmAyJLAsA1Lh9ugMTw2gciTihncciphzdNzdZYV:
-    PROGRAM_NAMES.QUARRY_MINT_WRAPPER,
-  QRDxhMw1P2NEfiw5mYXG79bwfgHTdasY2xNP76XSea9: PROGRAM_NAMES.QUARRY_REDEEMER,
-  QREGBnEj9Sa5uR91AV8u3FxThgP5ZCvdZUW2bHAkfNc: PROGRAM_NAMES.QUARRY_REGISTRY,
-  "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8": PROGRAM_NAMES.RAYDIUM_AMM,
-  "9HzJyW1qZsEiSfMUf6L2jo3CcTKAyBmSyKdwQeYisHrC": PROGRAM_NAMES.RAYDIUM_IDO,
-  RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr: PROGRAM_NAMES.RAYDIUM_LP_1,
-  "27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv": PROGRAM_NAMES.RAYDIUM_LP_2,
-  EhhTKczWMGQt46ynNeRX1WfeagwwJd7ufHvCDjRxjo5Q: PROGRAM_NAMES.RAYDIUM_STAKING,
-  Crt7UoUR6QgrFrN7j8rmSQpUTNWNSitSwWvsWGf1qZ5t: PROGRAM_NAMES.SABER_ROUTER,
-  SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ: PROGRAM_NAMES.SABER_SWAP,
-  BJ3jrUzddfuSrZHXSCxMUUQsjKEyLmuuyZebkcaFp2fg: PROGRAM_NAMES.SERUM_1,
-  EUqojwWA2rd19FZrzeBncJsm38Jm1hEhE3zsmX3bRc2o: PROGRAM_NAMES.SERUM_2,
-  "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin": PROGRAM_NAMES.SERUM_3,
-  "22Y43yTVxuUkoRKdm9thyRhQ3SdgQS7c7kB6UNCiaczD": PROGRAM_NAMES.SERUM_SWAP,
-  So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo: PROGRAM_NAMES.SOLEND,
-  CrX7kMhLC3cSsXJdT7JDgqrRVWGnUpX3gfEfxxU2NVLi: PROGRAM_NAMES.SOLIDO,
-  SSwpMgqNDsyV7mAgN9ady4bDVu5ySjmmXejXvy2vLt1: PROGRAM_NAMES.STEP_SWAP,
-  DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM: PROGRAM_NAMES.SWITCHBOARD,
-  WormT3McKhFJ2RkiGpdw9GKvNCrB2aB54gb2uV9MfQC: PROGRAM_NAMES.WORMHOLE,
-} as const;
+  C64kTdg1Hzv5KoQmZrQRcm2Qz7PkxtFBgw7EpFhvYn8W: {
+    name: PROGRAM_NAMES.ACUMEN,
+    deployments: [Cluster.MainnetBeta],
+  },
+  WvmTNLpGMVbwJVYztYL4Hnsy82cJhQorxjnnXcRm3b6: {
+    name: PROGRAM_NAMES.BONFIDA_POOL,
+    deployments: [Cluster.MainnetBeta],
+  },
+  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: {
+    name: PROGRAM_NAMES.BREAK_SOLANA,
+    deployments: LIVE_CLUSTERS,
+  },
+  GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J: {
+    name: PROGRAM_NAMES.MANGO_GOVERNANCE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "7sPptkymzvayoSbLXzBsXEF8TSf3typNnAWkrKrDizNb": {
+    name: PROGRAM_NAMES.MANGO_ICO,
+    deployments: [Cluster.MainnetBeta],
+  },
+  JD3bq9hGdy38PuWQ4h2YJpELmHVGPPfFSuFkpzAd9zfu: {
+    name: PROGRAM_NAMES.MANGO_1,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "5fNfvyp5czQVX77yoACa3JJVEhdRaWjPuazuWgjhTqEH": {
+    name: PROGRAM_NAMES.MANGO_2,
+    deployments: [Cluster.MainnetBeta],
+  },
+  mv3ekLzLbnVPNxjSKvqBpU3ZeZXPQdEC3bp5MDEBG68: {
+    name: PROGRAM_NAMES.MANGO_3,
+    deployments: [Cluster.MainnetBeta],
+  },
+  MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD: {
+    name: PROGRAM_NAMES.MARINADE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky: {
+    name: PROGRAM_NAMES.MERCURIAL,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
+  p1exdMJcjVao65QdewkaZRUnU6VPSXhus9n2GzWfh98: {
+    name: PROGRAM_NAMES.METAPLEX,
+    deployments: LIVE_CLUSTERS,
+  },
+  auctxRXPeJoc4817jDhf4HbjnhEcr1cCXenosMhK5R8: {
+    name: PROGRAM_NAMES.NFT_AUCTION,
+    deployments: LIVE_CLUSTERS,
+  },
+  cndyAnrLdpjq1Ssp1z8xxDsB8dxe7u4HL5Nxi2K5WXZ: {
+    name: PROGRAM_NAMES.NFT_CANDY_MACHINE,
+    deployments: LIVE_CLUSTERS,
+  },
+  DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1: {
+    name: PROGRAM_NAMES.ORCA_SWAP_1,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP": {
+    name: PROGRAM_NAMES.ORCA_SWAP_2,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "82yxjeMsvaURa4MbZZ7WZZHfobirZYkH1zF8fmeGtyaQ": {
+    name: PROGRAM_NAMES.ORCA_AQUAFARM,
+    deployments: [Cluster.MainnetBeta],
+  },
+  Port7uDYB3wk6GJAw4KT1WpTeMtSu9bTcChBHkX2LfR: {
+    name: PROGRAM_NAMES.PORT,
+    deployments: [Cluster.MainnetBeta],
+  },
+  gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s: {
+    name: PROGRAM_NAMES.PYTH_DEVNET,
+    deployments: [Cluster.Devnet],
+  },
+  "8tfDNiaEyrV6Q1U4DEXrEigs9DoDtkugzFbybENEbCDz": {
+    name: PROGRAM_NAMES.PYTH_TESTNET,
+    deployments: [Cluster.Testnet],
+  },
+  FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH: {
+    name: PROGRAM_NAMES.PYTH_MAINNET,
+    deployments: [Cluster.MainnetBeta],
+  },
+  QMMD16kjauP5knBwxNUJRZ1Z5o3deBuFrqVjBVmmqto: {
+    name: PROGRAM_NAMES.QUARRY_MERGE_MINE,
+    deployments: LIVE_CLUSTERS,
+  },
+  QMNeHCGYnLVDn1icRAfQZpjPLBNkfGbSKRB83G5d8KB: {
+    name: PROGRAM_NAMES.QUARRY_MINE,
+    deployments: LIVE_CLUSTERS,
+  },
+  QMWoBmAyJLAsA1Lh9ugMTw2gciTihncciphzdNzdZYV: {
+    name: PROGRAM_NAMES.QUARRY_MINT_WRAPPER,
+    deployments: LIVE_CLUSTERS,
+  },
+  QRDxhMw1P2NEfiw5mYXG79bwfgHTdasY2xNP76XSea9: {
+    name: PROGRAM_NAMES.QUARRY_REDEEMER,
+    deployments: LIVE_CLUSTERS,
+  },
+  QREGBnEj9Sa5uR91AV8u3FxThgP5ZCvdZUW2bHAkfNc: {
+    name: PROGRAM_NAMES.QUARRY_REGISTRY,
+    deployments: LIVE_CLUSTERS,
+  },
+  "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8": {
+    name: PROGRAM_NAMES.RAYDIUM_AMM,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "9HzJyW1qZsEiSfMUf6L2jo3CcTKAyBmSyKdwQeYisHrC": {
+    name: PROGRAM_NAMES.RAYDIUM_IDO,
+    deployments: [Cluster.MainnetBeta],
+  },
+  RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr: {
+    name: PROGRAM_NAMES.RAYDIUM_LP_1,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv": {
+    name: PROGRAM_NAMES.RAYDIUM_LP_2,
+    deployments: [Cluster.MainnetBeta],
+  },
+  EhhTKczWMGQt46ynNeRX1WfeagwwJd7ufHvCDjRxjo5Q: {
+    name: PROGRAM_NAMES.RAYDIUM_STAKING,
+    deployments: [Cluster.MainnetBeta],
+  },
+  Crt7UoUR6QgrFrN7j8rmSQpUTNWNSitSwWvsWGf1qZ5t: {
+    name: PROGRAM_NAMES.SABER_ROUTER,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
+  SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ: {
+    name: PROGRAM_NAMES.SABER_SWAP,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
+  BJ3jrUzddfuSrZHXSCxMUUQsjKEyLmuuyZebkcaFp2fg: {
+    name: PROGRAM_NAMES.SERUM_1,
+    deployments: [Cluster.MainnetBeta],
+  },
+  EUqojwWA2rd19FZrzeBncJsm38Jm1hEhE3zsmX3bRc2o: {
+    name: PROGRAM_NAMES.SERUM_2,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin": {
+    name: PROGRAM_NAMES.SERUM_3,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "22Y43yTVxuUkoRKdm9thyRhQ3SdgQS7c7kB6UNCiaczD": {
+    name: PROGRAM_NAMES.SERUM_SWAP,
+    deployments: [Cluster.MainnetBeta],
+  },
+  So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo: {
+    name: PROGRAM_NAMES.SOLEND,
+    deployments: [Cluster.MainnetBeta],
+  },
+  CrX7kMhLC3cSsXJdT7JDgqrRVWGnUpX3gfEfxxU2NVLi: {
+    name: PROGRAM_NAMES.SOLIDO,
+    deployments: [Cluster.MainnetBeta],
+  },
+  SSwpMgqNDsyV7mAgN9ady4bDVu5ySjmmXejXvy2vLt1: {
+    name: PROGRAM_NAMES.STEP_SWAP,
+    deployments: [Cluster.MainnetBeta],
+  },
+  DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM: {
+    name: PROGRAM_NAMES.SWITCHBOARD,
+    deployments: [Cluster.MainnetBeta],
+  },
+  WormT3McKhFJ2RkiGpdw9GKvNCrB2aB54gb2uV9MfQC: {
+    name: PROGRAM_NAMES.WORMHOLE,
+    deployments: [Cluster.MainnetBeta],
+  },
+};
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
 export const LOADER_IDS = {
@@ -273,9 +381,9 @@ export function programLabel(
   address: string,
   cluster: Cluster
 ): string | undefined {
-  const programName = PROGRAM_NAME_BY_ID[address];
-  if (programName && PROGRAM_DEPLOYMENTS[programName].includes(cluster)) {
-    return programName;
+  const programInfo = PROGRAM_INFO_BY_ID[address];
+  if (programInfo && programInfo.deployments.includes(cluster)) {
+    return programInfo.name;
   }
 
   return LOADER_IDS[address];
