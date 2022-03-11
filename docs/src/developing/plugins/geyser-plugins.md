@@ -1,18 +1,18 @@
 ---
-title: Plugins
+title: Geyser Plugins
 ---
 
 ## Overview
 
 Validators under heavy RPC loads, such as when serving getProgramAccounts calls,
 can fall behind the network. To solve this problem, the validator has been
-enhanced to support a plugin mechanism through which the information about
-accounts and slots can be transmitted to external data stores such as relational
-databases, NoSQL databases or Kafka. RPC services then can be developed to
-consume data from these external data stores with the possibility of more
-flexible and targeted optimizations such as caching and indexing. This allows
-the validator to focus on processing transactions without being slowed down by
-busy RPC requests.
+enhanced to support a plugin mechanism, called a "Geyser" plugin, through which
+the information about accounts, slots, blocks, and transactions can be
+transmitted to external data stores such as relational databases, NoSQL
+databases or Kafka. RPC services then can be developed to consume data from
+these external data stores with the possibility of more flexible and targeted
+optimizations such as caching and indexing. This allows the validator to focus
+on processing transactions without being slowed down by busy RPC requests.
 
 This document describes the interfaces of the plugin and the referential plugin
 implementation for the PostgreSQL database.
@@ -22,24 +22,24 @@ implementation for the PostgreSQL database.
 
 ### Important Crates:
 
-- [`solana-accountsdb-plugin-interface`] &mdash; This crate defines the plugin
+- [`solana-geyser-plugin-interface`] &mdash; This crate defines the plugin
 interfaces.
 
 - [`solana-accountsdb-plugin-postgres`] &mdash; The crate for the referential
 plugin implementation for the PostgreSQL database.
 
-[`solana-accountsdb-plugin-interface`]: https://docs.rs/solana-accountsdb-plugin-interface
+[`solana-geyser-plugin-interface`]: https://docs.rs/solana-geyser-plugin-interface
 [`solana-accountsdb-plugin-postgres`]: https://docs.rs/solana-accountsdb-plugin-postgres
 [`solana-sdk`]: https://docs.rs/solana-sdk
 [`solana-transaction-status`]: https://docs.rs/solana-transaction-status
 
 ## The Plugin Interface
 
-The Plugin interface is declared in [`solana-accountsdb-plugin-interface`]. It
-is defined by the trait `AccountsDbPlugin`. The plugin should implement the
+The Plugin interface is declared in [`solana-geyser-plugin-interface`]. It
+is defined by the trait `GeyserPlugin`. The plugin should implement the
 trait and expose a "C" function `_create_plugin` to return the pointer to this
 trait. For example, in the referential implementation, the following code
-instantiates the PostgreSQL plugin `AccountsDbPluginPostgres ` and returns its
+instantiates the PostgreSQL plugin `GeyserPluginPostgres ` and returns its
 pointer.
 
 ```
@@ -47,10 +47,10 @@ pointer.
 #[allow(improper_ctypes_definitions)]
 /// # Safety
 ///
-/// This function returns the AccountsDbPluginPostgres pointer as trait AccountsDbPlugin.
-pub unsafe extern "C" fn _create_plugin() -> *mut dyn AccountsDbPlugin {
-    let plugin = AccountsDbPluginPostgres::new();
-    let plugin: Box<dyn AccountsDbPlugin> = Box::new(plugin);
+/// This function returns the GeyserPluginPostgres pointer as trait GeyserPlugin.
+pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
+    let plugin = GeyserPluginPostgres::new();
+    let plugin: Box<dyn GeyserPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
 }
 ```
@@ -62,7 +62,7 @@ file in JSON5 format. The JSON5 file must have a field `libpath` that points
 to the full path name of the shared library implementing the plugin, and may
 have other configuration information, like connection parameters for the external
 database. The plugin configuration file is specified by the validator's CLI
-parameter `--accountsdb-plugin-config` and the file must be readable to the
+parameter `--geyser-plugin-config` and the file must be readable to the
 validator process.
 
 Please see the [config file](#config) for the referential
@@ -164,11 +164,11 @@ please refer to [`solana-sdk`] and [`solana-transaction-status`]
 
 The `slot` points to the slot the transaction is executed at.
 For more details, please refer to the Rust documentation in
-[`solana-accountsdb-plugin-interface`].
+[`solana-geyser-plugin-interface`].
 
 ## Example PostgreSQL Plugin
 
-The [`solana-accountsdb-plugin-postgres`] crate implements a plugin storing
+The [`solana-accountsdb-plugin-postgres`] repository implements a plugin storing
 account data to a PostgreSQL database to illustrate how a plugin can be
 developed.
 
@@ -182,7 +182,7 @@ configuration file looks like the following:
 
 ```
 {
-	"libpath": "/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
+	"libpath": "/solana/target/release/libsolana_geyser_plugin_postgres.so",
 	"host": "postgres-server",
 	"user": "solana",
 	"port": 5433,
@@ -366,7 +366,7 @@ Then run the script:
 psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f create_schema.sql
 ```
 
-After this, start the validator with the plugin by using the `--accountsdb-plugin-config`
+After this, start the validator with the plugin by using the `--geyser-plugin-config`
 argument mentioned above.
 
 #### Destroy the Schema Objects

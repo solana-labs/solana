@@ -1,5 +1,5 @@
-/// The interface for AccountsDb plugins. A plugin must implement
-/// the AccountsDbPlugin trait to work with the runtime.
+/// The interface for Geyser plugins. A plugin must implement
+/// the GeyserPlugin trait to work with the runtime.
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
@@ -85,7 +85,7 @@ pub enum ReplicaBlockInfoVersions<'a> {
 
 /// Errors returned by plugin calls
 #[derive(Error, Debug)]
-pub enum AccountsDbPluginError {
+pub enum GeyserPluginError {
     /// Error opening the configuration file; for example, when the file
     /// is not found or when the validator process has no permission to read it.
     #[error("Error opening config file. Error detail: ({0}).")]
@@ -134,12 +134,12 @@ impl SlotStatus {
     }
 }
 
-pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
+pub type Result<T> = std::result::Result<T, GeyserPluginError>;
 
-/// Defines an AccountsDb plugin, to stream data from the runtime.
-/// AccountsDb plugins must describe desired behavior for load and unload,
+/// Defines a Geyser plugin, to stream data from the runtime.
+/// Geyser plugins must describe desired behavior for load and unload,
 /// as well as how they will handle streamed data.
-pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
+pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     fn name(&self) -> &'static str;
 
     /// The callback called when a plugin is loaded by the system,

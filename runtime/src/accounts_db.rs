@@ -415,7 +415,7 @@ pub enum LoadedAccountAccessor<'a> {
     Cached(Option<Cow<'a, CachedAccount>>),
 }
 
-mod accountsdb_plugin_utils;
+mod geyser_plugin_utils;
 
 impl<'a> LoadedAccountAccessor<'a> {
     fn check_and_get_loaded_account(&mut self) -> LoadedAccount {
@@ -1072,7 +1072,7 @@ pub struct AccountsDb {
     /// for incremental snapshot support.
     zero_lamport_accounts_to_purge_after_full_snapshot: DashSet<(Slot, Pubkey)>,
 
-    /// AccountsDbPlugin accounts update notifier
+    /// GeyserPlugin accounts update notifier
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 
     filler_account_count: usize,

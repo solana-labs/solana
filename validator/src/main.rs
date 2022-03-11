@@ -1370,12 +1370,13 @@ pub fn main() {
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
-            Arg::with_name("accountsdb_plugin_config")
-                .long("accountsdb-plugin-config")
+            Arg::with_name("geyser_plugin_config")
+                .long("geyser-plugin-config")
+                .alias("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .help("Specify the configuration file for the AccountsDb plugin."),
+                .help("Specify the configuration file for the Geyser plugin."),
         )
         .arg(
             Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
@@ -2240,9 +2241,9 @@ pub fn main() {
         None
     };
 
-    let accountsdb_plugin_config_files = if matches.is_present("accountsdb_plugin_config") {
+    let geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
         Some(
-            values_t_or_exit!(matches, "accountsdb_plugin_config", String)
+            values_t_or_exit!(matches, "geyser_plugin_config", String)
                 .into_iter()
                 .map(PathBuf::from)
                 .collect(),
@@ -2297,7 +2298,7 @@ pub fn main() {
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
         accountsdb_repl_service_config,
-        accountsdb_plugin_config_files,
+        geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),

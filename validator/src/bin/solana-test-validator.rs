@@ -312,12 +312,13 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("accountsdb_plugin_config")
-                .long("accountsdb-plugin-config")
+            Arg::with_name("geyser_plugin_config")
+                .long("geyser-plugin-config")
+                .alias("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .help("Specify the configuration file for the AccountsDb plugin."),
+                .help("Specify the configuration file for the Geyser plugin."),
         )
         .arg(
             Arg::with_name("no_accounts_db_caching")
@@ -683,9 +684,9 @@ fn main() {
         genesis.bind_ip_addr(bind_address);
     }
 
-    if matches.is_present("accountsdb_plugin_config") {
-        genesis.accountsdb_plugin_config_files = Some(
-            values_t_or_exit!(matches, "accountsdb_plugin_config", String)
+    if matches.is_present("geyser_plugin_config") {
+        genesis.geyser_plugin_config_files = Some(
+            values_t_or_exit!(matches, "geyser_plugin_config", String)
                 .into_iter()
                 .map(PathBuf::from)
                 .collect(),
