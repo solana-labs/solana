@@ -33,8 +33,8 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::{
-        BlockstoreRecoveryMode, BlockstoreRocksFifoOptions, ShredStorageType,
-        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreAdvancedOptions, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+        ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
@@ -2559,22 +2559,24 @@ pub fn main() {
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
-    validator_config.shred_storage_type = match matches.value_of("rocksdb_shred_compaction") {
-        None => ShredStorageType::default(),
-        Some(shred_compaction_string) => match shred_compaction_string {
-            "level" => ShredStorageType::RocksLevel,
-            "fifo" => {
-                let shred_storage_size =
-                    value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                    shred_data_cf_size: shred_storage_size / 2,
-                    shred_code_cf_size: shred_storage_size / 2,
-                })
-            }
-            _ => panic!(
-                "Unrecognized rocksdb-shred-compaction: {}",
-                shred_compaction_string
-            ),
+    validator_config.blockstore_advanced_options = BlockstoreAdvancedOptions {
+        shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
+            None => ShredStorageType::default(),
+            Some(shred_compaction_string) => match shred_compaction_string {
+                "level" => ShredStorageType::RocksLevel,
+                "fifo" => {
+                    let shred_storage_size =
+                        value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
+                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+                        shred_data_cf_size: shred_storage_size / 2,
+                        shred_code_cf_size: shred_storage_size / 2,
+                    })
+                }
+                _ => panic!(
+                    "Unrecognized rocksdb-shred-compaction: {}",
+                    shred_compaction_string
+                ),
+            },
         },
     };
 

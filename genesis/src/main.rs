@@ -15,7 +15,7 @@ use {
     solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account},
     solana_ledger::{
         blockstore::create_new_ledger,
-        blockstore_db::{AccessType, ShredStorageType},
+        blockstore_db::{AccessType, BlockstoreAdvancedOptions},
     },
     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_sdk::{
@@ -633,7 +633,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &genesis_config,
         max_genesis_archive_unpacked_size,
         AccessType::PrimaryOnly,
-        ShredStorageType::default(),
+        BlockstoreAdvancedOptions::default(),
     )?;
 
     println!("{}", genesis_config);

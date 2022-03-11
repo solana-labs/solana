@@ -5,8 +5,9 @@ use {
     crate::{
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
-            columns as cf, AccessType, BlockstoreOptions, Column, ColumnName, Database,
-            IteratorDirection, IteratorMode, LedgerColumn, Result, ShredStorageType, WriteBatch,
+            columns as cf, AccessType, BlockstoreAdvancedOptions, BlockstoreOptions, Column,
+            ColumnName, Database, IteratorDirection, IteratorMode, LedgerColumn, Result,
+            ShredStorageType, WriteBatch,
         },
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
@@ -177,6 +178,7 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
     slots_stats: Arc<Mutex<SlotsStats>>,
+    advanced_options: BlockstoreAdvancedOptions,
 }
 
 struct SlotsStats {
@@ -519,8 +521,20 @@ impl BlockstoreRocksDbColumnFamilyMetrics {
 }
 
 macro_rules! rocksdb_metric_header {
-    ($metric_name:literal, $cf_name:literal) => {
-        concat!($metric_name, ",cf_name=", $cf_name)
+    ($metric_name:literal, $cf_name:literal, $advanced_options:expr) => {
+        match $advanced_options.shred_storage_type {
+            ShredStorageType::RocksLevel =>
+                rocksdb_metric_header!(@all_fields $metric_name, $cf_name, "rocks_level"),
+            ShredStorageType::RocksFifo(_) =>
+                rocksdb_metric_header!(@all_fields $metric_name, $cf_name, "rocks_fifo"),
+        }
+    };
+
+    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal) => {
+        concat!($metric_name,
+            ",cf_name=", $cf_name,
+            ",storage=", $storage_type,
+        )
     };
 }
 use rocksdb_metric_header;
@@ -554,8 +568,10 @@ impl Blockstore {
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
-        let blockstore_path =
-            ledger_path.join(Self::blockstore_directory(&options.shred_storage_type));
+        let blockstore_path = ledger_path.join(Self::blockstore_directory(
+            &options.advanced_options.shred_storage_type,
+        ));
+        let advanced_options = options.advanced_options.clone();
 
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
@@ -648,6 +664,7 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
+            advanced_options,
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -944,81 +961,101 @@ impl Blockstore {
     /// Collects and reports [`BlockstoreRocksDbColumnFamilyMetrics`] for the
     /// all the column families.
     pub fn submit_rocksdb_cf_metrics_for_all_cfs(&self) {
+        let advanced_options = &self.advanced_options;
         self.submit_rocksdb_cf_metrics::<cf::SlotMeta>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "slot_meta"
+            "slot_meta",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::DeadSlots>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "dead_slots"
+            "dead_slots",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::DuplicateSlots>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "duplicate_slots"
+            "duplicate_slots",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::ErasureMeta>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "erasure_meta"
+            "erasure_meta",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::Orphans>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "orphans"
+            "orphans",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::BankHash>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "bank_hash"
+            "bank_hash",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::Root>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "root"
+            "root",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::Index>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "index"
+            "index",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::ShredData>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "shred_data"
+            "shred_data",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::ShredCode>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "shred_code"
+            "shred_code",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::TransactionStatus>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "transaction_status"
+            "transaction_status",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::AddressSignatures>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "address_signature"
+            "address_signature",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::TransactionMemos>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "transaction_memos"
+            "transaction_memos",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::TransactionStatusIndex>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "transaction_status_index"
+            "transaction_status_index",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::Rewards>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "rewards"
+            "rewards",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::Blocktime>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "blocktime"
+            "blocktime",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::PerfSamples>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "perf_sample"
+            "perf_sample",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::BlockHeight>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "block_height"
+            "block_height",
+            advanced_options
         ));
         self.submit_rocksdb_cf_metrics::<cf::ProgramCosts>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "program_costs"
+            "program_costs",
+            advanced_options
         ));
     }
 
@@ -4114,20 +4151,20 @@ pub fn create_new_ledger(
     genesis_config: &GenesisConfig,
     max_genesis_archive_unpacked_size: u64,
     access_type: AccessType,
-    shred_storage_type: ShredStorageType,
+    advanced_options: BlockstoreAdvancedOptions,
 ) -> Result<Hash> {
     Blockstore::destroy(ledger_path)?;
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore_dir = Blockstore::blockstore_directory(&shred_storage_type);
+    let blockstore_dir = Blockstore::blockstore_directory(&advanced_options.shred_storage_type);
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
             access_type,
             recovery_mode: None,
             enforce_ulimit_nofile: false,
-            shred_storage_type: shred_storage_type.clone(),
+            advanced_options: advanced_options.clone(),
         },
     )?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -4297,7 +4334,7 @@ macro_rules! create_new_tmp_ledger {
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_db::AccessType::PrimaryOnly,
-            $crate::blockstore_db::ShredStorageType::default(),
+            $crate::blockstore_db::BlockstoreAdvancedOptions::default(),
         )
     };
 }
@@ -4309,7 +4346,7 @@ macro_rules! create_new_tmp_ledger_auto_delete {
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_db::AccessType::PrimaryOnly,
-            $crate::blockstore_db::ShredStorageType::default(),
+            $crate::blockstore_db::BlockstoreAdvancedOptions::default(),
         )
     };
 }
@@ -4321,9 +4358,11 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_db::AccessType::PrimaryOnly,
-            $crate::blockstore_db::ShredStorageType::RocksFifo(
-                $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
-            ),
+            $crate::blockstore_db::BlockstoreAdvancedOptions {
+                shred_storage_type: $crate::blockstore_db::ShredStorageType::RocksFifo(
+                    $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
+                ),
+            },
         )
     };
 }
@@ -4354,13 +4393,13 @@ pub fn create_new_ledger_from_name(
     name: &str,
     genesis_config: &GenesisConfig,
     access_type: AccessType,
-    shred_storage_type: ShredStorageType,
+    advanced_options: BlockstoreAdvancedOptions,
 ) -> (PathBuf, Hash) {
     let (ledger_path, blockhash) = create_new_ledger_from_name_auto_delete(
         name,
         genesis_config,
         access_type,
-        shred_storage_type,
+        advanced_options,
     );
     (ledger_path.into_path(), blockhash)
 }
@@ -4373,7 +4412,7 @@ pub fn create_new_ledger_from_name_auto_delete(
     name: &str,
     genesis_config: &GenesisConfig,
     access_type: AccessType,
-    shred_storage_type: ShredStorageType,
+    advanced_options: BlockstoreAdvancedOptions,
 ) -> (TempDir, Hash) {
     let ledger_path = get_ledger_path_from_name_auto_delete(name);
     let blockhash = create_new_ledger(
@@ -4381,7 +4420,7 @@ pub fn create_new_ledger_from_name_auto_delete(
         genesis_config,
         MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         access_type,
-        shred_storage_type,
+        advanced_options,
     )
     .unwrap();
     (ledger_path, blockhash)
@@ -4690,9 +4729,11 @@ pub mod tests {
         let blockstore = Blockstore::open_with_options(
             ledger_path.path(),
             BlockstoreOptions {
-                shred_storage_type: ShredStorageType::RocksFifo(
-                    BlockstoreRocksFifoOptions::default(),
-                ),
+                advanced_options: BlockstoreAdvancedOptions {
+                    shred_storage_type: ShredStorageType::RocksFifo(
+                        BlockstoreRocksFifoOptions::default(),
+                    ),
+                },
                 ..BlockstoreOptions::default()
             },
         )
