@@ -1,4 +1,6 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![deny(clippy::integer_arithmetic)]
+#![deny(clippy::indexing_slicing)]
 
 pub mod accounts_data_meter;
 pub mod compute_budget;
