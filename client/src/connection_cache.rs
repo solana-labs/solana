@@ -2,33 +2,82 @@ use {
     crate::{tpu_connection::TpuConnection, udp_client::UdpTpuConnection},
     lazy_static::lazy_static,
     std::{
-        collections::HashMap,
+        collections::{hash_map::Entry, BTreeMap, HashMap},
         net::{SocketAddr, UdpSocket},
         sync::{Arc, Mutex},
     },
 };
 
+// Should be non-zero
+static MAX_CONNECTIONS: usize = 64;
+
+struct ConnMap {
+    // Keeps track of the connection associated with an addr and the last time it was used
+    map: HashMap<SocketAddr, (Arc<dyn TpuConnection + 'static + Sync + Send>, u64)>,
+    // Helps to find the least recently used connection. The search and inserts are O(log(n))
+    // but since we're bounding the size of the collections, this should be constant
+    // (and hopefully negligible) time. In theory, we can do this in constant time
+    // with a queue implemented as a doubly-linked list (and all the
+    // HashMap entries holding a "pointer" to the corresponding linked-list node),
+    // so we can push, pop and bump a used connection back to the end of the queue in O(1) time, but
+    // that seems non-"Rust-y" and low bang/buck. This is still pretty terrible though...
+    last_used_times: BTreeMap<u64, SocketAddr>,
+    ticks: u64,
+}
+
+impl ConnMap {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            last_used_times: BTreeMap::new(),
+            ticks: 0,
+        }
+    }
+}
+
 lazy_static! {
     // TODO: all implementations of TpuConnection should be Sync + Send but make sure...
-    // TODO: figure out a way to get rid of this mutex if possible
-    // try_insert seems promising but it's still nightly-only...
-    static ref CONNECTION_MAP: Mutex<HashMap<SocketAddr, Arc<dyn TpuConnection + 'static + Sync + Send>>> = Mutex::new(HashMap::new());
+    static ref CONNECTION_MAP: Mutex<ConnMap> = Mutex::new(ConnMap::new());
 }
 
 #[allow(dead_code)]
+// TODO: make this less terrible
 pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sync + Send> {
-    // TODO: implement eviction of old connections
     let mut map = (*CONNECTION_MAP).lock().unwrap();
-    if let Some(conn) = map.get(addr) {
-        conn.clone()
-    } else {
-        // TODO: do we want the ability to let the caller specify the socket as well?
-        // in that case, should each (socket, addr) pair be considered unique?
-        // it would seem pointless to have the socket caller-specified if not...
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        // TODO: make it configurable (e.g. via the command line) whether to use UDP or Quic
-        let conn = Arc::new(UdpTpuConnection::new(send_socket, *addr));
-        map.insert(*addr, conn.clone());
-        conn
+    let ticks = map.ticks;
+
+    let (conn, target_ticks) = match map.map.entry(*addr) {
+        Entry::Occupied(mut entry) => {
+            let mut pair = entry.get_mut();
+            let old_ticks = pair.1;
+            pair.1 = ticks;
+            (pair.0.clone(), old_ticks)
+        }
+        Entry::Vacant(entry) => {
+            let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            // TODO: make it configurable (e.g. via the command line) whether to use UDP or Quic
+            let conn = Arc::new(UdpTpuConnection::new(send_socket, *addr));
+            entry.insert((conn.clone(), ticks));
+            (
+                conn as Arc<dyn TpuConnection + 'static + Sync + Send>,
+                ticks,
+            )
+        }
+    };
+
+    let num_connections = map.map.len();
+    if num_connections > MAX_CONNECTIONS {
+        let (old_ticks, target_addr) = {
+            let (old_ticks, target_addr) = map.last_used_times.iter().next().unwrap();
+            (*old_ticks, *target_addr)
+        };
+        map.map.remove(&target_addr);
+        map.last_used_times.remove(&old_ticks);
     }
+
+    map.last_used_times.remove(&target_ticks);
+    map.last_used_times.insert(ticks, *addr);
+
+    map.ticks += 1;
+    conn
 }
