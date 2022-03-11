@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
     solana_metrics::inc_new_counter_debug,
@@ -452,6 +453,36 @@ impl LedgerStorage {
             )
             .await?;
         Ok(blocks.into_iter().filter_map(|s| key_to_slot(&s)).collect())
+    }
+
+    // Fetches and gets a vector of confirmed blocks via a multirow fetch
+    pub async fn get_confirmed_blocks_with_data(
+        &self,
+        slots: Vec<Slot>,
+    ) -> Result<Vec<(Slot, ConfirmedBlock)>> {
+        debug!(
+            "LedgerStorage::get_confirmed_blocks_with_data request received: {:?}",
+            slots
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+        let row_keys: Vec<RowKey> = slots.into_iter().map(|s| slot_to_blocks_key(s)).collect();
+        let data: Vec<(Slot, ConfirmedBlock)> = bigtable
+            .get_protobuf_or_bincode_cells::<StoredConfirmedBlock, generated::ConfirmedBlock>(
+                "blocks",
+                row_keys.clone(),
+            )
+            .await?
+            .into_iter()
+            .filter_map(|(row_key, block_cell_data)| {
+                let block = match block_cell_data {
+                    bigtable::CellData::Bincode(block) => block.into(),
+                    bigtable::CellData::Protobuf(block) => block.try_into().ok()?,
+                };
+                Some((key_to_slot(&(row_key.to_string())).unwrap(), block))
+            })
+            .collect();
+        Ok(data)
     }
 
     /// Fetch the confirmed block from the desired slot
