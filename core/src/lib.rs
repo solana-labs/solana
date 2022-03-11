@@ -64,6 +64,7 @@ pub mod tpu;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
+pub mod unprocessed_packet_batches;
 pub mod validator;
 pub mod verified_vote_packets;
 pub mod vote_simulator;

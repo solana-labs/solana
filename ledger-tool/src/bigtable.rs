@@ -267,7 +267,11 @@ pub async fn transaction_history(
                                 Some(transaction_with_meta) => {
                                     println_transaction(
                                         &transaction_with_meta.transaction,
-                                        &transaction_with_meta.meta.clone().map(|m| m.into()),
+                                        transaction_with_meta
+                                            .meta
+                                            .clone()
+                                            .map(|m| m.into())
+                                            .as_ref(),
                                         "  ",
                                         None,
                                         None,

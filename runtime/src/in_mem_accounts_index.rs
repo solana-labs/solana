@@ -864,7 +864,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     pub(crate) fn flush(&self) {
-        let flushing = self.flushing_active.swap(true, Ordering::Acquire);
+        let flushing = self.flushing_active.swap(true, Ordering::AcqRel);
         if flushing {
             // already flushing in another thread
             return;

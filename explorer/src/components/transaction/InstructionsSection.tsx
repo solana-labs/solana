@@ -41,6 +41,8 @@ import { isWormholeInstruction } from "components/instruction/wormhole/types";
 import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTokenDetailsCard";
 import { isMangoInstruction } from "components/instruction/mango/types";
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
+import { isPythInstruction } from "components/instruction/pyth/types";
+import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -127,7 +129,9 @@ export function InstructionsSection({ signature }: SignatureProps) {
       <div className="container">
         <div className="header">
           <div className="header-body">
-            <h3 className="mb-0">Instruction(s)</h3>
+            <h3 className="mb-0">
+              {instructionDetails.length > 1 ? "Instructions" : "Instruction"}
+            </h3>
           </div>
         </div>
       </div>
@@ -220,6 +224,8 @@ function renderInstructionCard({
     return <TokenLendingDetailsCard key={key} {...props} />;
   } else if (isWormholeInstruction(transactionIx)) {
     return <WormholeDetailsCard key={key} {...props} />;
+  } else if (isPythInstruction(transactionIx)) {
+    return <PythDetailsCard key={key} {...props} />;
   } else {
     return <UnknownDetailsCard key={key} {...props} />;
   }

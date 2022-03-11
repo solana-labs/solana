@@ -2114,6 +2114,12 @@ pub fn main() {
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    for addr in &entrypoint_addrs {
+        if !socket_addr_space.check(addr) {
+            eprintln!("invalid entrypoint address: {}", addr);
+            exit(1);
+        }
+    }
     // TODO: Once entrypoints are updated to return shred-version, this should
     // abort if it fails to obtain a shred-version, so that nodes always join
     // gossip with a valid shred-version. The code to adopt entrypoint shred

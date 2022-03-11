@@ -811,7 +811,8 @@ impl Validator {
 
         let vote_tracker = Arc::<VoteTracker>::default();
         let mut cost_model = CostModel::default();
-        cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+        // initialize cost model with built-in instruction costs only
+        cost_model.initialize_cost_table(&[]);
         let cost_model = Arc::new(RwLock::new(cost_model));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();

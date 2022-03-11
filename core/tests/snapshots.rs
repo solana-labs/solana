@@ -175,7 +175,7 @@ mod tests {
 
         let check_hash_calculation = false;
         let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir.to_path_buf(),
+            snapshot_archives_dir,
             old_last_bank.slot(),
             &old_last_bank.get_accounts_hash(),
             ArchiveFormat::TarBzip2,
@@ -432,7 +432,7 @@ mod tests {
                 // Only save off the files returned by `get_snapshot_storages`. This is because
                 // some of the storage entries in the accounts directory may be filtered out by
                 // `get_snapshot_storages()` and will not be included in the snapshot. Ultimately,
-                // this means copying naitvely everything in `accounts_dir` to the `saved_accounts_dir`
+                // this means copying natively everything in `accounts_dir` to the `saved_accounts_dir`
                 // will lead to test failure by mismatch when `saved_accounts_dir` is compared to
                 // the unpacked snapshot later in this test's call to `verify_snapshot_archive()`.
                 for file in snapshot_storage_files {
@@ -461,7 +461,7 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
-                    snapshot_archives_dir.to_path_buf(),
+                    snapshot_archives_dir,
                     slot,
                     &accounts_hash,
                     ArchiveFormat::TarBzip2,

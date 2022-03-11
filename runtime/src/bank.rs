@@ -215,7 +215,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "6XkxpmzmKZguLZMS1KmU7N2dAcv8MmNhyobJCwRLkTdi")]
+#[frozen_abi(digest = "HdYCU65Jwfv9sF3C8k6ZmjUAaXSkJwazebuur21v8JtY")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -16147,9 +16147,9 @@ pub(crate) mod tests {
         );
     }
 
-    /// Test exceeding the accounts data budget by creating accounts in a loop
+    /// Test exceeding the max accounts data size by creating accounts in a loop
     #[test]
-    fn test_accounts_data_budget_exceeded() {
+    fn test_max_accounts_data_size_exceeded() {
         use {
             solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
             solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH,
@@ -16188,7 +16188,7 @@ pub(crate) mod tests {
             result,
             Err(TransactionError::InstructionError(
                 _,
-                solana_sdk::instruction::InstructionError::AccountsDataBudgetExceeded,
+                solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded,
             ))
         ));
     }

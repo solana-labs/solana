@@ -39,7 +39,9 @@ use {
         system_program,
         transaction::Transaction,
     },
-    solana_transaction_status::{Encodable, EncodedTransaction, UiTransactionEncoding},
+    solana_transaction_status::{
+        Encodable, EncodedTransaction, TransactionBinaryEncoding, UiTransactionEncoding,
+    },
     std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc},
 };
 
@@ -189,7 +191,7 @@ impl WalletSubCommands for App<'_, '_> {
                     Arg::with_name("encoding")
                         .index(2)
                         .value_name("ENCODING")
-                        .possible_values(&["base58", "base64"]) // Subset of `UiTransactionEncoding` enum
+                        .possible_values(&["base58", "base64"]) // Variants of `TransactionBinaryEncoding` enum
                         .default_value("base58")
                         .takes_value(true)
                         .required(true)
@@ -341,13 +343,13 @@ pub fn parse_balance(
 
 pub fn parse_decode_transaction(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let blob = value_t_or_exit!(matches, "transaction", String);
-    let encoding = match matches.value_of("encoding").unwrap() {
-        "base58" => UiTransactionEncoding::Base58,
-        "base64" => UiTransactionEncoding::Base64,
+    let binary_encoding = match matches.value_of("encoding").unwrap() {
+        "base58" => TransactionBinaryEncoding::Base58,
+        "base64" => TransactionBinaryEncoding::Base64,
         _ => unreachable!(),
     };
 
-    let encoded_transaction = EncodedTransaction::Binary(blob, encoding);
+    let encoded_transaction = EncodedTransaction::Binary(blob, binary_encoding);
     if let Some(transaction) = encoded_transaction.decode() {
         Ok(CliCommandInfo {
             command: CliCommand::DecodeTransaction(transaction),

@@ -82,7 +82,7 @@ pub enum ParsePubkeyError {
 
 impl From<Infallible> for ParsePubkeyError {
     fn from(_: Infallible) -> Self {
-        unreachable!("Infallible unihnabited");
+        unreachable!("Infallible uninhabited");
     }
 }
 

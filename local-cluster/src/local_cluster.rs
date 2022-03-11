@@ -6,7 +6,10 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_client::thin_client::{create_client, ThinClient},
+    solana_client::{
+        thin_client::{create_client, ThinClient},
+        udp_client::UdpTpuConnection,
+    },
     solana_core::{
         tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -535,7 +538,7 @@ impl LocalCluster {
     }
 
     fn transfer_with_client(
-        client: &ThinClient,
+        client: &ThinClient<UdpTpuConnection>,
         source_keypair: &Keypair,
         dest_pubkey: &Pubkey,
         lamports: u64,
@@ -564,7 +567,7 @@ impl LocalCluster {
     }
 
     fn setup_vote_and_stake_accounts(
-        client: &ThinClient,
+        client: &ThinClient<UdpTpuConnection>,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
         amount: u64,
@@ -701,7 +704,7 @@ impl Cluster for LocalCluster {
         self.validators.keys().cloned().collect()
     }
 
-    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
+    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient<UdpTpuConnection>> {
         self.validators.get(pubkey).map(|f| {
             create_client(
                 f.info.contact_info.client_facing_addr(),

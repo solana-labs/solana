@@ -17,6 +17,7 @@ use {
         rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
         rpc_response::RpcSignatureResult,
         thin_client::{create_client, ThinClient},
+        udp_client::UdpTpuConnection,
     },
     solana_core::{
         broadcast_stage::BroadcastStageType,
@@ -1330,8 +1331,7 @@ fn test_snapshot_restart_tower() {
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_archives_dir
-            .path()
-            .to_path_buf(),
+            .into_path(),
         full_snapshot_archive_info.slot(),
         full_snapshot_archive_info.hash(),
         full_snapshot_archive_info.archive_format(),
@@ -1403,8 +1403,7 @@ fn test_snapshots_blockstore_floor() {
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_archives_dir
-            .path()
-            .to_path_buf(),
+            .into_path(),
         archive_info.slot(),
         archive_info.hash(),
         ArchiveFormat::TarBzip2,
@@ -2648,8 +2647,8 @@ fn setup_transfer_scan_threads(
     num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
     scan_commitment: CommitmentConfig,
-    update_client_receiver: Receiver<ThinClient>,
-    scan_client_receiver: Receiver<ThinClient>,
+    update_client_receiver: Receiver<ThinClient<UdpTpuConnection>>,
+    scan_client_receiver: Receiver<ThinClient<UdpTpuConnection>>,
 ) -> (
     JoinHandle<()>,
     JoinHandle<()>,

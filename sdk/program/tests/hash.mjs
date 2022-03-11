@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { init, Hash } from "crate";
-init();
+import { solana_program_init, Hash } from "crate";
+solana_program_init();
 
 // TODO: wasm_bindgen doesn't currently support exporting constants
 const HASH_BYTES = 32;

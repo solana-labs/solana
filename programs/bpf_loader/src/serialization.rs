@@ -183,10 +183,18 @@ pub fn deserialize_parameters_unaligned(
             start += size_of::<u8>(); // is_signer
             start += size_of::<u8>(); // is_writable
             start += size_of::<Pubkey>(); // key
-            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(&buffer[start..]));
+            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(
+                buffer
+                    .get(start..)
+                    .ok_or(InstructionError::InvalidArgument)?,
+            ));
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-            let _ = borrowed_account.set_data(&buffer[start..start + pre_len]);
+            let _ = borrowed_account.set_data(
+                buffer
+                    .get(start..start + pre_len)
+                    .ok_or(InstructionError::InvalidArgument)?,
+            );
             start += pre_len // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
@@ -316,11 +324,23 @@ pub fn deserialize_parameters_aligned(
                 + size_of::<u8>() // executable
                 + 4 // padding to 128-bit aligned
                 + size_of::<Pubkey>(); // key
-            let _ = borrowed_account.set_owner(&buffer[start..start + size_of::<Pubkey>()]);
+            let _ = borrowed_account.set_owner(
+                buffer
+                    .get(start..start + size_of::<Pubkey>())
+                    .ok_or(InstructionError::InvalidArgument)?,
+            );
             start += size_of::<Pubkey>(); // owner
-            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(&buffer[start..]));
+            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(
+                buffer
+                    .get(start..)
+                    .ok_or(InstructionError::InvalidArgument)?,
+            ));
             start += size_of::<u64>(); // lamports
-            let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
+            let post_len = LittleEndian::read_u64(
+                buffer
+                    .get(start..)
+                    .ok_or(InstructionError::InvalidArgument)?,
+            ) as usize;
             start += size_of::<u64>(); // data length
             let data_end = if do_support_realloc {
                 if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
@@ -338,7 +358,11 @@ pub fn deserialize_parameters_aligned(
                 }
                 data_end
             };
-            let _ = borrowed_account.set_data(&buffer[start..data_end]);
+            let _ = borrowed_account.set_data(
+                buffer
+                    .get(start..data_end)
+                    .ok_or(InstructionError::InvalidArgument)?,
+            );
             start += *pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(BPF_ALIGN_OF_U128);
             start += size_of::<u64>(); // rent_epoch
@@ -445,7 +469,7 @@ mod tests {
             .into_iter()
             .enumerate()
             .map(|(index_in_instruction, index_in_transaction)| AccountMeta {
-                pubkey: transaction_accounts[index_in_transaction].0,
+                pubkey: transaction_accounts.get(index_in_transaction).unwrap().0,
                 is_signer: false,
                 is_writable: index_in_instruction >= 4,
             })
@@ -479,12 +503,12 @@ mod tests {
             serialize_parameters(invoke_context.transaction_context, instruction_context).unwrap();
 
         let (de_program_id, de_accounts, de_instruction_data) =
-            unsafe { deserialize(&mut serialized.as_slice_mut()[0] as *mut u8) };
+            unsafe { deserialize(serialized.as_slice_mut().first_mut().unwrap() as *mut u8) };
 
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
         assert_eq!(
-            (&de_instruction_data[0] as *const u8).align_offset(BPF_ALIGN_OF_U128),
+            (de_instruction_data.first().unwrap() as *const u8).align_offset(BPF_ALIGN_OF_U128),
             0
         );
         for account_info in de_accounts {
@@ -546,7 +570,9 @@ mod tests {
         }
 
         // check serialize_parameters_unaligned
-        original_accounts[0]
+        original_accounts
+            .first_mut()
+            .unwrap()
             .1
             .set_owner(bpf_loader_deprecated::id());
         let _ = invoke_context
@@ -560,8 +586,9 @@ mod tests {
         let (mut serialized, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context).unwrap();
 
-        let (de_program_id, de_accounts, de_instruction_data) =
-            unsafe { deserialize_unaligned(&mut serialized.as_slice_mut()[0] as *mut u8) };
+        let (de_program_id, de_accounts, de_instruction_data) = unsafe {
+            deserialize_unaligned(serialized.as_slice_mut().first_mut().unwrap() as *mut u8)
+        };
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
         for account_info in de_accounts {
@@ -676,7 +703,7 @@ mod tests {
                 });
             } else {
                 // duplicate account, clone the original
-                accounts.push(accounts[dup_info as usize].clone());
+                accounts.push(accounts.get(dup_info as usize).unwrap().clone());
             }
         }
 

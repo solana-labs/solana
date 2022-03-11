@@ -72,12 +72,29 @@ pub trait EncodableWithMeta {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub enum TransactionBinaryEncoding {
+    Base58,
+    Base64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
     Binary, // Legacy. Retained for RPC backwards compatibility
     Base64,
     Base58,
     Json,
     JsonParsed,
+}
+
+impl UiTransactionEncoding {
+    pub fn into_binary_encoding(&self) -> Option<TransactionBinaryEncoding> {
+        match self {
+            Self::Binary | Self::Base58 => Some(TransactionBinaryEncoding::Base58),
+            Self::Base64 => Some(TransactionBinaryEncoding::Base64),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for UiTransactionEncoding {
@@ -801,7 +818,7 @@ pub struct EncodedConfirmedTransactionWithStatusMeta {
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
     LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
-    Binary(String, UiTransactionEncoding),
+    Binary(String, TransactionBinaryEncoding),
     Json(UiTransaction),
 }
 
@@ -818,11 +835,11 @@ impl EncodableWithMeta for VersionedTransaction {
             ),
             UiTransactionEncoding::Base58 => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(self).unwrap()).into_string(),
-                encoding,
+                TransactionBinaryEncoding::Base58,
             ),
             UiTransactionEncoding::Base64 => EncodedTransaction::Binary(
                 base64::encode(bincode::serialize(self).unwrap()),
-                encoding,
+                TransactionBinaryEncoding::Base64,
             ),
             UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
                 EncodedTransaction::Json(UiTransaction {
@@ -846,11 +863,11 @@ impl Encodable for Transaction {
             ),
             UiTransactionEncoding::Base58 => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(self).unwrap()).into_string(),
-                encoding,
+                TransactionBinaryEncoding::Base58,
             ),
             UiTransactionEncoding::Base64 => EncodedTransaction::Binary(
                 base64::encode(bincode::serialize(self).unwrap()),
-                encoding,
+                TransactionBinaryEncoding::Base64,
             ),
             UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
                 EncodedTransaction::Json(UiTransaction {
@@ -871,16 +888,13 @@ impl EncodedTransaction {
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
             EncodedTransaction::Binary(blob, encoding) => match *encoding {
-                UiTransactionEncoding::Base58 => bs58::decode(blob)
+                TransactionBinaryEncoding::Base58 => bs58::decode(blob)
                     .into_vec()
                     .ok()
                     .and_then(|bytes| bincode::deserialize(&bytes).ok()),
-                UiTransactionEncoding::Base64 => base64::decode(blob)
+                TransactionBinaryEncoding::Base64 => base64::decode(blob)
                     .ok()
                     .and_then(|bytes| bincode::deserialize(&bytes).ok()),
-                UiTransactionEncoding::Binary
-                | UiTransactionEncoding::Json
-                | UiTransactionEncoding::JsonParsed => None,
             },
         };
         transaction.filter(|transaction| transaction.sanitize().is_ok())
@@ -1030,7 +1044,7 @@ mod test {
              pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
              hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
                 .to_string(),
-            UiTransactionEncoding::Base58,
+            TransactionBinaryEncoding::Base58,
         );
         assert!(unsanitary_transaction.decode().is_none());
     }
