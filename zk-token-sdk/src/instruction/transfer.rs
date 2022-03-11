@@ -35,8 +35,8 @@ const TRANSFER_AMOUNT_HI_BIT_LENGTH: usize = 32;
 
 #[cfg(not(target_arch = "bpf"))]
 lazy_static::lazy_static! {
-    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode(1_u64 <<
-                                                                         TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH - 1);
+    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode((1_u64 <<
+                                                                         TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH) - 1);
 }
 
 #[derive(Clone)]
@@ -353,7 +353,7 @@ impl TransferProof {
             )
         } else {
             let transfer_amount_lo_negated =
-                (1 << TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH - 1) - transfer_amount_lo as u64;
+                (1 << TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH) - 1 - transfer_amount_lo as u64;
             let opening_lo_negated = &PedersenOpening::default() - opening_lo;
 
             RangeProof::new(
