@@ -680,6 +680,29 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         deserialize_protobuf_or_bincode_cell_data(&row_data, table, key)
     }
 
+    pub async fn get_protobuf_or_bincode_cells<B, P>(
+        &mut self,
+        table: &str,
+        row_keys: Vec<RowKey>,
+    ) -> Result<Vec<(RowKey, CellData<B, P>)>>
+    where
+        B: serde::de::DeserializeOwned,
+        P: prost::Message + Default,
+    {
+        Ok(self
+            .get_multi_row_data(table, row_keys.as_slice())
+            .await?
+            .into_iter()
+            .map(|(key, row_data)| {
+                let key_str = key.to_string();
+                (
+                    key,
+                    deserialize_protobuf_or_bincode_cell_data(&row_data, table, key_str).unwrap(),
+                )
+            })
+            .collect())
+    }
+
     pub async fn put_bincode_cells<T>(
         &mut self,
         table: &str,
