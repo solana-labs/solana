@@ -41,7 +41,7 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
     } else {
         let mint_account = bank.get_account(mint)?;
 
-        if !is_known_spl_token_id(&mint_account.owner()) {
+        if !is_known_spl_token_id(mint_account.owner()) {
             return None;
         }
 
@@ -111,7 +111,7 @@ fn collect_token_balance_from_account(
 ) -> Option<TokenBalanceData> {
     let account = bank.get_account(account_id)?;
 
-    if !is_known_spl_token_id(&account.owner()) {
+    if !is_known_spl_token_id(account.owner()) {
         return None;
     }
 
