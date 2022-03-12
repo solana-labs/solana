@@ -157,6 +157,7 @@ function launch_testnet() {
     wait_for_max_stake "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
   fi
 
+  echo "NUMBER_OF_CLIENT_NODES is : &NUMBER_OF_CLIENT_NODES"
   if [[ $NUMBER_OF_CLIENT_NODES -gt 0 ]]; then
     execution_step "Starting ${NUMBER_OF_CLIENT_NODES} client nodes"
     "${REPO_ROOT}"/net/net.sh startclients "$maybeClientOptions" "$CLIENT_OPTIONS"
