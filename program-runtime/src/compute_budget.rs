@@ -73,13 +73,8 @@ impl Default for ComputeBudget {
 
 impl ComputeBudget {
     pub fn new(use_max_units_default: bool) -> Self {
-        let max_units = if use_max_units_default {
-            MAX_UNITS
-        } else {
-            200_000
-        } as u64;
         ComputeBudget {
-            max_units,
+            max_units: ComputeBudget::get_max_units(use_max_units_default),
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
@@ -99,6 +94,14 @@ impl ComputeBudget {
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
+        }
+    }
+
+    pub fn get_max_units(use_max_units_default: bool) -> u64 {
+        if use_max_units_default {
+            MAX_UNITS as u64
+        } else {
+            200_000
         }
     }
 
