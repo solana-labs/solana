@@ -11,7 +11,7 @@ use {
     },
 };
 
-/// hold deserialized messages, as well as computed message_hash and other things needed to create
+/// Holds deserialized messages, as well as computed message_hash and other things needed to create
 /// SanitizedTransaction
 #[derive(Debug, Default)]
 pub struct DeserializedPacket {
@@ -25,14 +25,22 @@ pub struct DeserializedPacket {
     is_simple_vote: bool,
 }
 
+/// Defines the type of entry in `UnprocessedPacketBatches`, it holds original packet_batch
+/// for forwarding, as well as `forwarded` flag;
+/// Each packet in packet_batch are deserialized upon receiving, the result are stored in
+/// `DeserializedPacket` in the same order as packets in `packet_batch`.
 #[derive(Debug, Default)]
 pub struct DeserializedPacketBatch {
     pub packet_batch: PacketBatch,
     pub forwarded: bool,
-    // indexes of valid packets in batch, and their corrersponding deserialized_packet
+    // indexes of valid packets in batch, and their corresponding deserialized_packet
     pub unprocessed_packets: HashMap<usize, DeserializedPacket>,
 }
 
+/// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
+/// PacketBatch's received from sigverify. Banking thread continuously scans the buffer
+/// to pick proper packets to add to the block.
+#[derive(Default)]
 pub struct UnprocessedPacketBatches(VecDeque<DeserializedPacketBatch>);
 
 impl std::ops::Deref for UnprocessedPacketBatches {
@@ -63,15 +71,9 @@ impl FromIterator<DeserializedPacketBatch> for UnprocessedPacketBatches {
     }
 }
 
-impl Default for UnprocessedPacketBatches {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl UnprocessedPacketBatches {
     pub fn new() -> Self {
-        UnprocessedPacketBatches(VecDeque::new())
+        Self::default()
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
