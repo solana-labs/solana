@@ -2345,9 +2345,21 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, loader_id)?;
 
-        assert_eq!(std::mem::size_of_val(&ix_c.accounts_len), std::mem::size_of::<usize>(), "non-64-bit host");
-        assert_eq!(std::mem::size_of_val(&ix_c.data_len), std::mem::size_of::<usize>(), "non-64-bit host");
-        check_instruction_size(ix_c.accounts_len as usize, ix_c.data_len as usize, invoke_context)?;
+        assert_eq!(
+            std::mem::size_of_val(&ix_c.accounts_len),
+            std::mem::size_of::<usize>(),
+            "non-64-bit host"
+        );
+        assert_eq!(
+            std::mem::size_of_val(&ix_c.data_len),
+            std::mem::size_of::<usize>(),
+            "non-64-bit host"
+        );
+        check_instruction_size(
+            ix_c.accounts_len as usize,
+            ix_c.data_len as usize,
+            invoke_context,
+        )?;
         let program_id = translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, loader_id)?;
         let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
