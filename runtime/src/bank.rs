@@ -6428,6 +6428,13 @@ impl Bank {
             self.reconfigure_token2_native_mint();
         }
         self.ensure_no_storage_rewards_pool();
+
+        if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
+            // bprumo TODO:
+            const BPRUMO_TODO_STARTING_ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
+            let accounts_data_len = BPRUMO_TODO_STARTING_ACCOUNTS_DATA_LEN;
+            self.store_accounts_data_len(accounts_data_len);
+        }
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {
