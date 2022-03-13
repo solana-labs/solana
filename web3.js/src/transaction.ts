@@ -119,6 +119,15 @@ export type TransactionCtorFields = {
 };
 
 /**
+ * List of Transaction object fields that may be initialized at construction
+ * and aligns with the Rust implementation
+ */
+export type TransactionCtorWithMessage = {
+  signatures?: Array<SignaturePubkeyPair>;
+  message?: Message;
+};
+
+/**
  * Nonce information to be used to build an offline Transaction.
  */
 export type NonceInformation = {
@@ -170,9 +179,15 @@ export class Transaction {
   nonceInfo?: NonceInformation;
 
   /**
+   * Optional message object. If present, transaction will be created with the
+   * instructions and blockhash of the message. Must be populated by the caller
+   */
+  message?: Message;
+
+  /**
    * Construct an empty Transaction
    */
-  constructor(opts?: TransactionCtorFields) {
+  constructor(opts?: TransactionCtorFields | TransactionCtorWithMessage) {
     opts && Object.assign(this, opts);
   }
 
@@ -204,11 +219,14 @@ export class Transaction {
    * Compile transaction data
    */
   compileMessage(): Message {
+    if (this.message) return this.message;
+
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
       this.instructions.unshift(nonceInfo.nonceInstruction);
     }
+
     const {recentBlockhash} = this;
     if (!recentBlockhash) {
       throw new Error('Transaction recentBlockhash required');
