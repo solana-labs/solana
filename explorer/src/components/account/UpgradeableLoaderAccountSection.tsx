@@ -18,6 +18,8 @@ import { Downloadable } from "components/common/Downloadable";
 import { CheckingBadge, VerifiedBadge } from "components/common/VerifiedBadge";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { useVerifiableBuilds } from "utils/program-verification";
+import { fromProgramData } from "utils/security-txt";
+import { SecurityTXTBadge } from "components/common/SecurityTXTBadge";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -72,6 +74,7 @@ export function UpgradeableProgramSection({
   programAccount: ProgramAccountInfo;
   programData: ProgramDataAccountInfo;
 }) {
+  const securityTXT = fromProgramData(programData);
   const refresh = useFetchAccountInfo();
   const { cluster } = useCluster();
   const label = addressLabel(account.pubkey.toBase58(), cluster);
@@ -147,6 +150,20 @@ export function UpgradeableProgramSection({
           </td>
         </tr>
         <tr>
+          <td>
+            {
+              //TODO: display also for non upgradeable programs
+            }
+            <SecurityLabel />
+          </td>
+          <td className="text-lg-end">
+            <SecurityTXTBadge
+              securityTXT={securityTXT}
+              pubkey={account.pubkey}
+            />
+          </td>
+        </tr>
+        <tr>
           <td>Last Deployed Slot</td>
           <td className="text-lg-end">
             <Slot slot={programData.slot} link />
@@ -162,6 +179,14 @@ export function UpgradeableProgramSection({
         )}
       </TableCardBody>
     </div>
+  );
+}
+
+function SecurityLabel() {
+  return (
+    <InfoTooltip text="Security.txt helps security researchers to contact developers if they find security bugs.">
+      Security.txt
+    </InfoTooltip>
   );
 }
 

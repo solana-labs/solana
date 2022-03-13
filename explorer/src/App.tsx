@@ -14,6 +14,7 @@ import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 import { BlockDetailsPage } from "pages/BlockDetailsPage";
 import { EpochDetailsPage } from "pages/EpochDetailsPage";
+import { SecurityDetailsPage } from "pages/SecurityDetailsPage";
 
 const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
 const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];
@@ -87,6 +88,13 @@ function App() {
                 address={match.params.address}
                 tab={match.params.tab}
               />
+            )}
+          />
+          <Route
+            exact
+            path={["/security/:address"]}
+            render={({ match }) => (
+              <SecurityDetailsPage address={match.params.address} />
             )}
           />
           <Route exact path="/">
