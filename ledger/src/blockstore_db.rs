@@ -5,16 +5,19 @@ use {
     byteorder::{BigEndian, ByteOrder},
     log::*,
     prost::Message,
+    rand::{thread_rng, Rng},
     rocksdb::{
         self,
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
+        perf::{set_perf_stats, PerfMetric, PerfStatsLevel},
         properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
         DBCompactionStyle, DBCompressionType as RocksCompressionType, DBIterator, DBRawIterator,
         DBRecoveryMode, FifoCompactOptions, IteratorMode as RocksIteratorMode, Options,
-        WriteBatch as RWriteBatch, DB,
+        PerfContext, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
+    solana_metrics::datapoint_info,
     solana_runtime::hardened_unpack::UnpackError,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -23,6 +26,7 @@ use {
     },
     solana_storage_proto::convert::generated,
     std::{
+        cell::RefCell,
         collections::{HashMap, HashSet},
         ffi::{CStr, CString},
         fs,
@@ -55,6 +59,9 @@ const DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE: u64 = 125 * 1024 * 1024 * 1024;
 // to 100GB, assuming 500GB total storage for ledger and 20% is
 // used by coding shreds.
 const DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE: u64 = 100 * 1024 * 1024 * 1024;
+
+// Thread local instance of RocksDB's PerfContext.
+thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefCell::new(PerfContext::default());}
 
 // Column family for metadata about a leader slot
 const META_CF: &str = "meta";
@@ -778,6 +785,7 @@ pub trait ColumnMetrics {
         cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
         column_options: &Arc<LedgerColumnOptions>,
     );
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str;
 }
 
 pub trait ColumnName {
@@ -875,6 +883,13 @@ impl ColumnMetrics for columns::TransactionStatus {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "transaction_status",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
@@ -927,6 +942,13 @@ impl ColumnMetrics for columns::AddressSignatures {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "address_signatures",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::AddressSignatures {
     const NAME: &'static str = ADDRESS_SIGNATURES_CF;
@@ -968,6 +990,13 @@ impl ColumnMetrics for columns::TransactionMemos {
             "transaction_memos",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "transaction_memos",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::TransactionMemos {
@@ -1011,6 +1040,13 @@ impl ColumnMetrics for columns::TransactionStatusIndex {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "transaction_status_index",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::TransactionStatusIndex {
     const NAME: &'static str = TRANSACTION_STATUS_INDEX_CF;
@@ -1027,6 +1063,13 @@ impl ColumnMetrics for columns::Rewards {
             "rewards",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "rewards",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::Rewards {
@@ -1048,6 +1091,13 @@ impl ColumnMetrics for columns::Blocktime {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "blocktime",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::Blocktime {
     const NAME: &'static str = BLOCKTIME_CF;
@@ -1067,6 +1117,13 @@ impl ColumnMetrics for columns::PerfSamples {
             "perf_samples",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "perf_samples",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::PerfSamples {
@@ -1088,6 +1145,13 @@ impl ColumnMetrics for columns::BlockHeight {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "block_height",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::BlockHeight {
     const NAME: &'static str = BLOCK_HEIGHT_CF;
@@ -1106,6 +1170,13 @@ impl ColumnMetrics for columns::ProgramCosts {
             "program_costs",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "program_costs",
+            column_options
+        )
     }
 }
 
@@ -1173,6 +1244,13 @@ impl ColumnMetrics for columns::ShredCode {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "shred_code",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::ShredCode {
     const NAME: &'static str = CODE_SHRED_CF;
@@ -1214,6 +1292,13 @@ impl ColumnMetrics for columns::ShredData {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "shred_data",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::ShredData {
     const NAME: &'static str = DATA_SHRED_CF;
@@ -1230,6 +1315,13 @@ impl ColumnMetrics for columns::Index {
             "index",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "index",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::Index {
@@ -1251,6 +1343,13 @@ impl ColumnMetrics for columns::DeadSlots {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "dead_slots",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::DeadSlots {
     const NAME: &'static str = DEAD_SLOTS_CF;
@@ -1270,6 +1369,13 @@ impl ColumnMetrics for columns::DuplicateSlots {
             "duplicate_slots",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "duplicate_slots",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::DuplicateSlots {
@@ -1291,6 +1397,13 @@ impl ColumnMetrics for columns::Orphans {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "orphans",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::Orphans {
     const NAME: &'static str = ORPHANS_CF;
@@ -1310,6 +1423,13 @@ impl ColumnMetrics for columns::BankHash {
             "bank_hash",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "bank_hash",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::BankHash {
@@ -1331,6 +1451,13 @@ impl ColumnMetrics for columns::Root {
             column_options
         ));
     }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "root",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::Root {
     const NAME: &'static str = ROOT_CF;
@@ -1350,6 +1477,13 @@ impl ColumnMetrics for columns::SlotMeta {
             "slot_meta",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "slot_meta",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::SlotMeta {
@@ -1395,6 +1529,13 @@ impl ColumnMetrics for columns::ErasureMeta {
             "erasure_meta",
             column_options
         ));
+    }
+    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_read_perf,op=get",
+            "erasure_meta",
+            column_options
+        )
     }
 }
 impl ColumnName for columns::ErasureMeta {
@@ -1793,18 +1934,37 @@ where
     }
 }
 
+const METRIC_SAMPLES_1K: i32 = 1000;
+// The default number of rocksdb perf samples in 1K
+const ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K_DEFAULT: i32 = 10;
+lazy_static! {
+// The number of RocksDB performance counter samples in 1000.
+static ref ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K: i32 =
+std::env::var("SOLANA_METRICS_ROCKSDB_PERF_SAMPLES_IN_1K")
+    .map(|x| {
+        x.parse().expect("Failed to parse SOLANA_METRICS_ROCKSDB_PERF_SAMPLES_IN_1K")
+
+    }).unwrap_or(ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K_DEFAULT);
+
+}
+
 impl<C> LedgerColumn<C>
 where
     C: TypedColumn + ColumnName + ColumnMetrics,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
+        let mut result = Ok(None);
+        let is_perf_context_enabled = Self::maybe_collect_perf_context();
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
 
-            Ok(Some(value))
-        } else {
-            Ok(None)
+            result = Ok(Some(value))
         }
+
+        if is_perf_context_enabled {
+            self.report_read_perf_context(C::rocksdb_get_perf_metric_header(&self.column_options));
+        }
+        result
     }
 
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
@@ -1816,6 +1976,202 @@ where
 
     pub fn delete(&self, key: C::Index) -> Result<()> {
         self.backend.delete_cf(self.handle(), &C::key(key))
+    }
+
+    /// The function enables RocksDB's PerfContext in N out of 1000
+    /// where N is ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K.
+    ///
+    /// Returns true if the PerfContext is enabled.
+    fn maybe_collect_perf_context() -> bool {
+        if thread_rng().gen_range(0, METRIC_SAMPLES_1K) > *ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K {
+            return false;
+        }
+        set_perf_stats(PerfStatsLevel::EnableTime);
+        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
+            perf_context.borrow_mut().reset();
+        });
+        true
+    }
+
+    /// Reports the collected PerfContext and disables the PerfContext after
+    /// reporting.
+    fn report_read_perf_context(&self, metric_header: &'static str) {
+        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
+            set_perf_stats(PerfStatsLevel::Disable);
+            let perf_context = perf_context_cell.borrow();
+            datapoint_info!(
+                metric_header,
+                (
+                    "user_key_comparison_count",
+                    perf_context.metric(PerfMetric::UserKeyComparisonCount) as i64,
+                    i64
+                ),
+                (
+                    "block_cache_hit_count",
+                    perf_context.metric(PerfMetric::BlockCacheHitCount) as i64,
+                    i64
+                ),
+                (
+                    "block_read_count",
+                    perf_context.metric(PerfMetric::BlockReadCount) as i64,
+                    i64
+                ),
+                (
+                    "block_read_byte",
+                    perf_context.metric(PerfMetric::BlockReadByte) as i64,
+                    i64
+                ),
+                (
+                    "block_read_nanos",
+                    perf_context.metric(PerfMetric::BlockReadTime) as i64,
+                    i64
+                ),
+                (
+                    "block_checksum_nanos",
+                    perf_context.metric(PerfMetric::BlockChecksumTime) as i64,
+                    i64
+                ),
+                (
+                    "block_decompress_nanos",
+                    perf_context.metric(PerfMetric::BlockDecompressTime) as i64,
+                    i64
+                ),
+                (
+                    "get_read_bytes",
+                    perf_context.metric(PerfMetric::GetReadBytes) as i64,
+                    i64
+                ),
+                (
+                    "multiget_read_bytes",
+                    perf_context.metric(PerfMetric::MultigetReadBytes) as i64,
+                    i64
+                ),
+                (
+                    "get_snapshot_nanos",
+                    perf_context.metric(PerfMetric::GetSnapshotTime) as i64,
+                    i64
+                ),
+                (
+                    "get_from_memtable_nanos",
+                    perf_context.metric(PerfMetric::GetFromMemtableTime) as i64,
+                    i64
+                ),
+                (
+                    "get_from_memtable_count",
+                    perf_context.metric(PerfMetric::GetFromMemtableCount) as i64,
+                    i64
+                ),
+                (
+                    // total nanos spent after Get() finds a key
+                    "get_post_process_nanos",
+                    perf_context.metric(PerfMetric::GetPostProcessTime) as i64,
+                    i64
+                ),
+                (
+                    // total nanos reading from output files
+                    "get_from_output_files_nanos",
+                    perf_context.metric(PerfMetric::GetFromOutputFilesTime) as i64,
+                    i64
+                ),
+                (
+                    // time spent on acquiring DB mutex
+                    "db_mutex_lock_nanos",
+                    perf_context.metric(PerfMetric::DbMutexLockNanos) as i64,
+                    i64
+                ),
+                (
+                    // time spent on waiting with a condition variable created with DB mutex.
+                    "db_condition_wait_nanos",
+                    perf_context.metric(PerfMetric::DbConditionWaitNanos) as i64,
+                    i64
+                ),
+                (
+                    "merge_operator_nanos",
+                    perf_context.metric(PerfMetric::MergeOperatorTimeNanos) as i64,
+                    i64
+                ),
+                (
+                    "read_index_block_nanos",
+                    perf_context.metric(PerfMetric::ReadIndexBlockNanos) as i64,
+                    i64
+                ),
+                (
+                    "read_filter_block_nanos",
+                    perf_context.metric(PerfMetric::ReadFilterBlockNanos) as i64,
+                    i64
+                ),
+                (
+                    "new_table_block_iter_nanos",
+                    perf_context.metric(PerfMetric::NewTableBlockIterNanos) as i64,
+                    i64
+                ),
+                (
+                    "block_seek_nanos",
+                    perf_context.metric(PerfMetric::BlockSeekNanos) as i64,
+                    i64
+                ),
+                (
+                    "find_table_nanos",
+                    perf_context.metric(PerfMetric::FindTableNanos) as i64,
+                    i64
+                ),
+                (
+                    "bloom_memtable_hit_count",
+                    perf_context.metric(PerfMetric::BloomMemtableHitCount) as i64,
+                    i64
+                ),
+                (
+                    "bloom_memtable_miss_count",
+                    perf_context.metric(PerfMetric::BloomMemtableMissCount) as i64,
+                    i64
+                ),
+                (
+                    "bloom_sst_hit_count",
+                    perf_context.metric(PerfMetric::BloomSstHitCount) as i64,
+                    i64
+                ),
+                (
+                    "bloom_sst_miss_count",
+                    perf_context.metric(PerfMetric::BloomSstMissCount) as i64,
+                    i64
+                ),
+                (
+                    "key_lock_wait_time",
+                    perf_context.metric(PerfMetric::KeyLockWaitTime) as i64,
+                    i64
+                ),
+                (
+                    "key_lock_wait_count",
+                    perf_context.metric(PerfMetric::KeyLockWaitCount) as i64,
+                    i64
+                ),
+                (
+                    "env_file_exists_nanos",
+                    perf_context.metric(PerfMetric::EnvFileExistsNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_get_children_nanos",
+                    perf_context.metric(PerfMetric::EnvGetChildrenNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_lock_file_nanos",
+                    perf_context.metric(PerfMetric::EnvLockFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_unlock_file_nanos",
+                    perf_context.metric(PerfMetric::EnvUnlockFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "total_metric_count",
+                    perf_context.metric(PerfMetric::TotalMetricCount) as i64,
+                    i64
+                ),
+            );
+        });
     }
 }
 
