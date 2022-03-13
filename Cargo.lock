@@ -3611,11 +3611,13 @@ dependencies = [
 
 [[package]]
 name = "rpassword"
-version = "5.0.1"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
+checksum = "49b7ef46d67d4cecf32ad486814d625738e79e4ccd62531dde0548b2f242f894"
 dependencies = [
  "libc",
+ "serde",
+ "serde_json",
  "winapi 0.3.9",
 ]
 
