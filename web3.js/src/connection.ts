@@ -867,31 +867,34 @@ function createRpcRequest(
   return (method, args) => {
     if (connection._autoBatch) {
       return new Promise((resolve, reject) => {
-        // Automatically batch requests every 100 ms.
-        const BATCH_INTERVAL_MS = 100;
+        // Automatically batch requests every 50 ms.
+        const BATCH_INTERVAL_MS = 50;
 
-        connection._batchRequests.push([
-          client.request(method, args),
+        connection._batchedRequests.push({
+          params: {methodName: method, args},
           resolve,
           reject,
-        ]);
+        });
 
         if (!connection._pendingBatchTimer) {
-          connection._pendingBatchTimer = setTimeout(() => {
-            const batch = client.batchRequests.map((e: any) => e[0]);
-            client.request(batch, (err: any, response: any) => {
-              if (err) {
-                // Call reject handler of each promise
-                connection._batchRequests.map((e: any) => e[2](err));
-              } else {
-                // Call resolve handler of each promise
-                connection._batchRequests.map((e: any, i: number) =>
-                  e[1](response[i]),
-                );
-              }
+          connection._pendingBatchTimer = setTimeout(async () => {
+            try {
+              // Call the RPC batch request.
+              const unsafeRes = await connection._rpcBatchRequest(
+                connection._batchedRequests.map(e => e.params),
+              );
+              // Call resolve handler of each promise
+              connection._batchedRequests.forEach(({resolve}, i) =>
+                resolve(unsafeRes[i]),
+              );
+            } catch (err) {
+              // Call reject handler of each promise
+              connection._batchedRequests.forEach(({reject}) => reject(err));
+            } finally {
               connection._pendingBatchTimer = 0;
-            });
-          }, BATCH_INTERVAL_MS);
+              connection._batchedRequests = [];
+            }
+          }, BATCH_INTERVAL_MS) as any;
         }
       });
     } else {
@@ -2107,7 +2110,7 @@ export type ConnectionConfig = {
   disableRetryOnRateLimit?: boolean;
   /** time to allow for the server to initially process a transaction (in milliseconds) */
   confirmTransactionInitialTimeout?: number;
-  /** automatically batch operations */
+  /** automatically batch JSON RPC operations */
   autoBatch?: boolean;
 };
 
@@ -2120,7 +2123,11 @@ export class Connection {
   /** @internal */ _rpcEndpoint: string;
   /** @internal */ _rpcWsEndpoint: string;
   /** @internal */ _autoBatch?: boolean;
-  /** @internal */ _batchRequests: any[] = [];
+  /** @internal */ _batchedRequests: {
+    params: RpcParams;
+    resolve: (value?: unknown) => void;
+    reject: (reason?: any) => void;
+  }[] = [];
   /** @internal */ _pendingBatchTimer: number = 0;
   /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
