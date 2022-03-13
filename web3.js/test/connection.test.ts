@@ -655,6 +655,86 @@ describe('Connection', () => {
     expect(balance).to.be.at.least(0);
   });
 
+  it('get balance - batch a single request', async () => {
+    const account = Keypair.generate();
+
+    await mockRpcBatchResponse({
+      batch: [
+        {
+          methodName: 'getBalance',
+          args: [account.publicKey.toBase58()],
+        },
+      ],
+      result: [
+        {
+          context: {
+            slot: 11,
+          },
+          value: 5,
+        },
+      ],
+    });
+
+    const [balance] = await connection.performBatchRequest([
+      () => connection.getBalance(account.publicKey),
+    ]);
+    expect(balance).to.equal(5);
+  });
+
+  it('get balance - batch multiple requests', async () => {
+    const account1 = Keypair.generate();
+    const account2 = Keypair.generate();
+    const account3 = Keypair.generate();
+
+    await mockRpcBatchResponse({
+      batch: [
+        {
+          methodName: 'getBalance',
+          args: [account1.publicKey.toBase58()],
+        },
+        {
+          methodName: 'getBalance',
+          args: [account2.publicKey.toBase58()],
+        },
+        {
+          methodName: 'getBalance',
+          args: [account3.publicKey.toBase58()],
+        },
+      ],
+      result: [
+        {
+          context: {
+            slot: 11,
+          },
+          value: 5,
+        },
+        {
+          context: {
+            slot: 11,
+          },
+          value: 10,
+        },
+        {
+          context: {
+            slot: 11,
+          },
+          value: 15,
+        },
+      ],
+    });
+
+    const [balance1, balance2, balance3] = await connection.performBatchRequest(
+      [
+        () => connection.getBalance(account1.publicKey),
+        () => connection.getBalance(account2.publicKey),
+        () => connection.getBalance(account3.publicKey),
+      ],
+    );
+    expect(balance1).to.equal(5);
+    expect(balance2).to.equal(10);
+    expect(balance3).to.equal(15);
+  });
+
   it('get inflation', async () => {
     await mockRpcResponse({
       method: 'getInflationGovernor',
