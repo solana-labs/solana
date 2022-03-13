@@ -860,17 +860,42 @@ function createRpcClient(
   return clientBrowser;
 }
 
-function createRpcRequest(client: RpcClient): RpcRequest {
+function createRpcRequest(client: RpcClient, connection: Connection): RpcRequest {
   return (method, args) => {
-    return new Promise((resolve, reject) => {
-      client.request(method, args, (err: any, response: any) => {
-        if (err) {
-          reject(err);
-          return;
+    if (client._autoBatch) {
+      return new Promise((resolve, reject) => {
+        // Automatically batch requests every 100 ms.
+        const BATCH_INTERVAL_MS = 100;
+        
+        client._batchRequests.push([client.request(method, args), resolve, reject]);
+        
+        if (!client._pendingBatchTimer) {
+          client._pendingBatchTimer = setTimeout(() => {
+            const batch = client.batchRequests.map((e: any) => e[0]);
+            client.request(batch, (err: any, response: any) => {
+              if (err) {
+                // Call reject handler of each promise
+                client._batchRequests.map((e: any) => e[2](err));
+                return;
+              }
+              // Call resolve handler of each promise
+              client._batchRequests.map((e: any, i: number) => e[1](response[i]));
+            });
+            client._pendingBatchTimer = 0;
+          }, BATCH_INTERVAL_MS);
         }
-        resolve(response);
       });
-    });
+    } else {
+      return new Promise((resolve, reject) => {
+        client.request(method, args, (err: any, response: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(response);
+        });
+      });
+    }
   };
 }
 
@@ -2073,6 +2098,8 @@ export type ConnectionConfig = {
   disableRetryOnRateLimit?: boolean;
   /** time to allow for the server to initially process a transaction (in milliseconds) */
   confirmTransactionInitialTimeout?: number;
+  /** automatically batch operations */
+  autoBatch?: boolean;
 };
 
 /**
@@ -2083,6 +2110,9 @@ export class Connection {
   /** @internal */ _confirmTransactionInitialTimeout?: number;
   /** @internal */ _rpcEndpoint: string;
   /** @internal */ _rpcWsEndpoint: string;
+  /** @internal */ _autoBatch?: boolean;
+  /** @internal */ _batchRequests: any[] = [];
+  /** @internal */ _pendingBatchTimer: number = 0;
   /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
   /** @internal */ _rpcBatchRequest: RpcBatchRequest;
@@ -2171,6 +2201,7 @@ export class Connection {
       httpHeaders = commitmentOrConfig.httpHeaders;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
+      this._autoBatch = commitmentOrConfig.autoBatch;
     }
 
     this._rpcEndpoint = endpoint;
@@ -2183,7 +2214,7 @@ export class Connection {
       fetchMiddleware,
       disableRetryOnRateLimit,
     );
-    this._rpcRequest = createRpcRequest(this._rpcClient);
+    this._rpcRequest = createRpcRequest(this._rpcClient, this);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
 
     this._rpcWebSocket = new RpcWebSocketClient(this._rpcWsEndpoint, {
