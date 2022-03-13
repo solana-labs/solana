@@ -15,7 +15,7 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
 dashmap = "4.0.2"
-histogram = "*"
+histogram = "0.6.9"
 itertools = "0.10.3"
 log = { version = "0.4.14" }
 regex = "1"
