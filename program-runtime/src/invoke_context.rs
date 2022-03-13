@@ -471,7 +471,10 @@ impl<'a> InvokeContext<'a> {
                     .try_borrow_mut()
                     .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
             }
-            let pre_account = &self.pre_accounts[pre_account_index];
+            let pre_account = &self
+                .pre_accounts
+                .get(pre_account_index)
+                .ok_or(InstructionError::NotEnoughAccountKeys)?;
             pre_account_index = pre_account_index.saturating_add(1);
             let account = self
                 .transaction_context
@@ -709,7 +712,9 @@ impl<'a> InvokeContext<'a> {
                     })
             {
                 duplicate_indicies.push(duplicate_index);
-                let instruction_account = &mut deduplicated_instruction_accounts[duplicate_index];
+                let instruction_account = deduplicated_instruction_accounts
+                    .get_mut(duplicate_index)
+                    .ok_or(InstructionError::NotEnoughAccountKeys)?;
                 instruction_account.is_signer |= account_meta.is_signer;
                 instruction_account.is_writable |= account_meta.is_writable;
             } else {
@@ -761,10 +766,15 @@ impl<'a> InvokeContext<'a> {
                 return Err(InstructionError::PrivilegeEscalation);
             }
         }
-        let instruction_accounts: Vec<InstructionAccount> = duplicate_indicies
+        let instruction_accounts = duplicate_indicies
             .into_iter()
-            .map(|duplicate_index| deduplicated_instruction_accounts[duplicate_index].clone())
-            .collect();
+            .map(|duplicate_index| {
+                Ok(deduplicated_instruction_accounts
+                    .get(duplicate_index)
+                    .ok_or(InstructionError::NotEnoughAccountKeys)?
+                    .clone())
+            })
+            .collect::<Result<Vec<InstructionAccount>, InstructionError>>()?;
 
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
@@ -977,7 +987,7 @@ impl<'a> InvokeContext<'a> {
     pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
+            .and_then(|frame| frame.keyed_accounts.get(frame.keyed_accounts_range.clone()))
             .ok_or(InstructionError::CallDepth)
     }
 
@@ -1090,7 +1100,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         ),
     ];
     let instruction_accounts = vec![AccountMeta {
-        pubkey: transaction_accounts[2].0,
+        pubkey: transaction_accounts.get(2).unwrap().0,
         is_signer: false,
         is_writable: false,
     }];
@@ -1152,7 +1162,11 @@ fn visit_each_account_once(
     'root: for (index, instruction_account) in instruction_accounts.iter().enumerate() {
         // Note: This is an O(n^2) algorithm,
         // but performed on a very small slice and requires no heap allocations
-        for before in instruction_accounts[..index].iter() {
+        for before in instruction_accounts
+            .get(..index)
+            .ok_or(InstructionError::NotEnoughAccountKeys)?
+            .iter()
+        {
             if before.index_in_transaction == instruction_account.index_in_transaction {
                 continue 'root; // skip dups
             }
@@ -1333,7 +1347,7 @@ mod tests {
             invoke_stack.push(solana_sdk::pubkey::new_rand());
             accounts.push((
                 solana_sdk::pubkey::new_rand(),
-                AccountSharedData::new(index as u64, 1, &invoke_stack[index]),
+                AccountSharedData::new(index as u64, 1, invoke_stack.get(index).unwrap()),
             ));
             instruction_accounts.push(InstructionAccount {
                 index_in_transaction: index,
@@ -1390,44 +1404,67 @@ mod tests {
             ];
 
             // modify account owned by the program
-            invoke_context
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(owned_index)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = (MAX_DEPTH + owned_index) as u8;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = (MAX_DEPTH + owned_index) as u8;
             invoke_context
                 .verify_and_update(&instruction_accounts, false)
                 .unwrap();
             assert_eq!(
-                invoke_context.pre_accounts[owned_index].data()[0],
+                *invoke_context
+                    .pre_accounts
+                    .get(owned_index)
+                    .unwrap()
+                    .data()
+                    .get(0)
+                    .unwrap(),
                 (MAX_DEPTH + owned_index) as u8
             );
 
             // modify account not owned by the program
-            let data = invoke_context
+            let data = *invoke_context
                 .transaction_context
                 .get_account_at_index(not_owned_index)
                 .unwrap()
                 .borrow_mut()
-                .data()[0];
-            invoke_context
+                .data()
+                .get(0)
+                .unwrap();
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(not_owned_index)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = (MAX_DEPTH + not_owned_index) as u8;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(&instruction_accounts, false),
                 Err(InstructionError::ExternalAccountDataModified)
             );
-            assert_eq!(invoke_context.pre_accounts[not_owned_index].data()[0], data);
-            invoke_context
+            assert_eq!(
+                *invoke_context
+                    .pre_accounts
+                    .get(not_owned_index)
+                    .unwrap()
+                    .data()
+                    .get(0)
+                    .unwrap(),
+                data
+            );
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(not_owned_index)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = data;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = data;
 
             invoke_context.pop().unwrap();
         }
@@ -1470,9 +1507,9 @@ mod tests {
             (solana_sdk::pubkey::new_rand(), loader_account),
         ];
         let metas = vec![
-            AccountMeta::new(accounts[0].0, false),
-            AccountMeta::new(accounts[1].0, false),
-            AccountMeta::new_readonly(accounts[2].0, false),
+            AccountMeta::new(accounts.get(0).unwrap().0, false),
+            AccountMeta::new(accounts.get(1).unwrap().0, false),
+            AccountMeta::new_readonly(accounts.get(2).unwrap().0, false),
         ];
         let instruction_accounts = (0..4)
             .map(|index_in_transaction| InstructionAccount {
@@ -1498,40 +1535,48 @@ mod tests {
             );
 
             // not owned account
-            invoke_context
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(1)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = 1;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = 1;
             assert_eq!(
                 invoke_context.native_invoke(inner_instruction.clone(), &[]),
                 Err(InstructionError::ExternalAccountDataModified)
             );
-            invoke_context
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(1)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = 0;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = 0;
 
             // readonly account
-            invoke_context
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(2)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = 1;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = 1;
             assert_eq!(
                 invoke_context.native_invoke(inner_instruction, &[]),
                 Err(InstructionError::ReadonlyDataModified)
             );
-            invoke_context
+            *invoke_context
                 .transaction_context
                 .get_account_at_index(2)
                 .unwrap()
                 .borrow_mut()
-                .data_as_mut_slice()[0] = 0;
+                .data_as_mut_slice()
+                .get_mut(0)
+                .unwrap() = 0;
 
             invoke_context.pop().unwrap();
         }

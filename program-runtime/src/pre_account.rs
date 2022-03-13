@@ -182,8 +182,11 @@ impl PreAccount {
         static ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
         let mut chunks = buf.chunks_exact(ZEROS_LEN);
 
-        chunks.all(|chunk| chunk == &ZEROS[..])
-            && chunks.remainder() == &ZEROS[..chunks.remainder().len()]
+        #[allow(clippy::indexing_slicing)]
+        {
+            chunks.all(|chunk| chunk == &ZEROS[..])
+                && chunks.remainder() == &ZEROS[..chunks.remainder().len()]
+        }
     }
 }
 
