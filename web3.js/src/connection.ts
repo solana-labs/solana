@@ -860,15 +860,22 @@ function createRpcClient(
   return clientBrowser;
 }
 
-function createRpcRequest(client: RpcClient, connection: Connection): RpcRequest {
+function createRpcRequest(
+  client: RpcClient,
+  connection: Connection,
+): RpcRequest {
   return (method, args) => {
     if (connection._autoBatch) {
       return new Promise((resolve, reject) => {
         // Automatically batch requests every 100 ms.
         const BATCH_INTERVAL_MS = 100;
-        
-        connection._batchRequests.push([client.request(method, args), resolve, reject]);
-        
+
+        connection._batchRequests.push([
+          client.request(method, args),
+          resolve,
+          reject,
+        ]);
+
         if (!connection._pendingBatchTimer) {
           connection._pendingBatchTimer = setTimeout(() => {
             const batch = client.batchRequests.map((e: any) => e[0]);
@@ -878,7 +885,9 @@ function createRpcRequest(client: RpcClient, connection: Connection): RpcRequest
                 connection._batchRequests.map((e: any) => e[2](err));
               } else {
                 // Call resolve handler of each promise
-                connection._batchRequests.map((e: any, i: number) => e[1](response[i]));
+                connection._batchRequests.map((e: any, i: number) =>
+                  e[1](response[i]),
+                );
               }
               connection._pendingBatchTimer = 0;
             });
