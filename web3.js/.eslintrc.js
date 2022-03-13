@@ -16,6 +16,9 @@ module.exports = {
     sourceType: 'module',
     ecmaVersion: 8,
   },
+  globals: {
+    NodeJS: true,
+  },
   plugins: ['@typescript-eslint'],
   rules: {
     '@typescript-eslint/no-unused-vars': ['error'],

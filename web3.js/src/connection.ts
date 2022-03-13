@@ -891,10 +891,10 @@ function createRpcRequest(
               // Call reject handler of each promise
               connection._batchedRequests.forEach(({reject}) => reject(err));
             } finally {
-              connection._pendingBatchTimer = 0;
+              connection._pendingBatchTimer = undefined;
               connection._batchedRequests = [];
             }
-          }, BATCH_INTERVAL_MS) as any;
+          }, BATCH_INTERVAL_MS);
         }
       });
     } else {
@@ -2128,7 +2128,7 @@ export class Connection {
     resolve: (value?: unknown) => void;
     reject: (reason?: any) => void;
   }[] = [];
-  /** @internal */ _pendingBatchTimer: number = 0;
+  /** @internal */ _pendingBatchTimer?: NodeJS.Timeout;
   /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
   /** @internal */ _rpcBatchRequest: RpcBatchRequest;
