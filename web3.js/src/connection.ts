@@ -865,18 +865,33 @@ function createRpcRequest(
   connection: Connection,
 ): RpcRequest {
   return (method, args) => {
-    if (connection._numRequestsToBatch > 0) {
+    if (connection._autoBatch) {
       return new Promise((resolve, reject) => {
-        // Automatically queue request to be processed in this batch.
-        connection._batchedRequests.push({
-          params: {methodName: method, args},
+        // Automatically batch requests every 100 ms.
+        const BATCH_INTERVAL_MS = 100;
+
+        connection._batchRequests.push([
+          client.request(method, args),
           resolve,
           reject,
-        });
-        if (
-          connection._batchedRequests.length === connection._numRequestsToBatch
-        ) {
-          connection._resolvePendingBatchRequests();
+        ]);
+
+        if (!connection._pendingBatchTimer) {
+          connection._pendingBatchTimer = setTimeout(() => {
+            const batch = client.batchRequests.map((e: any) => e[0]);
+            client.request(batch, (err: any, response: any) => {
+              if (err) {
+                // Call reject handler of each promise
+                connection._batchRequests.map((e: any) => e[2](err));
+              } else {
+                // Call resolve handler of each promise
+                connection._batchRequests.map((e: any, i: number) =>
+                  e[1](response[i]),
+                );
+              }
+              connection._pendingBatchTimer = 0;
+            });
+          }, BATCH_INTERVAL_MS);
         }
       });
     } else {
@@ -2104,14 +2119,9 @@ export class Connection {
   /** @internal */ _confirmTransactionInitialTimeout?: number;
   /** @internal */ _rpcEndpoint: string;
   /** @internal */ _rpcWsEndpoint: string;
-  /** @internal */ _numRequestsToBatch: number = 0;
-  /** @internal */ _resolvePendingBatchRequests: (value?: unknown) => void =
-    () => null;
-  /** @internal */ _batchedRequests: {
-    params: RpcParams;
-    resolve: (value?: unknown) => void;
-    reject: (reason?: any) => void;
-  }[] = [];
+  /** @internal */ _autoBatch?: boolean;
+  /** @internal */ _batchRequests: any[] = [];
+  /** @internal */ _pendingBatchTimer: number = 0;
   /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
   /** @internal */ _rpcBatchRequest: RpcBatchRequest;
@@ -2200,6 +2210,7 @@ export class Connection {
       httpHeaders = commitmentOrConfig.httpHeaders;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
+      this._autoBatch = commitmentOrConfig.autoBatch;
     }
 
     this._rpcEndpoint = endpoint;
@@ -3996,63 +4007,6 @@ export class Connection {
       );
     }
     return res.result;
-  }
-
-  /**
-   * Perform the provided requests in a single batch JSON RPC request. Basically, this function allows you to
-   * replace the following code, which executes multiple JSON RPC requests in parallel:
-   *
-   *    Promise.all(addresses.map(address => connection.getSignaturesForAddress(address, undefined, 'confirmed'))
-   *
-   * with the below code, which batches all requests into a single JSON RPC request:
-   *
-   *    connection.performBatchRequest(addresses.map(address => () => connection.getSignaturesForAddress(address, undefined, 'confirmed'))
-   *
-   * @param deferredRequests an array of functions, each which returns a promise to be batched. Each promise should call a
-   *                    method on this Connection instance that performs a non-batched request. Note: only methods on
-   *                    the Connection class that call _rpcRequest are supported (most do).
-   * @return {Promise<Array<any>>} an array of responses that correspond to each request.
-   */
-  async performBatchRequest(
-    deferredRequests: Array<() => Promise<any>>,
-  ): Promise<Array<any>> {
-    this._numRequestsToBatch = deferredRequests.length;
-    let promises: Array<any> = [];
-    await new Promise((resolve, reject) => {
-      this._resolvePendingBatchRequests = resolve;
-
-      // Begin executing the promises.
-      promises = deferredRequests.map(e => e().catch(reject));
-
-      // Each promise generates an RPC payload, and it stores
-      // that payload, resolve function, and reject function
-      // in this._batchedRequests.
-      //
-      // This outer Promise is resolved only when all the entries
-      // in this._batchedRequests are created, at which
-      // point _resolvePendingBatchRequests is called.
-    });
-
-    assert(
-      this._batchedRequests.length === this._numRequestsToBatch,
-      'all requests were not properly batched',
-    );
-
-    // Now call the RPC batch request with the data.
-    try {
-      const unsafeRes = await this._rpcBatchRequest(
-        this._batchedRequests.map(e => e.params),
-      );
-
-      // Finally, resolve the promises created by deferredRequests with the appropriate data for each promise.
-      this._batchedRequests.forEach(({resolve}, i) => resolve(unsafeRes[i]));
-    } catch (err) {
-      // Propagate the error to the promises created by deferredRequests.
-      this._batchedRequests.forEach(({reject}) => reject(err));
-    }
-
-    // Await all promises so we return a list of the results from each one.
-    return Promise.all(promises);
   }
 
   /**
