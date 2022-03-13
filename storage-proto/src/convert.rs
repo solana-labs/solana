@@ -570,7 +570,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             18 => TransactionError::UnsupportedVersion,
             19 => TransactionError::InvalidWritableAccount,
             20 => TransactionError::WouldExceedMaxAccountCostLimit,
-            21 => TransactionError::WouldExceedMaxAccountDataCostLimit,
+            21 => TransactionError::WouldExceedAccountDataBlockLimit,
             22 => TransactionError::TooManyAccountLocks,
             23 => TransactionError::AddressLookupTableNotFound,
             24 => TransactionError::InvalidAddressLookupTableOwner,
@@ -578,6 +578,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             26 => TransactionError::InvalidAddressLookupTableIndex,
             27 => TransactionError::InvalidRentPayingAccount,
             28 => TransactionError::WouldExceedMaxVoteCostLimit,
+            29 => TransactionError::WouldExceedAccountDataTotalLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -648,8 +649,8 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::WouldExceedMaxAccountCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxAccountCostLimit
                 }
-                TransactionError::WouldExceedMaxAccountDataCostLimit => {
-                    tx_by_addr::TransactionErrorType::WouldExceedMaxAccountDataCostLimit
+                TransactionError::WouldExceedAccountDataBlockLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedAccountDataBlockLimit
                 }
                 TransactionError::TooManyAccountLocks => {
                     tx_by_addr::TransactionErrorType::TooManyAccountLocks
@@ -671,6 +672,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::WouldExceedMaxVoteCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxVoteCostLimit
+                }
+                TransactionError::WouldExceedAccountDataTotalLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedAccountDataTotalLimit
                 }
             } as i32,
             instruction_error: match transaction_error {
