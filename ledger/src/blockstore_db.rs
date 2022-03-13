@@ -5,15 +5,18 @@ use {
     byteorder::{BigEndian, ByteOrder},
     log::*,
     prost::Message,
+    rand::{thread_rng, Rng},
     rocksdb::{
         self,
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
+        perf::{set_perf_stats, PerfMetric, PerfStatsLevel},
         ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBCompactionStyle, DBIterator,
         DBRawIterator, DBRecoveryMode, FifoCompactOptions, IteratorMode as RocksIteratorMode,
-        Options, WriteBatch as RWriteBatch, DB,
+        Options, PerfContext, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
+    solana_metrics::{datapoint_info},
     solana_runtime::hardened_unpack::UnpackError,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -22,6 +25,7 @@ use {
     },
     solana_storage_proto::convert::generated,
     std::{
+        cell::RefCell,
         collections::{HashMap, HashSet},
         ffi::{CStr, CString},
         fs,
@@ -52,6 +56,12 @@ const DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE: u64 = 125 * 1024 * 1024 * 1024;
 // to 100GB, assuming 500GB total storage for ledger and 20% is
 // used by coding shreds.
 const DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE: u64 = 100 * 1024 * 1024 * 1024;
+
+// Thread local instance of RocksDB's PerfContext.
+thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefCell::new(PerfContext::default());}
+
+// The sample rate of RocksDB's PerfContext in 1 out of N.
+const ROCKSDB_PERF_CONTEXT_SAMPLE_RATE: u32 = 100;
 
 // Column family for metadata about a leader slot
 const META_CF: &str = "meta";
@@ -1258,13 +1268,18 @@ where
     C: TypedColumn + ColumnName,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
+        let mut result = Ok(None);
+        let is_perf_context_enabled = Self::maybe_collect_perf_context();
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
 
-            Ok(Some(value))
-        } else {
-            Ok(None)
+            result = Ok(Some(value))
         }
+
+        if is_perf_context_enabled {
+            Self::report_perf_context();
+        }
+        result
     }
 
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
@@ -1276,6 +1291,378 @@ where
 
     pub fn delete(&self, key: C::Index) -> Result<()> {
         self.backend.delete_cf(self.handle(), &C::key(key))
+    }
+
+    /// The function enables RocksDB's PerfContext in one out of
+    /// ROCKSDB_PERF_CONTEXT_SAMPLE_RATE.
+    ///
+    /// Returns true if the PerfContext is enabled.
+    fn maybe_collect_perf_context() -> bool {
+        if thread_rng().gen_range(0, ROCKSDB_PERF_CONTEXT_SAMPLE_RATE) != 0 {
+            return false;
+        }
+        set_perf_stats(PerfStatsLevel::EnableTime);
+        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
+            perf_context.borrow_mut().reset();
+        });
+        true
+    }
+
+    /// Reports the collected PerfContext and disables the PerfContext after
+    /// reporting.
+    fn report_perf_context() {
+        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
+            let perf_context = perf_context_cell.borrow();
+            datapoint_info!(
+                "rocksdb_get_perf,cf_name=unknown",
+                (
+                    "user_key_comparison_count",
+                    perf_context.metric(PerfMetric::UserKeyComparisonCount) as i64,
+                    i64
+                ),
+                (
+                    "block_cache_hit_count",
+                    perf_context.metric(PerfMetric::BlockCacheHitCount) as i64,
+                    i64
+                ),
+                (
+                    "block_read_count",
+                    perf_context.metric(PerfMetric::BlockReadCount) as i64,
+                    i64
+                ),
+                (
+                    "block_read_byte",
+                    perf_context.metric(PerfMetric::BlockReadByte) as i64,
+                    i64
+                ),
+                (
+                    "block_read_time",
+                    perf_context.metric(PerfMetric::BlockReadTime) as i64,
+                    i64
+                ),
+                (
+                    "block_checksum_time",
+                    perf_context.metric(PerfMetric::BlockChecksumTime) as i64,
+                    i64
+                ),
+                (
+                    "block_decompress_time",
+                    perf_context.metric(PerfMetric::BlockDecompressTime) as i64,
+                    i64
+                ),
+                (
+                    "get_read_bytes",
+                    perf_context.metric(PerfMetric::GetReadBytes) as i64,
+                    i64
+                ),
+                (
+                    "multiget_read_bytes",
+                    perf_context.metric(PerfMetric::MultigetReadBytes) as i64,
+                    i64
+                ),
+                (
+                    "iter_read_bytes",
+                    perf_context.metric(PerfMetric::IterReadBytes) as i64,
+                    i64
+                ),
+                (
+                    "internal_key_skipped_count",
+                    perf_context.metric(PerfMetric::InternalKeySkippedCount) as i64,
+                    i64
+                ),
+                (
+                    "internal_delete_skipped_count",
+                    perf_context.metric(PerfMetric::InternalDeleteSkippedCount) as i64,
+                    i64
+                ),
+                (
+                    "internal_recent_skipped_count",
+                    perf_context.metric(PerfMetric::InternalRecentSkippedCount) as i64,
+                    i64
+                ),
+                (
+                    "internal_merge_count",
+                    perf_context.metric(PerfMetric::InternalMergeCount) as i64,
+                    i64
+                ),
+                (
+                    "get_snapshot_time",
+                    perf_context.metric(PerfMetric::GetSnapshotTime) as i64,
+                    i64
+                ),
+                (
+                    "get_from_memtable_time",
+                    perf_context.metric(PerfMetric::GetFromMemtableTime) as i64,
+                    i64
+                ),
+                (
+                    "get_from_memtable_count",
+                    perf_context.metric(PerfMetric::GetFromMemtableCount) as i64,
+                    i64
+                ),
+                (
+                    "get_post_process_time",
+                    perf_context.metric(PerfMetric::GetPostProcessTime) as i64,
+                    i64
+                ),
+                (
+                    "get_from_output_files_time",
+                    perf_context.metric(PerfMetric::GetFromOutputFilesTime) as i64,
+                    i64
+                ),
+                (
+                    "seek_on_memtable_time",
+                    perf_context.metric(PerfMetric::SeekOnMemtableTime) as i64,
+                    i64
+                ),
+                (
+                    "seek_on_memtable_count",
+                    perf_context.metric(PerfMetric::SeekOnMemtableCount) as i64,
+                    i64
+                ),
+                (
+                    "next_on_memtable_count",
+                    perf_context.metric(PerfMetric::NextOnMemtableCount) as i64,
+                    i64
+                ),
+                (
+                    "prev_on_memtable_count",
+                    perf_context.metric(PerfMetric::PrevOnMemtableCount) as i64,
+                    i64
+                ),
+                (
+                    "seek_child_seek_time",
+                    perf_context.metric(PerfMetric::SeekChildSeekTime) as i64,
+                    i64
+                ),
+                (
+                    "seek_child_seek_count",
+                    perf_context.metric(PerfMetric::SeekChildSeekCount) as i64,
+                    i64
+                ),
+                (
+                    "seek_min_heap_time",
+                    perf_context.metric(PerfMetric::SeekMinHeapTime) as i64,
+                    i64
+                ),
+                (
+                    "seek_max_heap_time",
+                    perf_context.metric(PerfMetric::SeekMaxHeapTime) as i64,
+                    i64
+                ),
+                (
+                    "seek_internal_seek_time",
+                    perf_context.metric(PerfMetric::SeekInternalSeekTime) as i64,
+                    i64
+                ),
+                (
+                    "find_next_user_entry_time",
+                    perf_context.metric(PerfMetric::FindNextUserEntryTime) as i64,
+                    i64
+                ),
+                (
+                    "write_wal_time",
+                    perf_context.metric(PerfMetric::WriteWalTime) as i64,
+                    i64
+                ),
+                (
+                    "write_memtable_time",
+                    perf_context.metric(PerfMetric::WriteMemtableTime) as i64,
+                    i64
+                ),
+                (
+                    "write_delay_time",
+                    perf_context.metric(PerfMetric::WriteDelayTime) as i64,
+                    i64
+                ),
+                (
+                    "write_pre_and_post_process_time",
+                    perf_context.metric(PerfMetric::WritePreAndPostProcessTime) as i64,
+                    i64
+                ),
+                (
+                    "db_mutex_lock_nanos",
+                    perf_context.metric(PerfMetric::DbMutexLockNanos) as i64,
+                    i64
+                ),
+                (
+                    "db_condition_wait_nanos",
+                    perf_context.metric(PerfMetric::DbConditionWaitNanos) as i64,
+                    i64
+                ),
+                (
+                    "merge_operator_time_nanos",
+                    perf_context.metric(PerfMetric::MergeOperatorTimeNanos) as i64,
+                    i64
+                ),
+                (
+                    "read_index_block_nanos",
+                    perf_context.metric(PerfMetric::ReadIndexBlockNanos) as i64,
+                    i64
+                ),
+                (
+                    "read_filter_block_nanos",
+                    perf_context.metric(PerfMetric::ReadFilterBlockNanos) as i64,
+                    i64
+                ),
+                (
+                    "new_table_block_iter_nanos",
+                    perf_context.metric(PerfMetric::NewTableBlockIterNanos) as i64,
+                    i64
+                ),
+                (
+                    "new_table_iterator_nanos",
+                    perf_context.metric(PerfMetric::NewTableIteratorNanos) as i64,
+                    i64
+                ),
+                (
+                    "block_seek_nanos",
+                    perf_context.metric(PerfMetric::BlockSeekNanos) as i64,
+                    i64
+                ),
+                (
+                    "find_table_nanos",
+                    perf_context.metric(PerfMetric::FindTableNanos) as i64,
+                    i64
+                ),
+                (
+                    "bloom_memtable_hit_count",
+                    perf_context.metric(PerfMetric::BloomMemtableHitCount) as i64,
+                    i64
+                ),
+                (
+                    "bloom_memtable_miss_count",
+                    perf_context.metric(PerfMetric::BloomMemtableMissCount) as i64,
+                    i64
+                ),
+                (
+                    "bloom_sst_hit_count",
+                    perf_context.metric(PerfMetric::BloomSstHitCount) as i64,
+                    i64
+                ),
+                (
+                    "bloom_sst_miss_count",
+                    perf_context.metric(PerfMetric::BloomSstMissCount) as i64,
+                    i64
+                ),
+                (
+                    "key_lock_wait_time",
+                    perf_context.metric(PerfMetric::KeyLockWaitTime) as i64,
+                    i64
+                ),
+                (
+                    "key_lock_wait_count",
+                    perf_context.metric(PerfMetric::KeyLockWaitCount) as i64,
+                    i64
+                ),
+                (
+                    "env_new_sequential_file_nanos",
+                    perf_context.metric(PerfMetric::EnvNewSequentialFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_new_random_access_file_nanos",
+                    perf_context.metric(PerfMetric::EnvNewRandomAccessFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_new_writable_file_nanos",
+                    perf_context.metric(PerfMetric::EnvNewWritableFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_reuse_writable_file_nanos",
+                    perf_context.metric(PerfMetric::EnvReuseWritableFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_new_random_rw_file_nanos",
+                    perf_context.metric(PerfMetric::EnvNewRandomRwFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_new_directory_nanos",
+                    perf_context.metric(PerfMetric::EnvNewDirectoryNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_file_exists_nanos",
+                    perf_context.metric(PerfMetric::EnvFileExistsNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_get_children_nanos",
+                    perf_context.metric(PerfMetric::EnvGetChildrenNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_get_children_file_attributes_nanos",
+                    perf_context.metric(PerfMetric::EnvGetChildrenFileAttributesNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_delete_file_nanos",
+                    perf_context.metric(PerfMetric::EnvDeleteFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_create_dir_nanos",
+                    perf_context.metric(PerfMetric::EnvCreateDirNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_create_dir_if_missing_nanos",
+                    perf_context.metric(PerfMetric::EnvCreateDirIfMissingNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_delete_dir_nanos",
+                    perf_context.metric(PerfMetric::EnvDeleteDirNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_get_file_size_nanos",
+                    perf_context.metric(PerfMetric::EnvGetFileSizeNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_get_file_modification_time_nanos",
+                    perf_context.metric(PerfMetric::EnvGetFileModificationTimeNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_rename_file_nanos",
+                    perf_context.metric(PerfMetric::EnvRenameFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_link_file_nanos",
+                    perf_context.metric(PerfMetric::EnvLinkFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_lock_file_nanos",
+                    perf_context.metric(PerfMetric::EnvLockFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_unlock_file_nanos",
+                    perf_context.metric(PerfMetric::EnvUnlockFileNanos) as i64,
+                    i64
+                ),
+                (
+                    "env_new_logger_nanos",
+                    perf_context.metric(PerfMetric::EnvNewLoggerNanos) as i64,
+                    i64
+                ),
+                (
+                    "total_metric_count",
+                    perf_context.metric(PerfMetric::TotalMetricCount) as i64,
+                    i64
+                ),
+            );
+        });
+        set_perf_stats(PerfStatsLevel::Disable);
     }
 }
 
