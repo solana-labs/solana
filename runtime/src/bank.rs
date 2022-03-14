@@ -2829,7 +2829,7 @@ impl Bank {
         epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
     ) -> Option<UnixTimestamp> {
         let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
-        let slots_per_epoch = self.epoch_schedule().slots_per_epoch;
+        let slots_per_epoch = self.epoch_schedule().get_slots_in_epoch(self.epoch());
         let vote_accounts = self.vote_accounts();
         let recent_timestamps = vote_accounts.iter().filter_map(|(pubkey, (_, account))| {
             let vote_state = account.vote_state();
