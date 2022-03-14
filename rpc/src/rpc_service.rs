@@ -155,10 +155,10 @@ impl RpcRequestMiddleware {
 
     fn find_snapshot_file<P>(&self, stem: P) -> PathBuf
     where
-        P: AsRef<Path> + Copy,
+        P: AsRef<Path>,
     {
         let root = &self.snapshot_config.as_ref().unwrap().snapshot_archives_dir;
-        let local_path = root.join(stem);
+        let local_path = root.join(&stem);
         if local_path.exists() {
             local_path
         } else {
