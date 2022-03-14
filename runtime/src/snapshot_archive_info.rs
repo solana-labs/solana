@@ -25,6 +25,15 @@ pub trait SnapshotArchiveInfoGetter {
     fn archive_format(&self) -> ArchiveFormat {
         self.snapshot_archive_info().archive_format
     }
+
+    fn is_remote(&self) -> bool {
+        self.snapshot_archive_info()
+            .path
+            .parent()
+            .map_or(false, |p| {
+                p.ends_with(snapshot_utils::SNAPSHOT_ARCHIVE_DOWNLOAD_DIR)
+            })
+    }
 }
 
 /// Common information about a snapshot archive
@@ -79,7 +88,7 @@ impl PartialOrd for FullSnapshotArchiveInfo {
     }
 }
 
-// Order `FullSnapshotArchiveInfo` by slot (ascending), which practially is sorting chronologically
+// Order `FullSnapshotArchiveInfo` by slot (ascending), which practically is sorting chronologically
 impl Ord for FullSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.slot().cmp(&other.slot())
@@ -141,7 +150,7 @@ impl PartialOrd for IncrementalSnapshotArchiveInfo {
 }
 
 // Order `IncrementalSnapshotArchiveInfo` by base slot (ascending), then slot (ascending), which
-// practially is sorting chronologically
+// practically is sorting chronologically
 impl Ord for IncrementalSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.base_slot()

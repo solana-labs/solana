@@ -47,6 +47,7 @@ mod archive_format;
 pub use archive_format::*;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
+pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
@@ -789,7 +790,7 @@ pub fn bank_from_snapshot_archives(
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
-        accounts_db_skip_shrink,
+        accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
         Some(full_snapshot_archive_info.slot()),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -1033,6 +1034,12 @@ pub fn path_to_file_name_str(path: &Path) -> Result<&str> {
         .ok_or_else(|| SnapshotError::FileNameToStrError(path.to_path_buf()))
 }
 
+pub fn build_snapshot_archives_remote_dir(snapshot_archives_dir: impl AsRef<Path>) -> PathBuf {
+    snapshot_archives_dir
+        .as_ref()
+        .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR)
+}
+
 /// Build the full snapshot archive path from its components: the snapshot archives directory, the
 /// snapshot slot, the accounts hash, and the archive format.
 pub fn build_full_snapshot_archive_path(
@@ -1136,54 +1143,57 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
     })
 }
 
-/// Get a list of the full snapshot archives in a directory
+/// Walk down the snapshot archive to collect snapshot archive file info
+fn get_snapshot_archives<T, F>(snapshot_archives_dir: &Path, cb: F) -> Vec<T>
+where
+    F: Fn(PathBuf) -> Result<T>,
+{
+    let walk_dir = |dir: &Path| -> Vec<T> {
+        let entry_iter = fs::read_dir(dir);
+        match entry_iter {
+            Err(err) => {
+                info!(
+                    "Unable to read snapshot archives directory: err: {}, path: {}",
+                    err,
+                    dir.display()
+                );
+                vec![]
+            }
+            Ok(entries) => entries
+                .filter_map(|entry| entry.map_or(None, |entry| cb(entry.path()).ok()))
+                .collect(),
+        }
+    };
+
+    let mut ret = walk_dir(snapshot_archives_dir);
+    ret.append(&mut walk_dir(
+        build_snapshot_archives_remote_dir(snapshot_archives_dir).as_ref(),
+    ));
+    ret
+}
+
+/// Get a list of the full snapshot archives from a directory
 pub fn get_full_snapshot_archives<P>(snapshot_archives_dir: P) -> Vec<FullSnapshotArchiveInfo>
 where
     P: AsRef<Path>,
 {
-    match fs::read_dir(&snapshot_archives_dir) {
-        Err(err) => {
-            info!(
-                "Unable to read snapshot archives directory: err: {}, path: {}",
-                err,
-                snapshot_archives_dir.as_ref().display()
-            );
-            vec![]
-        }
-        Ok(files) => files
-            .filter_map(|entry| {
-                entry.map_or(None, |entry| {
-                    FullSnapshotArchiveInfo::new_from_path(entry.path()).ok()
-                })
-            })
-            .collect(),
-    }
+    get_snapshot_archives(
+        snapshot_archives_dir.as_ref(),
+        FullSnapshotArchiveInfo::new_from_path,
+    )
 }
 
-/// Get a list of the incremental snapshot archives in a directory
+/// Get a list of the incremental snapshot archives from a directory
 pub fn get_incremental_snapshot_archives<P>(
     snapshot_archives_dir: P,
 ) -> Vec<IncrementalSnapshotArchiveInfo>
 where
     P: AsRef<Path>,
 {
-    match fs::read_dir(&snapshot_archives_dir) {
-        Err(err) => {
-            info!(
-                "Unable to read snapshot archives directory: err: {}, path: {}",
-                err,
-                snapshot_archives_dir.as_ref().display()
-            );
-            vec![]
-        }
-        Ok(files) => files
-            .filter_map(|entry| {
-                entry.map_or(None, |entry| {
-                    IncrementalSnapshotArchiveInfo::new_from_path(entry.path()).ok()
-                })
-            })
-            .collect(),
-    }
+    get_snapshot_archives(
+        snapshot_archives_dir.as_ref(),
+        IncrementalSnapshotArchiveInfo::new_from_path,
+    )
 }
 
 /// Get the highest slot of the full snapshot archives in a directory
@@ -2274,6 +2284,7 @@ mod tests {
         min_incremental_snapshot_slot: Slot,
         max_incremental_snapshot_slot: Slot,
     ) {
+        fs::create_dir_all(snapshot_archives_dir).unwrap();
         for full_snapshot_slot in min_full_snapshot_slot..max_full_snapshot_slot {
             for incremental_snapshot_slot in
                 min_incremental_snapshot_slot..max_incremental_snapshot_slot
@@ -2329,6 +2340,25 @@ mod tests {
     }
 
     #[test]
+    fn test_get_full_snapshot_archives_remote() {
+        solana_logger::setup();
+        let temp_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let min_slot = 123;
+        let max_slot = 456;
+        common_create_snapshot_archive_files(
+            &temp_snapshot_archives_dir.path().join("remote"),
+            min_slot,
+            max_slot,
+            0,
+            0,
+        );
+
+        let snapshot_archives = get_full_snapshot_archives(temp_snapshot_archives_dir);
+        assert_eq!(snapshot_archives.len() as Slot, max_slot - min_slot);
+        assert!(snapshot_archives.iter().all(|info| info.is_remote()));
+    }
+
+    #[test]
     fn test_get_incremental_snapshot_archives() {
         solana_logger::setup();
         let temp_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -2351,6 +2381,34 @@ mod tests {
             (max_full_snapshot_slot - min_full_snapshot_slot)
                 * (max_incremental_snapshot_slot - min_incremental_snapshot_slot)
         );
+    }
+
+    #[test]
+    fn test_get_incremental_snapshot_archives_remote() {
+        solana_logger::setup();
+        let temp_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let min_full_snapshot_slot = 12;
+        let max_full_snapshot_slot = 23;
+        let min_incremental_snapshot_slot = 34;
+        let max_incremental_snapshot_slot = 45;
+        common_create_snapshot_archive_files(
+            &temp_snapshot_archives_dir.path().join("remote"),
+            min_full_snapshot_slot,
+            max_full_snapshot_slot,
+            min_incremental_snapshot_slot,
+            max_incremental_snapshot_slot,
+        );
+
+        let incremental_snapshot_archives =
+            get_incremental_snapshot_archives(temp_snapshot_archives_dir);
+        assert_eq!(
+            incremental_snapshot_archives.len() as Slot,
+            (max_full_snapshot_slot - min_full_snapshot_slot)
+                * (max_incremental_snapshot_slot - min_incremental_snapshot_slot)
+        );
+        assert!(incremental_snapshot_archives
+            .iter()
+            .all(|info| info.is_remote()));
     }
 
     #[test]
