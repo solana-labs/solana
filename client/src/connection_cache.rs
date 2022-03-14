@@ -36,7 +36,6 @@ impl ConnMap {
 }
 
 lazy_static! {
-    // TODO: all implementations of TpuConnection should be Sync + Send but make sure...
     static ref CONNECTION_MAP: Mutex<ConnMap> = Mutex::new(ConnMap::new());
 }
 
@@ -55,7 +54,8 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sy
         }
         Entry::Vacant(entry) => {
             let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            // TODO: make it configurable (e.g. via the command line) whether to use UDP or Quic
+            // TODO: see https://github.com/solana-labs/solana/issues/23659
+            // make it configurable (e.g. via the command line) whether to use UDP or Quic
             let conn = Arc::new(UdpTpuConnection::new(send_socket, *addr));
             entry.insert((conn.clone(), ticks));
             (
@@ -91,6 +91,7 @@ mod tests {
         fakedata_generator::gen_ipv4,
         std::net::SocketAddr,
     };
+
     fn get_addr() -> SocketAddr {
         let mut ip = gen_ipv4();
         ip.push_str(":80");
@@ -114,14 +115,29 @@ mod tests {
                 addr
             })
             .collect::<Vec<_>>();
-        let map = (*CONNECTION_MAP).lock().unwrap();
-        addrs.iter().for_each(|a| {
-            let conn = map.map.get(a).expect("Address not found");
-            assert!(a.ip() == conn.0.tpu_addr().ip());
-        });
+        {
+            let map = (*CONNECTION_MAP).lock().unwrap();
+            addrs.iter().for_each(|a| {
+                let conn = map.map.get(a).expect("Address not found");
+                assert!(a.ip() == conn.0.tpu_addr().ip());
+            });
 
-        if map.map.get(&first_addr).is_some() {
-            panic!("Eviction failed");
+            if map.map.get(&first_addr).is_some() {
+                panic!("Eviction failed");
+            }
         }
+
+        // Test that get_connection updates which connection is next up for eviction
+        // when an existing connection is used. Initially, addrs[0] should be next up for eviction, since
+        // it was the earliest added. But we do get_connection(&addrs[0]), thereby using
+        // that connection, and bumping it back to the end of the queue. So addrs[1] should be
+        // the next up for eviction. So we add a new connection, and test that addrs[0] is not
+        // evicted but addrs[1] is.
+        get_connection(&addrs[0]);
+        get_connection(&get_addr());
+
+        let map = (*CONNECTION_MAP).lock().unwrap();
+        assert!(map.map.get(&addrs[0]).is_some());
+        assert!(map.map.get(&addrs[1]).is_none());
     }
 }
