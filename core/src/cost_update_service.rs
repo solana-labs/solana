@@ -7,9 +7,9 @@ use {
     crossbeam_channel::Receiver,
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::timings::{ExecuteTimings, ProgramTiming},
     solana_runtime::{bank::Bank, cost_model::CostModel},
-    solana_sdk::timing::timestamp,
+    solana_sdk::{pubkey::Pubkey, timing::timestamp},
     std::{
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
@@ -25,15 +25,18 @@ pub struct CostUpdateServiceTiming {
 
 impl CostUpdateServiceTiming {
     fn update(&mut self, update_cost_model_count: u64, update_cost_model_elapsed: u64) {
-        self.update_cost_model_count += update_cost_model_count;
-        self.update_cost_model_elapsed += update_cost_model_elapsed;
+        self.update_cost_model_count = self
+            .update_cost_model_count
+            .saturating_add(update_cost_model_count);
+        self.update_cost_model_elapsed = self
+            .update_cost_model_elapsed
+            .saturating_add(update_cost_model_elapsed);
 
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "cost-update-service-stats",
-                ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
                     "update_cost_model_count",
                     self.update_cost_model_count as i64,
@@ -133,8 +136,51 @@ impl CostUpdateService {
                 .unwrap()
                 .upsert_instruction_cost(program_id, units);
             update_count += 1;
+
+            let updated_estimated_program_cost =
+                cost_model.read().unwrap().find_instruction_cost(program_id);
+            if Self::is_large_change_in_cost_calculation(
+                units as i64,
+                updated_estimated_program_cost as i64,
+            ) {
+                Self::report_large_change_in_cost(
+                    program_id,
+                    program_timings,
+                    updated_estimated_program_cost,
+                );
+            }
         }
         update_count
+    }
+
+    /// Based on historical data, it seems reasonable to flag a large change if updated_cost
+    /// is more than double of input_data;
+    /// Compare updated_cost against input_cost instead of previous calculated cost captures
+    /// how far apart between single data point and calculated value, which is a good indicator
+    /// of potential issues.
+    fn is_large_change_in_cost_calculation(input_cost: i64, updated_cost: i64) -> bool {
+        (updated_cost - input_cost).abs() > input_cost
+    }
+
+    fn report_large_change_in_cost(
+        program_id: &Pubkey,
+        program_timing: &ProgramTiming,
+        calculated_units: u64,
+    ) {
+        datapoint_info!(
+            "large_change_in_cost",
+            ("pubkey", program_id.to_string(), String),
+            ("execute_us", program_timing.accumulated_us, i64),
+            ("accumulated_units", program_timing.accumulated_units, i64),
+            ("count", program_timing.count, i64),
+            ("errored_units", program_timing.total_errored_units, i64),
+            (
+                "errored_count",
+                program_timing.errored_txs_compute_consumed.len(),
+                i64
+            ),
+            ("calculated_units", calculated_units as i64, i64),
+        );
     }
 }
 
