@@ -475,10 +475,7 @@ impl Validator {
                 cache_block_meta_sender,
                 cache_block_meta_service,
             },
-            tower,
         ) = new_banks_from_ledger(
-            &id,
-            vote_account,
             config,
             ledger_path,
             &exit,
@@ -497,7 +494,7 @@ impl Validator {
                 });
             }
 
-            post_process_restored_tower(restored_tower, &id, &vote_account, config, &bank_forks)
+            post_process_restored_tower(restored_tower, &id, vote_account, config, &bank_forks)
         };
         info!("Tower state: {:?}", tower);
 
@@ -1209,8 +1206,6 @@ fn post_process_restored_tower(
 
 #[allow(clippy::type_complexity)]
 fn new_banks_from_ledger(
-    validator_identity: &Pubkey,
-    vote_account: &Pubkey,
     config: &ValidatorConfig,
     ledger_path: &Path,
     exit: &Arc<AtomicBool>,
@@ -1228,7 +1223,6 @@ fn new_banks_from_ledger(
     Option<Slot>,
     Option<StartingSnapshotHashes>,
     TransactionHistoryServices,
-    Tower,
 ) {
     info!("loading ledger from {:?}...", ledger_path);
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
@@ -1271,14 +1265,6 @@ fn new_banks_from_ledger(
     )
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
-
-    let restored_tower = Tower::restore(config.tower_storage.as_ref(), validator_identity);
-    if let Ok(tower) = &restored_tower {
-        reconcile_blockstore_roots_with_tower(tower, &blockstore).unwrap_or_else(|err| {
-            error!("Failed to reconcile blockstore with tower: {:?}", err);
-            abort()
-        });
-    }
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = if config.rpc_addrs.is_some()
@@ -1433,7 +1419,6 @@ fn new_banks_from_ledger(
         last_full_snapshot_slot,
         starting_snapshot_hashes,
         transaction_history_services,
-        tower,
     )
 }
 
