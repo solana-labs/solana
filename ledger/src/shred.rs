@@ -730,7 +730,6 @@ pub struct Shredder {
     pub slot: Slot,
     pub parent_slot: Slot,
     version: u16,
-    pub signing_coding_time: u128,
     reference_tick: u8,
 }
 
@@ -742,7 +741,6 @@ impl Shredder {
             Ok(Self {
                 slot,
                 parent_slot,
-                signing_coding_time: 0,
                 reference_tick,
                 version,
             })
