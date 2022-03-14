@@ -1166,9 +1166,10 @@ where
     };
 
     let mut ret = walk_dir(snapshot_archives_dir);
-    ret.append(&mut walk_dir(
-        build_snapshot_archives_remote_dir(snapshot_archives_dir).as_ref(),
-    ));
+    let remote_dir = build_snapshot_archives_remote_dir(snapshot_archives_dir);
+    if remote_dir.exists() {
+        ret.append(&mut walk_dir(remote_dir.as_ref()));
+    }
     ret
 }
 
