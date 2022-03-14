@@ -40,7 +40,8 @@ lazy_static! {
 }
 
 #[allow(dead_code)]
-// TODO: make this less terrible
+// TODO: see https://github.com/solana-labs/solana/issues/23661
+// remove lazy_static and optimize and refactor this
 pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sync + Send> {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
     let ticks = map.ticks;
