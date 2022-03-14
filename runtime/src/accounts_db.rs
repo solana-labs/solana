@@ -6692,14 +6692,14 @@ impl AccountsDb {
                 let pubkey = stored_account.meta.pubkey;
                 assert!(!self.is_filler_account(&pubkey));
                 match accounts_map.entry(pubkey) {
-                    std::collections::hash_map::Entry::Vacant(entry) => {
+                    Entry::Vacant(entry) => {
                         entry.insert(IndexAccountMapEntry {
                             write_version: this_version,
                             store_id: storage.append_vec_id(),
                             stored_account,
                         });
                     }
-                    std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    Entry::Occupied(mut entry) => {
                         let occupied_version = entry.get().write_version;
                         if occupied_version < this_version {
                             entry.insert(IndexAccountMapEntry {
