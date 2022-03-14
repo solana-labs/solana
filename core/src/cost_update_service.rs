@@ -150,15 +150,9 @@ mod tests {
     fn test_update_cost_model_with_empty_execute_timings() {
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
         let mut empty_execute_timings = ExecuteTimings::default();
-        CostUpdateService::update_cost_model(&cost_model, &mut empty_execute_timings);
-
         assert_eq!(
-            0,
-            cost_model
-                .read()
-                .unwrap()
-                .get_instruction_cost_table()
-                .len()
+            CostUpdateService::update_cost_model(&cost_model, &mut empty_execute_timings),
+            0
         );
     }
 
@@ -188,14 +182,9 @@ mod tests {
                     total_errored_units,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
             assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
+                CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
+                1
             );
             assert_eq!(
                 Some(&expected_cost),
@@ -225,14 +214,9 @@ mod tests {
                     total_errored_units: 0,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
             assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
+                CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
+                1
             );
             assert_eq!(
                 Some(&expected_cost),
@@ -264,20 +248,47 @@ mod tests {
                     total_errored_units: 0,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
             // If both the `errored_txs_compute_consumed` is empty and `count == 0`, then
             // nothing should be inserted into the cost model
-            assert!(cost_model
-                .read()
-                .unwrap()
-                .get_instruction_cost_table()
-                .is_empty());
+            assert_eq!(
+                CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
+                0
+            );
+        }
+
+        // set up current instruction cost to 100
+        let current_program_cost = 100;
+        {
+            execute_timings.details.per_program_timings.insert(
+                program_key_1,
+                ProgramTiming {
+                    accumulated_us: 1000,
+                    accumulated_units: current_program_cost,
+                    count: 1,
+                    errored_txs_compute_consumed: vec![],
+                    total_errored_units: 0,
+                },
+            );
+            assert_eq!(
+                CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
+                1
+            );
+            assert_eq!(
+                Some(&current_program_cost),
+                cost_model
+                    .read()
+                    .unwrap()
+                    .get_instruction_cost_table()
+                    .get(&program_key_1)
+            );
         }
 
         // Test updating cost model with only erroring compute costs where the `cost_per_error` is
         // greater than the current instruction cost for the program. Should update with the
         // new erroring compute costs
         let cost_per_error = 1000;
+        // the expect cost is (previous_cost + new_cost)/2 = (100 + 1000)/2 = 550
+        let expect_units = 550;
         {
             let errored_txs_compute_consumed = vec![cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
@@ -291,17 +302,12 @@ mod tests {
                     total_errored_units,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
             assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
+                CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
+                1
             );
             assert_eq!(
-                Some(&cost_per_error),
+                Some(&expect_units),
                 cost_model
                     .read()
                     .unwrap()
@@ -313,7 +319,7 @@ mod tests {
         // Test updating cost model with only erroring compute costs where the error cost is
         // `smaller_cost_per_error`, less than the current instruction cost for the program.
         // The cost should not decrease for these new lesser errors
-        let smaller_cost_per_error = cost_per_error - 10;
+        let smaller_cost_per_error = expect_units - 10;
         {
             let errored_txs_compute_consumed = vec![smaller_cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
@@ -327,17 +333,12 @@ mod tests {
                     total_errored_units,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
             assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
+                CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
+                1
             );
             assert_eq!(
-                Some(&cost_per_error),
+                Some(&expect_units),
                 cost_model
                     .read()
                     .unwrap()

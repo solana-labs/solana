@@ -3,8 +3,10 @@
 /// unchecked.
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
-use log::*;
-use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
+use {
+    log::*, solana_program_runtime::compute_budget::ComputeBudget, solana_sdk::pubkey::Pubkey,
+    std::collections::HashMap,
+};
 
 // prune is rather expensive op, free up bulk space in each operation
 // would be more efficient. PRUNE_RATIO defines the after prune table
@@ -45,19 +47,25 @@ impl ExecuteCostTable {
         self.table.len()
     }
 
-    // instead of assigning unknown program with a configured/hard-coded cost
-    // use average or mode function to make a educated guess.
-    pub fn get_average(&self) -> u64 {
+    // default program cost to max_units
+    pub fn get_default_units(&self) -> u64 {
+        let use_max_units_default = false;
+        ComputeBudget::get_max_units(use_max_units_default)
+    }
+
+    // average cost of all recorded programs
+    pub fn get_average_units(&self) -> u64 {
         if self.table.is_empty() {
-            0
+            self.get_default_units()
         } else {
             self.table.iter().map(|(_, value)| value).sum::<u64>() / self.get_count() as u64
         }
     }
 
-    pub fn get_mode(&self) -> u64 {
+    // the most frequently occurring program's cost
+    pub fn get_mode_units(&self) -> u64 {
         if self.occurrences.is_empty() {
-            0
+            self.get_default_units()
         } else {
             let key = self
                 .occurrences
@@ -71,8 +79,8 @@ impl ExecuteCostTable {
     }
 
     // returns None if program doesn't exist in table. In this case,
-    // client is advised to call `get_average()` or `get_mode()` to
-    // assign a 'default' value for new program.
+    // `get_default_units()`, `get_average_units()` or `get_mode_units()`
+    // can be used to assign a value to new program.
     pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
         self.table.get(key)
     }
@@ -219,23 +227,26 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_average());
-        assert_eq!(cost1, testee.get_mode());
+        assert_eq!(cost1, testee.get_average_units());
+        assert_eq!(cost1, testee.get_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average());
-        assert_eq!(cost2, testee.get_mode());
+        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average_units());
+        assert_eq!(cost2, testee.get_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // update 1st record
         testee.upsert(&key1, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(((cost1 + cost2) / 2 + cost2) / 2, testee.get_average());
-        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
+        assert_eq!(
+            ((cost1 + cost2) / 2 + cost2) / 2_u64,
+            testee.get_average_units()
+        );
+        assert_eq!((cost1 + cost2) / 2, testee.get_mode_units());
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
     }
@@ -269,8 +280,8 @@ mod tests {
         // insert 3rd record, pushes out the oldest (eg 1st) record
         testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
-        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average());
-        assert_eq!(cost3, testee.get_mode());
+        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average_units());
+        assert_eq!(cost3, testee.get_mode_units());
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
         assert_eq!(&cost3, testee.get_cost(&key3).unwrap());
@@ -279,8 +290,11 @@ mod tests {
         // add 4th record, pushes out 3rd key
         testee.upsert(&key2, cost1);
         testee.upsert(&key4, cost4);
-        assert_eq!(((cost1 + cost2) / 2 + cost4) / 2_u64, testee.get_average());
-        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
+        assert_eq!(
+            ((cost1 + cost2) / 2 + cost4) / 2_u64,
+            testee.get_average_units()
+        );
+        assert_eq!((cost1 + cost2) / 2, testee.get_mode_units());
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key2).unwrap());
