@@ -864,15 +864,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     pub(crate) fn flush(&self) {
-        let flushing = self.flushing_active.swap(true, Ordering::AcqRel);
-        if flushing {
-            // already flushing in another thread
-            return;
+        if let Some(flush_guard) = FlushGuard::lock(&self.flushing_active) {
+            self.flush_internal(&flush_guard)
         }
-
-        self.flush_internal();
-
-        self.flushing_active.store(false, Ordering::Release);
     }
 
     pub fn set_bin_dirty(&self) {
@@ -934,7 +928,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    fn flush_internal(&self) {
+    fn flush_internal(&self, _flush_guard: &FlushGuard) {
         let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
         let mut iterate_for_age = self.get_should_age(current_age);
@@ -1128,6 +1122,33 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         m.stop();
         let value = m.as_us();
         Self::update_stat(stat, value);
+    }
+}
+
+/// An RAII implementation of a scoped lock for the `flushing_active` atomic flag in
+/// `InMemAccountsIndex`.  When this structure is dropped (falls out of scope), the flag will be
+/// cleared (set to false).
+///
+/// After successfully locking (calling `FlushGuard::lock()`), pass a reference to the `FlashGuard`
+/// instance to any function/code that requires the `flushing_active` flag has been set (to true).
+#[derive(Debug)]
+struct FlushGuard<'a> {
+    flushing: &'a AtomicBool,
+}
+
+impl<'a> FlushGuard<'a> {
+    /// Set the `flushing` atomic flag to true.  If the flag was already true, then return `None`
+    /// (so as to not clear the flag erroneously).  Otherwise return `Some(FlushGuard)`.
+    #[must_use = "if unused, the `flushing` flag will immediately clear"]
+    fn lock(flushing: &'a AtomicBool) -> Option<Self> {
+        let already_flushing = flushing.swap(true, Ordering::AcqRel);
+        (!already_flushing).then(|| Self { flushing })
+    }
+}
+
+impl Drop for FlushGuard<'_> {
+    fn drop(&mut self) {
+        self.flushing.store(false, Ordering::Release);
     }
 }
 
@@ -1530,5 +1551,29 @@ mod tests {
             }
         }
         assert_eq!(attempts, 1304); // complicated permutations, so make sure we ran the right #
+    }
+
+    #[test]
+    fn test_flush_guard() {
+        let flushing_active = AtomicBool::new(false);
+
+        {
+            let flush_guard = FlushGuard::lock(&flushing_active);
+            assert!(flush_guard.is_some());
+            assert!(flushing_active.load(Ordering::Acquire));
+
+            {
+                // Trying to lock the FlushGuard again will not succeed.
+                let flush_guard2 = FlushGuard::lock(&flushing_active);
+                assert!(flush_guard2.is_none());
+            }
+
+            // The `flushing_active` flag will remain true, even after `flush_guard2` goes out of
+            // scope (and is dropped).  This ensures `lock()` and `drop()` work harmoniously.
+            assert!(flushing_active.load(Ordering::Acquire));
+        }
+
+        // After the FlushGuard is dropped, the flag will be cleared.
+        assert!(!flushing_active.load(Ordering::Acquire));
     }
 }
