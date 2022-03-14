@@ -153,14 +153,14 @@ impl RpcRequestMiddleware {
         tokio::fs::File::open(path).await
     }
 
-    fn find_snapshot_file(&self, stem: &Path) -> PathBuf {
+    fn find_snapshot_file(&self, stem: impl AsRef<Path>) -> PathBuf {
         let root = &self.snapshot_config.as_ref().unwrap().snapshot_archives_dir;
         let local_path = root.join(stem);
-        let remote_path = snapshot_utils::build_snapshot_archives_remote_dir(root).join(stem);
         if local_path.exists() {
             local_path
         } else {
-            remote_path
+            // remote snapshot archive path
+            snapshot_utils::build_snapshot_archives_remote_dir(root).join(stem);
         }
     }
 
