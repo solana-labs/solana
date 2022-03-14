@@ -1148,7 +1148,7 @@ fn get_snapshot_archives<T, F>(snapshot_archives_dir: &Path, cb: F) -> Vec<T>
 where
     F: Fn(PathBuf) -> Result<T>,
 {
-    let walk_dir = |dir| -> Vec<T> {
+    let walk_dir = |dir: &Path| -> Vec<T> {
         let entry_iter = fs::read_dir(dir);
         match entry_iter {
             Err(err) => {
