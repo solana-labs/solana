@@ -5,157 +5,87 @@ use {
     log::*,
     solana_metrics::inc_new_counter_info,
     solana_program_runtime::{
-        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check2,
+        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
-    solana_sdk::{feature_set, instruction::InstructionError, program_utils::limited_deserialize},
+    solana_sdk::{
+        feature_set,
+        instruction::InstructionError,
+        keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        sysvar::rent::Rent,
+    },
+    std::collections::HashSet,
 };
 
-pub mod instruction_account_indices {
-    pub enum InitializeAccount {
-        VoteAccount = 0,
-        Rent = 1,
-        Clock = 2,
-    }
-
-    pub enum Authorize {
-        VoteAccount = 0,
-        Clock = 1,
-    }
-
-    pub enum UpdateValidatorIdentity {
-        VoteAccount = 0,
-        Node = 1,
-    }
-
-    pub enum UpdateCommission {
-        VoteAccount = 0,
-    }
-
-    pub enum Vote {
-        VoteAccount = 0,
-        SlotHashes = 1,
-        Clock = 2,
-    }
-
-    pub enum UpdateVoteState {
-        VoteAccount = 0,
-    }
-
-    pub enum Withdraw {
-        VoteAccount = 0,
-        Recipient = 1,
-    }
-
-    pub enum AuthorizeChecked {
-        VoteAccount = 0,
-        Clock = 1,
-        // Ignores = 2,
-        Voter = 3,
-    }
-}
-
 pub fn process_instruction(
-    _first_instruction_account: usize,
+    first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
+    trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    {
-        let vote_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if vote_account.get_owner() != &id() {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
+    let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+    if me.owner()? != id() {
+        return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[first_instruction_account..]);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-            let rent = get_sysvar_with_account_check2::rent(
+            let rent = get_sysvar_with_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
-                instruction_context,
-                instruction_account_indices::InitializeAccount::Rent as usize,
             )?;
-            {
-                // Verify rent exemption
-                let vote_account = instruction_context.try_borrow_instruction_account(
-                    transaction_context,
-                    instruction_account_indices::InitializeAccount::VoteAccount as usize,
-                )?;
-                if !rent.is_exempt(vote_account.get_lamports(), vote_account.get_data().len()) {
-                    return Err(InstructionError::InsufficientFunds);
-                }
-            }
-            let _clock = get_sysvar_with_account_check2::clock(
+            verify_rent_exemption(me, &rent)?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
-                instruction_context,
-                instruction_account_indices::InitializeAccount::Clock as usize,
             )?;
-            vote_state::initialize_account(
-                invoke_context,
-                instruction_context,
-                &signers,
-                instruction_account_indices::InitializeAccount::VoteAccount as usize,
-                &vote_init,
-            )
+            vote_state::initialize_account(me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
-            let _clock = get_sysvar_with_account_check2::clock(
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
-                instruction_context,
-                instruction_account_indices::Authorize::Clock as usize,
             )?;
             vote_state::authorize(
-                invoke_context,
-                instruction_context,
-                &signers,
-                instruction_account_indices::Authorize::VoteAccount as usize,
+                me,
                 &voter_pubkey,
                 vote_authorize,
-            )
-        }
-        VoteInstruction::UpdateValidatorIdentity => {
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            vote_state::update_validator_identity(
-                invoke_context,
-                instruction_context,
                 &signers,
-                instruction_account_indices::UpdateValidatorIdentity::VoteAccount as usize,
-                instruction_context.get_instruction_account_key(
-                    transaction_context,
-                    instruction_account_indices::UpdateValidatorIdentity::Node as usize,
-                )?,
+                &clock,
+                &invoke_context.feature_set,
             )
         }
-        VoteInstruction::UpdateCommission(commission) => vote_state::update_commission(
-            invoke_context,
-            instruction_context,
+        VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
+            me,
+            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.unsigned_key(),
             &signers,
-            instruction_account_indices::UpdateCommission::VoteAccount as usize,
-            commission,
         ),
+        VoteInstruction::UpdateCommission(commission) => {
+            vote_state::update_commission(me, commission, &signers)
+        }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
-            let _slot_hashes = get_sysvar_with_account_check2::slot_hashes(
+            let slot_hashes = get_sysvar_with_account_check::slot_hashes(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
-                instruction_context,
-                instruction_account_indices::Vote::SlotHashes as usize,
             )?;
-            let _clock = get_sysvar_with_account_check2::clock(
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
-                instruction_context,
-                instruction_account_indices::Vote::Clock as usize,
             )?;
             vote_state::process_vote(
-                invoke_context,
-                instruction_context,
-                &signers,
-                instruction_account_indices::Vote::VoteAccount as usize,
+                me,
+                &slot_hashes,
+                &clock,
                 &vote,
+                &signers,
+                &invoke_context.feature_set,
             )
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
@@ -165,26 +95,47 @@ pub fn process_instruction(
                 .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
             {
                 inc_new_counter_info!("vote-state-native", 1);
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let slot_hashes = sysvar_cache.get_slot_hashes()?;
+                let clock = sysvar_cache.get_clock()?;
                 vote_state::process_vote_state_update(
-                    invoke_context,
-                    instruction_context,
-                    &signers,
-                    instruction_account_indices::UpdateVoteState::VoteAccount as usize,
+                    me,
+                    slot_hashes.slot_hashes(),
+                    &clock,
                     vote_state_update,
+                    &signers,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
         }
         VoteInstruction::Withdraw(lamports) => {
-            instruction_context.check_number_of_instruction_accounts(2)?;
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let rent_sysvar = if invoke_context
+                .feature_set
+                .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
+            {
+                Some(invoke_context.get_sysvar_cache().get_rent()?)
+            } else {
+                None
+            };
+
+            let clock_if_feature_active = if invoke_context
+                .feature_set
+                .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
+            {
+                Some(invoke_context.get_sysvar_cache().get_clock()?)
+            } else {
+                None
+            };
+
             vote_state::withdraw(
-                invoke_context,
-                instruction_context,
-                &signers,
-                instruction_account_indices::Withdraw::VoteAccount as usize,
-                instruction_account_indices::Withdraw::Recipient as usize,
+                me,
                 lamports,
+                to,
+                &signers,
+                rent_sysvar.as_deref(),
+                clock_if_feature_active.as_deref(),
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -192,33 +143,37 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                if !instruction_context.is_signer(
-                    instruction_context.get_number_of_program_accounts()
-                        + instruction_account_indices::AuthorizeChecked::Voter as usize,
-                )? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                let _clock = get_sysvar_with_account_check2::clock(
+                let voter_pubkey =
+                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
+                        .signer_key()
+                        .ok_or(InstructionError::MissingRequiredSignature)?;
+                let clock = get_sysvar_with_account_check::clock(
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                     invoke_context,
-                    instruction_context,
-                    instruction_account_indices::AuthorizeChecked::Clock as usize,
                 )?;
                 vote_state::authorize(
-                    invoke_context,
-                    instruction_context,
-                    &signers,
-                    instruction_account_indices::AuthorizeChecked::VoteAccount as usize,
-                    instruction_context.get_instruction_account_key(
-                        transaction_context,
-                        instruction_account_indices::AuthorizeChecked::Voter as usize,
-                    )?,
+                    me,
+                    voter_pubkey,
                     vote_authorize,
+                    &signers,
+                    &clock,
+                    &invoke_context.feature_set,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
         }
+    }
+}
+
+fn verify_rent_exemption(
+    keyed_account: &KeyedAccount,
+    rent: &Rent,
+) -> Result<(), InstructionError> {
+    if !rent.is_exempt(keyed_account.lamports()?, keyed_account.data_len()?) {
+        Err(InstructionError::InsufficientFunds)
+    } else {
+        Ok(())
     }
 }
 
@@ -246,10 +201,9 @@ mod tests {
             feature_set::FeatureSet,
             hash::Hash,
             instruction::{AccountMeta, Instruction},
-            pubkey::Pubkey,
-            sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes},
+            sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
         },
-        std::{collections::HashSet, str::FromStr},
+        std::str::FromStr,
     };
 
     fn create_default_account() -> AccountSharedData {
