@@ -134,10 +134,6 @@ impl CostUpdateService {
                 .upsert_instruction_cost(program_id, units);
             update_count += 1;
         }
-        debug!(
-           "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
-           cost_model.read().unwrap().get_instruction_cost_table()
-        );
         update_count
     }
 }
@@ -150,9 +146,10 @@ mod tests {
     fn test_update_cost_model_with_empty_execute_timings() {
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
         let mut empty_execute_timings = ExecuteTimings::default();
+
         assert_eq!(
+            0,
             CostUpdateService::update_cost_model(&cost_model, &mut empty_execute_timings),
-            0
         );
     }
 
@@ -183,16 +180,15 @@ mod tests {
                 },
             );
             assert_eq!(
+                1,
                 CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
-                1
             );
             assert_eq!(
-                Some(&expected_cost),
+                expected_cost,
                 cost_model
                     .read()
                     .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
+                    .find_instruction_cost(&program_key_1)
             );
         }
 
@@ -215,16 +211,15 @@ mod tests {
                 },
             );
             assert_eq!(
+                1,
                 CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
-                1
             );
             assert_eq!(
-                Some(&expected_cost),
+                expected_cost,
                 cost_model
                     .read()
                     .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
+                    .find_instruction_cost(&program_key_1)
             );
         }
     }
@@ -274,12 +269,11 @@ mod tests {
                 1
             );
             assert_eq!(
-                Some(&current_program_cost),
+                current_program_cost,
                 cost_model
                     .read()
                     .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
+                    .find_instruction_cost(&program_key_1)
             );
         }
 
@@ -307,12 +301,11 @@ mod tests {
                 1
             );
             assert_eq!(
-                Some(&expected_units),
+                expected_units,
                 cost_model
                     .read()
                     .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
+                    .find_instruction_cost(&program_key_1)
             );
         }
 
@@ -338,12 +331,11 @@ mod tests {
                 1
             );
             assert_eq!(
-                Some(&expected_units),
+                expected_units,
                 cost_model
                     .read()
                     .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
+                    .find_instruction_cost(&program_key_1)
             );
         }
     }
