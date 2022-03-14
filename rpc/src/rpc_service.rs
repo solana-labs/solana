@@ -160,7 +160,7 @@ impl RpcRequestMiddleware {
             local_path
         } else {
             // remote snapshot archive path
-            snapshot_utils::build_snapshot_archives_remote_dir(root).join(stem);
+            snapshot_utils::build_snapshot_archives_remote_dir(root).join(stem)
         }
     }
 
@@ -174,7 +174,7 @@ impl RpcRequestMiddleware {
                 }
                 _ => {
                     inc_new_counter_info!("rpc-get_snapshot", 1);
-                    self.find_snapshot_file(stem.as_ref())
+                    self.find_snapshot_file(stem)
                 }
             }
         };
