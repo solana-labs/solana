@@ -39,10 +39,6 @@ impl ExecuteCostTable {
         }
     }
 
-    pub fn get_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        &self.table
-    }
-
     pub fn get_count(&self) -> usize {
         self.table.len()
     }
