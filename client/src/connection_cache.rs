@@ -75,9 +75,53 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sy
         map.last_used_times.remove(&old_ticks);
     }
 
-    map.last_used_times.remove(&target_ticks);
+    if target_ticks != ticks {
+        map.last_used_times.remove(&target_ticks);
+    }
     map.last_used_times.insert(ticks, *addr);
 
     map.ticks += 1;
     conn
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::connection_cache::{get_connection, CONNECTION_MAP, MAX_CONNECTIONS},
+        fakedata_generator::gen_ipv4,
+        std::net::SocketAddr,
+    };
+    fn get_addr() -> SocketAddr {
+        let mut ip = gen_ipv4();
+        ip.push_str(":80");
+        ip.parse().expect("Invalid address")
+    }
+
+    #[test]
+    fn test_connection_cache() {
+        // Generate a bunch of random addresses and create TPUConnections to them
+        // Since TPUConnection::new is infallible, it should't matter whether or not
+        // we can actually connect to those addresses - TPUConnection implementations should either
+        // be lazy and not connect until first use or handle connection errors somehow
+        // (without crashing, as would be required in a real practical validator)
+        let first_addr = get_addr();
+        assert!(get_connection(&first_addr).tpu_addr().ip() == first_addr.ip());
+        let addrs = (0..MAX_CONNECTIONS)
+            .into_iter()
+            .map(|_| {
+                let addr = get_addr();
+                get_connection(&addr);
+                addr
+            })
+            .collect::<Vec<_>>();
+        let map = (*CONNECTION_MAP).lock().unwrap();
+        addrs.iter().for_each(|a| {
+            let conn = map.map.get(a).expect("Address not found");
+            assert!(a.ip() == conn.0.tpu_addr().ip());
+        });
+
+        if let Some(_) = map.map.get(&first_addr) {
+            panic!("Eviction failed");
+        }
+    }
 }
