@@ -488,6 +488,19 @@ impl Validator {
             transaction_notifier,
         );
 
+        let tower = {
+            let restored_tower = Tower::restore(config.tower_storage.as_ref(), &id);
+            if let Ok(tower) = &restored_tower {
+                reconcile_blockstore_roots_with_tower(tower, &blockstore).unwrap_or_else(|err| {
+                    error!("Failed to reconcile blockstore with tower: {:?}", err);
+                    abort()
+                });
+            }
+
+            post_process_restored_tower(restored_tower, &id, &vote_account, config, &bank_forks)
+        };
+        info!("Tower state: {:?}", tower);
+
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
         if !config.no_os_network_stats_reporting {
@@ -1319,33 +1332,38 @@ fn new_banks_from_ledger(
         .cache_block_meta_sender
         .as_ref();
 
-    let (bank_forks, starting_snapshot_hashes) = bank_forks_utils::load_bank_forks(
-        &genesis_config,
-        &blockstore,
-        config.account_paths.clone(),
-        config.account_shrink_paths.clone(),
-        config.snapshot_config.as_ref(),
-        &process_options,
-        cache_block_meta_sender,
-        accounts_update_notifier,
-    );
-
-    let (mut bank_forks, mut leader_schedule_cache, last_full_snapshot_slot) =
-        blockstore_processor::process_blockstore_from_root(
+    let (mut bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
+        bank_forks_utils::load_bank_forks(
+            &genesis_config,
             &blockstore,
-            bank_forks,
-            &process_options,
-            transaction_history_services
-                .transaction_status_sender
-                .as_ref(),
-            cache_block_meta_sender,
+            config.account_paths.clone(),
+            config.account_shrink_paths.clone(),
             config.snapshot_config.as_ref(),
-            accounts_package_sender,
-        )
-        .unwrap_or_else(|err| {
-            error!("Failed to load ledger: {:?}", err);
-            abort()
-        });
+            &process_options,
+            cache_block_meta_sender,
+            accounts_update_notifier,
+        );
+
+    leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
+    bank_forks.set_snapshot_config(config.snapshot_config.clone());
+    bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
+
+    let last_full_snapshot_slot = blockstore_processor::process_blockstore_from_root(
+        &blockstore,
+        &mut bank_forks,
+        &leader_schedule_cache,
+        &process_options,
+        transaction_history_services
+            .transaction_status_sender
+            .as_ref(),
+        cache_block_meta_sender,
+        config.snapshot_config.as_ref(),
+        accounts_package_sender,
+    )
+    .unwrap_or_else(|err| {
+        error!("Failed to load ledger: {:?}", err);
+        abort()
+    });
 
     let last_full_snapshot_slot =
         last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
@@ -1398,21 +1416,6 @@ fn new_banks_from_ledger(
             full_snapshot_archive_info.path().display()
         );
     }
-
-    let tower = post_process_restored_tower(
-        restored_tower,
-        validator_identity,
-        vote_account,
-        config,
-        &bank_forks,
-    );
-
-    info!("Tower state: {:?}", tower);
-
-    leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
-
-    bank_forks.set_snapshot_config(config.snapshot_config.clone());
-    bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
 
     if let Some(blockstore_root_scan) = blockstore_root_scan {
         if let Err(err) = blockstore_root_scan.join() {

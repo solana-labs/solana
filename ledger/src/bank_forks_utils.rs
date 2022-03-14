@@ -47,7 +47,7 @@ pub fn load(
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> LoadResult {
-    let (bank_forks, starting_snapshot_hashes) = load_bank_forks(
+    let (mut bank_forks, leader_schedule_cache, starting_snapshot_hashes) = load_bank_forks(
         genesis_config,
         blockstore,
         account_paths,
@@ -60,16 +60,15 @@ pub fn load(
 
     blockstore_processor::process_blockstore_from_root(
         blockstore,
-        bank_forks,
+        &mut bank_forks,
+        &leader_schedule_cache,
         &process_options,
         transaction_status_sender,
         cache_block_meta_sender,
         snapshot_config,
         accounts_package_sender,
     )
-    .map(|(bank_forks, leader_schedule_cache, ..)| {
-        (bank_forks, leader_schedule_cache, starting_snapshot_hashes)
-    })
+    .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -82,7 +81,11 @@ pub fn load_bank_forks(
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> (BankForks, Option<StartingSnapshotHashes>) {
+) -> (
+    BankForks,
+    LeaderScheduleCache,
+    Option<StartingSnapshotHashes>,
+) {
     let snapshot_present = if let Some(snapshot_config) = snapshot_config {
         info!(
             "Initializing bank snapshot path: {}",
@@ -107,7 +110,7 @@ pub fn load_bank_forks(
         false
     };
 
-    if snapshot_present {
+    let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
         bank_forks_from_snapshot(
             genesis_config,
             account_paths,
@@ -139,7 +142,13 @@ pub fn load_bank_forks(
             ),
             None,
         )
+    };
+
+    let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank_forks.root_bank());
+    if process_options.full_leader_cache {
+        leader_schedule_cache.set_max_schedules(std::usize::MAX);
     }
+    (bank_forks, leader_schedule_cache, starting_snapshot_hashes)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -95,11 +95,6 @@ impl BlockCostCapacityMeter {
     }
 }
 
-pub type BlockstoreProcessorInner = (BankForks, LeaderScheduleCache, Option<Slot>);
-
-pub type BlockstoreProcessorResult =
-    result::Result<BlockstoreProcessorInner, BlockstoreProcessorError>;
-
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
                     .thread_name(|ix| format!("blockstore_processor_{}", ix))
@@ -570,8 +565,8 @@ pub fn test_process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     opts: ProcessOptions,
-) -> BlockstoreProcessorInner {
-    let (bank_forks, ..) = crate::bank_forks_utils::load_bank_forks(
+) -> (BankForks, LeaderScheduleCache) {
+    let (mut bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
         genesis_config,
         blockstore,
         Vec::new(),
@@ -584,14 +579,16 @@ pub fn test_process_blockstore(
     let (accounts_package_sender, _) = unbounded();
     process_blockstore_from_root(
         blockstore,
-        bank_forks,
+        &mut bank_forks,
+        &leader_schedule_cache,
         &opts,
         None,
         None,
         None,
         accounts_package_sender,
     )
-    .unwrap()
+    .unwrap();
+    (bank_forks, leader_schedule_cache)
 }
 
 pub(crate) fn process_blockstore_for_bank_0(
@@ -632,13 +629,14 @@ pub(crate) fn process_blockstore_for_bank_0(
 #[allow(clippy::too_many_arguments)]
 pub fn process_blockstore_from_root(
     blockstore: &Blockstore,
-    mut bank_forks: BankForks,
+    bank_forks: &mut BankForks,
+    leader_schedule_cache: &LeaderScheduleCache,
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
-) -> BlockstoreProcessorResult {
+) -> result::Result<Option<Slot>, BlockstoreProcessorError> {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
@@ -692,10 +690,6 @@ pub fn process_blockstore_from_root(
 
     let mut timing = ExecuteTimings::default();
     // Iterate and replay slots from blockstore starting from `start_slot`
-    let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-    if opts.full_leader_cache {
-        leader_schedule_cache.set_max_schedules(std::usize::MAX);
-    }
 
     let mut last_full_snapshot_slot = None;
 
@@ -704,11 +698,11 @@ pub fn process_blockstore_from_root(
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
     {
         load_frozen_forks(
-            &mut bank_forks,
+            bank_forks,
             start_slot,
             &start_slot_meta,
             blockstore,
-            &leader_schedule_cache,
+            leader_schedule_cache,
             opts,
             transaction_status_sender,
             cache_block_meta_sender,
@@ -764,7 +758,7 @@ pub fn process_blockstore_from_root(
     );
     assert!(bank_forks.active_banks().is_empty());
 
-    Ok((bank_forks, leader_schedule_cache, last_full_snapshot_slot))
+    Ok(last_full_snapshot_slot)
 }
 
 /// Verify that a segment of entries has the correct number of ticks and hashes
@@ -2374,7 +2368,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (_bank_forks, leader_schedule, _) =
+        let (_bank_forks, leader_schedule) =
             test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
     }
@@ -3160,11 +3154,14 @@ pub mod tests {
             None,
         );
 
+        let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank1);
+
         // Test process_blockstore_from_root() from slot 1 onwards
         let (accounts_package_sender, _) = unbounded();
-        let (bank_forks, ..) = process_blockstore_from_root(
+        process_blockstore_from_root(
             &blockstore,
-            bank_forks,
+            &mut bank_forks,
+            &leader_schedule_cache,
             &opts,
             None,
             None,
@@ -3268,10 +3265,12 @@ pub mod tests {
         };
 
         let (accounts_package_sender, accounts_package_receiver) = unbounded();
+        let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
 
         process_blockstore_from_root(
             &blockstore,
-            bank_forks,
+            &mut bank_forks,
+            &leader_schedule_cache,
             &opts,
             None,
             None,
