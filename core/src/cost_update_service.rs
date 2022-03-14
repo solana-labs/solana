@@ -11,12 +11,8 @@ use {
     solana_runtime::{bank::Bank, cost_model::CostModel},
     solana_sdk::timing::timestamp,
     std::{
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
+        sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
-        time::Duration,
     },
 };
 
@@ -74,7 +70,6 @@ pub struct CostUpdateService {
 impl CostUpdateService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         cost_model: Arc<RwLock<CostModel>>,
         cost_update_receiver: CostUpdateReceiver,
@@ -82,7 +77,7 @@ impl CostUpdateService {
         let thread_hdl = Builder::new()
             .name("solana-cost-update-service".to_string())
             .spawn(move || {
-                Self::service_loop(exit, blockstore, cost_model, cost_update_receiver);
+                Self::service_loop(blockstore, cost_model, cost_update_receiver);
             })
             .unwrap();
 
@@ -94,77 +89,62 @@ impl CostUpdateService {
     }
 
     fn service_loop(
-        exit: Arc<AtomicBool>,
         _blockstore: Arc<Blockstore>,
         cost_model: Arc<RwLock<CostModel>>,
         cost_update_receiver: CostUpdateReceiver,
     ) {
         let mut cost_update_service_timing = CostUpdateServiceTiming::default();
-        let mut update_count: u64;
-        let wait_timer = Duration::from_millis(100);
-
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
-            update_count = 0_u64;
-            let mut update_cost_model_time = Measure::start("update_cost_model_time");
-            for cost_update in cost_update_receiver.try_iter() {
-                match cost_update {
-                    CostUpdate::FrozenBank { bank } => {
-                        bank.read_cost_tracker().unwrap().report_stats(bank.slot());
-                    }
-                    CostUpdate::ExecuteTiming {
-                        mut execute_timings,
-                    } => {
-                        Self::update_cost_model(&cost_model, &mut execute_timings);
-                        update_count += 1;
-                    }
+        for cost_update in cost_update_receiver.iter() {
+            match cost_update {
+                CostUpdate::FrozenBank { bank } => {
+                    bank.read_cost_tracker().unwrap().report_stats(bank.slot());
+                }
+                CostUpdate::ExecuteTiming {
+                    mut execute_timings,
+                } => {
+                    let (update_count, update_cost_model_time) = Measure::this(
+                        |_| Self::update_cost_model(&cost_model, &mut execute_timings),
+                        (),
+                        "update_cost_model_time",
+                    );
+                    cost_update_service_timing.update(update_count, update_cost_model_time.as_us());
                 }
             }
-            update_cost_model_time.stop();
-
-            cost_update_service_timing.update(update_count, update_cost_model_time.as_us());
-
-            thread::sleep(wait_timer);
         }
     }
 
     fn update_cost_model(
         cost_model: &RwLock<CostModel>,
         execute_timings: &mut ExecuteTimings,
-    ) -> bool {
-        let mut dirty = false;
-        {
-            for (program_id, program_timings) in &mut execute_timings.details.per_program_timings {
-                let current_estimated_program_cost =
-                    cost_model.read().unwrap().find_instruction_cost(program_id);
-                program_timings.coalesce_error_timings(current_estimated_program_cost);
+    ) -> u64 {
+        let mut update_count = 0_u64;
+        for (program_id, program_timings) in &mut execute_timings.details.per_program_timings {
+            let current_estimated_program_cost =
+                cost_model.read().unwrap().find_instruction_cost(program_id);
+            program_timings.coalesce_error_timings(current_estimated_program_cost);
 
-                if program_timings.count < 1 {
-                    continue;
+            if program_timings.count < 1 {
+                continue;
+            }
+
+            let units = program_timings.accumulated_units / program_timings.count as u64;
+            match cost_model
+                .write()
+                .unwrap()
+                .upsert_instruction_cost(program_id, units)
+            {
+                Ok(c) => {
+                    debug!(
+                        "after replayed into bank, instruction {:?} has averaged cost {}",
+                        program_id, c
+                    );
+                    update_count += 1;
                 }
-
-                let units = program_timings.accumulated_units / program_timings.count as u64;
-                match cost_model
-                    .write()
-                    .unwrap()
-                    .upsert_instruction_cost(program_id, units)
-                {
-                    Ok(c) => {
-                        debug!(
-                            "after replayed into bank, instruction {:?} has averaged cost {}",
-                            program_id, c
-                        );
-                        dirty = true;
-                    }
-                    Err(err) => {
-                        debug!(
+                Err(err) => {
+                    debug!(
                         "after replayed into bank, instruction {:?} failed to update cost, err: {}",
                         program_id, err
                     );
-                    }
                 }
             }
         }
@@ -172,7 +152,7 @@ impl CostUpdateService {
            "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
            cost_model.read().unwrap().get_instruction_cost_table()
         );
-        dirty
+        update_count
     }
 }
 
