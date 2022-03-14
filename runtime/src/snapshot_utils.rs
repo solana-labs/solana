@@ -1143,7 +1143,7 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
     })
 }
 
-/// Walk down the snapshot archive directory recursively to collect snapshot archive file info
+/// Walk down the snapshot archive to collect snapshot archive file info
 fn get_snapshot_archives<T, F>(snapshot_archives_dir: &Path, cb: F) -> Vec<T>
 where
     F: Fn(PathBuf) -> Result<T>,
