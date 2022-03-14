@@ -6841,11 +6841,17 @@ impl AccountsDb {
             return;
         }
 
+        let max_root_inclusive = self.accounts_index.max_root_inclusive();
+        let epoch = epoch_schedule.get_epoch(max_root_inclusive);
+
         info!("adding {} filler accounts", self.filler_account_count);
         // break this up to force the accounts out of memory after each pass
         let passes = 100;
         let mut roots = self.storage.all_slots();
-        Self::retain_roots_within_one_epoch_range(&mut roots, epoch_schedule.slots_per_epoch);
+        Self::retain_roots_within_one_epoch_range(
+            &mut roots,
+            epoch_schedule.get_slots_in_epoch(epoch),
+        );
         let root_count = roots.len();
         let per_pass = std::cmp::max(1, root_count / passes);
         let overall_index = AtomicUsize::new(0);
