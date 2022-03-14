@@ -187,7 +187,10 @@ pub fn create_executor(
         }
     }
     create_executor_metrics.submit_datapoint();
-    Ok(Arc::new(BpfExecutor { executable }))
+    Ok(Arc::new(BpfExecutor {
+        executable,
+        use_jit,
+    }))
 }
 
 fn write_program_data<'a>(
@@ -384,12 +387,7 @@ fn process_instruction_common(
             get_or_create_executor_time.as_us()
         );
 
-        executor.execute(
-            program_account_index,
-            instruction_data,
-            invoke_context,
-            use_jit,
-        )
+        executor.execute(program_account_index, instruction_data, invoke_context)
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
@@ -1291,6 +1289,7 @@ impl InstructionMeter for ThisInstructionMeter {
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
     executable: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    use_jit: bool,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -1306,7 +1305,6 @@ impl Executor for BpfExecutor {
         _first_instruction_account: usize,
         _instruction_data: &[u8],
         invoke_context: &'a mut InvokeContext<'b>,
-        use_jit: bool,
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
@@ -1340,7 +1338,7 @@ impl Executor for BpfExecutor {
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
-            let result = if use_jit {
+            let result = if self.use_jit {
                 vm.execute_program_jit(&mut instruction_meter)
             } else {
                 vm.execute_program_interpreted(&mut instruction_meter)

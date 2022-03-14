@@ -13736,7 +13736,6 @@ pub(crate) mod tests {
             _first_instruction_account: usize,
             _instruction_data: &[u8],
             _invoke_context: &'a mut InvokeContext<'b>,
-            _use_jit: bool,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
