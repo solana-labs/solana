@@ -2069,7 +2069,7 @@ export type ConnectionConfig = {
   httpHeaders?: HttpHeaders;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
-  /** Optional Disable retring calls when server responds with HTTP 429 (Too Many Requests) */
+  /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */
   disableRetryOnRateLimit?: boolean;
   /** time to allow for the server to initially process a transaction (in milliseconds) */
   confirmTransactionInitialTimeout?: number;
