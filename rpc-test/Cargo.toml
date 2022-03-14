@@ -8,6 +8,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-rpc-test"
 edition = "2021"
+publish = false
 
 [dependencies]
 bincode = "1.3.3"
