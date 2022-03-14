@@ -1155,7 +1155,7 @@ where
                 info!(
                     "Unable to read snapshot archives directory: err: {}, path: {}",
                     err,
-                    snapshot_archives_dir.display()
+                    dir.display()
                 );
                 vec![]
             }
