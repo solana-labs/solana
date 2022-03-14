@@ -459,7 +459,7 @@ impl Validator {
 
         let (
             genesis_config,
-            bank_forks,
+            mut bank_forks,
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
@@ -484,6 +484,8 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
         );
+
+        maybe_warp_slot(config, ledger_path, &mut bank_forks, &leader_schedule_cache);
 
         let tower = {
             let restored_tower = Tower::restore(config.tower_storage.as_ref(), &id);
@@ -1354,6 +1356,31 @@ fn new_banks_from_ledger(
     let last_full_snapshot_slot =
         last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
 
+    if let Some(blockstore_root_scan) = blockstore_root_scan {
+        if let Err(err) = blockstore_root_scan.join() {
+            warn!("blockstore_root_scan failed to join {:?}", err);
+        }
+    }
+
+    (
+        genesis_config,
+        bank_forks,
+        blockstore,
+        ledger_signal_receiver,
+        completed_slots_receiver,
+        leader_schedule_cache,
+        last_full_snapshot_slot,
+        starting_snapshot_hashes,
+        transaction_history_services,
+    )
+}
+
+fn maybe_warp_slot(
+    config: &ValidatorConfig,
+    ledger_path: &Path,
+    bank_forks: &mut BankForks,
+    leader_schedule_cache: &LeaderScheduleCache,
+) {
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
             error!("warp slot requires a snapshot config");
@@ -1402,24 +1429,6 @@ fn new_banks_from_ledger(
             full_snapshot_archive_info.path().display()
         );
     }
-
-    if let Some(blockstore_root_scan) = blockstore_root_scan {
-        if let Err(err) = blockstore_root_scan.join() {
-            warn!("blockstore_root_scan failed to join {:?}", err);
-        }
-    }
-
-    (
-        genesis_config,
-        bank_forks,
-        blockstore,
-        ledger_signal_receiver,
-        completed_slots_receiver,
-        leader_schedule_cache,
-        last_full_snapshot_slot,
-        starting_snapshot_hashes,
-        transaction_history_services,
-    )
 }
 
 fn blockstore_contains_bad_shred_version(
