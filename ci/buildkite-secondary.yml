@@ -16,7 +16,7 @@ steps:
   - command: "ci/publish-crate.sh"
     agents:
       - "queue=release-build"
-    timeout_in_minutes: 240
+    timeout_in_minutes: 360
     name: "publish crate"
     branches: "!master"
   - command: "ci/publish-tarball.sh"
