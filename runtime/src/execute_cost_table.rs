@@ -77,8 +77,10 @@ impl ExecuteCostTable {
         self.table.get(key)
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) -> Option<u64> {
-        let need_to_add = self.table.get(key).is_none();
+    // update-or-insert should be infallible. Query the result of upsert,
+    // often requires additional calculation, should be lazy.
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
+        let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
@@ -93,8 +95,6 @@ impl ExecuteCostTable {
             .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
         *timestamp = Self::micros_since_epoch();
-
-        Some(*program_cost)
     }
 
     // prune the old programs so the table contains `new_size` of records,
@@ -184,9 +184,9 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        // simulate a lot of occurences to key1, so even there're longer than
+        // simulate a lot of occurrences to key1, so even there're longer than
         // usual delay between upsert(key1..) and upsert(key2, ..), test
-        // would still satisfy as key1 has enough occurences to compensate
+        // would still satisfy as key1 has enough occurrences to compensate
         // its age.
         for i in 0..1000 {
             testee.upsert(&key1, i);

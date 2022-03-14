@@ -128,25 +128,11 @@ impl CostUpdateService {
             }
 
             let units = program_timings.accumulated_units / program_timings.count as u64;
-            match cost_model
+            cost_model
                 .write()
                 .unwrap()
-                .upsert_instruction_cost(program_id, units)
-            {
-                Ok(c) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} has averaged cost {}",
-                        program_id, c
-                    );
-                    update_count += 1;
-                }
-                Err(err) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} failed to update cost, err: {}",
-                        program_id, err
-                    );
-                }
-            }
+                .upsert_instruction_cost(program_id, units);
+            update_count += 1;
         }
         debug!(
            "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
