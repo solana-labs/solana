@@ -998,13 +998,6 @@ mod with_incremental_snapshots {
     ///
     /// This function finds the highest compatible snapshots from the cluster, then picks one peer
     /// at random to use (return).
-    ///
-    /// NOTE: If the node has configured a full snapshot interval that is not common and/or
-    /// different from its known validators, then it is possible that there are no compatible
-    /// snapshot hashes available.  At that time, a node may (1) try again, (2) change its full
-    /// snapshot interval back to a standard/default value, or (3) disable downloading an
-    /// incremental snapshot and instead download the highest full snapshot hash, regardless of
-    /// compatibility.
     fn get_rpc_node(
         cluster_info: &ClusterInfo,
         cluster_entrypoints: &[ContactInfo],
@@ -1099,9 +1092,6 @@ mod with_incremental_snapshots {
     /// 1. match a snapshot hash from the known validators
     /// 2. have the highest full snapshot slot
     /// 3. have the highest incremental snapshot slot
-    ///
-    /// NOTE: If the node's full snapshot interval is different from its known validators, it may
-    /// be more likely to download full snapshots more often than necessary.
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
