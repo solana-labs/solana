@@ -153,7 +153,10 @@ impl RpcRequestMiddleware {
         tokio::fs::File::open(path).await
     }
 
-    fn find_snapshot_file(&self, stem: impl AsRef<Path>) -> PathBuf {
+    fn find_snapshot_file<P>(&self, stem: P) -> PathBuf
+    where
+        P: AsRef<Path> + Copy,
+    {
         let root = &self.snapshot_config.as_ref().unwrap().snapshot_archives_dir;
         let local_path = root.join(stem);
         if local_path.exists() {
