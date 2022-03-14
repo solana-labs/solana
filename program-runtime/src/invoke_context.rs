@@ -67,7 +67,6 @@ pub trait Executor: Debug + Send + Sync {
         first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &'a mut InvokeContext<'b>,
-        use_jit: bool,
     ) -> Result<(), InstructionError>;
 }
 
