@@ -120,7 +120,7 @@ mod tests {
             assert!(a.ip() == conn.0.tpu_addr().ip());
         });
 
-        if let Some(_) = map.map.get(&first_addr) {
+        if map.map.get(&first_addr).is_some() {
             panic!("Eviction failed");
         }
     }
