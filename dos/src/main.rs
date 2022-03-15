@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-use solana_client::transaction_executor::TransactionExecutor;
 use {
     clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
     log::*,
@@ -64,12 +63,15 @@ impl TransactionGenerator {
             self.last_generated = Instant::now();
         }
 
-        // create an arbitrary valid instructions
+        // in order to evaluate the performance implications of the different transactions
+        // we create here transactions which are filetered out on different stages of processing pipeline
+
+        // create an arbitrary valid instruction
         let lamports = 5;
         let transfer_instruction = SystemInstruction::Transfer { lamports };
         let program_ids = vec![system_program::id(), stake::program::id()];
 
-        // transaction with payer, in this case signatures are valid and num_sign is irrelevant
+        // transaction with payer, in this case signatures are valid and num_signatures is irrelevant
         // random payer will cause error "attempt to debit an account but found no record of a prior credit"
         // if payer is correct, it will trigger error with not enough signatures
         let transaction = if let Some(payer) = payer {
@@ -90,7 +92,7 @@ impl TransactionGenerator {
         } else if self.transaction_params.valid_signatures {
             // Since we don't provide a payer, this transaction will
             // end up filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
-            let kpvals: Vec<Keypair> = (0..self.transaction_params.num_sign)
+            let kpvals: Vec<Keypair> = (0..self.transaction_params.num_signatures)
                 .map(|_| Keypair::new())
                 .collect();
             let keypairs: Vec<&Keypair> = kpvals.iter().collect();
@@ -125,7 +127,7 @@ impl TransactionGenerator {
                 program_ids,
                 instructions,
             );
-            tx.signatures = vec![Signature::new_unique(); self.transaction_params.num_sign];
+            tx.signatures = vec![Signature::new_unique(); self.transaction_params.num_signatures];
             tx
         };
 
@@ -279,8 +281,18 @@ fn run_dos(
 
 // command line parsing
 #[derive(Parser)]
-#[clap(name = crate_name!(), version = crate_version!(), about = crate_description!())]
+#[clap(name = crate_name!(),
+    version = crate_version!(),
+    about = crate_description!(),
+    rename_all = "kebab-case"
+)]
 struct DosClientParameters {
+    #[clap(long, arg_enum, help = "Interface to DoS")]
+    mode: Mode,
+
+    #[clap(long, arg_enum, help = "Type of data to send")]
+    data_type: DataType,
+
     #[clap(
         long = "entrypoint",
         parse(try_from_str = addr_parser),
@@ -289,51 +301,21 @@ struct DosClientParameters {
     )]
     entrypoint_addr: SocketAddr,
 
-    #[clap(long="mode",
-        possible_values=&[
-                    "gossip",
-                    "tvu",
-                    "tvu_forwards",
-                    "tpu",
-                    "tpu_forwards",
-                    "repair",
-                    "serve_repair",
-                    "rpc",
-                ],
-        parse(try_from_str = mode_parser),
-        help="Interface to DoS")]
-    mode: Mode,
-
     #[clap(
-        long = "data-size",
+        long,
         default_value = "128",
         required_if_eq("data-type", "random"),
         help = "Size of packet to DoS with, relevant only for data-type=random"
     )]
     data_size: usize,
 
-    #[clap(long="data-type",
-        possible_values=&[
-                    "repair_highest",
-                    "repair_shred",
-                    "repair_orphan",
-                    "random",
-                    "get_account_info",
-                    "get_program_accounts",
-                    "transaction"],
-        parse(try_from_str = data_type_parser), help="Type of data to send")]
-    data_type: DataType,
-
-    #[clap(long = "data-input", help = "Data to send [Optional]")]
+    #[clap(long, help = "Data to send [Optional]")]
     data_input: Option<String>,
 
-    #[clap(long = "skip-gossip", help = "Just use entrypoint address directly")]
+    #[clap(long, help = "Just use entrypoint address directly")]
     skip_gossip: bool,
 
-    #[clap(
-        long = "allow-private-addr",
-        help = "Allow contacting private ip addresses"
-    )]
+    #[clap(long, help = "Allow contacting private ip addresses")]
     allow_private_addr: bool,
 
     #[clap(flatten)]
@@ -341,27 +323,22 @@ struct DosClientParameters {
 }
 
 #[derive(Args, Serialize, Deserialize, Debug, Default)]
+#[clap(rename_all = "kebab-case")]
 struct TransactionParams {
     #[clap(
-        long = "num-sign",
+        long,
         default_value = "2",
         help = "Number of signatures in transaction"
     )]
-    num_sign: usize,
+    num_signatures: usize,
 
-    #[clap(
-        long = "valid-blockhash",
-        help = "Generate a valid blockhash for transaction"
-    )]
+    #[clap(long, help = "Generate a valid blockhash for transaction")]
     valid_blockhash: bool,
 
-    #[clap(
-        long = "valid-signatures",
-        help = "Generate valid signature(s) for transaction"
-    )]
+    #[clap(long, help = "Generate valid signature(s) for transaction")]
     valid_signatures: bool,
 
-    #[clap(long = "unique-transactions", help = "Generate unique transactions")]
+    #[clap(long, help = "Generate unique transactions")]
     unique_transactions: bool,
 
     #[clap(
@@ -398,33 +375,6 @@ fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
     match solana_net_utils::parse_host_port(addr) {
         Ok(v) => Ok(v),
         Err(_) => Err("failed to parse entrypoint address"),
-    }
-}
-
-fn data_type_parser(s: &str) -> Result<DataType, &'static str> {
-    match s {
-        "repair_highest" => Ok(DataType::RepairHighest),
-        "repair_shred" => Ok(DataType::RepairShred),
-        "repair_orphan" => Ok(DataType::RepairOrphan),
-        "random" => Ok(DataType::Random),
-        "get_account_info" => Ok(DataType::GetAccountInfo),
-        "get_program_accounts" => Ok(DataType::GetProgramAccounts),
-        "transaction" => Ok(DataType::Transaction),
-        _ => Err("unsupported value"),
-    }
-}
-
-fn mode_parser(s: &str) -> Result<Mode, &'static str> {
-    match s {
-        "gossip" => Ok(Mode::Gossip),
-        "tvu" => Ok(Mode::Tvu),
-        "tvu_forwards" => Ok(Mode::TvuForwards),
-        "tpu" => Ok(Mode::Tpu),
-        "tpu_forwards" => Ok(Mode::TpuForwards),
-        "repair" => Ok(Mode::Repair),
-        "serve_repair" => Ok(Mode::ServeRepair),
-        "rpc" => Ok(Mode::Rpc),
-        _ => Err("unsupported value"),
     }
 }
 
@@ -592,7 +542,7 @@ pub mod test {
             },
         );
 
-        // send transactions to TPU with varied number of random signatures
+        // send transactions to TPU with 2 random signatures
         // will be filtered on dedup (because transactions are not unique)
         run_dos(
             &nodes_slice,
@@ -607,7 +557,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_sign: 2,
+                    num_signatures: 2,
                     valid_blockhash: false,
                     valid_signatures: false,
                     unique_transactions: false,
@@ -616,7 +566,7 @@ pub mod test {
             },
         );
 
-        // send *unique* transactions to TPU with varied number of random signatures
+        // send *unique* transactions to TPU with 2 random signatures
         // will be discarded on banking stage in legacy.rs
         // ("there should be at least 1 RW fee-payer account")
         run_dos(
@@ -632,7 +582,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_sign: 2,
+                    num_signatures: 4,
                     valid_blockhash: false,
                     valid_signatures: false,
                     unique_transactions: true,
@@ -641,7 +591,7 @@ pub mod test {
             },
         );
 
-        // send unique transactions to TPU with varied number of random signatures
+        // send unique transactions to TPU with 2 random signatures
         // will be discarded on banking stage in legacy.rs (A program cannot be a payer)
         // because we haven't provided a valid payer
         run_dos(
@@ -657,7 +607,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_sign: 2,
+                    num_signatures: 2,
                     valid_blockhash: false, // irrelevant without valid payer, because
                     // it will be filtered before blockhash validity checks
                     valid_signatures: true,
@@ -682,7 +632,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_sign: 2,
+                    num_signatures: 2,
                     valid_blockhash: false,
                     valid_signatures: true,
                     unique_transactions: true,
@@ -706,7 +656,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_sign: 2,
+                    num_signatures: 2,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
@@ -741,7 +691,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_sign: 2,
+                    num_signatures: 2,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
