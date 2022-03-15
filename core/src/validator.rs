@@ -8,6 +8,7 @@ use {
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
@@ -334,6 +335,7 @@ pub struct Validator {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub blockstore: Arc<Blockstore>,
     geyser_plugin_service: Option<GeyserPluginService>,
+    ledger_metric_report_service: LedgerMetricReportService,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -829,6 +831,9 @@ impl Validator {
             abort();
         };
 
+        let ledger_metric_report_service =
+            LedgerMetricReportService::new(blockstore.clone(), &exit);
+
         let wait_for_vote_to_start_leader =
             !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
 
@@ -983,6 +988,7 @@ impl Validator {
             bank_forks,
             blockstore: blockstore.clone(),
             geyser_plugin_service,
+            ledger_metric_report_service,
         }
     }
 
