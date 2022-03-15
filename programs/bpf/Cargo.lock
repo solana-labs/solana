@@ -950,17 +950,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 
 [[package]]
-name = "fakedata_generator"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6815202b22ccd0dd16957e52e254c52392c84edafb4d3cc0161b9f30a85dbb88"
-dependencies = [
- "rand 0.7.3",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "fastrand"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3233,7 +3222,6 @@ dependencies = [
  "bytes 1.1.0",
  "clap",
  "crossbeam-channel",
- "fakedata_generator",
  "futures",
  "futures-util",
  "indicatif",
@@ -3242,6 +3230,8 @@ dependencies = [
  "lazy_static",
  "log",
  "quinn",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "reqwest",
  "rustls",

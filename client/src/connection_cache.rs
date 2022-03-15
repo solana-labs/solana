@@ -89,29 +89,44 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sy
 mod tests {
     use {
         crate::connection_cache::{get_connection, CONNECTION_MAP, MAX_CONNECTIONS},
-        fakedata_generator::gen_ipv4,
         std::net::SocketAddr,
+        rand::{
+            Rng, SeedableRng,
+        },
+        rand_chacha::ChaChaRng,
     };
 
-    fn get_addr() -> SocketAddr {
-        let mut ip = gen_ipv4();
-        ip.push_str(":80");
-        ip.parse().expect("Invalid address")
+    fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
+        let a = rng.gen_range(1, 255);
+        let b = rng.gen_range(1, 255);
+        let c = rng.gen_range(1, 255);
+        let d = rng.gen_range(1, 255);
+    
+        let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
+
+        addr_str.parse().expect("Invalid address")
     }
 
     #[test]
     fn test_connection_cache() {
+        // Allow the test to run deterministically
+        // with the same pseudorandom sequence between runs
+        // and on different platforms - the cryptographic security
+        // property isn't important here but ChaChaRng provides a way
+        // to get the same pseudorandom sequence on different platforms
+        let mut rng = ChaChaRng::seed_from_u64(42);
+
         // Generate a bunch of random addresses and create TPUConnections to them
         // Since TPUConnection::new is infallible, it should't matter whether or not
         // we can actually connect to those addresses - TPUConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
-        let first_addr = get_addr();
+        let first_addr = get_addr(&mut rng);
         assert!(get_connection(&first_addr).tpu_addr().ip() == first_addr.ip());
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {
-                let addr = get_addr();
+                let addr = get_addr(&mut rng);
                 get_connection(&addr);
                 addr
             })
@@ -123,9 +138,7 @@ mod tests {
                 assert!(a.ip() == conn.0.tpu_addr().ip());
             });
 
-            if map.map.get(&first_addr).is_some() {
-                panic!("Eviction failed");
-            }
+            assert!(map.map.get(&first_addr).is_none());
         }
 
         // Test that get_connection updates which connection is next up for eviction
@@ -135,7 +148,7 @@ mod tests {
         // the next up for eviction. So we add a new connection, and test that addrs[0] is not
         // evicted but addrs[1] is.
         get_connection(&addrs[0]);
-        get_connection(&get_addr());
+        get_connection(&get_addr(&mut rng));
 
         let map = (*CONNECTION_MAP).lock().unwrap();
         assert!(map.map.get(&addrs[0]).is_some());
