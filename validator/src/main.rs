@@ -926,6 +926,11 @@ pub fn main() {
                 .help("Skip checks for OS network limits.")
         )
         .arg(
+            Arg::with_name("no_os_memory_stats_reporting")
+                .long("no-os-memory-stats-reporting")
+                .help("Disable reporting of OS memory statistics.")
+        )
+        .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
                 .help("Disable reporting of OS network statistics.")
@@ -2362,6 +2367,7 @@ pub fn main() {
             ),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
+        no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
         no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),

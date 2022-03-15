@@ -150,6 +150,7 @@ pub struct ValidatorConfig {
     pub bpf_jit: bool,
     pub send_transaction_service_config: send_transaction_service::Config,
     pub no_poh_speed_test: bool,
+    pub no_os_memory_stats_reporting: bool,
     pub no_os_network_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
@@ -211,6 +212,7 @@ impl Default for ValidatorConfig {
             bpf_jit: false,
             send_transaction_service_config: send_transaction_service::Config::default(),
             no_poh_speed_test: true,
+            no_os_memory_stats_reporting: true,
             no_os_network_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
@@ -443,6 +445,7 @@ impl Validator {
 
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
+            !config.no_os_memory_stats_reporting,
             !config.no_os_network_stats_reporting,
         ));
 
