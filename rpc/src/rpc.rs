@@ -70,7 +70,8 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{
-            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
+            self, AddressLoader, MessageHash, SanitizedTransaction, TransactionError,
+            VersionedTransaction,
         },
     },
     solana_send_transaction_service::{
@@ -4277,10 +4278,9 @@ where
 
 fn sanitize_transaction(
     transaction: VersionedTransaction,
-    address_loader: &impl AddressLoader,
+    address_loader: impl AddressLoader,
 ) -> Result<SanitizedTransaction> {
-    let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, address_loader)
+    SanitizedTransaction::try_create(transaction, MessageHash::Compute, None, address_loader)
         .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
@@ -4420,7 +4420,7 @@ pub mod tests {
             system_program, system_transaction,
             timing::slot_duration_from_slots_per_year,
             transaction::{
-                self, DisabledAddressLoader, Transaction, TransactionError, TransactionVersion,
+                self, SimpleAddressLoader, Transaction, TransactionError, TransactionVersion,
             },
         },
         solana_transaction_status::{
@@ -7823,7 +7823,8 @@ pub mod tests {
                 .to_string(),
         );
         assert_eq!(
-            sanitize_transaction(unsanitary_versioned_tx, &DisabledAddressLoader).unwrap_err(),
+            sanitize_transaction(unsanitary_versioned_tx, SimpleAddressLoader::Disabled)
+                .unwrap_err(),
             expect58
         );
     }
@@ -7843,9 +7844,9 @@ pub mod tests {
         };
 
         assert_eq!(
-            sanitize_transaction(versioned_tx, &DisabledAddressLoader).unwrap_err(),
+            sanitize_transaction(versioned_tx, SimpleAddressLoader::Disabled).unwrap_err(),
             Error::invalid_params(
-                "invalid transaction: Transaction version is unsupported".to_string(),
+                "invalid transaction: Transaction loads an address table account that doesn't exist".to_string(),
             )
         );
     }

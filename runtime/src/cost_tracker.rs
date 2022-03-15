@@ -263,7 +263,7 @@ mod tests {
             hash::Hash,
             signature::{Keypair, Signer},
             system_transaction,
-            transaction::{DisabledAddressLoader, VersionedTransaction},
+            transaction::{MessageHash, SimpleAddressLoader, VersionedTransaction},
         },
         solana_vote_program::vote_transaction,
         std::{cmp, sync::Arc},
@@ -326,12 +326,11 @@ mod tests {
             &keypair,
             None,
         );
-        let message_hash = transaction.message.hash();
         let vote_transaction = SanitizedTransaction::try_create(
             VersionedTransaction::from(transaction),
-            message_hash,
+            MessageHash::Compute,
             Some(true),
-            &DisabledAddressLoader,
+            SimpleAddressLoader::Disabled,
         )
         .unwrap();
         (vote_transaction, vec![mint_keypair.pubkey()], 10)

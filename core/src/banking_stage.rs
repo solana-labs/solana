@@ -1680,7 +1680,7 @@ impl BankingStage {
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
-        address_loader: &impl AddressLoader,
+        address_loader: impl AddressLoader,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         transaction_indexes
             .iter()
@@ -1697,7 +1697,7 @@ impl BankingStage {
                     tx,
                     message_hash,
                     Some(p.meta.is_simple_vote_tx()),
-                    address_loader,
+                    address_loader.clone(),
                 )
                 .ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
@@ -2128,7 +2128,7 @@ mod tests {
             signature::{Keypair, Signer},
             system_instruction::SystemError,
             system_transaction,
-            transaction::{DisabledAddressLoader, Transaction, TransactionError},
+            transaction::{MessageHash, SimpleAddressLoader, Transaction, TransactionError},
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
@@ -3464,10 +3464,13 @@ mod tests {
         });
 
         let tx = VersionedTransaction::try_new(message, &[&keypair]).unwrap();
-        let message_hash = tx.message.hash();
-        let sanitized_tx =
-            SanitizedTransaction::try_create(tx.clone(), message_hash, Some(false), bank.as_ref())
-                .unwrap();
+        let sanitized_tx = SanitizedTransaction::try_create(
+            tx.clone(),
+            MessageHash::Compute,
+            Some(false),
+            bank.as_ref(),
+        )
+        .unwrap();
 
         let entry = next_versioned_entry(&genesis_config.hash(), 1, vec![tx]);
         let entries = vec![entry];
@@ -4145,7 +4148,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                &DisabledAddressLoader,
+                SimpleAddressLoader::Disabled,
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
@@ -4156,7 +4159,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                &DisabledAddressLoader,
+                SimpleAddressLoader::Disabled,
             );
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
@@ -4176,7 +4179,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                &DisabledAddressLoader,
+                SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -4187,7 +4190,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                &DisabledAddressLoader,
+                SimpleAddressLoader::Disabled,
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
@@ -4207,7 +4210,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                &DisabledAddressLoader,
+                SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -4218,7 +4221,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
-                &DisabledAddressLoader,
+                SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);

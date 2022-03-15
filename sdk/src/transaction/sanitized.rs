@@ -39,14 +39,35 @@ pub struct TransactionAccountLocks<'a> {
     pub writable: Vec<&'a Pubkey>,
 }
 
-pub trait AddressLoader {
-    fn load_addresses(&self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
+pub trait AddressLoader: Clone {
+    fn load_addresses(self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
 }
 
-pub struct DisabledAddressLoader;
-impl AddressLoader for DisabledAddressLoader {
-    fn load_addresses(&self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
-        Err(TransactionError::UnsupportedVersion)
+#[derive(Clone)]
+pub enum SimpleAddressLoader {
+    Disabled,
+    Enabled(LoadedAddresses),
+}
+
+impl AddressLoader for SimpleAddressLoader {
+    fn load_addresses(self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
+        match self {
+            Self::Disabled => Err(TransactionError::AddressLookupTableNotFound),
+            Self::Enabled(loaded_addresses) => Ok(loaded_addresses),
+        }
+    }
+}
+
+/// Type that represents whether the transaction message has been precomputed or
+/// not.
+pub enum MessageHash {
+    Precomputed(Hash),
+    Compute,
+}
+
+impl From<Hash> for MessageHash {
+    fn from(hash: Hash) -> Self {
+        Self::Precomputed(hash)
     }
 }
 
@@ -56,11 +77,16 @@ impl SanitizedTransaction {
     /// the address for each table index.
     pub fn try_create(
         tx: VersionedTransaction,
-        message_hash: Hash,
+        message_hash: impl Into<MessageHash>,
         is_simple_vote_tx: Option<bool>,
-        address_loader: &impl AddressLoader,
+        address_loader: impl AddressLoader,
     ) -> Result<Self> {
         tx.sanitize()?;
+
+        let message_hash = match message_hash.into() {
+            MessageHash::Compute => tx.message.hash(),
+            MessageHash::Precomputed(hash) => hash,
+        };
 
         let signatures = tx.signatures;
         let message = match tx.message {

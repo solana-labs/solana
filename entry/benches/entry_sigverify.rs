@@ -6,7 +6,7 @@ use {
     solana_sdk::{
         hash::Hash,
         transaction::{
-            DisabledAddressLoader, Result, SanitizedTransaction, TransactionVerificationMode,
+            Result, SanitizedTransaction, SimpleAddressLoader, TransactionVerificationMode,
             VersionedTransaction,
         },
     },
@@ -39,7 +39,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                     versioned_tx,
                     message_hash,
                     None,
-                    &DisabledAddressLoader,
+                    SimpleAddressLoader::Disabled,
                 )
             }?;
 
@@ -80,7 +80,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
                     versioned_tx,
                     message_hash,
                     None,
-                    &DisabledAddressLoader,
+                    SimpleAddressLoader::Disabled,
                 )
             }?;
 

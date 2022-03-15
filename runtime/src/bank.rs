@@ -127,7 +127,7 @@ use {
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            Result, SanitizedTransaction, Transaction, TransactionError,
+            MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
         transaction_context::{InstructionTrace, TransactionAccount, TransactionContext},
@@ -3439,10 +3439,7 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| {
-                let message_hash = tx.message.hash();
-                SanitizedTransaction::try_create(tx, message_hash, None, self)
-            })
+            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
             .collect::<Result<Vec<_>>>()?;
         let lock_results = self
             .rc

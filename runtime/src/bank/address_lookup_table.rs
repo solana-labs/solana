@@ -8,9 +8,9 @@ use {
     },
 };
 
-impl AddressLoader for Bank {
+impl AddressLoader for &Bank {
     fn load_addresses(
-        &self,
+        self,
         address_table_lookups: &[MessageAddressTableLookup],
     ) -> TransactionResult<LoadedAddresses> {
         if !self.versioned_tx_message_enabled() {
