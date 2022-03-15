@@ -215,14 +215,6 @@ impl Tvu {
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
 
-        let snapshot_interval_slots = {
-            if let Some(config) = bank_forks.read().unwrap().snapshot_config() {
-                config.full_snapshot_archive_interval_slots
-            } else {
-                std::u64::MAX
-            }
-        };
-        info!("snapshot_interval_slots: {}", snapshot_interval_slots);
         let (snapshot_config, pending_snapshot_package) = snapshot_config_and_pending_package
             .map(|(snapshot_config, pending_snapshot_package)| {
                 (Some(snapshot_config), Some(pending_snapshot_package))
