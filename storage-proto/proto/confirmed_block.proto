@@ -57,6 +57,8 @@ message TransactionStatusMeta {
     repeated Reward rewards = 9;
     repeated bytes loaded_writable_addresses = 12;
     repeated bytes loaded_readonly_addresses = 13;
+    ReturnData return_data = 14;
+    bool return_data_none = 15;
 }
 
 message TransactionError {
@@ -86,6 +88,11 @@ message UiTokenAmount {
     uint32 decimals = 2;
     string amount = 3;
     string ui_amount_string = 4;
+}
+
+message ReturnData {
+    bytes program_id = 1;
+    bytes data = 2;
 }
 
 enum RewardType {

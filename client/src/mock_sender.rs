@@ -229,6 +229,7 @@ impl RpcSender for MockSender {
                             post_token_balances: None,
                             rewards: None,
                             loaded_addresses: None,
+                            return_data: None,
                         }),
                 },
                 block_time: Some(1628633791),

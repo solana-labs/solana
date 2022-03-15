@@ -143,7 +143,7 @@ fn is_finalized(
 #[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
-    pub enable_cpi_and_log_storage: bool,
+    pub enable_cpi_and_log_and_return_data_storage: bool,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
     pub rpc_bigtable_config: Option<RpcBigtableConfig>,

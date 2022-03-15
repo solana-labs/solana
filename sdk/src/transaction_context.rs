@@ -35,7 +35,7 @@ pub struct TransactionContext {
     instruction_stack: Vec<usize>,
     number_of_instructions_at_transaction_level: usize,
     instruction_trace: InstructionTrace,
-    return_data: (Pubkey, Vec<u8>),
+    return_data: TransactionReturnData,
 }
 
 impl TransactionContext {
@@ -57,12 +57,18 @@ impl TransactionContext {
             instruction_stack: Vec::with_capacity(instruction_context_capacity),
             number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
-            return_data: (Pubkey::default(), Vec::new()),
+            return_data: TransactionReturnData::default(),
         }
     }
 
     /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn deconstruct(self) -> (Vec<TransactionAccount>, Vec<Vec<InstructionContext>>) {
+    pub fn deconstruct(
+        self,
+    ) -> (
+        Vec<TransactionAccount>,
+        Vec<Vec<InstructionContext>>,
+        TransactionReturnData,
+    ) {
         (
             Vec::from(Pin::into_inner(self.account_keys))
                 .into_iter()
@@ -73,6 +79,7 @@ impl TransactionContext {
                 )
                 .collect(),
             self.instruction_trace,
+            self.return_data,
         )
     }
 
@@ -225,7 +232,7 @@ impl TransactionContext {
 
     /// Gets the return data of the current InstructionContext or any above
     pub fn get_return_data(&self) -> (&Pubkey, &[u8]) {
-        (&self.return_data.0, &self.return_data.1)
+        (&self.return_data.program_id, &self.return_data.data)
     }
 
     /// Set the return data of the current InstructionContext
@@ -234,7 +241,7 @@ impl TransactionContext {
         program_id: Pubkey,
         data: Vec<u8>,
     ) -> Result<(), InstructionError> {
-        self.return_data = (program_id, data);
+        self.return_data = TransactionReturnData { program_id, data };
         Ok(())
     }
 
@@ -252,6 +259,13 @@ impl TransactionContext {
     pub fn get_instruction_trace(&self) -> &InstructionTrace {
         &self.instruction_trace
     }
+}
+
+/// Return data at the end of a transaction
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct TransactionReturnData {
+    pub program_id: Pubkey,
+    pub data: Vec<u8>,
 }
 
 /// List of (stack height, instruction) for each top-level instruction

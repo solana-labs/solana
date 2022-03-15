@@ -1374,6 +1374,7 @@ mod tests {
             log_messages: None,
             inner_instructions: None,
             durable_nonce_fee: nonce.map(DurableNonceFee::from),
+            return_data: None,
         })
     }
 

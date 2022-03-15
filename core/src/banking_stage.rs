@@ -1183,6 +1183,7 @@ impl BankingStage {
                     MAX_PROCESSING_AGE,
                     transaction_status_sender.is_some(),
                     transaction_status_sender.is_some(),
+                    transaction_status_sender.is_some(),
                     &mut execute_and_commit_timings.execute_timings,
                 )
             },
@@ -2156,6 +2157,7 @@ mod tests {
             log_messages: None,
             inner_instructions: None,
             durable_nonce_fee: None,
+            return_data: None,
         })
     }
 

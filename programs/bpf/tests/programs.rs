@@ -323,6 +323,7 @@ fn process_transaction_and_record_inner(
             false,
             true,
             false,
+            false,
             &mut ExecuteTimings::default(),
         )
         .0;
@@ -364,6 +365,7 @@ fn execute_transactions(
         true,
         true,
         true,
+        true,
         &mut timings,
     );
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -392,6 +394,7 @@ fn execute_transactions(
                         log_messages,
                         inner_instructions,
                         durable_nonce_fee,
+                        return_data,
                     } = details;
 
                     let lamports_per_signature = match durable_nonce_fee {
@@ -432,6 +435,7 @@ fn execute_transactions(
                         log_messages,
                         rewards: None,
                         loaded_addresses: LoadedAddresses::default(),
+                        return_data,
                     };
 
                     Ok(ConfirmedTransactionWithStatusMeta {
