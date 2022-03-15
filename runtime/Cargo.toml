@@ -18,7 +18,7 @@ bytemuck = "1.8.0"
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
 crossbeam-channel = "0.5"
-dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
+dashmap = { version = "5.2.0", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
 flate2 = "1.0.22"
 fnv = "1.0.7"
