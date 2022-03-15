@@ -139,6 +139,7 @@ pub fn process_instruction(
             me.initialize(&authorized, &lockup, &rent)
         }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
+            instruction_context.check_number_of_instruction_accounts(3)?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
@@ -1501,6 +1502,11 @@ mod tests {
                 is_signer: false,
                 is_writable: false,
             },
+            AccountMeta {
+                pubkey: authority_address,
+                is_signer: false,
+                is_writable: false,
+            },
         ];
 
         // should fail, uninit
@@ -1567,11 +1573,7 @@ mod tests {
 
         // Test a second authorization by the new authority_address
         instruction_accounts[0].is_signer = false;
-        instruction_accounts.push(AccountMeta {
-            pubkey: authority_address,
-            is_signer: true,
-            is_writable: false,
-        });
+        instruction_accounts[2].is_signer = true;
         let accounts = process_instruction(
             &serialize(&StakeInstruction::Authorize(
                 authority_address_2,
@@ -1666,6 +1668,11 @@ mod tests {
                 is_signer: false,
                 is_writable: false,
             },
+            AccountMeta {
+                pubkey: authority_address,
+                is_signer: false,
+                is_writable: false,
+            },
         ];
 
         // Authorize a staker pubkey and move the withdrawer key into cold storage.
@@ -1683,11 +1690,7 @@ mod tests {
 
         // Attack! The stake key (a hot key) is stolen and used to authorize a new staker.
         instruction_accounts[0].is_signer = false;
-        instruction_accounts.push(AccountMeta {
-            pubkey: authority_address,
-            is_signer: true,
-            is_writable: false,
-        });
+        instruction_accounts[2].is_signer = true;
         let accounts = process_instruction(
             &serialize(&StakeInstruction::Authorize(
                 mallory_address,
@@ -1714,7 +1717,7 @@ mod tests {
 
         // Verify the withdrawer (pulled from cold storage) can save the day.
         instruction_accounts[0].is_signer = true;
-        instruction_accounts.pop();
+        instruction_accounts[2].is_signer = false;
         let accounts = process_instruction(
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
@@ -1729,11 +1732,11 @@ mod tests {
 
         // Attack! Verify the staker cannot be used to authorize a withdraw.
         instruction_accounts[0].is_signer = false;
-        instruction_accounts.push(AccountMeta {
+        instruction_accounts[2] = AccountMeta {
             pubkey: mallory_address,
             is_signer: true,
             is_writable: false,
-        });
+        };
         process_instruction(
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
@@ -1970,6 +1973,11 @@ mod tests {
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: authority_address,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3568,6 +3576,11 @@ mod tests {
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: authorized_address,
                     is_signer: false,
                     is_writable: false,
                 },
