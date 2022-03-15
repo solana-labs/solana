@@ -26,7 +26,7 @@ jsonrpc-core = "18.0.0"
 log = "0.4.14"
 quinn = "0.8.0"
 rayon = "1.5.1"
-reqwest = { version = "0.11.9", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 rustls = { version = "0.20.2", features = ["dangerous_configuration"] }
 semver = "1.0.6"
 serde = "1.0.136"
