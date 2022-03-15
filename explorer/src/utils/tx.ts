@@ -86,6 +86,7 @@ export enum PROGRAM_NAMES {
   SOLEND = "Solend Program",
   SOLIDO = "Lido for Solana Program",
   STEP_SWAP = "Step Finance Swap Program",
+  SWIM_SWAP = "Swim Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
 }
@@ -338,6 +339,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   SSwpMgqNDsyV7mAgN9ady4bDVu5ySjmmXejXvy2vLt1: {
     name: PROGRAM_NAMES.STEP_SWAP,
+    deployments: [Cluster.MainnetBeta],
+  },
+  SWiMDJYFUGj6cPrQ6QYYYWZtvXQdRChSVAygDZDsCHC: {
+    name: PROGRAM_NAMES.SWIM_SWAP,
     deployments: [Cluster.MainnetBeta],
   },
   DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM: {
