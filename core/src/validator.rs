@@ -3,6 +3,7 @@
 pub use solana_perf::report_target_features;
 use {
     crate::{
+        accounts_hash_verifier::AccountsHashVerifier,
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
@@ -65,7 +66,10 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
-        accounts_background_service::DroppedSlotsReceiver,
+        accounts_background_service::{
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
+            SnapshotRequestHandler,
+        },
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -336,6 +340,8 @@ pub struct Validator {
     pub blockstore: Arc<Blockstore>,
     geyser_plugin_service: Option<GeyserPluginService>,
     ledger_metric_report_service: LedgerMetricReportService,
+    accounts_background_service: AccountsBackgroundService,
+    accounts_hash_verifier: AccountsHashVerifier,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -524,7 +530,7 @@ impl Validator {
             config.snapshot_config.as_ref(),
             Arc::clone(&pending_accounts_package),
             blockstore_root_scan,
-            pruned_banks_receiver.clone(),
+            pruned_banks_receiver,
         );
         let last_full_snapshot_slot =
             last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
@@ -596,6 +602,108 @@ impl Validator {
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
+
+        // Before replay starts, set the callbacks in each of the banks in BankForks
+        // Note after this callback is created, only the AccountsBackgroundService should be calling
+        // AccountsDb::purge_slot() to clean up dropped banks.
+        let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+        let callback = bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .rc
+            .accounts
+            .accounts_db
+            .create_drop_bank_callback(pruned_banks_sender);
+        for bank in bank_forks.read().unwrap().banks().values() {
+            bank.set_callback(Some(Box::new(callback.clone())));
+        }
+
+        let (
+            accounts_background_service,
+            accounts_hash_verifier,
+            snapshot_packager_service,
+            accounts_background_request_sender,
+        ) = {
+            let (
+                accounts_background_request_sender,
+                snapshot_request_handler,
+                pending_snapshot_package,
+                snapshot_packager_service,
+            ) = if let Some(snapshot_config) = config.snapshot_config.clone() {
+                if !is_snapshot_config_valid(
+                    snapshot_config.full_snapshot_archive_interval_slots,
+                    snapshot_config.incremental_snapshot_archive_interval_slots,
+                    config.accounts_hash_interval_slots,
+                ) {
+                    error!("Snapshot config is invalid");
+                }
+
+                let pending_snapshot_package = PendingSnapshotPackage::default();
+
+                // filler accounts make snapshots invalid for use
+                // so, do not publish that we have snapshots
+                let enable_gossip_push = config
+                    .accounts_db_config
+                    .as_ref()
+                    .map(|config| config.filler_accounts_config.count == 0)
+                    .unwrap_or(true);
+
+                let snapshot_packager_service = SnapshotPackagerService::new(
+                    pending_snapshot_package.clone(),
+                    starting_snapshot_hashes,
+                    &exit,
+                    &cluster_info,
+                    snapshot_config.clone(),
+                    enable_gossip_push,
+                );
+
+                let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+                (
+                    AbsRequestSender::new(snapshot_request_sender),
+                    Some(SnapshotRequestHandler {
+                        snapshot_config,
+                        snapshot_request_receiver,
+                        pending_accounts_package: pending_accounts_package.clone(),
+                    }),
+                    Some(pending_snapshot_package),
+                    Some(snapshot_packager_service),
+                )
+            } else {
+                (AbsRequestSender::default(), None, None, None)
+            };
+
+            let accounts_hash_verifier = AccountsHashVerifier::new(
+                Arc::clone(&pending_accounts_package),
+                pending_snapshot_package,
+                &exit,
+                &cluster_info,
+                config.known_validators.clone(),
+                config.halt_on_known_validators_accounts_hash_mismatch,
+                config.accounts_hash_fault_injection_slots,
+                config.snapshot_config.clone(),
+            );
+
+            let accounts_background_service = AccountsBackgroundService::new(
+                bank_forks.clone(),
+                &exit,
+                AbsRequestHandler {
+                    snapshot_request_handler,
+                    pruned_banks_receiver,
+                },
+                config.accounts_db_caching_enabled,
+                config.accounts_db_test_hash_calculation,
+                last_full_snapshot_slot,
+            );
+
+            (
+                accounts_background_service,
+                accounts_hash_verifier,
+                snapshot_packager_service,
+                accounts_background_request_sender,
+            )
+        };
+
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(bank.slot(), bank_forks.read().unwrap().root());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
@@ -776,43 +884,6 @@ impl Validator {
             &exit,
         );
 
-        let (snapshot_packager_service, snapshot_config_and_pending_package) =
-            if let Some(snapshot_config) = config.snapshot_config.clone() {
-                if !is_snapshot_config_valid(
-                    snapshot_config.full_snapshot_archive_interval_slots,
-                    snapshot_config.incremental_snapshot_archive_interval_slots,
-                    config.accounts_hash_interval_slots,
-                ) {
-                    error!("Snapshot config is invalid");
-                }
-
-                // Start a snapshot packaging service
-                let pending_snapshot_package = PendingSnapshotPackage::default();
-
-                // filler accounts make snapshots invalid for use
-                // so, do not publish that we have snapshots
-                let enable_gossip_push = config
-                    .accounts_db_config
-                    .as_ref()
-                    .map(|config| config.filler_accounts_config.count == 0)
-                    .unwrap_or(true);
-
-                let snapshot_packager_service = SnapshotPackagerService::new(
-                    pending_snapshot_package.clone(),
-                    starting_snapshot_hashes,
-                    &exit,
-                    &cluster_info,
-                    snapshot_config.clone(),
-                    enable_gossip_push,
-                );
-                (
-                    Some(snapshot_packager_service),
-                    Some((snapshot_config, pending_snapshot_package)),
-                )
-            } else {
-                (None, None)
-            };
-
         let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
             config,
             &bank,
@@ -889,7 +960,6 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             cache_block_meta_sender,
-            snapshot_config_and_pending_package,
             vote_tracker.clone(),
             retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
@@ -900,26 +970,17 @@ impl Validator {
             cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                halt_on_known_validators_accounts_hash_mismatch: config
-                    .halt_on_known_validators_accounts_hash_mismatch,
                 shred_version: node.info.shred_version,
-                known_validators: config.known_validators.clone(),
                 repair_validators: config.repair_validators.clone(),
-                accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
-                accounts_db_caching_enabled: config.accounts_db_caching_enabled,
-                test_hash_calculation: config.accounts_db_test_hash_calculation,
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
-                accounts_shrink_ratio: config.accounts_shrink_ratio,
             },
             &max_slots,
             &cost_model,
-            pending_accounts_package,
-            last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-            pruned_banks_receiver,
+            accounts_background_request_sender,
         );
 
         let tpu = Tpu::new(
@@ -983,6 +1044,8 @@ impl Validator {
             blockstore: blockstore.clone(),
             geyser_plugin_service,
             ledger_metric_report_service,
+            accounts_background_service,
+            accounts_hash_verifier,
         }
     }
 
@@ -1092,6 +1155,15 @@ impl Validator {
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
+        self.ledger_metric_report_service
+            .join()
+            .expect("ledger_metric_report_service");
+        self.accounts_background_service
+            .join()
+            .expect("accounts_background_service");
+        self.accounts_hash_verifier
+            .join()
+            .expect("accounts_hash_verifier");
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
         self.completed_data_sets_service

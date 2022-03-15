@@ -368,9 +368,9 @@ pub struct AbsRequestSender {
 }
 
 impl AbsRequestSender {
-    pub fn new(snapshot_request_sender: Option<SnapshotRequestSender>) -> Self {
-        AbsRequestSender {
-            snapshot_request_sender,
+    pub fn new(snapshot_request_sender: SnapshotRequestSender) -> Self {
+        Self {
+            snapshot_request_sender: Some(snapshot_request_sender),
         }
     }
 
