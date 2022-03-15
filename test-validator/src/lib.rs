@@ -582,7 +582,6 @@ impl TestValidator {
                     config
                         .max_genesis_archive_unpacked_size
                         .unwrap_or(MAX_GENESIS_ARCHIVE_UNPACKED_SIZE),
-                    solana_ledger::blockstore_db::AccessType::PrimaryOnly,
                     BlockstoreAdvancedOptions::default(),
                 )
                 .map_err(|err| {

@@ -1723,7 +1723,6 @@ fn main() {
                     &output_directory,
                     &genesis_config,
                     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-                    AccessType::PrimaryOnly,
                     BlockstoreAdvancedOptions::default(),
                 )
                 .unwrap_or_else(|err| {
