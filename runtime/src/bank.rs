@@ -1936,6 +1936,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
+        // bprumo TODO: remove param vv and get accounts_data_len from fields
         accounts_data_len: u64,
     ) -> Self {
         fn new<T: Default>() -> T {
@@ -6430,9 +6431,13 @@ impl Bank {
         self.ensure_no_storage_rewards_pool();
 
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
-            // bprumo TODO:
-            const BPRUMO_TODO_STARTING_ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
-            let accounts_data_len = BPRUMO_TODO_STARTING_ACCOUNTS_DATA_LEN;
+            // bprumo TODO: get good starting numbers for the clusters
+            let accounts_data_len = match self.cluster_type() {
+                ClusterType::Testnet => todo!(),
+                ClusterType::MainnetBeta => 50_000_000_000,
+                ClusterType::Devnet => todo!(),
+                ClusterType::Development => todo!(),
+            };
             self.store_accounts_data_len(accounts_data_len);
         }
     }
