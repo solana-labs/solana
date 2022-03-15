@@ -1058,6 +1058,7 @@ pub fn process_get_block(
             RpcBlockConfig {
                 encoding: Some(UiTransactionEncoding::Base64),
                 commitment: Some(CommitmentConfig::confirmed()),
+                max_supported_transaction_version: Some(0),
                 ..RpcBlockConfig::default()
             },
         )?
@@ -2042,7 +2043,7 @@ pub fn process_transaction_history(
                     RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
                         commitment: Some(CommitmentConfig::confirmed()),
-                        max_supported_transaction_version: None,
+                        max_supported_transaction_version: Some(0),
                     },
                 ) {
                     Ok(confirmed_transaction) => {

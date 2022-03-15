@@ -30,7 +30,7 @@ use {
         pubkey::Pubkey,
         signature::{Signature, Signer, SignerError},
         stake::{instruction::LockupArgs, state::Lockup},
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, VersionedTransaction},
     },
     solana_vote_program::vote_state::VoteAuthorize,
     std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
@@ -385,7 +385,7 @@ pub enum CliCommand {
         seed: String,
         program_id: Pubkey,
     },
-    DecodeTransaction(Transaction),
+    DecodeTransaction(VersionedTransaction),
     ResolveSigner(Option<String>),
     ShowAccount {
         pubkey: Pubkey,

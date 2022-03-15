@@ -7,12 +7,13 @@ use {
         clock::UnixTimestamp,
         hash::Hash,
         instruction::CompiledInstruction,
+        message::v0::MessageAddressTableLookup,
         native_token::lamports_to_sol,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         signature::Signature,
         stake,
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, TransactionVersion, VersionedTransaction},
     },
     solana_transaction_status::{Rewards, UiTransactionStatusMeta},
     spl_memo::{id as spl_memo_id, v1::id as spl_memo_v1_id},
@@ -171,7 +172,7 @@ fn format_account_mode(meta: CliAccountMeta) -> String {
 
 fn write_transaction<W: io::Write>(
     w: &mut W,
-    transaction: &Transaction,
+    transaction: &VersionedTransaction,
     transaction_status: Option<&UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
@@ -181,46 +182,63 @@ fn write_transaction<W: io::Write>(
     write_block_time(w, block_time, timezone, prefix)?;
 
     let message = &transaction.message;
-    write_recent_blockhash(w, &message.recent_blockhash, prefix)?;
+    let account_keys: Vec<AccountKeyType> = {
+        let static_keys_iter = message
+            .static_account_keys()
+            .iter()
+            .map(AccountKeyType::Known);
+        let dynamic_keys: Vec<AccountKeyType> = message
+            .address_table_lookups()
+            .map(transform_lookups_to_unknown_keys)
+            .unwrap_or_default();
+        static_keys_iter.chain(dynamic_keys).collect()
+    };
+
+    write_version(w, transaction.version(), prefix)?;
+    write_recent_blockhash(w, message.recent_blockhash(), prefix)?;
     write_signatures(w, &transaction.signatures, sigverify_status, prefix)?;
 
     let mut fee_payer_index = None;
-    for (account_index, account) in message.account_keys.iter().enumerate() {
+    for (account_index, account) in account_keys.iter().enumerate() {
         if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
             fee_payer_index = Some(account_index)
         }
 
         let account_meta = CliAccountMeta {
             is_signer: message.is_signer(account_index),
-            is_writable: message.is_writable(account_index),
-            is_invoked: message.maybe_executable(account_index),
+            is_writable: message.is_maybe_writable(account_index),
+            is_invoked: message.is_invoked(account_index),
         };
 
         write_account(
             w,
             account_index,
-            account,
+            *account,
             format_account_mode(account_meta),
             Some(account_index) == fee_payer_index,
             prefix,
         )?;
     }
 
-    for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-        let program_pubkey = message.account_keys[instruction.program_id_index as usize];
-        let instruction_accounts = instruction.accounts.iter().map(|account_index| {
-            let account_pubkey = &message.account_keys[*account_index as usize];
-            (account_pubkey, *account_index)
-        });
+    for (instruction_index, instruction) in message.instructions().iter().enumerate() {
+        let program_pubkey = account_keys[instruction.program_id_index as usize];
+        let instruction_accounts = instruction
+            .accounts
+            .iter()
+            .map(|account_index| (account_keys[*account_index as usize], *account_index));
 
         write_instruction(
             w,
             instruction_index,
-            &program_pubkey,
+            program_pubkey,
             instruction,
             instruction_accounts,
             prefix,
         )?;
+    }
+
+    if let Some(address_table_lookups) = message.address_table_lookups() {
+        write_address_table_lookups(w, address_table_lookups, prefix)?;
     }
 
     if let Some(transaction_status) = transaction_status {
@@ -234,6 +252,36 @@ fn write_transaction<W: io::Write>(
     }
 
     Ok(())
+}
+
+fn transform_lookups_to_unknown_keys(lookups: &[MessageAddressTableLookup]) -> Vec<AccountKeyType> {
+    let unknown_writable_keys = lookups
+        .iter()
+        .enumerate()
+        .flat_map(|(lookup_index, lookup)| {
+            lookup
+                .writable_indexes
+                .iter()
+                .map(move |table_index| AccountKeyType::Unknown {
+                    lookup_index,
+                    table_index: *table_index,
+                })
+        });
+
+    let unknown_readonly_keys = lookups
+        .iter()
+        .enumerate()
+        .flat_map(|(lookup_index, lookup)| {
+            lookup
+                .readonly_indexes
+                .iter()
+                .map(move |table_index| AccountKeyType::Unknown {
+                    lookup_index,
+                    table_index: *table_index,
+                })
+        });
+
+    unknown_writable_keys.chain(unknown_readonly_keys).collect()
 }
 
 enum CliTimezone {
@@ -256,6 +304,18 @@ fn write_block_time<W: io::Write>(
         writeln!(w, "{}Block Time: {}", prefix, block_time_output,)?;
     }
     Ok(())
+}
+
+fn write_version<W: io::Write>(
+    w: &mut W,
+    version: TransactionVersion,
+    prefix: &str,
+) -> io::Result<()> {
+    let version = match version {
+        TransactionVersion::Legacy(_) => "legacy".to_string(),
+        TransactionVersion::Number(number) => number.to_string(),
+    };
+    writeln!(w, "{}Version: {}", prefix, version)
 }
 
 fn write_recent_blockhash<W: io::Write>(
@@ -292,10 +352,37 @@ fn write_signatures<W: io::Write>(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum AccountKeyType<'a> {
+    Known(&'a Pubkey),
+    Unknown {
+        lookup_index: usize,
+        table_index: u8,
+    },
+}
+
+impl fmt::Display for AccountKeyType<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Known(address) => write!(f, "{}", address),
+            Self::Unknown {
+                lookup_index,
+                table_index,
+            } => {
+                write!(
+                    f,
+                    "Unknown Address (uses lookup {} and index {})",
+                    lookup_index, table_index
+                )
+            }
+        }
+    }
+}
+
 fn write_account<W: io::Write>(
     w: &mut W,
     account_index: usize,
-    account_address: &Pubkey,
+    account_address: AccountKeyType,
     account_mode: String,
     is_fee_payer: bool,
     prefix: &str,
@@ -314,9 +401,9 @@ fn write_account<W: io::Write>(
 fn write_instruction<'a, W: io::Write>(
     w: &mut W,
     instruction_index: usize,
-    program_pubkey: &Pubkey,
+    program_pubkey: AccountKeyType,
     instruction: &CompiledInstruction,
-    instruction_accounts: impl Iterator<Item = (&'a Pubkey, u8)>,
+    instruction_accounts: impl Iterator<Item = (AccountKeyType<'a>, u8)>,
     prefix: &str,
 ) -> io::Result<()> {
     writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
@@ -334,33 +421,35 @@ fn write_instruction<'a, W: io::Write>(
     }
 
     let mut raw = true;
-    if program_pubkey == &solana_vote_program::id() {
-        if let Ok(vote_instruction) = limited_deserialize::<
-            solana_vote_program::vote_instruction::VoteInstruction,
-        >(&instruction.data)
-        {
-            writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
-            raw = false;
-        }
-    } else if program_pubkey == &stake::program::id() {
-        if let Ok(stake_instruction) =
-            limited_deserialize::<stake::instruction::StakeInstruction>(&instruction.data)
-        {
-            writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
-            raw = false;
-        }
-    } else if program_pubkey == &solana_sdk::system_program::id() {
-        if let Ok(system_instruction) = limited_deserialize::<
-            solana_sdk::system_instruction::SystemInstruction,
-        >(&instruction.data)
-        {
-            writeln!(w, "{}  {:?}", prefix, system_instruction)?;
-            raw = false;
-        }
-    } else if is_memo_program(program_pubkey) {
-        if let Ok(s) = std::str::from_utf8(&instruction.data) {
-            writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
-            raw = false;
+    if let AccountKeyType::Known(program_pubkey) = program_pubkey {
+        if program_pubkey == &solana_vote_program::id() {
+            if let Ok(vote_instruction) = limited_deserialize::<
+                solana_vote_program::vote_instruction::VoteInstruction,
+            >(&instruction.data)
+            {
+                writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
+                raw = false;
+            }
+        } else if program_pubkey == &stake::program::id() {
+            if let Ok(stake_instruction) =
+                limited_deserialize::<stake::instruction::StakeInstruction>(&instruction.data)
+            {
+                writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
+                raw = false;
+            }
+        } else if program_pubkey == &solana_sdk::system_program::id() {
+            if let Ok(system_instruction) = limited_deserialize::<
+                solana_sdk::system_instruction::SystemInstruction,
+            >(&instruction.data)
+            {
+                writeln!(w, "{}  {:?}", prefix, system_instruction)?;
+                raw = false;
+            }
+        } else if is_memo_program(program_pubkey) {
+            if let Ok(s) = std::str::from_utf8(&instruction.data) {
+                writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
+                raw = false;
+            }
         }
     }
 
@@ -368,6 +457,30 @@ fn write_instruction<'a, W: io::Write>(
         writeln!(w, "{}  Data: {:?}", prefix, instruction.data)?;
     }
 
+    Ok(())
+}
+
+fn write_address_table_lookups<W: io::Write>(
+    w: &mut W,
+    address_table_lookups: &[MessageAddressTableLookup],
+    prefix: &str,
+) -> io::Result<()> {
+    for (lookup_index, lookup) in address_table_lookups.iter().enumerate() {
+        writeln!(w, "{}Address Table Lookup {}", prefix, lookup_index,)?;
+        writeln!(w, "{}  Table Account: {}", prefix, lookup.account_key,)?;
+        writeln!(
+            w,
+            "{}  Writable Indexes: {:?}",
+            prefix,
+            &lookup.writable_indexes[..],
+        )?;
+        writeln!(
+            w,
+            "{}  Readonly Indexes: {:?}",
+            prefix,
+            &lookup.readonly_indexes[..],
+        )?;
+    }
     Ok(())
 }
 
@@ -480,7 +593,7 @@ fn write_log_messages<W: io::Write>(
 }
 
 pub fn println_transaction(
-    transaction: &Transaction,
+    transaction: &VersionedTransaction,
     transaction_status: Option<&UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
@@ -506,7 +619,7 @@ pub fn println_transaction(
 
 pub fn writeln_transaction(
     f: &mut dyn fmt::Write,
-    transaction: &Transaction,
+    transaction: &VersionedTransaction,
     transaction_status: Option<&UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
@@ -552,26 +665,59 @@ mod test {
     use {
         super::*,
         solana_sdk::{
-            message::{v0::LoadedAddresses, Message as LegacyMessage, MessageHeader},
+            message::{
+                v0::{self, LoadedAddresses},
+                Message as LegacyMessage, MessageHeader, VersionedMessage,
+            },
             pubkey::Pubkey,
             signature::{Keypair, Signer},
+            transaction::Transaction,
         },
         solana_transaction_status::{Reward, RewardType, TransactionStatusMeta},
         std::io::BufWriter,
     };
 
-    fn test_keypair() -> Keypair {
+    fn new_test_keypair() -> Keypair {
         let secret = ed25519_dalek::SecretKey::from_bytes(&[0u8; 32]).unwrap();
         let public = ed25519_dalek::PublicKey::from(&secret);
         let keypair = ed25519_dalek::Keypair { secret, public };
         Keypair::from_bytes(&keypair.to_bytes()).unwrap()
     }
 
-    #[test]
-    fn test_write_transaction() {
-        let keypair = test_keypair();
+    fn new_test_v0_transaction() -> VersionedTransaction {
+        let keypair = new_test_keypair();
         let account_key = Pubkey::new_from_array([1u8; 32]);
-        let transaction = Transaction::new(
+        let address_table_key = Pubkey::new_from_array([2u8; 32]);
+        VersionedTransaction::try_new(
+            VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 1,
+                },
+                recent_blockhash: Hash::default(),
+                account_keys: vec![keypair.pubkey(), account_key],
+                address_table_lookups: vec![MessageAddressTableLookup {
+                    account_key: address_table_key,
+                    writable_indexes: vec![0],
+                    readonly_indexes: vec![1],
+                }],
+                instructions: vec![CompiledInstruction::new_from_raw_parts(
+                    3,
+                    vec![],
+                    vec![1, 2],
+                )],
+            }),
+            &[&keypair],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_write_legacy_transaction() {
+        let keypair = new_test_keypair();
+        let account_key = Pubkey::new_from_array([1u8; 32]);
+        let transaction = VersionedTransaction::from(Transaction::new(
             &[&keypair],
             LegacyMessage {
                 header: MessageHeader {
@@ -584,7 +730,7 @@ mod test {
                 instructions: vec![CompiledInstruction::new_from_raw_parts(1, vec![], vec![0])],
             },
             Hash::default(),
-        );
+        ));
 
         let sigverify_status = CliSignatureVerificationStatus::verify_transaction(&transaction);
         let meta = TransactionStatusMeta {
@@ -625,6 +771,7 @@ mod test {
         assert_eq!(
             output,
             r#"Block Time: 2021-08-10T22:16:31Z
+Version: legacy
 Recent Blockhash: 11111111111111111111111111111111
 Signature 0: 5pkjrE4VBa3Bu9CMKXgh1U345cT1gGo8QBVRTzHAo6gHeiPae5BTbShP15g6NgqRMNqu8Qrhph1ATmrfC1Ley3rx (pass)
 Account 0: srw- 4zvwRjXUKGfvwnParsHAS3HuSVzV5cA4McphgmoCtajS (fee payer)
@@ -642,6 +789,85 @@ Log Messages:
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi        rent        -◎0.000000100     ◎0.000009900       \0
+"#.replace("\\0", "") // replace marker used to subvert trailing whitespace linter on CI
+        );
+    }
+
+    #[test]
+    fn test_write_v0_transaction() {
+        let versioned_tx = new_test_v0_transaction();
+        let sigverify_status = CliSignatureVerificationStatus::verify_transaction(&versioned_tx);
+        let address_table_entry1 = Pubkey::new_from_array([3u8; 32]);
+        let address_table_entry2 = Pubkey::new_from_array([4u8; 32]);
+        let loaded_addresses = LoadedAddresses {
+            writable: vec![address_table_entry1],
+            readonly: vec![address_table_entry2],
+        };
+        let meta = TransactionStatusMeta {
+            status: Ok(()),
+            fee: 5000,
+            pre_balances: vec![5000, 10_000, 15_000, 20_000],
+            post_balances: vec![0, 10_000, 14_900, 20_000],
+            inner_instructions: None,
+            log_messages: Some(vec!["Test message".to_string()]),
+            pre_token_balances: None,
+            post_token_balances: None,
+            rewards: Some(vec![Reward {
+                pubkey: address_table_entry1.to_string(),
+                lamports: -100,
+                post_balance: 14_900,
+                reward_type: Some(RewardType::Rent),
+                commission: None,
+            }]),
+            loaded_addresses,
+        };
+
+        let output = {
+            let mut write_buffer = BufWriter::new(Vec::new());
+            write_transaction(
+                &mut write_buffer,
+                &versioned_tx,
+                Some(&meta.into()),
+                "",
+                Some(&sigverify_status),
+                Some(1628633791),
+                CliTimezone::Utc,
+            )
+            .unwrap();
+            let bytes = write_buffer.into_inner().unwrap();
+            String::from_utf8(bytes).unwrap()
+        };
+
+        assert_eq!(
+            output,
+            r#"Block Time: 2021-08-10T22:16:31Z
+Version: 0
+Recent Blockhash: 11111111111111111111111111111111
+Signature 0: 5iEy3TT3ZhTA1NkuCY8GrQGNVY8d5m1bpjdh5FT3Ca4Py81fMipAZjafDuKJKrkw5q5UAAd8oPcgZ4nyXpHt4Fp7 (pass)
+Account 0: srw- 4zvwRjXUKGfvwnParsHAS3HuSVzV5cA4McphgmoCtajS (fee payer)
+Account 1: -r-- 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi
+Account 2: -rw- Unknown Address (uses lookup 0 and index 0)
+Account 3: -r-x Unknown Address (uses lookup 0 and index 1)
+Instruction 0
+  Program:   Unknown Address (uses lookup 0 and index 1) (3)
+  Account 0: 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (1)
+  Account 1: Unknown Address (uses lookup 0 and index 0) (2)
+  Data: []
+Address Table Lookup 0
+  Table Account: 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR
+  Writable Indexes: [0]
+  Readonly Indexes: [1]
+Status: Ok
+  Fee: ◎0.000005
+  Account 0 balance: ◎0.000005 -> ◎0
+  Account 1 balance: ◎0.00001
+  Account 2 balance: ◎0.000015 -> ◎0.0000149
+  Account 3 balance: ◎0.00002
+Log Messages:
+  Test message
+Rewards:
+  Address                                            Type        Amount            New Balance         \0
+  CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8        rent        -◎0.000000100     ◎0.000014900       \0
 "#.replace("\\0", "") // replace marker used to subvert trailing whitespace linter on CI
         );
     }
