@@ -5,7 +5,7 @@ use {
         ser::{Serialize, Serializer},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::{Account, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -57,13 +57,13 @@ impl VoteAccount {
     }
 
     pub(crate) fn lamports(&self) -> u64 {
-        self.account().lamports
+        self.account().lamports()
     }
 
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(&inner.account.data);
+            let vote_state = VoteState::deserialize(inner.account.data());
             *inner.vote_state.write().unwrap() = vote_state;
         });
         inner.vote_state.read().unwrap()
@@ -405,7 +405,7 @@ mod tests {
     fn test_vote_account() {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
-        let lamports = account.lamports;
+        let lamports = account.lamports();
         let vote_account = VoteAccount::from(account);
         assert_eq!(lamports, vote_account.lamports());
         assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
