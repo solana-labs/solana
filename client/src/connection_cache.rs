@@ -89,11 +89,9 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sy
 mod tests {
     use {
         crate::connection_cache::{get_connection, CONNECTION_MAP, MAX_CONNECTIONS},
-        std::net::SocketAddr,
-        rand::{
-            Rng, SeedableRng,
-        },
+        rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
+        std::net::SocketAddr,
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -101,7 +99,7 @@ mod tests {
         let b = rng.gen_range(1, 255);
         let c = rng.gen_range(1, 255);
         let d = rng.gen_range(1, 255);
-    
+
         let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
 
         addr_str.parse().expect("Invalid address")
