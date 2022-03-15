@@ -12,6 +12,8 @@ use {
     },
 };
 
+const CHUNK_SIZE: usize = 512; // Size of chunk just needs to fit into tx
+
 pub fn load_program<T: Client>(
     bank_client: &T,
     from_keypair: &Keypair,
@@ -39,7 +41,7 @@ pub fn load_program<T: Client>(
         )
         .unwrap();
 
-    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let chunk_size = CHUNK_SIZE;
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let instruction =
@@ -91,7 +93,7 @@ pub fn load_buffer_account<T: Client>(
         )
         .unwrap();
 
-    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let chunk_size = CHUNK_SIZE;
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let message = Message::new(
