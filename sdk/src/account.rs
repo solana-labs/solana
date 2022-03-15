@@ -4,6 +4,7 @@ use {
         lamports::LamportsError,
         pubkey::Pubkey,
     },
+    serde::ser::{Serialize, Serializer},
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
@@ -16,7 +17,7 @@ use {
 /// An Account with data that is stored on chain
 #[repr(C)]
 #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// lamports in the account
@@ -30,6 +31,64 @@ pub struct Account {
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,
+}
+
+// mod because we need 'Account' below to have the name 'Account' to match expected serialization
+mod account_serialize {
+    use {
+        crate::{account::ReadableAccount, clock::Epoch, pubkey::Pubkey},
+        serde::{ser::Serializer, Serialize},
+    };
+    #[repr(C)]
+    #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
+    #[derive(Serialize, AbiExample)]
+    #[serde(rename_all = "camelCase")]
+    struct Account<'a> {
+        lamports: u64,
+        #[serde(with = "serde_bytes")]
+        // a ref so we don't have to make a copy just to serialize this
+        data: &'a Vec<u8>,
+        // can't be &pubkey because abi example doesn't support it
+        owner: Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+    }
+
+    pub fn serialize_account<S>(
+        account: &(impl ReadableAccount + Serialize),
+        data: &Vec<u8>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let temp = Account {
+            lamports: account.lamports(),
+            data,
+            owner: *account.owner(),
+            executable: account.executable(),
+            rent_epoch: account.rent_epoch(),
+        };
+        temp.serialize(serializer)
+    }
+}
+
+impl Serialize for Account {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        crate::account::account_serialize::serialize_account(self, &self.data, serializer)
+    }
+}
+
+impl Serialize for AccountSharedData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        crate::account::account_serialize::serialize_account(self, &self.data, serializer)
+    }
 }
 
 /// An Account with data that is stored on chain

@@ -1,5 +1,6 @@
 use {
     crate::abi_digester::{AbiDigester, DigestError, DigestResult},
+    lazy_static::lazy_static,
     log::*,
     serde::Serialize,
     std::any::type_name,
@@ -399,6 +400,18 @@ impl<T: AbiExample> AbiExample for Vec<T> {
     fn example() -> Self {
         info!("AbiExample for (Vec<T>): {}", type_name::<Self>());
         vec![T::example()]
+    }
+}
+
+lazy_static! {
+    /// we need &Vec<u8>, so we need something with a static lifetime
+    static ref VEC_U8: Vec<u8> = vec![u8::default()];
+}
+
+impl AbiExample for &Vec<u8> {
+    fn example() -> Self {
+        info!("AbiExample for (&Vec<T>): {}", type_name::<Self>());
+        &*VEC_U8
     }
 }
 
