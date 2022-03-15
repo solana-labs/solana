@@ -5911,7 +5911,7 @@ impl Bank {
         mut debug_verify: bool,
         is_startup: bool,
     ) -> Hash {
-        let slots_per_epoch = Some(self.epoch_schedule().slots_per_epoch);
+        let slots_per_epoch = Some(self.epoch_schedule().get_slots_in_epoch(self.epoch));
         let (hash, total_lamports) = self
             .rc
             .accounts
