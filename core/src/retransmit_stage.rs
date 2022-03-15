@@ -448,6 +448,7 @@ impl RetransmitStage {
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
         duplicate_slots_sender: Sender<Slot>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
+        poh_recorder: Arc<Mutex<PohRecorder>>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = unbounded();
 
@@ -507,6 +508,7 @@ impl RetransmitStage {
             completed_data_sets_sender,
             duplicate_slots_sender,
             ancestor_hashes_replay_update_receiver,
+            poh_recorder.clone(),
         );
 
         Self {

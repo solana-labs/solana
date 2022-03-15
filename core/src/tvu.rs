@@ -211,6 +211,7 @@ impl Tvu {
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
             ancestor_hashes_replay_update_receiver,
+            poh_recoder.clone(),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();

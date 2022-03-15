@@ -28,6 +28,7 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_debug, datapoint_error},
+    solana_poh::poh_recorder::PohRecorder,
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
@@ -1225,6 +1226,7 @@ impl Blockstore {
         retransmit_sender: Option<&Sender<Vec<Shred>>>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
+        poh_recorder: &Mutex<PohRecorder>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
@@ -1269,6 +1271,7 @@ impl Blockstore {
                         handle_duplicate,
                         leader_schedule,
                         shred_source,
+                        poh_recorder,
                     ) {
                         Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
                         Err(InsertDataShredError::InvalidShred) => {
@@ -1335,6 +1338,7 @@ impl Blockstore {
                         &handle_duplicate,
                         leader_schedule,
                         ShredSource::Recovered,
+                        poh_recorder,
                     ) {
                         Err(InsertDataShredError::Exists) => {
                             metrics.num_recovered_exists += 1;
@@ -1450,6 +1454,7 @@ impl Blockstore {
         shreds: Vec<Shred>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
+        poh_recorder: &Mutex<PohRecorder>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)> {
         let shreds_len = shreds.len();
         self.insert_shreds_handle_duplicate(
@@ -1460,6 +1465,7 @@ impl Blockstore {
             None,    // retransmit-sender
             &|_| {}, // handle-duplicates
             &mut BlockstoreInsertionMetrics::default(),
+            poh_recorder,
         )
     }
 
@@ -1652,6 +1658,7 @@ impl Blockstore {
         handle_duplicate: &F,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
+        poh_recorder: &Mutex<PohRecorder>,
     ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError>
     where
         F: Fn(Shred),
@@ -1713,6 +1720,7 @@ impl Blockstore {
             &shred,
             write_batch,
             shred_source,
+            poh_recorder,
         )?;
         just_inserted_shreds.insert(shred.id(), shred);
         index_meta_working_set_entry.did_insert_occur = true;
@@ -1915,6 +1923,7 @@ impl Blockstore {
         shred: &Shred,
         write_batch: &mut WriteBatch,
         shred_source: ShredSource,
+        poh_recorder: &Mutex<PohRecorder>,
     ) -> Result<Vec<CompletedDataSetInfo>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
@@ -1996,13 +2005,23 @@ impl Blockstore {
                     (0, 0)
                 }
             };
+
+            let curr_ts = solana_sdk::timing::timestamp();
+            let slot_poh_ts = poh_recorder
+                .lock()
+                .unwrap()
+                .slot_times
+                .get(slot)
+                .map_or((curr_ts, curr_ts), |t| t);
             datapoint_info!(
                 "shred_insert_is_full",
                 (
                     "total_time_ms",
-                    solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
+                    curr_ts - slot_meta.first_shred_timestamp,
                     i64
                 ),
+                ("time_since_slot_start_ms", curr_ts - slot_poh_ts.0, i64),
+                ("time_since_slot_end_ms", curr_ts - slot_poh_ts.1, i64),
                 ("slot", slot_meta.slot, i64),
                 (
                     "last_index",

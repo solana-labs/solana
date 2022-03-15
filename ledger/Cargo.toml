@@ -47,6 +47,7 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.3" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.10.3" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.3" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.3" }
+solana-poh = { path = "../poh", version = "=1.10.3" }
 tempfile = "3.3.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }

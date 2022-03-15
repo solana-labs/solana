@@ -29,6 +29,7 @@ use {
     },
     std::{
         cmp,
+        collections::HashMap,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex,
@@ -228,6 +229,7 @@ pub struct PohRecorder {
     last_metric: Instant,
     record_sender: Sender<Record>,
     pub is_exited: Arc<AtomicBool>,
+    pub slot_timestamps: HashMap<Slot, (u64, u64)>,
 }
 
 impl PohRecorder {
@@ -314,6 +316,12 @@ impl PohRecorder {
         self.tick_height
     }
 
+    pub fn bank_end(&self) -> bool {
+        self.working_bank
+            .as_ref()
+            .map_or(false, |w| w.max_tick_height == self.tick_height)
+    }
+
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
     }
@@ -360,6 +368,10 @@ impl PohRecorder {
 
     pub fn start_slot(&self) -> Slot {
         self.start_bank.slot()
+    }
+
+    pub fn working_slot(&self) -> Option<Slot> {
+        self.working_bank.as_ref().map(|w| w.bank.slot())
     }
 
     /// Returns if the leader slot has been reached along with the current poh
@@ -444,7 +456,6 @@ impl PohRecorder {
             blockhash,
             reset_bank.slot()
         );
-
         std::mem::swap(&mut cache, &mut self.tick_cache);
 
         self.start_bank = reset_bank;
@@ -472,6 +483,9 @@ impl PohRecorder {
         // TODO: adjust the working_bank.start time based on number of ticks
         // that have already elapsed based on current tick height.
         let _ = self.flush_cache(false);
+
+        let bank_start_ts = solana_sdk::timing::timestamp();
+        self.slot_timestamps.insert(bank.slot(), (bank_start_ts, 0));
     }
 
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height
@@ -559,6 +573,13 @@ impl PohRecorder {
         if let Some(poh_entry) = poh_entry {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
+
+            if self.bank_end() && self.has_bank() {
+                let slot = self.working_slot().unwrap();
+                if let Some(x) = self.slot_timestamps.get_mut(&slot) {
+                    x.1 = solana_sdk::timing::timestamp();
+                }
+            }
 
             if self
                 .leader_first_tick_height_including_grace_ticks
@@ -755,6 +776,7 @@ impl PohRecorder {
                 last_metric: Instant::now(),
                 record_sender,
                 is_exited,
+                slot_timestamps: HashMap::new(),
             },
             receiver,
             record_receiver,
