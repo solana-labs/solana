@@ -16,8 +16,8 @@ and received the Message's instruction data inside, and also the index of the cu
 Two helper functions to extract this data can be used:
 
 ```
-fn load_current_index(instruction_data: &[u8]) -> u16;
-fn load_instruction_at(instruction_index: usize, instruction_data: &[u8]) -> Result<Instruction>;
+fn load_current_index_checked(instruction_data: &[u8]) -> u16;
+fn load_instruction_at_checked(instruction_index: usize, instruction_sysvar_account_info: &AccountInfo) -> Result<Instruction>;
 ```
 
 The runtime will recognize this special instruction, serialize the Message instruction data
