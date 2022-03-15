@@ -1,3 +1,30 @@
+//! DoS tool
+//!
+//! Sends requests to cluster in a loop to measure
+//! the effect of ihandling these requests on the performance of the cluster.
+//!
+//! * `mode` argument defines interface to use (e.g. rpc, tvu, tpu)
+//! * `data-type` argument specifies the type of the request.
+//! It takes various values, some of them makes sense with particular `mode` value (e.g. `get-account-info` is valid only with `mode=rpc`).
+//!
+//! Most of the options are provided for `data-type = transaction`.
+//! These options allow to compose transaction whcih fails at
+//! a particular stage of the processing pipeline.
+//!
+//! Example 1: send random transactions to TPU
+//! ```bash
+//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
+//! ```
+//!
+//! Example 2: send unique transactions with valid hashblock to TPU
+//! ```bash
+//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
+//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu \
+//!     --data-type transaction --generate-unique-transactions
+//!     --payer config/bootstrap-validator/identity.json \
+//!     --generate-valid-blockhash
+//! ```
+//!
 #![allow(clippy::integer_arithmetic)]
 use {
     clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
