@@ -17,7 +17,7 @@ use {
     },
     bip39::{Language, Mnemonic, Seed},
     clap::ArgMatches,
-    rpassword::prompt_password_stderr,
+    rpassword::prompt_password,
     solana_remote_wallet::{
         locator::{Locator as RemoteWalletLocator, LocatorError as RemoteWalletLocatorError},
         remote_keypair::generate_remote_keypair,
@@ -945,9 +945,9 @@ pub const SKIP_SEED_PHRASE_VALIDATION_ARG: ArgConstant<'static> = ArgConstant {
 
 /// Prompts user for a passphrase and then asks for confirmirmation to check for mistakes
 pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> {
-    let passphrase = prompt_password_stderr(prompt)?;
+    let passphrase = prompt_password(prompt)?;
     if !passphrase.is_empty() {
-        let confirmed = rpassword::prompt_password_stderr("Enter same passphrase again: ")?;
+        let confirmed = rpassword::prompt_password("Enter same passphrase again: ")?;
         if confirmed != passphrase {
             return Err("Passphrases did not match".into());
         }
@@ -1055,7 +1055,7 @@ pub fn keypair_from_seed_phrase(
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    let seed_phrase = prompt_password_stderr(&format!("[{}] seed phrase: ", keypair_name))?;
+    let seed_phrase = prompt_password(&format!("[{}] seed phrase: ", keypair_name))?;
     let seed_phrase = seed_phrase.trim();
     let passphrase_prompt = format!(
         "[{}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
