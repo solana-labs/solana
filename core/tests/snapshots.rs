@@ -241,8 +241,8 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
-        let (s, snapshot_request_receiver) = unbounded();
-        let request_sender = AbsRequestSender::new(Some(s));
+        let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+        let request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
@@ -585,7 +585,7 @@ mod tests {
                 Slot::MAX,
             );
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
-            let request_sender = AbsRequestSender::new(Some(snapshot_sender));
+            let request_sender = AbsRequestSender::new(snapshot_sender);
             for _ in 0..num_set_roots {
                 for _ in 0..*add_root_interval {
                     let new_slot = current_bank.slot() + 1;
@@ -680,7 +680,7 @@ mod tests {
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
+        let request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
@@ -918,7 +918,7 @@ mod tests {
             bank.set_callback(Some(Box::new(callback.clone())));
         }
 
-        let abs_request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = Some(SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
