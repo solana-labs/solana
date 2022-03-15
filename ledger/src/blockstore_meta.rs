@@ -26,8 +26,6 @@ pub struct SlotMeta {
     pub received: u64,
     // The timestamp of the first time a shred was added for this slot
     pub first_shred_timestamp: u64,
-    // The timestamp of the last shred was added for this slot
-    pub last_shred_timestamp: u64,
     // The index of the shred that is flagged as the last shred for this slot.
     // None until the shred with LAST_SHRED_IN_SLOT flag is received.
     #[serde(with = "serde_compat")]

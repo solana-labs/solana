@@ -2003,11 +2003,6 @@ impl Blockstore {
                     solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
                     i64
                 ),
-                (
-                    "time_since_last_shred_ms",
-                    solana_sdk::timing::timestamp() - slot_meta.last_shred_timestamp,
-                    i64
-                ),
                 ("slot", slot_meta.slot, i64),
                 (
                     "last_index",
@@ -3685,8 +3680,6 @@ fn update_slot_meta(
     // set it to this shred index
     if is_last_in_slot && slot_meta.last_index.is_none() {
         slot_meta.last_index = Some(u64::from(index));
-        let slot_time_elapsed = u64::from(reference_tick) * 1000 / DEFAULT_TICKS_PER_SECOND;
-        slot_meta.last_shred_timestamp = timestamp() - slot_time_elapsed;
     }
     update_completed_data_indexes(
         is_last_in_slot || is_last_in_data,
