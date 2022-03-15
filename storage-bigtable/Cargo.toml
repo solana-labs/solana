@@ -28,7 +28,7 @@ solana-storage-proto = { path = "../storage-proto", version = "=1.10.3" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.3" }
 thiserror = "1.0"
 tonic = { version = "0.6.2", features = ["tls", "transport"] }
-zstd = "0.11.0"
+zstd = "0.11.1"
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
 # declare it here as well to activate the "vendored" feature that builds OpenSSL
