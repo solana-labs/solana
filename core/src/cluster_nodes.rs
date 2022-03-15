@@ -1,5 +1,9 @@
 use {
-    crate::{broadcast_stage::BroadcastStage, retransmit_stage::RetransmitStage},
+    crate::{
+        broadcast_stage::BroadcastStage,
+        find_packet_sender_stake_stage::FindPacketSenderStakeStage,
+        retransmit_stage::RetransmitStage,
+    },
     itertools::Itertools,
     lru::LruCache,
     rand::{seq::SliceRandom, Rng, SeedableRng},
@@ -28,7 +32,7 @@ use {
         collections::HashMap,
         iter::repeat_with,
         marker::PhantomData,
-        net::SocketAddr,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         ops::Deref,
         sync::{Arc, Mutex},
         time::{Duration, Instant},
@@ -313,6 +317,19 @@ impl ClusterNodes<RetransmitStage> {
     }
 }
 
+impl ClusterNodes<FindPacketSenderStakeStage> {
+    pub(crate) fn get_ip_to_stakes(&self) -> HashMap<IpAddr, u64> {
+        self.compat_index
+            .iter()
+            .filter_map(|(_, i)| {
+                let node = &self.nodes[*i];
+                let contact_info = node.contact_info()?;
+                Some((contact_info.tvu.ip(), node.stake))
+            })
+            .collect()
+    }
+}
+
 pub fn new_cluster_nodes<T: 'static>(
     cluster_info: &ClusterInfo,
     stakes: &HashMap<Pubkey, u64>,
@@ -488,9 +505,20 @@ pub fn make_test_cluster<R: Rng>(
     ClusterInfo,
 ) {
     let (unstaked_numerator, unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
-    let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(rng, None))
-        .take(num_nodes)
-        .collect();
+    let mut ip_addr_octet: usize = 0;
+    let mut nodes: Vec<_> = repeat_with(|| {
+        let mut contact_info = ContactInfo::new_rand(rng, None);
+        contact_info.tvu.set_ip(IpAddr::V4(Ipv4Addr::new(
+            127,
+            0,
+            0,
+            (ip_addr_octet % 256) as u8,
+        )));
+        ip_addr_octet += 1;
+        contact_info
+    })
+    .take(num_nodes)
+    .collect();
     nodes.shuffle(rng);
     let this_node = nodes[0].clone();
     let mut stakes: HashMap<Pubkey, u64> = nodes
@@ -684,5 +712,36 @@ mod tests {
             let peer = cluster_nodes.get_broadcast_peer(shred_seed).unwrap();
             assert_eq!(*peer, peers[index]);
         }
+    }
+
+    #[test]
+    fn test_cluster_nodes_transaction_weight() {
+        solana_logger::setup();
+        let mut rng = rand::thread_rng();
+        let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 14, None);
+        let cluster_nodes = new_cluster_nodes::<FindPacketSenderStakeStage>(&cluster_info, &stakes);
+
+        // All nodes with contact-info should be in the index.
+        assert_eq!(cluster_nodes.compat_index.len(), nodes.len());
+        // Staked nodes with no contact-info should be included.
+        assert!(cluster_nodes.nodes.len() > nodes.len());
+
+        let ip_to_stake = cluster_nodes.get_ip_to_stakes();
+
+        // Only staked nodes with contact_info should be in the ip_to_stake
+        let stacked_nodes_with_contact_info: HashMap<_, _> = stakes
+            .iter()
+            .filter_map(|(pubkey, stake)| {
+                let node = nodes.iter().find(|node| node.id == *pubkey)?;
+                Some((node.tvu.ip(), stake))
+            })
+            .collect();
+        ip_to_stake.iter().for_each(|(ip, stake)| {
+            // ignoring the 0 staked, because non-stacked nodes are defaulted into 0 stake.
+            if *stake > 0 {
+                let expected_stake = stacked_nodes_with_contact_info.get(ip).unwrap();
+                assert_eq!(stake, *expected_stake);
+            }
+        });
     }
 }
