@@ -1,13 +1,13 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
-name = "solana-accountsdb-plugin-manager"
-description = "The Solana AccountsDb plugin manager."
+name = "solana-geyser-plugin-manager"
+description = "The Solana Geyser plugin manager."
 version = "1.10.3"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-validator"
+documentation = "https://docs.rs/solana-geyser-plugin-manager"
 
 [dependencies]
 bs58 = "0.4.0"
@@ -16,7 +16,7 @@ json5 = "0.4.1"
 libloading = "0.7.3"
 log = "0.4.11"
 serde_json = "1.0.79"
-solana-accountsdb-plugin-interface = { path = "../accountsdb-plugin-interface", version = "=1.10.3" }
+solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.10.3" }
 solana-measure = { path = "../measure", version = "=1.10.3" }
 solana-metrics = { path = "../metrics", version = "=1.10.3" }
 solana-rpc = { path = "../rpc", version = "=1.10.3" }

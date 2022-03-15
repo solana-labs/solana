@@ -1,7 +1,7 @@
 use {
-    crate::accountsdb_plugin_manager::AccountsDbPluginManager,
+    crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
-    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::SlotStatus,
+    solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus,
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::clock::Slot,
@@ -22,7 +22,7 @@ pub trait SlotStatusNotifierInterface {
 pub type SlotStatusNotifier = Arc<RwLock<dyn SlotStatusNotifierInterface + Sync + Send>>;
 
 pub struct SlotStatusNotifierImpl {
-    plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
 }
 
 impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
@@ -40,7 +40,7 @@ impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
 }
 
 impl SlotStatusNotifierImpl {
-    pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
         Self { plugin_manager }
     }
 
@@ -51,7 +51,7 @@ impl SlotStatusNotifierImpl {
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
-            let mut measure = Measure::start("accountsdb-plugin-update-slot");
+            let mut measure = Measure::start("geyser-plugin-update-slot");
             match plugin.update_slot_status(slot, parent, slot_status) {
                 Err(err) => {
                     error!(
@@ -71,7 +71,7 @@ impl SlotStatusNotifierImpl {
             }
             measure.stop();
             inc_new_counter_debug!(
-                "accountsdb-plugin-update-slot-us",
+                "geyser-plugin-update-slot-us",
                 measure.as_us() as usize,
                 1000,
                 1000

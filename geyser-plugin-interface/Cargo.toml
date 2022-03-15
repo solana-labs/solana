@@ -1,13 +1,13 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
-name = "solana-accountsdb-plugin-interface"
-description = "The Solana AccountsDb plugin interface."
+name = "solana-geyser-plugin-interface"
+description = "The Solana Geyser plugin interface."
 version = "1.10.3"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-accountsdb-plugin-interface"
+documentation = "https://docs.rs/solana-geyser-plugin-interface"
 
 [dependencies]
 log = "0.4.11"

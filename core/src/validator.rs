@@ -22,8 +22,8 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
-    solana_accountsdb_plugin_manager::accountsdb_plugin_service::AccountsDbPluginService,
     solana_entry::poh::compute_hash_time_ns,
+    solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -119,7 +119,7 @@ pub struct ValidatorConfig {
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
-    pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
+    pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -181,7 +181,7 @@ impl Default for ValidatorConfig {
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             accountsdb_repl_service_config: None,
-            accountsdb_plugin_config_files: None,
+            geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
@@ -301,7 +301,7 @@ pub struct Validator {
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
-    accountsdb_plugin_service: Option<AccountsDbPluginService>,
+    geyser_plugin_service: Option<GeyserPluginService>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -340,18 +340,16 @@ impl Validator {
 
         let mut bank_notification_senders = Vec::new();
 
-        let accountsdb_plugin_service =
-            if let Some(accountsdb_plugin_config_files) = &config.accountsdb_plugin_config_files {
+        let geyser_plugin_service =
+            if let Some(geyser_plugin_config_files) = &config.geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
-                let result = AccountsDbPluginService::new(
-                    confirmed_bank_receiver,
-                    accountsdb_plugin_config_files,
-                );
+                let result =
+                    GeyserPluginService::new(confirmed_bank_receiver, geyser_plugin_config_files);
                 match result {
-                    Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
+                    Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
-                        error!("Failed to load the AccountsDb plugin: {:?}", err);
+                        error!("Failed to load the Geyser plugin: {:?}", err);
                         abort();
                     }
                 }
@@ -425,29 +423,20 @@ impl Validator {
 
         let accounts_package_channel = unbounded();
 
-        let accounts_update_notifier =
-            accountsdb_plugin_service
-                .as_ref()
-                .and_then(|accountsdb_plugin_service| {
-                    accountsdb_plugin_service.get_accounts_update_notifier()
-                });
+        let accounts_update_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_accounts_update_notifier());
 
-        let transaction_notifier =
-            accountsdb_plugin_service
-                .as_ref()
-                .and_then(|accountsdb_plugin_service| {
-                    accountsdb_plugin_service.get_transaction_notifier()
-                });
+        let transaction_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_transaction_notifier());
 
-        let block_metadata_notifier =
-            accountsdb_plugin_service
-                .as_ref()
-                .and_then(|accountsdb_plugin_service| {
-                    accountsdb_plugin_service.get_block_metadata_notifier()
-                });
+        let block_metadata_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
         info!(
-            "AccountsDb plugin: accounts_update_notifier: {} transaction_notifier: {}",
+            "Geyser plugin: accounts_update_notifier: {} transaction_notifier: {}",
             accounts_update_notifier.is_some(),
             transaction_notifier.is_some()
         );
@@ -949,7 +938,7 @@ impl Validator {
             cluster_info,
             bank_forks,
             accountsdb_repl_service,
-            accountsdb_plugin_service,
+            geyser_plugin_service,
         }
     }
 
@@ -1071,10 +1060,8 @@ impl Validator {
                 .expect("accountsdb_repl_service");
         }
 
-        if let Some(accountsdb_plugin_service) = self.accountsdb_plugin_service {
-            accountsdb_plugin_service
-                .join()
-                .expect("accountsdb_plugin_service");
+        if let Some(geyser_plugin_service) = self.geyser_plugin_service {
+            geyser_plugin_service.join().expect("geyser_plugin_service");
         }
     }
 }

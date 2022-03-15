@@ -33,13 +33,13 @@ rayon = "1.5.1"
 retain_mut = "0.1.7"
 serde = "1.0.136"
 serde_derive = "1.0.103"
-solana-accountsdb-plugin-manager = { path = "../accountsdb-plugin-manager", version = "=1.10.3" }
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.3" }
 solana-bloom = { path = "../bloom", version = "=1.10.3" }
 solana-client = { path = "../client", version = "=1.10.3" }
 solana-entry = { path = "../entry", version = "=1.10.3" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.3" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.3" }
+solana-geyser-plugin-manager = { path = "../geyser-plugin-manager", version = "=1.10.3" }
 solana-gossip = { path = "../gossip", version = "=1.10.3" }
 solana-ledger = { path = "../ledger", version = "=1.10.3" }
 solana-measure = { path = "../measure", version = "=1.10.3" }

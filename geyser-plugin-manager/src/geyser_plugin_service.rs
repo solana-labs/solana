@@ -1,11 +1,10 @@
 use {
     crate::{
         accounts_update_notifier::AccountsUpdateNotifierImpl,
-        accountsdb_plugin_manager::AccountsDbPluginManager,
         block_metadata_notifier::BlockMetadataNotifierImpl,
         block_metadata_notifier_interface::BlockMetadataNotifierLock,
-        slot_status_notifier::SlotStatusNotifierImpl, slot_status_observer::SlotStatusObserver,
-        transaction_notifier::TransactionNotifierImpl,
+        geyser_plugin_manager::GeyserPluginManager, slot_status_notifier::SlotStatusNotifierImpl,
+        slot_status_observer::SlotStatusObserver, transaction_notifier::TransactionNotifierImpl,
     },
     crossbeam_channel::Receiver,
     log::*,
@@ -25,7 +24,7 @@ use {
 };
 
 #[derive(Error, Debug)]
-pub enum AccountsdbPluginServiceError {
+pub enum GeyserPluginServiceError {
     #[error("Cannot open the the plugin config file")]
     CannotOpenConfigFile(String),
 
@@ -45,41 +44,41 @@ pub enum AccountsdbPluginServiceError {
     PluginLoadError(String),
 }
 
-/// The service managing the AccountsDb plugin workflow.
-pub struct AccountsDbPluginService {
+/// The service managing the Geyser plugin workflow.
+pub struct GeyserPluginService {
     slot_status_observer: Option<SlotStatusObserver>,
-    plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
 }
 
-impl AccountsDbPluginService {
-    /// Creates and returns the AccountsDbPluginService.
+impl GeyserPluginService {
+    /// Creates and returns the GeyserPluginService.
     /// # Arguments
     /// * `confirmed_bank_receiver` - The receiver for confirmed bank notification
-    /// * `accountsdb_plugin_config_file` - The config file path for the plugin. The
+    /// * `geyser_plugin_config_file` - The config file path for the plugin. The
     ///    config file controls the plugin responsible
     ///    for transporting the data to external data stores. It is defined in JSON format.
     ///    The `libpath` field should be pointed to the full path of the dynamic shared library
-    ///    (.so file) to be loaded. The shared library must implement the `AccountsDbPlugin`
+    ///    (.so file) to be loaded. The shared library must implement the `GeyserPlugin`
     ///    trait. And the shared library shall export a `C` function `_create_plugin` which
-    ///    shall create the implementation of `AccountsDbPlugin` and returns to the caller.
+    ///    shall create the implementation of `GeyserPlugin` and returns to the caller.
     ///    The rest of the JSON fields' definition is up to to the concrete plugin implementation
     ///    It is usually used to configure the connection information for the external data store.
 
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
-        accountsdb_plugin_config_files: &[PathBuf],
-    ) -> Result<Self, AccountsdbPluginServiceError> {
+        geyser_plugin_config_files: &[PathBuf],
+    ) -> Result<Self, GeyserPluginServiceError> {
         info!(
-            "Starting AccountsDbPluginService from config files: {:?}",
-            accountsdb_plugin_config_files
+            "Starting GeyserPluginService from config files: {:?}",
+            geyser_plugin_config_files
         );
-        let mut plugin_manager = AccountsDbPluginManager::new();
+        let mut plugin_manager = GeyserPluginManager::new();
 
-        for accountsdb_plugin_config_file in accountsdb_plugin_config_files {
-            Self::load_plugin(&mut plugin_manager, accountsdb_plugin_config_file)?;
+        for geyser_plugin_config_file in geyser_plugin_config_files {
+            Self::load_plugin(&mut plugin_manager, geyser_plugin_config_file)?;
         }
         let account_data_notifications_enabled =
             plugin_manager.account_data_notifications_enabled();
@@ -123,8 +122,8 @@ impl AccountsDbPluginService {
             (None, None)
         };
 
-        info!("Started AccountsDbPluginService");
-        Ok(AccountsDbPluginService {
+        info!("Started GeyserPluginService");
+        Ok(GeyserPluginService {
             slot_status_observer,
             plugin_manager,
             accounts_update_notifier,
@@ -134,57 +133,55 @@ impl AccountsDbPluginService {
     }
 
     fn load_plugin(
-        plugin_manager: &mut AccountsDbPluginManager,
-        accountsdb_plugin_config_file: &Path,
-    ) -> Result<(), AccountsdbPluginServiceError> {
-        let mut file = match File::open(accountsdb_plugin_config_file) {
+        plugin_manager: &mut GeyserPluginManager,
+        geyser_plugin_config_file: &Path,
+    ) -> Result<(), GeyserPluginServiceError> {
+        let mut file = match File::open(geyser_plugin_config_file) {
             Ok(file) => file,
             Err(err) => {
-                return Err(AccountsdbPluginServiceError::CannotOpenConfigFile(format!(
+                return Err(GeyserPluginServiceError::CannotOpenConfigFile(format!(
                     "Failed to open the plugin config file {:?}, error: {:?}",
-                    accountsdb_plugin_config_file, err
+                    geyser_plugin_config_file, err
                 )));
             }
         };
 
         let mut contents = String::new();
         if let Err(err) = file.read_to_string(&mut contents) {
-            return Err(AccountsdbPluginServiceError::CannotReadConfigFile(format!(
+            return Err(GeyserPluginServiceError::CannotReadConfigFile(format!(
                 "Failed to read the plugin config file {:?}, error: {:?}",
-                accountsdb_plugin_config_file, err
+                geyser_plugin_config_file, err
             )));
         }
 
         let result: serde_json::Value = match json5::from_str(&contents) {
             Ok(value) => value,
             Err(err) => {
-                return Err(AccountsdbPluginServiceError::InvalidConfigFileFormat(
-                    format!(
-                        "The config file {:?} is not in a valid Json5 format, error: {:?}",
-                        accountsdb_plugin_config_file, err
-                    ),
-                ));
+                return Err(GeyserPluginServiceError::InvalidConfigFileFormat(format!(
+                    "The config file {:?} is not in a valid Json5 format, error: {:?}",
+                    geyser_plugin_config_file, err
+                )));
             }
         };
 
         let libpath = result["libpath"]
             .as_str()
-            .ok_or(AccountsdbPluginServiceError::LibPathNotSet)?;
+            .ok_or(GeyserPluginServiceError::LibPathNotSet)?;
         let mut libpath = PathBuf::from(libpath);
         if libpath.is_relative() {
-            let config_dir = accountsdb_plugin_config_file.parent().ok_or_else(|| {
-                AccountsdbPluginServiceError::CannotOpenConfigFile(format!(
+            let config_dir = geyser_plugin_config_file.parent().ok_or_else(|| {
+                GeyserPluginServiceError::CannotOpenConfigFile(format!(
                     "Failed to resolve parent of {:?}",
-                    accountsdb_plugin_config_file,
+                    geyser_plugin_config_file,
                 ))
             })?;
             libpath = config_dir.join(libpath);
         }
 
-        let config_file = accountsdb_plugin_config_file
+        let config_file = geyser_plugin_config_file
             .as_os_str()
             .to_str()
-            .ok_or(AccountsdbPluginServiceError::InvalidPluginPath)?;
+            .ok_or(GeyserPluginServiceError::InvalidPluginPath)?;
 
         unsafe {
             let result = plugin_manager.load_plugin(libpath.to_str().unwrap(), config_file);
@@ -193,7 +190,7 @@ impl AccountsDbPluginService {
                     "Failed to load the plugin library: {:?}, error: {:?}",
                     libpath, err
                 );
-                return Err(AccountsdbPluginServiceError::PluginLoadError(msg));
+                return Err(GeyserPluginServiceError::PluginLoadError(msg));
             }
         }
         Ok(())

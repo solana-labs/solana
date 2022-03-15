@@ -1,8 +1,8 @@
 /// Module responsible for notifying plugins of account updates
 use {
-    crate::accountsdb_plugin_manager::AccountsDbPluginManager,
+    crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
-    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
+    solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaAccountInfo, ReplicaAccountInfoVersions,
     },
     solana_measure::measure::Measure,
@@ -19,7 +19,7 @@ use {
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
-    plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
 }
 
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
@@ -30,14 +30,14 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
-        let mut measure_all = Measure::start("accountsdb-plugin-notify-account-restore-all");
-        let mut measure_copy = Measure::start("accountsdb-plugin-copy-stored-account-info");
+        let mut measure_all = Measure::start("geyser-plugin-notify-account-restore-all");
+        let mut measure_copy = Measure::start("geyser-plugin-copy-stored-account-info");
 
         let account = self.accountinfo_from_stored_account_meta(account);
         measure_copy.stop();
 
         inc_new_counter_debug!(
-            "accountsdb-plugin-copy-stored-account-info-us",
+            "geyser-plugin-copy-stored-account-info-us",
             measure_copy.as_us() as usize,
             100000,
             100000
@@ -49,7 +49,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         measure_all.stop();
 
         inc_new_counter_debug!(
-            "accountsdb-plugin-notify-account-restore-all-us",
+            "geyser-plugin-notify-account-restore-all-us",
             measure_all.as_us() as usize,
             100000,
             100000
@@ -63,7 +63,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
-            let mut measure = Measure::start("accountsdb-plugin-end-of-restore-from-snapshot");
+            let mut measure = Measure::start("geyser-plugin-end-of-restore-from-snapshot");
             match plugin.notify_end_of_startup() {
                 Err(err) => {
                     error!(
@@ -81,7 +81,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
             }
             measure.stop();
             inc_new_counter_debug!(
-                "accountsdb-plugin-end-of-restore-from-snapshot",
+                "geyser-plugin-end-of-restore-from-snapshot",
                 measure.as_us() as usize
             );
         }
@@ -89,7 +89,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 }
 
 impl AccountsUpdateNotifierImpl {
-    pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
         AccountsUpdateNotifierImpl { plugin_manager }
     }
 
@@ -130,14 +130,14 @@ impl AccountsUpdateNotifierImpl {
         slot: Slot,
         is_startup: bool,
     ) {
-        let mut measure2 = Measure::start("accountsdb-plugin-notify_plugins_of_account_update");
+        let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_account_update");
         let mut plugin_manager = self.plugin_manager.write().unwrap();
 
         if plugin_manager.plugins.is_empty() {
             return;
         }
         for plugin in plugin_manager.plugins.iter_mut() {
-            let mut measure = Measure::start("accountsdb-plugin-update-account");
+            let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_1(&account),
                 slot,
@@ -163,7 +163,7 @@ impl AccountsUpdateNotifierImpl {
             }
             measure.stop();
             inc_new_counter_debug!(
-                "accountsdb-plugin-update-account-us",
+                "geyser-plugin-update-account-us",
                 measure.as_us() as usize,
                 100000,
                 100000
@@ -171,7 +171,7 @@ impl AccountsUpdateNotifierImpl {
         }
         measure2.stop();
         inc_new_counter_debug!(
-            "accountsdb-plugin-notify_plugins_of_account_update-us",
+            "geyser-plugin-notify_plugins_of_account_update-us",
             measure2.as_us() as usize,
             100000,
             100000
