@@ -26,11 +26,6 @@ use {
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
-<<<<<<< HEAD
-    solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
-=======
-    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
->>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604))
     solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,

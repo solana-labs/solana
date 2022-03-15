@@ -51,13 +51,8 @@ impl SlotStatusNotifierImpl {
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
-<<<<<<< HEAD:accountsdb-plugin-manager/src/slot_status_notifier.rs
-            let mut measure = Measure::start("accountsdb-plugin-update-slot");
-            match plugin.update_slot_status(slot, parent, slot_status.clone()) {
-=======
             let mut measure = Measure::start("geyser-plugin-update-slot");
-            match plugin.update_slot_status(slot, parent, slot_status) {
->>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604)):geyser-plugin-manager/src/slot_status_notifier.rs
+            match plugin.update_slot_status(slot, parent, slot_status.clone()) {
                 Err(err) => {
                     error!(
                         "Failed to update slot status at slot {}, error: {} to plugin {}",

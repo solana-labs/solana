@@ -158,42 +158,17 @@ impl GeyserPluginService {
         let result: serde_json::Value = match serde_json::from_str(&contents) {
             Ok(value) => value,
             Err(err) => {
-<<<<<<< HEAD:accountsdb-plugin-manager/src/accountsdb_plugin_service.rs
-                return Err(AccountsdbPluginServiceError::InvalidConfigFileFormat(
-                    format!(
-                        "The config file {:?} is not in a valid Json format, error: {:?}",
-                        accountsdb_plugin_config_file, err
-                    ),
-                ));
-=======
                 return Err(GeyserPluginServiceError::InvalidConfigFileFormat(format!(
-                    "The config file {:?} is not in a valid Json5 format, error: {:?}",
+                    "The config file {:?} is not in a valid Json format, error: {:?}",
                     geyser_plugin_config_file, err
                 )));
->>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604)):geyser-plugin-manager/src/geyser_plugin_service.rs
             }
         };
 
         let libpath = result["libpath"]
             .as_str()
-<<<<<<< HEAD:accountsdb-plugin-manager/src/accountsdb_plugin_service.rs
-            .ok_or(AccountsdbPluginServiceError::LibPathNotSet)?;
-        let config_file = accountsdb_plugin_config_file
-=======
             .ok_or(GeyserPluginServiceError::LibPathNotSet)?;
-        let mut libpath = PathBuf::from(libpath);
-        if libpath.is_relative() {
-            let config_dir = geyser_plugin_config_file.parent().ok_or_else(|| {
-                GeyserPluginServiceError::CannotOpenConfigFile(format!(
-                    "Failed to resolve parent of {:?}",
-                    geyser_plugin_config_file,
-                ))
-            })?;
-            libpath = config_dir.join(libpath);
-        }
-
         let config_file = geyser_plugin_config_file
->>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604)):geyser-plugin-manager/src/geyser_plugin_service.rs
             .as_os_str()
             .to_str()
             .ok_or(GeyserPluginServiceError::InvalidPluginPath)?;

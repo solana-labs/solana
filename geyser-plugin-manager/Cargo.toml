@@ -1,15 +1,9 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
-<<<<<<< HEAD:accountsdb-plugin-manager/Cargo.toml
-name = "solana-accountsdb-plugin-manager"
-description = "The Solana AccountsDb plugin manager."
-version = "1.9.13"
-=======
 name = "solana-geyser-plugin-manager"
 description = "The Solana Geyser plugin manager."
-version = "1.10.3"
->>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604)):geyser-plugin-manager/Cargo.toml
+version = "1.9.13"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -20,11 +14,10 @@ bs58 = "0.4.0"
 crossbeam-channel = "0.5"
 libloading = "0.7.2"
 log = "0.4.11"
-<<<<<<< HEAD:accountsdb-plugin-manager/Cargo.toml
 serde = "1.0.130"
 serde_derive = "1.0.103"
 serde_json = "1.0.72"
-solana-accountsdb-plugin-interface = { path = "../accountsdb-plugin-interface", version = "=1.9.13" }
+solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.9.13" }
 solana-logger = { path = "../logger", version = "=1.9.13" }
 solana-measure = { path = "../measure", version = "=1.9.13" }
 solana-metrics = { path = "../metrics", version = "=1.9.13" }
@@ -32,16 +25,6 @@ solana-rpc = { path = "../rpc", version = "=1.9.13" }
 solana-runtime = { path = "../runtime", version = "=1.9.13" }
 solana-sdk = { path = "../sdk", version = "=1.9.13" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.9.13" }
-=======
-serde_json = "1.0.79"
-solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.10.3" }
-solana-measure = { path = "../measure", version = "=1.10.3" }
-solana-metrics = { path = "../metrics", version = "=1.10.3" }
-solana-rpc = { path = "../rpc", version = "=1.10.3" }
-solana-runtime = { path = "../runtime", version = "=1.10.3" }
-solana-sdk = { path = "../sdk", version = "=1.10.3" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.10.3" }
->>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604)):geyser-plugin-manager/Cargo.toml
 thiserror = "1.0.30"
 
 [package.metadata.docs.rs]
