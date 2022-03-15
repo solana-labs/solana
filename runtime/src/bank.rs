@@ -673,6 +673,7 @@ pub struct TransactionSimulationResult {
     pub logs: TransactionLogMessages,
     pub post_simulation_accounts: Vec<TransactionAccount>,
     pub units_consumed: u64,
+    pub return_data: Option<TransactionReturnData>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
@@ -3575,17 +3576,20 @@ impl Bank {
 
         let execution_result = execution_results.pop().unwrap();
         let flattened_result = execution_result.flattened_result();
-        let logs = match execution_result {
-            TransactionExecutionResult::Executed(details) => details.log_messages,
-            TransactionExecutionResult::NotExecuted(_) => None,
-        }
-        .unwrap_or_default();
+        let (logs, return_data) = match execution_result {
+            TransactionExecutionResult::Executed(details) => {
+                (details.log_messages, details.return_data)
+            }
+            TransactionExecutionResult::NotExecuted(_) => (None, None),
+        };
+        let logs = logs.unwrap_or_default();
 
         TransactionSimulationResult {
             result: flattened_result,
             logs,
             post_simulation_accounts,
             units_consumed,
+            return_data,
         }
     }
 

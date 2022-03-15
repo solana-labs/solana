@@ -341,6 +341,7 @@ impl RpcSender for MockSender {
                     logs: None,
                     accounts: None,
                     units_consumed: None,
+                    return_data: None,
                 },
             })?,
             "getMinimumBalanceForRentExemption" => json![20],
