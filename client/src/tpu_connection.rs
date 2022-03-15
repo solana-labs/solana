@@ -4,7 +4,9 @@ use {
 };
 
 pub trait TpuConnection {
-    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self;
+    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self
+    where
+        Self: Sized;
 
     fn tpu_addr(&self) -> &SocketAddr;
 
