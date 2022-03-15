@@ -253,6 +253,10 @@ impl ReadableAccount for AccountSharedData {
     fn rent_epoch(&self) -> Epoch {
         self.rent_epoch
     }
+    fn to_account_shared_data(&self) -> AccountSharedData {
+        // avoid data copy here
+        self.clone()
+    }
 }
 
 impl ReadableAccount for Ref<'_, AccountSharedData> {
@@ -270,6 +274,16 @@ impl ReadableAccount for Ref<'_, AccountSharedData> {
     }
     fn rent_epoch(&self) -> Epoch {
         self.rent_epoch
+    }
+    fn to_account_shared_data(&self) -> AccountSharedData {
+        AccountSharedData {
+            lamports: self.lamports(),
+            // avoid data copy here
+            data: Arc::clone(&self.data),
+            owner: *self.owner(),
+            executable: self.executable(),
+            rent_epoch: self.rent_epoch(),
+        }
     }
 }
 

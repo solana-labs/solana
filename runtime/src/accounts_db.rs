@@ -57,7 +57,7 @@ use {
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{BankId, Epoch, Slot, SlotCount},
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -564,6 +564,19 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
                 stored_account_meta.account_meta.rent_epoch
             }
             LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
+        }
+    }
+    fn to_account_shared_data(&self) -> AccountSharedData {
+        match self {
+            LoadedAccount::Stored(_stored_account_meta) => AccountSharedData::create(
+                self.lamports(),
+                self.data().to_vec(),
+                *self.owner(),
+                self.executable(),
+                self.rent_epoch(),
+            ),
+            // clone here to prevent data copy
+            LoadedAccount::Cached(cached_account) => cached_account.account.clone(),
         }
     }
 }
