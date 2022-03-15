@@ -9,7 +9,8 @@ use {
     },
     solana_program_test::*,
     solana_sdk::{
-        account::ReadableAccount,
+        account::{ReadableAccount, WritableAccount},
+        clock::Clock,
         instruction::{Instruction, InstructionError},
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signer},
@@ -111,7 +112,7 @@ async fn test_extend_lookup_table() {
             let instruction = extend_lookup_table(
                 lookup_table_address,
                 authority.pubkey(),
-                context.payer.pubkey(),
+                Some(context.payer.pubkey()),
                 new_addresses.clone(),
             );
 
@@ -169,7 +170,7 @@ async fn test_extend_lookup_table_with_wrong_authority() {
     let ix = extend_lookup_table(
         lookup_table_address,
         wrong_authority.pubkey(),
-        context.payer.pubkey(),
+        Some(context.payer.pubkey()),
         new_addresses,
     );
 
@@ -195,7 +196,7 @@ async fn test_extend_lookup_table_without_signing() {
     let mut ix = extend_lookup_table(
         lookup_table_address,
         authority.pubkey(),
-        context.payer.pubkey(),
+        Some(context.payer.pubkey()),
         new_addresses,
     );
     ix.accounts[1].is_signer = false;
@@ -226,7 +227,7 @@ async fn test_extend_deactivated_lookup_table() {
     let ix = extend_lookup_table(
         lookup_table_address,
         authority.pubkey(),
-        context.payer.pubkey(),
+        Some(context.payer.pubkey()),
         new_addresses,
     );
 
@@ -252,7 +253,7 @@ async fn test_extend_immutable_lookup_table() {
     let ix = extend_lookup_table(
         lookup_table_address,
         authority.pubkey(),
-        context.payer.pubkey(),
+        Some(context.payer.pubkey()),
         new_addresses,
     );
 
@@ -261,6 +262,86 @@ async fn test_extend_immutable_lookup_table() {
         ix,
         Some(&authority),
         InstructionError::Immutable,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_extend_lookup_table_without_payer() {
+    let mut context = setup_test_context().await;
+
+    let authority = Keypair::new();
+    let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 0);
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
+
+    let new_addresses = vec![Pubkey::new_unique()];
+    let ix = extend_lookup_table(
+        lookup_table_address,
+        authority.pubkey(),
+        None,
+        new_addresses,
+    );
+
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&authority),
+        InstructionError::NotEnoughAccountKeys,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_extend_prepaid_lookup_table_without_payer() {
+    let mut context = setup_test_context().await;
+
+    let authority = Keypair::new();
+    let lookup_table_address = Pubkey::new_unique();
+
+    let expected_state = {
+        // initialize lookup table
+        let empty_lookup_table = new_address_lookup_table(Some(authority.pubkey()), 0);
+        let mut lookup_table_account =
+            add_lookup_table_account(&mut context, lookup_table_address, empty_lookup_table).await;
+
+        // calculate required rent exempt balance for adding one address
+        let mut temp_lookup_table = new_address_lookup_table(Some(authority.pubkey()), 1);
+        let data = temp_lookup_table.clone().serialize_for_tests().unwrap();
+        let rent = context.banks_client.get_rent().await.unwrap();
+        let rent_exempt_balance = rent.minimum_balance(data.len());
+
+        // prepay for one address
+        lookup_table_account.set_lamports(rent_exempt_balance);
+        context.set_account(&lookup_table_address, &lookup_table_account);
+
+        // test will extend table in the current bank's slot
+        let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+        temp_lookup_table.meta.last_extended_slot = clock.slot;
+
+        ExpectedTableAccount {
+            lamports: rent_exempt_balance,
+            data_len: data.len(),
+            state: temp_lookup_table,
+        }
+    };
+
+    let new_addresses = expected_state.state.addresses.to_vec();
+    let instruction = extend_lookup_table(
+        lookup_table_address,
+        authority.pubkey(),
+        None,
+        new_addresses,
+    );
+
+    run_test_case(
+        &mut context,
+        TestCase {
+            lookup_table_address,
+            instruction,
+            extra_signer: Some(&authority),
+            expected_result: Ok(expected_state),
+        },
     )
     .await;
 }

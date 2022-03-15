@@ -225,15 +225,6 @@ impl Processor {
             return Err(InstructionError::MissingRequiredSignature);
         }
 
-        let payer_account =
-            keyed_account_at_index(keyed_accounts, checked_add(first_instruction_account, 2)?)?;
-        let payer_key = if let Some(payer_key) = payer_account.signer_key() {
-            *payer_key
-        } else {
-            ic_msg!(invoke_context, "Payer account must be a signer");
-            return Err(InstructionError::MissingRequiredSignature);
-        };
-
         let lookup_table_account_ref = lookup_table_account.try_account_ref()?;
         let lookup_table_data = lookup_table_account_ref.data();
         let mut lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
@@ -315,6 +306,15 @@ impl Processor {
 
         let table_key = *lookup_table_account.unsigned_key();
         if required_lamports > 0 {
+            let payer_account =
+                keyed_account_at_index(keyed_accounts, checked_add(first_instruction_account, 2)?)?;
+            let payer_key = if let Some(payer_key) = payer_account.signer_key() {
+                *payer_key
+            } else {
+                ic_msg!(invoke_context, "Payer account must be a signer");
+                return Err(InstructionError::MissingRequiredSignature);
+            };
+
             invoke_context.native_invoke(
                 system_instruction::transfer(&payer_key, &table_key, required_lamports),
                 &[payer_key],
