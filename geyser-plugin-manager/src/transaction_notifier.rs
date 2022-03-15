@@ -1,8 +1,8 @@
 /// Module responsible for notifying plugins of transactions
 use {
-    crate::accountsdb_plugin_manager::AccountsDbPluginManager,
+    crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
-    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
+    solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaTransactionInfo, ReplicaTransactionInfoVersions,
     },
     solana_measure::measure::Measure,
@@ -16,9 +16,9 @@ use {
 /// This implementation of TransactionNotifier is passed to the rpc's TransactionStatusService
 /// at the validator startup. TransactionStatusService invokes the notify_transaction method
 /// for new transactions. The implementation in turn invokes the notify_transaction of each
-/// plugin enabled with transaction notification managed by the AccountsDbPluginManager.
+/// plugin enabled with transaction notification managed by the GeyserPluginManager.
 pub(crate) struct TransactionNotifierImpl {
-    plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
 }
 
 impl TransactionNotifier for TransactionNotifierImpl {
@@ -29,7 +29,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
         transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
-        let mut measure = Measure::start("accountsdb-plugin-notify_plugins_of_transaction_info");
+        let mut measure = Measure::start("geyser-plugin-notify_plugins_of_transaction_info");
         let transaction_log_info =
             Self::build_replica_transaction_info(signature, transaction_status_meta, transaction);
 
@@ -64,7 +64,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
         }
         measure.stop();
         inc_new_counter_debug!(
-            "accountsdb-plugin-notify_plugins_of_transaction_info-us",
+            "geyser-plugin-notify_plugins_of_transaction_info-us",
             measure.as_us() as usize,
             10000,
             10000
@@ -73,7 +73,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
 }
 
 impl TransactionNotifierImpl {
-    pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
         Self { plugin_manager }
     }
 

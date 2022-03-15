@@ -1,10 +1,10 @@
 use {
     crate::{
-        accountsdb_plugin_manager::AccountsDbPluginManager,
         block_metadata_notifier_interface::BlockMetadataNotifier,
+        geyser_plugin_manager::GeyserPluginManager,
     },
     log::*,
-    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
+    solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaBlockInfo, ReplicaBlockInfoVersions,
     },
     solana_measure::measure::Measure,
@@ -16,7 +16,7 @@ use {
 };
 
 pub(crate) struct BlockMetadataNotifierImpl {
-    plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
 }
 
 impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
@@ -36,7 +36,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         let rewards = Self::build_rewards(rewards);
 
         for plugin in plugin_manager.plugins.iter_mut() {
-            let mut measure = Measure::start("accountsdb-plugin-update-slot");
+            let mut measure = Measure::start("geyser-plugin-update-slot");
             let block_info =
                 Self::build_replica_block_info(slot, blockhash, &rewards, block_time, block_height);
             let block_info = ReplicaBlockInfoVersions::V0_0_1(&block_info);
@@ -59,7 +59,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
             }
             measure.stop();
             inc_new_counter_debug!(
-                "accountsdb-plugin-update-block-metadata-us",
+                "geyser-plugin-update-block-metadata-us",
                 measure.as_us() as usize,
                 1000,
                 1000
@@ -99,7 +99,7 @@ impl BlockMetadataNotifierImpl {
         }
     }
 
-    pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
         Self { plugin_manager }
     }
 }
