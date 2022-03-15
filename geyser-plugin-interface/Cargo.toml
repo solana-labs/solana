@@ -1,13 +1,19 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
+<<<<<<< HEAD:accountsdb-plugin-interface/Cargo.toml
 name = "solana-accountsdb-plugin-interface"
 description = "The Solana AccountsDb plugin interface."
 version = "1.9.13"
+=======
+name = "solana-geyser-plugin-interface"
+description = "The Solana Geyser plugin interface."
+version = "1.10.3"
+>>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604)):geyser-plugin-interface/Cargo.toml
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-accountsdb-plugin-interface"
+documentation = "https://docs.rs/solana-geyser-plugin-interface"
 
 [dependencies]
 log = "0.4.11"

@@ -4366,6 +4366,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "solana-accountsdb-plugin-interface"
 version = "1.9.13"
 dependencies = [
@@ -4398,6 +4399,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604))
 name = "solana-address-lookup-table-program"
 version = "1.9.13"
 dependencies = [
@@ -4809,12 +4812,22 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serial_test",
+<<<<<<< HEAD
  "solana-accountsdb-plugin-manager",
  "solana-bloom",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.9.13",
  "solana-frozen-abi-macro 1.9.13",
+=======
+ "solana-address-lookup-table-program",
+ "solana-bloom",
+ "solana-client",
+ "solana-entry",
+ "solana-frozen-abi 1.10.3",
+ "solana-frozen-abi-macro 1.10.3",
+ "solana-geyser-plugin-manager",
+>>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604))
  "solana-gossip",
  "solana-ledger",
  "solana-logger 1.9.13",
@@ -5017,6 +5030,36 @@ dependencies = [
  "solana-download-utils",
  "solana-runtime",
  "solana-sdk",
+]
+
+[[package]]
+name = "solana-geyser-plugin-interface"
+version = "1.10.3"
+dependencies = [
+ "log",
+ "solana-sdk",
+ "solana-transaction-status",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-geyser-plugin-manager"
+version = "1.10.3"
+dependencies = [
+ "bs58 0.4.0",
+ "crossbeam-channel",
+ "json5",
+ "libloading",
+ "log",
+ "serde_json",
+ "solana-geyser-plugin-interface",
+ "solana-measure",
+ "solana-metrics",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-transaction-status",
+ "thiserror",
 ]
 
 [[package]]

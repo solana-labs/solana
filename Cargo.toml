@@ -1,11 +1,17 @@
 [workspace]
 members = [
+<<<<<<< HEAD
     "accountsdb-plugin-interface",
     "accountsdb-plugin-manager",
     "accounts-cluster-bench",
     "bench-streamer",
     "bench-tps",
     "accounts-bench",
+=======
+    "account-decoder",
+    "accounts-bench",
+    "accounts-cluster-bench",
+>>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604))
     "banking-bench",
     "banks-client",
     "banks-interface",
@@ -26,6 +32,8 @@ members = [
     "validator",
     "genesis",
     "genesis-utils",
+    "geyser-plugin-interface",
+    "geyser-plugin-manager",
     "gossip",
     "install",
     "keygen",

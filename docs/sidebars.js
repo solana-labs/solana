@@ -80,7 +80,7 @@ module.exports = {
       },
       "developing/test-validator",
       "developing/backwards-compatibility",
-      "developing/plugins/accountsdb_plugin"
+      "developing/plugins/geyser-plugins"
     ],
     Integrating: ["integrations/exchange"],
     Validating: [

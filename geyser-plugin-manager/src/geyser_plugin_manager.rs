@@ -1,20 +1,20 @@
-/// Managing the AccountsDb plugins
+/// Managing the Geyser plugins
 use {
     libloading::{Library, Symbol},
     log::*,
-    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::AccountsDbPlugin,
+    solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
     std::error::Error,
 };
 
 #[derive(Default, Debug)]
-pub struct AccountsDbPluginManager {
-    pub plugins: Vec<Box<dyn AccountsDbPlugin>>,
+pub struct GeyserPluginManager {
+    pub plugins: Vec<Box<dyn GeyserPlugin>>,
     libs: Vec<Library>,
 }
 
-impl AccountsDbPluginManager {
+impl GeyserPluginManager {
     pub fn new() -> Self {
-        AccountsDbPluginManager {
+        GeyserPluginManager {
             plugins: Vec::default(),
             libs: Vec::default(),
         }
@@ -29,7 +29,7 @@ impl AccountsDbPluginManager {
         libpath: &str,
         config_file: &str,
     ) -> Result<(), Box<dyn Error>> {
-        type PluginConstructor = unsafe fn() -> *mut dyn AccountsDbPlugin;
+        type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
         let lib = Library::new(libpath)?;
         let constructor: Symbol<PluginConstructor> = lib.get(b"_create_plugin")?;
         let plugin_raw = constructor();

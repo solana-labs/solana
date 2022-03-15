@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Default)]
-pub struct AccountsDbPluginNotifyAtSnapshotRestoreStats {
+pub struct GeyserPluginNotifyAtSnapshotRestoreStats {
     pub total_accounts: usize,
     pub skipped_accounts: usize,
     pub notified_accounts: usize,
@@ -20,7 +20,7 @@ pub struct AccountsDbPluginNotifyAtSnapshotRestoreStats {
     pub elapsed_notifying_us: usize,
 }
 
-impl AccountsDbPluginNotifyAtSnapshotRestoreStats {
+impl GeyserPluginNotifyAtSnapshotRestoreStats {
     pub fn report(&self) {
         datapoint_info!(
             "accountsdb_plugin_notify_account_restore_from_snapshot_summary",
@@ -46,7 +46,7 @@ impl AccountsDb {
 
         let mut slots = self.storage.all_slots();
         let mut notified_accounts: HashSet<Pubkey> = HashSet::default();
-        let mut notify_stats = AccountsDbPluginNotifyAtSnapshotRestoreStats::default();
+        let mut notify_stats = GeyserPluginNotifyAtSnapshotRestoreStats::default();
 
         slots.sort_by(|a, b| b.cmp(a));
         for slot in slots {
@@ -75,7 +75,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         notified_accounts: &mut HashSet<Pubkey>,
-        notify_stats: &mut AccountsDbPluginNotifyAtSnapshotRestoreStats,
+        notify_stats: &mut GeyserPluginNotifyAtSnapshotRestoreStats,
     ) {
         let slot_stores = self.storage.get_slot_stores(slot).unwrap();
 
@@ -117,7 +117,7 @@ impl AccountsDb {
         slot: Slot,
         notified_accounts: &mut HashSet<Pubkey>,
         accounts_to_stream: &HashMap<Pubkey, StoredAccountMeta>,
-        notify_stats: &mut AccountsDbPluginNotifyAtSnapshotRestoreStats,
+        notify_stats: &mut GeyserPluginNotifyAtSnapshotRestoreStats,
     ) {
         let notifier = self
             .accounts_update_notifier
@@ -168,18 +168,18 @@ pub mod tests {
     };
 
     impl AccountsDb {
-        pub fn set_accountsdb_plugin_notifer(&mut self, notifier: Option<AccountsUpdateNotifier>) {
+        pub fn set_geyser_plugin_notifer(&mut self, notifier: Option<AccountsUpdateNotifier>) {
             self.accounts_update_notifier = notifier;
         }
     }
 
     #[derive(Debug, Default)]
-    struct AccountsDbTestPlugin {
+    struct GeyserTestPlugin {
         pub accounts_notified: DashMap<Pubkey, Vec<(Slot, AccountSharedData)>>,
         pub is_startup_done: AtomicBool,
     }
 
-    impl AccountsUpdateNotifierInterface for AccountsDbTestPlugin {
+    impl AccountsUpdateNotifierInterface for GeyserTestPlugin {
         /// Notified when an account is updated at runtime, due to transaction activities
         fn notify_account_update(
             &self,
@@ -221,7 +221,7 @@ pub mod tests {
         account1_lamports = 2;
         let account1 = AccountSharedData::new(account1_lamports, 1, account1.owner());
         accounts.store_uncached(slot0, &[(&key1, &account1)]);
-        let notifier = AccountsDbTestPlugin::default();
+        let notifier = GeyserTestPlugin::default();
 
         let key2 = solana_sdk::pubkey::new_rand();
         let account2_lamports: u64 = 100;
@@ -231,7 +231,7 @@ pub mod tests {
         accounts.store_uncached(slot0, &[(&key2, &account2)]);
 
         let notifier = Arc::new(RwLock::new(notifier));
-        accounts.set_accountsdb_plugin_notifer(Some(notifier.clone()));
+        accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
 
         accounts.notify_account_restore_from_snapshot();
 
@@ -279,7 +279,7 @@ pub mod tests {
         let slot1 = 1;
         let account1 = AccountSharedData::new(account1_lamports, 1, account1.owner());
         accounts.store_uncached(slot1, &[(&key1, &account1)]);
-        let notifier = AccountsDbTestPlugin::default();
+        let notifier = GeyserTestPlugin::default();
 
         let key3 = solana_sdk::pubkey::new_rand();
         let account3_lamports: u64 = 300;
@@ -288,7 +288,7 @@ pub mod tests {
         accounts.store_uncached(slot1, &[(&key3, &account3)]);
 
         let notifier = Arc::new(RwLock::new(notifier));
-        accounts.set_accountsdb_plugin_notifer(Some(notifier.clone()));
+        accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
 
         accounts.notify_account_restore_from_snapshot();
 
@@ -324,10 +324,10 @@ pub mod tests {
     fn test_notify_account_at_accounts_update() {
         let mut accounts = AccountsDb::new_single_for_tests_with_caching();
 
-        let notifier = AccountsDbTestPlugin::default();
+        let notifier = GeyserTestPlugin::default();
 
         let notifier = Arc::new(RwLock::new(notifier));
-        accounts.set_accountsdb_plugin_notifer(Some(notifier.clone()));
+        accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
 
         // Account with key1 is updated twice in two different slots -- should only get notified twice.
         // Account with key2 is updated slot0, should get notified once

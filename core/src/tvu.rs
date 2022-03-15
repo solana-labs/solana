@@ -25,8 +25,13 @@ use {
         tower_storage::TowerStorage,
         voting_service::VotingService,
     },
+<<<<<<< HEAD
     crossbeam_channel::unbounded,
     solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
+=======
+    crossbeam_channel::{unbounded, Receiver},
+    solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
+>>>>>>> 102dd68a0 (Rename AccountsDb plugins to Geyser plugins (#23604))
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
