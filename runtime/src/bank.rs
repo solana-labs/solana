@@ -966,6 +966,20 @@ impl PartialEq for Bank {
         if ptr::eq(self, other) {
             return true;
         }
+
+        // Check if the accounts_data_len fields are equal.  If either bank has the
+        // cap_accounts_data_len feature *disabled* then treat the fields as equal to effectively
+        // ignore 'em.  In other words, we only check for equality when both banks have *enabled*
+        // the cap_accounts_data_len feature.
+        let is_not_eq_accounts_data_len = self
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_len::id())
+            && other
+                .feature_set
+                .is_active(&feature_set::cap_accounts_data_len::id())
+            && self.load_accounts_data_len() != other.load_accounts_data_len();
+        let is_eq_accounts_data_len = !is_not_eq_accounts_data_len;
+
         *self.blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && self.ancestors == other.ancestors
             && *self.hash.read().unwrap() == *other.hash.read().unwrap()
@@ -996,6 +1010,7 @@ impl PartialEq for Bank {
             && *self.stakes_cache.stakes() == *other.stakes_cache.stakes()
             && self.epoch_stakes == other.epoch_stakes
             && self.is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
+            && is_eq_accounts_data_len
     }
 }
 
