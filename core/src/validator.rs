@@ -551,10 +551,6 @@ impl Validator {
         }
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
-        let bank = bank_forks.working_bank();
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            bank.set_shrink_paths(shrink_paths.clone());
-        }
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let sample_performance_service =
@@ -568,6 +564,7 @@ impl Validator {
                 None
             };
 
+        let bank = bank_forks.read().unwrap().working_bank();
         info!("Starting validator with working bank slot {}", bank.slot());
         {
             let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();
@@ -1358,6 +1355,11 @@ fn load_blockstore(
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
     bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
+    if let Some(ref shrink_paths) = config.account_shrink_paths {
+        bank_forks
+            .working_bank()
+            .set_shrink_paths(shrink_paths.clone());
+    }
 
     (
         genesis_config,
