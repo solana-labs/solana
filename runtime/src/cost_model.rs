@@ -115,7 +115,7 @@ impl CostModel {
             None => {
                 let default_value = self.instruction_execution_cost_table.get_default_units();
                 debug!(
-                    "Instruction {:?} does not have aggregated cost, using default value {}",
+                    "Program {:?} does not have aggregated cost, using default value {}",
                     program_key, default_value
                 );
                 default_value

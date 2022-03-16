@@ -7,7 +7,8 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 
-const MAX_UNITS: u32 = 1_400_000;
+pub const DEFAULT_UNITS: u32 = 200_000;
+pub const MAX_UNITS: u32 = 1_400_000;
 const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -67,14 +68,14 @@ pub struct ComputeBudget {
 
 impl Default for ComputeBudget {
     fn default() -> Self {
-        Self::new(true)
+        Self::new(MAX_UNITS)
     }
 }
 
 impl ComputeBudget {
-    pub fn new(use_max_units_default: bool) -> Self {
+    pub fn new(max_units: u32) -> Self {
         ComputeBudget {
-            max_units: ComputeBudget::get_max_units(use_max_units_default),
+            max_units: max_units as u64,
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
@@ -94,14 +95,6 @@ impl ComputeBudget {
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
-        }
-    }
-
-    pub fn get_max_units(use_max_units_default: bool) -> u64 {
-        if use_max_units_default {
-            MAX_UNITS as u64
-        } else {
-            200_000
         }
     }
 

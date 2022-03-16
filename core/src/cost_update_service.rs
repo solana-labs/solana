@@ -288,7 +288,7 @@ mod tests {
         // new erroring compute costs
         let cost_per_error = 1000;
         // the expect cost is (previous_cost + new_cost)/2 = (100 + 1000)/2 = 550
-        let expect_units = 550;
+        let expected_units = 550;
         {
             let errored_txs_compute_consumed = vec![cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
@@ -307,7 +307,7 @@ mod tests {
                 1
             );
             assert_eq!(
-                Some(&expect_units),
+                Some(&expected_units),
                 cost_model
                     .read()
                     .unwrap()
@@ -319,7 +319,7 @@ mod tests {
         // Test updating cost model with only erroring compute costs where the error cost is
         // `smaller_cost_per_error`, less than the current instruction cost for the program.
         // The cost should not decrease for these new lesser errors
-        let smaller_cost_per_error = expect_units - 10;
+        let smaller_cost_per_error = expected_units - 10;
         {
             let errored_txs_compute_consumed = vec![smaller_cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
@@ -338,7 +338,7 @@ mod tests {
                 1
             );
             assert_eq!(
-                Some(&expect_units),
+                Some(&expected_units),
                 cost_model
                     .read()
                     .unwrap()
