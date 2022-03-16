@@ -12,4 +12,4 @@ test -r lib/index.esm.js
 npm run doc
 npm run lint
 npm run codecov
-npm run test:live-with-test-validator
+DEBUG=start-server-and-test npm run test:live-with-test-validator
