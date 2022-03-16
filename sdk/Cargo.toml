@@ -70,7 +70,7 @@ serde_bytes = "0.11"
 serde_derive = "1.0.103"
 serde_json = { version = "1.0.79", optional = true }
 sha2 = "0.10.2"
-sha3 = { version = "0.10.0", optional = true }
+sha3 = { version = "0.10.1", optional = true }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.3" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.3" }
 solana-logger = { path = "../logger", version = "=1.10.3", optional = true }
