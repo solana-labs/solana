@@ -634,7 +634,8 @@ mod tests {
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
         let rent_address = sysvar::rent::id();
-        let rent_account = account::create_account_shared_data_for_test(&Rent::default());
+        let rent = Rent::default();
+        let rent_account = account::create_account_shared_data_for_test(&rent);
         let rewards_address = sysvar::rewards::id();
         let rewards_account =
             account::create_account_shared_data_for_test(&sysvar::rewards::Rewards::new(0.0));
@@ -648,6 +649,8 @@ mod tests {
             account::create_account_shared_data_for_test(&sysvar::clock::Clock::default());
         let config_address = stake_config::id();
         let config_account = config::create_account(0, &stake_config::Config::default());
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let withdrawal_amount = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
 
         // gets the "is_empty()" check
         process_instruction(
@@ -769,7 +772,7 @@ mod tests {
 
         // Tests 3rd keyed account is of correct type (Clock instead of rewards) in withdraw
         process_instruction(
-            &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+            &serialize(&StakeInstruction::Withdraw(withdrawal_amount)).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
                 (vote_address, vote_account),
@@ -803,7 +806,7 @@ mod tests {
 
         // Tests correct number of accounts are provided in withdraw
         process_instruction(
-            &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+            &serialize(&StakeInstruction::Withdraw(withdrawal_amount)).unwrap(),
             vec![(stake_address, stake_account.clone())],
             vec![AccountMeta {
                 pubkey: stake_address,
@@ -858,6 +861,10 @@ mod tests {
         let clock_account = account::create_account_shared_data_for_test(&Clock::default());
         let custodian = Pubkey::new_unique();
         let custodian_account = create_default_account();
+        let rent = Rent::default();
+        let rent_address = sysvar::rent::id();
+        let rent_account = account::create_account_shared_data_for_test(&rent);
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
 
         // Test InitializeChecked with non-signing withdrawer
         let mut instruction =
@@ -870,12 +877,10 @@ mod tests {
 
         // Test InitializeChecked with withdrawer signer
         let stake_account = AccountSharedData::new(
-            1_000_000_000,
+            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
             std::mem::size_of::<crate::stake_state::StakeState>(),
             &id(),
         );
-        let rent_address = sysvar::rent::id();
-        let rent_account = account::create_account_shared_data_for_test(&Rent::default());
         process_instruction(
             &serialize(&StakeInstruction::InitializeChecked).unwrap(),
             vec![
@@ -1192,7 +1197,9 @@ mod tests {
 
     #[test]
     fn test_stake_initialize() {
-        let stake_lamports = 42;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account =
             AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
@@ -1211,7 +1218,7 @@ mod tests {
             (stake_address, stake_account.clone()),
             (
                 sysvar::rent::id(),
-                account::create_account_shared_data_for_test(&Rent::free()),
+                account::create_account_shared_data_for_test(&rent),
             ),
         ];
         let instruction_accounts = vec![
@@ -1238,11 +1245,9 @@ mod tests {
         assert_eq!(
             from(&accounts[0]).unwrap(),
             StakeState::Initialized(Meta {
+                authorized: Authorized::auto(&stake_address),
+                rent_exempt_reserve,
                 lockup,
-                ..Meta {
-                    authorized: Authorized::auto(&stake_address),
-                    ..Meta::default()
-                }
             }),
         );
 
@@ -1256,12 +1261,12 @@ mod tests {
         );
         transaction_accounts[0] = (stake_address, stake_account);
 
-        // not enough balance for rent...
+        // not enough balance for rent and minimum delegation...
         transaction_accounts[1] = (
             sysvar::rent::id(),
             account::create_account_shared_data_for_test(&Rent {
-                lamports_per_byte_year: 42,
-                ..Rent::free()
+                lamports_per_byte_year: rent.lamports_per_byte_year + 1,
+                ..rent
             }),
         );
         process_instruction(
@@ -2325,7 +2330,7 @@ mod tests {
     #[test]
     fn test_split() {
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let stake_lamports = MINIMUM_STAKE_DELEGATION * 2;
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
@@ -2421,7 +2426,7 @@ mod tests {
         let authority_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let stake_lamports = MINIMUM_STAKE_DELEGATION;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
@@ -3165,7 +3170,7 @@ mod tests {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let stake_lamports = MINIMUM_STAKE_DELEGATION;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
