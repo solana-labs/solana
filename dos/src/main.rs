@@ -1,14 +1,15 @@
 //! DoS tool
 //!
 //! Sends requests to cluster in a loop to measure
-//! the effect of ihandling these requests on the performance of the cluster.
+//! the effect of handling these requests on the performance of the cluster.
 //!
 //! * `mode` argument defines interface to use (e.g. rpc, tvu, tpu)
 //! * `data-type` argument specifies the type of the request.
-//! It takes various values, some of them makes sense with particular `mode` value (e.g. `get-account-info` is valid only with `mode=rpc`).
+//! Some request types might be used only with particular `mode` value.
+//! For example, `get-account-info` is valid only with `mode=rpc`.
 //!
-//! Most of the options are provided for `data-type = transaction`.
-//! These options allow to compose transaction whcih fails at
+//! Most options are provided for `data-type = transaction`.
+//! These options allow to compose transaction which fails at
 //! a particular stage of the processing pipeline.
 //!
 //! Example 1: send random transactions to TPU
@@ -16,7 +17,7 @@
 //! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
 //! ```
 //!
-//! Example 2: send unique transactions with valid hashblock to TPU
+//! Example 2: send unique transactions with valid recent blockhash to TPU
 //! ```bash
 //! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
 //! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu \
@@ -91,7 +92,7 @@ impl TransactionGenerator {
         }
 
         // in order to evaluate the performance implications of the different transactions
-        // we create here transactions which are filetered out on different stages of processing pipeline
+        // we create here transactions which are filtered out on different stages of processing pipeline
 
         // create an arbitrary valid instruction
         let lamports = 5;
@@ -117,8 +118,8 @@ impl TransactionGenerator {
                 self.blockhash,
             )
         } else if self.transaction_params.valid_signatures {
-            // Since we don't provide a payer, this transaction will
-            // end up filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
+            // Since we don't provide a payer, this transaction will end up
+            // filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
             let kpvals: Vec<Keypair> = (0..self.transaction_params.num_signatures)
                 .map(|_| Keypair::new())
                 .collect();
@@ -593,7 +594,7 @@ pub mod test {
             },
         );
 
-        // send *unique* transactions to TPU with 2 random signatures
+        // send *unique* transactions to TPU with 4 random signatures
         // will be discarded on banking stage in legacy.rs
         // ("there should be at least 1 RW fee-payer account")
         run_dos(
