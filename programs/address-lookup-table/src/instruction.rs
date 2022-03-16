@@ -38,13 +38,16 @@ pub enum ProgramInstruction {
     ///   1. `[SIGNER]` Current authority
     FreezeLookupTable,
 
-    /// Extend an address lookup table with new addresses
+    /// Extend an address lookup table with new addresses. Funding account and
+    /// system program account references are only required if the lookup table
+    /// account requires additional lamports to cover the rent-exempt balance
+    /// after being extended.
     ///
     /// # Account references
     ///   0. `[WRITE]` Address lookup table account to extend
     ///   1. `[SIGNER]` Current authority
-    ///   2. `[SIGNER, WRITE]` Account that will fund the table reallocation
-    ///   3. `[]` System program for CPI.
+    ///   2. `[SIGNER, WRITE, OPTIONAL]` Account that will fund the table reallocation
+    ///   3. `[OPTIONAL]` System program for CPI.
     ExtendLookupTable { new_addresses: Vec<Pubkey> },
 
     /// Deactivate an address lookup table, making it unusable and
@@ -120,18 +123,25 @@ pub fn freeze_lookup_table(lookup_table_address: Pubkey, authority_address: Pubk
 pub fn extend_lookup_table(
     lookup_table_address: Pubkey,
     authority_address: Pubkey,
-    payer_address: Pubkey,
+    payer_address: Option<Pubkey>,
     new_addresses: Vec<Pubkey>,
 ) -> Instruction {
+    let mut accounts = vec![
+        AccountMeta::new(lookup_table_address, false),
+        AccountMeta::new_readonly(authority_address, true),
+    ];
+
+    if let Some(payer_address) = payer_address {
+        accounts.extend([
+            AccountMeta::new(payer_address, true),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ]);
+    }
+
     Instruction::new_with_bincode(
         id(),
         &ProgramInstruction::ExtendLookupTable { new_addresses },
-        vec![
-            AccountMeta::new(lookup_table_address, false),
-            AccountMeta::new_readonly(authority_address, true),
-            AccountMeta::new(payer_address, true),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
+        accounts,
     )
 }
 
