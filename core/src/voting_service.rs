@@ -1,6 +1,7 @@
 use {
     crate::tower_storage::{SavedTowerVersions, TowerStorage},
     crossbeam_channel::Receiver,
+    solana_client::connection_cache::get_connection,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
@@ -86,7 +87,8 @@ impl VotingService {
         } else {
             crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder)
         };
-        let _ = cluster_info.send_transaction(vote_op.tx(), target_address);
+        let target_address = target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
+        let _ = get_connection(&target_address).send_transaction(vote_op.tx());
 
         match vote_op {
             VoteOp::PushVote {
