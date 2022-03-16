@@ -1037,7 +1037,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     // return true if the removal was completed
     fn evict_from_cache(
         &self,
-        evictions: Vec<Pubkey>,
+        mut evictions: Vec<Pubkey>,
         current_age: Age,
         startup: bool,
         randomly_evicted: bool,
@@ -1052,7 +1052,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if self.get_stop_evictions() {
             return false; // did NOT complete, ranges were changed, so have to restart
         }
+
+        // skip any keys that are held in memory because of ranges being held
         let ranges = self.cache_ranges_held.read().unwrap().clone();
+        if !ranges.is_empty() {
+            evictions.retain(|k| {
+                if ranges.iter().any(|range| range.contains(k)) {
+                    // this item is held in mem by range, so don't remove
+                    completed_scan = false;
+                    false
+                } else {
+                    true
+                }
+            });
+        }
 
         let mut removed = 0;
         // consider chunking these so we don't hold the write lock too long
@@ -1079,12 +1092,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
                     // but, at startup, everything is ready to age out if it isn't dirty
-                    continue;
-                }
-
-                if ranges.iter().any(|range| range.contains(&k)) {
-                    // this item is held in mem by range, so don't remove
-                    completed_scan = false;
                     continue;
                 }
 
