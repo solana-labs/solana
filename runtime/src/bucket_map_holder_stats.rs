@@ -46,6 +46,7 @@ pub struct BucketMapHolderStats {
     pub flush_scan_update_us: AtomicU64,
     pub flush_remove_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
+    pub reflushed_buckets: AtomicU64,
     last_was_startup: AtomicBool,
     last_time: AtomicInterval,
     bins: u64,
@@ -202,6 +203,11 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 ("count", self.total_count(), i64),
+                (
+                    "reflushed_buckets",
+                    self.reflushed_buckets.swap(0, Ordering::Relaxed),
+                    i64
+                ),
                 (
                     "bg_waiting_percent",
                     Self::calc_percent(

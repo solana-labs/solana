@@ -1020,6 +1020,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // completed iteration of the buckets at the current age
                         assert_eq!(current_age, self.storage.current_age());
                         self.set_has_aged(current_age);
+                    } else {
+                        Self::update_stat(&self.stats().reflushed_buckets, 1);
                     }
                     return;
                 }
