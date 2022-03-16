@@ -29,7 +29,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.10.3" }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = "0.5.3"
-libc = "0.2.119"
+libc = "0.2.120"
 nix = "0.23.1"
 
 [lib]
