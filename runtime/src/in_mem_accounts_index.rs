@@ -941,9 +941,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         let in_mem_count = self.stats().count_in_mem.load(Ordering::Relaxed);
         let limit = self.storage.mem_budget_mb;
+        let estimate_mem = in_mem_count * Self::approx_size_of_one_entry();
         let exceeds_budget = limit
-            .map(|limit| in_mem_count * Self::approx_size_of_one_entry() >= limit * 1024 * 1024)
+            .map(|limit| estimate_mem >= limit * 1024 * 1024)
             .unwrap_or_default();
+        self.stats()
+            .estimate_mem
+            .store(estimate_mem as u64, Ordering::Relaxed);
 
         // may have to loop if disk has to grow and we have to restart
         loop {
@@ -953,6 +957,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
             let mut flush_entries_updated_on_disk = 0;
             let mut disk_resize = Ok(());
+            let mut flush_should_evict_us = 0;
             // scan and update loop
             // holds read lock
             {
@@ -960,8 +965,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 evictions = Vec::with_capacity(map.len());
                 let m = Measure::start("flush_scan_and_update"); // we don't care about lock time in this metric - bg threads can wait
                 for (k, v) in map.iter() {
+                    let mut mse = Measure::start("flush_should_evict");
                     let (evict_for_age, slot_list) =
                         self.should_evict_from_mem(current_age, v, startup, true, exceeds_budget);
+                    mse.stop();
+                    flush_should_evict_us += mse.as_us();
                     if !evict_for_age && !Self::random_chance_of_eviction() {
                         // not planning to remove this item from memory now, so don't write it to disk yet
                         continue;
@@ -999,6 +1007,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
                 Self::update_time_stat(&self.stats().flush_scan_update_us, m);
             }
+            Self::update_stat(&self.stats().flush_should_evict_us, flush_should_evict_us);
+
             Self::update_stat(
                 &self.stats().flush_entries_updated_on_disk,
                 flush_entries_updated_on_disk,
