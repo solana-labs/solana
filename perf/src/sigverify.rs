@@ -634,12 +634,12 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
 }
 
 pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) -> usize {
-    let mut count_discarded = 0;
+    let mut count_discarded: usize = 0;
     for (batch, v) in batches.iter_mut().zip(r) {
         for (pkt, f) in batch.packets.iter_mut().zip(v) {
             if !pkt.meta.discard() {
                 pkt.meta.set_discard(*f == 0);
-                count_discarded += pkt.meta.discard() as usize;
+                count_discarded = count_discarded.saturating_add(pkt.meta.discard() as usize);
             }
         }
     }
