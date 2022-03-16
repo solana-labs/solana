@@ -5,6 +5,7 @@ use {
         in_mem_accounts_index::{InMemAccountsIndex, SlotT},
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
     solana_sdk::{clock::SLOT_MS, timing::AtomicInterval},
@@ -164,6 +165,8 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 // allocate with disk buckets if mem budget was not set, we were NOT started from validator, and env var was set
                 // we do not want the env var to have an effect when running the validator (only tests, benches, etc.)
                 mem_budget_mb = Some(limit.parse::<usize>().unwrap());
+                // log this so we can tell that the test suite is correctly testing the env var
+                error!("creating account index with mem budget due to env var: SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB={}", limit);
             }
         }
 
