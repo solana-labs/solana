@@ -1,13 +1,12 @@
 /// A helper for calculating a stake-weighted timestamp estimate from a set of timestamps and epoch
 /// stake.
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
-    pubkey::Pubkey,
-};
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, HashMap},
-    time::Duration,
+use {
+    im::HashMap,
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        pubkey::Pubkey,
+    },
+    std::{borrow::Borrow, collections::BTreeMap, time::Duration},
 };
 
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;

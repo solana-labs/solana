@@ -5,6 +5,7 @@ use {
         consensus::{Stake, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
+    im::HashMap as ImHashMap,
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::timings::ExecuteTimingType,
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
@@ -516,7 +517,7 @@ impl PropagatedStats {
         &mut self,
         node_pubkey: &Pubkey,
         vote_account_pubkeys: &[Pubkey],
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
+        epoch_vote_accounts: &ImHashMap<Pubkey, (u64, VoteAccount)>,
     ) {
         self.propagated_node_ids.insert(*node_pubkey);
         for vote_account_pubkey in vote_account_pubkeys.iter() {
@@ -727,7 +728,7 @@ mod test {
         let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
             .take(num_vote_accounts)
             .collect();
-        let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
+        let epoch_vote_accounts: ImHashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
             .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
@@ -769,7 +770,7 @@ mod test {
         let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
             .take(num_vote_accounts)
             .collect();
-        let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
+        let epoch_vote_accounts: ImHashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
             .map(|pubkey| (*pubkey, (1, VoteAccount::default())))

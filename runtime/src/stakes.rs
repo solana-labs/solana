@@ -3,16 +3,13 @@
 use {
     crate::{
         stake_history::StakeHistory,
-        vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
+        vote_account::{VoteAccount, VoteAccounts},
     },
     dashmap::DashMap,
     im::HashMap as ImHashMap,
     num_derive::ToPrimitive,
     num_traits::ToPrimitive,
-    rayon::{
-        iter::{IntoParallelRefIterator, ParallelIterator},
-        ThreadPool,
-    },
+    rayon::{prelude::*, ThreadPool},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -175,7 +172,7 @@ impl Stakes {
         thread_pool.install(|| {
             let stake_delegations = &self.stake_delegations;
             let stake_history = &mut self.stake_history;
-            let vote_accounts: &VoteAccountsHashMap = self.vote_accounts.as_ref();
+            let vote_accounts: Vec<_> = self.vote_accounts.iter().collect();
 
             // construct map of vote pubkey -> list of stake delegations
             let vote_delegations: HashMap<Pubkey, Vec<&Delegation>> = {
@@ -213,8 +210,8 @@ impl Stakes {
             }
 
             // refresh the stake distribution of vote accounts for the next epoch, using new stake history
-            let vote_accounts_for_next_epoch: VoteAccountsHashMap = vote_accounts
-                .par_iter()
+            let vote_accounts_for_next_epoch: HashMap<_, _> = vote_accounts
+                .into_par_iter()
                 .map(|(vote_pubkey, (_stake, vote_account))| {
                     let delegated_stake = vote_delegations
                         .get(vote_pubkey)
@@ -231,7 +228,7 @@ impl Stakes {
                 .collect();
 
             // overwrite vote accounts so that staked nodes singleton is reset
-            self.vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_for_next_epoch));
+            self.vote_accounts = VoteAccounts::from(ImHashMap::from(vote_accounts_for_next_epoch));
         });
     }
 

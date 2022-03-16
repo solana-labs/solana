@@ -5,6 +5,7 @@ use {
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::{unbounded, Sender},
+    im::HashMap as ImHashMap,
     itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
@@ -1348,7 +1349,7 @@ fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<S
 fn supermajority_root_from_vote_accounts(
     bank_slot: Slot,
     total_epoch_stake: u64,
-    vote_accounts: &HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
+    vote_accounts: &ImHashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
 ) -> Option<Slot> {
     let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
         .iter()
@@ -3798,7 +3799,7 @@ pub mod tests {
     #[allow(clippy::field_reassign_with_default)]
     fn test_supermajority_root_from_vote_accounts() {
         let convert_to_vote_accounts =
-            |roots_stakes: Vec<(Slot, u64)>| -> HashMap<Pubkey, (u64, VoteAccount)> {
+            |roots_stakes: Vec<(Slot, u64)>| -> ImHashMap<Pubkey, (u64, VoteAccount)> {
                 roots_stakes
                     .into_iter()
                     .map(|(root, stake)| {
@@ -3824,7 +3825,8 @@ pub mod tests {
 
         // Supermajority root should be None
         assert!(
-            supermajority_root_from_vote_accounts(slot, total_stake, &HashMap::default()).is_none()
+            supermajority_root_from_vote_accounts(slot, total_stake, &ImHashMap::default())
+                .is_none()
         );
 
         // Supermajority root should be None

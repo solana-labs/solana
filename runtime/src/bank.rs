@@ -65,6 +65,7 @@ use {
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::DashMap,
+    im::HashMap as ImHashMap,
     itertools::Itertools,
     log::*,
     rand::Rng,
@@ -4470,7 +4471,7 @@ impl Bank {
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
-        vote_accounts: &HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
+        vote_accounts: &ImHashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
         rent_to_be_distributed: u64,
     ) {
         let mut total_staked = 0;
@@ -6101,9 +6102,9 @@ impl Bank {
 
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
-    pub fn vote_accounts(&self) -> Arc<HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>> {
+    pub fn vote_accounts(&self) -> ImHashMap<Pubkey, (/*stake:*/ u64, VoteAccount)> {
         let stakes = self.stakes_cache.stakes();
-        Arc::from(stakes.vote_accounts())
+        ImHashMap::from(stakes.vote_accounts())
     }
 
     /// Vote account for the given vote account pubkey along with the stake.
@@ -6130,7 +6131,7 @@ impl Bank {
     pub fn epoch_vote_accounts(
         &self,
         epoch: Epoch,
-    ) -> Option<&HashMap<Pubkey, (u64, VoteAccount)>> {
+    ) -> Option<&ImHashMap<Pubkey, (u64, VoteAccount)>> {
         let epoch_stakes = self.epoch_stakes.get(&epoch)?.stakes();
         Some(epoch_stakes.vote_accounts().as_ref())
     }
