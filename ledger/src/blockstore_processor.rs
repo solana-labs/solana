@@ -655,21 +655,6 @@ pub fn process_blockstore_from_root(
     info!("processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
-    if let Some(ref new_hard_forks) = opts.new_hard_forks {
-        let hard_forks = bank.hard_forks();
-
-        for hard_fork_slot in new_hard_forks.iter() {
-            if *hard_fork_slot > start_slot {
-                hard_forks.write().unwrap().register(*hard_fork_slot);
-            } else {
-                warn!(
-                    "Hard fork at {} ignored, --hard-fork option can be removed.",
-                    hard_fork_slot
-                );
-            }
-        }
-    }
-
     // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
         blockstore
