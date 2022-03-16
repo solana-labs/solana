@@ -6085,7 +6085,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
- "sha3 0.10.1",
+ "sha3 0.9.1",
  "solana-program 1.10.3",
  "solana-sdk",
  "subtle",
