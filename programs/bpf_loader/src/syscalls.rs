@@ -2642,6 +2642,7 @@ where
             }
             Ok(())
         },
+        SyscallError::InstructionError(InstructionError::NotEnoughAccountKeys).into(),
     )?;
 
     Ok(accounts)

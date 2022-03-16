@@ -352,7 +352,11 @@ impl<'a> InvokeContext<'a> {
                 }
                 Err(InstructionError::MissingAccount)
             };
-            visit_each_account_once::<InstructionError>(instruction_accounts, &mut work)?;
+            visit_each_account_once(
+                instruction_accounts,
+                &mut work,
+                InstructionError::NotEnoughAccountKeys,
+            )?;
         } else {
             let contains = (0..self
                 .transaction_context
@@ -517,7 +521,11 @@ impl<'a> InvokeContext<'a> {
 
             Ok(())
         };
-        visit_each_account_once::<InstructionError>(instruction_accounts, &mut work)?;
+        visit_each_account_once(
+            instruction_accounts,
+            &mut work,
+            InstructionError::NotEnoughAccountKeys,
+        )?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -615,7 +623,11 @@ impl<'a> InvokeContext<'a> {
             }
             Err(InstructionError::MissingAccount)
         };
-        visit_each_account_once::<InstructionError>(instruction_accounts, &mut work)?;
+        visit_each_account_once(
+            instruction_accounts,
+            &mut work,
+            InstructionError::NotEnoughAccountKeys,
+        )?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -1157,16 +1169,22 @@ pub fn mock_process_instruction(
 pub fn visit_each_account_once<E>(
     instruction_accounts: &[InstructionAccount],
     work: &mut dyn FnMut(usize, &InstructionAccount) -> Result<(), E>,
+    inner_error: E,
 ) -> Result<(), E> {
+    // Note: This is an O(n^2) algorithm,
+    // but performed on a very small slice and requires no heap allocations
     'root: for (index, instruction_account) in instruction_accounts.iter().enumerate() {
-        // Note: This is an O(n^2) algorithm,
-        // but performed on a very small slice and requires no heap allocations
-        for before in instruction_accounts.get(..index).unwrap().iter() {
-            if before.index_in_transaction == instruction_account.index_in_transaction {
-                continue 'root; // skip dups
+        match instruction_accounts.get(..index) {
+            Some(range) => {
+                for before in range.iter() {
+                    if before.index_in_transaction == instruction_account.index_in_transaction {
+                        continue 'root; // skip dups
+                    }
+                }
+                work(index, instruction_account)?;
             }
+            None => return Err(inner_error),
         }
-        work(index, instruction_account)?;
     }
     Ok(())
 }
@@ -1207,7 +1225,8 @@ mod tests {
                 index_sum_b += entry.index_in_transaction;
                 Ok(())
             };
-            visit_each_account_once::<InstructionError>(accounts, &mut work).unwrap();
+            visit_each_account_once(accounts, &mut work, InstructionError::NotEnoughAccountKeys)
+                .unwrap();
 
             (unique_entries, index_sum_a, index_sum_b)
         };
