@@ -5898,6 +5898,7 @@ pub mod tests {
             &tower_storage,
             vote_info,
             false,
+            false,
         );
 
         let mut cursor = Cursor::default();
@@ -5963,6 +5964,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
             false,
         );
         let votes = cluster_info.get_votes(&mut cursor);
@@ -6033,6 +6035,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
             false,
         );
 

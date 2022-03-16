@@ -292,12 +292,14 @@ impl Tvu {
         };
 
         let (voting_sender, voting_receiver) = unbounded();
+        // TODO: use validator configuration to compute value for use_quic_client parameter
         let voting_service = VotingService::new(
             voting_receiver,
             cluster_info.clone(),
             poh_recorder.clone(),
             tower_storage,
             bank_forks.clone(),
+            false, /* use_quic_client */
         );
 
         let (cost_update_sender, cost_update_receiver) = unbounded();
