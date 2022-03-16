@@ -410,35 +410,29 @@ impl Rocks {
         oldest_slot: &OldestSlot,
     ) -> Vec<ColumnFamilyDescriptor> {
         use columns::*;
-        let access_type = &options.access_type;
-        let advanced_options = &options.advanced_options;
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
-            new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(
-                access_type,
-                oldest_slot,
-                advanced_options,
-            );
+            new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(options, oldest_slot);
         vec![
-            new_cf_descriptor::<SlotMeta>(access_type, oldest_slot),
-            new_cf_descriptor::<DeadSlots>(access_type, oldest_slot),
-            new_cf_descriptor::<DuplicateSlots>(access_type, oldest_slot),
-            new_cf_descriptor::<ErasureMeta>(access_type, oldest_slot),
-            new_cf_descriptor::<Orphans>(access_type, oldest_slot),
-            new_cf_descriptor::<BankHash>(access_type, oldest_slot),
-            new_cf_descriptor::<Root>(access_type, oldest_slot),
-            new_cf_descriptor::<Index>(access_type, oldest_slot),
+            new_cf_descriptor::<SlotMeta>(options, oldest_slot),
+            new_cf_descriptor::<DeadSlots>(options, oldest_slot),
+            new_cf_descriptor::<DuplicateSlots>(options, oldest_slot),
+            new_cf_descriptor::<ErasureMeta>(options, oldest_slot),
+            new_cf_descriptor::<Orphans>(options, oldest_slot),
+            new_cf_descriptor::<BankHash>(options, oldest_slot),
+            new_cf_descriptor::<Root>(options, oldest_slot),
+            new_cf_descriptor::<Index>(options, oldest_slot),
             cf_descriptor_shred_data,
             cf_descriptor_shred_code,
-            new_cf_descriptor::<TransactionStatus>(access_type, oldest_slot),
-            new_cf_descriptor::<AddressSignatures>(access_type, oldest_slot),
-            new_cf_descriptor::<TransactionMemos>(access_type, oldest_slot),
-            new_cf_descriptor::<TransactionStatusIndex>(access_type, oldest_slot),
-            new_cf_descriptor::<Rewards>(access_type, oldest_slot),
-            new_cf_descriptor::<Blocktime>(access_type, oldest_slot),
-            new_cf_descriptor::<PerfSamples>(access_type, oldest_slot),
-            new_cf_descriptor::<BlockHeight>(access_type, oldest_slot),
-            new_cf_descriptor::<ProgramCosts>(access_type, oldest_slot),
+            new_cf_descriptor::<TransactionStatus>(options, oldest_slot),
+            new_cf_descriptor::<AddressSignatures>(options, oldest_slot),
+            new_cf_descriptor::<TransactionMemos>(options, oldest_slot),
+            new_cf_descriptor::<TransactionStatusIndex>(options, oldest_slot),
+            new_cf_descriptor::<Rewards>(options, oldest_slot),
+            new_cf_descriptor::<Blocktime>(options, oldest_slot),
+            new_cf_descriptor::<PerfSamples>(options, oldest_slot),
+            new_cf_descriptor::<BlockHeight>(options, oldest_slot),
+            new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
         ]
     }
 
@@ -1413,44 +1407,44 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
 }
 
 fn new_cf_descriptor<C: 'static + Column + ColumnName>(
-    access_type: &AccessType,
+    options: &BlockstoreOptions,
     oldest_slot: &OldestSlot,
 ) -> ColumnFamilyDescriptor {
-    ColumnFamilyDescriptor::new(C::NAME, get_cf_options::<C>(access_type, oldest_slot))
+    ColumnFamilyDescriptor::new(C::NAME, get_cf_options::<C>(options, oldest_slot))
 }
 
 fn get_cf_options<C: 'static + Column + ColumnName>(
-    access_type: &AccessType,
+    options: &BlockstoreOptions,
     oldest_slot: &OldestSlot,
 ) -> Options {
-    let mut options = Options::default();
+    let mut cf_options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
-    options.set_max_write_buffer_number(8);
-    options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
+    cf_options.set_max_write_buffer_number(8);
+    cf_options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
     let file_num_compaction_trigger = 4;
     // Recommend that this be around the size of level 0. Level 0 estimated size in stable state is
     // write_buffer_size * min_write_buffer_number_to_merge * level0_file_num_compaction_trigger
     // Source: https://docs.rs/rocksdb/0.6.0/rocksdb/struct.Options.html#method.set_level_zero_file_num_compaction_trigger
     let total_size_base = MAX_WRITE_BUFFER_SIZE * file_num_compaction_trigger;
     let file_size_base = total_size_base / 10;
-    options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
-    options.set_max_bytes_for_level_base(total_size_base);
-    options.set_target_file_size_base(file_size_base);
+    cf_options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
+    cf_options.set_max_bytes_for_level_base(total_size_base);
+    cf_options.set_target_file_size_base(file_size_base);
 
-    let disable_auto_compactions = should_disable_auto_compactions(access_type);
+    let disable_auto_compactions = should_disable_auto_compactions(&options.access_type);
     if disable_auto_compactions {
-        options.set_disable_auto_compactions(true);
+        cf_options.set_disable_auto_compactions(true);
     }
 
     if !disable_auto_compactions && !should_exclude_from_compaction(C::NAME) {
-        options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
+        cf_options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
             _phantom: PhantomData::default(),
         });
     }
 
-    options
+    cf_options
 }
 
 /// Creates and returns the column family descriptors for both data shreds and
@@ -1462,14 +1456,13 @@ fn new_cf_descriptor_pair_shreds<
     D: 'static + Column + ColumnName, // Column Family for Data Shred
     C: 'static + Column + ColumnName, // Column Family for Coding Shred
 >(
-    access_type: &AccessType,
+    options: &BlockstoreOptions,
     oldest_slot: &OldestSlot,
-    advanced_options: &BlockstoreAdvancedOptions,
 ) -> (ColumnFamilyDescriptor, ColumnFamilyDescriptor) {
-    match &advanced_options.shred_storage_type {
+    match &options.advanced_options.shred_storage_type {
         ShredStorageType::RocksLevel => (
-            new_cf_descriptor::<D>(access_type, oldest_slot),
-            new_cf_descriptor::<C>(access_type, oldest_slot),
+            new_cf_descriptor::<D>(options, oldest_slot),
+            new_cf_descriptor::<C>(options, oldest_slot),
         ),
         ShredStorageType::RocksFifo(fifo_options) => (
             new_cf_descriptor_fifo::<D>(&fifo_options.shred_data_cf_size),
