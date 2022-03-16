@@ -76,7 +76,7 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        compute_budget::ComputeBudget,
+        compute_budget::{self, ComputeBudget},
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext, TransactionExecutor,
         },
@@ -4053,9 +4053,14 @@ impl Bank {
                     signature_count += u64::from(tx.message().header().num_required_signatures);
 
                     let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
+                    let compute_budget_max_units = if tx_wide_compute_cap {
+                        compute_budget::MAX_UNITS
+                    } else {
+                        compute_budget::DEFAULT_UNITS
+                    };
                     let mut compute_budget = self
                         .compute_budget
-                        .unwrap_or_else(|| ComputeBudget::new(tx_wide_compute_cap));
+                        .unwrap_or_else(|| ComputeBudget::new(compute_budget_max_units));
                     if tx_wide_compute_cap {
                         let mut compute_budget_process_transaction_time =
                             Measure::start("compute_budget_process_transaction_time");
@@ -16925,7 +16930,7 @@ pub(crate) mod tests {
 
         let compute_budget = bank
             .compute_budget
-            .unwrap_or_else(|| ComputeBudget::new(false));
+            .unwrap_or_else(|| ComputeBudget::new(compute_budget::DEFAULT_UNITS));
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             compute_budget.max_invoke_depth.saturating_add(1),

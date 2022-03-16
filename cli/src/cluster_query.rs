@@ -33,7 +33,7 @@ use {
         rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
         rpc_response::SlotInfo,
     },
-    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_program_runtime::compute_budget,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
@@ -1409,7 +1409,7 @@ pub fn process_ping(
             )];
             if let Some(additional_fee) = additional_fee {
                 ixs.push(ComputeBudgetInstruction::request_units(
-                    ComputeBudget::new(false).max_units as u32,
+                    compute_budget::DEFAULT_UNITS,
                     *additional_fee,
                 ));
             }
