@@ -170,6 +170,11 @@ export class Transaction {
   nonceInfo?: NonceInformation;
 
   /**
+   * @internal
+   */
+  _message?: Message;
+
+  /**
    * Construct an empty Transaction
    */
   constructor(opts?: TransactionCtorFields) {
@@ -184,6 +189,9 @@ export class Transaction {
       Transaction | TransactionInstruction | TransactionInstructionCtorFields
     >
   ): Transaction {
+    if (this._message) {
+      throw new Error('Transaction populated from Message');
+    }
     if (items.length === 0) {
       throw new Error('No instructions');
     }
@@ -204,6 +212,8 @@ export class Transaction {
    * Compile transaction data
    */
   compileMessage(): Message {
+    if (this._message) return this._message;
+
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
@@ -682,6 +692,7 @@ export class Transaction {
     signatures: Array<string> = [],
   ): Transaction {
     const transaction = new Transaction();
+    transaction._message = message;
     transaction.recentBlockhash = message.recentBlockhash;
     if (message.header.numRequiredSignatures > 0) {
       transaction.feePayer = message.accountKeys[0];
