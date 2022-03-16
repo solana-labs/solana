@@ -2494,8 +2494,10 @@ mod tests {
 
     #[test]
     fn test_split_source_uninitialized() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
         let stake_account = AccountSharedData::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
@@ -2614,12 +2616,17 @@ mod tests {
 
     #[test]
     fn test_split_more_than_staked() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
         let stake_account = AccountSharedData::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Stake(
-                Meta::auto(&stake_pubkey),
+                Meta {
+                    rent_exempt_reserve,
+                    ..Meta::auto(&stake_pubkey)
+                },
                 just_stake(stake_lamports / 2 - 1),
             ),
             std::mem::size_of::<StakeState>(),
@@ -2648,10 +2655,12 @@ mod tests {
 
     #[test]
     fn test_split_with_rent() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_balance = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 10_000_000;
-        let rent_exempt_reserve = 2_282_880;
+        let stake_lamports = minimum_balance * 2;
         let signers = vec![stake_pubkey].into_iter().collect();
 
         let meta = Meta {
@@ -2710,10 +2719,10 @@ mod tests {
             split_stake_keyed_account
                 .account
                 .borrow_mut()
-                .set_lamports(10_000_000);
+                .set_lamports(minimum_balance);
             assert_eq!(
                 stake_keyed_account.split(
-                    stake_lamports - (rent_exempt_reserve + 1), // leave rent_exempt_reserve + 1 in original account
+                    stake_lamports - minimum_balance,
                     &split_stake_keyed_account,
                     &signers
                 ),
@@ -2728,7 +2737,7 @@ mod tests {
                         *meta,
                         Stake {
                             delegation: Delegation {
-                                stake: stake_lamports - rent_exempt_reserve - 1,
+                                stake: stake_lamports - minimum_balance,
                                 ..stake.delegation
                             },
                             ..*stake
@@ -2737,11 +2746,11 @@ mod tests {
                 );
                 assert_eq!(
                     stake_keyed_account.account.borrow().lamports(),
-                    rent_exempt_reserve + 1
+                    minimum_balance,
                 );
                 assert_eq!(
                     split_stake_keyed_account.account.borrow().lamports(),
-                    10_000_000 + stake_lamports - rent_exempt_reserve - 1
+                    stake_lamports,
                 );
             }
         }
@@ -2752,7 +2761,7 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve * 3; // Enough to allow half to be split and remain rent-exempt
+        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -2767,7 +2776,13 @@ mod tests {
         // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
         // rent_exempt_reserve, and more than rent_exempt_reserve. The empty case is not covered in
         // test_split, since that test uses a Meta with rent_exempt_reserve = 0
-        let split_lamport_balances = vec![0, 1, rent_exempt_reserve, rent_exempt_reserve + 1];
+        let split_lamport_balances = vec![
+            0,
+            rent_exempt_reserve - 1,
+            rent_exempt_reserve,
+            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+        ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
                 initial_balance,
@@ -2852,7 +2867,7 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve * 3; // Enough to allow half to be split and remain rent-exempt
+        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -2876,9 +2891,10 @@ mod tests {
         // test_split, since that test uses a Meta with rent_exempt_reserve = 0
         let split_lamport_balances = vec![
             0,
-            1,
+            expected_rent_exempt_reserve - 1,
             expected_rent_exempt_reserve,
-            expected_rent_exempt_reserve + 1,
+            expected_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+            expected_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
         ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -3033,7 +3049,7 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve * 3; // Arbitrary amount over rent_exempt_reserve
+        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3119,7 +3135,7 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve * 3; // Arbitrary amount over rent_exempt_reserve
+        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3134,7 +3150,13 @@ mod tests {
         // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
         // rent_exempt_reserve, and more than rent_exempt_reserve. Technically, the empty case is
         // covered in test_split_100_percent_of_source, but included here as well for readability
-        let split_lamport_balances = vec![0, 1, rent_exempt_reserve, rent_exempt_reserve + 1];
+        let split_lamport_balances = vec![
+            0,
+            rent_exempt_reserve - 1,
+            rent_exempt_reserve,
+            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+        ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
                 initial_balance,
