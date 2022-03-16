@@ -166,7 +166,9 @@ pub mod tests {
         batches[0].packets[1].meta.size = shred.payload.len();
 
         let num_packets = solana_perf::sigverify::count_packets_in_batches(&batches);
-        let rv = verifier.verify_batches(batches, num_packets);
+        let (rv, count_discarded) = verifier.verify_batches(batches, num_packets);
+        assert_eq!(count_discarded, 1);
+
         assert!(!rv[0].packets[0].meta.discard());
         assert!(rv[0].packets[1].meta.discard());
     }
