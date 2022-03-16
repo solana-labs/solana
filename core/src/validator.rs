@@ -568,12 +568,6 @@ impl Validator {
 
         let bank = bank_forks.read().unwrap().working_bank();
         info!("Starting validator with working bank slot {}", bank.slot());
-        {
-            let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();
-            if !hard_forks.is_empty() {
-                info!("Hard forks: {:?}", hard_forks);
-            }
-        }
 
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
@@ -1360,6 +1354,20 @@ fn load_blockstore(
             .as_ref(),
         accounts_update_notifier,
     );
+
+    {
+        let hard_forks: Vec<_> = bank_forks
+            .working_bank()
+            .hard_forks()
+            .read()
+            .unwrap()
+            .iter()
+            .copied()
+            .collect();
+        if !hard_forks.is_empty() {
+            info!("Hard forks: {:?}", hard_forks);
+        }
+    }
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
