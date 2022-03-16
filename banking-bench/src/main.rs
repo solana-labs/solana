@@ -178,7 +178,7 @@ fn main() {
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
         .unwrap()
-        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+        .set_limits(None, None, None);
 
     info!("threads: {} txs: {}", num_threads, total_num_transactions);
 
@@ -341,11 +341,9 @@ fn main() {
                 insert_time.stop();
 
                 // set cost tracker limits to MAX so it will not filter out TXs
-                bank.write_cost_tracker().unwrap().set_limits(
-                    std::u64::MAX,
-                    std::u64::MAX,
-                    std::u64::MAX,
-                );
+                bank.write_cost_tracker()
+                    .unwrap()
+                    .set_limits(None, None, None);
 
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());

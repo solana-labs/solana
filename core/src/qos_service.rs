@@ -556,9 +556,11 @@ mod tests {
 
         // set cost tracker limit to fit 1 transfer tx and 1 vote tx
         let cost_limit = transfer_tx_cost + vote_tx_cost;
-        bank.write_cost_tracker()
-            .unwrap()
-            .set_limits(cost_limit, cost_limit, cost_limit);
+        bank.write_cost_tracker().unwrap().set_limits(
+            Some(cost_limit),
+            Some(cost_limit),
+            Some(cost_limit),
+        );
         let (results, num_selected) =
             qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
         assert_eq!(num_selected, 2);
