@@ -2,9 +2,11 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
 
-use solana_sdk::declare_id;
+use solana_program::declare_id;
 
+pub mod error;
 pub mod instruction;
+#[cfg(not(target_arch = "bpf"))]
 pub mod processor;
 pub mod state;
 
