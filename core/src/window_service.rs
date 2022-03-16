@@ -329,7 +329,7 @@ where
         Some(retransmit_sender),
         &handle_duplicate,
         metrics,
-        poh_recoder,
+        Some(poh_recoder),
     )?;
     for index in inserted_indices {
         if repair_infos[index].is_some() {

@@ -1226,7 +1226,7 @@ impl Blockstore {
         retransmit_sender: Option<&Sender<Vec<Shred>>>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
-        poh_recorder: &Mutex<PohRecorder>,
+        poh_recorder: Option<&Mutex<PohRecorder>>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
@@ -1454,7 +1454,6 @@ impl Blockstore {
         shreds: Vec<Shred>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
-        poh_recorder: &Mutex<PohRecorder>,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)> {
         let shreds_len = shreds.len();
         self.insert_shreds_handle_duplicate(
@@ -1465,7 +1464,7 @@ impl Blockstore {
             None,    // retransmit-sender
             &|_| {}, // handle-duplicates
             &mut BlockstoreInsertionMetrics::default(),
-            poh_recorder,
+            None,
         )
     }
 
@@ -1658,7 +1657,7 @@ impl Blockstore {
         handle_duplicate: &F,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
-        poh_recorder: &Mutex<PohRecorder>,
+        poh_recorder: Option<&Mutex<PohRecorder>>,
     ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError>
     where
         F: Fn(Shred),
@@ -1923,7 +1922,7 @@ impl Blockstore {
         shred: &Shred,
         write_batch: &mut WriteBatch,
         shred_source: ShredSource,
-        poh_recorder: &Mutex<PohRecorder>,
+        poh_recorder: Option<&Mutex<PohRecorder>>,
     ) -> Result<Vec<CompletedDataSetInfo>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
@@ -2008,10 +2007,7 @@ impl Blockstore {
 
             let curr_ts = solana_sdk::timing::timestamp();
             let slot_poh_ts = poh_recorder
-                .lock()
-                .unwrap()
-                .slot_times
-                .get(slot)
+                .and_then(|r| r.lock().unwrap().slot_times.get(slot))
                 .map_or((curr_ts, curr_ts), |t| t);
             datapoint_info!(
                 "shred_insert_is_full",

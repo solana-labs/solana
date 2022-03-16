@@ -231,6 +231,7 @@ impl StandardBroadcastRun {
         // This must be done before the blocks are sent out over the wire.
         if !data_shreds.is_empty() && data_shreds[0].index() == 0 {
             let first = vec![data_shreds[0].clone()];
+            // TODO: pass poh_recorder to record poh time difference
             blockstore
                 .insert_shreds(first, None, true)
                 .expect("Failed to insert shreds in blockstore");
@@ -328,6 +329,8 @@ impl StandardBroadcastRun {
         } else {
             shreds.to_vec()
         };
+
+        // TODO: pass poh_recorder to record poh time difference
         blockstore
             .insert_shreds(data_shreds, None, true)
             .expect("Failed to insert shreds in blockstore");
