@@ -268,7 +268,7 @@ impl SigVerifyStage {
         verify_batch_time.stop();
 
         debug!(
-            "discarded packages: {}, dedup failed packages: {}",
+            "discarded packets: {}, dedup failed packets: {}",
             count_discarded, dedup_fail
         );
 
