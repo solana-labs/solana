@@ -886,6 +886,13 @@ pub fn main() {
                        download from other validators"),
         )
         .arg(
+            // NOP arg for forward compatibility with ISS on-by-default in v1.10
+            Arg::with_name("no_incremental_snapshots")
+                .long("no-incremental-snapshots")
+                .hidden(true)
+                .conflicts_with("incremental_snapshots")
+        )
+        .arg(
             Arg::with_name("incremental_snapshots")
                 .long("incremental-snapshots")
                 .takes_value(false)
