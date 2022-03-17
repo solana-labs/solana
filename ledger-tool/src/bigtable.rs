@@ -1,4 +1,4 @@
-/// The `bigtable` subcommand
+//! The `bigtable` subcommand
 use {
     crate::ledger_path::canonicalize_ledger_path,
     clap::{
@@ -17,7 +17,7 @@ use {
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_transaction_status::{
-        BlockEncodingOptions, Encodable, EncodeError, LegacyConfirmedBlock, TransactionDetails,
+        BlockEncodingOptions, ConfirmedBlock, EncodeError, TransactionDetails,
         UiTransactionEncoding,
     },
     std::{
@@ -172,19 +172,17 @@ async fn confirm(
     if verbose {
         match bigtable.get_confirmed_transaction(signature).await {
             Ok(Some(confirmed_tx)) => {
-                let legacy_confirmed_tx = confirmed_tx
-                    .into_legacy_confirmed_transaction()
-                    .ok_or_else(|| "Failed to read versioned transaction in block".to_string())?;
-
+                let decoded_tx = confirmed_tx.get_transaction();
+                let encoded_tx_with_meta = confirmed_tx
+                    .tx_with_meta
+                    .encode(UiTransactionEncoding::Json, Some(0))
+                    .map_err(|_| "Failed to encode transaction in block".to_string())?;
                 transaction = Some(CliTransaction {
-                    transaction: legacy_confirmed_tx
-                        .tx_with_meta
-                        .transaction
-                        .encode(UiTransactionEncoding::Json),
-                    meta: legacy_confirmed_tx.tx_with_meta.meta.map(|m| m.into()),
-                    block_time: legacy_confirmed_tx.block_time,
-                    slot: Some(legacy_confirmed_tx.slot),
-                    decoded_transaction: legacy_confirmed_tx.tx_with_meta.transaction,
+                    transaction: encoded_tx_with_meta.transaction,
+                    meta: encoded_tx_with_meta.meta,
+                    block_time: confirmed_tx.block_time,
+                    slot: Some(confirmed_tx.slot),
+                    decoded_transaction: decoded_tx,
                     prefix: "  ".to_string(),
                     sigverify_status: vec![],
                 });
@@ -216,7 +214,7 @@ pub async fn transaction_history(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
 
-    let mut loaded_block: Option<(Slot, LegacyConfirmedBlock)> = None;
+    let mut loaded_block: Option<(Slot, ConfirmedBlock)> = None;
     while limit > 0 {
         let results = bigtable
             .get_confirmed_signatures_for_address(
@@ -257,21 +255,22 @@ pub async fn transaction_history(
                 loop {
                     if let Some((slot, block)) = &loaded_block {
                         if *slot == result.slot {
-                            match block.transactions.get(index as usize) {
+                            match block.transactions.get(index as usize).map(|tx_with_meta| {
+                                (
+                                    tx_with_meta.get_transaction(),
+                                    tx_with_meta.get_status_meta(),
+                                )
+                            }) {
                                 None => {
                                     println!(
                                         "  Transaction info for {} is corrupt",
                                         result.signature
                                     );
                                 }
-                                Some(transaction_with_meta) => {
+                                Some((transaction, meta)) => {
                                     println_transaction(
-                                        &transaction_with_meta.transaction,
-                                        transaction_with_meta
-                                            .meta
-                                            .clone()
-                                            .map(|m| m.into())
-                                            .as_ref(),
+                                        &transaction,
+                                        meta.map(|m| m.into()).as_ref(),
                                         "  ",
                                         None,
                                         None,
@@ -287,10 +286,7 @@ pub async fn transaction_history(
                             break;
                         }
                         Ok(confirmed_block) => {
-                            let block = confirmed_block.into_legacy_block().ok_or_else(|| {
-                                "Failed to read versioned transaction in block".to_string()
-                            })?;
-                            loaded_block = Some((result.slot, block));
+                            loaded_block = Some((result.slot, confirmed_block));
                         }
                     }
                 }

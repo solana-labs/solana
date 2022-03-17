@@ -28,7 +28,7 @@ use {
         signature::Signature,
         stake::state::{Authorized, Lockup},
         stake_history::StakeHistoryEntry,
-        transaction::{Transaction, TransactionError},
+        transaction::{Transaction, TransactionError, VersionedTransaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedTransaction, TransactionConfirmationStatus,
@@ -2218,7 +2218,7 @@ pub enum CliSignatureVerificationStatus {
 }
 
 impl CliSignatureVerificationStatus {
-    pub fn verify_transaction(tx: &Transaction) -> Vec<Self> {
+    pub fn verify_transaction(tx: &VersionedTransaction) -> Vec<Self> {
         tx.verify_with_results()
             .iter()
             .zip(&tx.signatures)
@@ -2354,7 +2354,7 @@ pub struct CliTransaction {
     #[serde(skip_serializing)]
     pub slot: Option<Slot>,
     #[serde(skip_serializing)]
-    pub decoded_transaction: Transaction,
+    pub decoded_transaction: VersionedTransaction,
     #[serde(skip_serializing)]
     pub prefix: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
