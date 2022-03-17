@@ -4,7 +4,10 @@ use {
         lamports::LamportsError,
         pubkey::Pubkey,
     },
-    serde::ser::{Serialize, Serializer},
+    serde::{
+        ser::{Serialize, Serializer},
+        Deserialize, Deserializer,
+    },
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
@@ -467,6 +470,15 @@ fn shared_new_ref_data_with_space<T: serde::Serialize, U: WritableAccount>(
     Ok(RefCell::new(shared_new_data_with_space::<T, U>(
         lamports, state, space, owner,
     )?))
+}
+
+impl<'de> Deserialize<'de> for AccountSharedData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(AccountSharedData::from(Account::deserialize(deserializer)?))
+    }
 }
 
 fn shared_deserialize_data<T: serde::de::DeserializeOwned, U: ReadableAccount>(
