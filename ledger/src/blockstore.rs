@@ -27,7 +27,7 @@ use {
     rocksdb::DBRawIterator,
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_debug, datapoint_error},
+    solana_metrics::{datapoint::PohTimingPoint, datapoint_debug, datapoint_error},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
@@ -175,6 +175,7 @@ pub struct Blockstore {
     insert_shreds_lock: Mutex<()>,
     pub new_shreds_signals: Vec<Sender<bool>>,
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
+    pub shred_timing_point_sender: Option<Sender<(Slot, PohTimingPoint)>>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
     slots_stats: Mutex<SlotsStats>,
@@ -659,6 +660,7 @@ impl Blockstore {
             bank_hash_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
+            shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
@@ -2017,6 +2019,14 @@ impl Blockstore {
             );
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
+
+        // send
+        if let Some(ref sender) = self.shred_timing_point_sender {
+            let _ = sender.try_send((
+                slot,
+                PohTimingPoint::FullShredReceived(solana_sdk::timing::timestamp()),
+            ));
+        }
         Ok(newly_completed_data_sets)
     }
 

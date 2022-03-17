@@ -1,52 +1,83 @@
-use {solana_metrics::datapoint_info, solana_sdk::clock::Slot, std::collections::HashMap};
+use {
+    solana_metrics::{datapoint::PohTimingPoint, datapoint_info},
+    solana_sdk::clock::Slot,
+    std::collections::HashMap,
+};
 
-/// SlotPohTimestamp
-#[derive(Debug, Default)]
+/// A PohTimestamp records timing of the events during the processing of a slot
+/// the validator
+#[derive(Debug)]
 pub struct SlotPohTimestamp {
-    /// slot start time from poh
+    /// Slot start time from poh
     pub start_time: u64,
-    /// slot end time from poh
+    /// Slot end time from poh
     pub end_time: u64,
-    /// last shred received time from block producer
+    /// Last shred received time from block producer
     pub last_shred_recv_time: u64,
 }
 
+/// Default value (all zeros)
+impl Default for SlotPohTimestamp {
+    fn default() -> Self {
+        Self {
+            start_time: 0,
+            end_time: 0,
+            last_shred_recv_time: 0,
+        }
+    }
+}
+
 impl SlotPohTimestamp {
+    /// Return true if the timing points of all event are received.
     pub fn is_complete(&self) -> bool {
         self.start_time != 0 && self.end_time != 0 && self.last_shred_recv_time != 0
     }
 
-    pub fn update(&mut self, s: &str, ts: u64) {
-        if s == "start_time" {
-            self.start_time = ts;
-        } else if s == "end_time" {
-            self.end_time = ts;
-        } else if s == "last_shred_recv_time" {
-            self.last_shred_recv_time = ts;
+    /// Update timing point
+    pub fn update(&mut self, timing_point: PohTimingPoint) {
+        match timing_point {
+            PohTimingPoint::PohSlotStart(ts) => self.start_time = ts,
+            PohTimingPoint::PohSlotEnd(ts) => self.end_time = ts,
+            PohTimingPoint::FullShredReceived(ts) => self.last_shred_recv_time = ts,
         }
     }
 
+    /// Return the time difference between last shred received and slot start
     pub fn shred_recv_slot_start_time_diff(&self) -> u64 {
         self.last_shred_recv_time - self.start_time
     }
 
+    /// Return the time difference between last shred received and slot end
     pub fn shred_recv_slot_end_time_diff(&self) -> u64 {
         self.last_shred_recv_time - self.end_time
     }
 }
 
-/// Collect and report PohTiming
+/// A PohTimingReporter manages and reports the timing of events for incoming
+/// slots
 pub struct PohTimingReporter {
+    /// Storage map of SlotPohTimestamp per slot
     slot_timestamps: HashMap<Slot, SlotPohTimestamp>,
 }
 
 impl PohTimingReporter {
+    /// Return a PohTimingReporter instance
     pub fn new() -> Self {
         Self {
             slot_timestamps: HashMap::new(),
         }
     }
 
+    /// Check if PohTiming is complete for a slot
+    pub fn is_complete(&self, slot: Slot) -> bool {
+        if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
+            slot_timestamp.is_complete()
+        } else {
+            false
+        }
+    }
+
+    /// Report PohTiming for a slot
     pub fn report(&self, slot: Slot, slot_timestamp: &SlotPohTimestamp) {
         datapoint_info!(
             "poh_slot_timing",
@@ -71,12 +102,14 @@ impl PohTimingReporter {
         );
     }
 
-    pub fn process(&mut self, slot: Slot, name: &str, ts: u64) {
+    /// Process incoming PohTimingPoint from the channel
+    pub fn process(&mut self, slot: Slot, t: PohTimingPoint) {
         if !self.slot_timestamps.contains_key(&slot) {
-            self.slot_timestamps.insert(slot, Default::default());
+            self.slot_timestamps
+                .insert(slot, SlotPohTimestamp::default());
         }
         if let Some(slot_timestamp) = self.slot_timestamps.get_mut(&slot) {
-            slot_timestamp.update(name, ts);
+            slot_timestamp.update(t);
         }
 
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
@@ -84,5 +117,25 @@ impl PohTimingReporter {
                 self.report(slot, slot_timestamp);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    /// Test poh_timing_reporter
+    fn test_poh_timing_reporter() {
+        // create a reporter
+        let mut reporter = PohTimingReporter::new();
+
+        // process all relevant PohTimingPoints for a slot
+        reporter.process(42, PohTimingPoint::PohSlotStart(100));
+        reporter.process(42, PohTimingPoint::PohSlotEnd(200));
+        reporter.process(42, PohTimingPoint::FullShredReceived(150));
+
+        // assert that the PohTiming is complete
+        assert!(reporter.is_complete(42));
     }
 }

@@ -1,9 +1,8 @@
-//! The `poh_timing_report_service` reports slot poh start/end time against slot shreds receiving
-//! time from the block producer.
-
+//! PohTimingReportService module
 use {
     crate::poh_timing_reporter::PohTimingReporter,
     crossbeam_channel::Receiver,
+    solana_metrics::datapoint::PohTimingPoint,
     solana_sdk::clock::Slot,
     std::{
         string::ToString,
@@ -19,15 +18,17 @@ use {
 /// Timeout to wait on the poh timestamp from the channel
 const POH_TIMING_RECEIVER_TIMEOUT_MILLISECONDS: u64 = 1000;
 
-pub type PohTimingReceiver = Receiver<(Slot, String, u64)>;
+pub type PohTimingReceiver = Receiver<(Slot, PohTimingPoint)>;
+
+/// The `poh_timing_report_service` receives signals of relevant timing points
+/// during the processing of a slot, (i.e. from blockstore and poh), aggregate and
+/// report the result as datapoints.
 pub struct PohTimingReportService {
     t_poh_timing: JoinHandle<()>,
 }
 
 impl PohTimingReportService {
     pub fn new(receiver: PohTimingReceiver, exit: Arc<AtomicBool>) -> Self {
-        //let (sender, receiver) = unbounded();
-
         let exit_signal = exit.clone();
         let mut poh_timing_reporter = PohTimingReporter::new();
         let t_poh_timing = Builder::new()
@@ -36,10 +37,10 @@ impl PohTimingReportService {
                 if exit_signal.load(Ordering::Relaxed) {
                     break;
                 }
-                if let Ok((slot, name, ts)) = receiver.recv_timeout(Duration::from_millis(
+                if let Ok((slot, timing_point)) = receiver.recv_timeout(Duration::from_millis(
                     POH_TIMING_RECEIVER_TIMEOUT_MILLISECONDS,
                 )) {
-                    poh_timing_reporter.process(slot, &name, ts);
+                    poh_timing_reporter.process(slot, timing_point);
                 }
             })
             .unwrap();
@@ -48,5 +49,31 @@ impl PohTimingReportService {
 
     pub fn join(self) -> thread::Result<()> {
         self.t_poh_timing.join()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use {super::*, crossbeam_channel::unbounded};
+
+    #[test]
+    /// Test the life cycle of the PohTimingReportService
+    fn test_poh_timing_report_service() {
+        let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
+        let exit = Arc::new(AtomicBool::new(false));
+        // Create the service
+        let poh_timing_report_service =
+            PohTimingReportService::new(poh_timing_point_receiver.clone(), exit.clone());
+
+        // Send PohTimingPoints
+        let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotStart(100)));
+        let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotEnd(200)));
+        let _ = poh_timing_point_sender.send((42, PohTimingPoint::FullShredReceived(150)));
+
+        // Shutdown the service
+        exit.store(true, Ordering::Relaxed);
+        poh_timing_report_service
+            .join()
+            .expect("poh_timing_report_service completed");
     }
 }

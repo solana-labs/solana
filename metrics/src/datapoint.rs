@@ -147,6 +147,13 @@ macro_rules! datapoint_trace {
     };
 }
 
+#[derive(Debug, Clone)]
+pub enum PohTimingPoint {
+    PohSlotStart(u64),
+    PohSlotEnd(u64),
+    FullShredReceived(u64),
+}
+
 #[cfg(test)]
 mod test {
     #[test]

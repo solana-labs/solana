@@ -17,7 +17,6 @@ use {
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
         ledger_metric_report_service::LedgerMetricReportService,
-        poh_timing_report_service::PohTimingReportService,
         replay_stage::{ReplayStage, ReplayStageConfig},
         retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
@@ -79,7 +78,6 @@ pub struct Tvu {
     voting_service: VotingService,
     drop_bank_service: DropBankService,
     transaction_cost_metrics_service: TransactionCostMetricsService,
-    poh_timing_report_service: PohTimingReportService,
 }
 
 pub struct TvuSockets {
@@ -306,10 +304,6 @@ impl Tvu {
         let cost_update_service =
             CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
 
-        let (poh_timing_sender, poh_timing_receiver) = unbounded();
-        let poh_timing_report_service =
-            PohTimingReportService::new(poh_timing_receiver.clone(), exit.clone());
-
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
         let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
@@ -382,7 +376,6 @@ impl Tvu {
             voting_service,
             drop_bank_service,
             transaction_cost_metrics_service,
-            poh_timing_report_service,
         }
     }
 
@@ -401,7 +394,6 @@ impl Tvu {
         self.voting_service.join()?;
         self.drop_bank_service.join()?;
         self.transaction_cost_metrics_service.join()?;
-        self.poh_timing_report_service.join()?;
         Ok(())
     }
 }
