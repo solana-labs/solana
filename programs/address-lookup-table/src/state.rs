@@ -1,12 +1,12 @@
 use {
+    crate::error::AddressLookupError,
     serde::{Deserialize, Serialize},
     solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample},
-    solana_sdk::{
+    solana_program::{
         clock::Slot,
         instruction::InstructionError,
         pubkey::Pubkey,
         slot_hashes::{SlotHashes, MAX_ENTRIES},
-        transaction::AddressLookupError,
     },
     std::borrow::Cow,
 };

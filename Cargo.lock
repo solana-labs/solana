@@ -4287,6 +4287,7 @@ dependencies = [
  "serde",
  "solana-frozen-abi 1.10.3",
  "solana-frozen-abi-macro 1.10.3",
+ "solana-program 1.10.3",
  "solana-program-runtime",
  "solana-sdk",
  "thiserror",

@@ -2763,6 +2763,7 @@ dependencies = [
  "serde",
  "solana-frozen-abi 1.10.3",
  "solana-frozen-abi-macro 1.10.3",
+ "solana-program 1.10.3",
  "solana-program-runtime",
  "solana-sdk",
  "thiserror",
@@ -2901,6 +2902,7 @@ name = "solana-bpf-rust-dep-crate"
 version = "1.10.3"
 dependencies = [
  "byteorder 1.4.3",
+ "solana-address-lookup-table-program",
  "solana-program 1.10.3",
 ]
 
