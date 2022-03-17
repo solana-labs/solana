@@ -46,7 +46,7 @@ mod account_serialize {
     struct Account<'a> {
         lamports: u64,
         #[serde(with = "serde_bytes")]
-        // a ref so we don't have to make a copy just to serialize this
+        // a slice so we don't have to make a copy just to serialize this
         data: &'a [u8],
         // can't be &pubkey because abi example doesn't support it
         owner: Pubkey,
