@@ -2012,7 +2012,7 @@ impl Bank {
                     .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
             )),
             sysvar_cache: RwLock::new(SysvarCache::default()),
-            accounts_data_len: AtomicU64::new(accounts_data_len),
+            accounts_data_len: AtomicU64::new(fields.accounts_data_len),
             fee_structure: FeeStructure::default(),
         };
         bank.finish_init(
