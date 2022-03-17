@@ -191,13 +191,13 @@ pub struct Blockstore {
     block_height_cf: LedgerColumn<cf::BlockHeight>,
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
-    last_root: Arc<RwLock<Slot>>,
-    insert_shreds_lock: Arc<Mutex<()>>,
+    last_root: RwLock<Slot>,
+    insert_shreds_lock: Mutex<()>,
     pub new_shreds_signals: Vec<Sender<bool>>,
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
-    pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
+    pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
-    slots_stats: Arc<Mutex<SlotsStats>>,
+    slots_stats: Mutex<SlotsStats>,
     advanced_options: BlockstoreAdvancedOptions,
     turbine_slots_stats: Arc<Mutex<HashMap<Slot, TurbineSlotStats>>>,
 }
@@ -636,7 +636,7 @@ impl Blockstore {
             .next()
             .map(|(slot, _)| slot)
             .unwrap_or(0);
-        let last_root = Arc::new(RwLock::new(max_root));
+        let last_root = RwLock::new(max_root);
 
         // Get active transaction-status index or 0
         let active_transaction_status_index = db
@@ -680,11 +680,11 @@ impl Blockstore {
             bank_hash_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
-            insert_shreds_lock: Arc::new(Mutex::new(())),
+            insert_shreds_lock: Mutex::<()>::default(),
             last_root,
-            lowest_cleanup_slot: Arc::new(RwLock::new(0)),
+            lowest_cleanup_slot: RwLock::<Slot>::default(),
             no_compaction: false,
-            slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
+            slots_stats: Mutex::<SlotsStats>::default(),
             advanced_options,
             turbine_slots_stats: Arc::new(Mutex::new(HashMap::default())),
         };
@@ -2151,7 +2151,7 @@ impl Blockstore {
         ticks_per_slot: u64,
         parent: Option<u64>,
         is_full_slot: bool,
-        keypair: &Arc<Keypair>,
+        keypair: &Keypair,
         entries: Vec<Entry>,
         version: u16,
     ) -> Result<usize /*num of data shreds*/> {
@@ -3616,7 +3616,7 @@ impl Blockstore {
         self.db.is_primary_access()
     }
 
-    pub fn scan_and_fix_roots(&self, exit: &Arc<AtomicBool>) -> Result<()> {
+    pub fn scan_and_fix_roots(&self, exit: &AtomicBool) -> Result<()> {
         let ancestor_iterator = AncestorIterator::new(self.last_root(), self)
             .take_while(|&slot| slot >= self.lowest_cleanup_slot());
 
