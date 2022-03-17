@@ -2345,12 +2345,12 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, loader_id)?;
 
-        assert_eq!(
+        debug_assert_eq!(
             std::mem::size_of_val(&ix_c.accounts_len),
             std::mem::size_of::<usize>(),
             "non-64-bit host"
         );
-        assert_eq!(
+        debug_assert_eq!(
             std::mem::size_of_val(&ix_c.data_len),
             std::mem::size_of::<usize>(),
             "non-64-bit host"
