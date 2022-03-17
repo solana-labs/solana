@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_index_storage::AccountsIndexStorage,
+        accounts_index_storage::{AccountsIndexStorage, Startup},
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
@@ -1505,7 +1505,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         iter.hold_range_in_memory(range, start_holding, thread_pool);
     }
 
-    pub fn set_startup(&self, value: bool) {
+    pub fn set_startup(&self, value: Startup) {
         self.storage.set_startup(value);
     }
 
