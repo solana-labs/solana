@@ -438,11 +438,6 @@
 //!   - Instruction: [`solana_sdk::compute_budget`](https://docs.rs/solana-sdk/latest/solana_sdk/compute_budget/index.html)
 //!   - Invokable by programs? no
 //!
-//! - __Address Lookup Table Program__: Support for [on-chain address lookup tables][lut].
-//!   - ID: [`solana_address_lookup_table_program`](https://docs.rs/solana-address-lookup-table-program/latest/solana_address_lookup_table_program/)
-//!   - Instruction: [`solana_address_lookup_table_program::instruction`](https://docs.rs/solana-address-lookup-table-program/latest/solana_address_lookup_table_program/instruction/index.html)
-//!   - Invokable by programs? yes
-//!
 //! - __ed25519 Program__: Verifies an ed25519 signature.
 //!   - ID: [`solana_program::ed25519_program`]
 //!   - Instruction: [`solana_sdk::ed25519_instruction`](https://docs.rs/solana-sdk/latest/solana_sdk/ed25519_instruction/index.html)
