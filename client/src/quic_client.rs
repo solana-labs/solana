@@ -65,21 +65,21 @@ impl TpuConnection for QuicTpuConnection {
         &self.client.addr
     }
 
-    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
+    fn send_wire_transaction(&self, data: &[u8]) -> TransportResult<()> {
         let _guard = self.client.runtime.enter();
-        let send_buffer = self.client.send_buffer(&data[..]);
+        let send_buffer = self.client.send_buffer(data);
         self.client.runtime.block_on(send_buffer)?;
         Ok(())
     }
 
-    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
+    fn send_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
         let buffers = transactions
             .into_par_iter()
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .collect::<Vec<_>>();
 
         let _guard = self.client.runtime.enter();
-        let send_batch = self.client.send_batch(&buffers[..]);
+        let send_batch = self.client.send_batch(&buffers);
         self.client.runtime.block_on(send_batch)?;
         Ok(())
     }
@@ -182,7 +182,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self._send_buffer(&buffers[0][..]).await?;
+        let connection = self._send_buffer(&buffers[0]).await?;
 
         // Used to avoid dereferencing the Arc multiple times below
         // by just getting a reference to the NewConnection once
@@ -196,7 +196,7 @@ impl QuicClient {
             join_all(
                 buffs
                     .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(&buf[..], connection_ref)),
+                    .map(|buf| Self::_send_buffer_using_conn(buf, connection_ref)),
             )
         });
 
