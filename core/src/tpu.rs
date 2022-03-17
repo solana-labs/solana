@@ -56,8 +56,8 @@ pub struct Tpu {
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
-    transaction_weight_stage: FindPacketSenderStakeStage,
-    vote_transaction_weight_stage: FindPacketSenderStakeStage,
+    find_packet_sender_stake_stage: FindPacketSenderStakeStage,
+    vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
 }
 
 impl Tpu {
@@ -107,20 +107,21 @@ impl Tpu {
             tpu_coalesce_ms,
         );
 
-        let (weighted_packet_sender, weighted_packet_receiver) = unbounded();
+        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
-        let transaction_weight_stage = FindPacketSenderStakeStage::new(
+        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             packet_receiver,
-            weighted_packet_sender,
+            find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
         );
 
-        let (vote_weighted_packet_sender, vote_weighted_packet_receiver) = unbounded();
+        let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
+            unbounded();
 
-        let vote_transaction_weight_stage = FindPacketSenderStakeStage::new(
+        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             vote_packet_receiver,
-            vote_weighted_packet_sender,
+            vote_find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
         );
@@ -139,7 +140,7 @@ impl Tpu {
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::default();
-            SigVerifyStage::new(weighted_packet_receiver, verified_sender, verifier)
+            SigVerifyStage::new(find_packet_sender_stake_receiver, verified_sender, verifier)
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
@@ -147,7 +148,7 @@ impl Tpu {
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote();
             SigVerifyStage::new(
-                vote_weighted_packet_receiver,
+                vote_find_packet_sender_stake_receiver,
                 verified_tpu_vote_packets_sender,
                 verifier,
             )
@@ -201,8 +202,8 @@ impl Tpu {
             cluster_info_vote_listener,
             broadcast_stage,
             tpu_quic_t,
-            transaction_weight_stage,
-            vote_transaction_weight_stage,
+            find_packet_sender_stake_stage,
+            vote_find_packet_sender_stake_stage,
         }
     }
 
@@ -213,8 +214,8 @@ impl Tpu {
             self.vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
-            self.transaction_weight_stage.join(),
-            self.vote_transaction_weight_stage.join(),
+            self.find_packet_sender_stake_stage.join(),
+            self.vote_find_packet_sender_stake_stage.join(),
         ];
         self.tpu_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();
