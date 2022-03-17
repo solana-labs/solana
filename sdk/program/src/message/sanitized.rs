@@ -1,7 +1,7 @@
 use {
     crate::{
         hash::Hash,
-        instruction::{CompiledInstruction, Instruction},
+        instruction::CompiledInstruction,
         message::{
             legacy::Message as LegacyMessage,
             v0::{self, LoadedAddresses},
@@ -190,25 +190,6 @@ impl SanitizedMessage {
             .saturating_add(usize::from(self.header().num_readonly_unsigned_accounts))
     }
 
-    fn try_position(&self, key: &Pubkey) -> Option<u8> {
-        u8::try_from(self.account_keys().iter().position(|k| k == key)?).ok()
-    }
-
-    /// Try to compile an instruction using the account keys in this message.
-    pub fn try_compile_instruction(&self, ix: &Instruction) -> Option<CompiledInstruction> {
-        let accounts: Vec<_> = ix
-            .accounts
-            .iter()
-            .map(|account_meta| self.try_position(&account_meta.pubkey))
-            .collect::<Option<_>>()?;
-
-        Some(CompiledInstruction {
-            program_id_index: self.try_position(&ix.program_id)?,
-            data: ix.data.clone(),
-            accounts,
-        })
-    }
-
     /// Decompile message instructions without cloning account keys
     pub fn decompile_instructions(&self) -> Vec<BorrowedInstruction> {
         let account_keys = self.account_keys();
@@ -275,13 +256,7 @@ impl SanitizedMessage {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{
-            instruction::{AccountMeta, Instruction},
-            message::v0,
-        },
-    };
+    use {super::*, crate::message::v0};
 
     #[test]
     fn test_try_from_message() {
@@ -360,88 +335,5 @@ mod tests {
         ));
 
         assert_eq!(v0_message.num_readonly_accounts(), 3);
-    }
-
-    #[test]
-    fn test_try_compile_instruction() {
-        let key0 = Pubkey::new_unique();
-        let key1 = Pubkey::new_unique();
-        let key2 = Pubkey::new_unique();
-        let program_id = Pubkey::new_unique();
-
-        let valid_instruction = Instruction {
-            program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(key0, false),
-                AccountMeta::new_readonly(key1, false),
-                AccountMeta::new_readonly(key2, false),
-            ],
-            data: vec![],
-        };
-
-        let invalid_program_id_instruction = Instruction {
-            program_id: Pubkey::new_unique(),
-            accounts: vec![
-                AccountMeta::new_readonly(key0, false),
-                AccountMeta::new_readonly(key1, false),
-                AccountMeta::new_readonly(key2, false),
-            ],
-            data: vec![],
-        };
-
-        let invalid_account_key_instruction = Instruction {
-            program_id: Pubkey::new_unique(),
-            accounts: vec![
-                AccountMeta::new_readonly(key0, false),
-                AccountMeta::new_readonly(key1, false),
-                AccountMeta::new_readonly(Pubkey::new_unique(), false),
-            ],
-            data: vec![],
-        };
-
-        let legacy_message = SanitizedMessage::try_from(LegacyMessage {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                num_readonly_signed_accounts: 0,
-                num_readonly_unsigned_accounts: 0,
-            },
-            account_keys: vec![key0, key1, key2, program_id],
-            ..LegacyMessage::default()
-        })
-        .unwrap();
-
-        let v0_message = SanitizedMessage::V0(v0::LoadedMessage::new(
-            v0::Message {
-                header: MessageHeader {
-                    num_required_signatures: 1,
-                    num_readonly_signed_accounts: 0,
-                    num_readonly_unsigned_accounts: 0,
-                },
-                account_keys: vec![key0, key1],
-                ..v0::Message::default()
-            },
-            LoadedAddresses {
-                writable: vec![key2],
-                readonly: vec![program_id],
-            },
-        ));
-
-        for message in vec![legacy_message, v0_message] {
-            assert_eq!(
-                message.try_compile_instruction(&valid_instruction),
-                Some(CompiledInstruction {
-                    program_id_index: 3,
-                    accounts: vec![0, 1, 2],
-                    data: vec![],
-                })
-            );
-
-            assert!(message
-                .try_compile_instruction(&invalid_program_id_instruction)
-                .is_none());
-            assert!(message
-                .try_compile_instruction(&invalid_account_key_instruction)
-                .is_none());
-        }
     }
 }
