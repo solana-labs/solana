@@ -148,6 +148,26 @@ pub struct BlockstoreSignals {
     pub completed_slots_receiver: CompletedSlotsReceiver,
 }
 
+#[derive(Debug, Default)]
+pub struct TurbineSlotStats {
+    pub fec_set_index_counts: HashMap<u32, usize>,
+}
+
+impl TurbineSlotStats {
+    pub fn inc_fec_set_index_count(&mut self, fec_set_index: u32) {
+        let e = self.fec_set_index_counts.entry(fec_set_index).or_default();
+        *e += 1;
+    }
+
+    pub fn get_min_batch_count(&self) -> usize {
+        self.fec_set_index_counts
+            .iter()
+            .map(|(_, cnt)| *cnt)
+            .min()
+            .unwrap_or(0)
+    }
+}
+
 // ledger window
 pub struct Blockstore {
     ledger_path: PathBuf,
@@ -179,6 +199,7 @@ pub struct Blockstore {
     no_compaction: bool,
     slots_stats: Arc<Mutex<SlotsStats>>,
     advanced_options: BlockstoreAdvancedOptions,
+    turbine_slots_stats: Arc<Mutex<HashMap<Slot, TurbineSlotStats>>>,
 }
 
 struct SlotsStats {
@@ -665,6 +686,7 @@ impl Blockstore {
             no_compaction: false,
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
             advanced_options,
+            turbine_slots_stats: Arc::new(Mutex::new(HashMap::default())),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -1742,6 +1764,8 @@ impl Blockstore {
         // `insert_coding_shred` is called
         assert!(shred.is_code() && shred.sanitize());
 
+        self.turbine_slots_stats_inc_fec_set_index_count(shred.slot(), shred.fec_set_index());
+
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &shred.payload)?;
@@ -1947,6 +1971,10 @@ impl Blockstore {
             slot_meta.consumed
         };
 
+        if shred_source == ShredSource::Turbine {
+            self.turbine_slots_stats_inc_fec_set_index_count(shred.slot(), shred.fec_set_index());
+        }
+
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredData>(
@@ -1996,6 +2024,19 @@ impl Blockstore {
                     (0, 0)
                 }
             };
+
+            let min_turbine_batch_count = if num_repaired == 0 {
+                self.turbine_slots_stats_get_min_batch_count(slot)
+            } else {
+                // remove metadata for repaired slots
+                let stats = self.turbine_slots_stats_remove_slot(slot);
+                if let Some(s) = stats {
+                    s.get_min_batch_count()
+                } else {
+                    0
+                }
+            };
+
             datapoint_info!(
                 "shred_insert_is_full",
                 (
@@ -2014,6 +2055,7 @@ impl Blockstore {
                 ),
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
+                ("min_turbine_batch_count", min_turbine_batch_count, i64),
             );
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
@@ -3616,6 +3658,27 @@ impl Blockstore {
             ("fix_roots_us", fix_roots.as_us() as i64, i64),
         );
         Ok(())
+    }
+
+    pub fn turbine_slots_stats_inc_fec_set_index_count(&self, slot: Slot, fec_set_index: u32) {
+        let mut turbine_slots_stats = self.turbine_slots_stats.lock().unwrap();
+        let slot_stats = turbine_slots_stats.entry(slot).or_default();
+        slot_stats.inc_fec_set_index_count(fec_set_index);
+    }
+
+    pub fn turbine_slots_stats_get_min_batch_count(&self, slot: Slot) -> usize {
+        let turbine_slots_stats = self.turbine_slots_stats.lock().unwrap();
+        let slot_stats = turbine_slots_stats.get(&slot);
+        if let Some(stats) = slot_stats {
+            stats.get_min_batch_count()
+        } else {
+            0
+        }
+    }
+
+    pub fn turbine_slots_stats_remove_slot(&self, slot: Slot) -> Option<TurbineSlotStats> {
+        let mut turbine_slots_stats = self.turbine_slots_stats.lock().unwrap();
+        turbine_slots_stats.remove(&slot)
     }
 }
 

@@ -1682,6 +1682,16 @@ impl ReplayStage {
         blockstore
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
+
+        if let Some(stats) = blockstore.turbine_slots_stats_remove_slot(slot) {
+            let min_turbine_batch_count = stats.get_min_batch_count();
+            datapoint_warn!(
+                "replay-stage-mark_dead_completed_unrepaired_slot",
+                ("slot", slot, i64),
+                ("min_turbine_batch_count", min_turbine_batch_count, i64),
+            );
+        }
+
         rpc_subscriptions.notify_slot_update(SlotUpdate::Dead {
             slot,
             err: format!("error: {:?}", err),
@@ -1788,6 +1798,8 @@ impl ReplayStage {
                 epoch_slots_frozen_slots,
                 drop_bank_sender,
             );
+
+            blockstore.turbine_slots_stats_remove_slot(new_root);
             rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
                 sender
@@ -2931,6 +2943,7 @@ impl ReplayStage {
             accounts_background_request_sender,
             highest_confirmed_root,
         );
+
         drop_bank_sender
             .send(removed_banks)
             .unwrap_or_else(|err| warn!("bank drop failed: {:?}", err));
