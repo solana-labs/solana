@@ -43,9 +43,11 @@ pub mod legacy;
 #[path = ""]
 mod non_bpf_modules {
     mod account_keys;
+    mod compiled_keys;
     mod sanitized;
     mod versions;
 
+    pub(crate) use compiled_keys::*;
     pub use {account_keys::*, sanitized::*, versions::*};
 }
 
