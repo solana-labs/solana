@@ -488,7 +488,7 @@ impl Validator {
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
         let poh_timing_report_service = Some(PohTimingReportService::new(
-            poh_timing_point_receiver.clone(),
+            poh_timing_point_receiver,
             exit.clone(),
         ));
 
@@ -666,7 +666,7 @@ impl Validator {
                 &poh_config,
                 exit.clone(),
             );
-        poh_recorder.poh_timing_point_sender = Some(poh_timing_point_sender.clone());
+        poh_recorder.poh_timing_point_sender = Some(poh_timing_point_sender);
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));

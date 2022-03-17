@@ -29,7 +29,7 @@ pub struct PohTimingReportService {
 
 impl PohTimingReportService {
     pub fn new(receiver: PohTimingReceiver, exit: Arc<AtomicBool>) -> Self {
-        let exit_signal = exit.clone();
+        let exit_signal = exit;
         let mut poh_timing_reporter = PohTimingReporter::new();
         let t_poh_timing = Builder::new()
             .name("poh_timing_report".to_string())
@@ -63,7 +63,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         // Create the service
         let poh_timing_report_service =
-            PohTimingReportService::new(poh_timing_point_receiver.clone(), exit.clone());
+            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
 
         // Send PohTimingPoints
         let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotStart(100)));

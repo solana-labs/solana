@@ -60,6 +60,12 @@ pub struct PohTimingReporter {
     slot_timestamps: HashMap<Slot, SlotPohTimestamp>,
 }
 
+impl Default for PohTimingReporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PohTimingReporter {
     /// Return a PohTimingReporter instance
     pub fn new() -> Self {
@@ -104,13 +110,12 @@ impl PohTimingReporter {
 
     /// Process incoming PohTimingPoint from the channel
     pub fn process(&mut self, slot: Slot, t: PohTimingPoint) {
-        if !self.slot_timestamps.contains_key(&slot) {
-            self.slot_timestamps
-                .insert(slot, SlotPohTimestamp::default());
-        }
-        if let Some(slot_timestamp) = self.slot_timestamps.get_mut(&slot) {
-            slot_timestamp.update(t);
-        }
+        let slot_timestamp = self
+            .slot_timestamps
+            .entry(slot)
+            .or_insert_with(SlotPohTimestamp::default);
+
+        slot_timestamp.update(t);
 
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
             if slot_timestamp.is_complete() {
