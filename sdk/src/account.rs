@@ -56,7 +56,6 @@ mod account_serialize {
 
     pub fn serialize_account<S>(
         account: &(impl ReadableAccount + Serialize),
-        data: &Vec<u8>,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
@@ -64,7 +63,7 @@ mod account_serialize {
     {
         let temp = Account {
             lamports: account.lamports(),
-            data,
+            data: account.data(),
             owner: *account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
@@ -78,7 +77,7 @@ impl Serialize for Account {
     where
         S: Serializer,
     {
-        crate::account::account_serialize::serialize_account(self, &self.data, serializer)
+        crate::account::account_serialize::serialize_account(self, serializer)
     }
 }
 
@@ -87,7 +86,7 @@ impl Serialize for AccountSharedData {
     where
         S: Serializer,
     {
-        crate::account::account_serialize::serialize_account(self, &self.data, serializer)
+        crate::account::account_serialize::serialize_account(self, serializer)
     }
 }
 
