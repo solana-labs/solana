@@ -3365,6 +3365,7 @@ dependencies = [
  "bv",
  "generic-array 0.14.5",
  "im",
+ "lazy_static",
  "log",
  "memmap2 0.5.3",
  "rustc_version 0.4.0",
