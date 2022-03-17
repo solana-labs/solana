@@ -1,10 +1,14 @@
 use {
-    crate::{instruction::Instruction, message::MessageHeader, pubkey::Pubkey},
+    super::v0::{CompileError, LoadedAddresses, MessageAddressTableLookup},
+    crate::{
+        address_lookup_table_account::AddressLookupTableAccount, instruction::Instruction,
+        message::MessageHeader, pubkey::Pubkey,
+    },
     std::collections::BTreeMap,
 };
 
 /// A helper struct to collect pubkeys compiled for a set of instructions
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompiledKeys {
     writable_signer_keys: Vec<Pubkey>,
     readonly_signer_keys: Vec<Pubkey>,
@@ -65,17 +69,22 @@ impl CompiledKeys {
         }
     }
 
-    pub(crate) fn try_into_message_components(self) -> Option<(MessageHeader, Vec<Pubkey>)> {
+    pub(crate) fn try_into_message_components(
+        self,
+    ) -> Result<(MessageHeader, Vec<Pubkey>), CompileError> {
+        let try_into_u8 = |num: usize| -> Result<u8, CompileError> {
+            u8::try_from(num).map_err(|_| CompileError::TooManyAccountKeys)
+        };
+
+        let signers_len = self
+            .writable_signer_keys
+            .len()
+            .saturating_add(self.readonly_signer_keys.len());
+
         let header = MessageHeader {
-            num_required_signatures: u8::try_from(
-                self.writable_signer_keys
-                    .len()
-                    .checked_add(self.readonly_signer_keys.len())?,
-            )
-            .ok()?,
-            num_readonly_signed_accounts: u8::try_from(self.readonly_signer_keys.len()).ok()?,
-            num_readonly_unsigned_accounts: u8::try_from(self.readonly_non_signer_keys.len())
-                .ok()?,
+            num_required_signatures: try_into_u8(signers_len)?,
+            num_readonly_signed_accounts: try_into_u8(self.readonly_signer_keys.len())?,
+            num_readonly_unsigned_accounts: try_into_u8(self.readonly_non_signer_keys.len())?,
         };
 
         let static_account_keys = std::iter::empty()
@@ -85,8 +94,69 @@ impl CompiledKeys {
             .chain(self.readonly_non_signer_keys)
             .collect();
 
-        Some((header, static_account_keys))
+        Ok((header, static_account_keys))
     }
+
+    pub(crate) fn try_extract_table_lookup(
+        &mut self,
+        lookup_table_account: &AddressLookupTableAccount,
+    ) -> Result<Option<(MessageAddressTableLookup, LoadedAddresses)>, CompileError> {
+        let (writable_indexes, drained_writable_keys) = try_drain_keys_found_in_lookup_table(
+            &mut self.writable_non_signer_keys,
+            &lookup_table_account.addresses,
+        )?;
+        let (readonly_indexes, drained_readonly_keys) = try_drain_keys_found_in_lookup_table(
+            &mut self.readonly_non_signer_keys,
+            &lookup_table_account.addresses,
+        )?;
+
+        // Don't extract lookup if no keys were found
+        if writable_indexes.is_empty() && readonly_indexes.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some((
+            MessageAddressTableLookup {
+                account_key: lookup_table_account.key,
+                writable_indexes,
+                readonly_indexes,
+            },
+            LoadedAddresses {
+                writable: drained_writable_keys,
+                readonly: drained_readonly_keys,
+            },
+        )))
+    }
+}
+
+fn try_drain_keys_found_in_lookup_table(
+    keys: &mut Vec<Pubkey>,
+    lookup_table_addresses: &[Pubkey],
+) -> Result<(Vec<u8>, Vec<Pubkey>), CompileError> {
+    let mut lookup_table_indexes = Vec::new();
+    let mut drained_keys = Vec::new();
+    let mut i = 0;
+    while i < keys.len() {
+        let search_key = &keys[i];
+        let mut lookup_table_index = None;
+        for (key_index, key) in lookup_table_addresses.iter().enumerate() {
+            if key == search_key {
+                lookup_table_index = Some(
+                    u8::try_from(key_index)
+                        .map_err(|_| CompileError::TooManyLookupTableAddresses)?,
+                );
+                break;
+            }
+        }
+
+        if let Some(index) = lookup_table_index {
+            lookup_table_indexes.push(index);
+            drained_keys.push(keys.remove(i));
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    Ok((lookup_table_indexes, drained_keys))
 }
 
 #[cfg(test)]
@@ -226,6 +296,225 @@ mod tests {
                 readonly_non_signer_keys: vec![program_id],
                 ..CompiledKeys::default()
             }
+        );
+    }
+
+    #[test]
+    fn test_try_into_message_components() {
+        let keys = vec![
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        ];
+
+        let compiled_keys = CompiledKeys {
+            writable_signer_keys: vec![keys[0]],
+            readonly_signer_keys: vec![keys[1]],
+            writable_non_signer_keys: vec![keys[2]],
+            readonly_non_signer_keys: vec![keys[3]],
+        };
+
+        let result = compiled_keys.try_into_message_components();
+        assert_eq!(result.as_ref().err(), None);
+        let (header, static_keys) = result.unwrap();
+
+        assert_eq!(static_keys, keys);
+        assert_eq!(
+            header,
+            MessageHeader {
+                num_required_signatures: 2,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn test_try_into_message_components_with_too_many_keys() {
+        let too_many_keys_vec = vec![Pubkey::default(); 257];
+
+        let mut test_keys_list = vec![CompiledKeys::default(); 3];
+        test_keys_list[0]
+            .writable_signer_keys
+            .extend(too_many_keys_vec.clone());
+        test_keys_list[1]
+            .readonly_signer_keys
+            .extend(too_many_keys_vec.clone());
+        // skip writable_non_signer_keys because it isn't used for creating header values
+        test_keys_list[2]
+            .readonly_non_signer_keys
+            .extend(too_many_keys_vec);
+
+        for test_keys in test_keys_list {
+            assert_eq!(
+                test_keys.try_into_message_components(),
+                Err(CompileError::TooManyAccountKeys)
+            );
+        }
+    }
+
+    #[test]
+    fn test_try_extract_table_lookup() {
+        let writable_keys = vec![Pubkey::new_unique(), Pubkey::new_unique()];
+        let readonly_keys = vec![Pubkey::new_unique(), Pubkey::new_unique()];
+
+        let mut compiled_keys = CompiledKeys {
+            writable_signer_keys: vec![writable_keys[0]],
+            readonly_signer_keys: vec![readonly_keys[0]],
+            writable_non_signer_keys: vec![writable_keys[1]],
+            readonly_non_signer_keys: vec![readonly_keys[1]],
+        };
+
+        let lookup_table_account = AddressLookupTableAccount {
+            key: Pubkey::new_unique(),
+            addresses: vec![
+                writable_keys[0],
+                readonly_keys[0],
+                writable_keys[1],
+                readonly_keys[1],
+                // add some duplicates to ensure lowest index is selected
+                writable_keys[1],
+                readonly_keys[1],
+            ],
+        };
+
+        assert_eq!(
+            compiled_keys.try_extract_table_lookup(&lookup_table_account),
+            Ok(Some((
+                MessageAddressTableLookup {
+                    account_key: lookup_table_account.key,
+                    writable_indexes: vec![2],
+                    readonly_indexes: vec![3],
+                },
+                LoadedAddresses {
+                    writable: vec![writable_keys[1]],
+                    readonly: vec![readonly_keys[1]],
+                },
+            )))
+        );
+    }
+
+    #[test]
+    fn test_try_extract_table_lookup_returns_none() {
+        let mut compiled_keys = CompiledKeys {
+            writable_non_signer_keys: vec![Pubkey::new_unique()],
+            readonly_non_signer_keys: vec![Pubkey::new_unique()],
+            ..CompiledKeys::default()
+        };
+
+        let lookup_table_account = AddressLookupTableAccount {
+            key: Pubkey::new_unique(),
+            addresses: vec![],
+        };
+
+        assert_eq!(
+            compiled_keys.try_extract_table_lookup(&lookup_table_account),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn test_try_extract_table_lookup_for_invalid_table() {
+        let mut compiled_keys = CompiledKeys {
+            writable_non_signer_keys: vec![Pubkey::new_unique()],
+            readonly_non_signer_keys: vec![Pubkey::new_unique()],
+            ..CompiledKeys::default()
+        };
+
+        let mut addresses = vec![Pubkey::default(); 256];
+        addresses.push(compiled_keys.writable_non_signer_keys[0]);
+
+        let lookup_table_account = AddressLookupTableAccount {
+            key: Pubkey::new_unique(),
+            addresses,
+        };
+
+        assert_eq!(
+            compiled_keys.try_extract_table_lookup(&lookup_table_account),
+            Err(CompileError::TooManyLookupTableAddresses),
+        );
+    }
+
+    #[test]
+    fn test_try_drain_keys_found_in_lookup_table() {
+        let orig_keys = vec![
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        ];
+
+        let lookup_table_addresses = vec![
+            Pubkey::new_unique(),
+            orig_keys[0],
+            Pubkey::new_unique(),
+            orig_keys[4],
+            Pubkey::new_unique(),
+            orig_keys[2],
+            Pubkey::new_unique(),
+        ];
+
+        let mut keys = orig_keys.clone();
+        let drain_result = try_drain_keys_found_in_lookup_table(&mut keys, &lookup_table_addresses);
+        assert_eq!(drain_result.as_ref().err(), None);
+        let (lookup_table_indexes, drained_keys) = drain_result.unwrap();
+
+        assert_eq!(keys, vec![orig_keys[1], orig_keys[3]]);
+        assert_eq!(drained_keys, vec![orig_keys[0], orig_keys[2], orig_keys[4]]);
+        assert_eq!(lookup_table_indexes, vec![1, 5, 3]);
+    }
+
+    #[test]
+    fn test_try_drain_keys_found_in_lookup_table_with_empty_keys() {
+        let mut keys = vec![];
+
+        let lookup_table_addresses = vec![
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        ];
+
+        let drain_result = try_drain_keys_found_in_lookup_table(&mut keys, &lookup_table_addresses);
+        assert_eq!(drain_result.as_ref().err(), None);
+        let (lookup_table_indexes, drained_keys) = drain_result.unwrap();
+
+        assert!(keys.is_empty());
+        assert!(drained_keys.is_empty());
+        assert!(lookup_table_indexes.is_empty());
+    }
+
+    #[test]
+    fn test_try_drain_keys_found_in_lookup_table_with_empty_table() {
+        let original_keys = vec![
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        ];
+
+        let lookup_table_addresses = vec![];
+
+        let mut keys = original_keys.clone();
+        let drain_result = try_drain_keys_found_in_lookup_table(&mut keys, &lookup_table_addresses);
+        assert_eq!(drain_result.as_ref().err(), None);
+        let (lookup_table_indexes, drained_keys) = drain_result.unwrap();
+
+        assert_eq!(keys, original_keys);
+        assert!(drained_keys.is_empty());
+        assert!(lookup_table_indexes.is_empty());
+    }
+
+    #[test]
+    fn test_try_drain_keys_found_in_lookup_table_with_too_many_addresses() {
+        let mut keys = vec![Pubkey::new_unique()];
+        let mut lookup_table_addresses = vec![Pubkey::default(); 256];
+        lookup_table_addresses.push(keys[0]);
+
+        let drain_result = try_drain_keys_found_in_lookup_table(&mut keys, &lookup_table_addresses);
+        assert_eq!(
+            drain_result.err(),
+            Some(CompileError::TooManyLookupTableAddresses)
         );
     }
 }

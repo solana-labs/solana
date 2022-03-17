@@ -258,13 +258,13 @@ mod tests {
             2,
             account_keys.clone(),
             Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
+            AccountKeys::new(&account_keys, None)
+                .try_compile_instructions(&[Instruction::new_with_bincode(
                     mock_system_program_id,
                     &MockSystemInstruction::Correct,
                     account_metas.clone(),
-                ),
-            ]),
+                )])
+                .unwrap(),
         ));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
@@ -307,13 +307,13 @@ mod tests {
             2,
             account_keys.clone(),
             Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
+            AccountKeys::new(&account_keys, None)
+                .try_compile_instructions(&[Instruction::new_with_bincode(
                     mock_system_program_id,
                     &MockSystemInstruction::TransferLamports { lamports: 50 },
                     account_metas.clone(),
-                ),
-            ]),
+                )])
+                .unwrap(),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -345,13 +345,13 @@ mod tests {
             2,
             account_keys.clone(),
             Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
+            AccountKeys::new(&account_keys, None)
+                .try_compile_instructions(&[Instruction::new_with_bincode(
                     mock_system_program_id,
                     &MockSystemInstruction::ChangeData { data: 50 },
                     account_metas,
-                ),
-            ]),
+                )])
+                .unwrap(),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,

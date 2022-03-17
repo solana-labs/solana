@@ -9,19 +9,25 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solana.com/proposals/transactions-v2
 
-use crate::{
-    bpf_loader_upgradeable,
-    hash::Hash,
-    instruction::CompiledInstruction,
-    message::{legacy::BUILTIN_PROGRAMS_KEYS, MessageHeader, MESSAGE_VERSION_PREFIX},
-    pubkey::Pubkey,
-    sanitize::{Sanitize, SanitizeError},
-    short_vec, sysvar,
+pub use loaded::*;
+use {
+    crate::{
+        address_lookup_table_account::AddressLookupTableAccount,
+        bpf_loader_upgradeable,
+        hash::Hash,
+        instruction::{CompiledInstruction, Instruction},
+        message::{
+            legacy::BUILTIN_PROGRAMS_KEYS, AccountKeys, CompiledKeys, MessageHeader,
+            MESSAGE_VERSION_PREFIX,
+        },
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        short_vec, sysvar,
+    },
+    thiserror::Error,
 };
 
 mod loaded;
-
-pub use loaded::*;
 
 /// Address table lookups describe an on-chain address lookup table to use
 /// for loading more readonly and writable accounts in a single tx.
@@ -134,7 +140,50 @@ impl Sanitize for Message {
     }
 }
 
+#[derive(PartialEq, Debug, Error, Eq, Clone)]
+pub enum CompileError {
+    #[error("cannot compile messages with too many account keys")]
+    TooManyAccountKeys,
+    #[error("cannot compile messages using lookup tables with too many addresses")]
+    TooManyLookupTableAddresses,
+    #[error("encountered unknown account key `{0}` during instruction compilation")]
+    UnknownInstructionKey(Pubkey),
+}
+
 impl Message {
+    pub fn try_compile(
+        payer: &Pubkey,
+        instructions: &[Instruction],
+        address_lookup_table_accounts: &[AddressLookupTableAccount],
+        recent_blockhash: Hash,
+    ) -> Result<Self, CompileError> {
+        let mut compiled_keys = CompiledKeys::compile(instructions, Some(*payer));
+
+        let mut address_table_lookups = Vec::with_capacity(address_lookup_table_accounts.len());
+        let mut loaded_addresses_list = Vec::with_capacity(address_lookup_table_accounts.len());
+        for lookup_table_account in address_lookup_table_accounts {
+            if let Some((lookup, loaded_addresses)) =
+                compiled_keys.try_extract_table_lookup(lookup_table_account)?
+            {
+                address_table_lookups.push(lookup);
+                loaded_addresses_list.push(loaded_addresses);
+            }
+        }
+
+        let (header, static_keys) = compiled_keys.try_into_message_components()?;
+        let dynamic_keys = loaded_addresses_list.into_iter().collect();
+        let account_keys = AccountKeys::new(&static_keys, Some(&dynamic_keys));
+        let instructions = account_keys.try_compile_instructions(instructions)?;
+
+        Ok(Self {
+            header,
+            account_keys: static_keys,
+            recent_blockhash,
+            instructions,
+            address_table_lookups,
+        })
+    }
+
     /// Serialize this message with a version #0 prefix using bincode encoding.
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(&(MESSAGE_VERSION_PREFIX, self)).unwrap()
@@ -207,7 +256,10 @@ impl Message {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::message::VersionedMessage};
+    use {
+        super::*,
+        crate::{instruction::AccountMeta, message::VersionedMessage},
+    };
 
     #[test]
     fn test_sanitize() {
@@ -443,10 +495,71 @@ mod tests {
         .sanitize()
         .is_err());
     }
+
     #[test]
     fn test_serialize() {
         let message = Message::default();
         let versioned_msg = VersionedMessage::V0(message.clone());
         assert_eq!(message.serialize(), versioned_msg.serialize());
+    }
+
+    #[test]
+    fn test_try_compile() {
+        let mut keys = vec![];
+        keys.resize_with(8, Pubkey::new_unique);
+
+        let payer = keys[0];
+        let program_id = keys[7];
+        let instructions = vec![Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new(keys[1], true),
+                AccountMeta::new_readonly(keys[2], true),
+                AccountMeta::new(keys[3], false),
+                AccountMeta::new_readonly(keys[4], false),
+                AccountMeta::new(keys[5], false),
+                AccountMeta::new_readonly(keys[6], false),
+            ],
+            data: vec![],
+        }];
+        let address_lookup_table_accounts = vec![
+            AddressLookupTableAccount {
+                key: Pubkey::new_unique(),
+                addresses: vec![keys[5], keys[6], program_id],
+            },
+            AddressLookupTableAccount {
+                key: Pubkey::new_unique(),
+                addresses: vec![],
+            },
+        ];
+
+        let recent_blockhash = Hash::new_unique();
+        assert_eq!(
+            Message::try_compile(
+                &payer,
+                &instructions,
+                &address_lookup_table_accounts,
+                recent_blockhash
+            ),
+            Ok(Message {
+                header: MessageHeader {
+                    num_required_signatures: 3,
+                    num_readonly_signed_accounts: 1,
+                    num_readonly_unsigned_accounts: 1
+                },
+                recent_blockhash,
+                account_keys: vec![keys[0], keys[1], keys[2], keys[3], keys[4]],
+                instructions: vec![CompiledInstruction {
+                    program_id_index: 7,
+                    accounts: vec![1, 2, 3, 4, 5, 6],
+                    data: vec![],
+                },],
+                address_table_lookups: vec![MessageAddressTableLookup {
+                    account_key: address_lookup_table_accounts[0].key,
+                    writable_indexes: vec![0],
+                    readonly_indexes: vec![1, 2],
+                }],
+            })
+        );
     }
 }
