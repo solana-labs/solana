@@ -891,6 +891,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             + std::mem::size_of::<AccountMapEntry<T>>()
     }
 
+    fn should_evict_based_on_age(
+        current_age: Age,
+        entry: &AccountMapEntry<T>,
+        startup: bool,
+    ) -> bool {
+        startup || (current_age == entry.age())
+    }
+
     /// return true if 'entry' should be evicted from the in-mem index
     fn should_evict_from_mem<'a>(
         &self,
@@ -902,7 +910,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>) {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
-        if startup || (current_age == entry.age()) {
+        if Self::should_evict_based_on_age(current_age, entry, startup) {
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
@@ -1017,19 +1025,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             let m = Measure::start("flush_evict_or_grow");
             match disk_resize {
                 Ok(_) => {
-                    if !self.evict_from_cache(
-                        evictions,
-                        current_age,
-                        startup,
-                        false,
-                        exceeds_budget,
-                    ) || !self.evict_from_cache(
-                        evictions_random,
-                        current_age,
-                        startup,
-                        true,
-                        exceeds_budget,
-                    ) {
+                    if !self.evict_from_cache(evictions, current_age, startup, false)
+                        || !self.evict_from_cache(evictions_random, current_age, startup, true)
+                    {
                         iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
                     }
                     Self::update_time_stat(&self.stats().flush_remove_us, m);
@@ -1059,7 +1057,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         current_age: Age,
         startup: bool,
         randomly_evicted: bool,
-        exceeds_budget: bool,
     ) -> bool {
         let mut completed_scan = true;
         if evictions.is_empty() {
@@ -1099,12 +1096,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if v.dirty()
                     || (!randomly_evicted
-                        && !self
-                            .should_evict_from_mem(current_age, v, startup, false, exceeds_budget)
-                            .0)
+                        && !Self::should_evict_based_on_age(current_age, v, startup))
                 {
                     // marked dirty or bumped in age after we looked above
-                    // these will be handled in later passes
+                    // these flushes will be handled in later passes (at later ages)
                     // but, at startup, everything is ready to age out if it isn't dirty
                     continue;
                 }
