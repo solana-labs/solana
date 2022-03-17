@@ -92,9 +92,12 @@ impl VotingService {
         };
 
         if use_quic_client {
+            let mut measure = Measure::start("vote_using_quic-ms");
             let target_address =
                 target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
             let _ = get_connection(&target_address).send_transaction(vote_op.tx());
+            measure.stop();
+            inc_new_counter_info!("vote_using_quic-ms", measure.as_ms() as usize);
         } else {
             let _ = cluster_info.send_transaction(vote_op.tx(), target_address);
         }
