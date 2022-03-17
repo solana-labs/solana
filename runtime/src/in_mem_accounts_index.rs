@@ -907,6 +907,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         update_stats: bool,
         exceeds_budget: bool,
     ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>) {
+        if startup {
+            return (true, None); // put everything on disk at startup
+        }
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
         if Self::should_evict_based_on_age(current_age, entry, startup) {
