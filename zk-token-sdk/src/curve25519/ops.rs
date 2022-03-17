@@ -1,45 +1,14 @@
-pub use bytemuck::{Pod, Zeroable};
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct PodEdwardsPoint([u8; 32]);
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct PodRistrettoPoint([u8; 32]);
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct PodScalar([u8; 32]);
-
 #[cfg(not(target_arch = "bpf"))]
 mod target_arch {
     use {
-        super::{PodEdwardsPoint, PodRistrettoPoint, PodScalar},
-        crate::curve25519::errors::Curve25519Error,
+        crate::curve25519::pod::*,
         curve25519_dalek::{
-            edwards::{CompressedEdwardsY, EdwardsPoint},
-            ristretto::{CompressedRistretto, RistrettoPoint},
+            edwards::EdwardsPoint,
+            ristretto::RistrettoPoint,
             scalar::Scalar,
         },
         std::convert::TryInto,
     };
-
-    impl From<EdwardsPoint> for PodEdwardsPoint {
-        fn from(point: EdwardsPoint) -> Self {
-            Self(point.compress().to_bytes())
-        }
-    }
-
-    impl TryFrom<PodEdwardsPoint> for EdwardsPoint {
-        type Error = Curve25519Error;
-
-        fn try_from(pod: PodEdwardsPoint) -> Result<Self, Self::Error> {
-            CompressedEdwardsY::from_slice(&pod.0)
-                .decompress()
-                .ok_or(Curve25519Error::PodConversion)
-        }
-    }
 
     fn add_edwards(
         left_point: &PodRistrettoPoint,
@@ -61,23 +30,6 @@ mod target_arch {
         Some((left_point - right_point).into())
     }
 
-
-    impl From<RistrettoPoint> for PodRistrettoPoint {
-        fn from(point: RistrettoPoint) -> Self {
-            Self(point.compress().to_bytes())
-        }
-    }
-
-    impl TryFrom<PodRistrettoPoint> for RistrettoPoint {
-        type Error = Curve25519Error;
-
-        fn try_from(pod: PodRistrettoPoint) -> Result<Self, Self::Error> {
-            CompressedRistretto::from_slice(&pod.0)
-                .decompress()
-                .ok_or(Curve25519Error::PodConversion)
-        }
-    }
-
     fn add_ristretto(
         left_point: &PodRistrettoPoint,
         right_point: &PodRistrettoPoint,
@@ -96,19 +48,6 @@ mod target_arch {
         let right_point: RistrettoPoint = (*right_point).try_into().ok()?;
 
         Some((left_point - right_point).into())
-    }
-
-
-    impl From<Scalar> for PodScalar {
-        fn from(scalar: Scalar) -> Self {
-            Self(scalar.to_bytes())
-        }
-    }
-
-    impl From<PodScalar> for Scalar {
-        fn from(pod: PodScalar) -> Self {
-            Scalar::from_bits(pod.0)
-        }
     }
 
     fn add_scalar(left_scalar: &PodScalar, right_scalar: &PodScalar) -> Option<PodScalar> {
@@ -157,7 +96,9 @@ mod target_arch {
 
 #[cfg(target_arch = "bpf")]
 mod target_arch {
-    use super::*;
+    use super::{OP_RISTRETTO_ADD, OP_RISTRETTO_SUB, OP_SCALAR_SUB, OP_SCALAR_ADD, OP_EDWARDS_MUL, OP_RISTRETTO_MUL};
+
+    use {super::*, crate::curve25519::pod::*};
 
     fn op(
         op: u64,
@@ -179,6 +120,76 @@ mod target_arch {
         } else {
             None
         }
+    }
+
+    fn add_edwards(
+        left_point: &PodEdwardsPoint,
+        right_point: &PodEdwardsPoint,
+    ) -> Option<PodEdwardsPoint> {
+        op(OP_EDWARDS_ADD, &left_point.0, &right_point.0).map(|bytes| PodEdwardsPoint(bytes))
+    }
+
+    fn subtract_edwards(
+        left_point: &PodEdwardsPoint,
+        right_point: &PodEdwardsPoint,
+    ) -> Option<PodEdwardsPoint> {
+        op(OP_EDWARDS_SUB, &left_point.0, &right_point.0).map(|bytes| PodEdwardsPoint(bytes))
+    }
+
+    fn add_ristretto(
+        left_point: &PodRistrettoPoint,
+        right_point: &PodRistrettoPoint,
+    ) -> Option<PodRistrettoPoint> {
+        op(OP_RISTRETTO_ADD, &left_point.0, &right_point.0).map(|bytes| PodRistrettoPoint(bytes))
+    }
+
+    fn subtract_ristretto(
+        left_point: &PodRistrettoPoint,
+        right_point: &PodRistrettoPoint,
+    ) -> Option<PodRistrettoPoint> {
+        op(OP_RISTRETTO_SUB, &left_point.0, &right_point.0).map(|bytes| PodRistrettoPoint(bytes))
+    }
+
+    fn add_scalar(
+        left_scalar: &PodScalar,
+        right_scalar: &PodScalar,
+    ) -> Option<PodScalar> {
+        op(OP_SCALAR_ADD, &left_scalar.0, &right_scalar.0).map(|bytes| PodScalar(bytes))
+    }
+
+    fn subtract_scalar(
+        left_scalar: &PodScalar,
+        right_scalar: &PodScalar,
+    ) -> Option<PodScalar> {
+        op(OP_SCALAR_SUB, &left_scalar.0, &right_scalar.0).map(|bytes| PodScalar(bytes))
+    }
+
+    fn multiply_scalar(
+        left_scalar: &PodScalar,
+        right_scalar: &PodScalar,
+    ) -> Option<PodScalar> {
+        op(OP_SCALAR_MUL, &left_scalar.0, &right_scalar.0).map(|bytes| PodScalar(bytes))
+    }
+
+    fn divide_scalar(
+        left_scalar: &PodScalar,
+        right_scalar: &PodScalar,
+    ) -> Option<PodScalar> {
+        op(OP_SCALAR_DIV, &left_scalar.0, &right_scalar.0).map(|bytes| PodScalar(bytes))
+    }
+
+    fn multiply_edwards(
+        point: &PodEdwardsPoint,
+        scalar: &PodScalar,
+    ) -> Option<PodEdwardsPoint> {
+        op(OP_EDWARDS_MUL, &point.0, &scalar.0).map(|bytes| PodEdwardsPoint(bytes))
+    }
+
+    fn multiply_ristretto(
+        point: &PodRistrettoPoint,
+        scalar: &PodScalar,
+    ) -> Option<PodRistrettoPoint> {
+        op(OP_RISTRETTO_MUL, &point.0, &scalar.0).map(|bytes| PodRistrettoPoint(bytes))
     }
 }
 
