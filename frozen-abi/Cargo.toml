@@ -1,6 +1,6 @@
 [package]
 name = "solana-frozen-abi"
-version = "1.10.3"
+version = "1.10.4"
 description = "Solana Frozen ABI"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -17,7 +17,7 @@ log = "0.4.14"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 sha2 = "0.10.2"
-solana-frozen-abi-macro = { path = "macro", version = "=1.10.3" }
+solana-frozen-abi-macro = { path = "macro", version = "=1.10.4" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
@@ -26,7 +26,7 @@ im = { version = "15.0.0", features = ["rayon", "serde"] }
 memmap2 = "0.5.3"
 
 [target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
-solana-logger = { path = "../logger", version = "=1.10.3" }
+solana-logger = { path = "../logger", version = "=1.10.4" }
 
 [build-dependencies]
 rustc_version = "0.4"
