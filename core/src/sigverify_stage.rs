@@ -6,9 +6,9 @@
 //! if perf-libs are available
 
 use {
-    crate::sigverify,
+    crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+    crossbeam_channel::{RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -192,7 +192,7 @@ impl SigVerifier for DisabledSigVerifier {
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: Receiver<Vec<PacketBatch>>,
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: T,
     ) -> Self {
@@ -227,7 +227,7 @@ impl SigVerifyStage {
 
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
-        recvr: &Receiver<Vec<PacketBatch>>,
+        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sendr: &Sender<Vec<PacketBatch>>,
         verifier: &T,
         stats: &mut SigVerifierStats,
@@ -312,7 +312,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: Receiver<Vec<PacketBatch>>,
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: &T,
     ) -> JoinHandle<()> {
@@ -358,7 +358,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: Receiver<Vec<PacketBatch>>,
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: T,
     ) -> JoinHandle<()> {
