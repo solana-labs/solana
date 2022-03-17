@@ -49,6 +49,8 @@ pub struct BucketMapHolderStats {
     last_was_startup: AtomicBool,
     last_time: AtomicInterval,
     bins: u64,
+    pub estimate_mem: AtomicU64,
+    pub flush_should_evict_us: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -196,6 +198,16 @@ impl BucketMapHolderStats {
                 } else {
                     "accounts_index"
                 },
+                (
+                    "estimate_mem_bytes",
+                    self.estimate_mem.load(Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "flush_should_evict_us",
+                    self.flush_should_evict_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
                 (
                     "count_in_mem",
                     self.count_in_mem.load(Ordering::Relaxed),
