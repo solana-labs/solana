@@ -1936,7 +1936,6 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
-        // bprumo TODO: remove param vv and get accounts_data_len from fields
         accounts_data_len: u64,
     ) -> Self {
         fn new<T: Default>() -> T {
