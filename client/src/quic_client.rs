@@ -182,7 +182,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self._send_buffer(&buffers[0][..]).await?;
+        let connection = self._send_buffer(&buffers[0]).await?;
 
         // Used to avoid dereferencing the Arc multiple times below
         // by just getting a reference to the NewConnection once
@@ -196,7 +196,7 @@ impl QuicClient {
             join_all(
                 buffs
                     .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(&buf[..], connection_ref)),
+                    .map(|buf| Self::_send_buffer_using_conn(buf, connection_ref)),
             )
         });
 

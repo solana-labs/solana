@@ -34,7 +34,7 @@ impl TpuConnection for UdpTpuConnection {
             .iter()
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .try_for_each(|buff| -> TransportResult<()> {
-                self.socket.send_to(&buff[..], self.addr)?;
+                self.socket.send_to(&buff, self.addr)?;
                 Ok(())
             })?;
         Ok(())
