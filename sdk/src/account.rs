@@ -54,6 +54,7 @@ mod account_serialize {
         rent_epoch: Epoch,
     }
 
+    /// allows us to implement serialize on AccountSharedData that is equivalent to Account::serialize without making a copy of the Vec<u8>
     pub fn serialize_account<S>(
         account: &(impl ReadableAccount + Serialize),
         data: &Vec<u8>,
@@ -64,6 +65,7 @@ mod account_serialize {
     {
         let temp = Account {
             lamports: account.lamports(),
+            // note this is a ref, which is the whole point of 'account_serialize'
             data,
             owner: *account.owner(),
             executable: account.executable(),
