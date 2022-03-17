@@ -12,10 +12,10 @@ pub trait TpuConnection {
 
     fn send_transaction(&self, tx: &Transaction) -> TransportResult<()> {
         let data = bincode::serialize(tx).expect("serialize Transaction in send_transaction");
-        self.send_wire_transaction(data)
+        self.send_wire_transaction(&data)
     }
 
-    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()>;
+    fn send_wire_transaction(&self, data: &[u8]) -> TransportResult<()>;
 
-    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()>;
+    fn send_batch(&self, transactions: &[Transaction]) -> TransportResult<()>;
 }
