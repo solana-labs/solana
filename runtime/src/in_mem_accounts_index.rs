@@ -48,8 +48,6 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     stop_evictions_changes: AtomicU64,
     // true while ranges are being manipulated. Used to keep an async flush from removing things while a range is being held.
     stop_evictions: AtomicU64,
-    // set to true when any entry in this bin is marked dirty
-    bin_dirty: AtomicBool,
     // set to true while this bin is being actively flushed
     flushing_active: AtomicBool,
 }
@@ -81,7 +79,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             cache_ranges_held: CacheRangesHeld::default(),
             stop_evictions_changes: AtomicU64::default(),
             stop_evictions: AtomicU64::default(),
-            bin_dirty: AtomicBool::default(),
             flushing_active: AtomicBool::default(),
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
             last_age_flushed: AtomicU8::new(Age::MAX),
@@ -869,12 +866,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    pub fn set_bin_dirty(&self) {
-        self.bin_dirty.store(true, Ordering::Release);
-        // 1 bin dirty, so only need 1 thread to wake up if many could be waiting
-        self.storage.wait_dirty_or_aged.notify_one();
-    }
-
     /// returns true if a dice roll indicates this call should result in a random eviction.
     /// This causes non-determinism in cache contents per validator.
     fn random_chance_of_eviction() -> bool {
@@ -937,12 +928,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn flush_internal(&self, _flush_guard: &FlushGuard) {
-        let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
         let mut iterate_for_age = self.get_should_age(current_age);
         let startup = self.storage.get_startup();
-        if !was_dirty && !iterate_for_age && !startup {
-            // wasn't dirty and no need to age, so no need to flush this bucket
+        if !iterate_for_age && !startup {
+            // no need to age, so no need to flush this bucket
             // but, at startup we want to remove from buckets as fast as possible if any items exist
             return;
         }
