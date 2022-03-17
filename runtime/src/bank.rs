@@ -6431,14 +6431,8 @@ impl Bank {
         self.ensure_no_storage_rewards_pool();
 
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
-            // bprumo TODO: get good starting numbers for the clusters
-            let accounts_data_len = match self.cluster_type() {
-                ClusterType::Testnet => todo!(),
-                ClusterType::MainnetBeta => 50_000_000_000,
-                ClusterType::Devnet => todo!(),
-                ClusterType::Development => todo!(),
-            };
-            self.store_accounts_data_len(accounts_data_len);
+            const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
+            self.store_accounts_data_len(ACCOUNTS_DATA_LEN);
         }
     }
 
