@@ -15,7 +15,7 @@ use {
     },
 };
 
-/// Timeout to wait on the poh timestamp from the channel
+/// Timeout to wait on the poh timing points from the channel
 const POH_TIMING_RECEIVER_TIMEOUT_MILLISECONDS: u64 = 1000;
 
 pub type PohTimingReceiver = Receiver<(Slot, PohTimingPoint)>;
