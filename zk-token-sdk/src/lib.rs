@@ -36,3 +36,4 @@ pub mod instruction;
 pub mod zk_token_elgamal;
 pub mod zk_token_proof_instruction;
 pub mod zk_token_proof_program;
+pub mod curve25519;
