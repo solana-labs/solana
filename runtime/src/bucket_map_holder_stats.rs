@@ -38,14 +38,14 @@ pub struct BucketMapHolderStats {
     pub count_in_mem: AtomicUsize,
     pub per_bucket_count: Vec<AtomicUsize>,
     pub flush_entries_updated_on_disk: AtomicU64,
-    pub flush_entries_removed_from_mem: AtomicU64,
+    pub flush_entries_evicted_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
     last_ages_flushed: AtomicU64,
     pub flush_scan_us: AtomicU64,
     pub flush_update_us: AtomicU64,
-    pub flush_remove_us: AtomicU64,
+    pub flush_evict_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
     last_was_startup: AtomicBool,
     last_time: AtomicInterval,
@@ -345,8 +345,8 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
-                    "flush_remove_us",
-                    self.flush_remove_us.swap(0, Ordering::Relaxed),
+                    "flush_evict_us",
+                    self.flush_evict_us.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -438,8 +438,8 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
-                    "flush_entries_removed_from_mem",
-                    self.flush_entries_removed_from_mem
+                    "flush_entries_evicted_from_mem",
+                    self.flush_entries_evicted_from_mem
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
