@@ -1,5 +1,5 @@
 use {
-    solana_sdk::{transaction::Transaction, transport::Result as TransportResult},
+    solana_sdk::transport::Result as TransportResult,
     std::net::{SocketAddr, UdpSocket},
 };
 
@@ -10,12 +10,15 @@ pub trait TpuConnection {
 
     fn tpu_addr(&self) -> &SocketAddr;
 
-    fn send_transaction(&self, tx: &Transaction) -> TransportResult<()> {
-        let data = bincode::serialize(tx).expect("serialize Transaction in send_transaction");
-        self.send_wire_transaction(&data)
+    fn send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()>;
+
+    fn send_wire_transaction_batch(
+        &self,
+        wire_transaction_batch: &[Vec<u8>],
+    ) -> TransportResult<()> {
+        for wire_transaction in wire_transaction_batch {
+            self.send_wire_transaction(wire_transaction)?;
+        }
+        Ok(())
     }
-
-    fn send_wire_transaction(&self, data: &[u8]) -> TransportResult<()>;
-
-    fn send_batch(&self, transactions: &[Transaction]) -> TransportResult<()>;
 }

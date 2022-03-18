@@ -7,10 +7,8 @@ use {
     futures::future::join_all,
     itertools::Itertools,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
-    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
-        transaction::Transaction,
         transport::Result as TransportResult,
     },
     std::{
@@ -65,21 +63,19 @@ impl TpuConnection for QuicTpuConnection {
         &self.client.addr
     }
 
-    fn send_wire_transaction(&self, data: &[u8]) -> TransportResult<()> {
+    fn send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()> {
         let _guard = self.client.runtime.enter();
-        let send_buffer = self.client.send_buffer(data);
+        let send_buffer = self.client.send_buffer(wire_transaction);
         self.client.runtime.block_on(send_buffer)?;
         Ok(())
     }
 
-    fn send_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
-        let buffers = transactions
-            .into_par_iter()
-            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
-            .collect::<Vec<_>>();
-
+    fn send_wire_transaction_batch(
+        &self,
+        wire_transaction_batch: &[Vec<u8>],
+    ) -> TransportResult<()> {
         let _guard = self.client.runtime.enter();
-        let send_batch = self.client.send_batch(&buffers);
+        let send_batch = self.client.send_batch(wire_transaction_batch);
         self.client.runtime.block_on(send_batch)?;
         Ok(())
     }
