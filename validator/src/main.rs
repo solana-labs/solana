@@ -998,6 +998,7 @@ pub fn main() {
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
                 .default_value(default_rocksdb_fifo_shred_storage_size)
+                .requires("rocksdb_shred_compaction")
                 .help("The shred storage size in bytes. \
                        The suggested value is 50% of your ledger storage size in bytes."),
         )
