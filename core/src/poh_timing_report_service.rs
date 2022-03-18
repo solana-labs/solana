@@ -30,7 +30,7 @@ pub struct PohTimingReportService {
 impl PohTimingReportService {
     pub fn new(receiver: PohTimingReceiver, exit: Arc<AtomicBool>) -> Self {
         let exit_signal = exit;
-        let mut poh_timing_reporter = PohTimingReporter::new();
+        let mut poh_timing_reporter = PohTimingReporter::default();
         let t_poh_timing = Builder::new()
             .name("poh_timing_report".to_string())
             .spawn(move || loop {

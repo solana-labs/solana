@@ -55,25 +55,13 @@ impl SlotPohTimestamp {
 
 /// A PohTimingReporter manages and reports the timing of events for incoming
 /// slots
+#[derive(Default)]
 pub struct PohTimingReporter {
     /// Storage map of SlotPohTimestamp per slot
     slot_timestamps: HashMap<Slot, SlotPohTimestamp>,
 }
 
-impl Default for PohTimingReporter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl PohTimingReporter {
-    /// Return a PohTimingReporter instance
-    pub fn new() -> Self {
-        Self {
-            slot_timestamps: HashMap::new(),
-        }
-    }
-
     /// Return true if PohTiming is complete for the slot
     pub fn is_complete(&self, slot: Slot) -> bool {
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
