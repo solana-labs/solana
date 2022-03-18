@@ -40,6 +40,8 @@ import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
+import { AnchorAccountCard, hasAnchorIDL } from "components/account/AnchorAccountCard";
+import { AnchorProgramCard } from "components/account/AnchorProgramCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -223,10 +225,25 @@ function DetailsSections({
   tab?: string;
   info?: CacheEntry<Account>;
 }) {
+  const [ isAnchorAccount, setIsAnchorAccount ] = React.useState<Boolean>(false);
+  const [ isAnchorProgram, setIsAnchorProgram ] = React.useState<Boolean>(false);
+  const { url } = useCluster()
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const location = useLocation();
   const { flaggedAccounts } = useFlaggedAccounts();
+
+  React.useEffect(()=>{
+    if (info && info.data ) {
+      hasAnchorIDL(info.data.pubkey, url)
+      .then(setIsAnchorProgram)
+      if (info.data.details) {
+        hasAnchorIDL(info.data.details.owner, url)
+        .then(setIsAnchorAccount)
+      }
+    }
+  },[info, url])
+
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -240,6 +257,22 @@ function DetailsSections({
   const account = info.data;
   const data = account?.details?.data;
   const tabs = getTabs(data);
+
+  // This is a bad way to do this. This should happen inside getTabs?
+  if (isAnchorAccount) {
+    tabs.push({
+      slug: "anchor-account",
+      title: "Anchor IDL",
+      path: "/anchor-account",
+    });
+  }
+  if (isAnchorProgram) {
+    tabs.push({
+      slug: "anchor-program",
+      title: "Anchor IDL",
+      path: "/anchor-program",
+    });
+  }
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -264,6 +297,7 @@ function DetailsSections({
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
+  console.log("account", account);
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -319,7 +353,9 @@ export type MoreTabs =
   | "instructions"
   | "rewards"
   | "metadata"
-  | "domains";
+  | "domains"
+  | "anchor-account"
+  | "anchor-program";
 
 function MoreSection({
   account,
@@ -389,6 +425,16 @@ function MoreSection({
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
+      {tab === "anchor-account" && (
+        <AnchorAccountCard
+          account={(account)}
+        />
+      )}
+      {tab === "anchor-program" && (
+        <AnchorProgramCard
+          account={(account)}
+        />
+      )}
     </>
   );
 }
