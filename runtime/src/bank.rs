@@ -3261,34 +3261,6 @@ impl Bank {
         }
     }
 
-    // Should not be called outside of startup, will race with
-    // concurrent cleaning logic in AccountsBackgroundService
-    pub fn exhaustively_free_unused_resource(&self, last_full_snapshot_slot: Option<Slot>) {
-        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
-        let mut flush = Measure::start("flush");
-        // Flush all the rooted accounts. Must be called after `squash()`,
-        // so that AccountsDb knows what the roots are.
-        self.force_flush_accounts_cache();
-        flush.stop();
-
-        let mut clean = Measure::start("clean");
-        // Don't clean the slot we're snapshotting because it may have zero-lamport
-        // accounts that were included in the bank delta hash when the bank was frozen,
-        // and if we clean them here, any newly created snapshot's hash for this bank
-        // may not match the frozen hash.
-        self.clean_accounts(true, IS_STARTUP, last_full_snapshot_slot);
-        clean.stop();
-
-        let mut shrink = Measure::start("shrink");
-        self.shrink_all_slots(IS_STARTUP, last_full_snapshot_slot);
-        shrink.stop();
-
-        info!(
-            "exhaustively_free_unused_resource() {} {} {}",
-            flush, clean, shrink,
-        );
-    }
-
     pub fn epoch_schedule(&self) -> &EpochSchedule {
         &self.epoch_schedule
     }
