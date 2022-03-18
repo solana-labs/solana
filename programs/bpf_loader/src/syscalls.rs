@@ -541,7 +541,7 @@ fn translate_type_inner<'a, T>(
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
 
     if loader_id != &bpf_loader_deprecated::id()
-        && (host_addr as *mut T).align_offset(align_of::<T>()) != 0
+        && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0
     {
         return Err(SyscallError::UnalignedPointer.into());
     }
@@ -582,7 +582,7 @@ fn translate_slice_inner<'a, T>(
     )?;
 
     if loader_id != &bpf_loader_deprecated::id()
-        && (host_addr as *mut T).align_offset(align_of::<T>()) != 0
+        && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0
     {
         return Err(SyscallError::UnalignedPointer.into());
     }
@@ -4034,7 +4034,10 @@ mod tests {
             );
             let address = result.unwrap();
             assert_ne!(address, 0);
-            assert_eq!((address as *const u8).align_offset(align_of::<u8>()), 0);
+            assert_eq!(
+                (address as *const u8 as usize).wrapping_rem(align_of::<u8>()),
+                0
+            );
         }
         check_alignment::<u8>();
         check_alignment::<u16>();
