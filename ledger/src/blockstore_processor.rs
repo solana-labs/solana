@@ -17,7 +17,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
-        accounts_background_service::DroppedSlotsReceiver,
+        accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -31,9 +31,6 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig,
-        snapshot_package::{PendingAccountsPackage, SnapshotType},
-        snapshot_utils,
         transaction_batch::TransactionBatch,
         transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccountsHashMap,
@@ -569,17 +566,16 @@ pub fn test_process_blockstore(
     blockstore: &Blockstore,
     opts: ProcessOptions,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
-    let (bank_forks, leader_schedule_cache, .., pruned_banks_receiver) =
-        crate::bank_forks_utils::load_bank_forks(
-            genesis_config,
-            blockstore,
-            Vec::new(),
-            None,
-            None,
-            &opts,
-            None,
-            None,
-        );
+    let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
+        genesis_config,
+        blockstore,
+        Vec::new(),
+        None,
+        None,
+        &opts,
+        None,
+        None,
+    );
     process_blockstore_from_root(
         blockstore,
         &bank_forks,
@@ -587,9 +583,7 @@ pub fn test_process_blockstore(
         &opts,
         None,
         None,
-        None,
-        PendingAccountsPackage::default(),
-        pruned_banks_receiver,
+        &AbsRequestSender::default(),
     )
     .unwrap();
     (bank_forks, leader_schedule_cache)
@@ -639,10 +633,8 @@ pub fn process_blockstore_from_root(
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    pending_accounts_package: PendingAccountsPackage,
-    pruned_banks_receiver: DroppedSlotsReceiver,
-) -> result::Result<Option<Slot>, BlockstoreProcessorError> {
+    accounts_background_request_sender: &AbsRequestSender,
+) -> result::Result<(), BlockstoreProcessorError> {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
@@ -682,8 +674,6 @@ pub fn process_blockstore_from_root(
     let mut timing = ExecuteTimings::default();
     // Iterate and replay slots from blockstore starting from `start_slot`
 
-    let mut last_full_snapshot_slot = None;
-
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
@@ -697,11 +687,8 @@ pub fn process_blockstore_from_root(
             opts,
             transaction_status_sender,
             cache_block_meta_sender,
-            snapshot_config,
-            pending_accounts_package,
             &mut timing,
-            &mut last_full_snapshot_slot,
-            pruned_banks_receiver,
+            accounts_background_request_sender,
         )?;
     } else {
         // If there's no meta for the input `start_slot`, then we started from a snapshot
@@ -761,7 +748,7 @@ pub fn process_blockstore_from_root(
         assert!(bank_forks.active_banks().is_empty());
     }
 
-    Ok(last_full_snapshot_slot)
+    Ok(())
 }
 
 /// Verify that a segment of entries has the correct number of ticks and hashes
@@ -1159,16 +1146,12 @@ fn load_frozen_forks(
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    pending_accounts_package: PendingAccountsPackage,
     timing: &mut ExecuteTimings,
-    last_full_snapshot_slot: &mut Option<Slot>,
-    pruned_banks_receiver: DroppedSlotsReceiver,
+    accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
-    let mut last_free = Instant::now();
     let mut pending_slots = vec![];
     let mut slots_elapsed = 0;
     let mut txs = 0;
@@ -1292,62 +1275,9 @@ fn load_frozen_forks(
                 leader_schedule_cache.set_root(new_root_bank);
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
-                    &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+                    accounts_background_request_sender,
                     None,
                 );
-
-                if let Some(snapshot_config) = snapshot_config {
-                    let block_height = new_root_bank.block_height();
-                    if snapshot_utils::should_take_full_snapshot(
-                        block_height,
-                        snapshot_config.full_snapshot_archive_interval_slots,
-                    ) {
-                        info!("Taking snapshot of new root bank that has crossed the full snapshot interval! slot: {}", root);
-                        *last_full_snapshot_slot = Some(root);
-                        new_root_bank.exhaustively_free_unused_resource(*last_full_snapshot_slot);
-                        last_free = Instant::now();
-                        new_root_bank.update_accounts_hash_with_index_option(
-                            false,
-                            snapshot_config.accounts_hash_debug_verify,
-                            false,
-                        );
-                        snapshot_utils::snapshot_bank(
-                            new_root_bank,
-                            new_root_bank.src.slot_deltas(&new_root_bank.src.roots()),
-                            &pending_accounts_package,
-                            &snapshot_config.bank_snapshots_dir,
-                            &snapshot_config.snapshot_archives_dir,
-                            snapshot_config.snapshot_version,
-                            snapshot_config.archive_format,
-                            None,
-                            Some(SnapshotType::FullSnapshot),
-                        )
-                        .expect("Failed to snapshot bank while loading frozen banks");
-                        trace!(
-                            "took bank snapshot for new root bank, block height: {}, slot: {}",
-                            block_height,
-                            root
-                        );
-                    }
-                }
-
-                if last_free.elapsed() > Duration::from_secs(10) {
-                    // Purge account state for all dropped banks
-                    for (pruned_slot, pruned_bank_id) in pruned_banks_receiver.try_iter() {
-                        // Simulate this purge is from AccountBackgroundService
-                        new_root_bank.rc.accounts.accounts_db.purge_slot(
-                            pruned_slot,
-                            pruned_bank_id,
-                            true,
-                        );
-                    }
-
-                    // Must be called after `squash()`, so that AccountsDb knows what
-                    // the roots are for the cache flushing in exhaustively_free_unused_resource().
-                    // This could take few secs; so update last_free later
-                    new_root_bank.exhaustively_free_unused_resource(*last_full_snapshot_slot);
-                    last_free = Instant::now();
-                }
 
                 // Filter out all non descendants of the new root
                 pending_slots
@@ -3211,7 +3141,6 @@ pub mod tests {
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank1);
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (_pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
         let bank_forks = RwLock::new(bank_forks);
         process_blockstore_from_root(
             &blockstore,
@@ -3220,9 +3149,7 @@ pub mod tests {
             &opts,
             None,
             None,
-            None,
-            PendingAccountsPackage::default(),
-            pruned_banks_receiver,
+            &AbsRequestSender::default(),
         )
         .unwrap();
 
@@ -3244,128 +3171,6 @@ pub mod tests {
 
         // Check that bank forks has the correct banks
         verify_fork_infos(&bank_forks);
-    }
-
-    /// Test that processing the blockstore is aware of incremental snapshots.  When processing the
-    /// blockstore from a root, like what happens when loading from a snapshot, there may be new
-    /// roots that cross a full snapshot interval.  In these cases, a bank snapshot must be taken,
-    /// so that a full snapshot archive is created and available by the time the background
-    /// services spin up.
-    ///
-    /// For this test, process enough roots to cross the full snapshot interval multiple times.
-    /// Ensure afterwards that the snapshots were created.
-    #[test]
-    fn test_process_blockstore_from_root_with_snapshots() {
-        solana_logger::setup();
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = create_genesis_config(123);
-
-        let ticks_per_slot = 1;
-        genesis_config.ticks_per_slot = ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        const ROOT_INTERVAL_SLOTS: Slot = 2;
-        const FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = ROOT_INTERVAL_SLOTS * 5;
-        const LAST_SLOT: Slot = FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 4;
-
-        let mut last_hash = blockhash;
-        for i in 1..=LAST_SLOT {
-            last_hash =
-                fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i, i - 1, last_hash);
-        }
-
-        let roots_to_set = (0..=LAST_SLOT)
-            .step_by(ROOT_INTERVAL_SLOTS as usize)
-            .collect_vec();
-        blockstore.set_roots(roots_to_set.iter()).unwrap();
-
-        // Set up bank1
-        let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.get(0).unwrap().clone();
-        let opts = ProcessOptions {
-            poh_verify: true,
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None);
-
-        let slot_start_processing = 1;
-        let bank = bank_forks.insert(Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            slot_start_processing,
-        ));
-        confirm_full_slot(
-            &blockstore,
-            &bank,
-            &opts,
-            &recyclers,
-            &mut ConfirmationProgress::new(bank0.last_blockhash()),
-            None,
-            None,
-            &mut ExecuteTimings::default(),
-        )
-        .unwrap();
-        bank_forks.set_root(
-            1,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            None,
-        );
-
-        let bank_snapshots_tempdir = tempfile::TempDir::new().unwrap();
-        let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots: FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            bank_snapshots_dir: bank_snapshots_tempdir.path().to_path_buf(),
-            ..SnapshotConfig::default()
-        };
-
-        let pending_accounts_package = PendingAccountsPackage::default();
-        let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-
-        let (_pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
-        process_blockstore_from_root(
-            &blockstore,
-            &RwLock::new(bank_forks),
-            &leader_schedule_cache,
-            &opts,
-            None,
-            None,
-            Some(&snapshot_config),
-            Arc::clone(&pending_accounts_package),
-            pruned_banks_receiver,
-        )
-        .unwrap();
-
-        // Ensure the last AccountsPackage was created and is pending
-        let received_accounts_package_slot = pending_accounts_package
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .slot;
-        let expected_accounts_package_slot = (slot_start_processing..=LAST_SLOT)
-            .filter(|slot| slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0)
-            .max()
-            .unwrap();
-        assert_eq!(
-            received_accounts_package_slot,
-            expected_accounts_package_slot
-        );
-
-        // Ensure all the bank snapshots were created
-        let bank_snapshots = snapshot_utils::get_bank_snapshots(&bank_snapshots_tempdir);
-        let mut bank_snapshot_slots = bank_snapshots
-            .into_iter()
-            .map(|bank_snapshot| bank_snapshot.slot)
-            .collect::<Vec<_>>();
-        bank_snapshot_slots.sort_unstable();
-        let expected_slots = (slot_start_processing..=LAST_SLOT)
-            .filter(|slot| slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0)
-            .collect::<Vec<_>>();
-        assert_eq!(bank_snapshot_slots, expected_slots);
     }
 
     #[test]
