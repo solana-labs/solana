@@ -1127,6 +1127,7 @@ pub fn main() {
                 .alias("no-untrusted-rpc")
                 .long("only-known-rpc")
                 .takes_value(false)
+                .requires("known_validators")
                 .help("Use the RPC service of known validators only")
         )
         .arg(
