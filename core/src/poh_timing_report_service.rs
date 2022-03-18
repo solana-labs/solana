@@ -68,7 +68,7 @@ mod test {
         // Send PohTimingPoints
         let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotStart(100)));
         let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotEnd(200)));
-        let _ = poh_timing_point_sender.send((42, PohTimingPoint::FullShredReceived(150)));
+        let _ = poh_timing_point_sender.send((42, PohTimingPoint::FullSlotReceived(150)));
 
         // Shutdown the service
         exit.store(true, Ordering::Relaxed);

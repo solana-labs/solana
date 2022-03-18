@@ -2024,7 +2024,7 @@ impl Blockstore {
         if let Some(ref sender) = self.shred_timing_point_sender {
             let _ = sender.try_send((
                 slot,
-                PohTimingPoint::FullShredReceived(solana_sdk::timing::timestamp()),
+                PohTimingPoint::FullSlotReceived(solana_sdk::timing::timestamp()),
             ));
         }
         Ok(newly_completed_data_sets)

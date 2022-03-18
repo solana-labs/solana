@@ -6,14 +6,14 @@ use {
 
 /// A PohTimestamp records timing of the events during the processing of a slot
 /// the validator
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SlotPohTimestamp {
     /// Slot start time from poh
     pub start_time: u64,
     /// Slot end time from poh
     pub end_time: u64,
     /// Last shred received time from block producer
-    pub last_shred_recv_time: u64,
+    pub full_time: u64,
 }
 
 /// Default value (all zeros)
@@ -22,7 +22,7 @@ impl Default for SlotPohTimestamp {
         Self {
             start_time: 0,
             end_time: 0,
-            last_shred_recv_time: 0,
+            full_time: 0,
         }
     }
 }
@@ -30,7 +30,7 @@ impl Default for SlotPohTimestamp {
 impl SlotPohTimestamp {
     /// Return true if the timing points of all event are received.
     pub fn is_complete(&self) -> bool {
-        self.start_time != 0 && self.end_time != 0 && self.last_shred_recv_time != 0
+        self.start_time != 0 && self.end_time != 0 && self.full_time != 0
     }
 
     /// Update timing point
@@ -38,18 +38,18 @@ impl SlotPohTimestamp {
         match timing_point {
             PohTimingPoint::PohSlotStart(ts) => self.start_time = ts,
             PohTimingPoint::PohSlotEnd(ts) => self.end_time = ts,
-            PohTimingPoint::FullShredReceived(ts) => self.last_shred_recv_time = ts,
+            PohTimingPoint::FullSlotReceived(ts) => self.full_time = ts,
         }
     }
 
-    /// Return the time difference between last shred received and slot start
-    pub fn shred_recv_slot_start_time_diff(&self) -> u64 {
-        self.last_shred_recv_time - self.start_time
+    /// Return the time difference from slot start to slot shred full
+    pub fn slot_start_to_full_time(&self) -> i64 {
+        (self.full_time as i64).saturating_sub(self.start_time as i64)
     }
 
-    /// Return the time difference between last shred received and slot end
-    pub fn shred_recv_slot_end_time_diff(&self) -> u64 {
-        self.last_shred_recv_time - self.end_time
+    /// Return the time difference from slot shred full to slot end
+    pub fn slot_full_to_end_time(&self) -> i64 {
+        (self.end_time as i64).saturating_sub(self.full_time as i64)
     }
 }
 
@@ -74,7 +74,7 @@ impl PohTimingReporter {
         }
     }
 
-    /// Check if PohTiming is complete for a slot
+    /// Return true if PohTiming is complete for the slot
     pub fn is_complete(&self, slot: Slot) -> bool {
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
             slot_timestamp.is_complete()
@@ -90,19 +90,15 @@ impl PohTimingReporter {
             ("slot", slot as i64, i64),
             ("start_time", slot_timestamp.start_time as i64, i64),
             ("end_time", slot_timestamp.end_time as i64, i64),
+            ("full_time", slot_timestamp.full_time as i64, i64),
             (
-                "last_shred_recv_time",
-                slot_timestamp.last_shred_recv_time as i64,
+                "start_to_full_time_diff",
+                slot_timestamp.slot_start_to_full_time(),
                 i64
             ),
             (
-                "last_shred_recv_slot_start_time_diff",
-                slot_timestamp.shred_recv_slot_start_time_diff() as i64,
-                i64
-            ),
-            (
-                "last_shred_recv_slot_end_time_diff",
-                slot_timestamp.shred_recv_slot_end_time_diff() as i64,
+                "full_to_end_time_diff",
+                slot_timestamp.slot_full_to_end_time(),
                 i64
             ),
         );
@@ -139,7 +135,21 @@ mod test {
         // process all relevant PohTimingPoints for a slot
         reporter.process(42, PohTimingPoint::PohSlotStart(100));
         reporter.process(42, PohTimingPoint::PohSlotEnd(200));
-        reporter.process(42, PohTimingPoint::FullShredReceived(150));
+        reporter.process(42, PohTimingPoint::FullSlotReceived(150));
+
+        // assert that the PohTiming is complete
+        assert!(reporter.is_complete(42));
+    }
+
+    #[test]
+    fn test_poh_timing_reporter_overflow() {
+        // create a reporter
+        let mut reporter = PohTimingReporter::default();
+
+        // process all relevant PohTimingPoints for a slot
+        reporter.process(42, PohTimingPoint::PohSlotStart(1647624609896));
+        reporter.process(42, PohTimingPoint::PohSlotEnd(1647624610286));
+        reporter.process(42, PohTimingPoint::FullSlotReceived(1647624610281));
 
         // assert that the PohTiming is complete
         assert!(reporter.is_complete(42));

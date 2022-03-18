@@ -151,7 +151,7 @@ macro_rules! datapoint_trace {
 pub enum PohTimingPoint {
     PohSlotStart(u64),
     PohSlotEnd(u64),
-    FullShredReceived(u64),
+    FullSlotReceived(u64),
 }
 
 #[cfg(test)]
