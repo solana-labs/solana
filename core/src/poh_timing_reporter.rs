@@ -1,13 +1,12 @@
 use {
     solana_metrics::{datapoint::PohTimingPoint, datapoint_info},
     solana_sdk::clock::Slot,
-    std::collections::HashMap,
-    std::fmt;
+    std::{collections::HashMap, fmt},
 };
 
 /// A PohTimestamp records timing of the events during the processing of a slot
 /// the validator
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SlotPohTimestamp {
     /// Slot start time from poh
     pub start_time: u64,
@@ -17,21 +16,14 @@ pub struct SlotPohTimestamp {
     pub full_time: u64,
 }
 
-/// Default value (all zeros)
-impl Default for SlotPohTimestamp {
-    fn default() -> Self {
-        Self {
-            start_time: 0,
-            end_time: 0,
-            full_time: 0,
-        }
-    }
-}
-
 /// fmt traits
 impl fmt::Display for SlotPohTimestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SlotPohTimestamp: start={} end={} full={}", self.start_time, self.end_time, self.full_time)
+        write!(
+            f,
+            "SlotPohTimestamp: start={} end={} full={}",
+            self.start_time, self.end_time, self.full_time
+        )
     }
 }
 
@@ -164,7 +156,7 @@ mod test {
     }
 
     #[test]
-    fn test_SlotPohTimestamp_fmt() {
+    fn test_slot_poh_timestamp_fmt() {
         let t = SlotPohTimestamp::default();
         assert_eq!(format!("{}", t), "SlotPohTimestamp: start=0 end=0 full=0");
     }
