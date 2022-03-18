@@ -146,13 +146,11 @@ pub struct JsonRpcConfig {
     pub enable_cpi_and_log_storage: bool,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
-    pub enable_bigtable_ledger_storage: bool,
-    pub enable_bigtable_ledger_upload: bool,
+    pub rpc_bigtable_config: Option<RpcBigtableConfig>,
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
     pub rpc_niceness_adj: i8,
-    pub rpc_bigtable_timeout: Option<Duration>,
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
@@ -165,6 +163,12 @@ impl JsonRpcConfig {
             ..Self::default()
         }
     }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct RpcBigtableConfig {
+    pub enable_bigtable_ledger_upload: bool,
+    pub timeout: Option<Duration>,
 }
 
 #[derive(Clone)]
