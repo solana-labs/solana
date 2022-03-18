@@ -13,7 +13,7 @@ use {
     },
     solana_entry::poh::compute_hashes_per_tick,
     solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account},
-    solana_ledger::{blockstore::create_new_ledger, blockstore_db::BlockstoreAdvancedOptions},
+    solana_ledger::{blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions},
     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -629,7 +629,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &ledger_path,
         &genesis_config,
         max_genesis_archive_unpacked_size,
-        BlockstoreAdvancedOptions::default(),
+        LedgerColumnOptions::default(),
     )?;
 
     println!("{}", genesis_config);

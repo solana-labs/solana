@@ -10,7 +10,7 @@ mod tests {
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
             blockstore_db::{
-                BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRocksFifoOptions,
+                BlockstoreOptions, BlockstoreRocksFifoOptions, LedgerColumnOptions,
                 ShredStorageType,
             },
             get_tmp_ledger_path,
@@ -351,7 +351,7 @@ mod tests {
             &ledger_path,
             if config.fifo_compaction {
                 BlockstoreOptions {
-                    advanced_options: BlockstoreAdvancedOptions {
+                    column_options: LedgerColumnOptions {
                         shred_storage_type: ShredStorageType::RocksFifo(
                             BlockstoreRocksFifoOptions {
                                 shred_data_cf_size: config.shred_data_cf_size,

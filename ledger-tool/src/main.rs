@@ -25,8 +25,8 @@ use {
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{
-            self, AccessType, BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRecoveryMode,
-            Database,
+            self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Database,
+            LedgerColumnOptions,
         },
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -1719,7 +1719,7 @@ fn main() {
                     &output_directory,
                     &genesis_config,
                     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-                    BlockstoreAdvancedOptions::default(),
+                    LedgerColumnOptions::default(),
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to write genesis config: {:?}", err);
