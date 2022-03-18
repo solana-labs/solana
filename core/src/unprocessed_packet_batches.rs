@@ -107,32 +107,32 @@ impl UnprocessedPacketBatches {
             .sum()
     }
 
-    /// Iterates packets in buffered packet_batches, returns all unprocessed packet's stake,
-    /// and its locator
+    /// Iterates the inner `Vec<DeserializedPacketBatch>`.
+    /// Returns the flattened result of mapping each
+    /// `DeserializedPacketBatch` to a list the batch's inner
+    /// packets' sender's stake and their `PacketLocator`'s within the
+    /// `Vec<DeserializedPacketBatch>`.
     #[allow(dead_code)]
     fn get_stakes_and_locators(&self) -> (Vec<u64>, Vec<PacketLocator>) {
-        let num_unprocessed_packets = self.get_unprocessed_packets_count();
-        let mut stakes = Vec::<u64>::with_capacity(num_unprocessed_packets);
-        let mut locators = Vec::<PacketLocator>::with_capacity(num_unprocessed_packets);
-
         self.iter()
             .enumerate()
-            .for_each(|(batch_index, deserialized_packet_batch)| {
+            .flat_map(|(batch_index, deserialized_packet_batch)| {
                 let packet_batch = &deserialized_packet_batch.packet_batch;
                 deserialized_packet_batch
                     .unprocessed_packets
                     .keys()
-                    .for_each(|packet_index| {
+                    .map(move |packet_index| {
                         let p = &packet_batch.packets[*packet_index];
-                        stakes.push(p.meta.sender_stake);
-                        locators.push(PacketLocator {
-                            batch_index,
-                            packet_index: *packet_index,
-                        });
-                    });
-            });
-
-        (stakes, locators)
+                        (
+                            p.meta.sender_stake,
+                            PacketLocator {
+                                batch_index,
+                                packet_index: *packet_index,
+                            },
+                        )
+                    })
+            })
+            .unzip()
     }
 }
 
