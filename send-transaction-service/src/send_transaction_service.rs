@@ -316,8 +316,18 @@ impl SendTransactionService {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
         measure.stop();
-        inc_new_counter_info!("send_transaction_service-us", measure.as_us() as usize, 1000, 1000);
-        inc_new_counter_info!("send_transaction_service-bytes", wire_transaction.len(), 1000, 1000);
+        inc_new_counter_info!(
+            "send_transaction_service-us",
+            measure.as_us() as usize,
+            1000,
+            1000
+        );
+        inc_new_counter_info!(
+            "send_transaction_service-bytes",
+            wire_transaction.len(),
+            1000,
+            1000
+        );
     }
 
     pub fn join(self) -> thread::Result<()> {
