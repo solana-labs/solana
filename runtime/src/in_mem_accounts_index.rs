@@ -933,7 +933,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let startup = self.storage.get_startup();
         if !iterate_for_age && !startup {
             // no need to age, so no need to flush this bucket
-            // but, at startup we want to remove from buckets as fast as possible if any items exist
+            // but, at startup we want to evict from buckets as fast as possible if any items exist
             return;
         }
 
@@ -970,7 +970,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     mse.stop();
                     flush_should_evict_us += mse.as_us();
                     if !evict_for_age && !Self::random_chance_of_eviction() {
-                        // not planning to remove this item from memory now, so don't write it to disk yet
+                        // not planning to evict this item from memory now, so don't write it to disk yet
                         continue;
                     }
 
@@ -1034,7 +1034,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             let m = Measure::start("flush_evict");
             self.evict_from_cache(evictions, current_age, startup, false);
             self.evict_from_cache(evictions_random, current_age, startup, true);
-            Self::update_time_stat(&self.stats().flush_remove_us, m);
+            Self::update_time_stat(&self.stats().flush_evict_us, m);
 
             if iterate_for_age {
                 // completed iteration of the buckets at the current age
@@ -1054,7 +1054,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         });
     }
 
-    // remove keys in 'evictions' from in-mem cache, likely due to age
+    // evict keys in 'evictions' from in-mem cache, likely due to age
     fn evict_from_cache(
         &self,
         mut evictions: Vec<Pubkey>,
@@ -1092,7 +1092,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             }
         }
 
-        let mut removed = 0;
+        let mut evicted = 0;
         // consider chunking these so we don't hold the write lock too long
         let mut map = self.map().write().unwrap();
         for k in evictions {
@@ -1120,8 +1120,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                // all conditions for removing succeeded, so really remove item from in-mem cache
-                removed += 1;
+                // all conditions for removing succeeded, so really evict item from in-mem cache
+                evicted += 1;
                 occupied.remove();
             }
         }
@@ -1130,8 +1130,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
         drop(map);
         self.stats()
-            .insert_or_delete_mem_count(false, self.bin, removed);
-        Self::update_stat(&self.stats().flush_entries_removed_from_mem, removed as u64);
+            .insert_or_delete_mem_count(false, self.bin, evicted);
+        Self::update_stat(&self.stats().flush_entries_evicted_from_mem, evicted as u64);
     }
 
     pub fn stats(&self) -> &BucketMapHolderStats {
