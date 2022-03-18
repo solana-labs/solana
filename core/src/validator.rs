@@ -378,6 +378,13 @@ impl Validator {
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
 
+        if !config.no_os_network_stats_reporting {
+            verify_udp_stats_access().unwrap_or_else(|err| {
+                error!("Failed to access UDP stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
+                abort();
+            });
+        }
+
         let mut bank_notification_senders = Vec::new();
 
         let geyser_plugin_service =
@@ -557,13 +564,6 @@ impl Validator {
         info!("Tower state: {:?}", tower);
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
-
-        if !config.no_os_network_stats_reporting {
-            verify_udp_stats_access().unwrap_or_else(|err| {
-                error!("Failed to access UDP stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
-                abort();
-            });
-        }
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
 
