@@ -3370,6 +3370,7 @@ dependencies = [
  "memmap2 0.5.3",
  "rustc_version 0.4.0",
  "serde",
+ "serde_bytes",
  "serde_derive",
  "sha2 0.10.2",
  "solana-frozen-abi-macro 1.10.4",

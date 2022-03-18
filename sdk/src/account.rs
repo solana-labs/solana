@@ -46,8 +46,8 @@ mod account_serialize {
     struct Account<'a> {
         lamports: u64,
         #[serde(with = "serde_bytes")]
-        // a ref so we don't have to make a copy just to serialize this
-        data: &'a Vec<u8>,
+        // a slice so we don't have to make a copy just to serialize this
+        data: &'a [u8],
         // can't be &pubkey because abi example doesn't support it
         owner: Pubkey,
         executable: bool,
@@ -57,7 +57,6 @@ mod account_serialize {
     /// allows us to implement serialize on AccountSharedData that is equivalent to Account::serialize without making a copy of the Vec<u8>
     pub fn serialize_account<S>(
         account: &(impl ReadableAccount + Serialize),
-        data: &Vec<u8>,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
@@ -65,8 +64,7 @@ mod account_serialize {
     {
         let temp = Account {
             lamports: account.lamports(),
-            // note this is a ref, which is the whole point of 'account_serialize'
-            data,
+            data: account.data(),
             owner: *account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
@@ -80,7 +78,7 @@ impl Serialize for Account {
     where
         S: Serializer,
     {
-        crate::account::account_serialize::serialize_account(self, &self.data, serializer)
+        crate::account::account_serialize::serialize_account(self, serializer)
     }
 }
 
@@ -89,7 +87,7 @@ impl Serialize for AccountSharedData {
     where
         S: Serializer,
     {
-        crate::account::account_serialize::serialize_account(self, &self.data, serializer)
+        crate::account::account_serialize::serialize_account(self, serializer)
     }
 }
 
