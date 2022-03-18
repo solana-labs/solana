@@ -133,7 +133,7 @@ mod test {
     /// Test poh_timing_reporter
     fn test_poh_timing_reporter() {
         // create a reporter
-        let mut reporter = PohTimingReporter::new();
+        let mut reporter = PohTimingReporter::default();
 
         // process all relevant PohTimingPoints for a slot
         reporter.process(42, PohTimingPoint::PohSlotStart(100));
