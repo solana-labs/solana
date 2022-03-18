@@ -2017,17 +2017,18 @@ impl Blockstore {
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
             );
+
+            // send
+            if let Some(ref sender) = self.shred_timing_point_sender {
+                info!("PohTimingPoint:Full {}", slot);
+                let _ = sender.try_send((
+                    slot,
+                    PohTimingPoint::FullSlotReceived(solana_sdk::timing::timestamp()),
+                ));
+            }
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
 
-        // send
-        if let Some(ref sender) = self.shred_timing_point_sender {
-            info!("PohTimingPoint:Full {}", slot);
-            let _ = sender.try_send((
-                slot,
-                PohTimingPoint::FullSlotReceived(solana_sdk::timing::timestamp()),
-            ));
-        }
         Ok(newly_completed_data_sets)
     }
 
