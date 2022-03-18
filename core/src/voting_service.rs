@@ -45,7 +45,6 @@ impl VotingService {
         poh_recorder: Arc<Mutex<PohRecorder>>,
         tower_storage: Arc<dyn TowerStorage>,
         bank_forks: Arc<RwLock<BankForks>>,
-        use_quic_client: bool,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("sol-vote-service".to_string())
@@ -59,7 +58,6 @@ impl VotingService {
                         tower_storage.as_ref(),
                         vote_op,
                         send_to_tpu_vote_port,
-                        use_quic_client,
                     );
                 }
             })
@@ -73,7 +71,6 @@ impl VotingService {
         tower_storage: &dyn TowerStorage,
         vote_op: VoteOp,
         send_to_tpu_vote_port: bool,
-        use_quic_client: bool,
     ) {
         if let VoteOp::PushVote { saved_tower, .. } = &vote_op {
             let mut measure = Measure::start("tower_save-ms");
@@ -92,13 +89,8 @@ impl VotingService {
         };
 
         let mut measure = Measure::start("vote_tx_send-ms");
-        if use_quic_client {
-            let target_address =
-                target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
-            let _ = get_connection(&target_address).send_transaction(vote_op.tx());
-        } else {
-            let _ = cluster_info.send_transaction(vote_op.tx(), target_address);
-        }
+        let target_address = target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
+        let _ = get_connection(&target_address).send_transaction(vote_op.tx());
         measure.stop();
         inc_new_counter_info!("vote_tx_send-ms", measure.as_ms() as usize);
 
