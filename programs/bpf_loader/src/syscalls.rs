@@ -255,7 +255,6 @@ pub fn register_syscalls(
             .register_syscall_by_name(b"sol_curve25519", SyscallCurve25519BasicOps::call)?;
     }
 
-
     syscall_registry
         .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
@@ -386,7 +385,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
         .is_active(&feature_set::zk_token_sdk_enabled::id());
-    let is_curve25519_enabled = invoke_context
+    let is_curve25519_basic_enabled = invoke_context
         .feature_set
         .is_active(&feature_set::curve25519_basic_enabled::id());
     let add_get_processed_sibling_instruction_syscall = invoke_context
@@ -550,7 +549,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
 
     bind_feature_gated_syscall_context_object!(
         vm,
-        is_curve25519_enabled,
+        is_curve25519_basic_enabled,
         Box::new(SyscallCurve25519BasicOps {
             invoke_context: invoke_context.clone(),
         }),
@@ -2147,6 +2146,7 @@ declare_syscall!(
     }
 );
 
+// Curve25519
 pub struct SyscallCurve25519BasicOps<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
 }
@@ -2175,7 +2175,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
 
         match op {
             OP_EDWARDS_ADD | OP_EDWARDS_SUB => {
-                let cost = invoke_context.get_compute_budget().curve25519_edwards_op_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_op_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let left_point = question_mark!(
@@ -2204,9 +2206,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                 } else {
                     *result = Ok(1);
                 }
-            },
+            }
             OP_RISTRETTO_ADD | OP_RISTRETTO_SUB => {
-                let cost = invoke_context.get_compute_budget().curve25519_ristretto_op_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_op_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let left_point = question_mark!(
@@ -2235,9 +2239,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                 } else {
                     *result = Ok(1);
                 }
-            },
+            }
             OP_SCALAR_ADD | OP_SCALAR_SUB | OP_SCALAR_MUL | OP_SCALAR_DIV => {
-                let cost = invoke_context.get_compute_budget().curve25519_scalar_op_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_scalar_op_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let left_scalar = question_mark!(
@@ -2257,20 +2263,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                     _ => None,
                 } {
                     *question_mark!(
-                        translate_type_mut::<PodScalar>(
-                            memory_mapping,
-                            result_addr,
-                            loader_id,
-                        ),
+                        translate_type_mut::<PodScalar>(memory_mapping, result_addr, loader_id,),
                         result
                     ) = result_point;
                     *result = Ok(0);
                 } else {
                     *result = Ok(1);
                 }
-            },
+            }
             OP_EDWARDS_MUL => {
-                let cost = invoke_context.get_compute_budget().curve25519_edwards_mul_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_mul_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
@@ -2295,9 +2299,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                 } else {
                     *result = Ok(1);
                 }
-            },
+            }
             OP_RISTRETTO_MUL => {
-                let cost = invoke_context.get_compute_budget().curve25519_ristretto_mul_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_mul_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
@@ -2322,14 +2328,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                 } else {
                     *result = Ok(1);
                 }
-            },
+            }
             _ => {
                 *result = Ok(1);
             }
         };
     }
 }
-
 
 // Blake3
 pub struct SyscallBlake3<'a, 'b> {

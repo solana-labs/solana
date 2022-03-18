@@ -76,7 +76,10 @@ mod target_arch {
         Some((left_scalar * right_scalar.invert()).into())
     }
 
-    pub fn multiply_edwards(point: &PodEdwardsPoint, scalar: &PodScalar) -> Option<PodEdwardsPoint> {
+    pub fn multiply_edwards(
+        point: &PodEdwardsPoint,
+        scalar: &PodScalar,
+    ) -> Option<PodEdwardsPoint> {
         let point: EdwardsPoint = (*point).try_into().ok()?;
         let scalar: Scalar = (*scalar).into();
 
@@ -164,7 +167,10 @@ mod target_arch {
         op(OP_SCALAR_DIV, &left_scalar.0, &right_scalar.0).map(|bytes| PodScalar(bytes))
     }
 
-    pub fn multiply_edwards(point: &PodEdwardsPoint, scalar: &PodScalar) -> Option<PodEdwardsPoint> {
+    pub fn multiply_edwards(
+        point: &PodEdwardsPoint,
+        scalar: &PodScalar,
+    ) -> Option<PodEdwardsPoint> {
         op(OP_EDWARDS_MUL, &point.0, &scalar.0).map(|bytes| PodEdwardsPoint(bytes))
     }
 
@@ -200,11 +206,8 @@ mod tests {
         super::*,
         crate::curve25519::pod::*,
         curve25519_dalek::{
-            constants::ED25519_BASEPOINT_POINT as G,
-            edwards::EdwardsPoint, 
-            ristretto::RistrettoPoint,
-            scalar::Scalar,
-            traits::Identity,
+            constants::ED25519_BASEPOINT_POINT as G, edwards::EdwardsPoint,
+            ristretto::RistrettoPoint, scalar::Scalar, traits::Identity,
         },
         rand::rngs::OsRng,
     };
@@ -216,7 +219,10 @@ mod tests {
         let random_point = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
 
         assert_eq!(add_edwards(&random_point, &identity).unwrap(), random_point);
-        assert_eq!(subtract_edwards(&random_point, &identity).unwrap(), random_point);
+        assert_eq!(
+            subtract_edwards(&random_point, &identity).unwrap(),
+            random_point
+        );
 
         // associativity
         let point_a = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
@@ -258,10 +264,17 @@ mod tests {
     fn test_ristretto_ops() {
         // identity
         let identity = PodRistrettoPoint(RistrettoPoint::identity().compress().to_bytes());
-        let random_point = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+        let random_point =
+            PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
 
-        assert_eq!(add_ristretto(&random_point, &identity).unwrap(), random_point);
-        assert_eq!(subtract_ristretto(&random_point, &identity).unwrap(), random_point);
+        assert_eq!(
+            add_ristretto(&random_point, &identity).unwrap(),
+            random_point
+        );
+        assert_eq!(
+            subtract_ristretto(&random_point, &identity).unwrap(),
+            random_point
+        );
 
         // associativity
         let point_a = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
@@ -306,7 +319,10 @@ mod tests {
         let random_scalar = PodScalar(Scalar::random(&mut OsRng).to_bytes());
 
         assert_eq!(add_scalar(&random_scalar, &zero).unwrap(), random_scalar);
-        assert_eq!(subtract_scalar(&random_scalar, &zero).unwrap(), random_scalar);
+        assert_eq!(
+            subtract_scalar(&random_scalar, &zero).unwrap(),
+            random_scalar
+        );
         assert_eq!(multiply_scalar(&zero, &random_scalar).unwrap(), zero);
         assert_eq!(divide_scalar(&zero, &random_scalar).unwrap(), zero);
 
