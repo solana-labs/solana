@@ -40,7 +40,10 @@ use {
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
-    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
+    solana_rpc::{
+        rpc::{JsonRpcConfig, RpcBigtableConfig},
+        rpc_pubsub_service::PubSubConfig,
+    },
     solana_runtime::{
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
@@ -2274,6 +2277,19 @@ pub fn main() {
         warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
     }
 
+    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
+        || matches.is_present("enable_bigtable_ledger_upload")
+    {
+        Some(RpcBigtableConfig {
+            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
+            timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
+                .ok()
+                .map(Duration::from_secs),
+        })
+    } else {
+        None
+    };
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2289,9 +2305,7 @@ pub fn main() {
         rpc_config: JsonRpcConfig {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
             enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
-            enable_bigtable_ledger_storage: matches
-                .is_present("enable_rpc_bigtable_ledger_storage"),
-            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
+            rpc_bigtable_config,
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
@@ -2309,9 +2323,6 @@ pub fn main() {
             ),
             rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
             rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
-            rpc_bigtable_timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
-                .ok()
-                .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
