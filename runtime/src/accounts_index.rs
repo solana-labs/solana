@@ -268,11 +268,21 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn age(&self) -> Age {
-        self.meta.age.load(Ordering::Relaxed)
+        self.meta.age.load(Ordering::Acquire)
     }
 
     pub fn set_age(&self, value: Age) {
-        self.meta.age.store(value, Ordering::Relaxed)
+        self.meta.age.store(value, Ordering::Release)
+    }
+
+    /// set age to 'next_age' if 'self.age' is 'expected_age'
+    pub fn try_exchange_age(&self, next_age: Age, expected_age: Age) {
+        let _ = self.meta.age.compare_exchange(
+            expected_age,
+            next_age,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        );
     }
 }
 
