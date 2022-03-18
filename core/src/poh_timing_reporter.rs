@@ -2,6 +2,7 @@ use {
     solana_metrics::{datapoint::PohTimingPoint, datapoint_info},
     solana_sdk::clock::Slot,
     std::collections::HashMap,
+    std::fmt;
 };
 
 /// A PohTimestamp records timing of the events during the processing of a slot
@@ -24,6 +25,13 @@ impl Default for SlotPohTimestamp {
             end_time: 0,
             full_time: 0,
         }
+    }
+}
+
+/// fmt traits
+impl fmt::Display for SlotPohTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SlotPohTimestamp: start={} end={} full={}", self.start_time, self.end_time, self.full_time)
     }
 }
 
@@ -153,5 +161,11 @@ mod test {
 
         // assert that the PohTiming is complete
         assert!(reporter.is_complete(42));
+    }
+
+    #[test]
+    fn test_SlotPohTimestamp_fmt() {
+        let t = SlotPohTimestamp::default();
+        assert_eq!(format!("{}", t), "SlotPohTimestamp: start=0 end=0 full=0");
     }
 }
