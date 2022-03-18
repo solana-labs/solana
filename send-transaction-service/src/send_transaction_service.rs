@@ -3,6 +3,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
     solana_client::connection_cache,
+    solana_measure::measure::Measure,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature},
@@ -308,10 +309,15 @@ impl SendTransactionService {
     }
 
     fn send_transaction(tpu_address: &SocketAddr, wire_transaction: &[u8]) {
+        let mut measure = Measure::start("send_transaction_service-us");
         let connection = connection_cache::get_connection(tpu_address);
+
         if let Err(err) = connection.send_wire_transaction(wire_transaction) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
+        measure.stop();
+        inc_new_counter_info!("send_transaction_service-us", measure.as_us() as usize, 1000, 1000);
+        inc_new_counter_info!("send_transaction_service-bytes", wire_transaction.len(), 1000, 1000);
     }
 
     pub fn join(self) -> thread::Result<()> {
