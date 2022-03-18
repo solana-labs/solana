@@ -488,6 +488,7 @@ impl PohRecorder {
         // send poh slot start timing point
         if let Some(ref sender) = self.poh_timing_point_sender {
             if let Some(slot) = self.working_slot() {
+                info!("PohTimingPoint:Start {}", slot);
                 let _ = sender.try_send((
                     slot,
                     PohTimingPoint::PohSlotStart(solana_sdk::timing::timestamp()),
@@ -586,6 +587,7 @@ impl PohRecorder {
             if self.bank_end() && self.has_bank() {
                 if let Some(slot) = self.working_slot() {
                     if let Some(ref sender) = self.poh_timing_point_sender {
+                        info!("PohTimingPoint:End {}", slot);
                         let _ = sender.try_send((
                             slot,
                             PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
