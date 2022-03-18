@@ -10,6 +10,64 @@ pub struct Measure {
     duration: u64,
 }
 
+/// Macro to recive any number of Measure::this more erognomotic
+///
+/// As suggested from: https://github.com/solana-labs/solana/issues/23084
+/// Measure this function
+///
+/// Use `measure_this()` when you have a function that you want to measure. It will
+/// start a new `Measure`, call your function, stop the measure, then return the `Measure`
+/// object along with your function's return value.
+///
+/// If your function takes more than one parameter, you will need to wrap your function in a
+/// closure, and wrap the arguments in a tuple.  The same thing applies to methods.  See the
+/// tests for more details.
+///
+/// # Examples
+///
+/// ```
+/// // Call a function with a single argument
+/// # use solana_measure::measure_this;
+/// # fn my_function(fizz: i32) -> i32 { fizz }
+/// let (result, measure) = measure_this!("my_func", my_function, 42);
+/// # assert_eq!(result, 42);
+/// ```
+///
+/// ```
+/// // Call a function with multiple arguments
+/// # use solana_measure::measure_this;
+/// let (result, measure) = measure_this!("minimum", |arg1, arg2| std::cmp::min(arg1, arg2), 42, 123);
+/// # assert_eq!(result, 42);
+/// ```
+///
+/// ```
+/// // Call a method
+/// # use solana_measure::measure_this;
+/// # struct Foo { x: i32 }
+/// # impl Foo { fn bar(&self, arg: i32) -> i32 { self.x + arg } }
+/// # let baz = 8;
+/// let foo = Foo { x: 42 };
+/// let (result, measure) = measure_this!("Foo::bar", |this, args| Foo::bar(&this, args), foo, baz);
+/// # assert_eq!(result, 50);
+/// ```
+
+#[macro_export]
+macro_rules! measure_this {
+    ($name: expr, $func: expr, $($args: expr),* ) => {{
+        let mut measure = $crate::measure::Measure::start($name);
+        let result = $func( $($args),* );
+
+        measure.stop();
+
+        (result, measure)
+    }};
+
+    // Support a prefixed comma (,) sign in macro call
+    ($name: expr, $func: expr, $($args: expr),* , ) => {
+        measure_this!( $name, $func, $($args),* )
+    };
+}
+
 impl Measure {
     pub fn start(name: &'static str) -> Self {
         Self {
@@ -77,10 +135,7 @@ impl Measure {
     /// # assert_eq!(result, 50);
     /// ```
     pub fn this<T, R, F: FnOnce(T) -> R>(func: F, args: T, name: &'static str) -> (R, Self) {
-        let mut measure = Self::start(name);
-        let result = func(args);
-        measure.stop();
-        (result, measure)
+        measure_this!(name, func, args)
     }
 }
 
@@ -181,6 +236,11 @@ mod tests {
             assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
             assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
             assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
+
+            let (_result, measure) = measure_this!("test", |s| sleep(Duration::from_secs(s)), 1);
+            assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
+            assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
+            assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
         }
 
         // Ensure that this() can be called with a simple closure
@@ -188,11 +248,18 @@ mod tests {
             let expected = 1;
             let (actual, _measure) = Measure::this(|x| x, expected, "test");
             assert_eq!(actual, expected);
+
+            let expected = 1;
+            let (actual, _measure) = measure_this!("test", |x| x, expected);
+            assert_eq!(actual, expected);
         }
 
         // Ensure that this() can be called with a tuple
         {
             let (result, _measure) = Measure::this(|(x, y)| x + y, (1, 2), "test");
+            assert_eq!(result, 1 + 2);
+
+            let (result, _measure) = measure_this!("test", |x, y| x + y, 1, 2);
             assert_eq!(result, 1 + 2);
         }
 
@@ -202,15 +269,39 @@ mod tests {
             assert_eq!(result, 3 * 4);
         }
 
+        // Ensure that mesure_this can be called with closure accepting multiple args
+        {
+            let (result, _measure) = measure_this!("test", |x, y, z| x * y * z, 2, 2, 3);
+            assert_eq!(result, 2 * 3 * 2);
+        }
+
+        // Ensure measure_this! can be called with function accepting 0 arguments
+        {
+            let (result, _measure) = measure_this!("test", || 10,);
+            assert_eq!(result, 10);
+        }
+
         // Ensure that this() can be called with a normal function with one argument
         {
             let (result, _measure) = Measure::this(square, 5, "test");
-            assert_eq!(result, 5 * 5)
+            assert_eq!(result, 5 * 5);
+
+            let (result, _measure) = measure_this!("test", square, 5);
+            assert_eq!(result, 5 * 5);
         }
 
         // Ensure that this() can be called with a normal function
         {
             let (result, _measure) = Measure::this(my_multiply_tuple, (3, 4), "test");
+            assert_eq!(result, 3 * 4);
+        }
+
+        // Ensure that measure_this! can be called with normal function
+        {
+            let (result, _measure) = measure_this!("test", my_multiply, 3, 4);
+            assert_eq!(result, 3 * 4);
+
+            let (result, _measure) = measure_this!("test", my_multiply_tuple, (3, 4));
             assert_eq!(result, 3 * 4);
         }
 
@@ -223,6 +314,11 @@ mod tests {
                 "test",
             );
             assert_eq!(result, 42 + 4);
+
+            let some_struct = SomeStruct { x: 42 };
+            let (result, _measure) =
+                measure_this!("test", |obj, x| SomeStruct::add_to(&obj, x), some_struct, 4);
+            assert_eq!(result, 42 + 4);
         }
 
         // Ensure that this() can be called with a method (and &self)
@@ -233,6 +329,11 @@ mod tests {
                 (&some_struct, 4),
                 "test",
             );
+            assert_eq!(result, 42 + 4);
+            assert_eq!(some_struct.add_to(6), 42 + 6);
+
+            let some_struct = SomeStruct { x: 42 };
+            let (result, _measure) = measure_this!("test", SomeStruct::add_to, &some_struct, 4,);
             assert_eq!(result, 42 + 4);
             assert_eq!(some_struct.add_to(6), 42 + 6);
         }
