@@ -3,11 +3,11 @@
 //! this account carries the Bank's most recent bank hashes for some N parents
 //!
 pub use crate::slot_hashes::SlotHashes;
-use crate::{account_info::AccountInfo, program_error::ProgramError, sysvar::Sysvar};
+use crate::{account_info::AccountInfo, program_error::ProgramError, sysvar::LegacySysvar};
 
 crate::declare_sysvar_id!("SysvarS1otHashes111111111111111111111111111", SlotHashes);
 
-impl Sysvar for SlotHashes {
+impl LegacySysvar for SlotHashes {
     // override
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty

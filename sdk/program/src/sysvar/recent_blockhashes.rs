@@ -5,7 +5,7 @@ use {
         declare_deprecated_sysvar_id,
         fee_calculator::FeeCalculator,
         hash::{hash, Hash},
-        sysvar::Sysvar,
+        sysvar::LegacySysvar,
     },
     std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref},
 };
@@ -131,7 +131,7 @@ impl<T: Ord> Iterator for IntoIterSorted<T> {
     }
 }
 
-impl Sysvar for RecentBlockhashes {
+impl LegacySysvar for RecentBlockhashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty
         6008 // golden, update if MAX_ENTRIES changes

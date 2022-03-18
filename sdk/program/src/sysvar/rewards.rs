@@ -1,6 +1,6 @@
 //! DEPRECATED: This sysvar can be removed once the pico-inflation feature is enabled
 //!
-use crate::sysvar::Sysvar;
+use crate::sysvar::LegacySysvar;
 
 crate::declare_sysvar_id!("SysvarRewards111111111111111111111111111111", Rewards);
 
@@ -19,4 +19,4 @@ impl Rewards {
     }
 }
 
-impl Sysvar for Rewards {}
+impl LegacySysvar for Rewards {}

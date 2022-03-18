@@ -125,7 +125,7 @@ use {
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
         system_transaction,
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{self, LegacySysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
             MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
@@ -2286,7 +2286,7 @@ impl Bank {
 
     pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)
     where
-        T: Sysvar + SysvarId,
+        T: LegacySysvar + SysvarId,
     {
         self.update_sysvar_account(&T::id(), |account| {
             create_account(
@@ -6491,6 +6491,18 @@ impl Bank {
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
             self.store_accounts_data_len(ACCOUNTS_DATA_LEN);
+        }
+
+        if new_feature_activations.contains(&feature_set::add_stake_program_config_sysvar::id()) {
+            self.sysvar_cache.write().unwrap().set_stake_program_config(
+                sysvar::stake_program_config::StakeProgramConfig::new(
+                    solana_sdk::stake::MINIMUM_STAKE_DELEGATION,
+                ),
+            );
+            error!(
+                "bprumo DEBUG: bank activate stake program config sysvar! {:?}",
+                self.sysvar_cache.read().unwrap().get_stake_program_config()
+            );
         }
     }
 

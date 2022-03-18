@@ -335,6 +335,10 @@ pub mod check_slice_translation_size {
     solana_sdk::declare_id!("GmC19j9qLn2RFk5NduX6QXaDhVpGncVVBzyM8e9WMz2F");
 }
 
+pub mod add_stake_program_config_sysvar {
+    solana_sdk::declare_id!("9zmnLKx6F55cNhwxwANZP1aT4GGqgYhvyoSfmfG5Zjr9");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -412,7 +416,8 @@ lazy_static! {
         (check_physical_overlapping::id(), "check physical overlapping regions"),
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
         (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
-        (check_slice_translation_size::id(), "check size when translating slices",)
+        (check_slice_translation_size::id(), "check size when translating slices"),
+        (add_stake_program_config_sysvar::id(), "add StakeProgramConfig sysvar"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

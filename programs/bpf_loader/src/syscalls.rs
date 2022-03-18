@@ -43,7 +43,6 @@ use {
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-        sysvar::{Sysvar, SysvarId},
         transaction_context::InstructionAccount,
     },
     std::{
@@ -197,6 +196,15 @@ pub fn register_syscalls(
     }
     syscall_registry
         .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::add_stake_program_config_sysvar::id())
+    {
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_stake_program_config_sysvar",
+            SyscallGetStakeProgramConfigSysvar::call,
+        )?;
+    }
 
     syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
     syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
@@ -292,6 +300,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let add_get_processed_sibling_instruction_syscall = invoke_context
         .feature_set
         .is_active(&add_get_processed_sibling_instruction_syscall::id());
+    let add_stake_program_config_sysvar = invoke_context
+        .feature_set
+        .is_active(&feature_set::add_stake_program_config_sysvar::id());
 
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
@@ -488,6 +499,14 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         }),
         None,
     )?;
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_stake_program_config_sysvar,
+        Box::new(SyscallGetStakeProgramConfigSysvar {
+            invoke_context: invoke_context.clone(),
+            check_aligned,
+        }),
+    );
 
     // Return data
     bind_feature_gated_syscall_context_object!(
@@ -1242,7 +1261,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
     }
 }
 
-fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
+fn get_sysvar<T: Clone>(
     sysvar: Result<Arc<T>, InstructionError>,
     var_addr: u64,
     check_aligned: bool,
@@ -1381,6 +1400,37 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
         );
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_rent(),
+            var_addr,
+            self.check_aligned,
+            memory_mapping,
+            &mut invoke_context,
+        );
+    }
+}
+/// Get a StakeProgramConfig sysvar
+struct SyscallGetStakeProgramConfigSysvar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+    check_aligned: bool,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetStakeProgramConfigSysvar<'a, 'b> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let mut invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow_mut()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_stake_program_config(),
             var_addr,
             self.check_aligned,
             memory_mapping,
@@ -3541,7 +3591,10 @@ mod tests {
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
-            sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
+            sysvar::{
+                clock::Clock, epoch_schedule::EpochSchedule, rent::Rent,
+                stake_program_config::StakeProgramConfig,
+            },
             transaction_context::TransactionContext,
         },
         std::{borrow::Cow, str::FromStr},
@@ -4435,12 +4488,14 @@ mod tests {
             exemption_threshold: 2.0,
             burn_percent: 3,
         };
+        let src_stake_program_config = StakeProgramConfig::new(123_456_789);
 
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.set_clock(src_clock.clone());
         sysvar_cache.set_epoch_schedule(src_epochschedule);
         sysvar_cache.set_fees(src_fees.clone());
         sysvar_cache.set_rent(src_rent);
+        sysvar_cache.set_stake_program_config(src_stake_program_config);
 
         prepare_mockup!(
             invoke_context,
@@ -4576,6 +4631,47 @@ mod tests {
             syscall.call(got_rent_va, 0, 0, 0, 0, &memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_rent, src_rent);
+        }
+
+        // Test stake program config sysvar
+        {
+            let got_stake_program_config = std::mem::MaybeUninit::<StakeProgramConfig>::uninit();
+            let got_stake_program_config_va = 0x100000000;
+
+            let memory_mapping = MemoryMapping::new::<UserError>(
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion {
+                        host_addr: &got_stake_program_config as *const _ as u64,
+                        vm_addr: got_stake_program_config_va,
+                        len: size_of::<StakeProgramConfig>() as u64,
+                        vm_gap_shift: 63,
+                        is_writable: true,
+                    },
+                ],
+                &config,
+            )
+            .unwrap();
+            let mut syscall = SyscallGetStakeProgramConfigSysvar {
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+                check_aligned: true,
+            };
+
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            syscall.call(
+                got_stake_program_config_va,
+                0,
+                0,
+                0,
+                0,
+                &memory_mapping,
+                &mut result,
+            );
+            result.unwrap();
+            // SAFETY: Since result was just unwrapped, then the syscall was successful, which
+            // ensures the stake program config has been initialized.
+            let got_stake_program_config = unsafe { got_stake_program_config.assume_init() };
+            assert_eq!(got_stake_program_config, src_stake_program_config);
         }
     }
 

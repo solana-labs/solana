@@ -15,7 +15,7 @@ use {
     solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResultWithSimulation},
     solana_program::{
         clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
-        rent::Rent, sysvar::Sysvar,
+        rent::Rent, sysvar::LegacySysvar,
     },
     solana_sdk::{
         account::{from_account, Account},
@@ -173,8 +173,9 @@ impl BanksClient {
         self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::default())
     }
 
+    // bprumo TODO: Will this only work for sysvars that are accounts?
     /// Return the cluster Sysvar
-    pub fn get_sysvar<T: Sysvar>(
+    pub fn get_sysvar<T: LegacySysvar>(
         &mut self,
     ) -> impl Future<Output = Result<T, BanksClientError>> + '_ {
         self.get_account(T::id()).map(|result| {

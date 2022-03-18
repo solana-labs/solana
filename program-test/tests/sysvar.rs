@@ -1,9 +1,17 @@
 use {
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
-        account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult,
-        epoch_schedule::EpochSchedule, instruction::Instruction, msg, pubkey::Pubkey, rent::Rent,
-        signature::Signer, sysvar::Sysvar, transaction::Transaction,
+        account_info::AccountInfo,
+        clock::Clock,
+        entrypoint::ProgramResult,
+        epoch_schedule::EpochSchedule,
+        instruction::Instruction,
+        msg,
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::Signer,
+        sysvar::{stake_program_config::StakeProgramConfig, LegacySysvar, Sysvar},
+        transaction::Transaction,
     },
 };
 
@@ -23,6 +31,10 @@ fn sysvar_getter_process_instruction(
 
     let rent = Rent::get()?;
     assert_eq!(rent, Rent::default());
+
+    let stake_program_config = StakeProgramConfig::get()?;
+    log::error!("bprumo DEBUG: {stake_program_config:?}");
+    assert_eq!(stake_program_config, StakeProgramConfig::new(123_456_789));
 
     Ok(())
 }

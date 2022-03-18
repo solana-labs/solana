@@ -22,7 +22,7 @@ use {
         sysvar::{
             clock,
             stake_history::{self, StakeHistory},
-            Sysvar,
+            LegacySysvar,
         },
         transaction::{Transaction, TransactionError},
     },

@@ -5,7 +5,7 @@ use {
         pubkey::Pubkey,
     },
     serde::ser::{Serialize, Serializer},
-    solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
+    solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::LegacySysvar},
     std::{
         cell::{Ref, RefCell},
         fmt,
@@ -600,11 +600,11 @@ pub const DUMMY_INHERITABLE_ACCOUNT_FIELDS: InheritableAccountFields = (1, INITI
     since = "1.5.17",
     note = "Please use `create_account_for_test` instead"
 )]
-pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
+pub fn create_account<S: LegacySysvar>(sysvar: &S, lamports: u64) -> Account {
     create_account_with_fields(sysvar, (lamports, INITIAL_RENT_EPOCH))
 }
 
-pub fn create_account_with_fields<S: Sysvar>(
+pub fn create_account_with_fields<S: LegacySysvar>(
     sysvar: &S,
     (lamports, rent_epoch): InheritableAccountFields,
 ) -> Account {
@@ -615,7 +615,7 @@ pub fn create_account_with_fields<S: Sysvar>(
     account
 }
 
-pub fn create_account_for_test<S: Sysvar>(sysvar: &S) -> Account {
+pub fn create_account_for_test<S: LegacySysvar>(sysvar: &S) -> Account {
     create_account_with_fields(sysvar, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
 }
 
@@ -624,21 +624,21 @@ pub fn create_account_for_test<S: Sysvar>(sysvar: &S) -> Account {
     since = "1.5.17",
     note = "Please use `create_account_shared_data_for_test` instead"
 )]
-pub fn create_account_shared_data<S: Sysvar>(sysvar: &S, lamports: u64) -> AccountSharedData {
+pub fn create_account_shared_data<S: LegacySysvar>(sysvar: &S, lamports: u64) -> AccountSharedData {
     AccountSharedData::from(create_account_with_fields(
         sysvar,
         (lamports, INITIAL_RENT_EPOCH),
     ))
 }
 
-pub fn create_account_shared_data_with_fields<S: Sysvar>(
+pub fn create_account_shared_data_with_fields<S: LegacySysvar>(
     sysvar: &S,
     fields: InheritableAccountFields,
 ) -> AccountSharedData {
     AccountSharedData::from(create_account_with_fields(sysvar, fields))
 }
 
-pub fn create_account_shared_data_for_test<S: Sysvar>(sysvar: &S) -> AccountSharedData {
+pub fn create_account_shared_data_for_test<S: LegacySysvar>(sysvar: &S) -> AccountSharedData {
     AccountSharedData::from(create_account_with_fields(
         sysvar,
         DUMMY_INHERITABLE_ACCOUNT_FIELDS,
@@ -646,12 +646,12 @@ pub fn create_account_shared_data_for_test<S: Sysvar>(sysvar: &S) -> AccountShar
 }
 
 /// Create a `Sysvar` from an `Account`'s data.
-pub fn from_account<S: Sysvar, T: ReadableAccount>(account: &T) -> Option<S> {
+pub fn from_account<S: LegacySysvar, T: ReadableAccount>(account: &T) -> Option<S> {
     bincode::deserialize(account.data()).ok()
 }
 
 /// Serialize a `Sysvar` into an `Account`'s data.
-pub fn to_account<S: Sysvar, T: WritableAccount>(sysvar: &S, account: &mut T) -> Option<()> {
+pub fn to_account<S: LegacySysvar, T: WritableAccount>(sysvar: &S, account: &mut T) -> Option<()> {
     bincode::serialize_into(account.data_as_mut_slice(), sysvar).ok()
 }
 

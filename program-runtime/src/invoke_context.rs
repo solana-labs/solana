@@ -239,6 +239,7 @@ impl<'a> InvokeContext<'a> {
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
         let mut sysvar_cache = SysvarCache::default();
+        // bprumo TODO: does this expect Sysvars are accounts?
         sysvar_cache.fill_missing_entries(|pubkey| {
             (0..transaction_context.get_number_of_accounts()).find_map(|index| {
                 if transaction_context
@@ -258,6 +259,13 @@ impl<'a> InvokeContext<'a> {
                 }
             })
         });
+        sysvar_cache.set_stake_program_config(
+            // bprumo TODO: can I get a more real value here?
+            solana_sdk::sysvar::stake_program_config::StakeProgramConfig::new(
+                solana_sdk::stake::MINIMUM_STAKE_DELEGATION,
+            ),
+        );
+        // bprumo TODO: add in StakeProgramConfig sysvar here?
         Self::new(
             transaction_context,
             Rent::default(),

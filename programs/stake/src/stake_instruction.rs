@@ -18,9 +18,11 @@ use {
             instruction::StakeInstruction,
             program::id,
             state::{Authorized, Lockup},
+            MINIMUM_STAKE_DELEGATION,
         },
-        sysvar::clock::Clock,
+        sysvar::{clock::Clock, stake_program_config::StakeProgramConfig},
     },
+    std::sync::Arc,
 };
 
 pub fn process_instruction(
@@ -40,11 +42,25 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
+    let stake_program_config = if invoke_context
+        .feature_set
+        .is_active(&feature_set::add_stake_program_config_sysvar::id())
+    {
+        Arc::clone(
+            &invoke_context
+                .get_sysvar_cache()
+                .get_stake_program_config()?,
+        )
+    } else {
+        // bprumo TODO: can I get a more real value here?
+        Arc::new(StakeProgramConfig::new(MINIMUM_STAKE_DELEGATION))
+    };
+
     let signers = instruction_context.get_signers(transaction_context);
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            me.initialize(&authorized, &lockup, &rent)
+            me.initialize(&authorized, &lockup, &rent, &stake_program_config)
         }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             let require_custodian_for_locked_stake_authorize = invoke_context
@@ -134,12 +150,19 @@ pub fn process_instruction(
             }
             let config = config::from(&*config_account.try_account_ref()?)
                 .ok_or(InstructionError::InvalidArgument)?;
-            me.delegate(vote, &clock, &stake_history, &config, &signers)
+            me.delegate(
+                vote,
+                &clock,
+                &stake_history,
+                &config,
+                &signers,
+                &stake_program_config,
+            )
         }
         StakeInstruction::Split(lamports) => {
             let split_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            me.split(lamports, split_stake, &signers)
+            me.split(lamports, split_stake, &signers, &stake_program_config)
         }
         StakeInstruction::Merge => {
             let source_stake =
@@ -175,6 +198,7 @@ pub fn process_instruction(
                 &stake_history,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 5).ok(),
+                &stake_program_config,
             )
         }
         StakeInstruction::Deactivate => {
@@ -204,7 +228,12 @@ pub fn process_instruction(
 
                 let rent =
                     get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-                me.initialize(&authorized, &Lockup::default(), &rent)
+                me.initialize(
+                    &authorized,
+                    &Lockup::default(),
+                    &rent,
+                    &stake_program_config,
+                )
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
@@ -323,7 +352,6 @@ mod tests {
                 config as stake_config,
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
-                MINIMUM_STAKE_DELEGATION,
             },
             system_program,
             sysvar::{self, stake_history::StakeHistory},
@@ -634,7 +662,7 @@ mod tests {
         let config_address = stake_config::id();
         let config_account = config::create_account(0, &stake_config::Config::default());
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let withdrawal_amount = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let withdrawal_amount = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION; // bprumo TODO: use the sysvar value
 
         // gets the "is_empty()" check
         process_instruction(
@@ -861,7 +889,7 @@ mod tests {
 
         // Test InitializeChecked with withdrawer signer
         let stake_account = AccountSharedData::new(
-            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION, // bprumo TODO: use the sysvar value
             std::mem::size_of::<crate::stake_state::StakeState>(),
             &id(),
         );
@@ -1183,7 +1211,7 @@ mod tests {
     fn test_stake_initialize() {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION; // bprumo TODO: use the sysvar value
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account =
             AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
@@ -2314,7 +2342,7 @@ mod tests {
     #[test]
     fn test_split() {
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = MINIMUM_STAKE_DELEGATION * 2;
+        let stake_lamports = MINIMUM_STAKE_DELEGATION * 2; // bprumo TODO: use the sysvar value
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
@@ -2410,7 +2438,7 @@ mod tests {
         let authority_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = MINIMUM_STAKE_DELEGATION;
+        let stake_lamports = MINIMUM_STAKE_DELEGATION; // bprumo TODO: use the sysvar value
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
@@ -2938,7 +2966,7 @@ mod tests {
         let stake_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = 7 * MINIMUM_STAKE_DELEGATION;
+        let stake_lamports = 7 * MINIMUM_STAKE_DELEGATION; // bprumo TODO: use the sysvar value
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports + rent_exempt_reserve,
             &StakeState::Initialized(Meta {
@@ -2993,7 +3021,7 @@ mod tests {
         // should pass, withdrawing account down to minimum balance
         process_instruction(
             &serialize(&StakeInstruction::Withdraw(
-                stake_lamports - MINIMUM_STAKE_DELEGATION,
+                stake_lamports - MINIMUM_STAKE_DELEGATION, // bprumo TODO: use the sysvar value
             ))
             .unwrap(),
             transaction_accounts.clone(),
@@ -3012,7 +3040,7 @@ mod tests {
         // should fail, withdrawal that would leave less than rent-exempt reserve
         process_instruction(
             &serialize(&StakeInstruction::Withdraw(
-                stake_lamports + MINIMUM_STAKE_DELEGATION,
+                stake_lamports + MINIMUM_STAKE_DELEGATION, // bprumo TODO: use the sysvar value
             ))
             .unwrap(),
             transaction_accounts.clone(),
@@ -3154,7 +3182,7 @@ mod tests {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = MINIMUM_STAKE_DELEGATION;
+        let stake_lamports = MINIMUM_STAKE_DELEGATION; // bprumo TODO: use the sysvar value
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,

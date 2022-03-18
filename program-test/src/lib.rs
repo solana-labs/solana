@@ -36,7 +36,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
-        sysvar::{Sysvar, SysvarId},
+        sysvar::{LegacySysvar, Sysvar, SysvarId},
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
@@ -210,7 +210,7 @@ macro_rules! processor {
     };
 }
 
-fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>(
+fn get_legacy_sysvar<T: Default + LegacySysvar + Sized + serde::de::DeserializeOwned + Clone>(
     sysvar: Result<Arc<T>, InstructionError>,
     var_addr: *mut u8,
 ) -> u64 {
@@ -231,6 +231,35 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
             *(var_addr as *mut _ as *mut T) = T::clone(&sysvar_data);
             SUCCESS
         },
+        Err(_) => UNSUPPORTED_SYSVAR,
+    }
+}
+
+// bprumo TODO:
+fn get_sysvar<T: Sysvar + Sized + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
+    var_addr: *mut u8,
+) -> u64 {
+    let invoke_context = get_invoke_context();
+    if invoke_context
+        .get_compute_meter()
+        .try_borrow_mut()
+        .map_err(|_| ACCOUNT_BORROW_FAILED)
+        .unwrap()
+        .consume(
+            invoke_context.get_compute_budget().sysvar_base_cost + std::mem::size_of::<T>() as u64,
+        )
+        .is_err()
+    {
+        panic!("Exceeded compute budget");
+    }
+
+    match sysvar {
+        Ok(sysvar_data) => {
+            let var = T::clone(&sysvar_data);
+            unsafe { *(var_addr as *mut _ as *mut T) = var };
+            SUCCESS
+        }
         Err(_) => UNSUPPORTED_SYSVAR,
     }
 }
@@ -347,14 +376,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     }
 
     fn sol_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar(
+        get_legacy_sysvar(
             get_invoke_context().get_sysvar_cache().get_clock(),
             var_addr,
         )
     }
 
     fn sol_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar(
+        get_legacy_sysvar(
             get_invoke_context().get_sysvar_cache().get_epoch_schedule(),
             var_addr,
         )
@@ -362,11 +391,21 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     #[allow(deprecated)]
     fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar(get_invoke_context().get_sysvar_cache().get_fees(), var_addr)
+        get_legacy_sysvar(get_invoke_context().get_sysvar_cache().get_fees(), var_addr)
     }
 
     fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
+        get_legacy_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
+    }
+
+    fn sol_get_stake_program_config_sysvar(&self, var_addr: *mut u8) -> u64 {
+        log::error!("bprumo DEBUG: sol_get_stake_program_config_sysvar");
+        get_sysvar(
+            get_invoke_context()
+                .get_sysvar_cache()
+                .get_stake_program_config(),
+            var_addr,
+        )
     }
 
     fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
@@ -1093,7 +1132,7 @@ impl ProgramTestContext {
     /// that would be difficult to replicate on a new test cluster. Beware
     /// that it can be used to create states that would not be reachable
     /// under normal conditions!
-    pub fn set_sysvar<T: SysvarId + Sysvar>(&self, sysvar: &T) {
+    pub fn set_sysvar<T: SysvarId + LegacySysvar>(&self, sysvar: &T) {
         let bank_forks = self.bank_forks.read().unwrap();
         let bank = bank_forks.working_bank();
         bank.set_sysvar_for_tests(sysvar);

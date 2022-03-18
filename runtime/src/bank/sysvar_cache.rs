@@ -4,6 +4,17 @@ impl Bank {
     pub(crate) fn fill_missing_sysvar_cache_entries(&self) {
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
         sysvar_cache.fill_missing_entries(|pubkey| self.get_account_with_fixed_root(pubkey));
+
+        // bprumo TODO: should I add StakeProgramConfig here?
+        sysvar_cache.set_stake_program_config(
+            solana_sdk::sysvar::stake_program_config::StakeProgramConfig::new(
+                123_456_789, //solana_sdk::stake::MINIMUM_STAKE_DELEGATION,
+            ),
+        );
+        log::error!(
+            "bprumo DEBUG: bank fill_missing_sysvar_cache_entries() stake program config sysvar! {:?}",
+            sysvar_cache.get_stake_program_config()
+        );
     }
 
     pub(crate) fn reset_sysvar_cache(&self) {
@@ -35,11 +46,13 @@ mod tests {
         let bank0_cached_epoch_schedule = bank0_sysvar_cache.get_epoch_schedule();
         let bank0_cached_fees = bank0_sysvar_cache.get_fees();
         let bank0_cached_rent = bank0_sysvar_cache.get_rent();
+        let bank0_cached_stake_program_config = bank0_sysvar_cache.get_stake_program_config();
 
         assert!(bank0_cached_clock.is_ok());
         assert!(bank0_cached_epoch_schedule.is_ok());
         assert!(bank0_cached_fees.is_ok());
         assert!(bank0_cached_rent.is_ok());
+        assert!(bank0_cached_stake_program_config.is_ok());
         assert!(bank0_sysvar_cache.get_slot_hashes().is_err());
 
         let bank1 = Arc::new(Bank::new_from_parent(
@@ -53,17 +66,23 @@ mod tests {
         let bank1_cached_epoch_schedule = bank1_sysvar_cache.get_epoch_schedule();
         let bank1_cached_fees = bank1_sysvar_cache.get_fees();
         let bank1_cached_rent = bank1_sysvar_cache.get_rent();
+        let bank1_cached_stake_program_config = bank1_sysvar_cache.get_stake_program_config();
 
         assert!(bank1_cached_clock.is_ok());
         assert!(bank1_cached_epoch_schedule.is_ok());
         assert!(bank1_cached_fees.is_ok());
         assert!(bank1_cached_rent.is_ok());
+        assert!(bank1_cached_stake_program_config.is_ok());
         assert!(bank1_sysvar_cache.get_slot_hashes().is_ok());
 
         assert_ne!(bank0_cached_clock, bank1_cached_clock);
         assert_eq!(bank0_cached_epoch_schedule, bank1_cached_epoch_schedule);
         assert_ne!(bank0_cached_fees, bank1_cached_fees);
         assert_eq!(bank0_cached_rent, bank1_cached_rent);
+        assert_eq!(
+            bank0_cached_stake_program_config,
+            bank1_cached_stake_program_config,
+        );
 
         let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.slot() + 1);
 
@@ -72,17 +91,23 @@ mod tests {
         let bank2_cached_epoch_schedule = bank2_sysvar_cache.get_epoch_schedule();
         let bank2_cached_fees = bank2_sysvar_cache.get_fees();
         let bank2_cached_rent = bank2_sysvar_cache.get_rent();
+        let bank2_cached_stake_program_config = bank2_sysvar_cache.get_stake_program_config();
 
         assert!(bank2_cached_clock.is_ok());
         assert!(bank2_cached_epoch_schedule.is_ok());
         assert!(bank2_cached_fees.is_ok());
         assert!(bank2_cached_rent.is_ok());
+        assert!(bank2_cached_stake_program_config.is_ok());
         assert!(bank2_sysvar_cache.get_slot_hashes().is_ok());
 
         assert_ne!(bank1_cached_clock, bank2_cached_clock);
         assert_eq!(bank1_cached_epoch_schedule, bank2_cached_epoch_schedule);
         assert_eq!(bank1_cached_fees, bank2_cached_fees);
         assert_eq!(bank1_cached_rent, bank2_cached_rent);
+        assert_eq!(
+            bank1_cached_stake_program_config,
+            bank2_cached_stake_program_config,
+        );
         assert_ne!(
             bank1_sysvar_cache.get_slot_hashes(),
             bank2_sysvar_cache.get_slot_hashes(),
@@ -101,12 +126,14 @@ mod tests {
         let bank1_cached_epoch_schedule = bank1_sysvar_cache.get_epoch_schedule();
         let bank1_cached_fees = bank1_sysvar_cache.get_fees();
         let bank1_cached_rent = bank1_sysvar_cache.get_rent();
+        let bank1_cached_stake_program_config = bank1_sysvar_cache.get_stake_program_config();
         let bank1_cached_slot_hashes = bank1_sysvar_cache.get_slot_hashes();
 
         assert!(bank1_cached_clock.is_ok());
         assert!(bank1_cached_epoch_schedule.is_ok());
         assert!(bank1_cached_fees.is_ok());
         assert!(bank1_cached_rent.is_ok());
+        assert!(bank1_cached_stake_program_config.is_ok());
         assert!(bank1_cached_slot_hashes.is_ok());
 
         drop(bank1_sysvar_cache);
@@ -117,6 +144,7 @@ mod tests {
         assert!(bank1_sysvar_cache.get_epoch_schedule().is_err());
         assert!(bank1_sysvar_cache.get_fees().is_err());
         assert!(bank1_sysvar_cache.get_rent().is_err());
+        assert!(bank1_sysvar_cache.get_stake_program_config().is_err());
         assert!(bank1_sysvar_cache.get_slot_hashes().is_err());
 
         drop(bank1_sysvar_cache);
@@ -126,13 +154,17 @@ mod tests {
         assert_eq!(bank1_sysvar_cache.get_clock(), bank1_cached_clock);
         assert_eq!(
             bank1_sysvar_cache.get_epoch_schedule(),
-            bank1_cached_epoch_schedule
+            bank1_cached_epoch_schedule,
         );
         assert_eq!(bank1_sysvar_cache.get_fees(), bank1_cached_fees);
+        assert_eq!(
+            bank1_sysvar_cache.get_stake_program_config(),
+            bank1_cached_stake_program_config,
+        );
         assert_eq!(bank1_sysvar_cache.get_rent(), bank1_cached_rent);
         assert_eq!(
             bank1_sysvar_cache.get_slot_hashes(),
-            bank1_cached_slot_hashes
+            bank1_cached_slot_hashes,
         );
     }
 }

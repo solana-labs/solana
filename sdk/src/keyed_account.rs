@@ -259,7 +259,7 @@ mod tests {
         crate::{
             account::{create_account_for_test, from_account, to_account},
             pubkey::Pubkey,
-            sysvar::Sysvar,
+            sysvar::LegacySysvar,
         },
     };
 
@@ -277,7 +277,7 @@ mod tests {
             check_id(pubkey)
         }
     }
-    impl Sysvar for TestSysvar {}
+    impl LegacySysvar for TestSysvar {}
 
     #[test]
     fn test_sysvar_keyed_account_to_from() {

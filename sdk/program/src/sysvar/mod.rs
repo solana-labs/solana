@@ -15,6 +15,7 @@ pub mod rewards;
 pub mod slot_hashes;
 pub mod slot_history;
 pub mod stake_history;
+pub mod stake_program_config;
 
 lazy_static! {
     pub static ref ALL_IDS: Vec<Pubkey> = vec![
@@ -30,6 +31,7 @@ lazy_static! {
         slot_history::id(),
         stake_history::id(),
         instructions::id(),
+        stake_program_config::id(),
     ];
 }
 
@@ -94,8 +96,16 @@ pub trait SysvarId {
     fn check_id(pubkey: &Pubkey) -> bool;
 }
 
-// Sysvar utilities
-pub trait Sysvar:
+/// bprumo TODO: doc
+pub trait Sysvar: SysvarId + Sized {
+    /// bprumo TODO: doc
+    fn get() -> Result<Self, ProgramError> {
+        Err(ProgramError::UnsupportedSysvar)
+    }
+}
+
+// LegacySysvar utilities
+pub trait LegacySysvar:
     SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
 {
     fn size_of() -> usize {
@@ -126,21 +136,23 @@ pub trait Sysvar:
 macro_rules! impl_sysvar_get {
     ($syscall_name:ident) => {
         fn get() -> Result<Self, ProgramError> {
-            let mut var = Self::default();
-            let var_addr = &mut var as *mut _ as *mut u8;
+            let mut var = std::mem::MaybeUninit::<Self>::uninit();
+            let var_addr = var.as_mut_ptr().cast::<u8>();
 
-            #[cfg(target_arch = "bpf")]
-            let result = unsafe {
+            let result = if cfg!(target_arch = "bpf") {
                 extern "C" {
                     fn $syscall_name(var_addr: *mut u8) -> u64;
                 }
-                $syscall_name(var_addr)
+                unsafe { $syscall_name(var_addr) }
+            } else {
+                crate::program_stubs::$syscall_name(var_addr)
             };
-            #[cfg(not(target_arch = "bpf"))]
-            let result = crate::program_stubs::$syscall_name(var_addr);
 
             match result {
-                crate::entrypoint::SUCCESS => Ok(var),
+                crate::entrypoint::SUCCESS => Ok(
+                    // SAFETY: If the result is SUCCESS, we know var has been initialized.
+                    unsafe { var.assume_init() },
+                ),
                 e => Err(e.into()),
             }
         }
@@ -170,7 +182,7 @@ mod tests {
             check_id(pubkey)
         }
     }
-    impl Sysvar for TestSysvar {}
+    impl LegacySysvar for TestSysvar {}
 
     #[test]
     fn test_sysvar_account_info_to_from() {

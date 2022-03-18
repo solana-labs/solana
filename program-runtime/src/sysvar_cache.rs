@@ -8,7 +8,8 @@ use {
         pubkey::Pubkey,
         sysvar::{
             clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
-            stake_history::StakeHistory, Sysvar, SysvarId,
+            stake_history::StakeHistory, stake_program_config::StakeProgramConfig, LegacySysvar,
+            SysvarId,
         },
         transaction_context::{InstructionContext, TransactionContext},
     },
@@ -34,6 +35,7 @@ pub struct SysvarCache {
     #[allow(deprecated)]
     recent_blockhashes: Option<Arc<RecentBlockhashes>>,
     stake_history: Option<Arc<StakeHistory>>,
+    stake_program_config: Option<Arc<StakeProgramConfig>>,
 }
 
 impl SysvarCache {
@@ -111,6 +113,16 @@ impl SysvarCache {
         self.stake_history = Some(Arc::new(stake_history));
     }
 
+    pub fn get_stake_program_config(&self) -> Result<Arc<StakeProgramConfig>, InstructionError> {
+        self.stake_program_config
+            .clone()
+            .ok_or(InstructionError::UnsupportedSysvar)
+    }
+
+    pub fn set_stake_program_config(&mut self, stake_program_config: StakeProgramConfig) {
+        self.stake_program_config = Some(Arc::new(stake_program_config));
+    }
+
     pub fn fill_missing_entries<F: FnMut(&Pubkey) -> Option<AccountSharedData>>(
         &mut self,
         mut load_sysvar_account: F,
@@ -166,6 +178,13 @@ impl SysvarCache {
                 self.set_stake_history(stake_history);
             }
         }
+        if self.get_stake_program_config().is_err() {
+            if let Some(stake_program_config) = load_sysvar_account(&StakeProgramConfig::id())
+                .and_then(|account| bincode::deserialize(account.data()).ok())
+            {
+                self.set_stake_program_config(stake_program_config);
+            }
+        }
     }
 
     pub fn reset(&mut self) {
@@ -181,7 +200,7 @@ impl SysvarCache {
 pub mod get_sysvar_with_account_check {
     use super::*;
 
-    fn check_sysvar_account<S: Sysvar>(
+    fn check_sysvar_account<S: LegacySysvar>(
         transaction_context: &TransactionContext,
         instruction_context: &InstructionContext,
         instruction_account_index: usize,
