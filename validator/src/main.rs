@@ -33,8 +33,8 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::{
-        BlockstoreAdvancedOptions, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreRecoveryMode, BlockstoreRocksFifoOptions, LedgerColumnOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
@@ -2567,7 +2567,7 @@ pub fn main() {
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
-    validator_config.blockstore_advanced_options = BlockstoreAdvancedOptions {
+    validator_config.ledger_column_options = LedgerColumnOptions {
         shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
             None => ShredStorageType::default(),
             Some(shred_compaction_string) => match shred_compaction_string {
