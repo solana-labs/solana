@@ -195,4 +195,206 @@ extern "C" {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use {
+        super::*,
+        crate::curve25519::pod::*,
+        curve25519_dalek::{
+            constants::ED25519_BASEPOINT_POINT as G,
+            edwards::EdwardsPoint, 
+            ristretto::RistrettoPoint,
+            scalar::Scalar,
+            traits::Identity,
+        },
+        rand::rngs::OsRng,
+    };
+
+    #[test]
+    fn test_edwards_ops() {
+        // identity
+        let identity = PodEdwardsPoint(EdwardsPoint::identity().compress().to_bytes());
+        let random_point = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+
+        assert_eq!(add_edwards(&random_point, &identity).unwrap(), random_point);
+        assert_eq!(subtract_edwards(&random_point, &identity).unwrap(), random_point);
+
+        // associativity
+        let point_a = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_b = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_c = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+
+        assert_eq!(
+            add_edwards(&add_edwards(&point_a, &point_b).unwrap(), &point_c),
+            add_edwards(&point_a, &add_edwards(&point_b, &point_c).unwrap()),
+        );
+
+        assert_eq!(
+            subtract_edwards(&subtract_edwards(&point_a, &point_b).unwrap(), &point_c),
+            subtract_edwards(&point_a, &add_edwards(&point_b, &point_c).unwrap()),
+        );
+
+        // commutativity
+        let point_a = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_b = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+
+        assert_eq!(
+            add_edwards(&point_a, &point_b).unwrap(),
+            add_edwards(&point_b, &point_a).unwrap(),
+        );
+
+        // subtraction
+        let identity = PodEdwardsPoint(EdwardsPoint::identity().compress().to_bytes());
+        let random_edwards = Scalar::random(&mut OsRng) * G;
+        let random_point = PodEdwardsPoint(random_edwards.compress().to_bytes());
+        let random_point_negated = PodEdwardsPoint((-random_edwards).compress().to_bytes());
+
+        assert_eq!(
+            random_point_negated,
+            subtract_edwards(&identity, &random_point).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_ristretto_ops() {
+        // identity
+        let identity = PodRistrettoPoint(RistrettoPoint::identity().compress().to_bytes());
+        let random_point = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+
+        assert_eq!(add_ristretto(&random_point, &identity).unwrap(), random_point);
+        assert_eq!(subtract_ristretto(&random_point, &identity).unwrap(), random_point);
+
+        // associativity
+        let point_a = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+        let point_b = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+        let point_c = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+
+        assert_eq!(
+            add_ristretto(&add_ristretto(&point_a, &point_b).unwrap(), &point_c),
+            add_ristretto(&point_a, &add_ristretto(&point_b, &point_c).unwrap()),
+        );
+
+        assert_eq!(
+            subtract_ristretto(&subtract_ristretto(&point_a, &point_b).unwrap(), &point_c),
+            subtract_ristretto(&point_a, &add_ristretto(&point_b, &point_c).unwrap()),
+        );
+
+        // commutativity
+        let point_a = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+        let point_b = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+
+        assert_eq!(
+            add_ristretto(&point_a, &point_b).unwrap(),
+            add_ristretto(&point_b, &point_a).unwrap(),
+        );
+
+        // subtraction
+        let identity = PodRistrettoPoint(RistrettoPoint::identity().compress().to_bytes());
+        let random_ristretto = RistrettoPoint::random(&mut OsRng);
+        let random_point = PodRistrettoPoint(random_ristretto.compress().to_bytes());
+        let random_point_negated = PodRistrettoPoint((-random_ristretto).compress().to_bytes());
+
+        assert_eq!(
+            random_point_negated,
+            subtract_ristretto(&identity, &random_point).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_scalar_ops() {
+        // identity
+        let zero = PodScalar(Scalar::zero().to_bytes());
+        let random_scalar = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+
+        assert_eq!(add_scalar(&random_scalar, &zero).unwrap(), random_scalar);
+        assert_eq!(subtract_scalar(&random_scalar, &zero).unwrap(), random_scalar);
+        assert_eq!(multiply_scalar(&zero, &random_scalar).unwrap(), zero);
+        assert_eq!(divide_scalar(&zero, &random_scalar).unwrap(), zero);
+
+        // associativity
+        let scalar_a = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let scalar_b = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let scalar_c = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+
+        assert_eq!(
+            add_scalar(&add_scalar(&scalar_a, &scalar_b).unwrap(), &scalar_c),
+            add_scalar(&scalar_a, &add_scalar(&scalar_b, &scalar_c).unwrap()),
+        );
+
+        assert_eq!(
+            subtract_scalar(&subtract_scalar(&scalar_a, &scalar_b).unwrap(), &scalar_c),
+            subtract_scalar(&scalar_a, &add_scalar(&scalar_b, &scalar_c).unwrap()),
+        );
+
+        assert_eq!(
+            multiply_scalar(&multiply_scalar(&scalar_a, &scalar_b).unwrap(), &scalar_c),
+            multiply_scalar(&scalar_a, &multiply_scalar(&scalar_b, &scalar_c).unwrap()),
+        );
+
+        assert_eq!(
+            divide_scalar(&divide_scalar(&scalar_a, &scalar_b).unwrap(), &scalar_c),
+            divide_scalar(&scalar_a, &multiply_scalar(&scalar_b, &scalar_c).unwrap()),
+        );
+
+        // commutativity
+        let scalar_a = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let scalar_b = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+
+        assert_eq!(
+            add_scalar(&scalar_a, &scalar_b).unwrap(),
+            add_scalar(&scalar_b, &scalar_a).unwrap(),
+        );
+
+        assert_eq!(
+            multiply_scalar(&scalar_a, &scalar_b).unwrap(),
+            multiply_scalar(&scalar_b, &scalar_a).unwrap(),
+        );
+
+        // subtraction and division
+        let zero = PodScalar(Scalar::zero().to_bytes());
+        let one = PodScalar(Scalar::one().to_bytes());
+        let random_scalar = Scalar::random(&mut OsRng);
+        let random_scalar_pod = PodScalar(random_scalar.to_bytes());
+        let random_scalar_negated_pod = PodScalar((-random_scalar).to_bytes());
+        let random_scalar_inverted_pod = PodScalar(random_scalar.invert().to_bytes());
+
+        assert_eq!(
+            random_scalar_negated_pod,
+            subtract_scalar(&zero, &random_scalar_pod).unwrap(),
+        );
+
+        assert_eq!(
+            random_scalar_inverted_pod,
+            divide_scalar(&one, &random_scalar_pod).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_edwards_mul() {
+        let scalar_x = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point_a = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_b = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+
+        let ax = multiply_edwards(&point_a, &scalar_x).unwrap();
+        let bx = multiply_edwards(&point_b, &scalar_x).unwrap();
+
+        assert_eq!(
+            add_edwards(&ax, &bx),
+            multiply_edwards(&add_edwards(&point_a, &point_b).unwrap(), &scalar_x),
+        );
+    }
+
+    #[test]
+    fn test_ristretto_mul() {
+        let scalar_x = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point_a = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+        let point_b = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
+
+        let ax = multiply_ristretto(&point_a, &scalar_x).unwrap();
+        let bx = multiply_ristretto(&point_b, &scalar_x).unwrap();
+
+        assert_eq!(
+            add_ristretto(&ax, &bx),
+            multiply_ristretto(&add_ristretto(&point_a, &point_b).unwrap(), &scalar_x),
+        );
+    }
+}
