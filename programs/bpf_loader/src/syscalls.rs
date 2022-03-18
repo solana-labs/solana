@@ -4642,4 +4642,10 @@ mod tests {
             Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
         );
     }
+
+    #[test]
+    fn test_check_type_assumptions() {
+        // Code in this file assumes that u64 and usize are the same
+        assert_eq!(size_of::<u64>(), size_of::<usize>());
+    }
 }
