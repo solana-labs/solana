@@ -327,6 +327,10 @@ pub mod limit_secp256k1_recovery_id {
     solana_sdk::declare_id!("7g9EUwj4j7CS21Yx1wvgWLjSZeh5aPq8x9kpoPwXM8n8");
 }
 
+pub mod disable_deprecated_loader {
+    solana_sdk::declare_id!("GTUMCZ8LTNxVfxdrw7ZsDFTxXb7TutYkzJnFwinpE6dg");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -403,6 +407,7 @@ lazy_static! {
         (syscall_saturated_math::id(), "syscalls use saturated math"),
         (check_physical_overlapping::id(), "check physical overlapping regions"),
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
+        (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
