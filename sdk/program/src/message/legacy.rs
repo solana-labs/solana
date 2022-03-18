@@ -755,7 +755,7 @@ mod tests {
         );
         assert_eq!(
             message.get_account_keys_by_lock_type(),
-            (vec![&id1, &id0], vec![&id3, &id2, &program_id])
+            (vec![&id1, &id0], vec![&id3, &program_id, &id2])
         );
     }
 
@@ -851,7 +851,7 @@ mod tests {
         let message = Message::new(&instructions, Some(&id1));
         assert_eq!(
             message.hash(),
-            Hash::from_str("CXRH7GHLieaQZRUjH1mpnNnUZQtU4V4RpJpAFgy77i3z").unwrap()
+            Hash::from_str("7VWCF4quo2CcWQFNUayZiorxpiR5ix8YzLebrXKf3fMF").unwrap()
         )
     }
 }
