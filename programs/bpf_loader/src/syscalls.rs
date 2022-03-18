@@ -2273,16 +2273,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
 
 /// Rust representation of C's SolInstruction
 #[derive(Debug)]
+#[repr(C)]
 struct SolInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
-    accounts_len: usize,
+    accounts_len: u64,
     data_addr: u64,
-    data_len: usize,
+    data_len: u64,
 }
 
 /// Rust representation of C's SolAccountMeta
 #[derive(Debug)]
+#[repr(C)]
 struct SolAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
@@ -2291,6 +2293,7 @@ struct SolAccountMeta {
 
 /// Rust representation of C's SolAccountInfo
 #[derive(Debug)]
+#[repr(C)]
 struct SolAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
@@ -2307,6 +2310,7 @@ struct SolAccountInfo {
 
 /// Rust representation of C's SolSignerSeed
 #[derive(Debug)]
+#[repr(C)]
 struct SolSignerSeedC {
     addr: u64,
     len: u64,
@@ -2314,10 +2318,9 @@ struct SolSignerSeedC {
 
 /// Rust representation of C's SolSignerSeeds
 #[derive(Debug)]
+#[repr(C)]
 struct SolSignerSeedsC {
-    #[allow(dead_code)]
     addr: u64,
-    #[allow(dead_code)]
     len: u64,
 }
 
@@ -2342,7 +2345,21 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, loader_id)?;
 
-        check_instruction_size(ix_c.accounts_len, ix_c.data_len, invoke_context)?;
+        debug_assert_eq!(
+            std::mem::size_of_val(&ix_c.accounts_len),
+            std::mem::size_of::<usize>(),
+            "non-64-bit host"
+        );
+        debug_assert_eq!(
+            std::mem::size_of_val(&ix_c.data_len),
+            std::mem::size_of::<usize>(),
+            "non-64-bit host"
+        );
+        check_instruction_size(
+            ix_c.accounts_len as usize,
+            ix_c.data_len as usize,
+            invoke_context,
+        )?;
         let program_id = translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, loader_id)?;
         let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
@@ -2487,7 +2504,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         memory_mapping: &MemoryMapping,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         if signers_seeds_len > 0 {
-            let signers_seeds = translate_slice::<SolSignerSeedC>(
+            let signers_seeds = translate_slice::<SolSignerSeedsC>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
