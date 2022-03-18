@@ -287,10 +287,9 @@ impl Message {
         blockhash: &Hash,
     ) -> Self {
         let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
-        let header = compiled_keys
-            .try_create_message_header()
-            .expect("overflow when creating message header");
-        let static_keys = compiled_keys.into_message_static_keys();
+        let (header, static_keys) = compiled_keys
+            .try_into_message_components()
+            .expect("overflow when compiling message keys");
         let account_keys = AccountKeys::new(&static_keys, None);
         let instructions = account_keys.compile_instructions(instructions);
         Self::new_with_compiled_instructions(

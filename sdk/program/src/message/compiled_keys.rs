@@ -65,8 +65,8 @@ impl CompiledKeys {
         }
     }
 
-    pub(crate) fn try_create_message_header(&self) -> Option<MessageHeader> {
-        Some(MessageHeader {
+    pub(crate) fn try_into_message_components(self) -> Option<(MessageHeader, Vec<Pubkey>)> {
+        let header = MessageHeader {
             num_required_signatures: u8::try_from(
                 self.writable_signer_keys
                     .len()
@@ -76,16 +76,16 @@ impl CompiledKeys {
             num_readonly_signed_accounts: u8::try_from(self.readonly_signer_keys.len()).ok()?,
             num_readonly_unsigned_accounts: u8::try_from(self.readonly_non_signer_keys.len())
                 .ok()?,
-        })
-    }
+        };
 
-    pub(crate) fn into_message_static_keys(self) -> Vec<Pubkey> {
-        std::iter::empty()
+        let static_account_keys = std::iter::empty()
             .chain(self.writable_signer_keys)
             .chain(self.readonly_signer_keys)
             .chain(self.writable_non_signer_keys)
             .chain(self.readonly_non_signer_keys)
-            .collect()
+            .collect();
+
+        Some((header, static_account_keys))
     }
 }
 
@@ -94,22 +94,27 @@ mod tests {
     use {super::*, crate::instruction::AccountMeta};
 
     #[test]
-    fn test_compile_with_dup_keys() {
+    fn test_compile_with_dups() {
         let program_id = Pubkey::new_unique();
         let id0 = Pubkey::new_unique();
         let id1 = Pubkey::new_unique();
         let id2 = Pubkey::new_unique();
-        let instruction = Instruction::new_with_bincode(
-            program_id,
-            &0,
-            vec![
-                AccountMeta::new(id0, true),
-                AccountMeta::new_readonly(id1, true),
-                AccountMeta::new(id2, false),
-            ],
+        let keys = CompiledKeys::compile(
+            &[Instruction::new_with_bincode(
+                program_id,
+                &0,
+                vec![
+                    AccountMeta::new(id0, true),
+                    AccountMeta::new_readonly(id1, true),
+                    AccountMeta::new(id2, false),
+                    // duplicate the account inputs
+                    AccountMeta::new(id0, true),
+                    AccountMeta::new_readonly(id1, true),
+                    AccountMeta::new(id2, false),
+                ],
+            )],
+            None,
         );
-
-        let keys = CompiledKeys::compile(&[instruction.clone(), instruction], None);
         assert_eq!(
             keys,
             CompiledKeys {
@@ -148,14 +153,15 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let id0 = Pubkey::new_unique();
         let keys = CompiledKeys::compile(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            ],
+            &[Instruction::new_with_bincode(
+                program_id,
+                &0,
+                vec![AccountMeta::new(id0, false), AccountMeta::new(id0, true)],
+            )],
             None,
         );
 
-        // Ensure the key is no longer a non signer
+        // Ensure the dup writable key is a signer
         assert_eq!(
             keys,
             CompiledKeys {
@@ -171,18 +177,18 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let id0 = Pubkey::new_unique();
         let keys = CompiledKeys::compile(
-            &[
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id0, true)],
-                ),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            ],
+            &[Instruction::new_with_bincode(
+                program_id,
+                &0,
+                vec![
+                    AccountMeta::new_readonly(id0, true),
+                    AccountMeta::new(id0, true),
+                ],
+            )],
             None,
         );
 
-        // Ensure the key is no longer readonly
+        // Ensure the dup signer key is writable
         assert_eq!(
             keys,
             CompiledKeys {
@@ -202,14 +208,17 @@ mod tests {
                 Instruction::new_with_bincode(
                     program_id,
                     &0,
-                    vec![AccountMeta::new_readonly(id0, false)],
+                    vec![
+                        AccountMeta::new_readonly(id0, false),
+                        AccountMeta::new(id0, false),
+                    ],
                 ),
                 Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
             ],
             None,
         );
 
-        // Ensure the key is no longer readonly
+        // Ensure the dup nonsigner key is writable
         assert_eq!(
             keys,
             CompiledKeys {
