@@ -365,14 +365,11 @@ describe('Transaction', () => {
     }).add(transfer);
     expectedTransaction.sign(sender);
 
-    const wireTransaction = Buffer.from(
-      'AVuErQHaXv0SG0/PchunfxHKt8wMRfMZzqV0tkC5qO6owYxWU2v871AoWywGoFQr4z+q/7mE8lIufNl/kxj+nQ0BAAEDE5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8r9Q5/Mtmcn8onFxt47xKj+XdXXd3C8j/FcPu7csUrz/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAxJrndgN4IFTxep3s6kO0ROug7bEsbx0xxuDkqEvwUusBAgIAAQwCAAAAMQAAAAAAAAA=',
-      'base64',
-    );
-    const tx = Transaction.from(wireTransaction);
+    const serializedTransaction = Buffer.from('AVuErQHaXv0SG0/PchunfxHKt8wMRfMZzqV0tkC5qO6owYxWU2v871AoWywGoFQr4z+q/7mE8lIufNl/kxj+nQ0BAAEDE5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8r9Q5/Mtmcn8onFxt47xKj+XdXXd3C8j/FcPu7csUrz/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAxJrndgN4IFTxep3s6kO0ROug7bEsbx0xxuDkqEvwUusBAgIAAQwCAAAAMQAAAAAAAAA=', 'base64');
+    const deserializedTransaction = Transaction.from(serializedTransaction);
 
-    expect(tx).to.eql(expectedTransaction);
-    expect(wireTransaction).to.eql(expectedTransaction.serialize());
+    expect(expectedTransaction.serialize()).to.eql(serializedTransaction);
+    expect(deserializedTransaction.serialize()).to.eql(serializedTransaction);
   });
 
   it('populate transaction', () => {
