@@ -6135,6 +6135,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-send-transaction-service",
+ "solana-storage-bigtable",
  "solana-streamer",
  "solana-test-validator",
  "solana-version",
