@@ -2827,22 +2827,7 @@ impl AccountsDb {
         }
         rewrite_elapsed.stop();
 
-        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
-        let mut recycle_stores = self.recycle_stores.write().unwrap();
-        recycle_stores_write_elapsed.stop();
-
-        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
-        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
-            recycle_stores.add_entries(dead_storages);
-            drop(recycle_stores);
-        } else {
-            self.stats
-                .dropped_stores
-                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
-            drop(recycle_stores);
-            drop(dead_storages);
-        }
-        drop_storage_entries_elapsed.stop();
+        self.drop_or_recycle_stores(dead_storages);
 
         self.shrink_stats
             .num_slots_shrunk
@@ -2874,12 +2859,6 @@ impl AccountsDb {
         self.shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
-            .drop_storage_entries_elapsed
-            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
-            .recycle_stores_write_elapsed
-            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
         self.shrink_stats.accounts_removed.fetch_add(
             total_starting_accounts - total_accounts_after_shrink,
             Ordering::Relaxed,
@@ -2895,6 +2874,31 @@ impl AccountsDb {
         self.shrink_stats.report();
 
         total_accounts_after_shrink
+    }
+
+    fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
+        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
+        let mut recycle_stores = self.recycle_stores.write().unwrap();
+        recycle_stores_write_elapsed.stop();
+
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
+            recycle_stores.add_entries(dead_storages);
+            drop(recycle_stores);
+        } else {
+            self.stats
+                .dropped_stores
+                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
+            drop(recycle_stores);
+            drop(dead_storages);
+        }
+        drop_storage_entries_elapsed.stop();
+        self.shrink_stats
+            .drop_storage_entries_elapsed
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .recycle_stores_write_elapsed
+            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
 
     /// return a store that can contain 'aligned_total' bytes and the time it took to execute

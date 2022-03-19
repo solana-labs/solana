@@ -606,7 +606,7 @@ impl<C: 'static + TpuConnection> AsyncClient for ThinClient<C> {
     }
 
     fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
-        self.tpu_connection().send_batch(transactions)
+        self.tpu_connection().send_batch(&transactions)
     }
 
     fn async_send_message<T: Signers>(

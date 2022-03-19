@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crate::{bigtable::*, ledger_path::*},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
@@ -24,8 +25,8 @@ use {
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{
-            self, AccessType, BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRecoveryMode,
-            Database,
+            self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Database,
+            LedgerColumnOptions,
         },
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -63,6 +64,7 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_transaction_status::VersionedTransactionWithStatusMeta,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -83,9 +85,7 @@ use {
 };
 
 mod bigtable;
-use bigtable::*;
 mod ledger_path;
-use ledger_path::*;
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -147,7 +147,7 @@ fn output_entry(
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
                 let tx_signature = transaction.signatures[0];
-                let tx_status = blockstore
+                let tx_with_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
                     .unwrap_or_else(|err| {
                         eprintln!(
@@ -156,20 +156,16 @@ fn output_entry(
                         );
                         None
                     })
-                    .map(|transaction_status| transaction_status.into());
+                    .map(|meta| VersionedTransactionWithStatusMeta { transaction, meta });
 
-                if let Some(legacy_tx) = transaction.into_legacy_transaction() {
+                if let Some(tx_with_meta) = tx_with_meta {
+                    let status = tx_with_meta.meta.into();
                     solana_cli_output::display::println_transaction(
-                        &legacy_tx,
-                        tx_status.as_ref(),
+                        &tx_with_meta.transaction,
+                        Some(&status),
                         "      ",
                         None,
                         None,
-                    );
-                } else {
-                    eprintln!(
-                        "Failed to print unsupported transaction for {} at slot {}",
-                        tx_signature, slot
                     );
                 }
             }
@@ -1723,7 +1719,7 @@ fn main() {
                     &output_directory,
                     &genesis_config,
                     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-                    BlockstoreAdvancedOptions::default(),
+                    LedgerColumnOptions::default(),
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to write genesis config: {:?}", err);

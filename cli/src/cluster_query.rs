@@ -33,7 +33,7 @@ use {
         rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
         rpc_response::SlotInfo,
     },
-    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_program_runtime::compute_budget,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
@@ -1058,6 +1058,7 @@ pub fn process_get_block(
             RpcBlockConfig {
                 encoding: Some(UiTransactionEncoding::Base64),
                 commitment: Some(CommitmentConfig::confirmed()),
+                max_supported_transaction_version: Some(0),
                 ..RpcBlockConfig::default()
             },
         )?
@@ -1408,7 +1409,7 @@ pub fn process_ping(
             )];
             if let Some(additional_fee) = additional_fee {
                 ixs.push(ComputeBudgetInstruction::request_units(
-                    ComputeBudget::new(false).max_units as u32,
+                    compute_budget::DEFAULT_UNITS,
                     *additional_fee,
                 ));
             }
@@ -2042,7 +2043,7 @@ pub fn process_transaction_history(
                     RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
                         commitment: Some(CommitmentConfig::confirmed()),
-                        max_supported_transaction_version: None,
+                        max_supported_transaction_version: Some(0),
                     },
                 ) {
                     Ok(confirmed_transaction) => {

@@ -24,17 +24,17 @@ impl TpuConnection for UdpTpuConnection {
         &self.addr
     }
 
-    fn send_wire_transaction(&self, data: Vec<u8>) -> TransportResult<()> {
-        self.socket.send_to(&data[..], self.addr)?;
+    fn send_wire_transaction(&self, data: &[u8]) -> TransportResult<()> {
+        self.socket.send_to(data, self.addr)?;
         Ok(())
     }
 
-    fn send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
+    fn send_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
         transactions
-            .into_iter()
+            .iter()
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .try_for_each(|buff| -> TransportResult<()> {
-                self.socket.send_to(&buff[..], self.addr)?;
+                self.socket.send_to(&buff, self.addr)?;
                 Ok(())
             })?;
         Ok(())

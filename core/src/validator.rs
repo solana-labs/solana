@@ -38,7 +38,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
-        blockstore_db::{BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRecoveryMode},
+        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
@@ -168,7 +168,7 @@ pub struct ValidatorConfig {
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
     pub wait_to_vote_slot: Option<Slot>,
-    pub blockstore_advanced_options: BlockstoreAdvancedOptions,
+    pub ledger_column_options: LedgerColumnOptions,
 }
 
 impl Default for ValidatorConfig {
@@ -230,7 +230,7 @@ impl Default for ValidatorConfig {
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
             wait_to_vote_slot: None,
-            blockstore_advanced_options: BlockstoreAdvancedOptions::default(),
+            ledger_column_options: LedgerColumnOptions::default(),
         }
     }
 }
@@ -1297,7 +1297,7 @@ fn load_blockstore(
         ledger_path,
         BlockstoreOptions {
             recovery_mode: config.wal_recovery_mode.clone(),
-            advanced_options: config.blockstore_advanced_options.clone(),
+            column_options: config.ledger_column_options.clone(),
             ..BlockstoreOptions::default()
         },
     )

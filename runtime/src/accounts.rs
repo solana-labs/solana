@@ -23,7 +23,7 @@ use {
     },
     log::*,
     rand::{thread_rng, Rng},
-    solana_address_lookup_table_program::state::AddressLookupTable,
+    solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -43,10 +43,7 @@ use {
         slot_hashes::SlotHashes,
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{
-            AddressLookupError, Result, SanitizedTransaction, TransactionAccountLocks,
-            TransactionError,
-        },
+        transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::TransactionAccount,
     },
     std::{

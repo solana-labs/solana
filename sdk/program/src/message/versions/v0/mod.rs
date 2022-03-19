@@ -10,12 +10,13 @@
 //! [future message format]: https://docs.solana.com/proposals/transactions-v2
 
 use crate::{
+    bpf_loader_upgradeable,
     hash::Hash,
     instruction::CompiledInstruction,
-    message::{MessageHeader, MESSAGE_VERSION_PREFIX},
+    message::{legacy::BUILTIN_PROGRAMS_KEYS, MessageHeader, MESSAGE_VERSION_PREFIX},
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
-    short_vec,
+    short_vec, sysvar,
 };
 
 mod loaded;
@@ -137,6 +138,70 @@ impl Message {
     /// Serialize this message with a version #0 prefix using bincode encoding.
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(&(MESSAGE_VERSION_PREFIX, self)).unwrap()
+    }
+
+    /// Returns true if the account at the specified index is called as a program by an instruction
+    pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.instructions
+                .iter()
+                .any(|ix| ix.program_id_index == key_index)
+        } else {
+            false
+        }
+    }
+
+    /// Returns true if the account at the specified index was requested to be
+    /// writable.  This method should not be used directly.
+    fn is_writable_index(&self, key_index: usize) -> bool {
+        let header = &self.header;
+        let num_account_keys = self.account_keys.len();
+        let num_signed_accounts = usize::from(header.num_required_signatures);
+        if key_index >= num_account_keys {
+            let loaded_addresses_index = key_index.saturating_sub(num_account_keys);
+            let num_writable_dynamic_addresses = self
+                .address_table_lookups
+                .iter()
+                .map(|lookup| lookup.writable_indexes.len())
+                .sum();
+            loaded_addresses_index < num_writable_dynamic_addresses
+        } else if key_index >= num_signed_accounts {
+            let num_unsigned_accounts = num_account_keys.saturating_sub(num_signed_accounts);
+            let num_writable_unsigned_accounts = num_unsigned_accounts
+                .saturating_sub(usize::from(header.num_readonly_unsigned_accounts));
+            let unsigned_account_index = key_index.saturating_sub(num_signed_accounts);
+            unsigned_account_index < num_writable_unsigned_accounts
+        } else {
+            let num_writable_signed_accounts = num_signed_accounts
+                .saturating_sub(usize::from(header.num_readonly_signed_accounts));
+            key_index < num_writable_signed_accounts
+        }
+    }
+
+    /// Returns true if any static account key is the bpf upgradeable loader
+    fn is_upgradeable_loader_in_static_keys(&self) -> bool {
+        self.account_keys
+            .iter()
+            .any(|&key| key == bpf_loader_upgradeable::id())
+    }
+
+    /// Returns true if the account at the specified index was requested as writable.
+    /// Before loading addresses, we can't demote write locks for dynamically loaded
+    /// addresses so this should not be used by the runtime.
+    pub fn is_maybe_writable(&self, key_index: usize) -> bool {
+        self.is_writable_index(key_index)
+            && !{
+                // demote reserved ids
+                self.account_keys
+                    .get(key_index)
+                    .map(|key| sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key))
+                    .unwrap_or_default()
+            }
+            && !{
+                // demote program ids
+                self.is_key_called_as_program(key_index)
+                    && !self.is_upgradeable_loader_in_static_keys()
+            }
     }
 }
 

@@ -991,16 +991,16 @@ impl Default for ShredStorageType {
     }
 }
 
-/// Advanced options for blockstore.
-/// The each advanced option might also be used as a tag that supports
-/// group-by operation when reporting Blockstore metrics.
+/// Options for LedgerColumn.
+/// Each field might also be used as a tag that supports group-by operation when
+/// reporting metrics.
 #[derive(Clone)]
-pub struct BlockstoreAdvancedOptions {
+pub struct LedgerColumnOptions {
     // Determine how to store both data and coding shreds. Default: RocksLevel.
     pub shred_storage_type: ShredStorageType,
 }
 
-impl Default for BlockstoreAdvancedOptions {
+impl Default for LedgerColumnOptions {
     fn default() -> Self {
         Self {
             shred_storage_type: ShredStorageType::RocksLevel,
@@ -1015,7 +1015,7 @@ pub struct BlockstoreOptions {
     pub recovery_mode: Option<BlockstoreRecoveryMode>,
     // Whether to allow unlimited number of open files. Default: true.
     pub enforce_ulimit_nofile: bool,
-    pub advanced_options: BlockstoreAdvancedOptions,
+    pub column_options: LedgerColumnOptions,
 }
 
 impl Default for BlockstoreOptions {
@@ -1025,7 +1025,7 @@ impl Default for BlockstoreOptions {
             access_type: AccessType::PrimaryOnly,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
-            advanced_options: BlockstoreAdvancedOptions::default(),
+            column_options: LedgerColumnOptions::default(),
         }
     }
 }
@@ -1459,7 +1459,7 @@ fn new_cf_descriptor_pair_shreds<
     options: &BlockstoreOptions,
     oldest_slot: &OldestSlot,
 ) -> (ColumnFamilyDescriptor, ColumnFamilyDescriptor) {
-    match &options.advanced_options.shred_storage_type {
+    match &options.column_options.shred_storage_type {
         ShredStorageType::RocksLevel => (
             new_cf_descriptor::<D>(options, oldest_slot),
             new_cf_descriptor::<C>(options, oldest_slot),

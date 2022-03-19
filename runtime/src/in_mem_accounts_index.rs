@@ -48,8 +48,6 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     stop_evictions_changes: AtomicU64,
     // true while ranges are being manipulated. Used to keep an async flush from removing things while a range is being held.
     stop_evictions: AtomicU64,
-    // set to true when any entry in this bin is marked dirty
-    bin_dirty: AtomicBool,
     // set to true while this bin is being actively flushed
     flushing_active: AtomicBool,
 }
@@ -81,7 +79,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             cache_ranges_held: CacheRangesHeld::default(),
             stop_evictions_changes: AtomicU64::default(),
             stop_evictions: AtomicU64::default(),
-            bin_dirty: AtomicBool::default(),
             flushing_active: AtomicBool::default(),
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
             last_age_flushed: AtomicU8::new(Age::MAX),
@@ -869,12 +866,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    pub fn set_bin_dirty(&self) {
-        self.bin_dirty.store(true, Ordering::Release);
-        // 1 bin dirty, so only need 1 thread to wake up if many could be waiting
-        self.storage.wait_dirty_or_aged.notify_one();
-    }
-
     /// returns true if a dice roll indicates this call should result in a random eviction.
     /// This causes non-determinism in cache contents per validator.
     fn random_chance_of_eviction() -> bool {
@@ -891,6 +882,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             + std::mem::size_of::<AccountMapEntry<T>>()
     }
 
+    fn should_evict_based_on_age(
+        current_age: Age,
+        entry: &AccountMapEntry<T>,
+        startup: bool,
+    ) -> bool {
+        startup || (current_age == entry.age())
+    }
+
     /// return true if 'entry' should be evicted from the in-mem index
     fn should_evict_from_mem<'a>(
         &self,
@@ -902,7 +901,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>) {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
-        if startup || (current_age == entry.age()) {
+        if Self::should_evict_based_on_age(current_age, entry, startup) {
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
@@ -929,41 +928,49 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn flush_internal(&self, _flush_guard: &FlushGuard) {
-        let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
-        let mut iterate_for_age = self.get_should_age(current_age);
+        let iterate_for_age = self.get_should_age(current_age);
         let startup = self.storage.get_startup();
-        if !was_dirty && !iterate_for_age && !startup {
-            // wasn't dirty and no need to age, so no need to flush this bucket
-            // but, at startup we want to remove from buckets as fast as possible if any items exist
+        if !iterate_for_age && !startup {
+            // no need to age, so no need to flush this bucket
+            // but, at startup we want to evict from buckets as fast as possible if any items exist
             return;
         }
 
         let in_mem_count = self.stats().count_in_mem.load(Ordering::Relaxed);
         let limit = self.storage.mem_budget_mb;
+        let estimate_mem = in_mem_count * Self::approx_size_of_one_entry();
         let exceeds_budget = limit
-            .map(|limit| in_mem_count * Self::approx_size_of_one_entry() >= limit * 1024 * 1024)
+            .map(|limit| estimate_mem >= limit * 1024 * 1024)
             .unwrap_or_default();
+        self.stats()
+            .estimate_mem
+            .store(estimate_mem as u64, Ordering::Relaxed);
 
         // may have to loop if disk has to grow and we have to restart
-        loop {
+        {
+            let mut dirty_items;
             let mut evictions;
             let mut evictions_random = Vec::default();
             let disk = self.bucket.as_ref().unwrap();
 
             let mut flush_entries_updated_on_disk = 0;
-            let mut disk_resize = Ok(());
-            // scan and update loop
+            let mut flush_should_evict_us = 0;
+            // scan loop
             // holds read lock
             {
                 let map = self.map().read().unwrap();
                 evictions = Vec::with_capacity(map.len());
-                let m = Measure::start("flush_scan_and_update"); // we don't care about lock time in this metric - bg threads can wait
+                dirty_items = Vec::with_capacity(map.len());
+                let m = Measure::start("flush_scan"); // we don't care about lock time in this metric - bg threads can wait
                 for (k, v) in map.iter() {
+                    let mut mse = Measure::start("flush_should_evict");
                     let (evict_for_age, slot_list) =
                         self.should_evict_from_mem(current_age, v, startup, true, exceeds_budget);
+                    mse.stop();
+                    flush_should_evict_us += mse.as_us();
                     if !evict_for_age && !Self::random_chance_of_eviction() {
-                        // not planning to remove this item from memory now, so don't write it to disk yet
+                        // not planning to evict this item from memory now, so don't write it to disk yet
                         continue;
                     }
 
@@ -976,18 +983,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         //  That prevents dropping an item from cache before disk is updated to latest in mem.
                         // happens inside of lock on in-mem cache. This is because of deleting items
                         // it is possible that the item in the cache is marked as dirty while these updates are happening. That is ok.
-                        {
-                            let slot_list =
-                                slot_list.unwrap_or_else(|| v.slot_list.read().unwrap());
-                            disk_resize = disk.try_write(k, (&slot_list, v.ref_count()));
-                        }
-                        if disk_resize.is_ok() {
-                            flush_entries_updated_on_disk += 1;
-                        } else {
-                            // disk needs to resize, so mark all unprocessed items as dirty again so we pick them up after the resize
-                            v.set_dirty(true);
-                            break;
-                        }
+                        dirty_items.push((*k, Arc::clone(v)));
                     } else {
                         drop(slot_list);
                     }
@@ -997,114 +993,135 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         evictions_random.push(*k);
                     }
                 }
-                Self::update_time_stat(&self.stats().flush_scan_update_us, m);
+                Self::update_time_stat(&self.stats().flush_scan_us, m);
             }
+            {
+                // write to disk outside giant read lock
+                let m = Measure::start("flush_update"); // we don't care about lock time in this metric - bg threads can wait
+                for (k, v) in dirty_items {
+                    if v.dirty() {
+                        // already marked dirty again, skip it
+                        continue;
+                    }
+                    loop {
+                        let disk_resize = {
+                            let slot_list = v.slot_list.read().unwrap();
+                            disk.try_write(&k, (&slot_list, v.ref_count()))
+                        };
+                        match disk_resize {
+                            Ok(_) => {
+                                // successfully written to disk
+                                flush_entries_updated_on_disk += 1;
+                            }
+                            Err(err) => {
+                                // disk needs to resize. This item did not get resized. Resize and try again.
+                                let m = Measure::start("flush_grow");
+                                disk.grow(err);
+                                Self::update_time_stat(&self.stats().flush_grow_us, m);
+                            }
+                        }
+                    }
+                }
+                Self::update_time_stat(&self.stats().flush_update_us, m);
+            }
+            Self::update_stat(&self.stats().flush_should_evict_us, flush_should_evict_us);
+
             Self::update_stat(
                 &self.stats().flush_entries_updated_on_disk,
                 flush_entries_updated_on_disk,
             );
 
-            let m = Measure::start("flush_evict_or_grow");
-            match disk_resize {
-                Ok(_) => {
-                    if !self.evict_from_cache(
-                        evictions,
-                        current_age,
-                        startup,
-                        false,
-                        exceeds_budget,
-                    ) || !self.evict_from_cache(
-                        evictions_random,
-                        current_age,
-                        startup,
-                        true,
-                        exceeds_budget,
-                    ) {
-                        iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
-                    }
-                    Self::update_time_stat(&self.stats().flush_remove_us, m);
+            let m = Measure::start("flush_evict");
+            self.evict_from_cache(evictions, current_age, startup, false);
+            self.evict_from_cache(evictions_random, current_age, startup, true);
+            Self::update_time_stat(&self.stats().flush_evict_us, m);
 
-                    if iterate_for_age {
-                        // completed iteration of the buckets at the current age
-                        assert_eq!(current_age, self.storage.current_age());
-                        self.set_has_aged(current_age);
-                    }
-                    return;
-                }
-                Err(err) => {
-                    // grow the bucket, outside of all in-mem locks.
-                    // then, loop to try again
-                    disk.grow(err);
-                    Self::update_time_stat(&self.stats().flush_grow_us, m);
-                }
+            if iterate_for_age {
+                // completed iteration of the buckets at the current age
+                assert_eq!(current_age, self.storage.current_age());
+                self.set_has_aged(current_age);
             }
         }
     }
 
-    // remove keys in 'evictions' from in-mem cache, likely due to age
-    // return true if the removal was completed
+    /// for each key in 'keys', look up in map, set age to the future
+    fn move_ages_to_future(&self, next_age: Age, current_age: Age, keys: &[Pubkey]) {
+        let map = self.map().read().unwrap();
+        keys.iter().for_each(|key| {
+            if let Some(entry) = map.get(key) {
+                entry.try_exchange_age(next_age, current_age);
+            }
+        });
+    }
+
+    // evict keys in 'evictions' from in-mem cache, likely due to age
     fn evict_from_cache(
         &self,
         mut evictions: Vec<Pubkey>,
         current_age: Age,
         startup: bool,
         randomly_evicted: bool,
-        exceeds_budget: bool,
-    ) -> bool {
-        let mut completed_scan = true;
+    ) {
         if evictions.is_empty() {
-            return completed_scan; // completed, don't need to get lock or do other work
+            return;
         }
 
         let stop_evictions_changes_at_start = self.get_stop_evictions_changes();
+        let next_age_on_failure = self.storage.future_age_to_flush();
         if self.get_stop_evictions() {
-            return false; // did NOT complete, ranges were changed, so have to restart
+            // ranges were changed
+            self.move_ages_to_future(next_age_on_failure, current_age, &evictions);
+            return;
         }
 
         // skip any keys that are held in memory because of ranges being held
         let ranges = self.cache_ranges_held.read().unwrap().clone();
         if !ranges.is_empty() {
+            let mut move_age = Vec::default();
             evictions.retain(|k| {
                 if ranges.iter().any(|range| range.contains(k)) {
-                    // this item is held in mem by range, so don't remove
-                    completed_scan = false;
+                    // this item is held in mem by range, so don't evict
+                    move_age.push(*k);
                     false
                 } else {
                     true
                 }
             });
+            if !move_age.is_empty() {
+                self.move_ages_to_future(next_age_on_failure, current_age, &move_age);
+            }
         }
 
-        let mut removed = 0;
+        let mut evicted = 0;
         // consider chunking these so we don't hold the write lock too long
         let mut map = self.map().write().unwrap();
         for k in evictions {
             if let Entry::Occupied(occupied) = map.entry(k) {
                 let v = occupied.get();
                 if Arc::strong_count(v) > 1 {
-                    // someone is holding the value arc's ref count and could modify it, so do not remove this from in-mem cache
-                    completed_scan = false;
+                    // someone is holding the value arc's ref count and could modify it, so do not evict
+                    v.try_exchange_age(next_age_on_failure, current_age);
                     continue;
                 }
 
                 if v.dirty()
                     || (!randomly_evicted
-                        && !self
-                            .should_evict_from_mem(current_age, v, startup, false, exceeds_budget)
-                            .0)
+                        && !Self::should_evict_based_on_age(current_age, v, startup))
                 {
                     // marked dirty or bumped in age after we looked above
-                    // these will be handled in later passes
+                    // these evictions will be handled in later passes (at later ages)
                     // but, at startup, everything is ready to age out if it isn't dirty
                     continue;
                 }
 
                 if stop_evictions_changes_at_start != self.get_stop_evictions_changes() {
-                    return false; // did NOT complete, ranges were changed, so have to restart
+                    // ranges were changed
+                    v.try_exchange_age(next_age_on_failure, current_age);
+                    continue;
                 }
 
-                // all conditions for removing succeeded, so really remove item from in-mem cache
-                removed += 1;
+                // all conditions for removing succeeded, so really evict item from in-mem cache
+                evicted += 1;
                 occupied.remove();
             }
         }
@@ -1113,10 +1130,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
         drop(map);
         self.stats()
-            .insert_or_delete_mem_count(false, self.bin, removed);
-        Self::update_stat(&self.stats().flush_entries_removed_from_mem, removed as u64);
-
-        completed_scan
+            .insert_or_delete_mem_count(false, self.bin, evicted);
+        Self::update_stat(&self.stats().flush_entries_evicted_from_mem, evicted as u64);
     }
 
     pub fn stats(&self) -> &BucketMapHolderStats {
