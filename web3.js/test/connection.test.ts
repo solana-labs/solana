@@ -7,6 +7,7 @@ import chaiAsPromised from 'chai-as-promised';
 import {
   Account,
   Authorized,
+  ConfirmedBlock,
   Connection,
   EpochSchedule,
   SystemProgram,
@@ -1005,7 +1006,14 @@ describe('Connection', () => {
     let expectedSignature: string | undefined;
     while (!address || !expectedSignature) {
       slot++;
-      const block = await connection.getConfirmedBlock(slot);
+
+      let block: ConfirmedBlock;
+      try {
+        block = await connection.getConfirmedBlock(slot);
+      } catch (e) {
+        continue;
+      }
+
       if (block.transactions.length > 0) {
         const {signature, publicKey} =
           block.transactions[0].transaction.signatures[0];
@@ -1180,7 +1188,14 @@ describe('Connection', () => {
     let expectedSignature: string | undefined;
     while (!address || !expectedSignature) {
       slot++;
-      const block = await connection.getConfirmedBlock(slot);
+
+      let block: ConfirmedBlock;
+      try {
+        block = await connection.getConfirmedBlock(slot);
+      } catch (e) {
+        continue;
+      }
+
       if (block.transactions.length > 0) {
         const {signature, publicKey} =
           block.transactions[0].transaction.signatures[0];
@@ -1283,7 +1298,14 @@ describe('Connection', () => {
     let confirmedTransaction: string | undefined;
     while (!confirmedTransaction) {
       slot++;
-      const block = await connection.getConfirmedBlock(slot);
+
+      let block: ConfirmedBlock;
+      try {
+        block = await connection.getConfirmedBlock(slot);
+      } catch (e) {
+        continue;
+      }
+
       for (const tx of block.transactions) {
         if (tx.transaction.signature) {
           confirmedTransaction = bs58.encode(tx.transaction.signature);
@@ -1699,7 +1721,14 @@ describe('Connection', () => {
     let confirmedTransaction: string | undefined;
     while (!confirmedTransaction) {
       slot++;
-      const block = await connection.getConfirmedBlock(slot);
+
+      let block: ConfirmedBlock;
+      try {
+        block = await connection.getConfirmedBlock(slot);
+      } catch (e) {
+        continue;
+      }
+
       for (const tx of block.transactions) {
         if (tx.transaction.signature) {
           confirmedTransaction = bs58.encode(tx.transaction.signature);
@@ -2091,9 +2120,17 @@ describe('Connection', () => {
 
     // Find a block that has a transaction
     // Compare data with parent
-    let x = 1;
-    while (x < 10) {
-      const block1 = await connection.getConfirmedBlock(x);
+    let slot = 0;
+    while (slot < 10) {
+      slot++;
+
+      let block1: ConfirmedBlock;
+      try {
+        block1 = await connection.getConfirmedBlock(slot);
+      } catch (e) {
+        continue;
+      }
+
       if (block1.transactions.length >= 1) {
         if (block1.parentSlot == 0) {
           expect(block1.previousBlockhash).to.eq(blockhash0);
@@ -2107,7 +2144,6 @@ describe('Connection', () => {
         expect(block1.transactions[0].transaction).not.to.be.null;
         break;
       }
-      x++;
     }
 
     await mockRpcResponse({
