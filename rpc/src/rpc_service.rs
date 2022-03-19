@@ -358,6 +358,7 @@ impl JsonRpcService {
                     read_only: !config.enable_bigtable_ledger_upload,
                     timeout: config.rpc_bigtable_timeout,
                     credential_path: None,
+                    instance_name: config.rpc_bigtable_instance_name.clone(),
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(

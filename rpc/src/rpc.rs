@@ -140,7 +140,7 @@ fn is_finalized(
         && (blockstore.is_root(slot) || bank.status_cache_ancestors().contains(&slot))
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub enable_cpi_and_log_storage: bool,
@@ -156,6 +156,30 @@ pub struct JsonRpcConfig {
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
+    pub rpc_bigtable_instance_name: String,
+}
+
+impl Default for JsonRpcConfig {
+    fn default() -> Self {
+        let rpc_bigtable_instance_name = solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string();
+        Self {
+            enable_rpc_transaction_history: false,
+            enable_cpi_and_log_storage: false,
+            faucet_addr: None,
+            health_check_slot_distance: 0,
+            enable_bigtable_ledger_storage: false,
+            enable_bigtable_ledger_upload: false,
+            max_multiple_accounts: None,
+            account_indexes: AccountSecondaryIndexes::default(),
+            rpc_threads: 0,
+            rpc_niceness_adj: 0,
+            rpc_bigtable_timeout: None,
+            full_api: false,
+            obsolete_v1_7_api: false,
+            rpc_scan_and_fix_roots: false,
+            rpc_bigtable_instance_name,
+        }
+    }
 }
 
 impl JsonRpcConfig {
