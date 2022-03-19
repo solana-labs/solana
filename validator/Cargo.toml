@@ -48,6 +48,7 @@ solana-rpc = { path = "../rpc", version = "=1.10.4" }
 solana-runtime = { path = "../runtime", version = "=1.10.4" }
 solana-sdk = { path = "../sdk", version = "=1.10.4" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.4" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.4" }
 solana-streamer = { path = "../streamer", version = "=1.10.4" }
 solana-test-validator = { path = "../test-validator", version = "=1.10.4" }
 solana-version = { path = "../version", version = "=1.10.4" }

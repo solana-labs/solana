@@ -165,10 +165,22 @@ impl JsonRpcConfig {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct RpcBigtableConfig {
     pub enable_bigtable_ledger_upload: bool,
+    pub bigtable_instance_name: String,
     pub timeout: Option<Duration>,
+}
+
+impl Default for RpcBigtableConfig {
+    fn default() -> Self {
+        let bigtable_instance_name = solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string();
+        Self {
+            enable_bigtable_ledger_upload: false,
+            bigtable_instance_name,
+            timeout: None,
+        }
+    }
 }
 
 #[derive(Clone)]
