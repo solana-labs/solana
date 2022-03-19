@@ -421,7 +421,7 @@ fn process_instruction(
                     &[(accounts[FROM_INDEX].key, true, true)],
                     vec![RETURN_OK],
                 );
-                // put the relavant account at the end of a larger account list
+                // put the relevant account at the end of a larger account list
                 let mut reordered_accounts = accounts.to_vec();
                 let account_info = reordered_accounts.remove(FROM_INDEX);
                 reordered_accounts.push(accounts[0].clone());
