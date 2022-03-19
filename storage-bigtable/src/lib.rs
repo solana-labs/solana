@@ -360,6 +360,23 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
     }
 }
 
+#[derive(Debug)]
+pub struct LedgerStorageConfig {
+    pub read_only: bool,
+    pub timeout: Option<std::time::Duration>,
+    pub credential_path: Option<String>,
+}
+
+impl Default for LedgerStorageConfig {
+    fn default() -> Self {
+        Self {
+            read_only: true,
+            timeout: None,
+            credential_path: None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct LedgerStorage {
     connection: bigtable::BigTableConnection,
@@ -371,6 +388,20 @@ impl LedgerStorage {
         timeout: Option<std::time::Duration>,
         credential_path: Option<String>,
     ) -> Result<Self> {
+        Self::new_with_config(LedgerStorageConfig {
+            read_only,
+            timeout,
+            credential_path,
+        })
+        .await
+    }
+
+    pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
+        let LedgerStorageConfig {
+            read_only,
+            timeout,
+            credential_path,
+        } = config;
         let connection =
             bigtable::BigTableConnection::new("solana-ledger", read_only, timeout, credential_path)
                 .await?;
