@@ -1210,6 +1210,14 @@ pub fn main() {
                 .help("Number of seconds before timing out RPC requests backed by BigTable"),
         )
         .arg(
+            Arg::with_name("rpc_bigtable_instance_name")
+                .long("rpc-bigtable-instance-name")
+                .takes_value(true)
+                .value_name("INSTANCE_NAME")
+                .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
+                .help("Name of the Bigtable instance to upload to")
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
                 .long("rpc-pubsub-worker-threads")
                 .takes_value(true)
@@ -2282,6 +2290,7 @@ pub fn main() {
     {
         Some(RpcBigtableConfig {
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
+            bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
