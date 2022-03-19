@@ -5,7 +5,7 @@ use {
 };
 
 /// A PohTimestamp records timing of the events during the processing of a slot
-/// the validator
+/// by the validator
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SlotPohTimestamp {
     /// Slot start time from poh
@@ -16,7 +16,7 @@ pub struct SlotPohTimestamp {
     pub full_time: u64,
 }
 
-/// fmt traits
+/// Display trait
 impl fmt::Display for SlotPohTimestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -28,12 +28,12 @@ impl fmt::Display for SlotPohTimestamp {
 }
 
 impl SlotPohTimestamp {
-    /// Return true if the timing points of all event are received.
+    /// Return true if the timing points of all events are received.
     pub fn is_complete(&self) -> bool {
         self.start_time != 0 && self.end_time != 0 && self.full_time != 0
     }
 
-    /// Update timing point
+    /// Update with timing point
     pub fn update(&mut self, timing_point: PohTimingPoint) {
         match timing_point {
             PohTimingPoint::PohSlotStart(ts) => self.start_time = ts,
