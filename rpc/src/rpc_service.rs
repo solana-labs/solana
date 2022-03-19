@@ -227,26 +227,32 @@ impl RequestMiddleware for RpcRequestMiddleware {
         trace!("request uri: {}", request.uri());
 
         if let Some(ref snapshot_config) = self.snapshot_config {
-            if request.uri().path() == "/snapshot.tar.bz2" || request.uri().path() == "/incremental-snapshot.tar.bz2" {
+            if request.uri().path() == "/snapshot.tar.bz2"
+                || request.uri().path() == "/incremental-snapshot.tar.bz2"
+            {
                 // Convenience redirect to the latest snapshot
-                let full_snapshot_archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_config.snapshot_archives_dir);
-                let snapshot_archive_info = if let Some(full_snapshot_archive_info) = full_snapshot_archive_info {
-                    if request.uri().path() == "/snapshot.tar.bz2" {
-                        Some(full_snapshot_archive_info.snapshot_archive_info().clone())
-                    } else {
-                        if let Some(incremental_snapshot_archive_info) =
-                        snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                            &snapshot_config.snapshot_archives_dir,
-                            full_snapshot_archive_info.slot(),
-                        ) {
-                            Some(incremental_snapshot_archive_info.snapshot_archive_info().clone())
+                let full_snapshot_archive_info =
+                    snapshot_utils::get_highest_full_snapshot_archive_info(
+                        &snapshot_config.snapshot_archives_dir,
+                    );
+                let snapshot_archive_info =
+                    if let Some(full_snapshot_archive_info) = full_snapshot_archive_info {
+                        if request.uri().path() == "/snapshot.tar.bz2" {
+                            Some(full_snapshot_archive_info.snapshot_archive_info().clone())
                         } else {
-                            None
+                            snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                                &snapshot_config.snapshot_archives_dir,
+                                full_snapshot_archive_info.slot(),
+                            )
+                            .map(|incremental_snapshot_archive_info| {
+                                incremental_snapshot_archive_info
+                                    .snapshot_archive_info()
+                                    .clone()
+                            })
                         }
-                    }
-                } else {
-                    None
-                };
+                    } else {
+                        None
+                    };
                 return if let Some(snapshot_archive_info) = snapshot_archive_info {
                     RpcRequestMiddleware::redirect(&format!(
                         "/{}",
