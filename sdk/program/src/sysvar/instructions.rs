@@ -2,12 +2,15 @@
 //! This account contains the serialized transaction instructions
 use crate::{
     account_info::AccountInfo,
+    impl_sysvar_get,
     instruction::{AccountMeta, Instruction},
     program_error::ProgramError,
     pubkey::Pubkey,
     sanitize::SanitizeError,
     serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
+    sysvar::Sysvar,
 };
+
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::serialize_utils::{append_slice, append_u16, append_u8},
@@ -15,9 +18,16 @@ use {
 };
 
 // Instructions Sysvar, dummy type, use the associated helpers instead of the Sysvar trait
+#[derive(Serialize, Clone, Deserialize, Debug, Default, PartialEq)]
 pub struct Instructions();
 
 crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instructions);
+
+impl Sysvar for Instructions {
+    impl_sysvar_get!(sol_get_instructions_sysvar);
+}
+
+
 
 // Construct the account data for the Instructions Sysvar
 #[cfg(not(target_arch = "bpf"))]
@@ -25,7 +35,7 @@ pub fn construct_instructions_data(instructions: &[BorrowedInstruction]) -> Vec<
     let mut data = serialize_instructions(instructions);
     // add room for current instruction index.
     data.resize(data.len() + 2, 0);
-
+    
     data
 }
 
@@ -119,7 +129,8 @@ pub fn load_current_index_checked(
     if !check_id(instruction_sysvar_account_info.key) {
         return Err(ProgramError::UnsupportedSysvar);
     }
-
+    let instruction_sysvar = solana_program::sysvar::instructions::try_borrow_data()?;
+    let a = Instructions::from_account_info(instruction_sysvar_account_info).unwrap().try_borrow_data()?;
     let instruction_sysvar = instruction_sysvar_account_info.try_borrow_data()?;
     let mut instr_fixed_data = [0u8; 2];
     let len = instruction_sysvar.len();
@@ -276,6 +287,7 @@ mod tests {
         let mut lamports = 0;
         let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
         let owner = crate::sysvar::id();
+        //mock sysvar acc
         let mut account_info = AccountInfo::new(
             &key,
             false,

@@ -10,6 +10,7 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
     sysvar::instructions,
+    sysvar::instructions::Instructions,
 };
 
 solana_program::entrypoint!(process_instruction);
@@ -23,7 +24,9 @@ fn process_instruction(
     }
 
     let secp_instruction_index = instruction_data[0];
-    let instructions_account = accounts.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
+    //let instructions_account = accounts.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
+    let instructions_account = solana_program::sysvar::instructions::Instructions::get().unwrap();
+
     assert_eq!(*instructions_account.key, instructions::id());
     let data_len = instructions_account.try_borrow_data()?.len();
     if data_len < 2 {

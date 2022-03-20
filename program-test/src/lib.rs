@@ -353,6 +353,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         )
     }
 
+    fn sol_get_instructions_sysvar(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar(
+            get_invoke_context().get_sysvar_cache().get_instructions(),
+            var_addr,
+        )
+    }
+
     fn sol_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(
             get_invoke_context().get_sysvar_cache().get_epoch_schedule(),

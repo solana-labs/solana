@@ -20,6 +20,7 @@ use {
             state::{Authorized, Lockup},
         },
         sysvar::clock::Clock,
+        sysvar::instructions::Instructions,
     },
 };
 
@@ -310,6 +311,11 @@ pub fn process_instruction(
                     custodian,
                 };
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
+
+                // apparently working here?
+                //let instructions = invoke_context.get_sysvar_cache().get_instructions()?;
+                let abc = instructions;
+                let a = sysvar::instructions::Instructions;
                 me.set_lockup(&lockup, &signers, &clock)
             } else {
                 Err(InstructionError::InvalidInstructionData)

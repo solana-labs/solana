@@ -5,6 +5,11 @@
 /solana-metrics.tar.bz2
 /target/
 /test-ledger/
+/test-validator/
+/bin/
+
+.crates.toml
+.crates2.json
 
 **/*.rs.bk
 .cargo

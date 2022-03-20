@@ -1,3 +1,5 @@
+use solana_sdk::instruction::Instruction;
+
 #[allow(deprecated)]
 use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use {
@@ -8,8 +10,8 @@ use {
         keyed_account::KeyedAccount,
         pubkey::Pubkey,
         sysvar::{
-            clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
-            stake_history::StakeHistory, Sysvar, SysvarId,
+            clock::Clock, epoch_schedule::EpochSchedule, instructions::Instructions, rent::Rent,
+            slot_hashes::SlotHashes, stake_history::StakeHistory, Sysvar, SysvarId,
         },
         transaction_context::{InstructionContext, TransactionContext},
     },
@@ -28,6 +30,7 @@ impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
 pub struct SysvarCache {
     clock: Option<Arc<Clock>>,
     epoch_schedule: Option<Arc<EpochSchedule>>,
+    instructions: Option<Arc<Instructions>>,
     #[allow(deprecated)]
     fees: Option<Arc<Fees>>,
     rent: Option<Arc<Rent>>,
@@ -46,6 +49,16 @@ impl SysvarCache {
 
     pub fn set_clock(&mut self, clock: Clock) {
         self.clock = Some(Arc::new(clock));
+    }
+
+    pub fn get_instructions(&self) -> Result<Arc<Instructions>, InstructionError> {
+        self.instructions
+            .clone()
+            .ok_or(InstructionError::UnsupportedSysvar)
+    }
+
+    pub fn set_instructions(&mut self, instructions: Instructions) {
+        self.instructions = Some(Arc::new(instructions));
     }
 
     pub fn get_epoch_schedule(&self) -> Result<Arc<EpochSchedule>, InstructionError> {
@@ -121,6 +134,13 @@ impl SysvarCache {
                 .and_then(|account| bincode::deserialize(account.data()).ok())
             {
                 self.set_clock(clock);
+            }
+        }
+        if self.get_instructions().is_err() {
+            if let Some(instructions) = load_sysvar_account(&Instructions::id())
+                .and_then(|account| bincode::deserialize(account.data()).ok())
+            {
+                self.set_instructions(instructions);
             }
         }
         if self.get_epoch_schedule().is_err() {
@@ -199,6 +219,14 @@ pub mod get_sysvar_with_account_check {
         invoke_context.get_sysvar_cache().get_clock()
     }
 
+    pub fn instructions(
+        keyed_account: &KeyedAccount,
+        invoke_context: &InvokeContext,
+    ) -> Result<Arc<Instructions>, InstructionError> {
+        check_sysvar_keyed_account::<Instructions>(keyed_account)?;
+        invoke_context.get_sysvar_cache().get_instructions()
+    }
+
     pub fn rent(
         keyed_account: &KeyedAccount,
         invoke_context: &InvokeContext,
@@ -261,6 +289,19 @@ pub mod get_sysvar_with_account_check2 {
             index_in_instruction,
         )?;
         invoke_context.get_sysvar_cache().get_clock()
+    }
+
+    pub fn instructions(
+        invoke_context: &InvokeContext,
+        instruction_context: &InstructionContext,
+        index_in_instruction: usize,
+    ) -> Result<Arc<Instructions>, InstructionError> {
+        check_sysvar_account::<Instructions>(
+            invoke_context.transaction_context,
+            instruction_context,
+            index_in_instruction,
+        )?;
+        invoke_context.get_sysvar_cache().get_instructions()
     }
 
     pub fn rent(

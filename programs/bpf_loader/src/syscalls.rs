@@ -183,6 +183,8 @@ pub fn register_syscalls(
 
     syscall_registry
         .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+        syscall_registry
+        .register_syscall_by_name(b"sol_get_instructions_sysvar", SyscallGetInstructionsSysvar::call)?;
     syscall_registry.register_syscall_by_name(
         b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
@@ -1187,6 +1189,38 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
         );
     }
 }
+// Get an Instructions Sysvar 
+struct SyscallGetInstructionsSysvar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetInstructionsSysvar<'a, 'b> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let mut invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow_mut()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_instructions(),
+            var_addr,
+            loader_id,
+            memory_mapping,
+            &mut invoke_context,
+        );
+    }
+}
+
 /// Get a EpochSchedule sysvar
 struct SyscallGetEpochScheduleSysvar<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
