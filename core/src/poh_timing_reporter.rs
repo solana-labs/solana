@@ -93,7 +93,7 @@ impl PohTimingReporter {
     }
 
     /// Process incoming PohTimingPoint from the channel
-    pub fn process(&mut self, slot: Slot, t: PohTimingPoint) {
+    pub fn process(&mut self, slot: Slot, t: PohTimingPoint) -> bool {
         let slot_timestamp = self
             .slot_timestamps
             .entry(slot)
@@ -104,6 +104,7 @@ impl PohTimingReporter {
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
             if slot_timestamp.is_complete() {
                 self.report(slot, slot_timestamp);
+                let _ = self.slot_timestamps.remove(&slot);
             }
         }
     }
@@ -120,12 +121,14 @@ mod test {
         let mut reporter = PohTimingReporter::default();
 
         // process all relevant PohTimingPoints for a slot
-        reporter.process(42, PohTimingPoint::PohSlotStart(100));
-        reporter.process(42, PohTimingPoint::PohSlotEnd(200));
-        reporter.process(42, PohTimingPoint::FullSlotReceived(150));
+        let complete = reporter.process(42, PohTimingPoint::PohSlotStart(100));
+        assert!(!complete);
+        let complete = reporter.process(42, PohTimingPoint::PohSlotEnd(200));
+        assert!(!complete);
+        let complete = reporter.process(42, PohTimingPoint::FullSlotReceived(150));
 
         // assert that the PohTiming is complete
-        assert!(reporter.is_complete(42));
+        assert!(complete);
     }
 
     #[test]
