@@ -19,7 +19,7 @@ use {
         message::{CompiledKeys, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
-        short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
+        short_vec, system_instruction, system_program, sysvar,
     },
     lazy_static::lazy_static,
     std::{convert::TryFrom, str::FromStr},
@@ -82,18 +82,15 @@ fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledIns
 /// redundantly specifying the fee-payer is not strictly required.
 // NOTE: Serialization-related changes must be paired with the custom serialization
 // for versioned messages in the `RemainingLegacyMessage` struct.
-#[wasm_bindgen]
 #[frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU")]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`.
     // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
-    #[wasm_bindgen(skip)]
     pub header: MessageHeader,
 
     /// All the account keys used by this transaction.
-    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
 
@@ -102,7 +99,6 @@ pub struct Message {
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
-    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
