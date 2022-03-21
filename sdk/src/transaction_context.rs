@@ -61,28 +61,6 @@ impl TransactionContext {
         }
     }
 
-    /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn deconstruct(
-        self,
-    ) -> (
-        Vec<TransactionAccount>,
-        Vec<Vec<InstructionContext>>,
-        TransactionReturnData,
-    ) {
-        (
-            Vec::from(Pin::into_inner(self.account_keys))
-                .into_iter()
-                .zip(
-                    Vec::from(Pin::into_inner(self.accounts))
-                        .into_iter()
-                        .map(|account| account.into_inner()),
-                )
-                .collect(),
-            self.instruction_trace,
-            self.return_data,
-        )
-    }
-
     /// Used in mock_process_instruction
     pub fn deconstruct_without_keys(self) -> Result<Vec<AccountSharedData>, InstructionError> {
         if !self.instruction_stack.is_empty() {
@@ -640,5 +618,29 @@ impl<'a> BorrowedAccount<'a> {
         self.instruction_context
             .is_writable(self.index_in_instruction)
             .unwrap_or_default()
+    }
+}
+
+/// Everything that needs to be recorded from a TransactionContext after execution
+pub struct TransactionRecord {
+    pub accounts: Vec<TransactionAccount>,
+    pub instruction_trace: InstructionTrace,
+    pub return_data: TransactionReturnData,
+}
+/// Used by the bank in the runtime to write back the processed accounts and recorded instructions
+impl From<TransactionContext> for TransactionRecord {
+    fn from(context: TransactionContext) -> Self {
+        Self {
+            accounts: Vec::from(Pin::into_inner(context.account_keys))
+                .into_iter()
+                .zip(
+                    Vec::from(Pin::into_inner(context.accounts))
+                        .into_iter()
+                        .map(|account| account.into_inner()),
+                )
+                .collect(),
+            instruction_trace: context.instruction_trace,
+            return_data: context.return_data,
+        }
     }
 }

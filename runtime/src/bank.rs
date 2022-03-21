@@ -131,7 +131,8 @@ use {
             TransactionVerificationMode, VersionedTransaction,
         },
         transaction_context::{
-            InstructionTrace, TransactionAccount, TransactionContext, TransactionReturnData,
+            InstructionTrace, TransactionAccount, TransactionContext, TransactionRecord,
+            TransactionReturnData,
         },
     },
     solana_stake_program::stake_state::{
@@ -3970,7 +3971,11 @@ impl Bank {
                     .ok()
             });
 
-        let (accounts, instruction_trace, mut return_data) = transaction_context.deconstruct();
+        let TransactionRecord {
+            accounts,
+            instruction_trace,
+            mut return_data,
+        } = transaction_context.into();
         loaded_transaction.accounts = accounts;
 
         let inner_instructions = if enable_cpi_recording {
