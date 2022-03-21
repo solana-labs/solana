@@ -544,7 +544,8 @@ mod test {
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
         // transfer amount
-        let transfer_amount: u64 = (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
+        let transfer_amount: u64 =
+            (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
 
         // create transfer data
         let transfer_data = TransferData::new(

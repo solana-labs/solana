@@ -784,7 +784,8 @@ mod test {
         let spendable_balance: u64 = u64::max_value();
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
-        let transfer_amount: u64 = (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
+        let transfer_amount: u64 =
+            (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
 
         let fee_parameters = FeeParameters {
             fee_rate_basis_points: 400,
