@@ -165,6 +165,20 @@ impl FeeRateGovernor {
         me
     }
 
+    pub fn copy_with_new_lamports_per_signature(
+        old: FeeRateGovernor,
+        lamports_per_signature: u64,
+    ) -> FeeRateGovernor {
+        FeeRateGovernor {
+            lamports_per_signature,
+            target_lamports_per_signature: old.target_lamports_per_signature,
+            target_signatures_per_slot: old.target_signatures_per_slot,
+            min_lamports_per_signature: old.min_lamports_per_signature,
+            max_lamports_per_signature: old.max_lamports_per_signature,
+            burn_percent: old.burn_percent,
+        }
+    }
+
     /// calculate unburned fee from a fee total, returns (unburned, burned)
     pub fn burn(&self, fees: u64) -> (u64, u64) {
         let burned = fees * u64::from(self.burn_percent) / 100;
