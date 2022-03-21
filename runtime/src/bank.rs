@@ -131,7 +131,7 @@ use {
             TransactionVerificationMode, VersionedTransaction,
         },
         transaction_context::{
-            InstructionTrace, TransactionAccount, TransactionContext, TransactionRecord,
+            ExecutionRecord, InstructionTrace, TransactionAccount, TransactionContext,
             TransactionReturnData,
         },
     },
@@ -3971,7 +3971,7 @@ impl Bank {
                     .ok()
             });
 
-        let TransactionRecord {
+        let ExecutionRecord {
             accounts,
             instruction_trace,
             mut return_data,

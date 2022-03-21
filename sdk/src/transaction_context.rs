@@ -622,13 +622,13 @@ impl<'a> BorrowedAccount<'a> {
 }
 
 /// Everything that needs to be recorded from a TransactionContext after execution
-pub struct TransactionRecord {
+pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
     pub instruction_trace: InstructionTrace,
     pub return_data: TransactionReturnData,
 }
 /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-impl From<TransactionContext> for TransactionRecord {
+impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
         Self {
             accounts: Vec::from(Pin::into_inner(context.account_keys))
