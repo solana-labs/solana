@@ -1,0 +1,1 @@
+#this file is added to test solana-accounts-disk build for PRs.
