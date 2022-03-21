@@ -1,5 +1,7 @@
 use {
-    crate::{tpu_connection::TpuConnection, udp_client::UdpTpuConnection},
+    crate::{
+        quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
+    },
     lazy_static::lazy_static,
     std::{
         collections::{hash_map::Entry, BTreeMap, HashMap},
@@ -23,6 +25,7 @@ struct ConnMap {
     // that seems non-"Rust-y" and low bang/buck. This is still pretty terrible though...
     last_used_times: BTreeMap<u64, SocketAddr>,
     ticks: u64,
+    use_quic: bool,
 }
 
 impl ConnMap {
@@ -31,12 +34,22 @@ impl ConnMap {
             map: HashMap::new(),
             last_used_times: BTreeMap::new(),
             ticks: 0,
+            use_quic: false,
         }
+    }
+
+    pub fn set_use_quic(&mut self, use_quic: bool) {
+        self.use_quic = use_quic;
     }
 }
 
 lazy_static! {
     static ref CONNECTION_MAP: Mutex<ConnMap> = Mutex::new(ConnMap::new());
+}
+
+pub fn set_use_quic(use_quic: bool) {
+    let mut map = (*CONNECTION_MAP).lock().unwrap();
+    map.set_use_quic(use_quic);
 }
 
 #[allow(dead_code)]
@@ -45,7 +58,7 @@ lazy_static! {
 pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sync + Send> {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
     let ticks = map.ticks;
-
+    let use_quic = map.use_quic;
     let (conn, target_ticks) = match map.map.entry(*addr) {
         Entry::Occupied(mut entry) => {
             let mut pair = entry.get_mut();
@@ -57,12 +70,15 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<dyn TpuConnection + 'static + Sy
             let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             // TODO: see https://github.com/solana-labs/solana/issues/23659
             // make it configurable (e.g. via the command line) whether to use UDP or Quic
-            let conn = Arc::new(UdpTpuConnection::new(send_socket, *addr));
+
+            let conn: Arc<dyn TpuConnection + 'static + Sync + Send> = if use_quic {
+                Arc::new(QuicTpuConnection::new(send_socket, *addr))
+            } else {
+                Arc::new(UdpTpuConnection::new(send_socket, *addr))
+            };
+
             entry.insert((conn.clone(), ticks));
-            (
-                conn as Arc<dyn TpuConnection + 'static + Sync + Send>,
-                ticks,
-            )
+            (conn, ticks)
         }
     };
 

@@ -75,7 +75,7 @@ use {
         },
     },
     solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo},
+        send_transaction_service::{SendTransactionService, TransactionInfo, DEFAULT_TPU_USE_QUIC},
         tpu_info::NullTpuInfo,
     },
     solana_storage_bigtable::Error as StorageError,
@@ -323,6 +323,7 @@ impl JsonRpcRequestProcessor {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
 
         Self {
@@ -6087,6 +6088,7 @@ pub mod tests {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
 
         let mut bad_transaction = system_transaction::transfer(
@@ -6352,6 +6354,7 @@ pub mod tests {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),

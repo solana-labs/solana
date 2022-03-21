@@ -9,6 +9,7 @@ use {
     console::style,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
+    send_transaction_service::DEFAULT_TPU_USE_QUIC,
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
@@ -456,6 +457,7 @@ pub fn main() {
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
+    let default_tpu_use_quic = &DEFAULT_TPU_USE_QUIC.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1143,6 +1145,14 @@ pub fn main() {
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
+        )
+        .arg(
+            Arg::with_name("tpu_use_quic")
+                .long("tpu-use-quic")
+                .takes_value(true)
+                .value_name("BOOLEAN")
+                .default_value(default_tpu_use_quic)
+                .help("When this is set to true, the system will use QUIC to send transactions."),
         )
         .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
@@ -2095,6 +2105,8 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
+    let tpu_use_quic = value_t_or_exit!(matches, "tpu_use_quic", bool);
+
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
         eprintln!(
@@ -2366,6 +2378,7 @@ pub fn main() {
                 "rpc_send_transaction_service_max_retries",
                 usize
             ),
+            use_quic: tpu_use_quic,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
