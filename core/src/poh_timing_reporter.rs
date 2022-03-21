@@ -105,8 +105,10 @@ impl PohTimingReporter {
             if slot_timestamp.is_complete() {
                 self.report(slot, slot_timestamp);
                 let _ = self.slot_timestamps.remove(&slot);
+                return true;
             }
         }
+        false
     }
 }
 
@@ -137,12 +139,14 @@ mod test {
         let mut reporter = PohTimingReporter::default();
 
         // process all relevant PohTimingPoints for a slot
-        reporter.process(42, PohTimingPoint::PohSlotStart(1647624609896));
-        reporter.process(42, PohTimingPoint::PohSlotEnd(1647624610286));
-        reporter.process(42, PohTimingPoint::FullSlotReceived(1647624610281));
+        let complete = reporter.process(42, PohTimingPoint::PohSlotStart(1647624609896));
+        assert!(!complete);
+        let complete = reporter.process(42, PohTimingPoint::PohSlotEnd(1647624610286));
+        assert!(!complete);
+        let complete = reporter.process(42, PohTimingPoint::FullSlotReceived(1647624610281));
 
         // assert that the PohTiming is complete
-        assert!(reporter.is_complete(42));
+        assert!(complete);
     }
 
     #[test]
