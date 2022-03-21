@@ -1,7 +1,7 @@
 use {
     crate::tower_storage::{SavedTowerVersions, TowerStorage},
     crossbeam_channel::Receiver,
-    solana_client::connection_cache::get_connection,
+    solana_client::connection_cache::send_wire_transaction,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
@@ -91,7 +91,7 @@ impl VotingService {
         let mut measure = Measure::start("vote_tx_send-ms");
         let target_address = target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
         let wire_vote_tx = bincode::serialize(vote_op.tx()).expect("vote serialization failure");
-        let _ = get_connection(&target_address).send_wire_transaction(&wire_vote_tx);
+        let _ = send_wire_transaction(&wire_vote_tx, &target_address);
         measure.stop();
         inc_new_counter_info!("vote_tx_send-ms", measure.as_ms() as usize);
 

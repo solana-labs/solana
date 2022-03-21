@@ -8,6 +8,7 @@ use {
     std::os::unix::io::AsRawFd,
 };
 use {
+    solana_sdk::transport::TransportError,
     std::{
         borrow::Borrow,
         io,
@@ -22,6 +23,12 @@ pub enum SendPktsError {
     /// IO Error during send: first error, num failed packets
     #[error("IO Error, some packets could not be sent")]
     IoError(io::Error, usize),
+}
+
+impl From<SendPktsError> for TransportError {
+    fn from(err: SendPktsError) -> Self {
+        Self::Custom(format!("{:?}", err))
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
