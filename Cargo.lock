@@ -4588,6 +4588,7 @@ dependencies = [
  "ed25519-dalek",
  "humantime",
  "indicatif",
+ "pretty-hex",
  "serde",
  "serde_json",
  "solana-account-decoder",

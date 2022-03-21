@@ -585,9 +585,13 @@ fn write_return_data<W: io::Write>(
 ) -> io::Result<()> {
     if let Some(return_data) = return_data {
         if !return_data.data.is_empty() {
-            writeln!(w, "{}Return Data:", prefix)?;
-            writeln!(w, "{}  Program: {}", prefix, return_data.program_id)?;
-            writeln!(w, "{}  Data: {:?}", prefix, return_data.data)?;
+            use pretty_hex::*;
+            writeln!(
+                w,
+                "{}Return Data from Program {}:",
+                prefix, return_data.program_id
+            )?;
+            writeln!(w, "{}  {:?}", prefix, return_data.data.hex_dump())?;
         }
     }
     Ok(())
@@ -807,9 +811,9 @@ Status: Ok
   Account 1 balance: ◎0.00001 -> ◎0.0000099
 Log Messages:
   Test message
-Return Data:
-  Program: 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR
-  Data: [1, 2, 3]
+Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
+  Length: 3 (0x3) bytes
+0000:   01 02 03                                             ...
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi        rent        -◎0.000000100     ◎0.000009900       \0
@@ -844,6 +848,10 @@ Rewards:
                 commission: None,
             }]),
             loaded_addresses,
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_from_array([2u8; 32]),
+                data: vec![1, 2, 3],
+            }),
         };
 
         let output = {
@@ -889,6 +897,9 @@ Status: Ok
   Account 3 balance: ◎0.00002
 Log Messages:
   Test message
+Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
+  Length: 3 (0x3) bytes
+0000:   01 02 03                                             ...
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8        rent        -◎0.000000100     ◎0.000014900       \0
