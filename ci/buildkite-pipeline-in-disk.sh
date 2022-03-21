@@ -137,7 +137,7 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage.sh \
       ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 40
+    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 50
     wait_step
   else
     annotate --style info --context test-coverage \
@@ -152,14 +152,14 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage-in-disk.sh \
       ; then
-    command_step coverage-in-disk ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 40
+    command_step coverage-in-disk ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 50
     wait_step
   else
     annotate --style info --context test-coverage \
       "Coverage skipped as no .rs files were modified"
   fi
   # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
+  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
   wait_step
 
   # BPF test suite
