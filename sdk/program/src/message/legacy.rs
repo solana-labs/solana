@@ -15,14 +15,14 @@ use {
     crate::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         hash::Hash,
-        instruction::{AccountMeta, CompiledInstruction, Instruction},
-        message::MessageHeader,
+        instruction::{CompiledInstruction, Instruction},
+        message::{CompiledKeys, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
     lazy_static::lazy_static,
-    std::{collections::BTreeSet, convert::TryFrom, str::FromStr},
+    std::{convert::TryFrom, str::FromStr},
 };
 
 lazy_static! {
@@ -64,113 +64,6 @@ fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction
 
 fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
     ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
-}
-
-/// A helper struct to collect pubkeys referenced by a set of instructions and read-only counts
-#[derive(Debug, PartialEq, Eq)]
-struct InstructionKeys {
-    pub signed_keys: Vec<Pubkey>,
-    pub unsigned_keys: Vec<Pubkey>,
-    pub num_readonly_signed_accounts: u8,
-    pub num_readonly_unsigned_accounts: u8,
-}
-
-impl InstructionKeys {
-    fn new(
-        signed_keys: Vec<Pubkey>,
-        unsigned_keys: Vec<Pubkey>,
-        num_readonly_signed_accounts: u8,
-        num_readonly_unsigned_accounts: u8,
-    ) -> Self {
-        Self {
-            signed_keys,
-            unsigned_keys,
-            num_readonly_signed_accounts,
-            num_readonly_unsigned_accounts,
-        }
-    }
-}
-
-/// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
-/// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
-/// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
-/// including program ids, are placed last in the set. No duplicates and order is preserved.
-fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
-    let programs: Vec<_> = get_program_ids(instructions)
-        .iter()
-        .map(|program_id| AccountMeta {
-            pubkey: *program_id,
-            is_signer: false,
-            is_writable: false,
-        })
-        .collect();
-    let mut keys_and_signed: Vec<_> = instructions
-        .iter()
-        .flat_map(|ix| ix.accounts.iter())
-        .collect();
-    keys_and_signed.extend(&programs);
-    keys_and_signed.sort_by(|x, y| {
-        y.is_signer
-            .cmp(&x.is_signer)
-            .then(y.is_writable.cmp(&x.is_writable))
-    });
-
-    let payer_account_meta;
-    if let Some(payer) = payer {
-        payer_account_meta = AccountMeta {
-            pubkey: *payer,
-            is_signer: true,
-            is_writable: true,
-        };
-        keys_and_signed.insert(0, &payer_account_meta);
-    }
-
-    let mut unique_metas: Vec<AccountMeta> = vec![];
-    for account_meta in keys_and_signed {
-        // Promote to writable if a later AccountMeta requires it
-        if let Some(x) = unique_metas
-            .iter_mut()
-            .find(|x| x.pubkey == account_meta.pubkey)
-        {
-            x.is_writable |= account_meta.is_writable;
-            continue;
-        }
-        unique_metas.push(account_meta.clone());
-    }
-
-    let mut signed_keys = vec![];
-    let mut unsigned_keys = vec![];
-    let mut num_readonly_signed_accounts = 0;
-    let mut num_readonly_unsigned_accounts = 0;
-    for account_meta in unique_metas {
-        if account_meta.is_signer {
-            signed_keys.push(account_meta.pubkey);
-            if !account_meta.is_writable {
-                num_readonly_signed_accounts += 1;
-            }
-        } else {
-            unsigned_keys.push(account_meta.pubkey);
-            if !account_meta.is_writable {
-                num_readonly_unsigned_accounts += 1;
-            }
-        }
-    }
-    InstructionKeys::new(
-        signed_keys,
-        unsigned_keys,
-        num_readonly_signed_accounts,
-        num_readonly_unsigned_accounts,
-    )
-}
-
-/// Return program ids referenced by all instructions.  No duplicates and order is preserved.
-fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
-    let mut set = BTreeSet::new();
-    instructions
-        .iter()
-        .map(|ix| ix.program_id)
-        .filter(|&program_id| set.insert(program_id))
-        .collect()
 }
 
 /// A Solana transaction message (legacy).
@@ -397,20 +290,16 @@ impl Message {
         payer: Option<&Pubkey>,
         blockhash: &Hash,
     ) -> Self {
-        let InstructionKeys {
-            mut signed_keys,
-            unsigned_keys,
-            num_readonly_signed_accounts,
-            num_readonly_unsigned_accounts,
-        } = get_keys(instructions, payer);
-        let num_required_signatures = signed_keys.len() as u8;
-        signed_keys.extend(&unsigned_keys);
-        let instructions = compile_instructions(instructions, &signed_keys);
+        let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
+        let (header, account_keys) = compiled_keys
+            .try_into_message_components()
+            .expect("overflow when compiling message keys");
+        let instructions = compile_instructions(instructions, &account_keys);
         Self::new_with_compiled_instructions(
-            num_required_signatures,
-            num_readonly_signed_accounts,
-            num_readonly_unsigned_accounts,
-            signed_keys,
+            header.num_required_signatures,
+            header.num_readonly_signed_accounts,
+            header.num_readonly_unsigned_accounts,
+            account_keys,
             *blockhash,
             instructions,
         )
@@ -714,16 +603,6 @@ mod tests {
     };
 
     #[test]
-    fn test_message_unique_program_ids() {
-        let program_id0 = Pubkey::default();
-        let program_ids = get_program_ids(&[
-            Instruction::new_with_bincode(program_id0, &0, vec![]),
-            Instruction::new_with_bincode(program_id0, &0, vec![]),
-        ]);
-        assert_eq!(program_ids, vec![program_id0]);
-    }
-
-    #[test]
     fn test_builtin_program_keys() {
         let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
         assert_eq!(keys.len(), 10);
@@ -745,174 +624,6 @@ mod tests {
     }
 
     #[test]
-    fn test_message_unique_program_ids_not_adjacent() {
-        let program_id0 = Pubkey::default();
-        let program_id1 = Pubkey::new_unique();
-        let program_ids = get_program_ids(&[
-            Instruction::new_with_bincode(program_id0, &0, vec![]),
-            Instruction::new_with_bincode(program_id1, &0, vec![]),
-            Instruction::new_with_bincode(program_id0, &0, vec![]),
-        ]);
-        assert_eq!(program_ids, vec![program_id0, program_id1]);
-    }
-
-    #[test]
-    fn test_message_unique_program_ids_order_preserved() {
-        let program_id0 = Pubkey::new_unique();
-        let program_id1 = Pubkey::default(); // Key less than program_id0
-        let program_ids = get_program_ids(&[
-            Instruction::new_with_bincode(program_id0, &0, vec![]),
-            Instruction::new_with_bincode(program_id1, &0, vec![]),
-            Instruction::new_with_bincode(program_id0, &0, vec![]),
-        ]);
-        assert_eq!(program_ids, vec![program_id0, program_id1]);
-    }
-
-    #[test]
-    fn test_message_unique_keys_both_signed() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_signed_and_payer() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[Instruction::new_with_bincode(
-                program_id,
-                &0,
-                vec![AccountMeta::new(id0, true)],
-            )],
-            Some(&id0),
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_unsigned_and_payer() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[Instruction::new_with_bincode(
-                program_id,
-                &0,
-                vec![AccountMeta::new(id0, false)],
-            )],
-            Some(&id0),
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_one_signed() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_one_readonly_signed() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id0, true)],
-                ),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            ],
-            None,
-        );
-
-        // Ensure the key is no longer readonly
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_one_readonly_unsigned() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id0, false)],
-                ),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-            ],
-            None,
-        );
-
-        // Ensure the key is no longer readonly
-        assert_eq!(keys, InstructionKeys::new(vec![], vec![id0], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_order_preserved() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::new_unique();
-        let id1 = Pubkey::default(); // Key less than id0
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id1, false)]),
-            ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![], vec![id0, id1], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_not_adjacent() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let id1 = Pubkey::new_unique();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id1, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![id1], 0, 0));
-    }
-
-    #[test]
-    fn test_message_signed_keys_first() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let id1 = Pubkey::new_unique();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id1, true)]),
-            ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id1], vec![id0], 0, 0));
-    }
-
-    #[test]
     // Ensure there's a way to calculate the number of required signatures.
     fn test_message_signed_keys_len() {
         let program_id = Pubkey::default();
@@ -924,36 +635,6 @@ mod tests {
         let ix = Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(&[ix], Some(&id0));
         assert_eq!(message.header.num_required_signatures, 1);
-    }
-
-    #[test]
-    fn test_message_readonly_keys_last() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default(); // Identical key/program_id should be de-duped
-        let id1 = Pubkey::new_unique();
-        let id2 = Pubkey::new_unique();
-        let id3 = Pubkey::new_unique();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id0, false)],
-                ),
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id1, true)],
-                ),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id2, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id3, true)]),
-            ],
-            None,
-        );
-        assert_eq!(
-            keys,
-            InstructionKeys::new(vec![id3, id1], vec![id2, id0], 1, 1)
-        );
     }
 
     #[test]
@@ -1005,32 +686,6 @@ mod tests {
         );
         let message = Message::new(&[ix], Some(&payer));
         assert_eq!(message.header.num_required_signatures, 2);
-    }
-
-    #[test]
-    fn test_message_program_last() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::new_unique();
-        let id1 = Pubkey::new_unique();
-        let keys = get_keys(
-            &[
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id0, false)],
-                ),
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id1, true)],
-                ),
-            ],
-            None,
-        );
-        assert_eq!(
-            keys,
-            InstructionKeys::new(vec![id1], vec![id0, program_id], 1, 2)
-        );
     }
 
     #[test]
@@ -1103,7 +758,7 @@ mod tests {
         );
         assert_eq!(
             message.get_account_keys_by_lock_type(),
-            (vec![&id1, &id0], vec![&id3, &id2, &program_id])
+            (vec![&id1, &id0], vec![&id3, &program_id, &id2])
         );
     }
 
@@ -1199,7 +854,7 @@ mod tests {
         let message = Message::new(&instructions, Some(&id1));
         assert_eq!(
             message.hash(),
-            Hash::from_str("CXRH7GHLieaQZRUjH1mpnNnUZQtU4V4RpJpAFgy77i3z").unwrap()
+            Hash::from_str("7VWCF4quo2CcWQFNUayZiorxpiR5ix8YzLebrXKf3fMF").unwrap()
         )
     }
 }

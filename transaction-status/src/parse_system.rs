@@ -202,348 +202,423 @@ fn check_num_system_accounts(accounts: &[u8], num: usize) -> Result<(), ParseIns
 mod test {
     use {
         super::*,
-        solana_sdk::{message::Message, pubkey::Pubkey, system_instruction},
+        solana_sdk::{message::Message, pubkey::Pubkey, system_instruction, sysvar},
     };
 
     #[test]
-    #[allow(clippy::same_item_push)]
-    fn test_parse_system_instruction() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..6 {
-            keys.push(solana_sdk::pubkey::new_rand());
-        }
-
+    fn test_parse_system_create_account_ix() {
         let lamports = 55;
         let space = 128;
+        let from_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::new_unique();
 
-        let instruction =
-            system_instruction::create_account(&keys[0], &keys[1], lamports, space, &keys[2]);
+        let instruction = system_instruction::create_account(
+            &from_pubkey,
+            &to_pubkey,
+            lamports,
+            space,
+            &owner_pubkey,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "createAccount".to_string(),
                 info: json!({
-                    "source": keys[0].to_string(),
-                    "newAccount": keys[1].to_string(),
+                    "source": from_pubkey.to_string(),
+                    "newAccount": to_pubkey.to_string(),
                     "lamports": lamports,
-                    "owner": keys[2].to_string(),
+                    "owner": owner_pubkey.to_string(),
                     "space": space,
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+    }
 
-        let instruction = system_instruction::assign(&keys[0], &keys[1]);
+    #[test]
+    fn test_parse_system_assign_ix() {
+        let account_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::new_unique();
+        let instruction = system_instruction::assign(&account_pubkey, &owner_pubkey);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..1], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "assign".to_string(),
                 info: json!({
-                    "account": keys[0].to_string(),
-                    "owner": keys[1].to_string(),
+                    "account": account_pubkey.to_string(),
+                    "owner": owner_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_system(&message.instructions[0], &AccountKeys::new(&[], None)).is_err());
+    }
 
-        let instruction = system_instruction::transfer(&keys[0], &keys[1], lamports);
+    #[test]
+    fn test_parse_system_transfer_ix() {
+        let lamports = 55;
+        let from_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
+        let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "transfer".to_string(),
                 info: json!({
-                    "source": keys[0].to_string(),
-                    "destination": keys[1].to_string(),
+                    "source": from_pubkey.to_string(),
+                    "destination": to_pubkey.to_string(),
                     "lamports": lamports,
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_parse_system_create_account_with_seed_ix() {
+        let lamports = 55;
+        let space = 128;
         let seed = "test_seed";
+        let from_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
+        let base_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::new_unique();
         let instruction = system_instruction::create_account_with_seed(
-            &keys[0], &keys[2], &keys[1], seed, lamports, space, &keys[3],
+            &from_pubkey,
+            &to_pubkey,
+            &base_pubkey,
+            seed,
+            lamports,
+            space,
+            &owner_pubkey,
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "createAccountWithSeed".to_string(),
                 info: json!({
-                    "source": keys[0].to_string(),
-                    "newAccount": keys[2].to_string(),
+                    "source": from_pubkey.to_string(),
+                    "newAccount": to_pubkey.to_string(),
                     "lamports": lamports,
-                    "base": keys[1].to_string(),
+                    "base": base_pubkey.to_string(),
                     "seed": seed,
-                    "owner": keys[3].to_string(),
+                    "owner": owner_pubkey.to_string(),
                     "space": space,
                 }),
             }
         );
 
-        let seed = "test_seed";
-        let instruction = system_instruction::create_account_with_seed(
-            &keys[0], &keys[1], &keys[0], seed, lamports, space, &keys[3],
-        );
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_system(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "createAccountWithSeed".to_string(),
-                info: json!({
-                    "source": keys[0].to_string(),
-                    "newAccount": keys[1].to_string(),
-                    "lamports": lamports,
-                    "base": keys[0].to_string(),
-                    "seed": seed,
-                    "owner": keys[3].to_string(),
-                    "space": space,
-                }),
-            }
-        );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+    }
 
-        let instruction = system_instruction::allocate(&keys[0], space);
+    #[test]
+    fn test_parse_system_allocate_ix() {
+        let space = 128;
+        let account_pubkey = Pubkey::new_unique();
+        let instruction = system_instruction::allocate(&account_pubkey, space);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..1], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "allocate".to_string(),
                 info: json!({
-                    "account": keys[0].to_string(),
+                    "account": account_pubkey.to_string(),
                     "space": space,
                 }),
             }
         );
         assert!(parse_system(&message.instructions[0], &AccountKeys::new(&[], None)).is_err());
+    }
 
-        let instruction =
-            system_instruction::allocate_with_seed(&keys[1], &keys[0], seed, space, &keys[2]);
+    #[test]
+    fn test_parse_system_allocate_with_seed_ix() {
+        let space = 128;
+        let seed = "test_seed";
+        let account_pubkey = Pubkey::new_unique();
+        let base_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::new_unique();
+        let instruction = system_instruction::allocate_with_seed(
+            &account_pubkey,
+            &base_pubkey,
+            seed,
+            space,
+            &owner_pubkey,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "allocateWithSeed".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "base": keys[0].to_string(),
+                    "account": account_pubkey.to_string(),
+                    "base": base_pubkey.to_string(),
                     "seed": seed,
-                    "owner": keys[2].to_string(),
+                    "owner": owner_pubkey.to_string(),
                     "space": space,
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+    }
 
-        let instruction = system_instruction::assign_with_seed(&keys[1], &keys[0], seed, &keys[2]);
+    #[test]
+    fn test_parse_system_assign_with_seed_ix() {
+        let seed = "test_seed";
+        let account_pubkey = Pubkey::new_unique();
+        let base_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::new_unique();
+        let instruction = system_instruction::assign_with_seed(
+            &account_pubkey,
+            &base_pubkey,
+            seed,
+            &owner_pubkey,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "assignWithSeed".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "base": keys[0].to_string(),
+                    "account": account_pubkey.to_string(),
+                    "base": base_pubkey.to_string(),
                     "seed": seed,
-                    "owner": keys[2].to_string(),
+                    "owner": owner_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_parse_system_transfer_with_seed_ix() {
+        let lamports = 55;
+        let seed = "test_seed";
+        let from_pubkey = Pubkey::new_unique();
+        let from_base_pubkey = Pubkey::new_unique();
+        let from_owner_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
         let instruction = system_instruction::transfer_with_seed(
-            &keys[1],
-            &keys[0],
+            &from_pubkey,
+            &from_base_pubkey,
             seed.to_string(),
-            &keys[3],
-            &keys[2],
+            &from_owner_pubkey,
+            &to_pubkey,
             lamports,
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "transferWithSeed".to_string(),
                 info: json!({
-                    "source": keys[1].to_string(),
-                    "sourceBase": keys[0].to_string(),
+                    "source": from_pubkey.to_string(),
+                    "sourceBase": from_base_pubkey.to_string(),
                     "sourceSeed": seed,
-                    "sourceOwner": keys[3].to_string(),
+                    "sourceOwner": from_owner_pubkey.to_string(),
                     "lamports": lamports,
-                    "destination": keys[2].to_string()
+                    "destination": to_pubkey.to_string()
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
-    fn test_parse_system_instruction_nonce() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..5 {
-            keys.push(solana_sdk::pubkey::new_rand());
-        }
+    fn test_parse_system_advance_nonce_account_ix() {
+        let nonce_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
 
-        let instruction = system_instruction::advance_nonce_account(&keys[1], &keys[0]);
+        let instruction =
+            system_instruction::advance_nonce_account(&nonce_pubkey, &authorized_pubkey);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "advanceNonce".to_string(),
                 info: json!({
-                    "nonceAccount": keys[1].to_string(),
-                    "recentBlockhashesSysvar": keys[2].to_string(),
-                    "nonceAuthority": keys[0].to_string(),
+                    "nonceAccount": nonce_pubkey.to_string(),
+                    "recentBlockhashesSysvar": sysvar::recent_blockhashes::ID.to_string(),
+                    "nonceAuthority": authorized_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_parse_system_withdraw_nonce_account_ix() {
+        let nonce_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
 
         let lamports = 55;
-        let instruction =
-            system_instruction::withdraw_nonce_account(&keys[1], &keys[0], &keys[2], lamports);
+        let instruction = system_instruction::withdraw_nonce_account(
+            &nonce_pubkey,
+            &authorized_pubkey,
+            &to_pubkey,
+            lamports,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..5], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "withdrawFromNonce".to_string(),
                 info: json!({
-                    "nonceAccount": keys[1].to_string(),
-                    "destination": keys[2].to_string(),
-                    "recentBlockhashesSysvar": keys[3].to_string(),
-                    "rentSysvar": keys[4].to_string(),
-                    "nonceAuthority": keys[0].to_string(),
+                    "nonceAccount": nonce_pubkey.to_string(),
+                    "destination": to_pubkey.to_string(),
+                    "recentBlockhashesSysvar": sysvar::recent_blockhashes::ID.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
+                    "nonceAuthority": authorized_pubkey.to_string(),
                     "lamports": lamports
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..4], None)
+            &AccountKeys::new(&message.account_keys[0..4], None)
         )
         .is_err());
+    }
 
-        let instructions =
-            system_instruction::create_nonce_account(&keys[0], &keys[1], &keys[4], lamports);
+    #[test]
+    fn test_parse_system_initialize_nonce_ix() {
+        let lamports = 55;
+        let from_pubkey = Pubkey::new_unique();
+        let nonce_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+
+        let instructions = system_instruction::create_nonce_account(
+            &from_pubkey,
+            &nonce_pubkey,
+            &authorized_pubkey,
+            lamports,
+        );
         let message = Message::new(&instructions, None);
         assert_eq!(
             parse_system(
                 &message.instructions[1],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeNonce".to_string(),
                 info: json!({
-                    "nonceAccount": keys[1].to_string(),
-                    "recentBlockhashesSysvar": keys[2].to_string(),
-                    "rentSysvar": keys[3].to_string(),
-                    "nonceAuthority": keys[4].to_string(),
+                    "nonceAccount": nonce_pubkey.to_string(),
+                    "recentBlockhashesSysvar": sysvar::recent_blockhashes::ID.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
+                    "nonceAuthority": authorized_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[1],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+    }
 
-        let instruction = system_instruction::authorize_nonce_account(&keys[1], &keys[0], &keys[2]);
+    #[test]
+    fn test_parse_system_authorize_nonce_account_ix() {
+        let nonce_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let new_authority_pubkey = Pubkey::new_unique();
+
+        let instruction = system_instruction::authorize_nonce_account(
+            &nonce_pubkey,
+            &authorized_pubkey,
+            &new_authority_pubkey,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeNonce".to_string(),
                 info: json!({
-                    "nonceAccount": keys[1].to_string(),
-                    "newAuthorized": keys[2].to_string(),
-                    "nonceAuthority": keys[0].to_string(),
+                    "nonceAccount": nonce_pubkey.to_string(),
+                    "newAuthorized": new_authority_pubkey.to_string(),
+                    "nonceAuthority": authorized_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
     }

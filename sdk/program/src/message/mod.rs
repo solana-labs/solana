@@ -37,6 +37,7 @@
 //! types continue to be exposed to Solana programs, for backwards compatibility
 //! reasons.
 
+mod compiled_keys;
 pub mod legacy;
 
 #[cfg(not(target_arch = "bpf"))]
@@ -49,6 +50,7 @@ mod non_bpf_modules {
     pub use {account_keys::*, sanitized::*, versions::*};
 }
 
+use compiled_keys::*;
 pub use legacy::Message;
 #[cfg(not(target_arch = "bpf"))]
 pub use non_bpf_modules::*;
