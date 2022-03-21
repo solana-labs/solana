@@ -604,16 +604,16 @@ impl<C: 'static + TpuConnection> SyncClient for ThinClient<C> {
 
 impl<C: 'static + TpuConnection> AsyncClient for ThinClient<C> {
     fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
-        let wire_transaction =
-            bincode::serialize(&transaction).expect("transaction serialization failed");
+        let transaction = VersionedTransaction::from(transaction);
         self.tpu_connection()
-            .send_wire_transaction(&wire_transaction)?;
+            .serialize_and_send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
 
     fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
         let batch: Vec<VersionedTransaction> = transactions.into_iter().map(Into::into).collect();
-        self.tpu_connection().send_transaction_batch(&batch)?;
+        self.tpu_connection()
+            .par_serialize_and_send_transaction_batch(&batch)?;
         Ok(())
     }
 
