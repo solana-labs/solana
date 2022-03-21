@@ -1509,6 +1509,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.storage.set_startup(value);
     }
 
+    pub fn get_startup_remaining_items_to_flush_estimate(&self) -> usize {
+        self.storage.get_startup_remaining_items_to_flush_estimate()
+    }
+
     /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`
     ///   call `callback`
     pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
