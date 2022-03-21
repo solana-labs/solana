@@ -29,6 +29,7 @@ pub struct BucketMapHolderStats {
     pub updates_in_mem: AtomicU64,
     pub items: AtomicU64,
     pub items_us: AtomicU64,
+    pub failed_to_evict: AtomicU64,
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
@@ -317,6 +318,11 @@ impl BucketMapHolderStats {
                 (
                     "entry_missing_us",
                     self.entry_missing_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "failed_to_evict",
+                    self.failed_to_evict.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (

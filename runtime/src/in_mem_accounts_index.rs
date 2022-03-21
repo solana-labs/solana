@@ -1104,6 +1104,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             return;
         }
 
+        let mut failed = 0;
+
         // skip any keys that are held in memory because of ranges being held
         let ranges = self.cache_ranges_held.read().unwrap().clone();
         if !ranges.is_empty() {
@@ -1118,6 +1120,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
             });
             if !move_age.is_empty() {
+                failed += move_age.len();
                 self.move_ages_to_future(next_age_on_failure, current_age, &move_age);
             }
         }
@@ -1131,6 +1134,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let v = occupied.get();
                     if Arc::strong_count(v) > 1 {
                         // someone is holding the value arc's ref count and could modify it, so do not evict
+                        failed += 1;
                         v.try_exchange_age(next_age_on_failure, current_age);
                         continue;
                     }
@@ -1142,11 +1146,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // marked dirty or bumped in age after we looked above
                         // these evictions will be handled in later passes (at later ages)
                         // but, at startup, everything is ready to age out if it isn't dirty
+                        failed += 1;
                         continue;
                     }
 
                     if stop_evictions_changes_at_start != self.get_stop_evictions_changes() {
                         // ranges were changed
+                        failed += 1;
                         v.try_exchange_age(next_age_on_failure, current_age);
                         continue;
                     }
@@ -1163,6 +1169,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.stats()
             .insert_or_delete_mem_count(false, self.bin, evicted);
         Self::update_stat(&self.stats().flush_entries_evicted_from_mem, evicted as u64);
+        Self::update_stat(&self.stats().failed_to_evict, failed as u64);
     }
 
     pub fn stats(&self) -> &BucketMapHolderStats {
