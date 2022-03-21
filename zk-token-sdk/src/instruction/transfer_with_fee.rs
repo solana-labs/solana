@@ -49,8 +49,8 @@ const TRANSFER_DELTA_BITS: usize = 64;
 
 #[cfg(not(target_arch = "bpf"))]
 lazy_static::lazy_static! {
-    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode(1_u64 <<
-                                                                         TRANSFER_AMOUNT_LO_NEGATED_BITS - 1);
+    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode((1_u64 <<
+                                                                         TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
     pub static ref COMMITMENT_MAX_FEE_BASIS_POINTS: PedersenCommitment = Pedersen::encode(MAX_FEE_BASIS_POINTS);
 }
 
@@ -425,7 +425,7 @@ impl TransferWithFeeProof {
             )
         } else {
             let transfer_amount_lo_negated =
-                (1 << TRANSFER_AMOUNT_LO_NEGATED_BITS - 1) - transfer_amount_lo as u64;
+                ((1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1) - transfer_amount_lo as u64;
             let opening_lo_negated = &PedersenOpening::default() - opening_lo;
 
             RangeProof::new(
@@ -722,18 +722,12 @@ fn compute_delta_commitment_and_opening(
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
     let delta_commitment = fee_commitment * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_lo_hi_commitments(
-            commitment_lo,
-            commitment_hi,
-            TRANSFER_AMOUNT_LO_BITS,
-        ) * &fee_rate_scalar);
+        - &(&combine_lo_hi_commitments(commitment_lo, commitment_hi, TRANSFER_AMOUNT_LO_BITS)
+            * &fee_rate_scalar);
 
     let opening_delta = opening_fee * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_lo_hi_openings(
-            opening_lo,
-            opening_hi,
-            TRANSFER_AMOUNT_LO_BITS,
-        ) * &fee_rate_scalar);
+        - &(&combine_lo_hi_openings(opening_lo, opening_hi, TRANSFER_AMOUNT_LO_BITS)
+            * &fee_rate_scalar);
 
     (delta_commitment, opening_delta)
 }
@@ -748,11 +742,8 @@ fn compute_delta_commitment(
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
     fee_commitment * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_lo_hi_commitments(
-            commitment_lo,
-            commitment_hi,
-            TRANSFER_AMOUNT_LO_BITS,
-        ) * &fee_rate_scalar)
+        - &(&combine_lo_hi_commitments(commitment_lo, commitment_hi, TRANSFER_AMOUNT_LO_BITS)
+            * &fee_rate_scalar)
 }
 
 #[cfg(test)]
