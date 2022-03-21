@@ -457,6 +457,23 @@ impl PohRecorder {
             reset_bank.slot()
         );
 
+        // send poh end for current slot and poh start for new slot
+        if let Some(ref sender) = self.poh_timing_point_sender {
+            info!("PohTimingPoint:End {}", self.start_slot());
+            let _ = sender.try_send((
+                self.start_slot(),
+                None,
+                PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
+            ));
+
+            info!("PohTimingPoint:Start {}", reset_bank.slot());
+            let _ = sender.try_send((
+                reset_bank.slot(),
+                None,
+                PohTimingPoint::PohSlotStart(solana_sdk::timing::timestamp()),
+            ));
+        }
+
         std::mem::swap(&mut cache, &mut self.tick_cache);
 
         self.start_bank = reset_bank;
