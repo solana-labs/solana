@@ -7,6 +7,7 @@
 use {
     crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
     log::*,
+    solana_program_runtime::timings::ProgramTiming,
     solana_sdk::{
         instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
         system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
@@ -78,7 +79,8 @@ impl CostModel {
             .map(|(key, cost)| (key, cost))
             .chain(BUILT_IN_INSTRUCTION_COSTS.iter())
             .for_each(|(program_id, cost)| {
-                self.upsert_instruction_cost(program_id, *cost);
+                self.instruction_execution_cost_table
+                    .initialize(program_id, cost);
             });
     }
 
@@ -95,9 +97,13 @@ impl CostModel {
         tx_cost
     }
 
-    pub fn upsert_instruction_cost(&mut self, program_key: &Pubkey, cost: u64) {
+    pub fn upsert_instruction_cost(
+        &mut self,
+        program_key: &Pubkey,
+        program_timing: &ProgramTiming,
+    ) {
         self.instruction_execution_cost_table
-            .upsert(program_key, cost);
+            .upsert(program_key, program_timing)
     }
 
     pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
@@ -260,11 +266,29 @@ mod tests {
         let mut testee = CostModel::default();
 
         let known_key = Pubkey::from_str("known11111111111111111111111111111111111111").unwrap();
-        testee.upsert_instruction_cost(&known_key, 100);
+        testee.upsert_instruction_cost(
+            &known_key,
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: 100,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         // find cost for known programs
         assert_eq!(100, testee.find_instruction_cost(&known_key));
 
-        testee.upsert_instruction_cost(&bpf_loader::id(), 1999);
+        testee.upsert_instruction_cost(
+            &bpf_loader::id(),
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: 1999,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         assert_eq!(1999, testee.find_instruction_cost(&bpf_loader::id()));
 
         // unknown program is assigned with default cost
@@ -340,7 +364,16 @@ mod tests {
         let expected_cost = 8;
 
         let mut testee = CostModel::default();
-        testee.upsert_instruction_cost(&system_program::id(), expected_cost);
+        testee.upsert_instruction_cost(
+            &system_program::id(),
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: expected_cost,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         assert_eq!(
             expected_cost,
             testee.get_transaction_cost(&simple_transaction)
@@ -368,7 +401,16 @@ mod tests {
         let expected_cost = program_cost * 2;
 
         let mut testee = CostModel::default();
-        testee.upsert_instruction_cost(&system_program::id(), program_cost);
+        testee.upsert_instruction_cost(
+            &system_program::id(),
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: program_cost,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         assert_eq!(expected_cost, testee.get_transaction_cost(&tx));
     }
 
@@ -451,7 +493,16 @@ mod tests {
         );
 
         // insert instruction cost to table
-        cost_model.upsert_instruction_cost(&key1, cost1);
+        cost_model.upsert_instruction_cost(
+            &key1,
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: cost1,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
 
         // now it is known instruction with known cost
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
@@ -471,7 +522,16 @@ mod tests {
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
-        cost_model.upsert_instruction_cost(&system_program::id(), expected_execution_cost);
+        cost_model.upsert_instruction_cost(
+            &system_program::id(),
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: expected_execution_cost,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
@@ -488,11 +548,29 @@ mod tests {
         let mut cost_model = CostModel::default();
 
         // insert instruction cost to table
-        cost_model.upsert_instruction_cost(&key1, cost1);
+        cost_model.upsert_instruction_cost(
+            &key1,
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: cost1,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
 
         // update instruction cost
-        cost_model.upsert_instruction_cost(&key1, cost2);
+        cost_model.upsert_instruction_cost(
+            &key1,
+            &ProgramTiming {
+                accumulated_us: 0,
+                accumulated_units: cost2,
+                count: 1,
+                errored_txs_compute_consumed: vec![],
+                total_errored_units: 0,
+            },
+        );
         assert_eq!(updated_cost, cost_model.find_instruction_cost(&key1));
     }
 
@@ -534,8 +612,26 @@ mod tests {
                 if i == 5 {
                     thread::spawn(move || {
                         let mut cost_model = cost_model.write().unwrap();
-                        cost_model.upsert_instruction_cost(&prog1, cost1);
-                        cost_model.upsert_instruction_cost(&prog2, cost2);
+                        cost_model.upsert_instruction_cost(
+                            &prog1,
+                            &ProgramTiming {
+                                accumulated_us: 0,
+                                accumulated_units: cost1,
+                                count: 1,
+                                errored_txs_compute_consumed: vec![],
+                                total_errored_units: 0,
+                            },
+                        );
+                        cost_model.upsert_instruction_cost(
+                            &prog2,
+                            &ProgramTiming {
+                                accumulated_us: 0,
+                                accumulated_units: cost2,
+                                count: 1,
+                                errored_txs_compute_consumed: vec![],
+                                total_errored_units: 0,
+                            },
+                        );
                     })
                 } else {
                     thread::spawn(move || {

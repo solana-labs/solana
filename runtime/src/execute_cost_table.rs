@@ -4,8 +4,14 @@
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
 use {
-    log::*, solana_program_runtime::compute_budget::DEFAULT_UNITS, solana_sdk::pubkey::Pubkey,
-    std::collections::HashMap,
+    crate::cost_calculation_metrics::CostCalculationMetrics,
+    log::*,
+    solana_program_runtime::{compute_budget, timings::ProgramTiming},
+    solana_sdk::pubkey::Pubkey,
+    std::{
+        collections::{hash_map::Entry, HashMap},
+        time::Duration,
+    },
 };
 
 // prune is rather expensive op, free up bulk space in each operation
@@ -16,12 +22,14 @@ const PRUNE_RATIO: f64 = 0.75;
 const OCCURRENCES_WEIGHT: i64 = 100;
 
 const DEFAULT_CAPACITY: usize = 1024;
+const MAX_METRICS_REPORT_PER_SEC: usize = 100;
 
-#[derive(AbiExample, Debug)]
+#[derive(Debug)]
 pub struct ExecuteCostTable {
     capacity: usize,
     table: HashMap<Pubkey, u64>,
     occurrences: HashMap<Pubkey, (usize, u128)>,
+    cost_calculation_metrics: CostCalculationMetrics,
 }
 
 impl Default for ExecuteCostTable {
@@ -36,6 +44,10 @@ impl ExecuteCostTable {
             capacity: cap,
             table: HashMap::with_capacity(cap),
             occurrences: HashMap::with_capacity(cap),
+            cost_calculation_metrics: CostCalculationMetrics::new(
+                MAX_METRICS_REPORT_PER_SEC,
+                Duration::from_secs(1),
+            ),
         }
     }
 
@@ -45,7 +57,7 @@ impl ExecuteCostTable {
 
     /// default program cost, set to ComputeBudget::DEFAULT_UNITS
     pub fn get_default_units(&self) -> u64 {
-        DEFAULT_UNITS as u64
+        compute_budget::DEFAULT_UNITS as u64
     }
 
     /// average cost of all recorded programs
@@ -80,17 +92,34 @@ impl ExecuteCostTable {
         self.table.get(key)
     }
 
+    pub fn initialize(&mut self, key: &Pubkey, cost: &u64) {
+        self.table.insert(*key, *cost);
+    }
+
     /// update-or-insert should be infallible. Query the result of upsert,
     /// often requires additional calculation, should be lazy.
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
+    pub fn upsert(&mut self, key: &Pubkey, program_timing: &ProgramTiming) {
         let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
         }
 
-        let program_cost = self.table.entry(*key).or_insert(value);
-        *program_cost = (*program_cost + value) / 2;
+        let value = program_timing.accumulated_units / program_timing.count as u64;
+        match self.table.entry(*key) {
+            Entry::Occupied(mut entry) => {
+                let result = entry.get_mut();
+                *result = (*result + value) / 2;
+
+                if Self::is_large_change(value, *result) {
+                    self.cost_calculation_metrics
+                        .report(key, program_timing, *result);
+                }
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+            }
+        };
 
         let (count, timestamp) = self
             .occurrences
@@ -98,6 +127,13 @@ impl ExecuteCostTable {
             .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
         *timestamp = Self::micros_since_epoch();
+    }
+
+    /// Simple calculation anomaly check, return True if calculation result is
+    /// LARGE_CHANGE_THRESHOLD times larger than input data itself;
+    fn is_large_change(input: u64, calculated_value: u64) -> bool {
+        const LARGE_CHANGE_THRESHOLD: u64 = 20;
+        calculated_value / input > LARGE_CHANGE_THRESHOLD
     }
 
     /// prune the old programs so the table contains `new_size` of records,
@@ -153,6 +189,16 @@ impl ExecuteCostTable {
 mod tests {
     use super::*;
 
+    fn make_program_timing_for_cost(cost: u64) -> ProgramTiming {
+        ProgramTiming {
+            accumulated_us: 0,
+            accumulated_units: cost,
+            count: 1,
+            errored_txs_compute_consumed: vec![],
+            total_errored_units: 0,
+        }
+    }
+
     #[test]
     fn test_execute_cost_table_prune_simple_table() {
         solana_logger::setup();
@@ -163,9 +209,9 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        testee.upsert(&key1, 1);
-        testee.upsert(&key2, 2);
-        testee.upsert(&key3, 3);
+        testee.upsert(&key1, &make_program_timing_for_cost(1));
+        testee.upsert(&key2, &make_program_timing_for_cost(2));
+        testee.upsert(&key3, &make_program_timing_for_cost(3));
 
         testee.prune_to(&(capacity - 1));
 
@@ -190,10 +236,10 @@ mod tests {
         // would still satisfy as key1 has enough occurrences to compensate
         // its age.
         for i in 0..1000 {
-            testee.upsert(&key1, i);
+            testee.upsert(&key1, &make_program_timing_for_cost(i));
         }
-        testee.upsert(&key2, 2);
-        testee.upsert(&key3, 3);
+        testee.upsert(&key2, &make_program_timing_for_cost(2));
+        testee.upsert(&key3, &make_program_timing_for_cost(3));
 
         testee.prune_to(&(capacity - 1));
 
@@ -218,14 +264,14 @@ mod tests {
         assert!(testee.get_cost(&key1).is_none());
 
         // insert one record
-        testee.upsert(&key1, cost1);
+        testee.upsert(&key1, &make_program_timing_for_cost(cost1));
         assert_eq!(1, testee.get_count());
         assert_eq!(cost1, testee.get_average_units());
         assert_eq!(cost1, testee.get_statistical_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
-        testee.upsert(&key2, cost2);
+        testee.upsert(&key2, &make_program_timing_for_cost(cost2));
         assert_eq!(2, testee.get_count());
         assert_eq!((cost1 + cost2) / 2_u64, testee.get_average_units());
         assert_eq!(cost2, testee.get_statistical_mode_units());
@@ -233,7 +279,7 @@ mod tests {
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // update 1st record
-        testee.upsert(&key1, cost2);
+        testee.upsert(&key1, &make_program_timing_for_cost(cost2));
         assert_eq!(2, testee.get_count());
         assert_eq!(
             ((cost1 + cost2) / 2 + cost2) / 2_u64,
@@ -260,18 +306,18 @@ mod tests {
         let cost4: u64 = 130;
 
         // insert one record
-        testee.upsert(&key1, cost1);
+        testee.upsert(&key1, &make_program_timing_for_cost(cost1));
         assert_eq!(1, testee.get_count());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
-        testee.upsert(&key2, cost2);
+        testee.upsert(&key2, &make_program_timing_for_cost(cost2));
         assert_eq!(2, testee.get_count());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // insert 3rd record, pushes out the oldest (eg 1st) record
-        testee.upsert(&key3, cost3);
+        testee.upsert(&key3, &make_program_timing_for_cost(cost3));
         assert_eq!(2, testee.get_count());
         assert_eq!((cost2 + cost3) / 2_u64, testee.get_average_units());
         assert_eq!(cost3, testee.get_statistical_mode_units());
@@ -281,8 +327,8 @@ mod tests {
 
         // update 2nd record, so the 3rd becomes the oldest
         // add 4th record, pushes out 3rd key
-        testee.upsert(&key2, cost1);
-        testee.upsert(&key4, cost4);
+        testee.upsert(&key2, &make_program_timing_for_cost(cost1));
+        testee.upsert(&key4, &make_program_timing_for_cost(cost4));
         assert_eq!(
             ((cost1 + cost2) / 2 + cost4) / 2_u64,
             testee.get_average_units()

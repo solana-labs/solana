@@ -26,6 +26,7 @@ pub mod cache_hash_data;
 pub mod cache_hash_data_stats;
 pub mod commitment;
 pub mod contains;
+pub mod cost_calculation_metrics;
 pub mod cost_model;
 pub mod cost_tracker;
 pub mod epoch_stakes;
