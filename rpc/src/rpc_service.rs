@@ -50,6 +50,8 @@ use {
     tokio_util::codec::{BytesCodec, FramedRead},
 };
 
+const FULL_SNAPSHOT_REQUEST_PATH: &str = "/snapshot.tar.bz2";
+const INCREMENTAL_SNAPSHOT_REQUEST_PATH: &str = "/incremental-snapshot.tar.bz2";
 const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
 
 pub struct JsonRpcService {
@@ -227,8 +229,8 @@ impl RequestMiddleware for RpcRequestMiddleware {
         trace!("request uri: {}", request.uri());
 
         if let Some(ref snapshot_config) = self.snapshot_config {
-            if request.uri().path() == "/snapshot.tar.bz2"
-                || request.uri().path() == "/incremental-snapshot.tar.bz2"
+            if request.uri().path() == FULL_SNAPSHOT_REQUEST_PATH
+                || request.uri().path() == INCREMENTAL_SNAPSHOT_REQUEST_PATH
             {
                 // Convenience redirect to the latest snapshot
                 let full_snapshot_archive_info =
@@ -237,7 +239,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                     );
                 let snapshot_archive_info =
                     if let Some(full_snapshot_archive_info) = full_snapshot_archive_info {
-                        if request.uri().path() == "/snapshot.tar.bz2" {
+                        if request.uri().path() == FULL_SNAPSHOT_REQUEST_PATH {
                             Some(full_snapshot_archive_info.snapshot_archive_info().clone())
                         } else {
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
