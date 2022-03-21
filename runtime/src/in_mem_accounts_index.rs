@@ -1123,42 +1123,43 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let mut evicted = 0;
-        // consider chunking these so we don't hold the write lock too long
-        let mut map = self.map().write().unwrap();
-        for k in evictions {
-            if let Entry::Occupied(occupied) = map.entry(k) {
-                let v = occupied.get();
-                if Arc::strong_count(v) > 1 {
-                    // someone is holding the value arc's ref count and could modify it, so do not evict
-                    v.try_exchange_age(next_age_on_failure, current_age);
-                    continue;
-                }
+        // chunk these so we don't hold the write lock too long
+        for evictions in evictions.chunks(50) {
+            let mut map = self.map().write().unwrap();
+            for k in evictions {
+                if let Entry::Occupied(occupied) = map.entry(*k) {
+                    let v = occupied.get();
+                    if Arc::strong_count(v) > 1 {
+                        // someone is holding the value arc's ref count and could modify it, so do not evict
+                        v.try_exchange_age(next_age_on_failure, current_age);
+                        continue;
+                    }
 
-                if v.dirty()
-                    || (!randomly_evicted
-                        && !Self::should_evict_based_on_age(current_age, v, startup))
-                {
-                    // marked dirty or bumped in age after we looked above
-                    // these evictions will be handled in later passes (at later ages)
-                    // but, at startup, everything is ready to age out if it isn't dirty
-                    continue;
-                }
+                    if v.dirty()
+                        || (!randomly_evicted
+                            && !Self::should_evict_based_on_age(current_age, v, startup))
+                    {
+                        // marked dirty or bumped in age after we looked above
+                        // these evictions will be handled in later passes (at later ages)
+                        // but, at startup, everything is ready to age out if it isn't dirty
+                        continue;
+                    }
 
-                if stop_evictions_changes_at_start != self.get_stop_evictions_changes() {
-                    // ranges were changed
-                    v.try_exchange_age(next_age_on_failure, current_age);
-                    continue;
-                }
+                    if stop_evictions_changes_at_start != self.get_stop_evictions_changes() {
+                        // ranges were changed
+                        v.try_exchange_age(next_age_on_failure, current_age);
+                        continue;
+                    }
 
-                // all conditions for eviction succeeded, so really evict item from in-mem cache
-                evicted += 1;
-                occupied.remove();
+                    // all conditions for eviction succeeded, so really evict item from in-mem cache
+                    evicted += 1;
+                    occupied.remove();
+                }
+            }
+            if map.is_empty() {
+                map.shrink_to_fit();
             }
         }
-        if map.is_empty() {
-            map.shrink_to_fit();
-        }
-        drop(map);
         self.stats()
             .insert_or_delete_mem_count(false, self.bin, evicted);
         Self::update_stat(&self.stats().flush_entries_evicted_from_mem, evicted as u64);
