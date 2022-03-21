@@ -104,7 +104,6 @@ impl PohTimingReporter {
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
             if slot_timestamp.is_complete() {
                 self.report(slot, slot_timestamp);
-                //let _ = self.slot_timestamps.remove(&slot);
             }
         }
     }
