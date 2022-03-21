@@ -93,22 +93,31 @@ impl PohTimingReporter {
     }
 
     /// Process incoming PohTimingPoint from the channel
-    pub fn process(&mut self, slot: Slot, t: PohTimingPoint) -> bool {
+    pub fn process(&mut self, slot: Slot, root_slot: Option<Slot>, t: PohTimingPoint) -> bool {
+        let mut completed = false;
         let slot_timestamp = self
             .slot_timestamps
             .entry(slot)
             .or_insert_with(SlotPohTimestamp::default);
 
         slot_timestamp.update(t);
-
         if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
             if slot_timestamp.is_complete() {
                 self.report(slot, slot_timestamp);
-                let _ = self.slot_timestamps.remove(&slot);
-                return true;
+                completed = true;
             }
         }
-        false
+
+        // delete slots that are older than the root_slot
+        if let Some(root_slot) = root_slot {
+            self.slot_timestamps.retain(|&k, _| k >= root_slot);
+        }
+        completed
+    }
+
+    /// Return the size of slot_timestamps in memory
+    pub fn timestamp_size(&self) -> usize {
+        self.slot_timestamps.len()
     }
 }
 
@@ -122,15 +131,29 @@ mod test {
         // create a reporter
         let mut reporter = PohTimingReporter::default();
 
-        // process all relevant PohTimingPoints for a slot
-        let complete = reporter.process(42, PohTimingPoint::PohSlotStart(100));
+        // process all relevant PohTimingPoints for slot 42
+        let complete = reporter.process(42, None, PohTimingPoint::PohSlotStart(100));
         assert!(!complete);
-        let complete = reporter.process(42, PohTimingPoint::PohSlotEnd(200));
+        let complete = reporter.process(42, None, PohTimingPoint::PohSlotEnd(200));
         assert!(!complete);
-        let complete = reporter.process(42, PohTimingPoint::FullSlotReceived(150));
-
+        let complete = reporter.process(42, None, PohTimingPoint::FullSlotReceived(150));
         // assert that the PohTiming is complete
         assert!(complete);
+
+        // Move root to slot 43
+        let root = Some(43);
+
+        // process all relevant PohTimingPoints for slot 45
+        let complete = reporter.process(45, None, PohTimingPoint::PohSlotStart(100));
+        assert!(!complete);
+        let complete = reporter.process(45, None, PohTimingPoint::PohSlotEnd(200));
+        assert!(!complete);
+        let complete = reporter.process(45, root, PohTimingPoint::FullSlotReceived(150));
+        // assert that the PohTiming is complete
+        assert!(complete);
+
+        // assert that only one timestamp is kept
+        assert_eq!(reporter.timestamp_size(), 1)
     }
 
     #[test]
@@ -139,11 +162,11 @@ mod test {
         let mut reporter = PohTimingReporter::default();
 
         // process all relevant PohTimingPoints for a slot
-        let complete = reporter.process(42, PohTimingPoint::PohSlotStart(1647624609896));
+        let complete = reporter.process(42, None, PohTimingPoint::PohSlotStart(1647624609896));
         assert!(!complete);
-        let complete = reporter.process(42, PohTimingPoint::PohSlotEnd(1647624610286));
+        let complete = reporter.process(42, None, PohTimingPoint::PohSlotEnd(1647624610286));
         assert!(!complete);
-        let complete = reporter.process(42, PohTimingPoint::FullSlotReceived(1647624610281));
+        let complete = reporter.process(42, None, PohTimingPoint::FullSlotReceived(1647624610281));
 
         // assert that the PohTiming is complete
         assert!(complete);

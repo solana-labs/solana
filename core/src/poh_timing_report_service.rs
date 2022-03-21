@@ -18,7 +18,8 @@ use {
 /// Timeout to wait on the poh timing points from the channel
 const POH_TIMING_RECEIVER_TIMEOUT_MILLISECONDS: u64 = 1000;
 
-pub type PohTimingReceiver = Receiver<(Slot, PohTimingPoint)>;
+/// Receiver of PohTimingPoint in format of (slot, Option<root_slot>, timingpoint)
+pub type PohTimingReceiver = Receiver<(Slot, Option<Slot>, PohTimingPoint)>;
 
 /// The `poh_timing_report_service` receives signals of relevant timing points
 /// during the processing of a slot, (i.e. from blockstore and poh), aggregate and
@@ -37,10 +38,10 @@ impl PohTimingReportService {
                 if exit_signal.load(Ordering::Relaxed) {
                     break;
                 }
-                if let Ok((slot, timing_point)) = receiver.recv_timeout(Duration::from_millis(
-                    POH_TIMING_RECEIVER_TIMEOUT_MILLISECONDS,
-                )) {
-                    poh_timing_reporter.process(slot, timing_point);
+                if let Ok((slot, root_slot, timing_point)) = receiver.recv_timeout(
+                    Duration::from_millis(POH_TIMING_RECEIVER_TIMEOUT_MILLISECONDS),
+                ) {
+                    poh_timing_reporter.process(slot, root_slot, timing_point);
                 }
             })
             .unwrap();
@@ -66,9 +67,9 @@ mod test {
             PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
 
         // Send PohTimingPoints
-        let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotStart(100)));
-        let _ = poh_timing_point_sender.send((42, PohTimingPoint::PohSlotEnd(200)));
-        let _ = poh_timing_point_sender.send((42, PohTimingPoint::FullSlotReceived(150)));
+        let _ = poh_timing_point_sender.send((42, None, PohTimingPoint::PohSlotStart(100)));
+        let _ = poh_timing_point_sender.send((42, None, PohTimingPoint::PohSlotEnd(200)));
+        let _ = poh_timing_point_sender.send((42, None, PohTimingPoint::FullSlotReceived(150)));
 
         // Shutdown the service
         exit.store(true, Ordering::Relaxed);

@@ -208,7 +208,7 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntry>,
-    pub poh_timing_point_sender: Option<Sender<(Slot, PohTimingPoint)>>,
+    pub poh_timing_point_sender: Option<Sender<(Slot, Option<Slot>, PohTimingPoint)>>,
     leader_first_tick_height_including_grace_ticks: Option<u64>,
     leader_last_tick_height: u64, // zero if none
     grace_ticks: u64,
@@ -490,6 +490,7 @@ impl PohRecorder {
             if let Some(slot) = self.working_slot() {
                 let _ = sender.try_send((
                     slot,
+                    None,
                     PohTimingPoint::PohSlotStart(solana_sdk::timing::timestamp()),
                 ));
             }
@@ -588,6 +589,7 @@ impl PohRecorder {
                     if let Some(ref sender) = self.poh_timing_point_sender {
                         let _ = sender.try_send((
                             slot,
+                            None,
                             PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
                         ));
                     }

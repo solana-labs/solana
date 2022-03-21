@@ -175,7 +175,7 @@ pub struct Blockstore {
     insert_shreds_lock: Mutex<()>,
     pub new_shreds_signals: Vec<Sender<bool>>,
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
-    pub shred_timing_point_sender: Option<Sender<(Slot, PohTimingPoint)>>,
+    pub shred_timing_point_sender: Option<Sender<(Slot, Option<Slot>, PohTimingPoint)>>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
     slots_stats: Mutex<SlotsStats>,
@@ -2022,6 +2022,7 @@ impl Blockstore {
             if let Some(ref sender) = self.shred_timing_point_sender {
                 let _ = sender.try_send((
                     slot,
+                    Some(self.last_root()),
                     PohTimingPoint::FullSlotReceived(solana_sdk::timing::timestamp()),
                 ));
             }

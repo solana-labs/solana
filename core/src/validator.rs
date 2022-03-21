@@ -1267,7 +1267,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
-    poh_timing_point_sender: Option<Sender<(Slot, PohTimingPoint)>>,
+    poh_timing_point_sender: Option<Sender<(Slot, Option<Slot>, PohTimingPoint)>>,
 ) -> (
     GenesisConfig,
     BankForks,

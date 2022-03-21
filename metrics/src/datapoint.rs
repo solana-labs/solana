@@ -147,6 +147,7 @@ macro_rules! datapoint_trace {
     };
 }
 
+/// PohTimingPoint. Each TimingPoint is annotated a timestamp in milliseconds.
 #[derive(Debug, Clone)]
 pub enum PohTimingPoint {
     PohSlotStart(u64),
