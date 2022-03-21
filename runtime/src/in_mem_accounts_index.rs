@@ -1027,6 +1027,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             Ok(_) => {
                                 // successfully written to disk
                                 flush_entries_updated_on_disk += 1;
+                                break;
                             }
                             Err(err) => {
                                 // disk needs to resize. This item did not get resized. Resize and try again.
