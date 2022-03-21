@@ -16,7 +16,7 @@ use {
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
-        message::{AccountKeys, CompiledKeys, MessageHeader},
+        message::{CompiledKeys, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
@@ -60,6 +60,10 @@ fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction
         data: ix.data.clone(),
         accounts,
     }
+}
+
+fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
+    ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
 }
 
 /// A Solana transaction message (legacy).
@@ -287,16 +291,15 @@ impl Message {
         blockhash: &Hash,
     ) -> Self {
         let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
-        let (header, static_keys) = compiled_keys
+        let (header, account_keys) = compiled_keys
             .try_into_message_components()
             .expect("overflow when compiling message keys");
-        let account_keys = AccountKeys::new(&static_keys, None);
-        let instructions = account_keys.compile_instructions(instructions);
+        let instructions = compile_instructions(instructions, &account_keys);
         Self::new_with_compiled_instructions(
             header.num_required_signatures,
             header.num_readonly_signed_accounts,
             header.num_readonly_unsigned_accounts,
-            static_keys,
+            account_keys,
             *blockhash,
             instructions,
         )
