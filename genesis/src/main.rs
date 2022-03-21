@@ -2,7 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_utils::{
         input_parsers::{
             cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime,
@@ -144,32 +144,33 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_cluster_type = "mainnet-beta";
     let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("creation_time")
+            Arg::new("creation_time")
                 .long("creation-time")
                 .value_name("RFC3339 DATE TIME")
-                .validator(is_rfc3339_datetime)
+                .validator(|s| is_rfc3339_datetime(s))
                 .takes_value(true)
                 .help("Time when the bootstrap validator will start the cluster [default: current system time]"),
         )
         .arg(
-            Arg::with_name("bootstrap_validator")
-                .short("b")
+            Arg::new("bootstrap_validator")
+                .short('b')
                 .long("bootstrap-validator")
                 .value_name("IDENTITY_PUBKEY VOTE_PUBKEY STAKE_PUBKEY")
                 .takes_value(true)
-                .validator(is_pubkey_or_keypair)
+                .validator(|s| is_pubkey_or_keypair(s))
                 .number_of_values(3)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .required(true)
                 .help("The bootstrap validator's identity, vote and stake pubkeys"),
         )
         .arg(
-            Arg::with_name("ledger_path")
-                .short("l")
+            Arg::new("ledger_path")
+                .short('l')
                 .long("ledger")
                 .value_name("DIR")
                 .takes_value(true)
@@ -177,37 +178,37 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Use directory as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("faucet_lamports")
-                .short("t")
+            Arg::new("faucet_lamports")
+                .short('t')
                 .long("faucet-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
                 .help("Number of lamports to assign to the faucet"),
         )
         .arg(
-            Arg::with_name("faucet_pubkey")
-                .short("m")
+            Arg::new("faucet_pubkey")
+                .short('m')
                 .long("faucet-pubkey")
                 .value_name("PUBKEY")
                 .takes_value(true)
-                .validator(is_pubkey_or_keypair)
+                .validator(|s| is_pubkey_or_keypair(s))
                 .requires("faucet_lamports")
                 .default_value(&default_faucet_pubkey)
                 .help("Path to file containing the faucet's pubkey"),
         )
         .arg(
-            Arg::with_name("bootstrap_stake_authorized_pubkey")
+            Arg::new("bootstrap_stake_authorized_pubkey")
                 .long("bootstrap-stake-authorized-pubkey")
                 .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
                 .takes_value(true)
-                .validator(is_pubkey_or_keypair)
+                .validator(|s| is_pubkey_or_keypair(s))
                 .help(
                     "Path to file containing the pubkey authorized to manage the bootstrap \
                      validator's stake [default: --bootstrap-validator IDENTITY_PUBKEY]",
                 ),
         )
         .arg(
-            Arg::with_name("bootstrap_validator_lamports")
+            Arg::new("bootstrap_validator_lamports")
                 .long("bootstrap-validator-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -215,7 +216,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the bootstrap validator"),
         )
         .arg(
-            Arg::with_name("bootstrap_validator_stake_lamports")
+            Arg::new("bootstrap_validator_stake_lamports")
                 .long("bootstrap-validator-stake-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -223,7 +224,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the bootstrap validator's stake account"),
         )
         .arg(
-            Arg::with_name("target_lamports_per_signature")
+            Arg::new("target_lamports_per_signature")
                 .long("target-lamports-per-signature")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -234,7 +235,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("lamports_per_byte_year")
+            Arg::new("lamports_per_byte_year")
                 .long("lamports-per-byte-year")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -245,7 +246,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("rent_exemption_threshold")
+            Arg::new("rent_exemption_threshold")
                 .long("rent-exemption-threshold")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -256,34 +257,34 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("rent_burn_percentage")
+            Arg::new("rent_burn_percentage")
                 .long("rent-burn-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(default_rent_burn_percentage)
                 .help("percentage of collected rent to burn")
-                .validator(is_valid_percentage),
+                .validator(|s| is_valid_percentage(s)),
         )
         .arg(
-            Arg::with_name("fee_burn_percentage")
+            Arg::new("fee_burn_percentage")
                 .long("fee-burn-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(default_fee_burn_percentage)
                 .help("percentage of collected fee to burn")
-                .validator(is_valid_percentage),
+                .validator(|s| is_valid_percentage(s)),
         )
         .arg(
-            Arg::with_name("vote_commission_percentage")
+            Arg::new("vote_commission_percentage")
                 .long("vote-commission-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value("100")
                 .help("percentage of vote commission")
-                .validator(is_valid_percentage),
+                .validator(|s| is_valid_percentage(s)),
         )
         .arg(
-            Arg::with_name("target_signatures_per_slot")
+            Arg::new("target_signatures_per_slot")
                 .long("target-signatures-per-slot")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -296,14 +297,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("target_tick_duration")
+            Arg::new("target_tick_duration")
                 .long("target-tick-duration")
                 .value_name("MILLIS")
                 .takes_value(true)
                 .help("The target tick rate of the cluster in milliseconds"),
         )
         .arg(
-            Arg::with_name("hashes_per_tick")
+            Arg::new("hashes_per_tick")
                 .long("hashes-per-tick")
                 .value_name("NUM_HASHES|\"auto\"|\"sleep\"")
                 .takes_value(true)
@@ -316,7 +317,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("ticks_per_slot")
+            Arg::new("ticks_per_slot")
                 .long("ticks-per-slot")
                 .value_name("TICKS")
                 .takes_value(true)
@@ -324,15 +325,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("The number of ticks in a slot"),
         )
         .arg(
-            Arg::with_name("slots_per_epoch")
+            Arg::new("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
-                .validator(is_slot)
+                .validator(|s| is_slot(s))
                 .takes_value(true)
                 .help("The number of slots in an epoch"),
         )
         .arg(
-            Arg::with_name("enable_warmup_epochs")
+            Arg::new("enable_warmup_epochs")
                 .long("enable-warmup-epochs")
                 .help(
                     "When enabled epochs start short and will grow. \
@@ -340,15 +341,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("primordial_accounts_file")
+            Arg::new("primordial_accounts_file")
                 .long("primordial-accounts-file")
                 .value_name("FILENAME")
                 .takes_value(true)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .help("The location of pubkey for primordial accounts and balance"),
         )
         .arg(
-            Arg::with_name("cluster_type")
+            Arg::new("cluster_type")
                 .long("cluster-type")
                 .possible_values(&ClusterType::STRINGS)
                 .takes_value(true)
@@ -358,7 +360,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("max_genesis_archive_unpacked_size")
+            Arg::new("max_genesis_archive_unpacked_size")
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -368,16 +370,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("bpf_program")
+            Arg::new("bpf_program")
                 .long("bpf-program")
                 .value_name("ADDRESS BPF_PROGRAM.SO")
                 .takes_value(true)
                 .number_of_values(3)
-                .multiple(true)
+                .multiple_occurrences(true).multiple_values(true)
                 .help("Install a BPF program at the given address"),
         )
         .arg(
-            Arg::with_name("inflation")
+            Arg::new("inflation")
                 .required(false)
                 .long("inflation")
                 .takes_value(true)
@@ -389,13 +391,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
 
     let rent = Rent {
-        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
-        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
-        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
+        lamports_per_byte_year: matches.value_of_t_or_exit("lamports_per_byte_year"),
+        exemption_threshold: matches.value_of_t_or_exit("rent_exemption_threshold"),
+        burn_percent: matches.value_of_t_or_exit("rent_burn_percentage"),
     };
 
-    fn rent_exempt_check(matches: &ArgMatches<'_>, name: &str, exempt: u64) -> io::Result<u64> {
-        let lamports = value_t_or_exit!(matches, name, u64);
+    fn rent_exempt_check(matches: &ArgMatches, name: &str, exempt: u64) -> io::Result<u64> {
+        let lamports: u64 = matches.value_of_t_or_exit(name);
 
         if lamports < exempt {
             Err(io::Error::new(
@@ -424,8 +426,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    let bootstrap_validator_lamports =
-        value_t_or_exit!(matches, "bootstrap_validator_lamports", u64);
+    let bootstrap_validator_lamports: u64 =
+        matches.value_of_t_or_exit("bootstrap_validator_lamports");
 
     let bootstrap_validator_stake_lamports = rent_exempt_check(
         &matches,
@@ -435,20 +437,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let bootstrap_stake_authorized_pubkey =
         pubkey_of(&matches, "bootstrap_stake_authorized_pubkey");
-    let faucet_lamports = value_t!(matches, "faucet_lamports", u64).unwrap_or(0);
+    let faucet_lamports: u64 = matches.value_of_t("faucet_lamports").unwrap_or(0);
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey");
 
-    let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
+    let ticks_per_slot: u64 = matches.value_of_t_or_exit("ticks_per_slot");
 
     let mut fee_rate_governor = FeeRateGovernor::new(
-        value_t_or_exit!(matches, "target_lamports_per_signature", u64),
-        value_t_or_exit!(matches, "target_signatures_per_slot", u64),
+        matches.value_of_t_or_exit("target_lamports_per_signature"),
+        matches.value_of_t_or_exit("target_signatures_per_slot"),
     );
-    fee_rate_governor.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
+    fee_rate_governor.burn_percent = matches.value_of_t_or_exit("fee_burn_percentage");
 
     let mut poh_config = PohConfig {
         target_tick_duration: if matches.is_present("target_tick_duration") {
-            Duration::from_micros(value_t_or_exit!(matches, "target_tick_duration", u64))
+            Duration::from_micros(matches.value_of_t_or_exit("target_tick_duration"))
         } else {
             Duration::from_micros(default_target_tick_duration)
         },
@@ -472,12 +474,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             poh_config.hashes_per_tick = None;
         }
         _ => {
-            poh_config.hashes_per_tick = Some(value_t_or_exit!(matches, "hashes_per_tick", u64));
+            poh_config.hashes_per_tick = Some(matches.value_of_t_or_exit("hashes_per_tick"));
         }
     }
 
     let slots_per_epoch = if matches.value_of("slots_per_epoch").is_some() {
-        value_t_or_exit!(matches, "slots_per_epoch", u64)
+        matches.value_of_t_or_exit("slots_per_epoch")
     } else {
         match cluster_type {
             ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
@@ -503,7 +505,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ..GenesisConfig::default()
     };
 
-    if let Ok(raw_inflation) = value_t!(matches, "inflation", String) {
+    if let Ok(raw_inflation) = matches.value_of_t::<String>("inflation") {
         let inflation = match raw_inflation.as_str() {
             "pico" => Inflation::pico(),
             "full" => Inflation::full(),
@@ -513,7 +515,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         genesis_config.inflation = inflation;
     }
 
-    let commission = value_t_or_exit!(matches, "vote_commission_percentage", u8);
+    let commission: u8 = matches.value_of_t_or_exit("vote_commission_percentage");
 
     let mut bootstrap_validator_pubkeys_iter = bootstrap_validator_pubkeys.iter();
     loop {
@@ -575,8 +577,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    let max_genesis_archive_unpacked_size =
-        value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
+    let max_genesis_archive_unpacked_size: u64 =
+        matches.value_of_t_or_exit("max_genesis_archive_unpacked_size");
 
     let issued_lamports = genesis_config
         .accounts
