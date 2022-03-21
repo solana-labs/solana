@@ -140,7 +140,7 @@ impl SendTransactionService {
         if let Some(leader_info) = leader_info.as_mut() {
             leader_info.refresh_recent_peers();
         }
-
+        connection_cache::set_use_quic(config.use_quic);
         Builder::new()
             .name("send-tx-sv2".to_string())
             .spawn(move || loop {
