@@ -65,12 +65,15 @@ struct ProcessTransactionsResult {
     retained: u64,
 }
 
+pub const DEFAULT_TPU_USE_QUIC: bool = false;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub retry_rate_ms: u64,
     pub leader_forward_count: u64,
     pub default_max_retries: Option<usize>,
     pub service_max_retries: usize,
+    pub use_quic: bool,
 }
 
 impl Default for Config {
@@ -80,6 +83,7 @@ impl Default for Config {
             leader_forward_count: DEFAULT_LEADER_FORWARD_COUNT,
             default_max_retries: None,
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
+            use_quic: DEFAULT_TPU_USE_QUIC,
         }
     }
 }
@@ -92,10 +96,12 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         retry_rate_ms: u64,
         leader_forward_count: u64,
+        use_quic: bool,
     ) -> Self {
         let config = Config {
             retry_rate_ms,
             leader_forward_count,
+            use_quic,
             ..Config::default()
         };
         Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
@@ -352,6 +358,7 @@ mod test {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
 
         drop(sender);
