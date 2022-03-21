@@ -6450,6 +6450,11 @@ impl Bank {
             self.reconfigure_token2_native_mint();
         }
         self.ensure_no_storage_rewards_pool();
+
+        if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
+            const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
+            self.store_accounts_data_len(ACCOUNTS_DATA_LEN);
+        }
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {

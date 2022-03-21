@@ -97,14 +97,6 @@ pull_request_rules:
       label:
         add:
           - automerge
-  - name: v1.8 backport
-    conditions:
-      - label=v1.8
-    actions:
-      backport:
-        ignore_conflicts: true
-        branches:
-          - v1.8
   - name: v1.9 backport
     conditions:
       - label=v1.9
@@ -113,6 +105,14 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.9
+  - name: v1.10 backport
+    conditions:
+      - label=v1.10
+    actions:
+      backport:
+        ignore_conflicts: true
+        branches:
+          - v1.10
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
