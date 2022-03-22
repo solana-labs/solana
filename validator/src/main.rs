@@ -34,8 +34,8 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::{
-        BlockstoreRecoveryMode, BlockstoreRocksFifoOptions, LedgerColumnOptions, ShredStorageType,
-        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
@@ -1000,6 +1000,18 @@ pub fn main() {
                 .default_value(default_rocksdb_fifo_shred_storage_size)
                 .help("The shred storage size in bytes. \
                        The suggested value is 50% of your ledger storage size in bytes."),
+        )
+        .arg(
+            Arg::with_name("rocksdb_ledger_compression")
+                .hidden(true)
+                .long("rocksdb-ledger-compression")
+                .value_name("COMPRESSION_TYPE")
+                .takes_value(true)
+                .possible_values(&["none", "lz4", "snappy", "zlib"])
+                .default_value("none")
+                .help("The compression alrogithm that is used to compress \
+                       transaction status data.  \
+                       Turning on compression can save ~10% of the ledger size."),
         )
         .arg(
             Arg::with_name("skip_poh_verify")
@@ -2601,6 +2613,19 @@ pub fn main() {
     }
 
     validator_config.ledger_column_options = LedgerColumnOptions {
+        compression_type: match matches.value_of("rocksdb_ledger_compression") {
+            None => BlockstoreCompressionType::default(),
+            Some(ledger_compression_string) => match ledger_compression_string {
+                "none" => BlockstoreCompressionType::None,
+                "snappy" => BlockstoreCompressionType::Snappy,
+                "lz4" => BlockstoreCompressionType::Lz4,
+                "zlib" => BlockstoreCompressionType::Zlib,
+                _ => panic!(
+                    "Unsupported ledger_compression: {}",
+                    ledger_compression_string
+                ),
+            },
+        },
         shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
             None => ShredStorageType::default(),
             Some(shred_compaction_string) => match shred_compaction_string {

@@ -9,9 +9,10 @@ use {
         self,
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
-        ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBCompactionStyle, DBIterator,
-        DBRawIterator, DBRecoveryMode, FifoCompactOptions, IteratorMode as RocksIteratorMode,
-        Options, WriteBatch as RWriteBatch, DB,
+        ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBCompactionStyle,
+        DBCompressionType as RocksCompressionType, DBIterator, DBRawIterator, DBRecoveryMode,
+        FifoCompactOptions, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch,
+        DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -991,6 +992,31 @@ impl Default for ShredStorageType {
     }
 }
 
+#[derive(Clone)]
+pub enum BlockstoreCompressionType {
+    None,
+    Snappy,
+    Lz4,
+    Zlib,
+}
+
+impl Default for BlockstoreCompressionType {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl BlockstoreCompressionType {
+    fn to_rocksdb_compression_type(&self) -> RocksCompressionType {
+        match self {
+            Self::None => RocksCompressionType::None,
+            Self::Snappy => RocksCompressionType::Snappy,
+            Self::Lz4 => RocksCompressionType::Lz4,
+            Self::Zlib => RocksCompressionType::Zlib,
+        }
+    }
+}
+
 /// Options for LedgerColumn.
 /// Each field might also be used as a tag that supports group-by operation when
 /// reporting metrics.
@@ -998,12 +1024,17 @@ impl Default for ShredStorageType {
 pub struct LedgerColumnOptions {
     // Determine how to store both data and coding shreds. Default: RocksLevel.
     pub shred_storage_type: ShredStorageType,
+
+    // Determine the way to compress column families which are eligible for
+    // compression.
+    pub compression_type: BlockstoreCompressionType,
 }
 
 impl Default for LedgerColumnOptions {
     fn default() -> Self {
         Self {
             shred_storage_type: ShredStorageType::RocksLevel,
+            compression_type: BlockstoreCompressionType::default(),
         }
     }
 }
@@ -1444,7 +1475,22 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
         });
     }
 
+    process_cf_options_advanced::<C>(&mut cf_options, &options.column_options);
+
     cf_options
+}
+
+fn process_cf_options_advanced<C: 'static + Column + ColumnName>(
+    cf_options: &mut Options,
+    column_options: &LedgerColumnOptions,
+) {
+    if should_enable_compression::<C>() {
+        cf_options.set_compression_type(
+            column_options
+                .compression_type
+                .to_rocksdb_compression_type(),
+        );
+    }
 }
 
 /// Creates and returns the column family descriptors for both data shreds and
@@ -1465,17 +1511,21 @@ fn new_cf_descriptor_pair_shreds<
             new_cf_descriptor::<C>(options, oldest_slot),
         ),
         ShredStorageType::RocksFifo(fifo_options) => (
-            new_cf_descriptor_fifo::<D>(&fifo_options.shred_data_cf_size),
-            new_cf_descriptor_fifo::<C>(&fifo_options.shred_code_cf_size),
+            new_cf_descriptor_fifo::<D>(&fifo_options.shred_data_cf_size, &options.column_options),
+            new_cf_descriptor_fifo::<C>(&fifo_options.shred_code_cf_size, &options.column_options),
         ),
     }
 }
 
 fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(
     max_cf_size: &u64,
+    column_options: &LedgerColumnOptions,
 ) -> ColumnFamilyDescriptor {
     if *max_cf_size > FIFO_WRITE_BUFFER_SIZE {
-        ColumnFamilyDescriptor::new(C::NAME, get_cf_options_fifo::<C>(max_cf_size))
+        ColumnFamilyDescriptor::new(
+            C::NAME,
+            get_cf_options_fifo::<C>(max_cf_size, column_options),
+        )
     } else {
         panic!(
             "{} cf_size must be greater than write buffer size {} when using ShredStorageType::RocksFifo.",
@@ -1495,7 +1545,10 @@ fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(
 /// rocksdb will start deleting the oldest SST file when the column family
 /// size reaches `max_cf_size` - `FIFO_WRITE_BUFFER_SIZE` to strictly
 /// maintain the size limit.
-fn get_cf_options_fifo<C: 'static + Column + ColumnName>(max_cf_size: &u64) -> Options {
+fn get_cf_options_fifo<C: 'static + Column + ColumnName>(
+    max_cf_size: &u64,
+    column_options: &LedgerColumnOptions,
+) -> Options {
     let mut options = Options::default();
 
     options.set_max_write_buffer_number(8);
@@ -1519,6 +1572,8 @@ fn get_cf_options_fifo<C: 'static + Column + ColumnName>(max_cf_size: &u64) -> O
 
     options.set_compaction_style(DBCompactionStyle::Fifo);
     options.set_fifo_compaction_options(&fifo_compact_options);
+
+    process_cf_options_advanced::<C>(&mut options, column_options);
 
     options
 }
@@ -1574,6 +1629,11 @@ fn should_exclude_from_compaction(cf_name: &str) -> bool {
     .collect();
 
     no_compaction_cfs.get(cf_name).is_some()
+}
+
+// Returns true if the column family enables compression.
+fn should_enable_compression<C: 'static + Column + ColumnName>() -> bool {
+    C::NAME == columns::TransactionStatus::NAME
 }
 
 #[cfg(test)]
