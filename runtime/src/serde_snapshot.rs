@@ -23,6 +23,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
+        deserialize_utils::default_on_eof,
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::GenesisConfig,
@@ -67,6 +68,12 @@ struct AccountsDbFields<T>(
     StoredMetaWriteVersion,
     Slot,
     BankHashInfo,
+    /// all slots that were roots within the last epoch
+    #[serde(deserialize_with = "default_on_eof")]
+    Vec<Slot>,
+    /// slots that were roots within the last epoch for which we care about the hash value
+    #[serde(deserialize_with = "default_on_eof")]
+    Vec<(Slot, Hash)>,
 );
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
@@ -97,6 +104,8 @@ impl<T> SnapshotAccountsDbFields<T> {
                 incremental_snapshot_version,
                 incremental_snapshot_slot,
                 incremental_snapshot_bank_hash_info,
+                incremental_snapshot_prior_roots,
+                incremental_snapshot_prior_roots_with_hash,
             )) => {
                 let full_snapshot_storages = self.full_snapshot_accounts_db_fields.0;
                 let full_snapshot_slot = self.full_snapshot_accounts_db_fields.2;
@@ -119,6 +128,8 @@ impl<T> SnapshotAccountsDbFields<T> {
                     incremental_snapshot_version,
                     incremental_snapshot_slot,
                     incremental_snapshot_bank_hash_info,
+                    incremental_snapshot_prior_roots,
+                    incremental_snapshot_prior_roots_with_hash,
                 ))
             }
         }
@@ -418,7 +429,21 @@ where
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
+        _snapshot_prior_roots,
+        _snapshot_prior_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
+
+    /*
+    todo in future pr:
+    deserialize prior_roots and prior_roots_with_hash
+    example:
+    {
+        let mut writer = accounts_db.accounts_index.roots_tracker.write().unwrap();
+        for x in snapshot_prior_roots {
+            writer.roots_original.insert(x);
+        }
+    }
+    */
 
     let snapshot_storages = snapshot_storages.into_iter().collect::<Vec<_>>();
 
