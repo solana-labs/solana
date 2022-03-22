@@ -14,6 +14,7 @@ use {
     },
     std::{
         collections::{hash_map::Entry, HashMap},
+        env,
         error::Error,
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
@@ -28,6 +29,17 @@ use {
         time::timeout,
     },
 };
+
+// TODO: remove this ENV variable when we have confidence in a good default timeout value
+lazy_static! {
+    static ref QUIC_READ_TIMEOUT_MS: u64 = env::var("SOLANA_QUIC_READ_TIMEOUT_MS")
+        .map(|x| x.parse().unwrap_or(2500))
+        .unwrap_or(2500);
+}
+// timeout for quinn::read_to_end() to finish
+fn get_read_timeout_ms() -> u64 {
+    *QUIC_READ_TIMEOUT_MS
+}
 
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
@@ -244,6 +256,7 @@ struct StreamStats {
     total_new_connections: AtomicUsize,
     total_streams: AtomicUsize,
     total_new_streams: AtomicUsize,
+    total_stream_timeouts: AtomicUsize,
     num_evictions: AtomicUsize,
 }
 
@@ -268,6 +281,11 @@ impl StreamStats {
             ),
             (
                 "new_streams",
+                self.total_new_streams.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "stream_timeouts",
                 self.total_new_streams.swap(0, Ordering::Relaxed),
                 i64
             ),
@@ -332,11 +350,18 @@ fn handle_connection(
                         stats.total_streams.fetch_add(1, Ordering::Relaxed);
                         stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
                         if !stream_exit.load(Ordering::Relaxed) {
-                            handle_read_to_end(
-                                &stream.read_to_end(PACKET_DATA_SIZE).await,
-                                &remote_addr,
-                                &packet_sender,
-                            );
+                            let timeout_ms = get_read_timeout_ms();
+                            let timeout_read_to_end = timeout(
+                                Duration::from_millis(timeout_ms),
+                                stream.read_to_end(PACKET_DATA_SIZE),
+                            )
+                            .await;
+                            if let Ok(read_to_end) = timeout_read_to_end {
+                                handle_read_to_end(&read_to_end, &remote_addr, &packet_sender);
+                            } else {
+                                stats.total_stream_timeouts.fetch_add(1, Ordering::Relaxed);
+                                debug!("Timed out waiting for read_to_end");
+                            }
                             last_update.store(timing::timestamp(), Ordering::Relaxed);
                         }
                     }

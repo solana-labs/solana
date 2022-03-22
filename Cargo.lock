@@ -5722,6 +5722,7 @@ dependencies = [
  "futures-util",
  "histogram",
  "itertools",
+ "lazy_static",
  "libc",
  "log",
  "nix",
