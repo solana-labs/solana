@@ -102,6 +102,11 @@ impl TransactionContext {
             .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
+    /// Returns the keys for the accounts loaded in this Transaction
+    pub fn get_keys_of_accounts(&self) -> &[Pubkey] {
+        &self.account_keys
+    }
+
     /// Searches for an account by its key
     pub fn get_account_at_index(
         &self,

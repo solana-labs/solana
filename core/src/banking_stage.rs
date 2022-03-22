@@ -1,5 +1,5 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
-//! to contruct a software pipeline. The stage uses all available CPU cores and
+//! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use {
     crate::{
@@ -194,7 +194,7 @@ impl BankingStageStats {
     }
 
     fn report(&mut self, report_interval_ms: u64) {
-        // skip repoting metrics if stats is empty
+        // skip reporting metrics if stats is empty
         if self.is_empty() {
             return;
         }
@@ -700,14 +700,11 @@ impl BankingStage {
 
                     // `original_unprocessed_indexes` must have remaining packets to process
                     // if not yet processed.
-                    assert!(Self::packet_has_more_unprocessed_transactions(
-                        &original_unprocessed_indexes
-                    ));
+                    assert!(!original_unprocessed_indexes.is_empty());
                     true
                 }
             }
         });
-
         proc_start.stop();
 
         debug!(
@@ -2015,7 +2012,7 @@ impl BankingStage {
         banking_stage_stats: &mut BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
-        if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
+        if !packet_indexes.is_empty() {
             if unprocessed_packet_batches.len() >= batch_limit {
                 *dropped_packet_batches_count += 1;
                 if let Some(dropped_batch) = unprocessed_packet_batches.pop_front() {
@@ -2039,10 +2036,6 @@ impl BankingStage {
                 false,
             ));
         }
-    }
-
-    fn packet_has_more_unprocessed_transactions(packet_indexes: &[usize]) -> bool {
-        !packet_indexes.is_empty()
     }
 
     pub fn join(self) -> thread::Result<()> {

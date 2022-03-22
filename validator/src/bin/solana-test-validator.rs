@@ -12,7 +12,10 @@ use {
     solana_client::rpc_client::RpcClient,
     solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
-    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
+    solana_rpc::{
+        rpc::{JsonRpcConfig, RpcBigtableConfig},
+        rpc_pubsub_service::PubSubConfig,
+    },
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
@@ -154,6 +157,23 @@ fn main() {
                 .default_value(&default_rpc_port)
                 .validator(solana_validator::port_validator)
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
+        )
+        .arg(
+            Arg::with_name("enable_rpc_bigtable_ledger_storage")
+                .long("enable-rpc-bigtable-ledger-storage")
+                .takes_value(false)
+                .hidden(true)
+                .help("Fetch historical transaction info from a BigTable instance \
+                       as a fallback to local ledger data"),
+        )
+        .arg(
+            Arg::with_name("rpc_bigtable_instance")
+                .long("rpc-bigtable-instance")
+                .value_name("INSTANCE_NAME")
+                .takes_value(true)
+                .hidden(true)
+                .default_value("solana-ledger")
+                .help("Name of BigTable instance to target"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
@@ -618,6 +638,16 @@ fn main() {
         None
     };
 
+    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage") {
+        Some(RpcBigtableConfig {
+            enable_bigtable_ledger_upload: false,
+            bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance", String),
+            timeout: None,
+        })
+    } else {
+        None
+    };
+
     genesis
         .ledger_path(&ledger_path)
         .tower_storage(tower_storage)
@@ -628,6 +658,7 @@ fn main() {
         .rpc_config(JsonRpcConfig {
             enable_rpc_transaction_history: true,
             enable_cpi_and_log_storage: true,
+            rpc_bigtable_config,
             faucet_addr,
             ..JsonRpcConfig::default_for_test()
         })

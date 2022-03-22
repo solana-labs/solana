@@ -494,12 +494,12 @@ mod test {
 
     #[test]
     fn test_fee_below_max_proof() {
-        let transfer_amount: u64 = 55;
-        let max_fee: u64 = 77;
+        let transfer_amount: u64 = 1;
+        let max_fee: u64 = 3;
 
-        let fee_rate: u16 = 555; // 5.55%
-        let fee_amount: u64 = 4;
-        let delta: u64 = 9475; // 4*10000 - 55*555
+        let fee_rate: u16 = 400; // 5.55%
+        let fee_amount: u64 = 1;
+        let delta: u64 = 9600; // 4*10000 - 55*555
 
         let (transfer_commitment, transfer_opening) = Pedersen::new(transfer_amount);
         let (fee_commitment, fee_opening) = Pedersen::new(fee_amount);

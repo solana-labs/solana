@@ -186,7 +186,7 @@ fn check_num_vote_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInstr
 mod test {
     use {
         super::*,
-        solana_sdk::{hash::Hash, message::Message, pubkey::Pubkey},
+        solana_sdk::{hash::Hash, message::Message, pubkey::Pubkey, sysvar},
         solana_vote_program::{
             vote_instruction,
             vote_state::{Vote, VoteAuthorize, VoteInit},
@@ -194,34 +194,24 @@ mod test {
     };
 
     #[test]
-    #[allow(clippy::same_item_push)]
-    fn test_parse_vote_instruction() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..5 {
-            keys.push(solana_sdk::pubkey::new_rand());
-        }
-
+    fn test_parse_vote_initialize_ix() {
         let lamports = 55;
-        let hash = Hash::new_from_array([1; 32]);
-        let vote = Vote {
-            slots: vec![1, 2, 4],
-            hash,
-            timestamp: Some(1_234_567_890),
-        };
 
         let commission = 10;
-        let authorized_voter = solana_sdk::pubkey::new_rand();
-        let authorized_withdrawer = solana_sdk::pubkey::new_rand();
+        let node_pubkey = Pubkey::new_unique();
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_voter = Pubkey::new_unique();
+        let authorized_withdrawer = Pubkey::new_unique();
         let vote_init = VoteInit {
-            node_pubkey: keys[2],
+            node_pubkey,
             authorized_voter,
             authorized_withdrawer,
             commission,
         };
 
         let instructions = vote_instruction::create_account(
-            &solana_sdk::pubkey::new_rand(),
-            &keys[1],
+            &Pubkey::new_unique(),
+            &vote_pubkey,
             &vote_init,
             lamports,
         );
@@ -229,16 +219,16 @@ mod test {
         assert_eq!(
             parse_vote(
                 &message.instructions[1],
-                &AccountKeys::new(&keys[0..5], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initialize".to_string(),
                 info: json!({
-                    "voteAccount": keys[1].to_string(),
-                    "rentSysvar": keys[3].to_string(),
-                    "clockSysvar": keys[4].to_string(),
-                    "node": keys[2].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "node": node_pubkey.to_string(),
                     "authorizedVoter": authorized_voter.to_string(),
                     "authorizedWithdrawer": authorized_withdrawer.to_string(),
                     "commission": commission,
@@ -247,51 +237,74 @@ mod test {
         );
         assert!(parse_vote(
             &message.instructions[1],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_parse_vote_authorize_ix() {
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
         let authority_type = VoteAuthorize::Voter;
-        let instruction = vote_instruction::authorize(&keys[1], &keys[0], &keys[3], authority_type);
+        let instruction = vote_instruction::authorize(
+            &vote_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
+            authority_type,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorize".to_string(),
                 info: json!({
-                    "voteAccount": keys[1].to_string(),
-                    "clockSysvar": keys[2].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[3].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authority": authorized_pubkey.to_string(),
+                    "newAuthority": new_authorized_pubkey.to_string(),
                     "authorityType": authority_type,
                 }),
             }
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+    }
 
-        let instruction = vote_instruction::vote(&keys[1], &keys[0], vote.clone());
+    #[test]
+    fn test_parse_vote_ix() {
+        let hash = Hash::new_from_array([1; 32]);
+        let vote = Vote {
+            slots: vec![1, 2, 4],
+            hash,
+            timestamp: Some(1_234_567_890),
+        };
+
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_voter_pubkey = Pubkey::new_unique();
+        let instruction = vote_instruction::vote(&vote_pubkey, &authorized_voter_pubkey, vote);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "vote".to_string(),
                 info: json!({
-                    "voteAccount": keys[1].to_string(),
-                    "slotHashesSysvar": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "voteAuthority": keys[0].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "slotHashesSysvar": sysvar::slot_hashes::ID.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "voteAuthority": authorized_voter_pubkey.to_string(),
                     "vote": {
                         "slots": [1, 2, 4],
                         "hash": hash.to_string(),
@@ -302,96 +315,141 @@ mod test {
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+    }
 
-        let instruction = vote_instruction::withdraw(&keys[1], &keys[0], lamports, &keys[2]);
+    #[test]
+    fn test_parse_vote_withdraw_ix() {
+        let lamports = 55;
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_withdrawer_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
+        let instruction = vote_instruction::withdraw(
+            &vote_pubkey,
+            &authorized_withdrawer_pubkey,
+            lamports,
+            &to_pubkey,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "withdraw".to_string(),
                 info: json!({
-                    "voteAccount": keys[1].to_string(),
-                    "destination": keys[2].to_string(),
-                    "withdrawAuthority": keys[0].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "destination": to_pubkey.to_string(),
+                    "withdrawAuthority": authorized_withdrawer_pubkey.to_string(),
                     "lamports": lamports,
                 }),
             }
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+    }
 
-        let instruction = vote_instruction::update_validator_identity(&keys[2], &keys[1], &keys[0]);
+    #[test]
+    fn test_parse_vote_update_validator_identity_ix() {
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_withdrawer_pubkey = Pubkey::new_unique();
+        let node_pubkey = Pubkey::new_unique();
+        let instruction = vote_instruction::update_validator_identity(
+            &vote_pubkey,
+            &authorized_withdrawer_pubkey,
+            &node_pubkey,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "updateValidatorIdentity".to_string(),
                 info: json!({
-                    "voteAccount": keys[2].to_string(),
-                    "newValidatorIdentity": keys[0].to_string(),
-                    "withdrawAuthority": keys[1].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "newValidatorIdentity": node_pubkey.to_string(),
+                    "withdrawAuthority": authorized_withdrawer_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+    }
 
-        let instruction = vote_instruction::update_commission(&keys[1], &keys[0], commission);
+    #[test]
+    fn test_parse_vote_update_commission_ix() {
+        let commission = 10;
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_withdrawer_pubkey = Pubkey::new_unique();
+        let instruction = vote_instruction::update_commission(
+            &vote_pubkey,
+            &authorized_withdrawer_pubkey,
+            commission,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..2], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "updateCommission".to_string(),
                 info: json!({
-                    "voteAccount": keys[1].to_string(),
-                    "withdrawAuthority": keys[0].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "withdrawAuthority": authorized_withdrawer_pubkey.to_string(),
                     "commission": commission,
                 }),
             }
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..1], None)
+            &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_parse_vote_switch_ix() {
+        let hash = Hash::new_from_array([1; 32]);
+        let vote = Vote {
+            slots: vec![1, 2, 4],
+            hash,
+            timestamp: Some(1_234_567_890),
+        };
+
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_voter_pubkey = Pubkey::new_unique();
         let proof_hash = Hash::new_from_array([2; 32]);
-        let instruction = vote_instruction::vote_switch(&keys[1], &keys[0], vote, proof_hash);
+        let instruction =
+            vote_instruction::vote_switch(&vote_pubkey, &authorized_voter_pubkey, vote, proof_hash);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "voteSwitch".to_string(),
                 info: json!({
-                    "voteAccount": keys[1].to_string(),
-                    "slotHashesSysvar": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "voteAuthority": keys[0].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "slotHashesSysvar": sysvar::slot_hashes::ID.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "voteAuthority": authorized_voter_pubkey.to_string(),
                     "vote": {
                         "slots": [1, 2, 4],
                         "hash": hash.to_string(),
@@ -403,34 +461,44 @@ mod test {
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_parse_vote_authorized_checked_ix() {
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
         let authority_type = VoteAuthorize::Voter;
-        let instruction =
-            vote_instruction::authorize_checked(&keys[1], &keys[0], &keys[3], authority_type);
+        let instruction = vote_instruction::authorize_checked(
+            &vote_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
+            authority_type,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeChecked".to_string(),
                 info: json!({
-                    "voteAccount": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[1].to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authority": authorized_pubkey.to_string(),
+                    "newAuthority": new_authorized_pubkey.to_string(),
                     "authorityType": authority_type,
                 }),
             }
         );
         assert!(parse_vote(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
     }

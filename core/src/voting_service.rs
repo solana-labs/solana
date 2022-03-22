@@ -1,11 +1,12 @@
 use {
     crate::tower_storage::{SavedTowerVersions, TowerStorage},
     crossbeam_channel::Receiver,
+    solana_client::connection_cache::get_connection,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{clock::Slot, transaction::Transaction},
+    solana_sdk::{clock::Slot, transaction::VersionedTransaction},
     std::{
         sync::{Arc, Mutex, RwLock},
         thread::{self, Builder, JoinHandle},
@@ -14,18 +15,18 @@ use {
 
 pub enum VoteOp {
     PushVote {
-        tx: Transaction,
+        tx: VersionedTransaction,
         tower_slots: Vec<Slot>,
         saved_tower: SavedTowerVersions,
     },
     RefreshVote {
-        tx: Transaction,
+        tx: VersionedTransaction,
         last_voted_slot: Slot,
     },
 }
 
 impl VoteOp {
-    fn tx(&self) -> &Transaction {
+    fn tx(&self) -> &VersionedTransaction {
         match self {
             VoteOp::PushVote { tx, .. } => tx,
             VoteOp::RefreshVote { tx, .. } => tx,
@@ -86,18 +87,29 @@ impl VotingService {
         } else {
             crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder)
         };
-        let _ = cluster_info.send_transaction(vote_op.tx(), target_address);
+
+        let mut measure = Measure::start("vote_tx_send-ms");
+        let target_address = target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
+        let _ = get_connection(&target_address).serialize_and_send_transaction(vote_op.tx());
+        measure.stop();
+        inc_new_counter_info!("vote_tx_send-ms", measure.as_ms() as usize);
 
         match vote_op {
             VoteOp::PushVote {
                 tx, tower_slots, ..
             } => {
+                // we can safely unwrap here because the vote tx is constructed
+                // from a legacy transaction in replay stage
+                let tx = tx.into_legacy_transaction().unwrap();
                 cluster_info.push_vote(&tower_slots, tx);
             }
             VoteOp::RefreshVote {
                 tx,
                 last_voted_slot,
             } => {
+                // we can safely unwrap here because the vote tx is constructed
+                // from a legacy transaction in replay stage
+                let tx = tx.into_legacy_transaction().unwrap();
                 cluster_info.refresh_vote(tx, last_voted_slot);
             }
         }
