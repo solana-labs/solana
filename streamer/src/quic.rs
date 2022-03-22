@@ -3,7 +3,7 @@ use {
     futures_util::stream::StreamExt,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
-    quinn::{Endpoint, EndpointConfig, IncomingUniStreams, ServerConfig},
+    quinn::{Endpoint, EndpointConfig, IncomingUniStreams, ReadToEndError, ServerConfig},
     rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
@@ -139,63 +139,6 @@ pub enum QuicServerError {
 
     #[error("Endpoint creation failed")]
     EndpointFailed,
-}
-
-// Return true if the server should drop the stream
-fn handle_chunk(
-    chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
-    maybe_batch: &mut Option<PacketBatch>,
-    remote_addr: &SocketAddr,
-    packet_sender: &Sender<PacketBatch>,
-) -> bool {
-    match chunk {
-        Ok(maybe_chunk) => {
-            if let Some(chunk) = maybe_chunk {
-                trace!("got chunk: {:?}", chunk);
-                let chunk_len = chunk.bytes.len() as u64;
-
-                // shouldn't happen, but sanity check the size and offsets
-                if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
-                    return true;
-                }
-                if chunk.offset + chunk_len > PACKET_DATA_SIZE as u64 {
-                    return true;
-                }
-
-                // chunk looks valid
-                if maybe_batch.is_none() {
-                    let mut batch = PacketBatch::with_capacity(1);
-                    let mut packet = Packet::default();
-                    packet.meta.set_addr(remote_addr);
-                    batch.packets.push(packet);
-                    *maybe_batch = Some(batch);
-                }
-
-                if let Some(batch) = maybe_batch.as_mut() {
-                    let end = chunk.offset as usize + chunk.bytes.len();
-                    batch.packets[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
-                    batch.packets[0].meta.size = std::cmp::max(batch.packets[0].meta.size, end);
-                }
-            } else {
-                trace!("chunk is none");
-                // done receiving chunks
-                if let Some(batch) = maybe_batch.take() {
-                    let len = batch.packets[0].meta.size;
-                    if let Err(e) = packet_sender.send(batch) {
-                        info!("send error: {}", e);
-                    } else {
-                        trace!("sent {} byte packet", len);
-                    }
-                }
-                return true;
-            }
-        }
-        Err(e) => {
-            debug!("Received stream error: {:?}", e);
-            return true;
-        }
-    }
-    false
 }
 
 #[derive(Debug)]
@@ -337,6 +280,35 @@ impl StreamStats {
     }
 }
 
+// Translate data from QUIC stream into PacketBatch and forward along
+fn handle_read_to_end(
+    read_to_end: &Result<Vec<u8>, ReadToEndError>,
+    remote_addr: &SocketAddr,
+    packet_sender: &Sender<PacketBatch>,
+) {
+    match read_to_end {
+        Ok(bytes) => {
+            let len = bytes.len();
+            trace!("Got read_to_end with {} bytes", len);
+            assert!(len <= PACKET_DATA_SIZE);
+
+            let mut packet = Packet::default();
+            packet.data[..len].copy_from_slice(bytes);
+            packet.meta.size = len;
+            packet.meta.set_addr(remote_addr);
+            let mut batch = PacketBatch::with_capacity(1);
+            batch.packets.push(packet);
+
+            if let Err(e) = packet_sender.send(batch) {
+                info!("send error: {}", e);
+            }
+        }
+        Err(e) => {
+            debug!("Received stream error: {:?}", e);
+        }
+    }
+}
+
 fn handle_connection(
     mut uni_streams: IncomingUniStreams,
     packet_sender: Sender<PacketBatch>,
@@ -356,20 +328,16 @@ fn handle_connection(
         while !stream_exit.load(Ordering::Relaxed) {
             match uni_streams.next().await {
                 Some(stream_result) => match stream_result {
-                    Ok(mut stream) => {
+                    Ok(stream) => {
                         stats.total_streams.fetch_add(1, Ordering::Relaxed);
                         stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                        let mut maybe_batch = None;
-                        while !stream_exit.load(Ordering::Relaxed) {
-                            if handle_chunk(
-                                &stream.read_chunk(PACKET_DATA_SIZE, false).await,
-                                &mut maybe_batch,
+                        if !stream_exit.load(Ordering::Relaxed) {
+                            handle_read_to_end(
+                                &stream.read_to_end(PACKET_DATA_SIZE).await,
                                 &remote_addr,
                                 &packet_sender,
-                            ) {
-                                last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                break;
-                            }
+                            );
+                            last_update.store(timing::timestamp(), Ordering::Relaxed);
                         }
                     }
                     Err(e) => {
