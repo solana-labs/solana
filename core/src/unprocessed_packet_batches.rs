@@ -1,13 +1,24 @@
 use {
     retain_mut::RetainMut,
+    solana_gossip::weighted_shuffle::WeightedShuffle,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
+    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_runtime::bank::Bank,
     solana_sdk::{
-        hash::Hash, message::Message, short_vec::decode_shortu16_len, signature::Signature,
-        transaction::VersionedTransaction,
+        hash::Hash,
+        message::{
+            v0::{self},
+            Message, SanitizedMessage, VersionedMessage,
+        },
+        sanitize::Sanitize,
+        short_vec::decode_shortu16_len,
+        signature::Signature,
+        transaction::{AddressLoader, VersionedTransaction},
     },
     std::{
-        collections::{HashMap, VecDeque},
+        collections::{BTreeMap, HashMap, VecDeque},
         mem::size_of,
+        sync::Arc,
     },
 };
 
@@ -40,7 +51,7 @@ pub struct DeserializedPacketBatch {
 /// References to a packet in `UnprocessedPacketBatches`, where
 /// - batch_index references to `DeserializedPacketBatch`,
 /// - packet_index references to `packet` within `DeserializedPacketBatch.packet_batch`
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PacketLocator {
     #[allow(dead_code)]
     batch_index: usize,
@@ -91,6 +102,42 @@ impl UnprocessedPacketBatches {
         UnprocessedPacketBatches(VecDeque::with_capacity(capacity))
     }
 
+    /// Insert new `deserizlized_packet_batch` into inner `VecDeque<DeserializedPacketBatch>`,
+    /// If buffer is at Max limit, packets (not packet_batch) will be dropped, starting from
+    /// the lowest priority until an empty batch is located, then swap it with new batch;
+    /// Otherwise, new_batch will be pushed into the end of VecDeque;
+    /// returns tuple of (number of batch dropped, number of packets dropped)
+    pub fn insert_batch(
+        &mut self,
+        deserialized_packet_batch: DeserializedPacketBatch,
+        batch_limit: usize,
+    ) -> (Option<usize>, Option<usize>) {
+        if deserialized_packet_batch.unprocessed_packets.is_empty() {
+            return (None, None);
+        }
+
+        if self.len() >= batch_limit {
+            let (_, dropped_batches_count, dropped_packets_count) =
+                self.replace_packet_by_priority(deserialized_packet_batch);
+            (dropped_batches_count, dropped_packets_count)
+        } else {
+            self.push_back(deserialized_packet_batch);
+            (None, None)
+        }
+    }
+
+    /// prioritize unprocessed packets by their fee/CU then by sender's stakes
+    pub fn prioritize_by_fee_then_stakes(
+        &self,
+        working_bank: Option<Arc<Bank>>,
+    ) -> Vec<PacketLocator> {
+        let (stakes, locators) = self.get_stakes_and_locators();
+
+        let shuffled_packet_locators = Self::weighted_shuffle(&stakes, &locators);
+
+        self.prioritize_by_fee_per_cu(&shuffled_packet_locators, working_bank)
+    }
+
     /// Returns total number of all packets (including unprocessed and processed) in buffer
     #[allow(dead_code)]
     fn get_packets_count(&self) -> usize {
@@ -133,6 +180,185 @@ impl UnprocessedPacketBatches {
                     })
             })
             .unzip()
+    }
+
+    fn weighted_shuffle(stakes: &[u64], locators: &[PacketLocator]) -> Vec<PacketLocator> {
+        let mut rng = rand::thread_rng();
+        WeightedShuffle::new(stakes)
+            .unwrap()
+            .shuffle(&mut rng)
+            .map(|i| locators[i].clone())
+            .collect()
+    }
+
+    /// Index `locators` by their transaction's fee-per-cu value; For transactions
+    /// have same fee-per-cu, their relative order remains same (eg. in sender_stake order).
+    fn prioritize_by_fee_per_cu(
+        &self,
+        locators: &Vec<PacketLocator>,
+        bank: Option<Arc<Bank>>,
+    ) -> Vec<PacketLocator> {
+        let mut fee_buckets = BTreeMap::<u64, Vec<PacketLocator>>::new();
+        for locator in locators {
+            // if unable to compute fee-per-cu for the packet, put it to the `0` bucket
+            let fee_per_cu = self.compute_fee_per_cu(locator, &bank).unwrap_or(0);
+
+            let bucket = fee_buckets
+                .entry(fee_per_cu)
+                .or_insert(Vec::<PacketLocator>::new());
+            bucket.push(locator.clone());
+        }
+        fee_buckets
+            .iter()
+            .rev()
+            .flat_map(|(_key, bucket)| bucket.iter().cloned())
+            .collect()
+    }
+
+    /// Computes `(addition_fee + base_fee / requested_cu)` for packet referenced by `PacketLocator`
+    fn compute_fee_per_cu(&self, locator: &PacketLocator, bank: &Option<Arc<Bank>>) -> Option<u64> {
+        if let Some(bank) = bank {
+            let deserialized_packet_batch = self.get(locator.batch_index)?;
+            let deserialized_packet = deserialized_packet_batch
+                .unprocessed_packets
+                .get(&locator.packet_index)?;
+            let sanitized_message = Self::sanitize_message(
+                &deserialized_packet.versioned_transaction.message,
+                bank.as_ref(),
+            )?;
+            let total_fee = bank.get_fee_for_message(&sanitized_message)?;
+
+            // TODO refactor `bank.get_fee_for_message()` to return both fee and CUs to avoid
+            // calling ComputeBudget twice.
+            let mut compute_budget = ComputeBudget::default();
+            let _ = compute_budget
+                .process_message(&sanitized_message, false)
+                .ok()?;
+
+            Some(total_fee / compute_budget.max_units)
+        } else {
+            None
+        }
+    }
+
+    fn sanitize_message(
+        versioned_message: &VersionedMessage,
+        address_loader: impl AddressLoader,
+    ) -> Option<SanitizedMessage> {
+        versioned_message.sanitize().ok()?;
+
+        match versioned_message {
+            VersionedMessage::Legacy(message) => Some(SanitizedMessage::Legacy(message.clone())),
+            VersionedMessage::V0(message) => {
+                let loaded_addresses = address_loader
+                    .load_addresses(&message.address_table_lookups)
+                    .ok()?;
+                Some(SanitizedMessage::V0(v0::LoadedMessage::new(
+                    message.clone(),
+                    loaded_addresses,
+                )))
+            }
+        }
+    }
+
+    /// This function is called to put new deserialized_packet_batch into buffer when it is
+    /// at Max capacity.
+    /// It tries to drop lower prioritized transactions in order to find an empty batch to swap
+    /// with new deserialized_packet_batch.
+    /// Returns the dropped deserialized_packet_batch, dropped batch count and dropped packets count.
+    fn replace_packet_by_priority(
+        &mut self,
+        deserialized_packet_batch: DeserializedPacketBatch,
+    ) -> (
+        Option<DeserializedPacketBatch>,
+        Option<usize>,
+        Option<usize>,
+    ) {
+        // push new batch to the end of Vec to join existing batches for prioritizing and selecting
+        self.push_back(deserialized_packet_batch);
+        let new_batch_index = self.len() - 1;
+
+        // Right now, it doesn't have a bank that can be used to calculate fee/cu at
+        // point of packet receiving.
+        let bank_to_compute_fee: Option<Arc<Bank>> = None;
+        // Get locators ordered by fee then sender's stake, the highest priority packet's locator
+        // at the top.
+        let ordered_locators_for_eviction = self.prioritize_by_fee_then_stakes(bank_to_compute_fee);
+
+        // Start from the lowest priority to collect packets as candidates to be dropped, until
+        // find a Batch that would no longer have unprocessed packets.
+        let mut eviction_batch_index: Option<usize> = None;
+        let mut evicting_packets = HashMap::<usize, Vec<usize>>::new();
+        for locator in ordered_locators_for_eviction.iter().rev() {
+            if let Some(batch) = self.get(locator.batch_index) {
+                if batch
+                    .unprocessed_packets
+                    .contains_key(&locator.packet_index)
+                {
+                    let packet_indexes = evicting_packets
+                        .entry(locator.batch_index)
+                        .or_insert(vec![]);
+                    packet_indexes.push(locator.packet_index);
+
+                    if Self::would_be_empty_batch(batch, packet_indexes) {
+                        // found an empty batch can be swapped with new batch
+                        eviction_batch_index = Some(locator.batch_index);
+                        break;
+                    }
+                }
+            }
+        }
+        // remove those evicted packets by removing them from `unprocessed` list
+        let mut dropped_packets_count: Option<usize> = None;
+        evicting_packets
+            .iter()
+            .for_each(|(batch_index, evicted_packet_indexes)| {
+                if let Some(batch) = self.get_mut(*batch_index) {
+                    batch
+                        .unprocessed_packets
+                        .retain(|&k, _| !evicted_packet_indexes.contains(&k));
+                    dropped_packets_count = Some(
+                        dropped_packets_count
+                            .unwrap_or(0usize)
+                            .saturating_add(evicted_packet_indexes.len()),
+                    );
+                }
+            });
+
+        if let Some(eviction_batch_index) = eviction_batch_index {
+            if eviction_batch_index == new_batch_index {
+                // the new batch is identified to be the one for eviction, just pop it out;
+                (self.pop_back(), None, dropped_packets_count)
+            } else {
+                // we have a spot in the queue, swap it with the new batch at end of queue;
+                (
+                    self.swap_remove_back(eviction_batch_index),
+                    Some(1usize),
+                    dropped_packets_count,
+                )
+            }
+        } else {
+            warn!("Cannot find eviction candidate from buffer in single iteration. New packet batch is dropped.");
+            (self.pop_back(), None, dropped_packets_count)
+        }
+    }
+
+    /// Returns True if all unprocessed packets in the batch are in eviction list
+    fn would_be_empty_batch(
+        deserialized_packet_batch: &DeserializedPacketBatch,
+        eviction_list: &[usize],
+    ) -> bool {
+        if deserialized_packet_batch.unprocessed_packets.len() != eviction_list.len() {
+            return false;
+        }
+
+        for (k, _) in deserialized_packet_batch.unprocessed_packets.iter() {
+            if !eviction_list.contains(k) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -213,7 +439,17 @@ impl DeserializedPacketBatch {
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_runtime::{
+            bank::goto_end_of_slot,
+            genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        },
+        solana_sdk::{
+            compute_budget::ComputeBudgetInstruction,
+            signature::{Keypair, Signer},
+            system_instruction::{self},
+            system_transaction,
+            transaction::Transaction,
+        },
         std::net::IpAddr,
     };
 
@@ -333,5 +569,221 @@ mod tests {
                     .1
             );
         });
+    }
+
+    #[test]
+    fn test_replace_packet_by_priority() {
+        solana_logger::setup();
+
+        let batch = DeserializedPacketBatch::new(
+            PacketBatch::new(vec![
+                packet_with_sender_stake(200, None),
+                packet_with_sender_stake(210, None),
+            ]),
+            vec![0, 1],
+            false,
+        );
+        let mut unprocessed_packets: UnprocessedPacketBatches = vec![batch].into_iter().collect();
+
+        // try to insert one with weight lesser than anything in buffer.
+        // the new one should be rejected, and buffer should be unchanged
+        {
+            let sender_stake = 0u64;
+            let new_batch = DeserializedPacketBatch::new(
+                PacketBatch::new(vec![packet_with_sender_stake(sender_stake, None)]),
+                vec![0],
+                false,
+            );
+            let (dropped_batch, _, _) = unprocessed_packets.replace_packet_by_priority(new_batch);
+            // dropped batch should be the one made from new packet:
+            let dropped_packets = dropped_batch.unwrap();
+            assert_eq!(1, dropped_packets.packet_batch.packets.len());
+            assert_eq!(
+                sender_stake,
+                dropped_packets.packet_batch.packets[0].meta.sender_stake
+            );
+            // buffer should be unchanged
+            assert_eq!(1, unprocessed_packets.len());
+        }
+
+        // try to insert one with sender_stake higher than anything in buffer.
+        // the lest sender_stake batch should be dropped, new one will take its palce.
+        {
+            let sender_stake = 50_000u64;
+            let new_batch = DeserializedPacketBatch::new(
+                PacketBatch::new(vec![packet_with_sender_stake(sender_stake, None)]),
+                vec![0],
+                false,
+            );
+            let (dropped_batch, _, _) = unprocessed_packets.replace_packet_by_priority(new_batch);
+            // dropped batch should be the one with lest sender_stake in buffer (the 3rd batch):
+            let dropped_packets = dropped_batch.unwrap();
+            assert_eq!(2, dropped_packets.packet_batch.packets.len());
+            assert_eq!(
+                200,
+                dropped_packets.packet_batch.packets[0].meta.sender_stake
+            );
+            assert_eq!(
+                210,
+                dropped_packets.packet_batch.packets[1].meta.sender_stake
+            );
+            // buffer should still have 1 batches
+            assert_eq!(1, unprocessed_packets.len());
+            // ... which should be the new batch with one packet
+            assert_eq!(1, unprocessed_packets[0].packet_batch.packets.len());
+            assert_eq!(
+                sender_stake,
+                unprocessed_packets[0].packet_batch.packets[0]
+                    .meta
+                    .sender_stake
+            );
+            assert_eq!(1, unprocessed_packets[0].unprocessed_packets.len());
+        }
+    }
+
+    // build a buffer of four batches, each contains packet with following stake:
+    // 0: [ 10, 300]
+    // 1: [100, 200, 300]
+    // 2: [ 20,  30,  40]
+    // 3: [500,  30, 200]
+    fn build_unprocessed_packets_buffer() -> UnprocessedPacketBatches {
+        vec![
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_sender_stake(10, None),
+                    packet_with_sender_stake(300, None),
+                    packet_with_sender_stake(200, None),
+                ]),
+                vec![0, 1],
+                false,
+            ),
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_sender_stake(100, None),
+                    packet_with_sender_stake(200, None),
+                    packet_with_sender_stake(300, None),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_sender_stake(20, None),
+                    packet_with_sender_stake(30, None),
+                    packet_with_sender_stake(40, None),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+            DeserializedPacketBatch::new(
+                PacketBatch::new(vec![
+                    packet_with_sender_stake(500, None),
+                    packet_with_sender_stake(30, None),
+                    packet_with_sender_stake(200, None),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    #[test]
+    fn test_prioritize_by_fee_per_cu() {
+        solana_logger::setup();
+
+        let leader = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(1_000_000, &leader, 3);
+        genesis_config
+            .fee_rate_governor
+            .target_lamports_per_signature = 1;
+        genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
+        goto_end_of_slot(&mut bank);
+        // build a "packet" with higher fee-pr-cu with compute_budget instruction.
+        let key0 = Keypair::new();
+        let key1 = Keypair::new();
+        let ix0 = system_instruction::transfer(&key0.pubkey(), &key1.pubkey(), 1);
+        let ix1 = system_instruction::transfer(&key1.pubkey(), &key0.pubkey(), 1);
+        let ix_cb = ComputeBudgetInstruction::request_units(1000, 20000);
+        let message = Message::new(&[ix0, ix1, ix_cb], Some(&key0.pubkey()));
+        let tx = Transaction::new(&[&key0, &key1], message, bank.last_blockhash());
+        let packet = Packet::from_data(None, &tx).unwrap();
+
+        // build a buffer with 4 batches
+        let mut unprocessed_packets = build_unprocessed_packets_buffer();
+        // add "packet" with higher fee-per-cu to buffer
+        unprocessed_packets.push_back(DeserializedPacketBatch::new(
+            PacketBatch::new(vec![packet]),
+            vec![0],
+            false,
+        ));
+        // randomly select 4 packets plus the higher fee/cu packets to feed into
+        // prioritize_by_fee_per_cu function.
+        let locators = vec![
+            PacketLocator {
+                batch_index: 2,
+                packet_index: 2,
+            },
+            PacketLocator {
+                batch_index: 1,
+                packet_index: 2,
+            },
+            PacketLocator {
+                batch_index: 3,
+                packet_index: 0,
+            },
+            PacketLocator {
+                batch_index: 3,
+                packet_index: 2,
+            },
+            PacketLocator {
+                batch_index: 4,
+                packet_index: 0,
+            },
+        ];
+
+        // If no bank is given, fee-per-cu won't calculate, should expect output is same as input
+        {
+            let prioritized_locators =
+                unprocessed_packets.prioritize_by_fee_per_cu(&locators, None);
+            assert_eq!(locators, prioritized_locators);
+        }
+
+        // If bank is given, fee-per-cu is calculated, should expect higher fee-per-cu come
+        // out first
+        {
+            let expected_locators = vec![
+                PacketLocator {
+                    batch_index: 4,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 2,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 1,
+                    packet_index: 2,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 0,
+                },
+                PacketLocator {
+                    batch_index: 3,
+                    packet_index: 2,
+                },
+            ];
+
+            let prioritized_locators =
+                unprocessed_packets.prioritize_by_fee_per_cu(&locators, Some(Arc::new(bank)));
+            assert_eq!(expected_locators, prioritized_locators);
+        }
     }
 }
