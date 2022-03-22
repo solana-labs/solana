@@ -42,12 +42,12 @@ impl SlotPohTimestamp {
         }
     }
 
-    /// Return the time difference from slot start to slot shred full
-    pub fn slot_start_to_full_time(&self) -> i64 {
-        (self.full_time as i64).saturating_sub(self.start_time as i64)
+    /// Return the time difference from slot full to slot start
+    pub fn slot_full_to_start_time(&self) -> i64 {
+        (self.start_time as i64).saturating_sub(self.full_time as i64)
     }
 
-    /// Return the time difference from slot shred full to slot end
+    /// Return the time difference from slot full to slot end
     pub fn slot_full_to_end_time(&self) -> i64 {
         (self.end_time as i64).saturating_sub(self.full_time as i64)
     }
@@ -80,8 +80,8 @@ impl PohTimingReporter {
             ("end_time", slot_timestamp.end_time as i64, i64),
             ("full_time", slot_timestamp.full_time as i64, i64),
             (
-                "start_to_full_time_diff",
-                slot_timestamp.slot_start_to_full_time(),
+                "full_to_start_time_diff",
+                slot_timestamp.slot_full_to_start_time(),
                 i64
             ),
             (
