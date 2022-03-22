@@ -164,7 +164,7 @@ impl Message {
     ///      instruction::Instruction,
     ///      message::Message,
     ///      pubkey::Pubkey,
-    ///      signature::Keypair,
+    ///      signature::{Keypair, Signer},
     ///      transaction::Transaction,
     /// };
     ///
@@ -235,7 +235,7 @@ impl Message {
     ///      instruction::Instruction,
     ///      message::Message,
     ///      pubkey::Pubkey,
-    ///      signature::Keypair,
+    ///      signature::{Keypair, Signer},
     ///      transaction::Transaction,
     /// };
     ///
@@ -333,7 +333,7 @@ impl Message {
     ///      message::Message,
     ///      nonce,
     ///      pubkey::Pubkey,
-    ///      signature::Keypair,
+    ///      signature::{Keypair, Signer},
     ///      system_instruction,
     ///      transaction::Transaction,
     /// };
