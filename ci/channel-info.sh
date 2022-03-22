@@ -120,3 +120,6 @@ echo CHANNEL="$CHANNEL"
 echo CHANNEL_LATEST_TAG="$CHANNEL_LATEST_TAG"
 
 exit 0
+
+
+#comment
