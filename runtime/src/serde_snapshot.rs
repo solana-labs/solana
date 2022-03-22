@@ -174,7 +174,18 @@ trait TypeContext<'a> {
     ) -> Result<AccountsDbFields<Self::SerializableAccountStorageEntry>, Error>
     where
         R: Read;
-}
+
+        fn reserialize_bank_fields_with_hash<R, W>(
+            stream_read: &mut BufReader<R>,
+            stream_write: &mut BufWriter<W>,
+            //stream_write: &mut BufWriter<File>
+            hash: &Hash,
+        ) -> std::result::Result<(), Box<bincode::ErrorKind>>
+        where
+        R: Read,
+        W: Write;
+        
+    }
 
 fn deserialize_from<R, T>(reader: R) -> bincode::Result<T>
 where
@@ -253,6 +264,17 @@ where
         warn!("bankrc_from_stream error: {:?}", err);
         err
     })
+}
+
+pub fn reserialize_with_new_hash<W, R>(
+    write_stream: &mut BufWriter<W>,
+    read_stream: &mut BufReader<R>,
+) -> Result<(), Error>
+where
+    W: Write,
+    R: Read,
+{
+    newer::Context::reserialize_bank_fields_with_hash(read_stream, write_stream, &Hash::default())
 }
 
 pub(crate) fn bank_to_stream<W>(

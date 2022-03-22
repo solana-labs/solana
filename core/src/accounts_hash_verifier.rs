@@ -137,6 +137,33 @@ impl AccountsHashVerifier {
             assert_eq!(accounts_package.expected_capitalization, lamports);
             assert_eq!(expected_hash, hash);
         };
+        let slot = accounts_package.slot;
+        let mut bank = accounts_package.snapshot_archives_dir.clone();
+
+        let links = accounts_package.snapshot_links.path().clone();
+
+        let mut bank_out = bank.clone();
+        bank_out.pop();
+        bank_out.push(".temp");
+        accounts_package.snapshot_links, bank, std::fs::read_dir(&links).map(|x| x.collect::<Vec<_>>()));
+        let mut file = std::fs::File::open(bank.clone());
+        use std::io::BufReader;
+        use std::io::BufWriter;
+        let mut file_out = std::fs::File::create(bank_out.clone());
+        if file.is_ok() && file_out.is_ok() {
+            {
+                let mut file = file.unwrap();
+                let mut file_out = file_out.unwrap();
+                let r = solana_runtime::serde_snapshot::reserialize_with_new_hash(&mut BufWriter::new(file_out), &mut BufReader::new(file));
+                // todo - what happens if this fails?
+            }
+            // replace the original file with this one
+            std::fs::rename(bank_out, bank).unwrap();
+        }
+        else {
+            // todo - this can't happen either
+        }
+
         measure_hash.stop();
         datapoint_info!(
             "accounts_hash_verifier",
