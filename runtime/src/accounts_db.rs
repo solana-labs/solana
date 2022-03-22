@@ -46,7 +46,7 @@ use {
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         sorted_storages::SortedStorages,
-        storable_accounts::StorableAccounts,
+        storable_accounts::{StorableAccounts, StorableAccountsMovingSlots},
     },
     blake3::traits::digest::Digest,
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -54,6 +54,7 @@ use {
         mapref::entry::Entry::{Occupied, Vacant},
         DashMap, DashSet,
     },
+    itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
@@ -4776,12 +4777,36 @@ impl AccountsDb {
         // Iterate from highest to lowest so that we don't need to flush earlier
         // outdated updates in earlier roots
         let mut num_roots_flushed = 0;
-        for &root in cached_roots.iter().rev() {
+        if !cached_roots.is_empty() {
+            let max_root = *cached_roots.iter().max().unwrap();
+            let mut roots = cached_roots.iter().rev().cloned().collect::<Vec<_>>();
+
+            let mut no_clean = Vec::default();
+            roots.retain(|root| {
+                if let Some(max_clean) = max_clean_root.as_ref() {
+                    if root > max_clean {
+                        no_clean.push(*root);
+                        return false;
+                    }
+                }
+                true
+            });
+
             if self
-                .flush_slot_cache_with_clean(&[root], should_flush_f.as_mut(), max_clean_root)
+                .flush_slot_cache_with_clean(&roots, should_flush_f.as_mut(), None)
                 .is_some()
             {
-                num_roots_flushed += 1;
+                num_roots_flushed += roots.len();
+            }
+
+            // flush these slots independently without cleaning
+            for slot in no_clean {
+                if self
+                    .flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
+                    .is_some()
+                {
+                    num_roots_flushed += 1;
+                }
             }
 
             // Regardless of whether this slot was *just* flushed from the cache by the above
@@ -4791,7 +4816,7 @@ impl AccountsDb {
             //  the cache is overwhelmed, we flushed some yet to be rooted frozen slots
             // These slots may then *later* be marked as root, so we still need to handle updating the
             // `max_flush_root` in the accounts cache.
-            self.accounts_cache.set_max_flush_root(root);
+            self.accounts_cache.set_max_flush_root(max_root);
         }
 
         // Only add to the uncleaned roots set *after* we've flushed the previous roots,
@@ -4801,90 +4826,164 @@ impl AccountsDb {
         (num_new_roots, num_roots_flushed)
     }
 
-    fn do_flush_slot_cache(
+    fn do_flush_slot_cache<A: FnMut(&Pubkey, &AccountSharedData) -> bool>(
         &self,
-        slot: Slot,
-        slot_cache: &SlotCache,
-        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        slot_caches: &[(Slot, SlotCache)],
+        mut should_flush_f_orig: Option<&mut A>,
         max_clean_root: Option<Slot>,
     ) -> FlushStats {
         let mut num_purged = 0;
         let mut total_size = 0;
         let mut num_flushed = 0;
-        let iter_items: Vec<_> = slot_cache.iter().collect();
-        let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
-        let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
-        if should_flush_f.is_some() {
-            if let Some(max_clean_root) = max_clean_root {
-                if slot > max_clean_root {
-                    // Only if the root is greater than the `max_clean_root` do we
-                    // have to prevent cleaning, otherwise, just default to `should_flush_f`
-                    // for any slots <= `max_clean_root`
-                    should_flush_f = None;
+        let mut all_accounts = Vec::new();
+        let mut all_hashes = Vec::new();
+
+        // should be in highest to lowest slot order
+        for i in 1..slot_caches.len() {
+            assert!(slot_caches[i - 1].0 > slot_caches[i].0, "{:?}", slot_caches);
+        }
+        let mut i = 0; // we have to do this in chunks if we exceed the max size of an appendvec
+        while i < slot_caches.len() {
+            let start_i = i;
+            let mut new_slot = Slot::MAX;
+            while i < slot_caches.len() {
+                let (slot, iter_items) = &slot_caches[i];
+                let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
+                let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
+                let mut should_flush_f = &mut should_flush_f_orig;
+                let mut should_flush_f_none = None::<&mut A>;
+                if should_flush_f.is_some() {
+                    if let Some(max_clean_root) = max_clean_root {
+                        if slot > &max_clean_root {
+                            // Only if the root is greater than the `max_clean_root` do we
+                            // have to prevent cleaning, otherwise, just default to `should_flush_f`
+                            // for any slots <= `max_clean_root`
+                            should_flush_f = &mut should_flush_f_none;
+                        }
+                    }
                 }
+                let (accounts, hashes): (Vec<Pubkey>, Vec<Hash>) = iter_items
+                    .iter()
+                    .filter_map(|iter_item| {
+                        let key = iter_item.key();
+                        let account = &iter_item.value().account;
+                        let should_flush = should_flush_f
+                            .as_mut()
+                            .map(|should_flush_f| should_flush_f(key, account))
+                            .unwrap_or(true);
+                        if should_flush {
+                            let hash = iter_item.value().hash();
+                            total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
+                            num_flushed += 1;
+                            Some((*key, hash))
+                        } else {
+                            // If we don't flush, we have to remove the entry from the
+                            // index, since it's equivalent to purging
+                            purged_slot_pubkeys.insert((*slot, *key));
+                            pubkey_to_slot_set.push((*key, *slot));
+                            num_purged += 1;
+                            None
+                        }
+                    })
+                    .unzip();
+
+                // Remove the account index entries from earlier roots that are outdated by later roots.
+                // Safe because queries to the index will be reading updates from later roots.
+                // todo may not be working correctly?
+                self.purge_slot_cache_pubkeys(
+                    *slot,
+                    purged_slot_pubkeys,
+                    pubkey_to_slot_set,
+                    accounts.is_empty(),
+                );
+
+                if !accounts.is_empty() {
+                    new_slot = std::cmp::min(new_slot, *slot);
+                    all_accounts.push(accounts);
+                    all_hashes.push(hashes);
+                }
+                i += 1;
             }
-        }
-        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
-            .iter()
-            .filter_map(|iter_item| {
-                let key = iter_item.key();
-                let account = &iter_item.value().account;
-                let should_flush = should_flush_f
-                    .as_mut()
-                    .map(|should_flush_f| should_flush_f(key, account))
-                    .unwrap_or(true);
-                if should_flush {
-                    let hash = iter_item.value().hash();
-                    total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
-                    num_flushed += 1;
-                    Some(((key, account), hash))
-                } else {
-                    // If we don't flush, we have to remove the entry from the
-                    // index, since it's equivalent to purging
-                    purged_slot_pubkeys.insert((slot, *key));
-                    pubkey_to_slot_set.push((*key, slot));
-                    num_purged += 1;
-                    None
+
+            if !all_accounts.is_empty() {
+                assert!(
+                    self.storage.get_slot_stores(new_slot).is_none(),
+                    "combining {} slots into 1 slot: {}, {:?}, storages: {:?}",
+                    slot_caches.len(),
+                    new_slot,
+                    slot_caches.iter().map(|(slot, _)| slot).collect::<Vec<_>>(),
+                    self.storage.get_slot_stores(new_slot)
+                );
+
+                let aligned_total_size = Self::page_align(total_size);
+                // This ensures that all updates are written to an AppendVec, before any
+                // updates to the index happen, so anybody that sees a real entry in the index,
+                // will be able to find the account in storage
+                let flushed_store =
+                    self.create_and_insert_store(new_slot, aligned_total_size, "flush_slot_cache");
+
+                let len = all_accounts.len();
+                // add in reverse order so higher slot contents are after lower slot contents
+                for slot_cache_idx in (0..len).rev() {
+                    let slot_cache_idx = slot_cache_idx + start_i;
+                    // store accounts from this slot into the append vec
+                    let accounts_this_slot = &all_accounts[slot_cache_idx];
+                    let hashes_this_slot = &all_hashes[slot_cache_idx];
+                    let (slot, slot_cache) = &slot_caches[slot_cache_idx];
+                    // this 'collect' is to satisfy the borrow checker
+                    // we need references to the contents of entries in the dashmap
+                    let iter_items /* dashmap::mapref */ = accounts_this_slot
+                        .iter()
+                        .map(|key| slot_cache.get(key).unwrap())
+                        .collect::<Vec<_>>();
+
+                    // collect key and account into what is required by 'store_accounts_frozen'
+                    let accounts_this_slot = iter_items
+                        .iter()
+                        .map(|item| {
+                            let key = item.key();
+                            let account = &item.value().account;
+                            (key, account)
+                        })
+                        .collect::<Vec<_>>();
+
+                    let flushed_store = flushed_store.clone();
+                    self.store_accounts_frozen(
+                        StorableAccountsMovingSlots {
+                            target_slot: new_slot,
+                            old_slot: *slot,
+                            accounts: &accounts_this_slot[..],
+                        },
+                        Some(hashes_this_slot),
+                        Some(Box::new(move |_, _| flushed_store.clone())),
+                        None,
+                    );
                 }
-            })
-            .unzip();
-
-        let is_dead_slot = accounts.is_empty();
-        // Remove the account index entries from earlier roots that are outdated by later roots.
-        // Safe because queries to the index will be reading updates from later roots.
-        self.purge_slot_cache_pubkeys(slot, purged_slot_pubkeys, pubkey_to_slot_set, is_dead_slot);
-
-        if !is_dead_slot {
-            let aligned_total_size = Self::page_align(total_size);
-            // This ensures that all updates are written to an AppendVec, before any
-            // updates to the index happen, so anybody that sees a real entry in the index,
-            // will be able to find the account in storage
-            let flushed_store =
-                self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
-            self.store_accounts_frozen(
-                (slot, &accounts[..]),
-                Some(&hashes),
-                Some(Box::new(move |_, _| flushed_store.clone())),
-                None,
-            );
-            // If the above sizing function is correct, just one AppendVec is enough to hold
-            // all the data for the slot
-            assert_eq!(
-                self.storage
-                    .get_slot_stores(slot)
-                    .unwrap()
-                    .read()
-                    .unwrap()
-                    .len(),
-                1
-            );
+                // If the above sizing function is correct, just one AppendVec is enough to hold
+                // all the data for the slot
+                assert_eq!(
+                    self.storage
+                        .get_slot_stores(new_slot)
+                        .unwrap()
+                        .read()
+                        .unwrap()
+                        .len(),
+                    1
+                );
+            }
+            slot_caches
+                .iter()
+                .map(|(slot, _): &(Slot, _)| *slot)
+                .unique()
+                .for_each(|slot| {
+                    // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
+                    // atomic switch from the cache to storage.
+                    // There is some racy condition for existing readers who just has read exactly while
+                    // flushing. That case is handled by retry_to_get_account_accessor()
+                    assert!(self.accounts_cache.remove_slot(slot).is_some());
+                });
         }
 
-        // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
-        // atomic switch from the cache to storage.
-        // There is some racy condition for existing readers who just has read exactly while
-        // flushing. That case is handled by retry_to_get_account_accessor()
-        assert!(self.accounts_cache.remove_slot(slot).is_some());
         FlushStats {
             num_flushed,
             num_purged,
@@ -4897,6 +4996,40 @@ impl AccountsDb {
         self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
     }
 
+    /// return true iff success
+    /// otherwise, 'slots_under_contention' is restored to its initial state
+    fn add_or_remove_slots_under_contention(&self, slots: &[Slot], add: bool) -> bool {
+        let mut slots_under_contention = self
+            .remove_unrooted_slots_synchronization
+            .slots_under_contention
+            .lock()
+            .unwrap();
+        let mut success = true;
+
+        if add {
+            for i in 0..slots.len() {
+                let slot = slots[i];
+                // If we're purging this slot, don't flush it here
+                if !slots_under_contention.insert(slot) {
+                    (&slots[..i])
+                        .iter()
+                        .for_each(|slot| assert!(slots_under_contention.remove(slot)));
+                    success = false;
+                    break;
+                }
+            }
+        } else {
+            slots
+                .iter()
+                .for_each(|slot| assert!(slots_under_contention.remove(slot)))
+        }
+
+        self.remove_unrooted_slots_synchronization
+            .signal
+            .notify_all();
+        success
+    }
+
     /// `should_flush_f` is an optional closure that determines whether a given
     /// account should be flushed. Passing `None` will by default flush all
     /// accounts
@@ -4906,51 +5039,25 @@ impl AccountsDb {
         should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
         max_clean_root: Option<Slot>,
     ) -> Option<FlushStats> {
-        assert_eq!(1, slots.len());
-        let slot = slots[0];
-        if self
-            .remove_unrooted_slots_synchronization
-            .slots_under_contention
-            .lock()
-            .unwrap()
-            .insert(slot)
-        {
-            // We have not see this slot, flush it.
-            let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
-                #[cfg(test)]
-                {
-                    // Give some time for cache flushing to occur here for unit tests
-                    sleep(Duration::from_millis(self.load_delay));
-                }
-                // Since we added the slot to `slots_under_contention` AND this slot
-                // still exists in the cache, we know the slot cannot be removed
-                // by any other threads past this point. We are now responsible for
-                // flushing this slot.
-                self.do_flush_slot_cache(slot, &slot_cache, should_flush_f, max_clean_root)
-            });
-
-            // Nobody else should have been purging this slot, so should not have been removed
-            // from `self.remove_unrooted_slots_synchronization`.
-
-            slots.iter().for_each(|slot| {
-                assert!(self
-                    .remove_unrooted_slots_synchronization
-                    .slots_under_contention
-                    .lock()
-                    .unwrap()
-                    .remove(slot));
-            });
-
-            // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
-            // flushing
-            self.remove_unrooted_slots_synchronization
-                .signal
-                .notify_all();
-            flush_stats
-        } else {
-            // We have already seen this slot. It is already under flushing. Skip.
-            None
+        const ADD: bool = true;
+        if !self.add_or_remove_slots_under_contention(slots, ADD) {
+            return None;
         }
+
+        let slot_caches = slots
+            .iter()
+            .filter_map(|slot| {
+                self.accounts_cache
+                    .slot_cache(*slot)
+                    .map(|slot_cache| (*slot, slot_cache))
+            })
+            .collect::<Vec<_>>();
+        let flush_stats = self.do_flush_slot_cache(&slot_caches, should_flush_f, max_clean_root);
+
+        // Nobody else should have been purging this slot, so should not have been removed
+        // from `self.remove_unrooted_slots_synchronization`.
+        self.add_or_remove_slots_under_contention(slots, !ADD);
+        Some(flush_stats)
     }
 
     fn write_accounts_to_cache(
@@ -5264,7 +5371,7 @@ impl AccountsDb {
                                     None
                                 }
                             } else {
-                                None
+                            None
                             }
                         })
                         .collect();
@@ -11852,7 +11959,7 @@ pub mod tests {
         );
         assert_eq!(
             db.load_without_fixed_root(&Ancestors::default(), &key6),
-            Some((account0, root6))
+            Some((account0, root5)) // root 5 because we squash 5 & 6 into 5
         );
     }
 
@@ -11875,6 +11982,8 @@ pub mod tests {
     }
 
     fn run_test_flush_accounts_cache_if_needed(num_roots: usize, num_unrooted: usize) {
+        error!("roots: {}, unrooted: {}", num_roots, num_unrooted);
+        solana_logger::setup();
         let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         db.write_cache_limit_bytes = Some(max_cache_slots() as u64);
         db.caching_enabled = true;
@@ -11892,6 +12001,7 @@ pub mod tests {
             }
         }
 
+        let aggressively_flush = db.should_aggressively_flush_cache();
         db.flush_accounts_cache(false, None);
 
         let total_slots = num_roots + num_unrooted;
@@ -11919,15 +12029,22 @@ pub mod tests {
         }
 
         // Should still be able to fetch all the accounts after flush
-        for (slot, key) in (0..num_slots as Slot).zip(keys) {
+        let min_slot = 0;
+        for (slot, key) in (min_slot..num_slots as Slot).zip(keys) {
             let ancestors = if slot < num_roots as Slot {
                 Ancestors::default()
             } else {
                 vec![(slot, 1)].into_iter().collect()
             };
+            let expected_slot = if slot < num_roots as Slot && aggressively_flush {
+                min_slot
+            } else {
+                slot
+            };
+            error!("assert: slot: {}, expected: {}", slot, expected_slot);
             assert_eq!(
                 db.load_without_fixed_root(&ancestors, &key),
-                Some((account0.clone(), slot))
+                Some((account0.clone(), expected_slot))
             );
         }
     }
@@ -12482,7 +12599,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accounts_db_cache_clean() {
+    fn test_accounts_db_cache_clean2() {
         let (accounts_db, keys, slots, _) = setup_accounts_db_cache_clean(10, None, None);
 
         // If no `max_clean_root` is specified, cleaning should purge all flushed slots
@@ -12499,18 +12616,30 @@ pub mod tests {
             accounts_db.accounts_cache.fetch_max_flush_root(),
             *slots.last().unwrap()
         );
-
+        solana_logger::setup();
         // Each slot should only have one entry in the storage, since all other accounts were
         // cleaned due to later updates
         for slot in &slots {
-            if let ScanStorageResult::Stored(slot_account) = accounts_db.scan_account_storage(
+            error!("slot: {}, slots: {:?}", slot, slots);
+            if let ScanStorageResult::Stored(slot_accounts) = accounts_db.scan_account_storage(
                 *slot as Slot,
                 |_| Some(0),
-                |slot_account: &Arc<RwLock<Pubkey>>, loaded_account: LoadedAccount| {
-                    *slot_account.write().unwrap() = *loaded_account.pubkey();
+                |slot_accounts: &Arc<RwLock<HashSet<Pubkey>>>, loaded_account: LoadedAccount| {
+                    error!("found: {}", loaded_account.pubkey());
+                    slot_accounts
+                        .write()
+                        .unwrap()
+                        .insert(*loaded_account.pubkey());
                 },
             ) {
-                assert_eq!(*slot_account.read().unwrap(), keys[*slot as usize]);
+                assert_eq!(
+                    *slot_accounts.read().unwrap(),
+                    if slot == &slots[0] {
+                        keys.iter().cloned().collect()
+                    } else {
+                        HashSet::default()
+                    }
+                ); //keys[*slot as usize], "keys: {:?}", keys);
             } else {
                 panic!("Everything should have been flushed")
             }
@@ -12568,6 +12697,8 @@ pub mod tests {
             expected_max_flushed_root,
         );
 
+        let mut outer_expected_accounts = HashSet::<Pubkey>::default();
+        let mut outer_accounts = HashSet::<Pubkey>::default();
         for slot in &slots {
             let slot_accounts = accounts_db.scan_account_storage(
                 *slot as Slot,
@@ -12599,6 +12730,7 @@ pub mod tests {
                     slot_accounts.into_iter().collect::<HashSet<Pubkey>>()
                 }
             };
+            outer_accounts.extend(&mut slot_accounts.into_iter());
 
             let expected_accounts =
                 if *slot >= requested_flush_root || *slot >= scan_root.unwrap_or(Slot::MAX) {
@@ -12624,9 +12756,9 @@ pub mod tests {
                         .into_iter()
                         .collect::<HashSet<Pubkey>>()
                 };
-
-            assert_eq!(slot_accounts, expected_accounts);
+            outer_expected_accounts.extend(&mut expected_accounts.into_iter());
         }
+        assert_eq!(outer_accounts, outer_expected_accounts);
 
         if let Some(scan_tracker) = scan_tracker {
             scan_tracker.exit().unwrap();
@@ -12696,6 +12828,8 @@ pub mod tests {
 
         // If no cleaning is specified, then flush everything
         accounts_db.flush_rooted_accounts_cache(None, should_clean_tracker);
+        let mut outer_expected_accounts = HashSet::<Pubkey>::default();
+        let mut outer_accounts = HashSet::<Pubkey>::default();
         for slot in &slots {
             let slot_accounts = if let ScanStorageResult::Stored(slot_accounts) = accounts_db
                 .scan_account_storage(
@@ -12709,6 +12843,8 @@ pub mod tests {
             } else {
                 panic!("All roots should have been flushed to storage");
             };
+            outer_accounts.extend(&mut slot_accounts.into_iter());
+
             let expected_accounts = if !should_clean || slot == slots.last().unwrap() {
                 // The slot was not cleaned before being flushed to storage,
                 // so it also contains all the original updates.
@@ -12723,8 +12859,9 @@ pub mod tests {
                     .into_iter()
                     .collect::<HashSet<Pubkey>>()
             };
-            assert_eq!(slot_accounts, expected_accounts);
+            outer_expected_accounts.extend(&mut expected_accounts.into_iter());
         }
+        assert_eq!(outer_accounts, outer_expected_accounts);
     }
 
     #[test]
@@ -12804,7 +12941,8 @@ pub mod tests {
         db.clean_accounts(Some(2), false, None);
 
         // No stores should exist for slot 0 after clean
-        assert!(db.storage.get_slot_storage_entries(0).is_none());
+        // we can't assert this anymore, because squashing slots puts them at slot 0
+        // assert!(db.storage.get_slot_storage_entries(0).is_none());
 
         // Ref count for `account_key1` (account removed earlier by shrink)
         // should be 1, since it was only stored in slot 0 and 1, and slot 0
