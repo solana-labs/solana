@@ -266,6 +266,7 @@ impl Banks for BanksServer {
             logs,
             post_simulation_accounts: _,
             units_consumed,
+            return_data,
         } = self
             .bank(commitment)
             .simulate_transaction_unchecked(sanitized_transaction)
@@ -275,6 +276,7 @@ impl Banks for BanksServer {
                 simulation_details: Some(TransactionSimulationDetails {
                     logs,
                     units_consumed,
+                    return_data,
                 }),
             };
         }

@@ -130,7 +130,10 @@ use {
             MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
-        transaction_context::{InstructionTrace, TransactionAccount, TransactionContext},
+        transaction_context::{
+            ExecutionRecord, InstructionTrace, TransactionAccount, TransactionContext,
+            TransactionReturnData,
+        },
     },
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
@@ -579,6 +582,7 @@ pub struct TransactionExecutionDetails {
     pub log_messages: Option<Vec<String>>,
     pub inner_instructions: Option<InnerInstructionsList>,
     pub durable_nonce_fee: Option<DurableNonceFee>,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 /// Type safe representation of a transaction execution attempt which
@@ -670,6 +674,7 @@ pub struct TransactionSimulationResult {
     pub logs: TransactionLogMessages,
     pub post_simulation_accounts: Vec<TransactionAccount>,
     pub units_consumed: u64,
+    pub return_data: Option<TransactionReturnData>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
@@ -3541,6 +3546,7 @@ impl Bank {
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
             false,
             true,
+            true,
             &mut timings,
         );
 
@@ -3571,17 +3577,20 @@ impl Bank {
 
         let execution_result = execution_results.pop().unwrap();
         let flattened_result = execution_result.flattened_result();
-        let logs = match execution_result {
-            TransactionExecutionResult::Executed(details) => details.log_messages,
-            TransactionExecutionResult::NotExecuted(_) => None,
-        }
-        .unwrap_or_default();
+        let (logs, return_data) = match execution_result {
+            TransactionExecutionResult::Executed(details) => {
+                (details.log_messages, details.return_data)
+            }
+            TransactionExecutionResult::NotExecuted(_) => (None, None),
+        };
+        let logs = logs.unwrap_or_default();
 
         TransactionSimulationResult {
             result: flattened_result,
             logs,
             post_simulation_accounts,
             units_consumed,
+            return_data,
         }
     }
 
@@ -3858,6 +3867,7 @@ impl Bank {
 
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
+    #[allow(clippy::too_many_arguments)]
     fn execute_loaded_transaction(
         &self,
         tx: &SanitizedTransaction,
@@ -3866,6 +3876,7 @@ impl Bank {
         durable_nonce_fee: Option<DurableNonceFee>,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
+        enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
         error_counters: &mut ErrorCounters,
     ) -> TransactionExecutionResult {
@@ -3960,7 +3971,11 @@ impl Bank {
                     .ok()
             });
 
-        let (accounts, instruction_trace) = transaction_context.deconstruct();
+        let ExecutionRecord {
+            accounts,
+            instruction_trace,
+            mut return_data,
+        } = transaction_context.into();
         loaded_transaction.accounts = accounts;
 
         let inner_instructions = if enable_cpi_recording {
@@ -3971,11 +3986,25 @@ impl Bank {
             None
         };
 
+        let return_data = if enable_return_data_recording {
+            if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {
+                let end_index = end_index.saturating_add(1);
+                error!("end index {}", end_index);
+                return_data.data.truncate(end_index);
+                Some(return_data)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages,
             inner_instructions,
             durable_nonce_fee,
+            return_data,
         })
     }
 
@@ -3986,6 +4015,7 @@ impl Bank {
         max_age: usize,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
+        enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
@@ -4089,6 +4119,7 @@ impl Bank {
                         durable_nonce_fee,
                         enable_cpi_recording,
                         enable_log_recording,
+                        enable_return_data_recording,
                         timings,
                         &mut error_counters,
                     )
@@ -5240,6 +5271,7 @@ impl Bank {
         collect_balances: bool,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
+        enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
     ) -> (TransactionResults, TransactionBalancesSet) {
         let pre_balances = if collect_balances {
@@ -5260,6 +5292,7 @@ impl Bank {
             max_age,
             enable_cpi_recording,
             enable_log_recording,
+            enable_return_data_recording,
             timings,
         );
 
@@ -5343,6 +5376,7 @@ impl Bank {
         self.load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
+            false,
             false,
             false,
             false,
@@ -6774,6 +6808,7 @@ pub(crate) mod tests {
             message::{Message, MessageHeader},
             nonce,
             poh_config::PohConfig,
+            program::MAX_RETURN_DATA,
             rent::Rent,
             signature::{keypair_from_seed, Keypair, Signer},
             stake::{
@@ -6813,6 +6848,7 @@ pub(crate) mod tests {
             log_messages: None,
             inner_instructions: None,
             durable_nonce_fee: nonce.map(DurableNonceFee::from),
+            return_data: None,
         })
     }
 
@@ -9949,6 +9985,7 @@ pub(crate) mod tests {
                 false,
                 false,
                 false,
+                false,
                 &mut ExecuteTimings::default(),
             )
             .0
@@ -12480,6 +12517,7 @@ pub(crate) mod tests {
                 &lock_result,
                 MAX_PROCESSING_AGE,
                 true,
+                false,
                 false,
                 false,
                 &mut ExecuteTimings::default(),
@@ -15407,6 +15445,7 @@ pub(crate) mod tests {
                 false,
                 false,
                 true,
+                false,
                 &mut ExecuteTimings::default(),
             )
             .0
@@ -15447,6 +15486,91 @@ pub(crate) mod tests {
         assert!(failure_log_info.result.is_err());
         let failure_log = failure_log_info.log_messages.clone().pop().unwrap();
         assert!(failure_log.contains(&"failed".to_string()));
+    }
+
+    #[test]
+    fn test_tx_return_data() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let mut bank = Bank::new_for_tests(&genesis_config);
+
+        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        fn mock_process_instruction(
+            _first_instruction_account: usize,
+            data: &[u8],
+            invoke_context: &mut InvokeContext,
+        ) -> result::Result<(), InstructionError> {
+            let mock_program_id = Pubkey::new(&[2u8; 32]);
+            let transaction_context = &mut invoke_context.transaction_context;
+            let mut return_data = [0u8; MAX_RETURN_DATA];
+            if !data.is_empty() {
+                let index = usize::from_le_bytes(data.try_into().unwrap());
+                return_data[index] = 1;
+                transaction_context
+                    .set_return_data(mock_program_id, return_data.to_vec())
+                    .unwrap();
+            }
+            Ok(())
+        }
+        let blockhash = bank.last_blockhash();
+        bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
+
+        for index in [
+            None,
+            Some(0),
+            Some(MAX_RETURN_DATA / 2),
+            Some(MAX_RETURN_DATA - 1),
+        ] {
+            let data = if let Some(index) = index {
+                usize::to_le_bytes(index).to_vec()
+            } else {
+                Vec::new()
+            };
+            let txs = vec![Transaction::new_signed_with_payer(
+                &[Instruction {
+                    program_id: mock_program_id,
+                    data,
+                    accounts: vec![AccountMeta::new(Pubkey::new_unique(), false)],
+                }],
+                Some(&mint_keypair.pubkey()),
+                &[&mint_keypair],
+                blockhash,
+            )];
+            let batch = bank.prepare_batch_for_tests(txs);
+            let return_data = bank
+                .load_execute_and_commit_transactions(
+                    &batch,
+                    MAX_PROCESSING_AGE,
+                    false,
+                    false,
+                    false,
+                    true,
+                    &mut ExecuteTimings::default(),
+                )
+                .0
+                .execution_results[0]
+                .details()
+                .unwrap()
+                .return_data
+                .clone();
+            if let Some(index) = index {
+                let return_data = return_data.unwrap();
+                assert_eq!(return_data.program_id, mock_program_id);
+                let mut expected_data = vec![0u8; index];
+                expected_data.push(1u8);
+                assert_eq!(return_data.data, expected_data);
+            } else {
+                assert!(return_data.is_none());
+            }
+        }
     }
 
     #[test]

@@ -1331,7 +1331,7 @@ fn load_blockstore(
                 blockstore.clone(),
                 exit,
                 enable_rpc_transaction_history,
-                config.rpc_config.enable_cpi_and_log_storage,
+                config.rpc_config.enable_extended_tx_metadata_storage,
                 transaction_notifier,
             )
         } else {
@@ -1538,7 +1538,7 @@ fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
     enable_rpc_transaction_history: bool,
-    enable_cpi_and_log_storage: bool,
+    enable_extended_tx_metadata_storage: bool,
     transaction_notifier: Option<TransactionNotifierLock>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
@@ -1552,7 +1552,7 @@ fn initialize_rpc_transaction_history_services(
         enable_rpc_transaction_history,
         transaction_notifier.clone(),
         blockstore.clone(),
-        enable_cpi_and_log_storage,
+        enable_extended_tx_metadata_storage,
         exit,
     ));
 

@@ -4424,6 +4424,7 @@ dependencies = [
  "ed25519-dalek",
  "humantime",
  "indicatif",
+ "pretty-hex",
  "serde",
  "serde_json",
  "solana-account-decoder",
@@ -5309,6 +5310,7 @@ dependencies = [
 name = "solana-program-test"
 version = "1.11.0"
 dependencies = [
+ "assert_matches",
  "async-trait",
  "base64 0.13.0",
  "bincode",

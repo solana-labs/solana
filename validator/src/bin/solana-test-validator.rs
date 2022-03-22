@@ -657,7 +657,7 @@ fn main() {
         )
         .rpc_config(JsonRpcConfig {
             enable_rpc_transaction_history: true,
-            enable_cpi_and_log_storage: true,
+            enable_extended_tx_metadata_storage: true,
             rpc_bigtable_config,
             faucet_addr,
             ..JsonRpcConfig::default_for_test()

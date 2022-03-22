@@ -656,8 +656,18 @@ pub fn main() {
                 .long("enable-cpi-and-log-storage")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
-                .help("Include CPI inner instructions and logs in the \
-                        historical transaction info stored"),
+                .hidden(true)
+                .help("Deprecated, please use \"enable-extended-tx-metadata-storage\". \
+                       Include CPI inner instructions, logs and return data in \
+                       the historical transaction info stored"),
+        )
+        .arg(
+            Arg::with_name("enable_extended_tx_metadata_storage")
+                .long("enable-extended-tx-metadata-storage")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Include CPI inner instructions, logs, and return data in \
+                       the historical transaction info stored"),
         )
         .arg(
             Arg::with_name("rpc_max_multiple_accounts")
@@ -2294,7 +2304,15 @@ pub fn main() {
     };
 
     if matches.is_present("minimal_rpc_api") {
-        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
+        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args");
+    }
+
+    if matches.is_present("enable_cpi_and_log_storage") {
+        warn!(
+            "--enable-cpi-and-log-storage is deprecated. Please update the \
+            launch args to use --enable-extended-tx-metadata-storage and remove \
+            --enable-cpi-and-log-storage"
+        );
     }
 
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
@@ -2325,7 +2343,8 @@ pub fn main() {
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
-            enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
+            enable_extended_tx_metadata_storage: matches.is_present("enable_cpi_and_log_storage")
+                || matches.is_present("enable_extended_tx_metadata_storage"),
             rpc_bigtable_config,
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")

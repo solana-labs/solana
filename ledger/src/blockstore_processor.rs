@@ -181,6 +181,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
+        transaction_status_sender.is_some(),
         timings,
     );
 
@@ -3507,6 +3508,7 @@ pub mod tests {
         ) = batch.bank().load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
+            false,
             false,
             false,
             false,
