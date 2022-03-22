@@ -139,6 +139,7 @@ pub fn load_bank_forks(
                 process_options,
                 cache_block_meta_sender,
                 accounts_update_notifier,
+                snapshot_config,
             ),
             None,
         )

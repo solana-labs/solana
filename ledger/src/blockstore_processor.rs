@@ -598,6 +598,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    snapshot_config: Option<&SnapshotConfig>,
 ) -> BankForks {
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
@@ -621,6 +622,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts,
         &VerifyRecyclers::default(),
         cache_block_meta_sender,
+        snapshot_config,
     );
     bank_forks
 }
@@ -1034,6 +1036,7 @@ fn process_bank_0(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    snapshot_config: Option<&SnapshotConfig>,
 ) {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
@@ -1051,6 +1054,23 @@ fn process_bank_0(
     bank0.freeze();
     blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
     cache_block_meta(bank0, cache_block_meta_sender);
+
+    if let Some(snapshot_config) = snapshot_config {
+        let snapshot_archive_info = solana_runtime::snapshot_utils::bank_to_full_snapshot_archive(
+            &snapshot_config.bank_snapshots_dir,
+            bank0,
+            Some(snapshot_config.snapshot_version),
+            &snapshot_config.snapshot_archives_dir,
+            snapshot_config.archive_format,
+            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+        )
+        .expect("take a full snapshot of bank 0");
+        debug!(
+            "Took a full snapshot of bank 0, snapshot archive info: {:?}",
+            snapshot_archive_info
+        );
+    }
 }
 
 // Given a bank, add its children to the pending slots queue if those children slots are
@@ -3120,7 +3140,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None);
+        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
         let bank1 = bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
@@ -3217,7 +3237,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None);
+        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
 
         let slot_start_processing = 1;
         let bank = bank_forks.insert(Bank::new_from_parent(
@@ -3285,6 +3305,72 @@ pub mod tests {
             .collect::<Vec<_>>();
         bank_snapshot_slots.sort_unstable();
         assert_eq!(bank_snapshot_slots, expected_slots);
+    }
+
+    /// Ensure that `process_bank_0()` takes a full snapshot for bank 0 if a snapshot config has
+    /// been passed in.
+    ///
+    /// Without a full snapshot at slot 0, incremental snapshots cannot be taken until the next
+    /// full snapshot is taken.  This can be confusing when starting a new cluster from genesis and
+    /// restarting the node before crossing the first full snapshot interval.
+    #[test]
+    fn test_process_bank_0_with_snapshots() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(123);
+
+        let ticks_per_slot = 1;
+        genesis_config.ticks_per_slot = ticks_per_slot;
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        const ROOT_INTERVAL_SLOTS: Slot = 1;
+        const LAST_SLOT: Slot = ROOT_INTERVAL_SLOTS * 2;
+
+        let mut last_hash = blockhash;
+        for i in 1..=LAST_SLOT {
+            last_hash =
+                fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i, i - 1, last_hash);
+        }
+
+        let roots_to_set = (0..=LAST_SLOT)
+            .step_by(ROOT_INTERVAL_SLOTS as usize)
+            .collect_vec();
+        blockstore.set_roots(roots_to_set.iter()).unwrap();
+
+        let bank_snapshots_tempdir = TempDir::new().unwrap();
+        let snapshot_archives_tempdir = TempDir::new().unwrap();
+        let snapshot_config = SnapshotConfig {
+            bank_snapshots_dir: bank_snapshots_tempdir.path().to_path_buf(),
+            snapshot_archives_dir: snapshot_archives_tempdir.path().to_path_buf(),
+            ..SnapshotConfig::default()
+        };
+
+        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank0_slot = 0;
+        let bank0 = bank_forks.get(bank0_slot).unwrap().clone();
+        let opts = ProcessOptions {
+            poh_verify: true,
+            accounts_db_test_hash_calculation: true,
+            ..ProcessOptions::default()
+        };
+        let recyclers = VerifyRecyclers::default();
+        process_bank_0(
+            &bank0,
+            &blockstore,
+            &opts,
+            &recyclers,
+            None,
+            Some(&snapshot_config),
+        );
+
+        assert_eq!(
+            snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &snapshot_config.snapshot_archives_dir
+            )
+            .unwrap(),
+            bank0_slot,
+        );
     }
 
     #[test]
