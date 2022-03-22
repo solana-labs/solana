@@ -10,8 +10,8 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure::Measure,
     solana_runtime::{
-        accounts_db::{self},
-        accounts_hash::HashStats,
+        accounts_db,
+        accounts_hash::{CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             AccountsPackage, AccountsPackageReceiver, PendingSnapshotPackage, SnapshotPackage,
@@ -132,16 +132,16 @@ impl AccountsHashVerifier {
             let (hash, lamports) = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash_without_index(
-                    ledger_path,
-                    &sorted_storages,
+                .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
+                    accounts_hash_cache_path: ledger_path,
+                    storages: &sorted_storages,
                     thread_pool,
-                    HashStats::default(),
-                    false,
-                    None,
-                    None, // this will fail with filler accounts
-                    None, // this code path is only for testing, so use default # passes here
-                )
+                    stats: HashStats::default(),
+                    check_hash: false,
+                    accounts_cache_and_ancestors: None,
+                    filler_account_suffix: None, // this will fail with filler accounts
+                    num_hash_scan_passes: None, // this code path is only for testing, so use default # passes here
+                })
                 .unwrap();
 
             assert_eq!(accounts_package.expected_capitalization, lamports);

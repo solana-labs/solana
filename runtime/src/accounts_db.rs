@@ -23,7 +23,10 @@ use {
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-        accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
+        accounts_hash::{
+            AccountsHash, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
+            PreviousPass,
+        },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
             AccountsIndexRootsStats, IndexKey, IndexValue, IsCached, RefCount, ScanConfig,
@@ -978,7 +981,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
+pub type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -5524,20 +5527,20 @@ impl AccountsDb {
             } else {
                 Some(&self.thread_pool_clean)
             };
-            self.calculate_accounts_hash_without_index(
-                &self.accounts_hash_cache_path,
-                &storages,
+            self.calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
+                accounts_hash_cache_path: &self.accounts_hash_cache_path,
+                storages: &storages,
                 thread_pool,
-                timings,
+                stats: timings,
                 check_hash,
                 accounts_cache_and_ancestors,
-                if self.filler_account_count > 0 {
+                filler_account_suffix: if self.filler_account_count > 0 {
                     self.filler_account_suffix.as_ref()
                 } else {
                     None
                 },
-                self.num_hash_scan_passes,
-            )
+                num_hash_scan_passes: self.num_hash_scan_passes,
+            })
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
         }
@@ -5729,25 +5732,16 @@ impl AccountsDb {
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
         &self,
-        accounts_hash_cache_path: &Path,
-        storages: &SortedStorages,
-        thread_pool: Option<&ThreadPool>,
-        mut stats: HashStats,
-        check_hash: bool,
-        accounts_cache_and_ancestors: Option<(
-            &AccountsCache,
-            &Ancestors,
-            &AccountInfoAccountsIndex,
-        )>,
-        filler_account_suffix: Option<&Pubkey>,
-        num_hash_scan_passes: Option<usize>,
+        config: &mut CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
+        let (num_hash_scan_passes, bins_per_pass) =
+            Self::bins_per_pass(config.num_hash_scan_passes);
+        let thread_pool = config.thread_pool;
         let mut scan_and_hash = move || {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            let cache_hash_data = CacheHashData::new(&accounts_hash_cache_path);
+            let cache_hash_data = CacheHashData::new(&config.accounts_hash_cache_path);
 
             for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
@@ -5757,21 +5751,21 @@ impl AccountsDb {
 
                 let result = Self::scan_snapshot_stores_with_cache(
                     &cache_hash_data,
-                    storages,
-                    &mut stats,
+                    config.storages,
+                    &mut config.stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
-                    check_hash,
-                    accounts_cache_and_ancestors,
-                    filler_account_suffix,
+                    config.check_hash,
+                    config.accounts_cache_and_ancestors,
+                    config.filler_account_suffix,
                 )?;
 
                 let hash = AccountsHash {
-                    filler_account_suffix: filler_account_suffix.cloned(),
+                    filler_account_suffix: config.filler_account_suffix.cloned(),
                 };
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
-                    &mut stats,
+                    &mut config.stats,
                     pass == num_hash_scan_passes - 1,
                     previous_pass,
                     bins_per_pass,
@@ -5782,7 +5776,7 @@ impl AccountsDb {
 
             info!(
                 "calculate_accounts_hash_without_index: slot (exclusive): {} {:?}",
-                storages.range().end,
+                config.storages.range().end,
                 final_result
             );
             Ok(final_result)
@@ -7914,16 +7908,16 @@ pub mod tests {
         let (storages, _size, _slot_expected) = sample_storage();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(
-                TempDir::new().unwrap().path(),
-                &get_storage_refs(&storages),
-                None,
-                HashStats::default(),
-                false,
-                None,
-                None,
-                None,
-            )
+            .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
+                accounts_hash_cache_path: TempDir::new().unwrap().path(),
+                storages: &get_storage_refs(&storages),
+                thread_pool: None,
+                stats: HashStats::default(),
+                check_hash: false,
+                accounts_cache_and_ancestors: None,
+                filler_account_suffix: None,
+                num_hash_scan_passes: None,
+            })
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
@@ -7941,16 +7935,16 @@ pub mod tests {
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(
-                TempDir::new().unwrap().path(),
-                &get_storage_refs(&storages),
-                None,
-                HashStats::default(),
-                false,
-                None,
-                None,
-                None,
-            )
+            .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
+                accounts_hash_cache_path: TempDir::new().unwrap().path(),
+                storages: &get_storage_refs(&storages),
+                thread_pool: None,
+                stats: HashStats::default(),
+                check_hash: false,
+                accounts_cache_and_ancestors: None,
+                filler_account_suffix: None,
+                num_hash_scan_passes: None,
+            })
             .unwrap();
 
         assert_eq!(result, (expected_hash, sum));

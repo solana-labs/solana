@@ -1,12 +1,16 @@
 use {
+    crate::{
+        accounts_cache::AccountsCache, accounts_db::AccountInfoAccountsIndex, ancestors::Ancestors,
+        sorted_storages::SortedStorages,
+    },
     log::*,
-    rayon::prelude::*,
+    rayon::{prelude::*, ThreadPool},
     solana_measure::measure::Measure,
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
     },
-    std::{borrow::Borrow, convert::TryInto, sync::Mutex},
+    std::{borrow::Borrow, convert::TryInto, path::Path, sync::Mutex},
 };
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -16,6 +20,28 @@ pub struct PreviousPass {
     pub reduced_hashes: Vec<Vec<Hash>>,
     pub remaining_unhashed: Vec<Hash>,
     pub lamports: u64,
+}
+
+/// parameters to calculate accounts hash
+pub struct CalcAccountsHashConfig<'a> {
+    pub accounts_hash_cache_path: &'a Path,
+    pub storages: &'a SortedStorages<'a>,
+    pub thread_pool: Option<&'a ThreadPool>,
+    pub stats: HashStats,
+    pub check_hash: bool,
+    pub accounts_cache_and_ancestors: Option<(
+        &'a AccountsCache,
+        &'a Ancestors,
+        &'a AccountInfoAccountsIndex,
+    )>,
+    // these should be gone soon as we get an AccountsDb '&self'
+    pub filler_account_suffix: Option<&'a Pubkey>,
+    pub num_hash_scan_passes: Option<usize>,
+    // to come soon
+    /*
+    pub rent_collector: RentCollector,
+    pub epoch_schedule: EpochSchedule,
+    */
 }
 
 #[derive(Debug, Default)]
