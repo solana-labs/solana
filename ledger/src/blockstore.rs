@@ -16,7 +16,7 @@ use {
             max_ticks_per_n_shreds, ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType,
             Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE,
         },
-        slot_stats::{SlotsStats, TurbineFecSetStats,},
+        slot_stats::{SlotsStats, TurbineFecSetStats},
     },
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
@@ -148,8 +148,6 @@ pub struct BlockstoreSignals {
     pub ledger_signal_receiver: Receiver<bool>,
     pub completed_slots_receiver: CompletedSlotsReceiver,
 }
-
-
 
 // ledger window
 pub struct Blockstore {

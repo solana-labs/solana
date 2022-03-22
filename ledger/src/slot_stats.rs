@@ -3,7 +3,7 @@ use {
     std::{
         collections::{BTreeMap, HashMap},
         time::Instant,
-    }
+    },
 };
 
 pub struct SlotsStats {
