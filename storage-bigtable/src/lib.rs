@@ -456,10 +456,10 @@ impl LedgerStorage {
     }
 
     // Fetches and gets a vector of confirmed blocks via a multirow fetch
-    pub async fn get_confirmed_blocks_with_data(
+    pub async fn get_confirmed_blocks_with_data<'a>(
         &self,
-        slots: &[Slot],
-    ) -> Result<Vec<(Slot, ConfirmedBlock)>> {
+        slots: &'a [Slot],
+    ) -> Result<impl Iterator<Item = (Slot, ConfirmedBlock)> + 'a> {
         debug!(
             "LedgerStorage::get_confirmed_blocks_with_data request received: {:?}",
             slots
@@ -467,7 +467,7 @@ impl LedgerStorage {
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
         let row_keys = slots.iter().copied().map(slot_to_blocks_key);
-        let data: Vec<(Slot, ConfirmedBlock)> = bigtable
+        let data = bigtable
             .get_protobuf_or_bincode_cells("blocks", row_keys)
             .await?
             .filter_map(
@@ -481,8 +481,7 @@ impl LedgerStorage {
                     };
                     Some((key_to_slot(&row_key).unwrap(), block))
                 },
-            )
-            .collect();
+            );
         Ok(data)
     }
 
