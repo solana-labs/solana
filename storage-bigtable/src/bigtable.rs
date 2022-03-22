@@ -683,14 +683,17 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     pub async fn get_protobuf_or_bincode_cells<'a, B, P>(
         &mut self,
         table: &'a str,
-        row_keys: impl Iterator<Item = String>,
+        row_keys: impl IntoIterator<Item = RowKey>,
     ) -> Result<impl Iterator<Item = (RowKey, CellData<B, P>)> + 'a>
     where
         B: serde::de::DeserializeOwned,
         P: prost::Message + Default,
     {
         Ok(self
-            .get_multi_row_data(table, row_keys.collect::<Vec<RowKey>>().as_slice())
+            .get_multi_row_data(
+                table,
+                row_keys.into_iter().collect::<Vec<RowKey>>().as_slice(),
+            )
             .await?
             .into_iter()
             .map(|(key, row_data)| {
