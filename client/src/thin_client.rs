@@ -24,7 +24,7 @@ use {
         signers::Signers,
         system_instruction,
         timing::duration_as_ms,
-        transaction::{self, Transaction, VersionedTransaction},
+        transaction::{self, Transaction},
         transport::Result as TransportResult,
     },
     std::{
@@ -215,13 +215,10 @@ impl<C: 'static + TpuConnection> ThinClient<C> {
             let mut num_confirmed = 0;
             let mut wait_time = MAX_PROCESSING_AGE;
             // resend the same transaction until the transaction has no chance of succeeding
-            let wire_transaction =
-                bincode::serialize(&transaction).expect("transaction serialization failed");
             while now.elapsed().as_secs() < wait_time as u64 {
                 if num_confirmed == 0 {
                     // Send the transaction if there has been no confirmation (e.g. the first time)
-                    self.tpu_connection()
-                        .send_wire_transaction(&wire_transaction)?;
+                    self.tpu_connection().send_transaction(transaction)?;
                 }
 
                 if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(
@@ -604,17 +601,12 @@ impl<C: 'static + TpuConnection> SyncClient for ThinClient<C> {
 
 impl<C: 'static + TpuConnection> AsyncClient for ThinClient<C> {
     fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
-        let transaction = VersionedTransaction::from(transaction);
-        self.tpu_connection()
-            .serialize_and_send_transaction(&transaction)?;
+        self.tpu_connection().send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
 
     fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
-        let batch: Vec<VersionedTransaction> = transactions.into_iter().map(Into::into).collect();
-        self.tpu_connection()
-            .par_serialize_and_send_transaction_batch(&batch)?;
-        Ok(())
+        self.tpu_connection().send_batch(&transactions)
     }
 
     fn async_send_message<T: Signers>(
