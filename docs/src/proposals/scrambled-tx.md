@@ -103,12 +103,19 @@ processing stalls by malicious leaders for MEV.
 
 So, given the raw transaction binary:
 
-``` [transaction details] ```
+```
+[transaction details]
+```
 
 , scrambling encloses it like this:
 
-``` [seed to recursive sha256] [recursion count] [encrypted authentication tag]
-[encrypted expiration unix time] [encrypted transaction details] ```
+```
+[seed to recursive sha256]
+[recursion count]
+[encrypted authentication tag]
+[encrypted expiration unix time]
+[encrypted transaction details]
+```
 
 So, this assumes quic to bypass the transaction udp packet size limit.
 
