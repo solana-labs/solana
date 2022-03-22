@@ -133,7 +133,11 @@ impl ExecuteCostTable {
     /// LARGE_CHANGE_THRESHOLD times larger than input data itself;
     fn is_large_change(input: u64, calculated_value: u64) -> bool {
         const LARGE_CHANGE_THRESHOLD: u64 = 20;
-        calculated_value / input > LARGE_CHANGE_THRESHOLD
+        const PERCENTAGE_OF_MAX_UNITS: f64 = 0.95;
+        let has_oversized_impact = input != 0 && calculated_value / input > LARGE_CHANGE_THRESHOLD;
+        let is_large_value =
+            calculated_value as f64 / compute_budget::MAX_UNITS as f64 > PERCENTAGE_OF_MAX_UNITS;
+        has_oversized_impact || is_large_value
     }
 
     /// prune the old programs so the table contains `new_size` of records,
@@ -339,5 +343,29 @@ mod tests {
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key2).unwrap());
         assert!(testee.get_cost(&key3).is_none());
         assert_eq!(&cost4, testee.get_cost(&key4).unwrap());
+    }
+
+    #[test]
+    fn test_is_large_change() {
+        // input data `0` is for initializing, skip is_oversized_impact check
+        assert!(!ExecuteCostTable::is_large_change(0, 100));
+        assert!(ExecuteCostTable::is_large_change(
+            0,
+            compute_budget::MAX_UNITS as u64
+        ));
+
+        // check when is_oversized_impact is false
+        assert!(!ExecuteCostTable::is_large_change(10, 10));
+        assert!(ExecuteCostTable::is_large_change(
+            10,
+            compute_budget::MAX_UNITS as u64
+        ));
+
+        // check when is_oversized_impact is true
+        assert!(ExecuteCostTable::is_large_change(10, 500));
+        assert!(ExecuteCostTable::is_large_change(
+            10,
+            compute_budget::MAX_UNITS as u64
+        ));
     }
 }
