@@ -1804,6 +1804,22 @@ impl ReplayStage {
                 drop_bank_sender,
             );
 
+            let (min_fec_set_count, last_fec_set_count, removed_stats) = {
+                let mut stats = blockstore.turbine_fec_set_stats.lock().unwrap();
+                let (min_fec_set_count, last_idx_count) = stats.get_min_index_count(&new_root);
+                let removed_stats = stats.remove(&new_root);
+                stats.prune(&new_root);
+                (min_fec_set_count, last_idx_count, removed_stats)
+            };
+
+            datapoint_info!(
+                "replay-stage-new_root",
+                ("slot", new_root, i64),
+                ("min_turbine_fec_set_count", min_fec_set_count, i64),
+                ("last_turbine_fec_set_count", last_fec_set_count, i64),
+                ("turbine_only", removed_stats, bool),
+            );
+
             blockstore
                 .turbine_fec_set_stats
                 .lock()

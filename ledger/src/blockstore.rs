@@ -16,6 +16,7 @@ use {
             max_ticks_per_n_shreds, ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType,
             Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE,
         },
+        slot_stats::{SlotsStats, TurbineFecSetStats,},
     },
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
@@ -50,7 +51,7 @@ use {
         borrow::Cow,
         cell::RefCell,
         cmp,
-        collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
+        collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap, HashSet},
         convert::TryInto,
         fs,
         io::{Error as IoError, ErrorKind},
@@ -148,51 +149,7 @@ pub struct BlockstoreSignals {
     pub completed_slots_receiver: CompletedSlotsReceiver,
 }
 
-#[derive(Default)]
-pub struct TurbineFecSetStats(HashMap<Slot, HashMap</*fec_set_index*/ u32, /*count*/ usize>>);
 
-impl TurbineFecSetStats {
-    pub fn inc_index_count(&mut self, slot: Slot, fec_set_index: u32) {
-        *self
-            .0
-            .entry(slot)
-            .or_default()
-            .entry(fec_set_index)
-            .or_default() += 1;
-    }
-
-    pub fn get_min_index_count(&self, slot: &Slot) -> (usize, usize) {
-        let m = self.0.get(slot);
-        if m.is_none() {
-            return (0, 0);
-        }
-        let m = m.unwrap();
-
-        let last_idx = m.iter().map(|(idx, _)| *idx).max();
-        if last_idx.is_none() {
-            return (0, 0);
-        }
-        let last_idx = last_idx.unwrap();
-
-        let min_fec_set_cnt = m
-            .iter()
-            .filter(|(idx, _)| **idx != last_idx)
-            .map(|(_, cnt)| *cnt)
-            .min()
-            .unwrap_or(0);
-        let last_idx_cnt = *m.get(&last_idx).unwrap_or(&0);
-
-        (min_fec_set_cnt, last_idx_cnt)
-    }
-
-    pub fn remove(&mut self, slot: &Slot) -> bool {
-        self.0.remove(slot).is_some()
-    }
-
-    pub fn prune(&mut self, slot: &Slot) {
-        self.0.retain(|s, _| *s > *slot);
-    }
-}
 
 // ledger window
 pub struct Blockstore {
@@ -226,26 +183,6 @@ pub struct Blockstore {
     slots_stats: Mutex<SlotsStats>,
     advanced_options: BlockstoreAdvancedOptions,
     pub turbine_fec_set_stats: Mutex<TurbineFecSetStats>,
-}
-
-struct SlotsStats {
-    last_cleanup_ts: Instant,
-    stats: BTreeMap<Slot, SlotStats>,
-}
-
-impl Default for SlotsStats {
-    fn default() -> Self {
-        SlotsStats {
-            last_cleanup_ts: Instant::now(),
-            stats: BTreeMap::new(),
-        }
-    }
-}
-
-#[derive(Default)]
-struct SlotStats {
-    num_repaired: usize,
-    num_recovered: usize,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -712,7 +649,7 @@ impl Blockstore {
             no_compaction: false,
             slots_stats: Mutex::<SlotsStats>::default(),
             advanced_options,
-            turbine_fec_set_stats: Mutex::new(TurbineFecSetStats::default()),
+            turbine_fec_set_stats: Mutex::<TurbineFecSetStats>::default(),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
