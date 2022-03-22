@@ -56,6 +56,29 @@ pub fn parse_token(
                 info: value,
             })
         }
+        TokenInstruction::InitializeMint2 {
+            decimals,
+            mint_authority,
+            freeze_authority,
+        } => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            let mut value = json!({
+                "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+                "decimals": decimals,
+                "mintAuthority": mint_authority.to_string(),
+            });
+            let map = value.as_object_mut().unwrap();
+            if let COption::Some(freeze_authority) = freeze_authority {
+                map.insert(
+                    "freezeAuthority".to_string(),
+                    json!(freeze_authority.to_string()),
+                );
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeMint2".to_string(),
+                info: value,
+            })
+        }
         TokenInstruction::InitializeAccount => {
             check_num_token_accounts(&instruction.accounts, 4)?;
             Ok(ParsedInstructionEnum {
@@ -80,6 +103,17 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::InitializeAccount3 { owner } => {
+            check_num_token_accounts(&instruction.accounts, 2)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeAccount3".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "mint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "owner": owner.to_string(),
+                }),
+            })
+        }
         TokenInstruction::InitializeMultisig { m } => {
             check_num_token_accounts(&instruction.accounts, 3)?;
             let mut signers: Vec<String> = vec![];
@@ -91,6 +125,21 @@ pub fn parse_token(
                 info: json!({
                     "multisig": account_keys[instruction.accounts[0] as usize].to_string(),
                     "rentSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "signers": signers,
+                    "m": m,
+                }),
+            })
+        }
+        TokenInstruction::InitializeMultisig2 { m } => {
+            check_num_token_accounts(&instruction.accounts, 2)?;
+            let mut signers: Vec<String> = vec![];
+            for i in instruction.accounts[1..].iter() {
+                signers.push(account_keys[*i as usize].to_string());
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeMultisig2".to_string(),
+                info: json!({
+                    "multisig": account_keys[instruction.accounts[0] as usize].to_string(),
                     "signers": signers,
                     "m": m,
                 }),
@@ -539,6 +588,29 @@ mod test {
             }
         );
 
+        // Test InitializeMint2
+        let initialize_mint_ix = initialize_mint2(
+            &spl_token::id(),
+            &convert_pubkey(keys[0]),
+            &convert_pubkey(keys[2]),
+            None,
+            2,
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_mint_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "initializeMint2".to_string(),
+                info: json!({
+                   "mint": keys[0].to_string(),
+                   "decimals": 2,
+                   "mintAuthority": keys[2].to_string(),
+                })
+            }
+        );
+
         // Test InitializeAccount
         let initialize_account_ix = initialize_account(
             &spl_token::id(),
@@ -558,6 +630,28 @@ mod test {
                    "mint": keys[1].to_string(),
                    "owner": keys[2].to_string(),
                    "rentSysvar": keys[3].to_string(),
+                })
+            }
+        );
+
+        // Test InitializeAccount3
+        let initialize_account_ix = initialize_account3(
+            &spl_token::id(),
+            &convert_pubkey(keys[0]),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_account_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "initializeAccount3".to_string(),
+                info: json!({
+                   "account": keys[0].to_string(),
+                   "mint": keys[1].to_string(),
+                   "owner": keys[2].to_string(),
                 })
             }
         );
@@ -585,6 +679,32 @@ mod test {
                    "m": 2,
                    "rentSysvar": keys[1].to_string(),
                    "signers": keys[2..5].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
+                })
+            }
+        );
+
+        // Test InitializeMultisig2
+        let initialize_multisig2_ix = initialize_multisig2(
+            &spl_token::id(),
+            &convert_pubkey(keys[0]),
+            &[
+                &convert_pubkey(keys[2]),
+                &convert_pubkey(keys[3]),
+                &convert_pubkey(keys[4]),
+            ],
+            2,
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_multisig2_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "initializeMultisig2".to_string(),
+                info: json!({
+                   "multisig": keys[0].to_string(),
+                   "m": 2,
+                   "signers": keys[1..4].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
                 })
             }
         );
