@@ -2001,7 +2001,7 @@ impl ReplayStage {
             );
             voting_sender
                 .send(VoteOp::RefreshVote {
-                    tx: vote_tx.into(),
+                    tx: vote_tx,
                     last_voted_slot,
                 })
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
@@ -2044,7 +2044,7 @@ impl ReplayStage {
             let tower_slots = tower.tower_slots();
             voting_sender
                 .send(VoteOp::PushVote {
-                    tx: vote_tx.into(),
+                    tx: vote_tx,
                     tower_slots,
                     saved_tower: SavedTowerVersions::from(saved_tower),
                 })
