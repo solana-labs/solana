@@ -1193,6 +1193,7 @@ pub fn visit_each_account_once<E>(
 mod tests {
     use {
         super::*,
+        crate::compute_budget,
         serde::{Deserialize, Serialize},
         solana_sdk::account::{ReadableAccount, WritableAccount},
     };
@@ -1674,12 +1675,12 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
-        invoke_context.compute_budget = ComputeBudget::new(false);
+        invoke_context.compute_budget = ComputeBudget::new(compute_budget::DEFAULT_UNITS);
 
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(false)
+            ComputeBudget::new(compute_budget::DEFAULT_UNITS)
         );
         invoke_context.pop().unwrap();
 
@@ -1687,7 +1688,7 @@ mod tests {
         let expected_compute_budget = ComputeBudget {
             max_units: 500_000,
             heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::new(false)
+            ..ComputeBudget::new(compute_budget::DEFAULT_UNITS)
         };
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1698,7 +1699,7 @@ mod tests {
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(false)
+            ComputeBudget::new(compute_budget::DEFAULT_UNITS)
         );
         invoke_context.pop().unwrap();
     }

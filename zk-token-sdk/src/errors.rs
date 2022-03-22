@@ -6,6 +6,8 @@ use {
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ProofError {
+    #[error("invalid transfer amount range")]
+    TransferAmount,
     #[error("proof generation failed")]
     Generation,
     #[error("proof failed to verify")]

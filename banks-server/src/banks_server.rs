@@ -24,7 +24,7 @@ use {
         transaction::{self, SanitizedTransaction, Transaction},
     },
     solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo},
+        send_transaction_service::{SendTransactionService, TransactionInfo, DEFAULT_TPU_USE_QUIC},
         tpu_info::NullTpuInfo,
     },
     std::{
@@ -399,6 +399,7 @@ pub async fn start_tcp_server(
                 receiver,
                 5_000,
                 0,
+                DEFAULT_TPU_USE_QUIC,
             );
 
             let server = BanksServer::new(

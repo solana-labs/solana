@@ -551,10 +551,14 @@ fn test_program_bpf_loader_deprecated() {
         println!("Test program: {:?}", program);
 
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
+        genesis_config
+            .accounts
+            .remove(&solana_sdk::feature_set::disable_deprecated_loader::id())
+            .unwrap();
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
         bank.add_builtin(&name, &id, entrypoint);
@@ -2039,19 +2043,13 @@ fn test_program_bpf_disguised_as_bpf_loader() {
             ..
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
+        let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
         let bank_client = BankClient::new(bank);
 
-        let program_id = load_bpf_program(
-            &bank_client,
-            &bpf_loader_deprecated::id(),
-            &mint_keypair,
-            program,
-        );
+        let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
-        let instruction =
-            Instruction::new_with_bytes(bpf_loader_deprecated::id(), &[1], account_metas);
+        let instruction = Instruction::new_with_bytes(bpf_loader::id(), &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert_eq!(
             result.unwrap_err().unwrap(),

@@ -24,6 +24,7 @@ pub mod cost_update_service;
 pub mod drop_bank_service;
 pub mod duplicate_repair_status;
 pub mod fetch_stage;
+pub mod find_packet_sender_stake_stage;
 pub mod fork_choice;
 pub mod gen_keys;
 pub mod heaviest_subtree_fork_choice;

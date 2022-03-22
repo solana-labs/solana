@@ -13,8 +13,7 @@ use {
         socketaddr,
     },
     solana_ledger::{
-        blockstore::create_new_ledger, blockstore_db::BlockstoreAdvancedOptions,
-        create_new_tmp_ledger,
+        blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions, create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
@@ -582,7 +581,7 @@ impl TestValidator {
                     config
                         .max_genesis_archive_unpacked_size
                         .unwrap_or(MAX_GENESIS_ARCHIVE_UNPACKED_SIZE),
-                    BlockstoreAdvancedOptions::default(),
+                    LedgerColumnOptions::default(),
                 )
                 .map_err(|err| {
                     format!(

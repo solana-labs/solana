@@ -110,6 +110,15 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         }
     }
 
+    /// estimate how many items are still needing to be flushed to the disk cache.
+    pub fn get_startup_remaining_items_to_flush_estimate(&self) -> usize {
+        self.storage
+            .disk
+            .as_ref()
+            .map(|_| self.storage.stats.get_remaining_items_to_flush_estimate())
+            .unwrap_or_default()
+    }
+
     fn shrink_to_fit(&self) {
         self.in_mem.iter().for_each(|mem| mem.shrink_to_fit())
     }

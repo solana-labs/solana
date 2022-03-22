@@ -541,7 +541,7 @@ fn translate_type_inner<'a, T>(
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
 
     if loader_id != &bpf_loader_deprecated::id()
-        && (host_addr as *mut T).align_offset(align_of::<T>()) != 0
+        && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0
     {
         return Err(SyscallError::UnalignedPointer.into());
     }
@@ -582,7 +582,7 @@ fn translate_slice_inner<'a, T>(
     )?;
 
     if loader_id != &bpf_loader_deprecated::id()
-        && (host_addr as *mut T).align_offset(align_of::<T>()) != 0
+        && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0
     {
         return Err(SyscallError::UnalignedPointer.into());
     }
@@ -2273,16 +2273,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
 
 /// Rust representation of C's SolInstruction
 #[derive(Debug)]
+#[repr(C)]
 struct SolInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
-    accounts_len: usize,
+    accounts_len: u64,
     data_addr: u64,
-    data_len: usize,
+    data_len: u64,
 }
 
 /// Rust representation of C's SolAccountMeta
 #[derive(Debug)]
+#[repr(C)]
 struct SolAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
@@ -2291,6 +2293,7 @@ struct SolAccountMeta {
 
 /// Rust representation of C's SolAccountInfo
 #[derive(Debug)]
+#[repr(C)]
 struct SolAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
@@ -2307,6 +2310,7 @@ struct SolAccountInfo {
 
 /// Rust representation of C's SolSignerSeed
 #[derive(Debug)]
+#[repr(C)]
 struct SolSignerSeedC {
     addr: u64,
     len: u64,
@@ -2314,10 +2318,9 @@ struct SolSignerSeedC {
 
 /// Rust representation of C's SolSignerSeeds
 #[derive(Debug)]
+#[repr(C)]
 struct SolSignerSeedsC {
-    #[allow(dead_code)]
     addr: u64,
-    #[allow(dead_code)]
     len: u64,
 }
 
@@ -2342,7 +2345,21 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, loader_id)?;
 
-        check_instruction_size(ix_c.accounts_len, ix_c.data_len, invoke_context)?;
+        debug_assert_eq!(
+            std::mem::size_of_val(&ix_c.accounts_len),
+            std::mem::size_of::<usize>(),
+            "non-64-bit host"
+        );
+        debug_assert_eq!(
+            std::mem::size_of_val(&ix_c.data_len),
+            std::mem::size_of::<usize>(),
+            "non-64-bit host"
+        );
+        check_instruction_size(
+            ix_c.accounts_len as usize,
+            ix_c.data_len as usize,
+            invoke_context,
+        )?;
         let program_id = translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, loader_id)?;
         let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
@@ -2487,7 +2504,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         memory_mapping: &MemoryMapping,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         if signers_seeds_len > 0 {
-            let signers_seeds = translate_slice::<SolSignerSeedC>(
+            let signers_seeds = translate_slice::<SolSignerSeedsC>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
@@ -4017,7 +4034,10 @@ mod tests {
             );
             let address = result.unwrap();
             assert_ne!(address, 0);
-            assert_eq!((address as *const u8).align_offset(align_of::<u8>()), 0);
+            assert_eq!(
+                (address as *const u8 as usize).wrapping_rem(align_of::<u8>()),
+                0
+            );
         }
         check_alignment::<u8>();
         check_alignment::<u16>();
@@ -4641,5 +4661,11 @@ mod tests {
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
             Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
         );
+    }
+
+    #[test]
+    fn test_check_type_assumptions() {
+        // Code in this file assumes that u64 and usize are the same
+        assert_eq!(size_of::<u64>(), size_of::<usize>());
     }
 }

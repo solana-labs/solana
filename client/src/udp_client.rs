@@ -3,7 +3,7 @@
 
 use {
     crate::tpu_connection::TpuConnection,
-    solana_sdk::{transaction::Transaction, transport::Result as TransportResult},
+    solana_sdk::transport::Result as TransportResult,
     std::net::{SocketAddr, UdpSocket},
 };
 
@@ -24,19 +24,8 @@ impl TpuConnection for UdpTpuConnection {
         &self.addr
     }
 
-    fn send_wire_transaction(&self, data: &[u8]) -> TransportResult<()> {
-        self.socket.send_to(data, self.addr)?;
-        Ok(())
-    }
-
-    fn send_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
-        transactions
-            .iter()
-            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
-            .try_for_each(|buff| -> TransportResult<()> {
-                self.socket.send_to(&buff, self.addr)?;
-                Ok(())
-            })?;
+    fn send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()> {
+        self.socket.send_to(wire_transaction, self.addr)?;
         Ok(())
     }
 }

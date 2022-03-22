@@ -18,8 +18,6 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
-#[cfg(test)]
-use std::{thread::sleep, time::Duration};
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
@@ -80,8 +78,8 @@ use {
             atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
             Arc, Condvar, Mutex, MutexGuard, RwLock,
         },
-        thread::Builder,
-        time::Instant,
+        thread::{sleep, Builder},
+        time::{Duration, Instant},
     },
     tempfile::TempDir,
 };
@@ -2827,22 +2825,7 @@ impl AccountsDb {
         }
         rewrite_elapsed.stop();
 
-        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
-        let mut recycle_stores = self.recycle_stores.write().unwrap();
-        recycle_stores_write_elapsed.stop();
-
-        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
-        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
-            recycle_stores.add_entries(dead_storages);
-            drop(recycle_stores);
-        } else {
-            self.stats
-                .dropped_stores
-                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
-            drop(recycle_stores);
-            drop(dead_storages);
-        }
-        drop_storage_entries_elapsed.stop();
+        self.drop_or_recycle_stores(dead_storages);
 
         self.shrink_stats
             .num_slots_shrunk
@@ -2874,12 +2857,6 @@ impl AccountsDb {
         self.shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
-            .drop_storage_entries_elapsed
-            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
-            .recycle_stores_write_elapsed
-            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
         self.shrink_stats.accounts_removed.fetch_add(
             total_starting_accounts - total_accounts_after_shrink,
             Ordering::Relaxed,
@@ -2895,6 +2872,31 @@ impl AccountsDb {
         self.shrink_stats.report();
 
         total_accounts_after_shrink
+    }
+
+    fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
+        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
+        let mut recycle_stores = self.recycle_stores.write().unwrap();
+        recycle_stores_write_elapsed.stop();
+
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
+            recycle_stores.add_entries(dead_storages);
+            drop(recycle_stores);
+        } else {
+            self.stats
+                .dropped_stores
+                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
+            drop(recycle_stores);
+            drop(dead_storages);
+        }
+        drop_storage_entries_elapsed.stop();
+        self.shrink_stats
+            .drop_storage_entries_elapsed
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .recycle_stores_write_elapsed
+            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
 
     /// return a store that can contain 'aligned_total' bytes and the time it took to execute
@@ -6924,6 +6926,7 @@ impl AccountsDb {
                     .map(|key| (key, &account))
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
+                self.maybe_throttle_index_generation();
                 self.store_accounts_frozen((*slot, &add[..]), Some(&hashes[..]), None, None);
             });
             self.accounts_index.set_startup(false);
@@ -7005,6 +7008,7 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
+                            self.maybe_throttle_index_generation();
                             let SlotIndexGenerationInfo {
                                 insert_time_us: insert_us,
                                 num_accounts: total_this_slot,
@@ -7132,6 +7136,28 @@ impl AccountsDb {
 
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Startup processes can consume large amounts of memory while inserting accounts into the index as fast as possible.
+    /// Calling this can slow down the insertion process to allow flushing to disk to keep pace.
+    fn maybe_throttle_index_generation(&self) {
+        // This number is chosen to keep the initial ram usage sufficiently small
+        // The process of generating the index is goverened entirely by how fast the disk index can be populated.
+        // 10M accounts is sufficiently small that it will never have memory usage. It seems sufficiently large that it will provide sufficient performance.
+        // Performance is measured by total time to generate the index.
+        // Just estimating - 150M accounts can easily be held in memory in the accounts index on a 256G machine. 2-300M are also likely 'fine' during startup.
+        // 550M was straining a 384G machine at startup.
+        // This is a tunable parameter that just needs to be small enough to keep the generation threads from overwhelming RAM and oom at startup.
+        const LIMIT: usize = 10_000_000;
+        while self
+            .accounts_index
+            .get_startup_remaining_items_to_flush_estimate()
+            > LIMIT
+        {
+            // 10 ms is long enough to allow some flushing to occur before insertion is resumed.
+            // callers of this are typically run in parallel, so many threads will be sleeping at different starting intervals, waiting to resume insertion.
+            sleep(Duration::from_millis(10));
         }
     }
 
@@ -7522,8 +7548,7 @@ pub mod tests {
         std::{
             iter::FromIterator,
             str::FromStr,
-            thread::{self, sleep, Builder, JoinHandle},
-            time::Duration,
+            thread::{self, Builder, JoinHandle},
         },
     };
 

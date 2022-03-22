@@ -268,11 +268,21 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn age(&self) -> Age {
-        self.meta.age.load(Ordering::Relaxed)
+        self.meta.age.load(Ordering::Acquire)
     }
 
     pub fn set_age(&self, value: Age) {
-        self.meta.age.store(value, Ordering::Relaxed)
+        self.meta.age.store(value, Ordering::Release)
+    }
+
+    /// set age to 'next_age' if 'self.age' is 'expected_age'
+    pub fn try_exchange_age(&self, next_age: Age, expected_age: Age) {
+        let _ = self.meta.age.compare_exchange(
+            expected_age,
+            next_age,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        );
     }
 }
 
@@ -1497,6 +1507,10 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     pub fn set_startup(&self, value: bool) {
         self.storage.set_startup(value);
+    }
+
+    pub fn get_startup_remaining_items_to_flush_estimate(&self) -> usize {
+        self.storage.get_startup_remaining_items_to_flush_estimate()
     }
 
     /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`

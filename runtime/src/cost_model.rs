@@ -11,7 +11,6 @@ use {
         instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
         system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
     },
-    std::collections::HashMap,
 };
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
@@ -81,10 +80,6 @@ impl CostModel {
             .for_each(|(program_id, cost)| {
                 self.upsert_instruction_cost(program_id, *cost);
             });
-        debug!(
-            "restored cost model instruction cost table from blockstore, current values: {:?}",
-            self.get_instruction_cost_table()
-        );
     }
 
     pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
@@ -105,17 +100,13 @@ impl CostModel {
             .upsert(program_key, cost);
     }
 
-    pub fn get_instruction_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        self.instruction_execution_cost_table.get_cost_table()
-    }
-
     pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
         match self.instruction_execution_cost_table.get_cost(program_key) {
             Some(cost) => *cost,
             None => {
-                let default_value = self.instruction_execution_cost_table.get_mode();
+                let default_value = self.instruction_execution_cost_table.get_default_units();
                 debug!(
-                    "Program key {:?} does not have assigned cost, using mode {}",
+                    "Program {:?} does not have aggregated cost, using default value {}",
                     program_key, default_value
                 );
                 default_value
@@ -278,7 +269,7 @@ mod tests {
 
         // unknown program is assigned with default cost
         assert_eq!(
-            testee.instruction_execution_cost_table.get_mode(),
+            testee.instruction_execution_cost_table.get_default_units(),
             testee.find_instruction_cost(
                 &Pubkey::from_str("unknown111111111111111111111111111111111111").unwrap()
             )
@@ -409,7 +400,7 @@ mod tests {
         let result = testee.get_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
-        let expected_cost = testee.instruction_execution_cost_table.get_mode() * 2;
+        let expected_cost = testee.instruction_execution_cost_table.get_default_units() * 2;
         assert_eq!(expected_cost, result);
     }
 
@@ -453,7 +444,9 @@ mod tests {
         let mut cost_model = CostModel::default();
         // Using default cost for unknown instruction
         assert_eq!(
-            cost_model.instruction_execution_cost_table.get_mode(),
+            cost_model
+                .instruction_execution_cost_table
+                .get_default_units(),
             cost_model.find_instruction_cost(&key1)
         );
 

@@ -1,6 +1,10 @@
 use {
-    crate::{message::v0::LoadedAddresses, pubkey::Pubkey},
-    std::ops::Index,
+    crate::{
+        instruction::{CompiledInstruction, Instruction},
+        message::v0::LoadedAddresses,
+        pubkey::Pubkey,
+    },
+    std::{collections::BTreeMap, ops::Index},
 };
 
 /// Collection of static and dynamically loaded keys used to load accounts
@@ -74,6 +78,33 @@ impl<'a> AccountKeys<'a> {
     /// Iterator for the addresses of the loaded accounts for a message
     pub fn iter(&self) -> impl Iterator<Item = &'a Pubkey> {
         self.key_segment_iter().flatten()
+    }
+
+    /// Compile instructions using the order of account keys to determine
+    /// compiled instruction account indexes.
+    pub fn compile_instructions(&self, instructions: &[Instruction]) -> Vec<CompiledInstruction> {
+        let account_index_map: BTreeMap<&Pubkey, u8> = BTreeMap::from_iter(
+            self.iter()
+                .enumerate()
+                .map(|(index, key)| (key, index as u8)),
+        );
+
+        instructions
+            .iter()
+            .map(|ix| {
+                let accounts: Vec<u8> = ix
+                    .accounts
+                    .iter()
+                    .map(|account_meta| *account_index_map.get(&account_meta.pubkey).unwrap())
+                    .collect();
+
+                CompiledInstruction {
+                    program_id_index: *account_index_map.get(&ix.program_id).unwrap(),
+                    data: ix.data.clone(),
+                    accounts,
+                }
+            })
+            .collect()
     }
 }
 
