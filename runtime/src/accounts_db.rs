@@ -4890,8 +4890,7 @@ impl AccountsDb {
                 .notify_all();
             flush_stats
         } else {
-            // We have already seen this slot. It is  already under flushing.
-            // So, no need to flush it again.
+            // We have already seen this slot. It is already under flushing. Skip.
             None
         }
     }
