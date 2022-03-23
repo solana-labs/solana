@@ -2301,7 +2301,7 @@ impl ReplayStage {
             }
         }
 
-        // send accumulated excute-timings to cost_update_service
+        // send accumulated execute-timings to cost_update_service
         if !execute_timings.details.per_program_timings.is_empty() {
             cost_update_sender
                 .send(CostUpdate::ExecuteTiming {
@@ -2589,7 +2589,7 @@ impl ReplayStage {
                     */
 
                     // Imagine 90% of validators voted on slot 4, but only 9% landed. If everybody that fails
-                    // the switch theshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
+                    // the switch threshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
                     // then there will be no blocks to include the votes for slot 4, and the network halts
                     // because 90% of validators can't vote
                     info!(
