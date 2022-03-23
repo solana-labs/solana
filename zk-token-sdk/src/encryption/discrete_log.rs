@@ -59,9 +59,6 @@ lazy_static::lazy_static! {
             include_bytes!("decode_u32_precomputation_for_G.bincode");
         bincode::deserialize(DECODE_PRECOMPUTATION_FOR_G_BINCODE).unwrap_or_default()
     };
-
-    // pub static ref ITERATOR_G: RistrettoPoint = Scalar::from(NUM_THREADS as u64) * G;
-    // pub static ref THREAD_RANGE_BOUND: usize = (TWO16 as usize) / NUM_THREADS;
 }
 
 /// Solves the discrete log instance using a 16/16 bit offline/online split
@@ -79,8 +76,8 @@ impl DiscreteLog {
         }
     }
 
-    /// Adjusts number of threads ina  discrete log isntance.
-    pub fn set_number_threads(&mut self, num_threads: usize) -> Result<(), ProofError> {
+    /// Adjusts number of threads in a discrete log instance.
+    pub fn num_threads(&mut self, num_threads: usize) -> Result<(), ProofError> {
         // number of threads must be a positive power-of-two integer
         if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 {
             return Err(ProofError::DiscreteLogThreads);
