@@ -346,7 +346,7 @@ pub struct ReplayStage {
 
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<T: Into<Tower> + Sized>(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -354,7 +354,7 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         duplicate_slots_receiver: DuplicateSlotReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        mut tower: Tower,
+        tower: T,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -369,6 +369,9 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
     ) -> Self {
+        let mut tower = tower.into();
+        info!("Tower state: {:?}", tower);
+
         let ReplayStageConfig {
             vote_account,
             authorized_voter_keypairs,
