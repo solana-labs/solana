@@ -2892,6 +2892,7 @@ impl SnapshotValidatorConfig {
         }
 
         // Create the snapshot config
+        let _ = fs::create_dir_all(farf_dir());
         let bank_snapshots_dir = tempfile::tempdir_in(farf_dir()).unwrap();
         let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
         let snapshot_config = SnapshotConfig {
