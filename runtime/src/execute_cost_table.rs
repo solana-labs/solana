@@ -22,7 +22,7 @@ const PRUNE_RATIO: f64 = 0.75;
 const OCCURRENCES_WEIGHT: i64 = 100;
 
 const DEFAULT_CAPACITY: usize = 1024;
-const MAX_METRICS_REPORT_PER_SEC: usize = 100;
+const MAX_METRICS_REPORT_PER_SEC: usize = 10;
 
 #[derive(Debug)]
 pub struct ExecuteCostTable {
