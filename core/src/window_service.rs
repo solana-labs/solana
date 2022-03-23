@@ -604,7 +604,7 @@ impl WindowService {
                     }
 
                     if last_print.elapsed().as_secs() > 2 {
-                        metrics.report_metrics("recv-window-insert-shreds");
+                        metrics.report_metrics("blockstore-insert-shreds");
                         metrics = BlockstoreInsertionMetrics::default();
                         ws_metrics.report_metrics("recv-window-insert-shreds");
                         ws_metrics = WindowServiceMetrics::default();
