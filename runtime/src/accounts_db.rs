@@ -5524,7 +5524,7 @@ impl AccountsDb {
             } else {
                 Some(&self.thread_pool_clean)
             };
-            Self::calculate_accounts_hash_without_index(
+            self.calculate_accounts_hash_without_index(
                 &self.accounts_hash_cache_path,
                 &storages,
                 thread_pool,
@@ -5728,6 +5728,7 @@ impl AccountsDb {
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
+        &self,
         accounts_hash_cache_path: &Path,
         storages: &SortedStorages,
         thread_pool: Option<&ThreadPool>,
@@ -7911,17 +7912,19 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDb::calculate_accounts_hash_without_index(
-            TempDir::new().unwrap().path(),
-            &get_storage_refs(&storages),
-            None,
-            HashStats::default(),
-            false,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let result = db
+            .calculate_accounts_hash_without_index(
+                TempDir::new().unwrap().path(),
+                &get_storage_refs(&storages),
+                None,
+                HashStats::default(),
+                false,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -7936,17 +7939,19 @@ pub mod tests {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result = AccountsDb::calculate_accounts_hash_without_index(
-            TempDir::new().unwrap().path(),
-            &get_storage_refs(&storages),
-            None,
-            HashStats::default(),
-            false,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let result = db
+            .calculate_accounts_hash_without_index(
+                TempDir::new().unwrap().path(),
+                &get_storage_refs(&storages),
+                None,
+                HashStats::default(),
+                false,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result, (expected_hash, sum));
     }

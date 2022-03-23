@@ -10,7 +10,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure::Measure,
     solana_runtime::{
-        accounts_db::{self, AccountsDb},
+        accounts_db::{self},
         accounts_hash::HashStats,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
@@ -129,17 +129,20 @@ impl AccountsHashVerifier {
         let mut measure_hash = Measure::start("hash");
         if let Some(expected_hash) = accounts_package.hash_for_testing {
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
-            let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
-                ledger_path,
-                &sorted_storages,
-                thread_pool,
-                HashStats::default(),
-                false,
-                None,
-                None, // this will fail with filler accounts
-                None, // this code path is only for testing, so use default # passes here
-            )
-            .unwrap();
+            let (hash, lamports) = accounts_package
+                .accounts
+                .accounts_db
+                .calculate_accounts_hash_without_index(
+                    ledger_path,
+                    &sorted_storages,
+                    thread_pool,
+                    HashStats::default(),
+                    false,
+                    None,
+                    None, // this will fail with filler accounts
+                    None, // this code path is only for testing, so use default # passes here
+                )
+                .unwrap();
 
             assert_eq!(accounts_package.expected_capitalization, lamports);
             assert_eq!(expected_hash, hash);
@@ -353,6 +356,7 @@ mod tests {
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             ..SnapshotConfig::default()
         };
+        let accounts = Arc::new(solana_runtime::accounts::Accounts::default_for_tests());
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {
                 slot: full_snapshot_archive_interval_slots + i as u64,
@@ -368,6 +372,7 @@ mod tests {
                 hash_for_testing: None,
                 cluster_type: ClusterType::MainnetBeta,
                 snapshot_type: None,
+                accounts: Arc::clone(&accounts),
             };
 
             let ledger_path = TempDir::new().unwrap();

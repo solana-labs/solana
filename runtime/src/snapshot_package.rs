@@ -1,5 +1,6 @@
 use {
     crate::{
+        accounts::Accounts,
         accounts_db::SnapshotStorages,
         bank::{Bank, BankSlotDelta},
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
@@ -47,6 +48,7 @@ pub struct AccountsPackage {
     pub hash_for_testing: Option<Hash>,
     pub cluster_type: ClusterType,
     pub snapshot_type: Option<SnapshotType>,
+    pub accounts: Arc<Accounts>,
 }
 
 impl AccountsPackage {
@@ -109,6 +111,7 @@ impl AccountsPackage {
             hash_for_testing,
             cluster_type: bank.cluster_type(),
             snapshot_type,
+            accounts: bank.accounts(),
         })
     }
 }
