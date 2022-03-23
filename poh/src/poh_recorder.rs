@@ -308,7 +308,7 @@ impl PohRecorder {
         })
     }
 
-    pub fn bank_end(&self) -> bool {
+    pub fn working_bank_end(&self) -> bool {
         self.working_bank
             .as_ref()
             .map_or(false, |w| w.max_tick_height == self.tick_height)
@@ -616,7 +616,7 @@ impl PohRecorder {
 
     fn report_poh_timing_point(&self) {
         // send poh slot end timing point
-        if self.bank_end() && self.has_bank() {
+        if self.working_bank_end() && self.has_bank() {
             //  bank producer
             self.report_poh_timing_point_by_working_bank()
         } else {
