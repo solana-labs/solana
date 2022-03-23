@@ -42,8 +42,8 @@ use {
     },
     solana_runtime::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold, AccountsDbConfig, FillerAccountsConfig,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
         },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
@@ -1601,6 +1601,12 @@ pub fn main() {
             .validator(is_parsable::<usize>)
             .takes_value(true)
             .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
+         .arg(Arg::with_name("accounts_filler_size")
+            .long("accounts-filler-size")
+            .value_name("BYTES")
+            .validator(is_parsable::<usize>)
+            .takes_value(true)
+            .help("Size per filler account in bytes. [default: 0]"))
          .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
@@ -2251,11 +2257,19 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB);
 
-    let filler_account_count = value_t!(matches, "accounts_filler_count", usize).ok();
+    let mut filler_accounts_config = FillerAccountsConfig::default();
+    if let Some(count) = value_t!(matches, "accounts_filler_count", usize).ok() {
+        filler_accounts_config.count = Some(count);
+    }
+
+    if let Some(size) = value_t!(matches, "accounts_filler_size", usize).ok() {
+        filler_accounts_config.size = Some(size);
+    }
+
     let mut accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
-        filler_account_count,
+        filler_accounts: Some(filler_accounts_config),
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),

@@ -128,7 +128,7 @@ pub fn load_bank_forks(
         if process_options
             .accounts_db_config
             .as_ref()
-            .and_then(|config| config.filler_account_count)
+            .and_then(|cfg| cfg.filler_accounts.as_ref().and_then(|facfg| facfg.count))
             .unwrap_or_default()
             > 0
         {

@@ -32,7 +32,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_runtime::{
-        accounts_db::AccountsDbConfig,
+        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, ScanConfig},
         bank::{Bank, RewardCalculationEvent},
         bank_forks::BankForks,
@@ -929,6 +929,12 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
+    let accounts_filler_size = Arg::with_name("accounts_filler_size")
+        .long("accounts-filler-size")
+        .value_name("BYTES")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .help("Size per filler account in bytes. [default: 0]");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1283,6 +1289,7 @@ fn main() {
             .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
+            .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -2066,13 +2073,19 @@ fn main() {
                     accounts_index_config.drives = Some(accounts_index_paths);
                 }
 
-                let filler_account_count =
-                    value_t!(arg_matches, "accounts_filler_count", usize).ok();
+                let mut filler_accounts_config = FillerAccountsConfig::default();
+                if let Some(count) = value_t!(arg_matches, "accounts_filler_count", usize).ok() {
+                    filler_accounts_config.count = Some(count);
+                }
+
+                if let Some(size) = value_t!(arg_matches, "accounts_filler_size", usize).ok() {
+                    filler_accounts_config.size = Some(size);
+                }
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
-                    filler_account_count,
+                    filler_accounts: Some(filler_accounts_config),
                     ..AccountsDbConfig::default()
                 });
 

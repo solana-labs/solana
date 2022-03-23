@@ -128,14 +128,14 @@ const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
-    filler_account_count: None,
+    filler_accounts: None,
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
-    filler_account_count: None,
+    filler_accounts: None,
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
 };
@@ -149,10 +149,16 @@ pub struct AccountsAddRootTiming {
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct FillerAccountsConfig {
+    pub count: Option<usize>,
+    pub size: Option<usize>,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     pub accounts_hash_cache_path: Option<PathBuf>,
-    pub filler_account_count: Option<usize>,
+    pub filler_accounts: Option<FillerAccountsConfig>,
     pub hash_calc_num_passes: Option<usize>,
     pub write_cache_limit_bytes: Option<u64>,
 }
@@ -1090,7 +1096,8 @@ pub struct AccountsDb {
     /// GeyserPlugin accounts update notifier
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 
-    filler_account_count: usize,
+    filler_accounts_count: usize,
+    filler_accounts_size: usize,
     pub filler_account_suffix: Option<Pubkey>,
 
     active_stats: ActiveStats,
@@ -1633,7 +1640,8 @@ impl AccountsDb {
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
             accounts_update_notifier: None,
-            filler_account_count: 0,
+            filler_accounts_count: 0,
+            filler_accounts_size: 0,
             filler_account_suffix: None,
             num_hash_scan_passes,
         }
@@ -1677,11 +1685,17 @@ impl AccountsDb {
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.accounts_hash_cache_path.clone());
-        let filler_account_count = accounts_db_config
+        let filler_accounts_count = accounts_db_config
             .as_ref()
-            .and_then(|cfg| cfg.filler_account_count)
+            .and_then(|cfg| cfg.filler_accounts.as_ref().and_then(|facfg| facfg.count))
             .unwrap_or_default();
-        let filler_account_suffix = if filler_account_count > 0 {
+
+        let filler_accounts_size = accounts_db_config
+            .as_ref()
+            .and_then(|cfg| cfg.filler_accounts.as_ref().and_then(|facfg| facfg.size))
+            .unwrap_or_default();
+
+        let filler_account_suffix = if filler_accounts_count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
             None
@@ -1694,7 +1708,8 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             accounts_update_notifier,
-            filler_account_count,
+            filler_accounts_count,
+            filler_accounts_size,
             filler_account_suffix,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
@@ -6858,14 +6873,14 @@ impl AccountsDb {
     /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
     /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
     pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule) {
-        if self.filler_account_count == 0 {
+        if self.filler_accounts_count == 0 {
             return;
         }
 
         let max_root_inclusive = self.accounts_index.max_root_inclusive();
         let epoch = epoch_schedule.get_epoch(max_root_inclusive);
 
-        info!("adding {} filler accounts", self.filler_account_count);
+        info!("adding {} filler accounts", self.filler_accounts_count);
         // break this up to force the accounts out of memory after each pass
         let passes = 100;
         let mut roots = self.storage.all_slots();
@@ -6880,7 +6895,7 @@ impl AccountsDb {
         let hash = Hash::from_str(string).unwrap();
         let owner = Pubkey::from_str(string).unwrap();
         let lamports = 100_000_000;
-        let space = 0;
+        let space = self.filler_accounts_count * self.filler_accounts_size;
         let account = AccountSharedData::new(lamports, space, &owner);
         let added = AtomicUsize::default();
         for pass in 0..=passes {
@@ -6907,8 +6922,8 @@ impl AccountsDb {
                 let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
 
                 let idx = overall_index.fetch_add(1, Ordering::Relaxed);
-                let filler_entries = (idx + 1) * self.filler_account_count / root_count
-                    - idx * self.filler_account_count / root_count;
+                let filler_entries = (idx + 1) * self.filler_accounts_count / root_count
+                    - idx * self.filler_accounts_count / root_count;
                 let accounts = (0..filler_entries)
                     .map(|_| {
                         let my_id = added.fetch_add(1, Ordering::Relaxed);
