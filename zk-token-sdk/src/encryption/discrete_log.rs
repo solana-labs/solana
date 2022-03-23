@@ -99,29 +99,35 @@ impl DiscreteLog {
         let mut starting_point = self.target;
         let (tx, rx) = mpsc::channel();
 
-        let handles = (0..self.num_threads).into_iter().map(|i| {
-            let tx = tx.clone();
-            let ristretto_iterator = RistrettoIterator::new(
-                (starting_point, i as u64),
-                (-(&self.step_point), self.num_threads as u64),
-            );
+        let handles = (0..self.num_threads)
+            .into_iter()
+            .map(|i| {
+                let tx = tx.clone();
+                let ristretto_iterator = RistrettoIterator::new(
+                    (starting_point, i as u64),
+                    (-(&self.step_point), self.num_threads as u64),
+                );
 
-            let handle = thread::spawn(move || {
-                if let Some(decoded) = self.decode_range(ristretto_iterator, self.range_bound) {
+                let handle = thread::spawn(move || {
+                    let decoded = self.decode_range(ristretto_iterator, self.range_bound);
                     tx.send(decoded).unwrap();
-                }
-            });
+                });
 
-            starting_point -= G;
-            handle
-        });
+                starting_point -= G;
+                handle
+            })
+            .collect::<Vec<_>>();
 
-        handles.for_each(|handle| handle.join().unwrap());
         drop(tx);
-
         let mut solution = None;
         for received in rx {
-            solution = Some(received);
+            if received.is_some() {
+                solution = received;
+            }
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
         }
         solution
     }
