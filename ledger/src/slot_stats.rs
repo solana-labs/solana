@@ -156,11 +156,7 @@ impl SlotsStats {
     }
 
     pub fn get_clone(&self, slot: Slot) -> Option<SlotStats> {
-        self.stats
-            .lock()
-            .unwrap()
-            .get(&slot)
-            .map(|slot_stats| slot_stats.clone())
+        self.stats.lock().unwrap().get(&slot).cloned()
     }
 
     pub fn remove(&self, slot: &Slot, reason: SlotStatsReportingReason) {
