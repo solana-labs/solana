@@ -49,7 +49,7 @@ use {
         DashMap, DashSet,
     },
     log::*,
-    rand::{prelude::SliceRandom, thread_rng, Rng},
+    rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
@@ -63,7 +63,6 @@ use {
         pubkey::Pubkey,
         timing::AtomicInterval,
     },
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         borrow::{Borrow, Cow},
         boxed::Box,
@@ -90,7 +89,6 @@ const STORE_META_OVERHEAD: usize = 256;
 // when the accounts write cache exceeds this many bytes, we will flush it
 // this can be specified on the command line, too (--accounts-db-cache-limit-mb)
 const WRITE_CACHE_LIMIT_BYTES_DEFAULT: u64 = 15_000_000_000;
-const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
 const SCAN_SLOT_PAR_ITER_THRESHOLD: usize = 4000;
 
 pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
@@ -4683,26 +4681,6 @@ impl AccountsDb {
             ("account_bytes_saved", account_bytes_saved, i64),
             ("num_accounts_saved", num_accounts_saved, i64),
         );
-
-        // Flush a random slot out after every force flush to catch any inconsistencies
-        // between cache and written state (i.e. should cause a hash mismatch between validators
-        // that flush and don't flush if such a bug exists).
-        let num_slots_remaining = self.accounts_cache.num_slots();
-        if force_flush && num_slots_remaining >= FLUSH_CACHE_RANDOM_THRESHOLD {
-            // Don't flush slots that are known to be unrooted
-            let mut frozen_slots = self.accounts_cache.cached_frozen_slots();
-            frozen_slots.retain(|s| *s > max_flushed_root);
-            // Remove a random index 0 <= i < `frozen_slots.len()`
-            let rand_slot = frozen_slots.choose(&mut thread_rng());
-            if let Some(rand_slot) = rand_slot {
-                let random_flush_stats =
-                    self.flush_slot_cache(*rand_slot, None::<&mut fn(&_, &_) -> bool>);
-                info!(
-                    "Flushed random slot: num_remaining: {} {:?}",
-                    num_slots_remaining, random_flush_stats,
-                );
-            }
-        }
     }
 
     fn flush_rooted_accounts_cache(
@@ -7537,7 +7515,7 @@ pub mod tests {
             inline_spl_token,
         },
         assert_matches::assert_matches,
-        rand::{thread_rng, Rng},
+        rand::{prelude::SliceRandom, thread_rng, Rng},
         solana_sdk::{
             account::{
                 accounts_equal, Account, AccountSharedData, ReadableAccount, WritableAccount,
