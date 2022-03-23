@@ -117,7 +117,7 @@ impl AccountsPackage {
             hash_for_testing,
             cluster_type: bank.cluster_type(),
             snapshot_type,
-            accounts: Arc::clone(&bank.accounts()),
+            accounts: bank.accounts(),
         })
     }
 }
