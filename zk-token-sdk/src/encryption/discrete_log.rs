@@ -10,7 +10,7 @@ use {
 };
 
 const TWO16: u64 = 65536; // 2^16
-const NUM_THREADS: usize = 8;
+const NUM_THREADS: usize = 1;
 
 /// Type that captures a discrete log challenge.
 ///
