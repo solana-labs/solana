@@ -573,6 +573,58 @@ impl PohRecorder {
         Ok(())
     }
 
+    fn report_poh_timing_point_by_tick(&self) {
+        // reaching the end of the slot
+        if self.tick_height % self.ticks_per_slot == 0 {
+            let slot = self.slot_for_tick_height(self.tick_height);
+            if let Some(ref sender) = self.poh_timing_point_sender {
+                info!("PohTimingPoint:End {}", slot);
+                let _ = sender.try_send((
+                    slot,
+                    None,
+                    PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
+                ));
+            }
+        }
+
+        // beginning of a slot
+        if self.tick_height % self.ticks_per_slot == 1 {
+            let slot = self.slot_for_tick_height(self.tick_height);
+            if let Some(ref sender) = self.poh_timing_point_sender {
+                info!("PohTimingPoint:Start {}", slot);
+                let _ = sender.try_send((
+                    slot,
+                    None,
+                    PohTimingPoint::PohSlotStart(solana_sdk::timing::timestamp()),
+                ));
+            }
+        }
+    }
+
+    fn report_poh_timing_point_by_working_bank(&self) {
+        if let Some(slot) = self.working_slot() {
+            if let Some(ref sender) = self.poh_timing_point_sender {
+                info!("PohTimingPoint:End {}", slot);
+                let _ = sender.try_send((
+                    slot,
+                    None,
+                    PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
+                ));
+            }
+        }
+    }
+
+    fn report_poh_timing_point(&self) {
+        // send poh slot end timing point
+        if self.bank_end() && self.has_bank() {
+            //  bank producer
+            self.report_poh_timing_point_by_working_bank()
+        } else {
+            // validator
+            self.report_poh_timing_point_by_tick()
+        }
+    }
+
     pub fn tick(&mut self) {
         let ((poh_entry, target_time), tick_lock_contention_time) = Measure::this(
             |_| {
@@ -594,47 +646,7 @@ impl PohRecorder {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
 
-            // send poh slot end timing point
-            if self.bank_end() && self.has_bank() {
-                //  bank producer
-                if let Some(slot) = self.working_slot() {
-                    if let Some(ref sender) = self.poh_timing_point_sender {
-                        info!("PohTimingPoint:End {}", slot);
-                        let _ = sender.try_send((
-                            slot,
-                            None,
-                            PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
-                        ));
-                    }
-                }
-            } else {
-                // validator
-                // reaching the end of the slot
-                if self.tick_height % self.ticks_per_slot == 0 {
-                    let slot = self.slot_for_tick_height(self.tick_height);
-                    if let Some(ref sender) = self.poh_timing_point_sender {
-                        info!("PohTimingPoint:End {}", slot);
-                        let _ = sender.try_send((
-                            slot,
-                            None,
-                            PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
-                        ));
-                    }
-                }
-
-                // beginning of a slot
-                if self.tick_height % self.ticks_per_slot == 1 {
-                    let slot = self.slot_for_tick_height(self.tick_height);
-                    if let Some(ref sender) = self.poh_timing_point_sender {
-                        info!("PohTimingPoint:End {}", slot);
-                        let _ = sender.try_send((
-                            slot,
-                            None,
-                            PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
-                        ));
-                    }
-                }
-            }
+            self.report_poh_timing_point();
 
             if self
                 .leader_first_tick_height_including_grace_ticks
