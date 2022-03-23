@@ -2,7 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
+    clap::{crate_description, crate_name, Arg, Command},
     log::*,
     solana_clap_utils::{
         input_parsers::pubkeys_of,
@@ -37,7 +37,7 @@ struct Config {
 }
 
 fn get_config() -> Config {
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .after_help("ADDITIONAL HELP:
@@ -58,8 +58,8 @@ fn get_config() -> Config {
 
         export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'")
         .arg({
-            let arg = Arg::with_name("config_file")
-                .short("C")
+            let arg = Arg::new("config_file")
+                .short('C')
                 .long("config")
                 .value_name("PATH")
                 .takes_value(true)
@@ -72,15 +72,15 @@ fn get_config() -> Config {
             }
         })
         .arg(
-            Arg::with_name("json_rpc_url")
+            Arg::new("json_rpc_url")
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
-                .validator(is_url)
+                .validator(|s| is_url(s))
                 .help("JSON RPC URL for the cluster"),
         )
         .arg(
-            Arg::with_name("interval")
+            Arg::new("interval")
                 .long("interval")
                 .value_name("SECONDS")
                 .takes_value(true)
@@ -88,7 +88,7 @@ fn get_config() -> Config {
                 .help("Wait interval seconds between checking the cluster"),
         )
         .arg(
-            Arg::with_name("unhealthy_threshold")
+            Arg::new("unhealthy_threshold")
                 .long("unhealthy-threshold")
                 .value_name("COUNT")
                 .takes_value(true)
@@ -96,37 +96,38 @@ fn get_config() -> Config {
                 .help("How many consecutive failures must occur to trigger a notification")
         )
         .arg(
-            Arg::with_name("validator_identities")
+            Arg::new("validator_identities")
                 .long("validator-identity")
                 .value_name("VALIDATOR IDENTITY PUBKEY")
                 .takes_value(true)
-                .validator(is_pubkey_or_keypair)
-                .multiple(true)
+                .validator(|s| is_pubkey_or_keypair(s))
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .help("Validator identities to monitor for delinquency")
         )
         .arg(
-            Arg::with_name("minimum_validator_identity_balance")
+            Arg::new("minimum_validator_identity_balance")
                 .long("minimum-validator-identity-balance")
                 .value_name("SOL")
                 .takes_value(true)
                 .default_value("10")
-                .validator(is_parsable::<f64>)
+                .validator(|s| is_parsable::<f64>(s.to_string()))
                 .help("Alert when the validator identity balance is less than this amount of SOL")
         )
         .arg(
             // Deprecated parameter, now always enabled
-            Arg::with_name("no_duplicate_notifications")
+            Arg::new("no_duplicate_notifications")
                 .long("no-duplicate-notifications")
-                .hidden(true)
+                .hide(true)
         )
         .arg(
-            Arg::with_name("monitor_active_stake")
+            Arg::new("monitor_active_stake")
                 .long("monitor-active-stake")
                 .takes_value(false)
                 .help("Alert when the current stake for the cluster drops below 80%"),
         )
         .arg(
-            Arg::with_name("ignore_http_bad_gateway")
+            Arg::new("ignore_http_bad_gateway")
                 .long("ignore-http-bad-gateway")
                 .takes_value(false)
                 .help("Ignore HTTP 502 Bad Gateway errors from the JSON RPC URL. \
@@ -142,15 +143,13 @@ fn get_config() -> Config {
         solana_cli_config::Config::default()
     };
 
-    let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
-    let unhealthy_threshold = value_t_or_exit!(matches, "unhealthy_threshold", usize);
-    let minimum_validator_identity_balance = sol_to_lamports(value_t_or_exit!(
-        matches,
-        "minimum_validator_identity_balance",
-        f64
-    ));
-    let json_rpc_url =
-        value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url.clone());
+    let interval = Duration::from_secs(matches.value_of_t_or_exit("interval"));
+    let unhealthy_threshold: usize = matches.value_of_t_or_exit("unhealthy_threshold");
+    let minimum_validator_identity_balance =
+        sol_to_lamports(matches.value_of_t_or_exit("minimum_validator_identity_balance"));
+    let json_rpc_url: String = matches
+        .value_of_t("json_rpc_url")
+        .unwrap_or_else(|_| config.json_rpc_url.clone());
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
         .unwrap_or_default()
         .into_iter()
