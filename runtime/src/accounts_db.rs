@@ -4853,22 +4853,13 @@ impl AccountsDb {
         slot: Slot,
         should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
     ) -> Option<FlushStats> {
-        let is_being_purged = {
-            let mut slots_under_contention = self
-                .remove_unrooted_slots_synchronization
-                .slots_under_contention
-                .lock()
-                .unwrap();
-            // If we're purging this slot, don't flush it here
-            if slots_under_contention.contains(&slot) {
-                true
-            } else {
-                slots_under_contention.insert(slot);
-                false
-            }
-        };
-
-        if !is_being_purged {
+        if self
+            .remove_unrooted_slots_synchronization
+            .slots_under_contention
+            .lock()
+            .unwrap()
+            .insert(slot)
+        {
             let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
                 #[cfg(test)]
                 {
