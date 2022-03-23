@@ -609,7 +609,21 @@ impl PohRecorder {
                 }
             } else {
                 // validator
+                // reaching the end of the slot
                 if self.tick_height % self.ticks_per_slot == 0 {
+                    let slot = self.slot_for_tick_height(self.tick_height);
+                    if let Some(ref sender) = self.poh_timing_point_sender {
+                        info!("PohTimingPoint:End {}", slot);
+                        let _ = sender.try_send((
+                            slot,
+                            None,
+                            PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
+                        ));
+                    }
+                }
+
+                // beginning of a slot
+                if self.tick_height % self.working_slot() == 1 {
                     let slot = self.slot_for_tick_height(self.tick_height);
                     if let Some(ref sender) = self.poh_timing_point_sender {
                         info!("PohTimingPoint:End {}", slot);
