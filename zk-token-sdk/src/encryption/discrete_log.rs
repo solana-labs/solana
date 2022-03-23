@@ -219,7 +219,7 @@ mod tests {
         let amount: u64 = 55;
 
         let mut instance = DiscreteLog::new(G, Scalar::from(amount) * G);
-        instance.set_number_threads(4).unwrap();
+        instance.num_threads(4).unwrap();
 
         // Very informal measurements for now
         let start_computation = Instant::now();
