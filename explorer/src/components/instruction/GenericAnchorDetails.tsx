@@ -105,9 +105,7 @@ export function GenericAnchorDetailsCard(props: {
           ix={ix}
           index={index}
           result={result}
-          title={`${programName || "Unknown"}: ${snakeCase(
-            ixTitle || "Unknown"
-          )}`}
+          title={`${programName || "Unknown"}: ${ixTitle || "Unknown"}`}
           innerCards={innerCards}
           childIndex={childIndex}
         >
