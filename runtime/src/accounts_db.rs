@@ -981,7 +981,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-pub type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
+type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -5488,7 +5488,7 @@ impl AccountsDb {
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
-                Some((&self.accounts_cache, ancestors, &self.accounts_index))
+                Some((&self.accounts_cache, ancestors))
             } else {
                 None
             };
@@ -5748,7 +5748,9 @@ impl AccountsDb {
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
                     config.check_hash,
-                    config.accounts_cache_and_ancestors,
+                    config
+                        .accounts_cache_and_ancestors
+                        .map(|(a, b)| (a, b, &self.accounts_index)),
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
