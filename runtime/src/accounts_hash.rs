@@ -23,7 +23,6 @@ pub struct PreviousPass {
 pub struct CalcAccountsHashConfig<'a> {
     pub storages: &'a SortedStorages<'a>,
     pub use_bg_thread_pool: bool,
-    pub stats: HashStats,
     pub check_hash: bool,
     pub ancestors: Option<&'a Ancestors>,
     // to come soon
