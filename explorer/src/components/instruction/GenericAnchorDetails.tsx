@@ -57,7 +57,14 @@ export function GenericAnchorDetailsCard(props: {
       }
 
       // e.g. voter_stake_registry -> voter stake registry
-      setProgramName(idl.name.replaceAll("_", " ").trim());
+      var _programName = idl.name.replaceAll("_", " ").trim();
+      // e.g. voter stake registry -> Voter Stake Registry
+      _programName = _programName
+        .toLowerCase()
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.substring(1))
+        .join(" ");
+      setProgramName(_programName);
 
       const coder = new BorshInstructionCoder(idl);
       const decodedIx = coder.decode(ix.data);
@@ -65,8 +72,10 @@ export function GenericAnchorDetailsCard(props: {
         return;
       }
 
-      // get ix title
-      setIxTitle(decodedIx.name);
+      // get ix title, pascal case it
+      var _ixTitle = decodedIx.name;
+      _ixTitle = _ixTitle.charAt(0).toUpperCase() + _ixTitle.slice(1);
+      setIxTitle(_ixTitle);
 
       // get ix accounts
       const idlInstructions = idl.instructions.filter(
