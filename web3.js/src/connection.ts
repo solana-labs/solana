@@ -2231,6 +2231,13 @@ export class Connection {
   }
 
   /**
+   * The RPC endpoint
+   */
+  get rpcEndpoint(): string {
+    return this._rpcEndpoint;
+  }
+
+  /**
    * Fetch the balance for the specified public key, return with context
    */
   async getBalanceAndContext(
