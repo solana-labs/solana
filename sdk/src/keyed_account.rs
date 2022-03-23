@@ -198,6 +198,10 @@ pub fn create_keyed_accounts_unified<'a>(
         .collect()
 }
 
+#[deprecated(
+    since = "1.11.0",
+    note = "Please use InstructionContext::get_signers() instead"
+)]
 /// Return all the signers from a set of KeyedAccounts
 pub fn get_signers<A>(keyed_accounts: &[KeyedAccount]) -> A
 where
