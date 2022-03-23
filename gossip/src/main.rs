@@ -1,10 +1,7 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
 use {
-    clap::{
-        crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
-        SubCommand,
-    },
+    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_utils::{
         input_parsers::keypair_of,
         input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
@@ -20,53 +17,54 @@ use {
     },
 };
 
-fn parse_matches() -> ArgMatches<'static> {
-    let shred_version_arg = Arg::with_name("shred_version")
+fn parse_matches() -> ArgMatches {
+    let shred_version_arg = Arg::new("shred_version")
         .long("shred-version")
         .value_name("VERSION")
         .takes_value(true)
         .default_value("0")
         .help("Filter gossip nodes by this shred version");
 
-    App::new(crate_name!())
+    Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand_required(true)
+        .arg_required_else_help(true)
         .arg(
-            Arg::with_name("allow_private_addr")
+            Arg::new("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
-                .hidden(true),
+                .hide(true),
         )
         .subcommand(
-            SubCommand::with_name("rpc-url")
+            Command::new("rpc-url")
                 .about("Get an RPC URL for the cluster")
                 .arg(
-                    Arg::with_name("entrypoint")
-                        .short("n")
+                    Arg::new("entrypoint")
+                        .short('n')
                         .long("entrypoint")
                         .value_name("HOST:PORT")
                         .takes_value(true)
                         .required(true)
-                        .validator(solana_net_utils::is_host_port)
+                        .validator(|s| solana_net_utils::is_host_port(s.to_string()))
                         .help("Rendezvous with the cluster at this entry point"),
                 )
                 .arg(
-                    Arg::with_name("all")
+                    Arg::new("all")
                         .long("all")
                         .takes_value(false)
                         .help("Return all RPC URLs"),
                 )
                 .arg(
-                    Arg::with_name("any")
+                    Arg::new("any")
                         .long("any")
                         .takes_value(false)
                         .conflicts_with("all")
                         .help("Return any RPC URL"),
                 )
                 .arg(
-                    Arg::with_name("timeout")
+                    Arg::new("timeout")
                         .long("timeout")
                         .value_name("SECONDS")
                         .takes_value(true)
@@ -74,50 +72,50 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Timeout in seconds"),
                 )
                 .arg(&shred_version_arg)
-                .setting(AppSettings::DisableVersion),
+                .disable_version_flag(true),
         )
         .subcommand(
-            SubCommand::with_name("spy")
+            Command::new("spy")
                 .about("Monitor the gossip entrypoint")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("entrypoint")
-                        .short("n")
+                    Arg::new("entrypoint")
+                        .short('n')
                         .long("entrypoint")
                         .value_name("HOST:PORT")
                         .takes_value(true)
-                        .validator(solana_net_utils::is_host_port)
+                        .validator(|s| solana_net_utils::is_host_port(s.to_string()))
                         .help("Rendezvous with the cluster at this entrypoint"),
                 )
                 .arg(
-                    clap::Arg::with_name("gossip_port")
+                    clap::Arg::new("gossip_port")
                         .long("gossip-port")
                         .value_name("PORT")
                         .takes_value(true)
-                        .validator(is_port)
+                        .validator(|s| is_port(s))
                         .help("Gossip port number for the node"),
                 )
                 .arg(
-                    clap::Arg::with_name("gossip_host")
+                    clap::Arg::new("gossip_host")
                         .long("gossip-host")
                         .value_name("HOST")
                         .takes_value(true)
-                        .validator(solana_net_utils::is_host)
+                        .validator(|s| solana_net_utils::is_host(s.to_string()))
                         .help("Gossip DNS name or IP address for the node to advertise in gossip \
                                [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
                 )
                 .arg(
-                    Arg::with_name("identity")
-                        .short("i")
+                    Arg::new("identity")
+                        .short('i')
                         .long("identity")
                         .value_name("PATH")
                         .takes_value(true)
-                        .validator(is_keypair_or_ask_keyword)
+                        .validator(|s| is_keypair_or_ask_keyword(s))
                         .help("Identity keypair [default: ephemeral keypair]"),
                 )
                 .arg(
-                    Arg::with_name("num_nodes")
-                        .short("N")
+                    Arg::new("num_nodes")
+                        .short('N')
                         .long("num-nodes")
                         .value_name("NUM")
                         .takes_value(true)
@@ -125,25 +123,25 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Wait for at least NUM nodes to be visible"),
                 )
                 .arg(
-                    Arg::with_name("num_nodes_exactly")
-                        .short("E")
+                    Arg::new("num_nodes_exactly")
+                        .short('E')
                         .long("num-nodes-exactly")
                         .value_name("NUM")
                         .takes_value(true)
                         .help("Wait for exactly NUM nodes to be visible"),
                 )
                 .arg(
-                    Arg::with_name("node_pubkey")
-                        .short("p")
+                    Arg::new("node_pubkey")
+                        .short('p')
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey)
+                        .validator(|s| is_pubkey(s))
                         .help("Public key of a specific node to wait for"),
                 )
                 .arg(&shred_version_arg)
                 .arg(
-                    Arg::with_name("timeout")
+                    Arg::new("timeout")
                         .long("timeout")
                         .value_name("SECONDS")
                         .takes_value(true)
@@ -231,7 +229,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
     let pubkey = matches
         .value_of("node_pubkey")
         .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
-    let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let shred_version: u16 = matches.value_of_t_or_exit("shred_version");
     let identity_keypair = keypair_of(matches, "identity");
 
     let entrypoint_addr = parse_entrypoint(matches);
@@ -240,13 +238,15 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
 
     let gossip_addr = SocketAddr::new(
         gossip_host,
-        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                (0, 1),
-            )
-            .expect("unable to find an available gossip port")
-        }),
+        matches
+            .value_of_t::<u16>("gossip_port")
+            .unwrap_or_else(|_| {
+                solana_net_utils::find_available_port_in_range(
+                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                    (0, 1),
+                )
+                .expect("unable to find an available gossip port")
+            }),
     );
     let discover_timeout = Duration::from_secs(timeout.unwrap_or(u64::MAX));
     let (_all_peers, validators) = discover(
@@ -282,8 +282,8 @@ fn process_rpc_url(
     let any = matches.is_present("any");
     let all = matches.is_present("all");
     let entrypoint_addr = parse_entrypoint(matches);
-    let timeout = value_t_or_exit!(matches, "timeout", u64);
-    let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let timeout: u64 = matches.value_of_t_or_exit("timeout");
+    let shred_version: u16 = matches.value_of_t_or_exit("shred_version");
     let (_all_peers, validators) = discover(
         None, // keypair
         entrypoint_addr.as_ref(),
@@ -329,10 +329,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = parse_matches();
     let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     match matches.subcommand() {
-        ("spy", Some(matches)) => {
+        Some(("spy", matches)) => {
             process_spy(matches, socket_addr_space)?;
         }
-        ("rpc-url", Some(matches)) => {
+        Some(("rpc-url", matches)) => {
             process_rpc_url(matches, socket_addr_space)?;
         }
         _ => unreachable!(),
