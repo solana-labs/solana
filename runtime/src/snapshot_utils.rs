@@ -1629,7 +1629,7 @@ pub fn snapshot_bank(
     root_bank: &Bank,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
     accounts_package_sender: &AccountsPackageSender,
-    bank_snapshots_dir: impl AsRef<Path>,
+    bank_snapshots_dir: impl AsRef<Path> + std::fmt::Debug,
     snapshot_archives_dir: impl AsRef<Path>,
     snapshot_version: SnapshotVersion,
     archive_format: ArchiveFormat,
@@ -1638,6 +1638,7 @@ pub fn snapshot_bank(
 ) -> Result<()> {
     let snapshot_storages = get_snapshot_storages(root_bank);
 
+    error!("snapshot bank dir: {:?}", bank_snapshots_dir);
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let bank_snapshot_info = add_bank_snapshot(
         &bank_snapshots_dir,
@@ -1647,6 +1648,7 @@ pub fn snapshot_bank(
     )?;
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
+    error!("{} {}, hash_for_testing: {:?}", file!(), line!(), hash_for_testing);
 
     let accounts_package = AccountsPackage::new(
         root_bank,
@@ -1784,6 +1786,7 @@ pub fn package_and_archive_full_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
+    error!("{} {}", file!(), line!());
     let accounts_package = AccountsPackage::new(
         bank,
         bank_snapshot_info,
@@ -1793,7 +1796,7 @@ pub fn package_and_archive_full_snapshot(
         snapshot_storages,
         archive_format,
         snapshot_version,
-        None,
+        Some(bank.get_accounts_hash()),
         Some(SnapshotType::FullSnapshot),
     )?;
 
@@ -1823,6 +1826,7 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
+    error!("{} {}", file!(), line!());
     let accounts_package = AccountsPackage::new(
         bank,
         bank_snapshot_info,
@@ -1832,7 +1836,7 @@ pub fn package_and_archive_incremental_snapshot(
         snapshot_storages,
         archive_format,
         snapshot_version,
-        None,
+        Some(bank.get_accounts_hash()),
         Some(SnapshotType::IncrementalSnapshot(
             incremental_snapshot_base_slot,
         )),

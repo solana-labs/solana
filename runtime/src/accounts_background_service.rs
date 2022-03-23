@@ -108,12 +108,12 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                let previous_hash = if test_hash_calculation {
+                let hash_for_testing = if test_hash_calculation {
                     // We have to use the index version here.
                     // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
-                    snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
+                    Some(snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false))
                 } else {
-                    Hash::default()
+                    None
                 };
 
                 let mut shrink_time = Measure::start("shrink_time");
@@ -144,7 +144,8 @@ impl SnapshotRequestHandler {
                     );
                 }
                 flush_accounts_cache_time.stop();
-
+                /*
+                // this is where we want hash for testing eventually
                 let mut hash_time = Measure::start("hash_time");
                 let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
                     use_index_hash_calculation,
@@ -158,6 +159,7 @@ impl SnapshotRequestHandler {
                     None
                 };
                 hash_time.stop();
+                */
 
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
@@ -195,6 +197,8 @@ impl SnapshotRequestHandler {
 
                 // Snapshot the bank and send over an accounts package
                 let mut snapshot_time = Measure::start("snapshot_time");
+                error!("snapshot bank, including hash for testing: {:?}", hash_for_testing);
+                error!("{} {}", file!(), line!());
                 let result = snapshot_utils::snapshot_bank(
                     &snapshot_root_bank,
                     status_cache_slot_deltas,
@@ -234,7 +238,6 @@ impl SnapshotRequestHandler {
 
                 datapoint_info!(
                     "handle_snapshot_requests-timing",
-                    ("hash_time", hash_time.as_us(), i64),
                     (
                         "flush_accounts_cache_time",
                         flush_accounts_cache_time.as_us(),

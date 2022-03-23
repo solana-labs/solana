@@ -54,6 +54,8 @@ impl<'a> SortedStorages<'a> {
     // 1. each SnapshotStorage.!is_empty()
     // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
     pub fn new(source: &'a [SnapshotStorage]) -> Self {
+        use log::*;
+        error!("storages: {}", source.len());
         let slots = source
             .iter()
             .map(|storages| {

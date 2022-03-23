@@ -286,7 +286,7 @@ mod tests {
             last_bank.get_snapshot_storages(None),
             ArchiveFormat::TarBzip2,
             snapshot_version,
-            None,
+            Some(last_bank.get_accounts_hash()),
             Some(SnapshotType::FullSnapshot),
         )
         .unwrap();

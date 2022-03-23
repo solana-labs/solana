@@ -20,6 +20,7 @@ use {
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{HashMap, HashSet},
+        path::PathBuf,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -109,7 +110,7 @@ impl AccountsHashVerifier {
 
     fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
         let mut measure_hash = Measure::start("hash");
-        if let Some(expected_hash) = accounts_package.hash_for_testing {
+        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
             let mut sort_time = Measure::start("sort_storages");
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
             sort_time.stop();
@@ -139,30 +140,42 @@ impl AccountsHashVerifier {
         };
         let slot = accounts_package.slot;
         let mut bank = accounts_package.snapshot_archives_dir.clone();
+        bank.push("snapshot");
+        bank.push(format!("{}", slot));
+        bank.push(format!("{}", slot));
 
         let links = accounts_package.snapshot_links.path().clone();
+        let mut links_slot = PathBuf::from(links.clone());
+        links_slot.push(slot.to_string());
 
         let mut bank_out = bank.clone();
         bank_out.pop();
-        bank_out.push(".temp");
+        bank_out.push(format!("{}.temp", slot));
+        error!("verify_accounts_package_hash: {:?}, {}, tempdir: {:?}, bank: {:?}, contents: {:?}", accounts_package.snapshot_archives_dir, slot,
         accounts_package.snapshot_links, bank, std::fs::read_dir(&links).map(|x| x.collect::<Vec<_>>()));
+        //let path = accounts_package.snapshot_archives_dir.join(slot);
+        //reserialize_bank_fields_with_hash
         let mut file = std::fs::File::open(bank.clone());
         use std::io::BufReader;
         use std::io::BufWriter;
         let mut file_out = std::fs::File::create(bank_out.clone());
+        error!("file: {}, file_out: {}", file.is_ok(), file_out.is_ok());
         if file.is_ok() && file_out.is_ok() {
             {
                 let mut file = file.unwrap();
                 let mut file_out = file_out.unwrap();
                 let r = solana_runtime::serde_snapshot::reserialize_with_new_hash(&mut BufWriter::new(file_out), &mut BufReader::new(file));
+                error!("file_out: result: {:?}", r);
                 // todo - what happens if this fails?
             }
+            error!("renaming: {:?} to {:?}, dir: {:?}", bank_out, bank, std::fs::read_dir(&links_slot).map(|x| x.collect::<Vec<_>>()));
             // replace the original file with this one
             std::fs::rename(bank_out, bank).unwrap();
         }
         else {
             // todo - this can't happen either
         }
+
 
         measure_hash.stop();
         datapoint_info!(
@@ -180,7 +193,7 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
     ) {
-        let hash = accounts_package.hash;
+        let hash = accounts_package.accounts_hash_for_testing.unwrap(); // todo
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
