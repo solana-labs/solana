@@ -4860,6 +4860,7 @@ impl AccountsDb {
             .unwrap()
             .insert(slot)
         {
+            // We have not see this slot, flush it.
             let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
                 #[cfg(test)]
                 {
@@ -4889,6 +4890,8 @@ impl AccountsDb {
                 .notify_all();
             flush_stats
         } else {
+            // We have already seen this slot. It is  already under flushing.
+            // So, no need to flush it again.
             None
         }
     }
