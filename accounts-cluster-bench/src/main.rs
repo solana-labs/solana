@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
+    clap::{crate_description, crate_name, Arg, Command},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
@@ -476,54 +476,55 @@ fn run_accounts_bench(
 
 fn main() {
     solana_logger::setup_with_default("solana=info");
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("RPC entrypoint address. Usually <ip>:8899"),
         )
         .arg(
-            Arg::with_name("faucet_addr")
+            Arg::new("faucet_addr")
                 .long("faucet")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("Faucet entrypoint address. Usually <ip>:9900"),
         )
         .arg(
-            Arg::with_name("space")
+            Arg::new("space")
                 .long("space")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help("Size of accounts to create"),
         )
         .arg(
-            Arg::with_name("lamports")
+            Arg::new("lamports")
                 .long("lamports")
                 .takes_value(true)
                 .value_name("LAMPORTS")
                 .help("How many lamports to fund each account"),
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::new("identity")
                 .long("identity")
                 .takes_value(true)
-                .multiple(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
                 .value_name("FILE")
                 .help("keypair file"),
         )
         .arg(
-            Arg::with_name("batch_size")
+            Arg::new("batch_size")
                 .long("batch-size")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help("Number of transactions to send per batch"),
         )
         .arg(
-            Arg::with_name("close_nth_batch")
+            Arg::new("close_nth_batch")
                 .long("close-frequency")
                 .takes_value(true)
                 .value_name("BYTES")
@@ -536,32 +537,32 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("num_instructions")
+            Arg::new("num_instructions")
                 .long("num-instructions")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts to create on each transaction"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of iterations to make. 0 = unlimited iterations."),
         )
         .arg(
-            Arg::with_name("check_gossip")
+            Arg::new("check_gossip")
                 .long("check-gossip")
                 .help("Just use entrypoint address directly"),
         )
         .arg(
-            Arg::with_name("mint")
+            Arg::new("mint")
                 .long("mint")
                 .takes_value(true)
                 .help("Mint address to initialize account"),
         )
         .arg(
-            Arg::with_name("reclaim_accounts")
+            Arg::new("reclaim_accounts")
                 .long("reclaim-accounts")
                 .takes_value(false)
                 .help("Reclaim accounts after session ends; incompatible with --iterations 0"),
@@ -586,12 +587,12 @@ fn main() {
         });
     }
 
-    let space = value_t!(matches, "space", u64).ok();
-    let lamports = value_t!(matches, "lamports", u64).ok();
-    let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
-    let close_nth_batch = value_t!(matches, "close_nth_batch", u64).unwrap_or(0);
-    let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
-    let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
+    let space: Option<u64> = matches.value_of_t("space").ok();
+    let lamports: Option<u64> = matches.value_of_t("lamports").ok();
+    let batch_size: usize = matches.value_of_t("batch_size").unwrap_or(4);
+    let close_nth_batch: u64 = matches.value_of_t("close_nth_batch").unwrap_or(0);
+    let iterations: usize = matches.value_of_t("iterations").unwrap_or(10);
+    let num_instructions: usize = matches.value_of_t("num_instructions").unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
         eprintln!("bad num_instructions: {}", num_instructions);
         exit(1);
@@ -599,7 +600,8 @@ fn main() {
 
     let mint = pubkey_of(&matches, "mint");
 
-    let payer_keypairs: Vec<_> = values_t_or_exit!(matches, "identity", String)
+    let payer_keypairs: Vec<_> = matches
+        .values_of_t_or_exit::<String>("identity")
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
