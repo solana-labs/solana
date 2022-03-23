@@ -1,5 +1,8 @@
 use {
-    crate::nonce_keyed_account::NonceKeyedAccount,
+    crate::nonce_keyed_account::{
+        advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
+        withdraw_nonce_account,
+    },
     log::*,
     solana_program_runtime::{
         ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
@@ -361,7 +364,7 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            me.advance_nonce_account(&signers, invoke_context)
+            advance_nonce_account(me, &signers, invoke_context)
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -375,7 +378,7 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
                 invoke_context,
             )?;
-            me.withdraw_nonce_account(lamports, to, &rent, &signers, invoke_context)
+            withdraw_nonce_account(me, lamports, to, &rent, &signers, invoke_context)
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -395,11 +398,11 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
-            me.initialize_nonce_account(&authorized, &rent, invoke_context)
+            initialize_nonce_account(me, &authorized, &rent, invoke_context)
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            me.authorize_nonce_account(&nonce_authority, &signers, invoke_context)
+            authorize_nonce_account(me, &nonce_authority, &signers, invoke_context)
         }
         SystemInstruction::Allocate { space } => {
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
