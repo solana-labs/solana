@@ -296,11 +296,11 @@ function isFullyInactivated(
     return false;
   }
 
-  const delegatedStake = stake.delegation.stake.toNumber();
-  const inactiveStake = activation.inactive;
+  const delegatedStake = stake.delegation.stake;
+  const inactiveStake = new BN(activation.inactive);
 
   return (
     !stake.delegation.deactivationEpoch.eq(MAX_EPOCH) &&
-    delegatedStake === inactiveStake
+    delegatedStake.eq(inactiveStake)
   );
 }
