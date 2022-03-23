@@ -2340,14 +2340,16 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 let translated = translate(
                     memory_mapping,
                     AccessType::Store,
-                    unsafe { (account_info.data.as_ptr() as *const u64).offset(1) as u64 },
+                    (account_info.data.as_ptr() as *const u64 as u64)
+                        .saturating_add(size_of::<u64>() as u64),
                     8,
                 )? as *mut u64;
                 let ref_to_len_in_vm = unsafe { &mut *translated };
-                let ref_of_len_in_input_buffer = unsafe { data.as_ptr().offset(-8) };
+                let ref_of_len_in_input_buffer =
+                    (data.as_ptr() as *const _ as u64).saturating_sub(8);
                 let serialized_len_ptr = translate_type_mut::<u64>(
                     memory_mapping,
-                    ref_of_len_in_input_buffer as *const _ as u64,
+                    ref_of_len_in_input_buffer,
                     self.check_aligned,
                 )?;
                 let vm_data_addr = data.as_ptr() as u64;
@@ -2682,10 +2684,10 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
 
             let ref_of_len_in_input_buffer =
-                unsafe { (account_info.data_addr as *mut u8).offset(-8) };
+                (account_info.data_addr as *mut u8 as u64).saturating_sub(8);
             let serialized_len_ptr = translate_type_mut::<u64>(
                 memory_mapping,
-                ref_of_len_in_input_buffer as *const _ as u64,
+                ref_of_len_in_input_buffer,
                 self.check_aligned,
             )?;
 
