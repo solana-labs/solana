@@ -1,6 +1,7 @@
 #![cfg(not(target_arch = "bpf"))]
 
 use {
+    crate::errors::ProofError,
     curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_POINT as G, ristretto::RistrettoPoint, scalar::Scalar,
         traits::Identity,
@@ -10,7 +11,6 @@ use {
 };
 
 const TWO16: u64 = 65536; // 2^16
-const NUM_THREADS: usize = 1;
 
 /// Type that captures a discrete log challenge.
 ///
@@ -21,6 +21,13 @@ pub struct DiscreteLog {
     pub generator: RistrettoPoint,
     /// Target point for discrete log
     pub target: RistrettoPoint,
+    /// Number of threads used for discrete log computation
+    num_threads: usize,
+    /// Range bound for discrete log search derived from the max value to search for and
+    /// `num_threads`
+    range_bound: usize,
+    /// Ristretto point representing each step of the discrete log search
+    step_point: RistrettoPoint,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -53,31 +60,54 @@ lazy_static::lazy_static! {
         bincode::deserialize(DECODE_PRECOMPUTATION_FOR_G_BINCODE).unwrap_or_default()
     };
 
-    pub static ref ITERATOR_G: RistrettoPoint = Scalar::from(NUM_THREADS as u64) * G;
-    pub static ref THREAD_RANGE_BOUND: usize = (TWO16 as usize) / NUM_THREADS;
+    // pub static ref ITERATOR_G: RistrettoPoint = Scalar::from(NUM_THREADS as u64) * G;
+    // pub static ref THREAD_RANGE_BOUND: usize = (TWO16 as usize) / NUM_THREADS;
 }
 
 /// Solves the discrete log instance using a 16/16 bit offline/online split
 impl DiscreteLog {
-    /// Solves the discrete log problem under the assumption that the solution
-    /// is a 32-bit number.
-    pub(crate) fn decode_u32(self) -> Option<u64> {
-        self.decode_u32_threaded()
+    /// Discrete log instance constructor.
+    ///
+    /// Default number of threads set to 1.
+    pub fn new(generator: RistrettoPoint, target: RistrettoPoint) -> Self {
+        Self {
+            generator,
+            target,
+            num_threads: 1,
+            range_bound: TWO16 as usize,
+            step_point: G,
+        }
     }
 
-    pub(crate) fn decode_u32_threaded(self) -> Option<u64> {
+    /// Adjusts number of threads ina  discrete log isntance.
+    pub fn set_number_threads(&mut self, num_threads: usize) -> Result<(), ProofError> {
+        // number of threads must be a positive power-of-two integer
+        if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 {
+            return Err(ProofError::DiscreteLogThreads);
+        }
+
+        self.num_threads = num_threads;
+        self.range_bound = (TWO16 as usize).checked_div(num_threads).unwrap();
+        self.step_point = Scalar::from(num_threads as u64) * G;
+
+        Ok(())
+    }
+
+    /// Solves the discrete log problem under the assumption that the solution
+    /// is a 32-bit number.
+    pub fn decode_u32(self) -> Option<u64> {
         let mut starting_point = self.target;
         let (tx, rx) = mpsc::channel();
 
-        for i in 0..NUM_THREADS {
+        for i in 0..self.num_threads {
             let tx = tx.clone();
             let ristretto_iterator = RistrettoIterator::new(
                 (starting_point, i as u64),
-                (-(*ITERATOR_G), NUM_THREADS as u64),
+                (-(&self.step_point), self.num_threads as u64),
             );
 
             thread::spawn(move || {
-                if let Some(decoded) = self.decode_range(ristretto_iterator, *THREAD_RANGE_BOUND) {
+                if let Some(decoded) = self.decode_range(ristretto_iterator, self.range_bound) {
                     tx.send(decoded).unwrap();
                 }
             });
@@ -161,10 +191,7 @@ mod tests {
         // general case
         let amount: u64 = 55;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
         // Very informal measurements for now
         let start_computation = Instant::now();
@@ -173,7 +200,10 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!("computation secs: {:?} sec", computation_secs);
+        println!(
+            "single thread discrete log computation secs: {:?} sec",
+            computation_secs
+        );
     }
 
     #[test]
@@ -181,73 +211,59 @@ mod tests {
         // general case
         let amount: u64 = 55;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let mut instance = DiscreteLog::new(G, Scalar::from(amount) * G);
+        instance.set_number_threads(4).unwrap();
 
         // Very informal measurements for now
         let start_computation = Instant::now();
-        let decoded = instance.decode_u32_threaded();
+        let decoded = instance.decode_u32();
         let computation_secs = start_computation.elapsed().as_secs_f64();
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!("computation secs: {:?} sec", computation_secs);
+        println!(
+            "4 thread discrete log computation: {:?} sec",
+            computation_secs
+        );
 
         // amount 0
         let amount: u64 = 0;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
-        let decoded = instance.decode_u32_threaded();
+        let decoded = instance.decode_u32();
         assert_eq!(amount, decoded.unwrap());
 
         // amount 1
         let amount: u64 = 1;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
-        let decoded = instance.decode_u32_threaded();
+        let decoded = instance.decode_u32();
         assert_eq!(amount, decoded.unwrap());
 
         // amount 2
         let amount: u64 = 2;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
-        let decoded = instance.decode_u32_threaded();
+        let decoded = instance.decode_u32();
         assert_eq!(amount, decoded.unwrap());
 
         // amount 3
         let amount: u64 = 3;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
-        let decoded = instance.decode_u32_threaded();
+        let decoded = instance.decode_u32();
         assert_eq!(amount, decoded.unwrap());
 
         // max amount
         let amount: u64 = ((1_u64 << 32) - 1) as u64;
 
-        let instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
-        };
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
-        let decoded = instance.decode_u32_threaded();
+        let decoded = instance.decode_u32();
         assert_eq!(amount, decoded.unwrap());
     }
 }
