@@ -4698,27 +4698,20 @@ impl AccountsDb {
             self.max_clean_root(requested_flush_root)
         });
 
-        // Use HashMap because HashSet doesn't provide Entry api
-        let mut written_accounts = HashMap::new();
+        let mut written_accounts = HashSet::new();
 
         // If `should_clean` is None, then`should_flush_f` is also None, which will cause
         // `flush_slot_cache` to flush all accounts to storage without cleaning any accounts.
         let mut should_flush_f = should_clean.map(|(account_bytes_saved, num_accounts_saved)| {
             move |&pubkey: &Pubkey, account: &AccountSharedData| {
-                use std::collections::hash_map::Entry::{Occupied, Vacant};
-                let should_flush = match written_accounts.entry(pubkey) {
-                    Vacant(vacant_entry) => {
-                        vacant_entry.insert(());
-                        true
-                    }
-                    Occupied(_occupied_entry) => {
-                        *account_bytes_saved += account.data().len();
-                        *num_accounts_saved += 1;
-                        // If a later root already wrote this account, no point
-                        // in flushing it
-                        false
-                    }
-                };
+                // if not in hashset, then not flushed previously, so flush it
+                let should_flush = written_accounts.insert(pubkey);
+                if !should_flush {
+                    *account_bytes_saved += account.data().len();
+                    *num_accounts_saved += 1;
+                    // If a later root already wrote this account, no point
+                    // in flushing it
+                }
                 should_flush
             }
         });
