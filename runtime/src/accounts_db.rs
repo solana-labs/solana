@@ -4575,7 +4575,7 @@ impl AccountsDb {
     }
 
     pub fn flush_accounts_cache_slot(&self, slot: Slot) {
-        self.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+        self.flush_slot_cache(slot);
     }
 
     /// true if write cache is too big
@@ -4642,9 +4642,7 @@ impl AccountsDb {
                 // Don't flush slots that are known to be unrooted
                 if old_slot > max_flushed_root {
                     if self.should_aggressively_flush_cache() {
-                        if let Some(stats) =
-                            self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>)
-                        {
+                        if let Some(stats) = self.flush_slot_cache(old_slot) {
                             flush_stats.num_flushed += stats.num_flushed;
                             flush_stats.num_purged += stats.num_purged;
                             flush_stats.total_size += stats.total_size;
@@ -4736,7 +4734,10 @@ impl AccountsDb {
                 should_flush_f.as_mut()
             };
 
-            if self.flush_slot_cache(root, should_flush_f).is_some() {
+            if self
+                .flush_slot_cache_with_clean(root, should_flush_f)
+                .is_some()
+            {
                 num_roots_flushed += 1;
             }
 
@@ -4839,10 +4840,15 @@ impl AccountsDb {
         }
     }
 
+    /// flush all accounts in this slot
+    fn flush_slot_cache(&self, slot: Slot) -> Option<FlushStats> {
+        self.flush_slot_cache_with_clean(slot, None::<&mut fn(&_, &_) -> bool>)
+    }
+
     /// `should_flush_f` is an optional closure that determines whether a given
     /// account should be flushed. Passing `None` will by default flush all
     /// accounts
-    fn flush_slot_cache(
+    fn flush_slot_cache_with_clean(
         &self,
         slot: Slot,
         should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
@@ -12852,7 +12858,7 @@ pub mod tests {
                     if flush_trial_start_receiver.recv().is_err() {
                         return;
                     }
-                    db.flush_slot_cache(10, None::<&mut fn(&_, &_) -> bool>);
+                    db.flush_slot_cache(10);
                     flush_done_sender.send(()).unwrap();
                 })
                 .unwrap()
@@ -12921,7 +12927,7 @@ pub mod tests {
                         return;
                     }
                     for slot in 0..num_cached_slots {
-                        db.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+                        db.flush_slot_cache(slot);
                     }
                     flush_done_sender.send(()).unwrap();
                 })
