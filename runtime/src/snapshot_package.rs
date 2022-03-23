@@ -78,12 +78,6 @@ impl AccountsPackage {
                 bank.slot() > incremental_snapshot_base_slot,
                 "Incremental snapshot base slot must be less than the bank being snapshotted!"
             );
-            assert!(
-            snapshot_storages.iter().all(|storage| storage
-                .iter()
-                .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
-            "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
-            );
         }
 
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
@@ -136,6 +130,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             "Cannot make a SnapshotPackage from an AccountsPackage when SnapshotType is None!"
         );
 
+        let mut snapshot_storages = accounts_package.snapshot_storages;
         let snapshot_archive_path = match accounts_package.snapshot_type.unwrap() {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 accounts_package.snapshot_archives_dir,
@@ -144,6 +139,18 @@ impl From<AccountsPackage> for SnapshotPackage {
                 accounts_package.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+                snapshot_storages.retain(|storages| {
+                    storages
+                        .first() // storages are grouped by slot in the outer Vec, so all storages will have the same slot as the first
+                        .map(|storage| storage.slot() > incremental_snapshot_base_slot)
+                        .unwrap_or_default()
+                });
+                assert!(
+                    snapshot_storages.iter().all(|storage| storage
+                        .iter()
+                        .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
+                    "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
+                    );
                 snapshot_utils::build_incremental_snapshot_archive_path(
                     accounts_package.snapshot_archives_dir,
                     incremental_snapshot_base_slot,
@@ -164,7 +171,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             block_height: accounts_package.block_height,
             slot_deltas: accounts_package.slot_deltas,
             snapshot_links: accounts_package.snapshot_links,
-            snapshot_storages: accounts_package.snapshot_storages,
+            snapshot_storages,
             snapshot_version: accounts_package.snapshot_version,
             snapshot_type: accounts_package.snapshot_type.unwrap(),
         }
