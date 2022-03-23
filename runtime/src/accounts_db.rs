@@ -4721,21 +4721,8 @@ impl AccountsDb {
         // outdated updates in earlier roots
         let mut num_roots_flushed = 0;
         for &root in cached_roots.iter().rev() {
-            let should_flush_f = if let Some(max_clean_root) = max_clean_root {
-                if root > max_clean_root {
-                    // Only if the root is greater than the `max_clean_root` do we
-                    // have to prevent cleaning, otherwise, just default to `should_flush_f`
-                    // for any slots <= `max_clean_root`
-                    None
-                } else {
-                    should_flush_f.as_mut()
-                }
-            } else {
-                should_flush_f.as_mut()
-            };
-
             if self
-                .flush_slot_cache_with_clean(&[root], should_flush_f)
+                .flush_slot_cache_with_clean(&[root], should_flush_f.as_mut(), max_clean_root)
                 .is_some()
             {
                 num_roots_flushed += 1;
@@ -4764,6 +4751,7 @@ impl AccountsDb {
         slot: Slot,
         slot_cache: &SlotCache,
         mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        max_clean_root: Option<Slot>,
     ) -> FlushStats {
         let mut num_purged = 0;
         let mut total_size = 0;
@@ -4771,6 +4759,16 @@ impl AccountsDb {
         let iter_items: Vec<_> = slot_cache.iter().collect();
         let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
         let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
+        if should_flush_f.is_some() {
+            if let Some(max_clean_root) = max_clean_root {
+                if slot > max_clean_root {
+                    // Only if the root is greater than the `max_clean_root` do we
+                    // have to prevent cleaning, otherwise, just default to `should_flush_f`
+                    // for any slots <= `max_clean_root`
+                    should_flush_f = None;
+                }
+            }
+        }
         let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
             .iter()
             .filter_map(|iter_item| {
@@ -4842,7 +4840,7 @@ impl AccountsDb {
 
     /// flush all accounts in this slot
     fn flush_slot_cache(&self, slot: Slot) -> Option<FlushStats> {
-        self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>)
+        self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
     }
 
     /// `should_flush_f` is an optional closure that determines whether a given
@@ -4852,6 +4850,7 @@ impl AccountsDb {
         &self,
         slots: &[Slot],
         should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        max_clean_root: Option<Slot>,
     ) -> Option<FlushStats> {
         assert_eq!(1, slots.len());
         let slot = slots[0];
@@ -4873,7 +4872,7 @@ impl AccountsDb {
                 // still exists in the cache, we know the slot cannot be removed
                 // by any other threads past this point. We are now responsible for
                 // flushing this slot.
-                self.do_flush_slot_cache(slot, &slot_cache, should_flush_f)
+                self.do_flush_slot_cache(slot, &slot_cache, should_flush_f, max_clean_root)
             });
 
             // Nobody else should have been purging this slot, so should not have been removed
