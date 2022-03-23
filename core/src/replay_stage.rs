@@ -37,6 +37,7 @@ use {
         blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
+        slot_stats::SlotStatsReportingReason,
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
@@ -1683,19 +1684,9 @@ impl ReplayStage {
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
 
-        let ((min_fec_set_count, last_fec_set_count), removed_stats) = {
-            let mut stats = blockstore.turbine_fec_set_stats.lock().unwrap();
-            let min_counts = stats.get_min_index_count(&slot);
-            let removed = stats.remove(&slot);
-            (min_counts, removed)
-        };
-        datapoint_info!(
-            "replay-stage-mark_dead_completed_unrepaired_slot",
-            ("slot", slot, i64),
-            ("min_turbine_fec_set_count", min_fec_set_count, i64),
-            ("last_turbine_fec_set_count", last_fec_set_count, i64),
-            ("turbine_only", removed_stats, bool),
-        );
+        blockstore
+            .slots_stats
+            .remove(&slot, SlotStatsReportingReason::Dead);
 
         rpc_subscriptions.notify_slot_update(SlotUpdate::Dead {
             slot,
@@ -1804,27 +1795,10 @@ impl ReplayStage {
                 drop_bank_sender,
             );
 
-            let (min_fec_set_count, last_fec_set_count, removed_stats) = {
-                let mut stats = blockstore.turbine_fec_set_stats.lock().unwrap();
-                let (min_fec_set_count, last_idx_count) = stats.get_min_index_count(&new_root);
-                let removed_stats = stats.remove(&new_root);
-                stats.prune(&new_root);
-                (min_fec_set_count, last_idx_count, removed_stats)
-            };
-
-            datapoint_info!(
-                "replay-stage-new_root",
-                ("slot", new_root, i64),
-                ("min_turbine_fec_set_count", min_fec_set_count, i64),
-                ("last_turbine_fec_set_count", last_fec_set_count, i64),
-                ("turbine_only", removed_stats, bool),
-            );
-
             blockstore
-                .turbine_fec_set_stats
-                .lock()
-                .unwrap()
-                .prune(&new_root);
+                .slots_stats
+                .remove(&new_root, SlotStatsReportingReason::Rooted);
+            blockstore.slots_stats.prune(&new_root);
 
             rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {

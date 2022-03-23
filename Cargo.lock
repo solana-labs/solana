@@ -4920,6 +4920,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
+ "lru",
  "matches",
  "num-derive",
  "num-traits",

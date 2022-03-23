@@ -16,7 +16,7 @@ use {
             max_ticks_per_n_shreds, ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType,
             Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE,
         },
-        slot_stats::{SlotsStats, TurbineFecSetStats},
+        slot_stats::SlotsStats,
     },
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
@@ -61,7 +61,6 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
-        time::Instant,
     },
     tempfile::{Builder, TempDir},
     thiserror::Error,
@@ -178,9 +177,8 @@ pub struct Blockstore {
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
-    slots_stats: Mutex<SlotsStats>,
+    pub slots_stats: SlotsStats,
     column_options: LedgerColumnOptions,
-    pub turbine_fec_set_stats: Mutex<TurbineFecSetStats>,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -206,7 +204,7 @@ pub struct SlotMetaWorkingSetEntry {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-enum ShredSource {
+pub enum ShredSource {
     Turbine,
     Repaired,
     Recovered,
@@ -675,9 +673,8 @@ impl Blockstore {
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             no_compaction: false,
-            slots_stats: Mutex::<SlotsStats>::default(),
+            slots_stats: SlotsStats::default(),
             column_options,
-            turbine_fec_set_stats: Mutex::<TurbineFecSetStats>::default(),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -1562,15 +1559,9 @@ impl Blockstore {
             return false;
         }
 
-        if is_repaired {
-            let mut slots_stats = self.slots_stats.lock().unwrap();
-            let mut e = slots_stats.stats.entry(slot).or_default();
-            e.num_repaired += 1;
-        }
-
         // insert coding shred into rocks
         let result = self
-            .insert_coding_shred(index_meta, &shred, write_batch)
+            .insert_coding_shred(index_meta, &shred, write_batch, is_repaired)
             .is_ok();
 
         if result {
@@ -1747,6 +1738,7 @@ impl Blockstore {
         index_meta: &mut Index,
         shred: &Shred,
         write_batch: &mut WriteBatch,
+        is_repaired: bool,
     ) -> Result<()> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -1755,10 +1747,15 @@ impl Blockstore {
         // `insert_coding_shred` is called
         assert!(shred.is_code() && shred.sanitize());
 
-        self.turbine_fec_set_stats
-            .lock()
-            .unwrap()
-            .inc_index_count(shred.slot(), shred.fec_set_index());
+        self.slots_stats.inc_index_count(
+            shred.slot(),
+            shred.fec_set_index(),
+            if is_repaired {
+                ShredSource::Repaired
+            } else {
+                ShredSource::Turbine
+            },
+        );
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
@@ -1965,12 +1962,8 @@ impl Blockstore {
             slot_meta.consumed
         };
 
-        if shred_source == ShredSource::Turbine {
-            self.turbine_fec_set_stats
-                .lock()
-                .unwrap()
-                .inc_index_count(shred.slot(), shred.fec_set_index());
-        }
+        self.slots_stats
+            .inc_index_count(shred.slot(), shred.fec_set_index(), shred_source);
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
@@ -1997,45 +1990,26 @@ impl Blockstore {
             end_index,
         })
         .collect();
-        if shred_source == ShredSource::Repaired || shred_source == ShredSource::Recovered {
-            let mut slots_stats = self.slots_stats.lock().unwrap();
-            let mut e = slots_stats.stats.entry(slot_meta.slot).or_default();
-            if shred_source == ShredSource::Repaired {
-                e.num_repaired += 1;
-            }
-            if shred_source == ShredSource::Recovered {
-                e.num_recovered += 1;
-            }
-        }
-        if slot_meta.is_full() {
-            let (num_repaired, num_recovered) = {
-                let mut slots_stats = self.slots_stats.lock().unwrap();
-                if let Some(e) = slots_stats.stats.remove(&slot_meta.slot) {
-                    if slots_stats.last_cleanup_ts.elapsed().as_secs() > 30 {
-                        let root = self.last_root();
-                        slots_stats.stats = slots_stats.stats.split_off(&root);
-                        slots_stats.last_cleanup_ts = Instant::now();
-                    }
-                    (e.num_repaired, e.num_recovered)
-                } else {
-                    (0, 0)
-                }
-            };
 
-            let (min_fec_set_count, last_fec_set_count) = if num_repaired == 0 {
-                self.turbine_fec_set_stats
-                    .lock()
-                    .unwrap()
-                    .get_min_index_count(&slot)
-            } else {
-                // remove metadata for repaired slots
-                let mut stats = self.turbine_fec_set_stats.lock().unwrap();
-                let min_counts = stats.get_min_index_count(&slot);
-                stats.remove(&slot);
-                min_counts
-            };
+        if slot_meta.is_full() {
             let last_fec_set_size =
                 slot_meta.last_index.unwrap_or(0) % MAX_DATA_SHREDS_PER_FEC_BLOCK as u64;
+
+            self.slots_stats
+                .set_slot_opts(slot, true, slot_meta.last_index.unwrap_or(0));
+
+            let (num_repaired, num_recovered, min_fec_set_count, last_fec_set_count) =
+                if let Some(stats) = self.slots_stats.get_clone(slot) {
+                    let (min_fec_set_count, last_fec_set_count) = stats.get_min_index_count();
+                    (
+                        stats.num_repaired,
+                        stats.num_recovered,
+                        min_fec_set_count,
+                        last_fec_set_count,
+                    )
+                } else {
+                    (0, 0, 0, 0)
+                };
 
             datapoint_info!(
                 "shred_insert_is_full",
