@@ -62,11 +62,7 @@ impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
     pub(crate) fn decode_u32(self) -> Option<u64> {
-        let ristretto_iterator = RistrettoIterator::new(
-            (self.target, 0),
-            (-self.generator, 1),
-        );
-        self.decode_range(ristretto_iterator, TWO16 as usize)
+        self.decode_u32_threaded()
     }
 
     pub(crate) fn decode_u32_threaded(self) -> Option<u64> {
@@ -81,23 +77,26 @@ impl DiscreteLog {
             );
 
             thread::spawn(move || {
-                let decoded = self.decode_range(ristretto_iterator, *THREAD_RANGE_BOUND);
-                if decoded.is_some() {
-                    tx.send(decoded.unwrap());
+                if let Some(decoded) = self.decode_range(ristretto_iterator, *THREAD_RANGE_BOUND) {
+                    tx.send(decoded).unwrap();
                 }
             });
             starting_point -= G;
         }
 
         drop(tx);
+        let mut solution = None;
         for received in rx {
-            return Some(received);
+            solution = Some(received);
         }
-
-        None
+        solution
     }
 
-    fn decode_range(self, ristretto_iterator: RistrettoIterator, range_bound: usize) -> Option<u64> {
+    fn decode_range(
+        self,
+        ristretto_iterator: RistrettoIterator,
+        range_bound: usize,
+    ) -> Option<u64> {
         let hashmap = &DECODE_PRECOMPUTATION_FOR_G;
         let mut decoded = None;
         for (point, x_lo) in ristretto_iterator.take(range_bound) {
@@ -252,6 +251,3 @@ mod tests {
         assert_eq!(amount, decoded.unwrap());
     }
 }
-
-
-
