@@ -120,7 +120,6 @@ impl AccountsHashVerifier {
                     stats: HashStats::default(),
                     check_hash: false,
                     accounts_cache_and_ancestors: None,
-                    filler_account_suffix: None, // this will fail with filler accounts
                 })
                 .unwrap();
 
