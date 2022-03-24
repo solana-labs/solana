@@ -5117,7 +5117,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         ancestors: &Ancestors,
-        check_hash: bool,
+        check_hash: bool, // this will not be supported anymore
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
@@ -5173,7 +5173,7 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
-                                            if check_hash && !self.is_filler_account(pubkey) {
+                                            if check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey);
                                                 if computed_hash != loaded_hash {
@@ -5488,7 +5488,7 @@ impl AccountsDb {
         use_index: bool,
         slot: Slot,
         ancestors: &Ancestors,
-        check_hash: bool,
+        check_hash: bool, // this will not be supported anymore
         can_cached_slot_be_unflushed: bool,
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
@@ -5663,6 +5663,7 @@ impl AccountsDb {
                     CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
 
                 if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
+                    // this will not be supported anymore
                     let computed_hash = loaded_account.compute_hash(slot, pubkey);
                     if computed_hash != source_item.hash {
                         info!(
@@ -5793,7 +5794,7 @@ impl AccountsDb {
         use BankHashVerificationError::*;
 
         let use_index = false;
-        let check_hash = true;
+        let check_hash = false; // this will not be supported anymore
         let is_startup = true;
         let can_cached_slot_be_unflushed = false;
         let (calculated_hash, calculated_lamports) = self
@@ -10110,7 +10111,7 @@ pub mod tests {
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
-            Err(MismatchedAccountHash)
+            Err(MismatchedBankHash)
         );
     }
 
