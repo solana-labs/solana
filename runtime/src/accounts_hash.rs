@@ -10,7 +10,7 @@ use {
         hash::{Hash, Hasher},
         pubkey::Pubkey,
     },
-    std::{borrow::Borrow, convert::TryInto, path::Path, sync::Mutex},
+    std::{borrow::Borrow, convert::TryInto, sync::Mutex},
 };
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -24,7 +24,6 @@ pub struct PreviousPass {
 
 /// parameters to calculate accounts hash
 pub struct CalcAccountsHashConfig<'a> {
-    pub accounts_hash_cache_path: &'a Path,
     pub storages: &'a SortedStorages<'a>,
     pub use_bg_thread_pool: bool,
     pub stats: HashStats,

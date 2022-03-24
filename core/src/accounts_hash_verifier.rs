@@ -20,7 +20,6 @@ use {
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{HashMap, HashSet},
-        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -44,7 +43,6 @@ impl AccountsHashVerifier {
         halt_on_known_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
         snapshot_config: Option<SnapshotConfig>,
-        ledger_path: PathBuf,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -69,7 +67,6 @@ impl AccountsHashVerifier {
                                 &exit,
                                 fault_injection_rate_slots,
                                 snapshot_config.as_ref(),
-                                &ledger_path,
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -94,9 +91,8 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
-        ledger_path: &Path,
     ) {
-        Self::verify_accounts_package_hash(&accounts_package, ledger_path);
+        Self::verify_accounts_package_hash(&accounts_package);
 
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
@@ -111,7 +107,7 @@ impl AccountsHashVerifier {
         Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config);
     }
 
-    fn verify_accounts_package_hash(accounts_package: &AccountsPackage, ledger_path: &Path) {
+    fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
         let mut measure_hash = Measure::start("hash");
         if let Some(expected_hash) = accounts_package.hash_for_testing {
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -119,7 +115,6 @@ impl AccountsHashVerifier {
                 .accounts
                 .accounts_db
                 .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                    accounts_hash_cache_path: ledger_path,
                     storages: &sorted_storages,
                     use_bg_thread_pool: true,
                     stats: HashStats::default(),
@@ -361,8 +356,6 @@ mod tests {
                 accounts: Arc::clone(&accounts),
             };
 
-            let ledger_path = TempDir::new().unwrap();
-
             AccountsHashVerifier::process_accounts_package(
                 accounts_package,
                 &cluster_info,
@@ -373,7 +366,6 @@ mod tests {
                 &exit,
                 0,
                 Some(&snapshot_config),
-                ledger_path.path(),
             );
 
             // sleep for 1ms to create a newer timestmap for gossip entry

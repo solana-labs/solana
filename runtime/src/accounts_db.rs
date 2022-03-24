@@ -5515,7 +5515,6 @@ impl AccountsDb {
             };
 
             self.calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                accounts_hash_cache_path: &self.accounts_hash_cache_path,
                 storages: &storages,
                 use_bg_thread_pool: !is_startup,
                 stats: timings,
@@ -5729,7 +5728,7 @@ impl AccountsDb {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            let cache_hash_data = CacheHashData::new(&config.accounts_hash_cache_path);
+            let cache_hash_data = CacheHashData::new(&self.accounts_hash_cache_path);
 
             for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
@@ -7897,7 +7896,6 @@ pub mod tests {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
             .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                accounts_hash_cache_path: TempDir::new().unwrap().path(),
                 storages: &get_storage_refs(&storages),
                 use_bg_thread_pool: false,
                 stats: HashStats::default(),
@@ -7924,7 +7922,6 @@ pub mod tests {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
             .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                accounts_hash_cache_path: TempDir::new().unwrap().path(),
                 storages: &get_storage_refs(&storages),
                 use_bg_thread_pool: false,
                 stats: HashStats::default(),
