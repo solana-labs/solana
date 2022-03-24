@@ -110,7 +110,16 @@ impl AccountsHashVerifier {
     fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
         let mut measure_hash = Measure::start("hash");
         if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
+            let mut sort_time = Measure::start("sort_storages");
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
+            sort_time.stop();
+
+            let mut timings = HashStats {
+                storage_sort_us: sort_time.as_us(),
+                ..HashStats::default()
+            };
+            timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
+
             let (hash, lamports) = accounts_package
                 .accounts
                 .accounts_db
@@ -121,7 +130,7 @@ impl AccountsHashVerifier {
                         check_hash: false,
                         ancestors: None,
                     },
-                    HashStats::default(),
+                    timings,
                 )
                 .unwrap();
 
