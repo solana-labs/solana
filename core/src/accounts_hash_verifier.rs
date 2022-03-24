@@ -109,7 +109,7 @@ impl AccountsHashVerifier {
 
     fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
         let mut measure_hash = Measure::start("hash");
-        if let Some(expected_hash) = accounts_package.hash_for_testing {
+        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
             let (hash, lamports) = accounts_package
                 .accounts
@@ -144,7 +144,7 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
     ) {
-        let hash = accounts_package.hash;
+        let hash = accounts_package.accounts_hash;
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -345,12 +345,12 @@ mod tests {
                 slot_deltas: vec![],
                 snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: vec![],
-                hash: hash(&[i as u8]),
+                accounts_hash: hash(&[i as u8]),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_archives_dir: PathBuf::default(),
                 expected_capitalization: 0,
-                hash_for_testing: None,
+                accounts_hash_for_testing: None,
                 cluster_type: ClusterType::MainnetBeta,
                 snapshot_type: None,
                 accounts: Arc::clone(&accounts),
