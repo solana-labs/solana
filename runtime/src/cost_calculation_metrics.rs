@@ -26,7 +26,7 @@ impl MetricsMeter {
         }
     }
 
-    pub fn take(&mut self) -> bool {
+    pub fn should_submit(&mut self) -> bool {
         if self.time_window_start.elapsed() > self.time_window_duration {
             // To start a new window, reset counters
             self.accumulated_number_of_writes = 0;
@@ -55,7 +55,7 @@ impl CostCalculationMetrics {
         program_timing: &ProgramTiming,
         calculated_units: u64,
     ) {
-        if self.metrics_meter.take() {
+        if self.metrics_meter.should_submit() {
             datapoint_info!(
                 "large_change_in_cost_calculation",
                 ("pubkey", program_id.to_string(), String),
@@ -85,19 +85,19 @@ mod tests {
 
         // start first window, can take up to `limit` writes
         let mut metrics_meter = MetricsMeter::new(limit, duration);
-        assert!(metrics_meter.take());
-        assert!(metrics_meter.take());
-        assert!(!metrics_meter.take());
+        assert!(metrics_meter.should_submit());
+        assert!(metrics_meter.should_submit());
+        assert!(!metrics_meter.should_submit());
 
         // start second window
         thread::sleep(duration);
         // can write again in second time_window
-        assert!(metrics_meter.take());
+        assert!(metrics_meter.should_submit());
 
         // start another new window, can take up to `limit` writes
         thread::sleep(duration);
-        assert!(metrics_meter.take());
-        assert!(metrics_meter.take());
-        assert!(!metrics_meter.take());
+        assert!(metrics_meter.should_submit());
+        assert!(metrics_meter.should_submit());
+        assert!(!metrics_meter.should_submit());
     }
 }

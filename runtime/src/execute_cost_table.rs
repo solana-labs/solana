@@ -105,19 +105,19 @@ impl ExecuteCostTable {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
         }
 
-        let value = program_timing.accumulated_units / program_timing.count as u64;
+        let datum = program_timing.accumulated_units / program_timing.count as u64;
         match self.table.entry(*key) {
             Entry::Occupied(mut entry) => {
-                let result = entry.get_mut();
-                *result = (result.saturating_add(value)) / 2;
+                let average_cost = entry.get_mut();
+                *average_cost = (average_cost.saturating_add(datum)) / 2;
 
-                if Self::is_large_change(value, *result) {
+                if Self::is_large_change(datum, *average_cost) {
                     self.cost_calculation_metrics
-                        .report(key, program_timing, *result);
+                        .report(key, program_timing, *average_cost);
                 }
             }
             Entry::Vacant(entry) => {
-                entry.insert(value);
+                entry.insert(datum);
             }
         };
 
@@ -131,16 +131,16 @@ impl ExecuteCostTable {
 
     /// Simple calculation anomaly check, return True if calculation result is
     /// LARGE_CHANGE_THRESHOLD times larger than input data itself;
-    fn is_large_change(input: u64, calculated_value: u64) -> bool {
+    fn is_large_change(datum: u64, average_cost: u64) -> bool {
         const LARGE_CHANGE_THRESHOLD: u64 = 20;
         const PERCENTAGE_OF_MAX_UNITS: u64 = 95;
-        let has_oversized_impact = calculated_value
-            .checked_div(input)
+        let has_oversized_impact = average_cost
+            .checked_div(datum)
             .map(|v| v > LARGE_CHANGE_THRESHOLD)
             .unwrap_or(false);
-        let is_large_value = calculated_value
+        let is_large_value = average_cost
             .saturating_mul(100)
-            .checked_div(compute_budget::MAX_UNITS)
+            .checked_div(compute_budget::MAX_UNITS as u64)
             .map(|v| v > PERCENTAGE_OF_MAX_UNITS)
             .unwrap_or(false);
         has_oversized_impact || is_large_value
