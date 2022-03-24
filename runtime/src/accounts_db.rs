@@ -5513,13 +5513,15 @@ impl AccountsDb {
             };
             timings.calc_storage_size_quartiles(&combined_maps);
 
-            self.calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                storages: &storages,
-                use_bg_thread_pool: !is_startup,
-                stats: timings,
-                check_hash,
-                ancestors: can_cached_slot_be_unflushed.then(|| ancestors),
-            })
+            self.calculate_accounts_hash_without_index(
+                &CalcAccountsHashConfig {
+                    storages: &storages,
+                    use_bg_thread_pool: !is_startup,
+                    check_hash,
+                    ancestors: can_cached_slot_be_unflushed.then(|| ancestors),
+                },
+                timings,
+            )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
         }
@@ -5715,7 +5717,8 @@ impl AccountsDb {
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
         &self,
-        config: &mut CalcAccountsHashConfig<'_>,
+        config: &CalcAccountsHashConfig<'_>,
+        mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
@@ -5742,7 +5745,7 @@ impl AccountsDb {
                 let result = Self::scan_snapshot_stores_with_cache(
                     &cache_hash_data,
                     config.storages,
-                    &mut config.stats,
+                    &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
                     config.check_hash,
@@ -5754,7 +5757,7 @@ impl AccountsDb {
 
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
-                    &mut config.stats,
+                    &mut stats,
                     pass == num_hash_scan_passes - 1,
                     previous_pass,
                     bins_per_pass,
@@ -7917,13 +7920,15 @@ pub mod tests {
         let (storages, _size, _slot_expected) = sample_storage();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                storages: &get_storage_refs(&storages),
-                use_bg_thread_pool: false,
-                stats: HashStats::default(),
-                check_hash: false,
-                ancestors: None,
-            })
+            .calculate_accounts_hash_without_index(
+                &CalcAccountsHashConfig {
+                    storages: &get_storage_refs(&storages),
+                    use_bg_thread_pool: false,
+                    check_hash: false,
+                    ancestors: None,
+                },
+                HashStats::default(),
+            )
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
@@ -7941,13 +7946,15 @@ pub mod tests {
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                storages: &get_storage_refs(&storages),
-                use_bg_thread_pool: false,
-                stats: HashStats::default(),
-                check_hash: false,
-                ancestors: None,
-            })
+            .calculate_accounts_hash_without_index(
+                &CalcAccountsHashConfig {
+                    storages: &get_storage_refs(&storages),
+                    use_bg_thread_pool: false,
+                    check_hash: false,
+                    ancestors: None,
+                },
+                HashStats::default(),
+            )
             .unwrap();
 
         assert_eq!(result, (expected_hash, sum));

@@ -114,13 +114,15 @@ impl AccountsHashVerifier {
             let (hash, lamports) = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
-                    storages: &sorted_storages,
-                    use_bg_thread_pool: true,
-                    stats: HashStats::default(),
-                    check_hash: false,
-                    ancestors: None,
-                })
+                .calculate_accounts_hash_without_index(
+                    &CalcAccountsHashConfig {
+                        storages: &sorted_storages,
+                        use_bg_thread_pool: true,
+                        check_hash: false,
+                        ancestors: None,
+                    },
+                    HashStats::default(),
+                )
                 .unwrap();
 
             assert_eq!(accounts_package.expected_capitalization, lamports);
