@@ -1,5 +1,5 @@
 use {
-    crate::{stakes::Stakes, vote_account::VoteAccount},
+    crate::{stakes::Stakes, vote_account::VoteAccountsHashMap},
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
     std::{collections::HashMap, sync::Arc},
@@ -60,7 +60,7 @@ impl EpochStakes {
     }
 
     fn parse_epoch_vote_accounts(
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
+        epoch_vote_accounts: &VoteAccountsHashMap,
         leader_schedule_epoch: Epoch,
     ) -> (u64, NodeIdToVoteAccounts, EpochAuthorizedVoters) {
         let mut node_id_to_vote_accounts: NodeIdToVoteAccounts = HashMap::new();
@@ -119,7 +119,7 @@ impl EpochStakes {
 #[cfg(test)]
 pub(crate) mod tests {
     use {
-        super::*, solana_sdk::account::AccountSharedData,
+        super::*, crate::vote_account::VoteAccount, solana_sdk::account::AccountSharedData,
         solana_vote_program::vote_state::create_account_with_authorized, std::iter,
     };
 
