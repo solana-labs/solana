@@ -310,9 +310,8 @@ impl SendTransactionService {
 
     fn send_transaction(tpu_address: &SocketAddr, wire_transaction: &[u8]) {
         let mut measure = Measure::start("send_transaction_service-us");
-        let connection = connection_cache::get_connection(tpu_address);
 
-        if let Err(err) = connection.send_wire_transaction(wire_transaction) {
+        if let Err(err) = connection_cache::send_wire_transaction(wire_transaction, tpu_address) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
         measure.stop();
