@@ -36,7 +36,7 @@ export type PriorVoter = {
 
 export type BlockTimestamp = {
   slot: number;
-  timetamp: number;
+  timestamp: number;
 };
 
 /**
