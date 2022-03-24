@@ -118,7 +118,7 @@ export class Message {
 
     const instructions = this.instructions.map(instruction => {
       const {accounts, programIdIndex} = instruction;
-      const data = bs58.decode(instruction.data);
+      const data = Array.from(bs58.decode(instruction.data));
 
       let keyIndicesCount: number[] = [];
       shortvec.encodeLength(keyIndicesCount, accounts.length);
@@ -129,7 +129,7 @@ export class Message {
       return {
         programIdIndex,
         keyIndicesCount: Buffer.from(keyIndicesCount),
-        keyIndices: Buffer.from(accounts),
+        keyIndices: accounts,
         dataLength: Buffer.from(dataCount),
         data,
       };
@@ -142,7 +142,15 @@ export class Message {
     let instructionBufferLength = instructionCount.length;
 
     instructions.forEach(instruction => {
-      const instructionLayout = BufferLayout.struct([
+      const instructionLayout = BufferLayout.struct<
+        Readonly<{
+          data: number[];
+          dataLength: Uint8Array;
+          keyIndices: number[];
+          keyIndicesCount: Uint8Array;
+          programIdIndex: number;
+        }>
+      >([
         BufferLayout.u8('programIdIndex'),
 
         BufferLayout.blob(
@@ -170,7 +178,16 @@ export class Message {
     });
     instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
 
-    const signDataLayout = BufferLayout.struct([
+    const signDataLayout = BufferLayout.struct<
+      Readonly<{
+        keyCount: Uint8Array;
+        keys: Uint8Array[];
+        numReadonlySignedAccounts: Uint8Array;
+        numReadonlyUnsignedAccounts: Uint8Array;
+        numRequiredSignatures: Uint8Array;
+        recentBlockhash: Uint8Array;
+      }>
+    >([
       BufferLayout.blob(1, 'numRequiredSignatures'),
       BufferLayout.blob(1, 'numReadonlySignedAccounts'),
       BufferLayout.blob(1, 'numReadonlyUnsignedAccounts'),
