@@ -159,6 +159,7 @@ impl AccountsHashVerifier {
             bank,
             std::fs::read_dir(&links).map(|x| x.collect::<Vec<_>>())
         );
+        if false {
         //let path = accounts_package.snapshot_archives_dir.join(slot);
         //reserialize_bank_fields_with_hash
         let mut file = std::fs::File::open(bank.clone());
@@ -195,7 +196,8 @@ impl AccountsHashVerifier {
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
         );
-        hash
+    }
+    hash
     }
 
     fn push_accounts_hashes_to_cluster(
