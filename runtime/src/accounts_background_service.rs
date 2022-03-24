@@ -320,7 +320,7 @@ impl AbsRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        _use_index_hash_calculation: bool,
+        use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {

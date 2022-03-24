@@ -125,8 +125,8 @@ pub struct SnapshotPackage {
     pub snapshot_type: SnapshotType,
 }
 
-impl From<AccountsPackage> for SnapshotPackage {
-    fn from(accounts_package: AccountsPackage) -> Self {
+impl SnapshotPackage {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: &Hash) -> Self {
         assert!(
             accounts_package.snapshot_type.is_some(),
             "Cannot make a SnapshotPackage from an AccountsPackage when SnapshotType is None!"
@@ -137,7 +137,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 accounts_package.snapshot_archives_dir,
                 accounts_package.slot,
-                accounts_package.accounts_hash_for_testing.as_ref().unwrap(),
+                accounts_hash,
                 accounts_package.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
@@ -157,11 +157,12 @@ impl From<AccountsPackage> for SnapshotPackage {
                     accounts_package.snapshot_archives_dir,
                     incremental_snapshot_base_slot,
                     accounts_package.slot,
-                    accounts_package.accounts_hash_for_testing.as_ref().unwrap(),
+                    accounts_hash,
                     accounts_package.archive_format,
                 )
             }
         };
+        error!("generating snapshot: {:?}", snapshot_archive_path);
         Self {
             snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,

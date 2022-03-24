@@ -93,7 +93,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
     ) {
-        Self::verify_accounts_package_hash(&accounts_package);
+        let accounts_hash = Self::verify_accounts_package_hash(&accounts_package);
 
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
@@ -105,10 +105,11 @@ impl AccountsHashVerifier {
             fault_injection_rate_slots,
         );
 
-        Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config);
+        Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config, &accounts_hash);
     }
 
-    fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
+    /// returns accounts hash
+    fn verify_accounts_package_hash(accounts_package: &AccountsPackage) -> Hash {
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -117,7 +118,7 @@ impl AccountsHashVerifier {
             storage_sort_us: sort_time.as_us(),
             ..HashStats::default()
         };
-        timings.calc_storage_size_quartiles(&combined_maps);
+        timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
         let (hash, lamports) = accounts_package
             .accounts
             .accounts_db
@@ -126,7 +127,7 @@ impl AccountsHashVerifier {
                     storages: &sorted_storages,
                     use_bg_thread_pool: true,
                     check_hash: false,
-                    accounts_cache_and_ancestors: None,
+                    ancestors: None,
                 },
                 timings,
             )
@@ -138,7 +139,7 @@ impl AccountsHashVerifier {
         }
         let links = accounts_package.snapshot_links.path().clone();
         let slot = accounts_package.slot;
-        let mut bank = links.clone();//accounts_package.snapshot_archives_dir.clone();
+        let mut bank = PathBuf::from(links.clone());//accounts_package.snapshot_archives_dir.clone();
         //bank.push("snapshot");
         bank.push(format!("{}", slot));
         bank.push(format!("{}", slot));
@@ -193,6 +194,7 @@ impl AccountsHashVerifier {
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
         );
+        hash
     }
 
     fn push_accounts_hashes_to_cluster(
@@ -242,6 +244,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
         snapshot_config: Option<&SnapshotConfig>,
+        accounts_hash: &Hash,
     ) {
         if accounts_package.snapshot_type.is_none()
             || pending_snapshot_package.is_none()
@@ -250,7 +253,7 @@ impl AccountsHashVerifier {
             return;
         };
 
-        let snapshot_package = SnapshotPackage::from(accounts_package);
+        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         let pending_snapshot_package = pending_snapshot_package.unwrap();
         let _snapshot_config = snapshot_config.unwrap();
 

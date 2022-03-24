@@ -1716,6 +1716,7 @@ pub fn bank_to_full_snapshot_archive(
     let bank_snapshot_info =
         add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
 
+    panic!("");
     package_and_archive_full_snapshot(
         bank,
         &bank_snapshot_info,
@@ -1726,6 +1727,7 @@ pub fn bank_to_full_snapshot_archive(
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
+        &Hash::default(), // todo
     )
 }
 
@@ -1760,6 +1762,7 @@ pub fn bank_to_incremental_snapshot_archive(
     let bank_snapshot_info =
         add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
 
+        panic!("");
     package_and_archive_incremental_snapshot(
         bank,
         full_snapshot_slot,
@@ -1771,6 +1774,7 @@ pub fn bank_to_incremental_snapshot_archive(
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
+        &Hash::default(),
     )
 }
 
@@ -1785,6 +1789,7 @@ pub fn package_and_archive_full_snapshot(
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
+    accounts_hash: &Hash,
 ) -> Result<FullSnapshotArchiveInfo> {
     error!("{} {}", file!(), line!());
     let accounts_package = AccountsPackage::new(
@@ -1800,7 +1805,7 @@ pub fn package_and_archive_full_snapshot(
         Some(SnapshotType::FullSnapshot),
     )?;
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -1825,6 +1830,7 @@ pub fn package_and_archive_incremental_snapshot(
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
+    accounts_hash: &Hash,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
     error!("{} {}", file!(), line!());
     let accounts_package = AccountsPackage::new(
@@ -1836,13 +1842,14 @@ pub fn package_and_archive_incremental_snapshot(
         snapshot_storages,
         archive_format,
         snapshot_version,
-        Some(bank.get_accounts_hash()),
+        None,
         Some(SnapshotType::IncrementalSnapshot(
             incremental_snapshot_base_slot,
         )),
     )?;
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    // todo - where does accounts hash come from here?
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
