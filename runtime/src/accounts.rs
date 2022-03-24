@@ -416,7 +416,13 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<usize>> {
         let mut account_indices = Vec::new();
-        let mut program_id = accounts[program_account_index].0;
+        let mut program_id = match accounts.get(program_account_index) {
+            Some(program_account) => program_account.0,
+            None => {
+                error_counters.account_not_found += 1;
+                return Err(TransactionError::ProgramAccountNotFound);
+            }
+        };
         let mut depth = 0;
         while !native_loader::check_id(&program_id) {
             if depth >= 5 {
