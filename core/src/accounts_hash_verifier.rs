@@ -106,7 +106,7 @@ impl AccountsHashVerifier {
             accounts_hash,
         );
 
-        Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config, &accounts_hash);
+        Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config, accounts_hash);
     }
 
     /// returns accounts hash
