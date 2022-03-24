@@ -5233,13 +5233,13 @@ impl AccountsDb {
 
     pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
-            true, false, slot, ancestors, None, false, None, false,
+            true, false, slot, ancestors, None, false, None, None, false,
         )
     }
 
     pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
-            true, true, slot, ancestors, None, false, None, false,
+            true, true, slot, ancestors, None, false, None, None, false,
         )
     }
 
@@ -5575,6 +5575,7 @@ impl AccountsDb {
         Ok((hash, total_lamports))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_accounts_hash_with_index_option(
         &self,
         use_index: bool,
@@ -5583,10 +5584,12 @@ impl AccountsDb {
         ancestors: &Ancestors,
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
-        slots_per_epoch: Option<Slot>,
+        epoch_schedule: Option<&EpochSchedule>,
+        _rent_collector: Option<&RentCollector>,
         is_startup: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
+        let slots_per_epoch = epoch_schedule.map(|epoch_schedule| epoch_schedule.slots_per_epoch);
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
@@ -5783,6 +5786,26 @@ impl AccountsDb {
         total_lamports: u64,
         test_hash_calculation: bool,
     ) -> Result<(), BankHashVerificationError> {
+        self.verify_bank_hash_and_lamports_new(
+            slot,
+            ancestors,
+            total_lamports,
+            test_hash_calculation,
+            None,
+            None,
+        )
+    }
+
+    /// Only called from startup or test code.
+    pub fn verify_bank_hash_and_lamports_new(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        total_lamports: u64,
+        test_hash_calculation: bool,
+        _epoch_schedule: Option<&EpochSchedule>,
+        _rent_collector: Option<&RentCollector>,
+    ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let use_index = false;
@@ -5798,7 +5821,7 @@ impl AccountsDb {
                 None,
                 can_cached_slot_be_unflushed,
                 check_hash,
-                None,
+                None, // could use epoch_schedule.slots_per_epoch here
                 is_startup,
             )?;
 

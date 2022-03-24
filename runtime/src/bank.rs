@@ -5857,6 +5857,8 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
+            Some(self.epoch_schedule()),
+            Some(&self.rent_collector),
         )
     }
 
@@ -5924,6 +5926,8 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
+            Some(self.epoch_schedule()),
+            Some(&self.rent_collector),
         )
     }
 
@@ -5965,7 +5969,6 @@ impl Bank {
         mut debug_verify: bool,
         is_startup: bool,
     ) -> Hash {
-        let slots_per_epoch = Some(self.epoch_schedule().get_slots_in_epoch(self.epoch));
         let (hash, total_lamports) = self
             .rc
             .accounts
@@ -5977,7 +5980,8 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
-                slots_per_epoch,
+                Some(self.epoch_schedule()),
+                Some(&self.rent_collector),
                 is_startup,
             );
         if total_lamports != self.capitalization() {
@@ -6002,7 +6006,8 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
-                        slots_per_epoch,
+                        Some(self.epoch_schedule()),
+                        Some(&self.rent_collector),
                         is_startup,
                     );
             }
