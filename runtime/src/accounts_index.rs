@@ -652,7 +652,7 @@ impl RollingBitField {
 
 #[derive(Debug)]
 pub struct RootsTracker {
-    pub roots: RollingBitField,
+    pub(crate) roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }

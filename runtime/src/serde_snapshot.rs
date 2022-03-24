@@ -433,18 +433,6 @@ where
         _snapshot_prior_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
 
-    /*
-    todo in future pr:
-    deserialize prior_roots and prior_roots_with_hash
-    example:
-    {
-        let mut writer = accounts_db.accounts_index.roots_tracker.write().unwrap();
-        for x in snapshot_prior_roots {
-            writer.roots_original.insert(x);
-        }
-    }
-    */
-
     let snapshot_storages = snapshot_storages.into_iter().collect::<Vec<_>>();
 
     // Ensure all account paths exist
