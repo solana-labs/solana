@@ -1292,17 +1292,24 @@ describe('Connection', () => {
       },
     });
 
-    // Find a block that has a transaction, usually Block 1
-    let slot = 0;
+    // Find a block that has a transaction.
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 1,
+    });
+    let slot = await connection.getFirstAvailableBlock();
+
     let confirmedTransaction: string | undefined;
     while (!confirmedTransaction) {
-      slot++;
       const block = await connection.getConfirmedBlock(slot);
       for (const tx of block.transactions) {
         if (tx.transaction.signature) {
           confirmedTransaction = bs58.encode(tx.transaction.signature);
+          break;
         }
       }
+      slot++;
     }
 
     await mockRpcBatchResponse({
