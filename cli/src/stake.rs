@@ -1383,17 +1383,12 @@ pub fn process_stake_authorize(
             };
             if let Some(authorized) = authorized {
                 match authorization_type {
-                    StakeAuthorize::Staker => {
-                        // first check authorized withdrawer
-                        check_current_authority(&authorized.withdrawer, &authority.pubkey())
-                            .or_else(|_| {
-                                // ...then check authorized staker. If neither matches, error will
-                                // print the stake key as `expected`
-                                check_current_authority(&authorized.staker, &authority.pubkey())
-                            })?;
-                    }
+                    StakeAuthorize::Staker => check_current_authority(
+                        &[authorized.withdrawer, authorized.staker],
+                        &authority.pubkey(),
+                    )?,
                     StakeAuthorize::Withdrawer => {
-                        check_current_authority(&authorized.withdrawer, &authority.pubkey())?;
+                        check_current_authority(&[authorized.withdrawer], &authority.pubkey())?;
                     }
                 }
             } else {
@@ -1935,7 +1930,7 @@ pub fn process_stake_set_lockup(
         };
         if let Some(lockup) = lockup {
             if lockup.custodian != Pubkey::default() {
-                check_current_authority(&lockup.custodian, &custodian.pubkey())?;
+                check_current_authority(&[lockup.custodian], &custodian.pubkey())?;
             }
         } else {
             return Err(CliError::RpcRequestError(format!(
@@ -2119,13 +2114,13 @@ fn get_stake_account_state(
 }
 
 pub(crate) fn check_current_authority(
-    account_current_authority: &Pubkey,
+    permitted_authorities: &[Pubkey],
     provided_current_authority: &Pubkey,
 ) -> Result<(), CliError> {
-    if account_current_authority != provided_current_authority {
+    if !permitted_authorities.contains(provided_current_authority) {
         Err(CliError::RpcRequestError(format!(
-            "Invalid current authority provided: {:?}, expected {:?}",
-            provided_current_authority, account_current_authority
+            "Invalid authority provided: {:?}, expected {:?}",
+            provided_current_authority, permitted_authorities
         )))
     } else {
         Ok(())
