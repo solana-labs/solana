@@ -94,7 +94,11 @@ export class Ed25519Program {
 
     const instructionData = Buffer.alloc(messageDataOffset + message.length);
 
-    const index = instructionIndex != null ? instructionIndex : 0;
+    const index =
+      instructionIndex == null
+        ? 0xffff // An index of `u16::MAX` makes it default to the current instruction.
+        : instructionIndex;
+
     ED25519_INSTRUCTION_LAYOUT.encode(
       {
         numSignatures,
