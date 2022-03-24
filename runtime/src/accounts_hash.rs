@@ -1,8 +1,6 @@
 use {
     crate::{
-        accounts_cache::AccountsCache,
-        accounts_db::{AccountInfoAccountsIndex, SnapshotStorages},
-        ancestors::Ancestors,
+        accounts_cache::AccountsCache, accounts_db::SnapshotStorages, ancestors::Ancestors,
         sorted_storages::SortedStorages,
     },
     log::*,
@@ -30,11 +28,7 @@ pub struct CalcAccountsHashConfig<'a> {
     pub use_bg_thread_pool: bool,
     pub stats: HashStats,
     pub check_hash: bool,
-    pub accounts_cache_and_ancestors: Option<(
-        &'a AccountsCache,
-        &'a Ancestors,
-        &'a AccountInfoAccountsIndex,
-    )>,
+    pub accounts_cache_and_ancestors: Option<(&'a AccountsCache, &'a Ancestors)>,
     // to come soon
     /*
     pub rent_collector: RentCollector,
