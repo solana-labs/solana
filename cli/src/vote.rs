@@ -910,7 +910,10 @@ pub fn process_vote_authorize(
                             "Invalid vote account state; no authorized voters found".to_string(),
                         )
                     })?;
-                check_current_authority(&current_authorized_voter, &authorized.pubkey())?;
+                check_current_authority(
+                    &[current_authorized_voter, vote_state.authorized_withdrawer],
+                    &authorized.pubkey(),
+                )?;
                 if let Some(signer) = new_authorized_signer {
                     if signer.is_interactive() {
                         return Err(CliError::BadParameter(format!(
@@ -927,7 +930,7 @@ pub fn process_vote_authorize(
                 (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
             )?;
             if let Some(vote_state) = vote_state {
-                check_current_authority(&vote_state.authorized_withdrawer, &authorized.pubkey())?
+                check_current_authority(&[vote_state.authorized_withdrawer], &authorized.pubkey())?
             }
         }
     }
