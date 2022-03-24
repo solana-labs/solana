@@ -5521,15 +5521,10 @@ impl AccountsDb {
                 ..HashStats::default()
             };
 
-            let thread_pool = if is_startup {
-                None
-            } else {
-                Some(&self.thread_pool_clean)
-            };
             self.calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
                 accounts_hash_cache_path: &self.accounts_hash_cache_path,
                 storages: &storages,
-                thread_pool,
+                use_bg_thread_pool: !is_startup,
                 stats: timings,
                 check_hash,
                 accounts_cache_and_ancestors,
@@ -5735,7 +5730,7 @@ impl AccountsDb {
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (num_hash_scan_passes, bins_per_pass) =
             Self::bins_per_pass(config.num_hash_scan_passes);
-        let thread_pool = config.thread_pool;
+        let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = move || {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
@@ -5780,8 +5775,8 @@ impl AccountsDb {
             );
             Ok(final_result)
         };
-        if let Some(thread_pool) = thread_pool {
-            thread_pool.install(scan_and_hash)
+        if use_bg_thread_pool {
+            self.thread_pool_clean.install(scan_and_hash)
         } else {
             scan_and_hash()
         }
@@ -7910,7 +7905,7 @@ pub mod tests {
             .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
                 accounts_hash_cache_path: TempDir::new().unwrap().path(),
                 storages: &get_storage_refs(&storages),
-                thread_pool: None,
+                use_bg_thread_pool: false,
                 stats: HashStats::default(),
                 check_hash: false,
                 accounts_cache_and_ancestors: None,
@@ -7937,7 +7932,7 @@ pub mod tests {
             .calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
                 accounts_hash_cache_path: TempDir::new().unwrap().path(),
                 storages: &get_storage_refs(&storages),
-                thread_pool: None,
+                use_bg_thread_pool: false,
                 stats: HashStats::default(),
                 check_hash: false,
                 accounts_cache_and_ancestors: None,

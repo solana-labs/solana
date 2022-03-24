@@ -4,7 +4,7 @@ use {
         sorted_storages::SortedStorages,
     },
     log::*,
-    rayon::{prelude::*, ThreadPool},
+    rayon::prelude::*,
     solana_measure::measure::Measure,
     solana_sdk::{
         hash::{Hash, Hasher},
@@ -26,7 +26,7 @@ pub struct PreviousPass {
 pub struct CalcAccountsHashConfig<'a> {
     pub accounts_hash_cache_path: &'a Path,
     pub storages: &'a SortedStorages<'a>,
-    pub thread_pool: Option<&'a ThreadPool>,
+    pub use_bg_thread_pool: bool,
     pub stats: HashStats,
     pub check_hash: bool,
     pub accounts_cache_and_ancestors: Option<(
