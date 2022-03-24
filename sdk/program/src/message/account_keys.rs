@@ -1,7 +1,7 @@
 use {
     crate::{
         instruction::{CompiledInstruction, Instruction},
-        message::v0::{CompileError, LoadedAddresses},
+        message::{v0::LoadedAddresses, CompileError},
         pubkey::Pubkey,
     },
     std::{collections::BTreeMap, ops::Index},

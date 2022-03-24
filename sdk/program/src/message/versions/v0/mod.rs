@@ -9,23 +9,20 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solana.com/proposals/transactions-v2
 
-pub use loaded::*;
-use {
-    crate::{
-        address_lookup_table_account::AddressLookupTableAccount,
-        bpf_loader_upgradeable,
-        hash::Hash,
-        instruction::{CompiledInstruction, Instruction},
-        message::{
-            legacy::BUILTIN_PROGRAMS_KEYS, AccountKeys, CompiledKeys, MessageHeader,
-            MESSAGE_VERSION_PREFIX,
-        },
-        pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
-        short_vec, sysvar,
+use crate::{
+    address_lookup_table_account::AddressLookupTableAccount,
+    bpf_loader_upgradeable,
+    hash::Hash,
+    instruction::{CompiledInstruction, Instruction},
+    message::{
+        compiled_keys::CompileError, legacy::BUILTIN_PROGRAMS_KEYS, AccountKeys, CompiledKeys,
+        MessageHeader, MESSAGE_VERSION_PREFIX,
     },
-    thiserror::Error,
+    pubkey::Pubkey,
+    sanitize::{Sanitize, SanitizeError},
+    short_vec, sysvar,
 };
+pub use loaded::*;
 
 mod loaded;
 
@@ -138,16 +135,6 @@ impl Sanitize for Message {
 
         Ok(())
     }
-}
-
-#[derive(PartialEq, Debug, Error, Eq, Clone)]
-pub enum CompileError {
-    #[error("cannot compile messages with too many account keys")]
-    TooManyAccountKeys,
-    #[error("cannot compile messages using lookup tables with too many addresses")]
-    TooManyLookupTableAddresses,
-    #[error("encountered unknown account key `{0}` during instruction compilation")]
-    UnknownInstructionKey(Pubkey),
 }
 
 impl Message {

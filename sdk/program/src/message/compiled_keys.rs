@@ -1,10 +1,12 @@
+#[cfg(not(target_arch = "bpf"))]
+use crate::message::v0::{LoadedAddresses, MessageAddressTableLookup};
 use {
-    super::v0::{CompileError, LoadedAddresses, MessageAddressTableLookup},
     crate::{
         address_lookup_table_account::AddressLookupTableAccount, instruction::Instruction,
         message::MessageHeader, pubkey::Pubkey,
     },
     std::collections::BTreeMap,
+    thiserror::Error,
 };
 
 /// A helper struct to collect pubkeys compiled for a set of instructions
@@ -14,6 +16,16 @@ pub(crate) struct CompiledKeys {
     readonly_signer_keys: Vec<Pubkey>,
     writable_non_signer_keys: Vec<Pubkey>,
     readonly_non_signer_keys: Vec<Pubkey>,
+}
+
+#[derive(PartialEq, Debug, Error, Eq, Clone)]
+pub enum CompileError {
+    #[error("cannot compile messages with too many account keys")]
+    TooManyAccountKeys,
+    #[error("cannot compile messages using lookup tables with too many addresses")]
+    TooManyLookupTableAddresses,
+    #[error("encountered unknown account key `{0}` during instruction compilation")]
+    UnknownInstructionKey(Pubkey),
 }
 
 #[derive(Default, Debug)]
@@ -97,6 +109,7 @@ impl CompiledKeys {
         Ok((header, static_account_keys))
     }
 
+    #[cfg(not(target_arch = "bpf"))]
     pub(crate) fn try_extract_table_lookup(
         &mut self,
         lookup_table_account: &AddressLookupTableAccount,
