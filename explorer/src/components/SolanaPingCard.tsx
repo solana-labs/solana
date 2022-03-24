@@ -1,6 +1,7 @@
 import React from "react";
 import classNames from "classnames";
 import {
+  PingInfo,
   PingRollupInfo,
   PingStatus,
   useSolanaPingInfo,
@@ -107,12 +108,10 @@ const CUSTOM_TOOLTIP = function (this: any, tooltipModel: ChartTooltipModel) {
 
   // Set Text
   if (tooltipModel.body) {
-    const { label, value } = tooltipModel.dataPoints[0];
+    const { label } = tooltipModel.dataPoints[0];
     const tooltipContent = tooltipEl.querySelector("div");
     if (tooltipContent) {
-      let innerHtml = `<div class="value">${value} ms</div>`;
-      innerHtml += `<div class="label">${label}</div>`;
-      tooltipContent.innerHTML = innerHtml;
+      tooltipContent.innerHTML = `${label}`;
     }
   }
 
@@ -173,34 +172,56 @@ const CHART_OPTION: ChartOptions = {
 function PingBarChart({ pingInfo }: { pingInfo: PingRollupInfo }) {
   const [series, setSeries] = React.useState<Series>("short");
   const seriesData = pingInfo[series] || [];
-
+  const maxMean = seriesData.reduce((a, b) => {
+    return Math.max(a, b.mean);
+  }, 0);
   const seriesLength = seriesData.length;
+  const backgroundColor = (val: PingInfo) => {
+    if (val.submitted === 0) {
+      return "#08a274";
+    }
+    return val.loss > 0.5 ? "#f00" : "#00D192";
+  };
   const chartData: Chart.ChartData = {
     labels: seriesData.map((val, i) => {
-      return `
-      <p class="mb-0">${val.confirmed} of ${val.submitted} confirmed</p>
-      ${
-        val.loss
-          ? `<p class="mb-0">${val.loss.toLocaleString(undefined, {
-              style: "percent",
-              minimumFractionDigits: 2,
-            })} loss</p>`
-          : ""
+      if (val.submitted === 0) {
+        return `
+        <div class="label">
+          <p class="mb-0">Ping statistics unavailable</p>
+          ${SERIES_INFO[series].label(seriesLength - i)}min ago
+        </div>
+        `;
       }
-      ${SERIES_INFO[series].label(seriesLength - i)}min ago
+
+      return `
+        <div class="value">${val.mean} ms</div>
+        <div class="label">
+          <p class="mb-0">${val.confirmed} of ${val.submitted} confirmed</p>
+        ${
+          val.loss
+            ? `<p class="mb-0">${val.loss.toLocaleString(undefined, {
+                style: "percent",
+                minimumFractionDigits: 2,
+              })} loss</p>`
+            : ""
+        }
+        ${SERIES_INFO[series].label(seriesLength - i)}min ago
+        </div>
       `;
     }),
     datasets: [
       {
         minBarLength: 2,
-        backgroundColor: seriesData.map((val) =>
-          val.loss > 0.5 ? "#f00" : "#00D192"
-        ),
-        hoverBackgroundColor: seriesData.map((val) =>
-          val.loss > 0.5 ? "#f00" : "#00D192"
-        ),
+        backgroundColor: seriesData.map(backgroundColor),
+        hoverBackgroundColor: seriesData.map(backgroundColor),
         borderWidth: 0,
-        data: seriesData.map((val) => val.mean || 0),
+        data: seriesData.map((val) => {
+          if (val.submitted === 0) {
+            return maxMean * 0.5;
+          }
+
+          return val.mean || 0;
+        }),
       },
     ],
   };
