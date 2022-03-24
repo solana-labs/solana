@@ -2,10 +2,10 @@ use {
     retain_mut::RetainMut,
     solana_gossip::weighted_shuffle::WeightedShuffle,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
-    solana_program_runtime::compute_budget::ComputeBudget,
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::Slot,
+        feature_set::tx_wide_compute_cap,
         hash::Hash,
         message::{
             v0::{self},
@@ -33,7 +33,7 @@ struct FeePerCu {
 impl FeePerCu {
     fn too_old(&self, slot: &Slot) -> bool {
         const MAX_SLOT_AGE: Slot = 1;
-        slot - &self.slot >= MAX_SLOT_AGE
+        slot - self.slot >= MAX_SLOT_AGE
     }
 }
 
@@ -245,11 +245,11 @@ impl UnprocessedPacketBatches {
         let bank = bank.as_ref().unwrap();
         let deserialized_packet = self.locate_packet_mut(locator)?;
         if let Some(cached_fee_per_cu) =
-            Self::get_cached_fee_per_cu(&deserialized_packet, &bank.slot())
+            Self::get_cached_fee_per_cu(deserialized_packet, &bank.slot())
         {
             Some(cached_fee_per_cu)
         } else {
-            let computed_fee_per_cu = Self::compute_fee_per_cu(&deserialized_packet, bank);
+            let computed_fee_per_cu = Self::compute_fee_per_cu(deserialized_packet, bank);
             if let Some(computed_fee_per_cu) = computed_fee_per_cu {
                 deserialized_packet.fee_per_cu = Some(FeePerCu {
                     fee_per_cu: computed_fee_per_cu,
@@ -279,16 +279,13 @@ impl UnprocessedPacketBatches {
     fn compute_fee_per_cu(deserialized_packet: &DeserializedPacket, bank: &Bank) -> Option<u64> {
         let sanitized_message =
             Self::sanitize_message(&deserialized_packet.versioned_transaction.message, bank)?;
-        let total_fee = bank.get_fee_for_message(&sanitized_message)?;
-
-        // TODO refactor `bank.get_fee_for_message()` to return both fee and CUs to avoid
-        // calling ComputeBudget twice.
-        let mut compute_budget = ComputeBudget::default();
-        let _ = compute_budget
-            .process_message(&sanitized_message, false)
-            .ok()?;
-
-        Some(total_fee / compute_budget.max_units)
+        let (total_fee, max_units) = Bank::calculate_fee(
+            &sanitized_message,
+            bank.get_lamports_per_signature(),
+            &bank.fee_structure,
+            bank.feature_set.is_active(&tx_wide_compute_cap::id()),
+        );
+        Some(total_fee / max_units)
     }
 
     fn get_cached_fee_per_cu(deserialized_packet: &DeserializedPacket, slot: &Slot) -> Option<u64> {

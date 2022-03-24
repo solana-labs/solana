@@ -507,16 +507,17 @@ impl Accounts {
                         .unwrap_or_else(|| {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
-                    let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        Bank::calculate_fee(
-                            tx.message(),
-                            lamports_per_signature,
-                            fee_structure,
-                            feature_set.is_active(&tx_wide_compute_cap::id()),
-                        )
-                    } else {
-                        return (Err(TransactionError::BlockhashNotFound), None);
-                    };
+                    let (fee, _max_units) =
+                        if let Some(lamports_per_signature) = lamports_per_signature {
+                            Bank::calculate_fee(
+                                tx.message(),
+                                lamports_per_signature,
+                                fee_structure,
+                                feature_set.is_active(&tx_wide_compute_cap::id()),
+                            )
+                        } else {
+                            return (Err(TransactionError::BlockhashNotFound), None);
+                        };
 
                     let loaded_transaction = match self.load_transaction(
                         ancestors,
@@ -1589,7 +1590,7 @@ mod tests {
             instructions,
         );
 
-        let fee = Bank::calculate_fee(
+        let (fee, _max_units) = Bank::calculate_fee(
             &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
             10,
             &FeeStructure::default(),
