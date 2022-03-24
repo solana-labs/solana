@@ -1181,12 +1181,17 @@ describe('Connection', () => {
       },
     });
 
-    // Find a block that has a transaction, usually Block 1
-    let slot = 0;
+    // Find a block that has a transaction.
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 1,
+    });
+    let slot = await connection.getFirstAvailableBlock();
+
     let address: PublicKey | undefined;
     let expectedSignature: string | undefined;
     while (!address || !expectedSignature) {
-      slot++;
       const block = await connection.getConfirmedBlock(slot);
       if (block.transactions.length > 0) {
         const {signature, publicKey} =
@@ -1194,8 +1199,10 @@ describe('Connection', () => {
         if (signature) {
           address = publicKey;
           expectedSignature = bs58.encode(signature);
+          break;
         }
       }
+      slot++;
     }
 
     // getSignaturesForAddress tests...
