@@ -121,7 +121,6 @@ impl AccountsHashVerifier {
                     check_hash: false,
                     accounts_cache_and_ancestors: None,
                     filler_account_suffix: None, // this will fail with filler accounts
-                    num_hash_scan_passes: None, // this code path is only for testing, so use default # passes here
                 })
                 .unwrap();
 

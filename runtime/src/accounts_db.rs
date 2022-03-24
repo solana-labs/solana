@@ -5526,7 +5526,6 @@ impl AccountsDb {
                 } else {
                     None
                 },
-                num_hash_scan_passes: self.num_hash_scan_passes,
             })
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5725,8 +5724,7 @@ impl AccountsDb {
         &self,
         config: &mut CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let (num_hash_scan_passes, bins_per_pass) =
-            Self::bins_per_pass(config.num_hash_scan_passes);
+        let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = move || {
             let mut previous_pass = PreviousPass::default();
@@ -7926,7 +7924,6 @@ pub mod tests {
                 check_hash: false,
                 accounts_cache_and_ancestors: None,
                 filler_account_suffix: None,
-                num_hash_scan_passes: None,
             })
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -7952,7 +7949,6 @@ pub mod tests {
                 check_hash: false,
                 accounts_cache_and_ancestors: None,
                 filler_account_suffix: None,
-                num_hash_scan_passes: None,
             })
             .unwrap();
 

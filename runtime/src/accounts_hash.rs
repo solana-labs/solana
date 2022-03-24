@@ -37,7 +37,6 @@ pub struct CalcAccountsHashConfig<'a> {
     )>,
     // these should be gone soon as we get an AccountsDb '&self'
     pub filler_account_suffix: Option<&'a Pubkey>,
-    pub num_hash_scan_passes: Option<usize>,
     // to come soon
     /*
     pub rent_collector: RentCollector,
