@@ -130,6 +130,16 @@ pub mod solana_sdk {
                 }
             }
 
+            pub fn new_signed_with_payer<T: Signers>(
+                instructions: &[Instruction],
+                payer: Option<&Pubkey>,
+                signing_keypairs: &T,
+                recent_blockhash: Hash,
+            ) -> Self {
+                let message = Message::new(instructions, payer);
+                Self::new(signing_keypairs, message, recent_blockhash)
+            }
+
             pub fn sign<T: Signers>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}
         }
     }
