@@ -136,13 +136,13 @@ impl AccountsHashVerifier {
         if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
             assert_eq!(expected_hash, hash);
         }
+        let links = accounts_package.snapshot_links.path().clone();
         let slot = accounts_package.slot;
-        let mut bank = accounts_package.snapshot_archives_dir.clone();
-        bank.push("snapshot");
+        let mut bank = links.clone();//accounts_package.snapshot_archives_dir.clone();
+        //bank.push("snapshot");
         bank.push(format!("{}", slot));
         bank.push(format!("{}", slot));
 
-        let links = accounts_package.snapshot_links.path().clone();
         let mut links_slot = PathBuf::from(links.clone());
         links_slot.push(slot.to_string());
 
@@ -185,6 +185,7 @@ impl AccountsHashVerifier {
             std::fs::rename(bank_out, bank).unwrap();
         } else {
             // todo - this can't happen either
+            panic!("");
         }
 
         measure_hash.stop();
