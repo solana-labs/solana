@@ -15,11 +15,36 @@ export const uint64 = (property: string = 'uint64') => {
   return BufferLayout.blob(8, property);
 };
 
+interface IRustStringShim
+  extends Omit<
+    BufferLayout.Structure<
+      Readonly<{
+        length: number;
+        lengthPadding: number;
+        chars: Uint8Array;
+      }>
+    >,
+    'decode' | 'encode' | 'replicate'
+  > {
+  alloc: (str: string) => number;
+  decode: (b: Uint8Array, offset?: number) => string;
+  encode: (str: string, b: Uint8Array, offset?: number) => number;
+  replicate: (property: string) => this;
+}
+
 /**
  * Layout for a Rust String type
  */
-export const rustString = (property: string = 'string') => {
-  const rsl = BufferLayout.struct(
+export const rustString = (
+  property: string = 'string',
+): BufferLayout.Layout<string> => {
+  const rsl = BufferLayout.struct<
+    Readonly<{
+      length?: number;
+      lengthPadding?: number;
+      chars: Uint8Array;
+    }>
+  >(
     [
       BufferLayout.u32('length'),
       BufferLayout.u32('lengthPadding'),
@@ -30,19 +55,21 @@ export const rustString = (property: string = 'string') => {
   const _decode = rsl.decode.bind(rsl);
   const _encode = rsl.encode.bind(rsl);
 
-  rsl.decode = (buffer: any, offset: any) => {
-    const data = _decode(buffer, offset);
-    return data['chars'].toString('utf8');
+  const rslShim = rsl as unknown as IRustStringShim;
+
+  rslShim.decode = (b: Uint8Array, offset?: number) => {
+    const data = _decode(b, offset);
+    return data['chars'].toString();
   };
 
-  rsl.encode = (str: any, buffer: any, offset: any) => {
+  rslShim.encode = (str: string, b: Uint8Array, offset?: number) => {
     const data = {
       chars: Buffer.from(str, 'utf8'),
     };
-    return _encode(data, buffer, offset);
+    return _encode(data, b, offset);
   };
 
-  (rsl as any).alloc = (str: any) => {
+  rslShim.alloc = (str: string) => {
     return (
       BufferLayout.u32().span +
       BufferLayout.u32().span +
@@ -50,7 +77,7 @@ export const rustString = (property: string = 'string') => {
     );
   };
 
-  return rsl;
+  return rslShim;
 };
 
 /**
