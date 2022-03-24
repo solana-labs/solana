@@ -12,7 +12,7 @@ use {
         account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
-        keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -268,6 +268,8 @@ pub fn process_instruction(
     instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let instruction = limited_deserialize(instruction_data)?;
 
@@ -275,7 +277,7 @@ pub fn process_instruction(
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     let _ = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-    let signers = get_signers(&keyed_accounts[first_instruction_account..]);
+    let signers = instruction_context.get_signers(transaction_context);
     match instruction {
         SystemInstruction::CreateAccount {
             lamports,

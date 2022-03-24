@@ -10,12 +10,10 @@ use {
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
-        keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         program_utils::limited_deserialize,
-        pubkey::Pubkey,
         sysvar::rent::Rent,
     },
-    std::collections::HashSet,
 };
 
 pub fn process_instruction(
@@ -23,6 +21,8 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
@@ -33,7 +33,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[first_instruction_account..]);
+    let signers = instruction_context.get_signers(transaction_context);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             let rent = get_sysvar_with_account_check::rent(
@@ -201,9 +201,10 @@ mod tests {
             feature_set::FeatureSet,
             hash::Hash,
             instruction::{AccountMeta, Instruction},
+            pubkey::Pubkey,
             sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
         },
-        std::str::FromStr,
+        std::{collections::HashSet, str::FromStr},
     };
 
     fn create_default_account() -> AccountSharedData {

@@ -12,7 +12,7 @@ use {
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
-        keyed_account::{get_signers, keyed_account_at_index},
+        keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
         stake::{
             instruction::StakeInstruction,
@@ -28,6 +28,8 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
@@ -38,7 +40,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers = get_signers(&keyed_accounts[first_instruction_account..]);
+    let signers = instruction_context.get_signers(transaction_context);
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => {
             let rent = get_sysvar_with_account_check::rent(
