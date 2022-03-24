@@ -5521,11 +5521,6 @@ impl AccountsDb {
                 stats: timings,
                 check_hash,
                 accounts_cache_and_ancestors,
-                filler_account_suffix: if self.filler_account_count > 0 {
-                    self.filler_account_suffix.as_ref()
-                } else {
-                    None
-                },
             })
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5738,6 +5733,14 @@ impl AccountsDb {
                     end: (pass + 1) * bins_per_pass,
                 };
 
+                let hash = AccountsHash {
+                    filler_account_suffix: if self.filler_account_count > 0 {
+                        self.filler_account_suffix
+                    } else {
+                        None
+                    },
+                };
+
                 let result = Self::scan_snapshot_stores_with_cache(
                     &cache_hash_data,
                     config.storages,
@@ -5746,12 +5749,9 @@ impl AccountsDb {
                     &bounds,
                     config.check_hash,
                     config.accounts_cache_and_ancestors,
-                    config.filler_account_suffix,
+                    hash.filler_account_suffix.as_ref(),
                 )?;
 
-                let hash = AccountsHash {
-                    filler_account_suffix: config.filler_account_suffix.cloned(),
-                };
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut config.stats,
@@ -7923,7 +7923,6 @@ pub mod tests {
                 stats: HashStats::default(),
                 check_hash: false,
                 accounts_cache_and_ancestors: None,
-                filler_account_suffix: None,
             })
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -7948,7 +7947,6 @@ pub mod tests {
                 stats: HashStats::default(),
                 check_hash: false,
                 accounts_cache_and_ancestors: None,
-                filler_account_suffix: None,
             })
             .unwrap();
 

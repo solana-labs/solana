@@ -35,8 +35,6 @@ pub struct CalcAccountsHashConfig<'a> {
         &'a Ancestors,
         &'a AccountInfoAccountsIndex,
     )>,
-    // these should be gone soon as we get an AccountsDb '&self'
-    pub filler_account_suffix: Option<&'a Pubkey>,
     // to come soon
     /*
     pub rent_collector: RentCollector,
