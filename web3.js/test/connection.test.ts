@@ -2544,7 +2544,13 @@ describe('Connection', function () {
       value: 10000,
     });
 
-    const blockTime = await connection.getBlockTime(1);
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 1,
+    });
+    const slot = await connection.getFirstAvailableBlock();
+    const blockTime = await connection.getBlockTime(slot);
     if (blockTime === null) {
       expect(blockTime).not.to.be.null;
     } else {
