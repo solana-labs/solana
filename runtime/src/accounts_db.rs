@@ -5492,14 +5492,8 @@ impl AccountsDb {
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
-            let ancestors = if can_cached_slot_be_unflushed {
-                Some(ancestors)
-            } else {
-                None
-            };
-
             let mut collect_time = Measure::start("collect");
-            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, ancestors);
+            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
             collect_time.stop();
 
             let mut sort_time = Measure::start("sort_storages");
@@ -5525,7 +5519,7 @@ impl AccountsDb {
                 use_bg_thread_pool: !is_startup,
                 stats: timings,
                 check_hash,
-                ancestors,
+                ancestors: can_cached_slot_be_unflushed.then(|| ancestors),
             })
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
