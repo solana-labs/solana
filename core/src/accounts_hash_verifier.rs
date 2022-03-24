@@ -103,6 +103,7 @@ impl AccountsHashVerifier {
             hashes,
             exit,
             fault_injection_rate_slots,
+            accounts_hash,
         );
 
         Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config, &accounts_hash);
@@ -205,8 +206,8 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
+        accounts_hash: Hash,
     ) {
-        let hash = accounts_package.accounts_hash_for_testing.unwrap(); // todo
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -217,10 +218,10 @@ impl AccountsHashVerifier {
             };
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&hash, &[rand]);
+            let hash = extend_and_hash(&accounts_hash, &[rand]);
             hashes.push((accounts_package.slot, hash));
         } else {
-            hashes.push((accounts_package.slot, hash));
+            hashes.push((accounts_package.slot, accounts_hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {
