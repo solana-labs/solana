@@ -9,6 +9,7 @@ import {sleep} from './util/sleep';
 import type {Connection} from './connection';
 import type {Signer} from './keypair';
 import {SystemProgram} from './system-program';
+import {IInstructionInputData} from './instruction';
 
 // Keep program chunks under PACKET_DATA_SIZE, leaving enough room for the
 // rest of the Transaction fields
@@ -137,7 +138,15 @@ export class Loader {
       }
     }
 
-    const dataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct<
+      Readonly<{
+        bytes: number[];
+        bytesLength: number;
+        bytesLengthPadding: number;
+        instruction: number;
+        offset: number;
+      }>
+    >([
       BufferLayout.u32('instruction'),
       BufferLayout.u32('offset'),
       BufferLayout.u32('bytesLength'),
@@ -160,7 +169,9 @@ export class Loader {
         {
           instruction: 0, // Load instruction
           offset,
-          bytes,
+          bytes: bytes as number[],
+          bytesLength: 0,
+          bytesLengthPadding: 0,
         },
         data,
       );
@@ -189,7 +200,9 @@ export class Loader {
 
     // Finalize the account loaded with program data for execution
     {
-      const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
+      const dataLayout = BufferLayout.struct<IInstructionInputData>([
+        BufferLayout.u32('instruction'),
+      ]);
 
       const data = Buffer.alloc(dataLayout.span);
       dataLayout.encode(
