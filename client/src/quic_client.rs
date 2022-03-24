@@ -63,19 +63,22 @@ impl TpuConnection for QuicTpuConnection {
         &self.client.addr
     }
 
-    fn send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()> {
+    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    where
+        T: AsRef<[u8]>,
+    {
         let _guard = self.client.runtime.enter();
         let send_buffer = self.client.send_buffer(wire_transaction);
         self.client.runtime.block_on(send_buffer)?;
         Ok(())
     }
 
-    fn send_wire_transaction_batch(
-        &self,
-        wire_transaction_batch: &[Vec<u8>],
-    ) -> TransportResult<()> {
+    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    where
+        T: AsRef<[u8]>,
+    {
         let _guard = self.client.runtime.enter();
-        let send_batch = self.client.send_batch(wire_transaction_batch);
+        let send_batch = self.client.send_batch(buffers);
         self.client.runtime.block_on(send_batch)?;
         Ok(())
     }
@@ -158,12 +161,18 @@ impl QuicClient {
         }
     }
 
-    pub async fn send_buffer(&self, data: &[u8]) -> Result<(), ClientErrorKind> {
-        self._send_buffer(data).await?;
+    pub async fn send_buffer<T>(&self, data: T) -> Result<(), ClientErrorKind>
+    where
+        T: AsRef<[u8]>,
+    {
+        self._send_buffer(data.as_ref()).await?;
         Ok(())
     }
 
-    pub async fn send_batch(&self, buffers: &[Vec<u8>]) -> Result<(), ClientErrorKind> {
+    pub async fn send_batch<T>(&self, buffers: &[T]) -> Result<(), ClientErrorKind>
+    where
+        T: AsRef<[u8]>,
+    {
         // Start off by "testing" the connection by sending the first transaction
         // This will also connect to the server if not already connected
         // and reconnect and retry if the first send attempt failed
@@ -178,7 +187,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self._send_buffer(&buffers[0]).await?;
+        let connection = self._send_buffer(buffers[0].as_ref()).await?;
 
         // Used to avoid dereferencing the Arc multiple times below
         // by just getting a reference to the NewConnection once
@@ -192,7 +201,7 @@ impl QuicClient {
             join_all(
                 buffs
                     .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(buf, connection_ref)),
+                    .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
             )
         });
 

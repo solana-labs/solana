@@ -1,13 +1,11 @@
 use {
-    rayon::iter::{IntoParallelRefIterator, ParallelIterator},
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
     std::net::{SocketAddr, UdpSocket},
 };
 
 pub trait TpuConnection {
-    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self
-    where
-        Self: Sized;
+    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self;
 
     fn tpu_addr(&self) -> &SocketAddr;
 
@@ -20,26 +18,23 @@ pub trait TpuConnection {
         self.send_wire_transaction(&wire_transaction)
     }
 
-    fn send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()>;
+    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    where
+        T: AsRef<[u8]>;
 
     fn par_serialize_and_send_transaction_batch(
         &self,
-        transaction_batch: &[VersionedTransaction],
+        transactions: &[VersionedTransaction],
     ) -> TransportResult<()> {
-        let wire_transaction_batch: Vec<_> = transaction_batch
-            .par_iter()
+        let buffers = transactions
+            .into_par_iter()
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
-            .collect();
-        self.send_wire_transaction_batch(&wire_transaction_batch)
+            .collect::<Vec<_>>();
+
+        self.send_wire_transaction_batch(&buffers)
     }
 
-    fn send_wire_transaction_batch(
-        &self,
-        wire_transaction_batch: &[Vec<u8>],
-    ) -> TransportResult<()> {
-        for wire_transaction in wire_transaction_batch {
-            self.send_wire_transaction(wire_transaction)?;
-        }
-        Ok(())
-    }
+    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    where
+        T: AsRef<[u8]>;
 }
