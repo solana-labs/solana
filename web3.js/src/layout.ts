@@ -4,16 +4,14 @@ import * as BufferLayout from '@solana/buffer-layout';
 /**
  * Layout for a public key
  */
-export const publicKey = (
-  property: string = 'publicKey',
-): BufferLayout.Layout => {
+export const publicKey = (property: string = 'publicKey') => {
   return BufferLayout.blob(32, property);
 };
 
 /**
  * Layout for a 64bit unsigned value
  */
-export const uint64 = (property: string = 'uint64'): BufferLayout.Layout => {
+export const uint64 = (property: string = 'uint64') => {
   return BufferLayout.blob(8, property);
 };
 
@@ -59,17 +57,25 @@ export const rustString = (property: string = 'string') => {
  * Layout for an Authorized object
  */
 export const authorized = (property: string = 'authorized') => {
-  return BufferLayout.struct(
-    [publicKey('staker'), publicKey('withdrawer')],
-    property,
-  );
+  return BufferLayout.struct<
+    Readonly<{
+      staker: Uint8Array;
+      withdrawer: Uint8Array;
+    }>
+  >([publicKey('staker'), publicKey('withdrawer')], property);
 };
 
 /**
  * Layout for a Lockup object
  */
 export const lockup = (property: string = 'lockup') => {
-  return BufferLayout.struct(
+  return BufferLayout.struct<
+    Readonly<{
+      custodian: Uint8Array;
+      epoch: number;
+      unixTimestamp: number;
+    }>
+  >(
     [
       BufferLayout.ns64('unixTimestamp'),
       BufferLayout.ns64('epoch'),
@@ -83,7 +89,14 @@ export const lockup = (property: string = 'lockup') => {
  *  Layout for a VoteInit object
  */
 export const voteInit = (property: string = 'voteInit') => {
-  return BufferLayout.struct(
+  return BufferLayout.struct<
+    Readonly<{
+      authorizedVoter: Uint8Array;
+      authorizedWithdrawer: Uint8Array;
+      commission: number;
+      nodePubkey: Uint8Array;
+    }>
+  >(
     [
       publicKey('nodePubkey'),
       publicKey('authorizedVoter'),
