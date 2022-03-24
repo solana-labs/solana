@@ -110,34 +110,32 @@ impl AccountsHashVerifier {
 
     fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
         let mut measure_hash = Measure::start("hash");
-        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
-            let mut sort_time = Measure::start("sort_storages");
-            let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
-            sort_time.stop();
-
-            let mut timings = HashStats {
-                storage_sort_us: sort_time.as_us(),
-                ..HashStats::default()
-            };
-            timings.calc_storage_size_quartiles(&combined_maps);
-
-            let (hash, lamports) = accounts_package
-                .accounts
-                .accounts_db
-                .calculate_accounts_hash_without_index(
-                    &CalcAccountsHashConfig {
-                        storages: &sorted_storages,
-                        use_bg_thread_pool: true,
-                        check_hash: false,
-                        ancestors: None,
-                    },
-                    timings,
-                )
-                .unwrap();
-
-            assert_eq!(accounts_package.expected_capitalization, lamports);
-            assert_eq!(expected_hash, hash);
+        let mut sort_time = Measure::start("sort_storages");
+        let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
+        sort_time.stop();
+        let mut timings = HashStats {
+            storage_sort_us: sort_time.as_us(),
+            ..HashStats::default()
         };
+        timings.calc_storage_size_quartiles(&combined_maps);
+        let (hash, lamports) = accounts_package
+            .accounts
+            .accounts_db
+            .calculate_accounts_hash_without_index(
+                &mut CalcAccountsHashConfig {
+                    storages: &sorted_storages,
+                    use_bg_thread_pool: true,
+                    check_hash: false,
+                    accounts_cache_and_ancestors: None,
+                },
+                timings,
+            )
+            .unwrap();
+
+        assert_eq!(accounts_package.expected_capitalization, lamports);
+        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
+            assert_eq!(expected_hash, hash);
+        }
         let slot = accounts_package.slot;
         let mut bank = accounts_package.snapshot_archives_dir.clone();
         bank.push("snapshot");
@@ -151,31 +149,43 @@ impl AccountsHashVerifier {
         let mut bank_out = bank.clone();
         bank_out.pop();
         bank_out.push(format!("{}.temp", slot));
-        error!("verify_accounts_package_hash: {:?}, {}, tempdir: {:?}, bank: {:?}, contents: {:?}", accounts_package.snapshot_archives_dir, slot,
-        accounts_package.snapshot_links, bank, std::fs::read_dir(&links).map(|x| x.collect::<Vec<_>>()));
+        error!(
+            "verify_accounts_package_hash: {:?}, {}, tempdir: {:?}, bank: {:?}, contents: {:?}",
+            accounts_package.snapshot_archives_dir,
+            slot,
+            accounts_package.snapshot_links,
+            bank,
+            std::fs::read_dir(&links).map(|x| x.collect::<Vec<_>>())
+        );
         //let path = accounts_package.snapshot_archives_dir.join(slot);
         //reserialize_bank_fields_with_hash
         let mut file = std::fs::File::open(bank.clone());
-        use std::io::BufReader;
-        use std::io::BufWriter;
+        use std::io::{BufReader, BufWriter};
         let mut file_out = std::fs::File::create(bank_out.clone());
         error!("file: {}, file_out: {}", file.is_ok(), file_out.is_ok());
         if file.is_ok() && file_out.is_ok() {
             {
                 let mut file = file.unwrap();
                 let mut file_out = file_out.unwrap();
-                let r = solana_runtime::serde_snapshot::reserialize_with_new_hash(&mut BufWriter::new(file_out), &mut BufReader::new(file));
+                let r = solana_runtime::serde_snapshot::reserialize_with_new_hash(
+                    &mut BufWriter::new(file_out),
+                    &mut BufReader::new(file),
+                    &hash,
+                );
                 error!("file_out: result: {:?}", r);
                 // todo - what happens if this fails?
             }
-            error!("renaming: {:?} to {:?}, dir: {:?}", bank_out, bank, std::fs::read_dir(&links_slot).map(|x| x.collect::<Vec<_>>()));
+            error!(
+                "renaming: {:?} to {:?}, dir: {:?}",
+                bank_out,
+                bank,
+                std::fs::read_dir(&links_slot).map(|x| x.collect::<Vec<_>>())
+            );
             // replace the original file with this one
             std::fs::rename(bank_out, bank).unwrap();
-        }
-        else {
+        } else {
             // todo - this can't happen either
         }
-
 
         measure_hash.stop();
         datapoint_info!(

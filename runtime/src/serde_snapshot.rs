@@ -269,12 +269,13 @@ where
 pub fn reserialize_with_new_hash<W, R>(
     write_stream: &mut BufWriter<W>,
     read_stream: &mut BufReader<R>,
+    hash: &Hash,
 ) -> Result<(), Error>
 where
     W: Write,
     R: Read,
 {
-    newer::Context::reserialize_bank_fields_with_hash(read_stream, write_stream, &Hash::default())
+    newer::Context::reserialize_bank_fields_with_hash(read_stream, write_stream, hash)
 }
 
 pub(crate) fn bank_to_stream<W>(
