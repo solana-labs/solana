@@ -1572,15 +1572,22 @@ describe('Connection', () => {
       },
     });
 
-    // Find a block that has a transaction, usually Block 1
-    let slot = 0;
+    // Find a block that has a transaction.
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 1,
+    });
+    let slot = await connection.getFirstAvailableBlock();
+
     let transaction: string | undefined;
     while (!transaction) {
-      slot++;
       const block = await connection.getBlock(slot);
       if (block && block.transactions.length > 0) {
         transaction = block.transactions[0].transaction.signatures[0];
+        continue;
       }
+      slot++;
     }
 
     await mockRpcResponse({
