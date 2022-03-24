@@ -93,9 +93,9 @@ struct SnapshotAccountsDbFields<T> {
 
 impl<T> SnapshotAccountsDbFields<T> {
     /// Collapse the SnapshotAccountsDbFields into a single AccountsDbFields.  If there is no
-    /// incremental snapshot, this returns the AccountsDbFields from the full snapshot.  Otherwise
-    /// this uses the version, slot, and bank hash info from the incremental snapshot, then the
-    /// combination of the storages from both the full and incremental snapshots.
+    /// incremental snapshot, this returns the AccountsDbFields from the full snapshot.
+    /// Otherwise, use the AccountsDbFields from the incremental snapshot, and a combination
+    /// of the storages from both the full and incremental snapshots.
     fn collapse_into(self) -> Result<AccountsDbFields<T>, Error> {
         match self.incremental_snapshot_accounts_db_fields {
             None => Ok(self.full_snapshot_accounts_db_fields),
