@@ -4735,7 +4735,7 @@ impl AccountsDb {
             };
 
             if self
-                .flush_slot_cache_with_clean(root, should_flush_f)
+                .flush_slot_cache_with_clean(&[root], should_flush_f)
                 .is_some()
             {
                 num_roots_flushed += 1;
@@ -4842,7 +4842,7 @@ impl AccountsDb {
 
     /// flush all accounts in this slot
     fn flush_slot_cache(&self, slot: Slot) -> Option<FlushStats> {
-        self.flush_slot_cache_with_clean(slot, None::<&mut fn(&_, &_) -> bool>)
+        self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>)
     }
 
     /// `should_flush_f` is an optional closure that determines whether a given
@@ -4850,9 +4850,11 @@ impl AccountsDb {
     /// accounts
     fn flush_slot_cache_with_clean(
         &self,
-        slot: Slot,
+        slots: &[Slot],
         should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
     ) -> Option<FlushStats> {
+        assert_eq!(1, slots.len());
+        let slot = slots[0];
         if self
             .remove_unrooted_slots_synchronization
             .slots_under_contention
@@ -4876,12 +4878,15 @@ impl AccountsDb {
 
             // Nobody else should have been purging this slot, so should not have been removed
             // from `self.remove_unrooted_slots_synchronization`.
-            assert!(self
-                .remove_unrooted_slots_synchronization
-                .slots_under_contention
-                .lock()
-                .unwrap()
-                .remove(&slot));
+
+            slots.iter().for_each(|slot| {
+                assert!(self
+                    .remove_unrooted_slots_synchronization
+                    .slots_under_contention
+                    .lock()
+                    .unwrap()
+                    .remove(slot));
+            });
 
             // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
             // flushing
