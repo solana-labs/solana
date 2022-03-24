@@ -1876,8 +1876,6 @@ mod tests {
         );
         validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
-
-        thread::sleep(time::Duration::from_millis(10));
     }
 
     fn validator_parallel_exit() {
