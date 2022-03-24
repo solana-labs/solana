@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn test_vote_accounts_serialize() {
         let mut rng = rand::thread_rng();
-        let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
+        let vote_accounts_hash_map: VoteAccountsHashMap =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
         let vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_hash_map.clone()));
         assert!(vote_accounts.staked_nodes().len() > 32);
@@ -479,7 +479,7 @@ mod tests {
     #[test]
     fn test_vote_accounts_deserialize() {
         let mut rng = rand::thread_rng();
-        let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
+        let vote_accounts_hash_map: VoteAccountsHashMap =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
         let data = bincode::serialize(&vote_accounts_hash_map).unwrap();
         let vote_accounts: VoteAccounts = bincode::deserialize(&data).unwrap();
