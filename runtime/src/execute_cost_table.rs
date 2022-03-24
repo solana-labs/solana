@@ -109,7 +109,7 @@ impl ExecuteCostTable {
         match self.table.entry(*key) {
             Entry::Occupied(mut entry) => {
                 let result = entry.get_mut();
-                *result = (*result + value) / 2;
+                *result = (result.saturating_add(value)) / 2;
 
                 if Self::is_large_change(value, *result) {
                     self.cost_calculation_metrics
@@ -133,10 +133,16 @@ impl ExecuteCostTable {
     /// LARGE_CHANGE_THRESHOLD times larger than input data itself;
     fn is_large_change(input: u64, calculated_value: u64) -> bool {
         const LARGE_CHANGE_THRESHOLD: u64 = 20;
-        const PERCENTAGE_OF_MAX_UNITS: f64 = 0.95;
-        let has_oversized_impact = input != 0 && calculated_value / input > LARGE_CHANGE_THRESHOLD;
-        let is_large_value =
-            calculated_value as f64 / compute_budget::MAX_UNITS as f64 > PERCENTAGE_OF_MAX_UNITS;
+        const PERCENTAGE_OF_MAX_UNITS: u64 = 95;
+        let has_oversized_impact = calculated_value
+            .checked_div(input)
+            .map(|v| v > LARGE_CHANGE_THRESHOLD)
+            .unwrap_or(false);
+        let is_large_value = calculated_value
+            .saturating_mul(100)
+            .checked_div(compute_budget::MAX_UNITS)
+            .map(|v| v > PERCENTAGE_OF_MAX_UNITS)
+            .unwrap_or(false);
         has_oversized_impact || is_large_value
     }
 
