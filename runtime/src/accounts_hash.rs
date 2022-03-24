@@ -1,6 +1,8 @@
 use {
     crate::{
-        accounts_cache::AccountsCache, accounts_db::AccountInfoAccountsIndex, ancestors::Ancestors,
+        accounts_cache::AccountsCache,
+        accounts_db::{AccountInfoAccountsIndex, SnapshotStorages},
+        ancestors::Ancestors,
         sorted_storages::SortedStorages,
     },
     log::*,
@@ -43,6 +45,9 @@ pub struct CalcAccountsHashConfig<'a> {
     */
 }
 
+// smallest, 3 quartiles, largest, average
+pub type StorageSizeQuartileStats = [usize; 6];
+
 #[derive(Debug, Default)]
 pub struct HashStats {
     pub scan_time_total_us: u64,
@@ -58,8 +63,41 @@ pub struct HashStats {
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
     pub max_bin_size: usize,
+    pub storage_size_quartiles: StorageSizeQuartileStats,
 }
 impl HashStats {
+    pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
+        let mut sum = 0;
+        let mut sizes = storages
+            .iter()
+            .flat_map(|storages| {
+                let result = storages
+                    .iter()
+                    .map(|storage| {
+                        let cap = storage.accounts.capacity() as usize;
+                        sum += cap;
+                        cap
+                    })
+                    .collect::<Vec<_>>();
+                result
+            })
+            .collect::<Vec<_>>();
+        sizes.sort_unstable();
+        let len = sizes.len();
+        self.storage_size_quartiles = if len == 0 {
+            StorageSizeQuartileStats::default()
+        } else {
+            [
+                *sizes.first().unwrap(),
+                sizes[len / 4],
+                sizes[len * 2 / 4],
+                sizes[len * 3 / 4],
+                *sizes.last().unwrap(),
+                sum / len,
+            ]
+        };
+    }
+
     fn log(&mut self) {
         let total_time_us = self.scan_time_total_us
             + self.zeros_time_total_us
@@ -89,6 +127,36 @@ impl HashStats {
             ("num_slots", self.num_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
+            (
+                "storage_size_min",
+                self.storage_size_quartiles[0] as i64,
+                i64
+            ),
+            (
+                "storage_size_quartile_1",
+                self.storage_size_quartiles[1] as i64,
+                i64
+            ),
+            (
+                "storage_size_quartile_2",
+                self.storage_size_quartiles[2] as i64,
+                i64
+            ),
+            (
+                "storage_size_quartile_3",
+                self.storage_size_quartiles[3] as i64,
+                i64
+            ),
+            (
+                "storage_size_max",
+                self.storage_size_quartiles[4] as i64,
+                i64
+            ),
+            (
+                "storage_size_avg",
+                self.storage_size_quartiles[5] as i64,
+                i64
+            ),
             ("total", total_time_us as i64, i64),
         );
     }

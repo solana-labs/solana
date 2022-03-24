@@ -5508,11 +5508,12 @@ impl AccountsDb {
             self.mark_old_slots_as_dirty(&storages, slots_per_epoch);
             sort_time.stop();
 
-            let timings = HashStats {
+            let mut timings = HashStats {
                 collect_snapshots_us: collect_time.as_us(),
                 storage_sort_us: sort_time.as_us(),
                 ..HashStats::default()
             };
+            timings.calc_storage_size_quartiles(&combined_maps);
 
             self.calculate_accounts_hash_without_index(&mut CalcAccountsHashConfig {
                 storages: &storages,
