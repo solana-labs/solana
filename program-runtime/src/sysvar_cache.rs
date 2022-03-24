@@ -178,7 +178,7 @@ impl SysvarCache {
 /// order to keep consistent behavior, they continue to enforce the same checks
 /// as `solana_sdk::keyed_account::from_keyed_account` despite dynamically
 /// loading them instead of deserializing from account data.
-pub mod get_sysvar_with_account_check2 {
+pub mod get_sysvar_with_account_check {
     use super::*;
 
     fn check_sysvar_account<S: Sysvar>(

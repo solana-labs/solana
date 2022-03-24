@@ -25,7 +25,7 @@ use {
         invoke_context::{ComputeMeter, Executor, InvokeContext},
         log_collector::LogCollector,
         stable_log,
-        sysvar_cache::get_sysvar_with_account_check2,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
@@ -492,10 +492,9 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(3),
             )?;
-            let rent =
-                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 4)?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
             let clock =
-                get_sysvar_with_account_check2::clock(invoke_context, instruction_context, 5)?;
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(7),

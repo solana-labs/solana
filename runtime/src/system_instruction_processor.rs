@@ -5,7 +5,7 @@ use {
     },
     log::*,
     solana_program_runtime::{
-        ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check2,
+        ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -355,7 +355,7 @@ pub fn process_instruction(
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
-            let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
+            let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
                 instruction_context,
                 1,
@@ -373,19 +373,18 @@ pub fn process_instruction(
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
-            let _recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
+            let _recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
                 instruction_context,
                 2,
             )?;
-            let rent =
-                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 3)?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 3)?;
             withdraw_nonce_account(me, lamports, to, &rent, &signers, invoke_context)
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
-            let recent_blockhashes = get_sysvar_with_account_check2::recent_blockhashes(
+            let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
                 instruction_context,
                 1,
@@ -397,8 +396,7 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            let rent =
-                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 2)?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 2)?;
             initialize_nonce_account(me, &authorized, &rent, invoke_context)
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {

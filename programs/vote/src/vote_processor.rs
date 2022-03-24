@@ -5,7 +5,7 @@ use {
     log::*,
     solana_metrics::inc_new_counter_info,
     solana_program_runtime::{
-        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check2,
+        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         feature_set,
@@ -36,16 +36,15 @@ pub fn process_instruction(
     let signers = instruction_context.get_signers(transaction_context);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-            let rent =
-                get_sysvar_with_account_check2::rent(invoke_context, instruction_context, 1)?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             verify_rent_exemption(me, &rent)?;
             let clock =
-                get_sysvar_with_account_check2::clock(invoke_context, instruction_context, 2)?;
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             vote_state::initialize_account(me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             let clock =
-                get_sysvar_with_account_check2::clock(invoke_context, instruction_context, 1)?;
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
             vote_state::authorize(
                 me,
                 &voter_pubkey,
@@ -65,13 +64,10 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
-            let slot_hashes = get_sysvar_with_account_check2::slot_hashes(
-                invoke_context,
-                instruction_context,
-                1,
-            )?;
+            let slot_hashes =
+                get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
-                get_sysvar_with_account_check2::clock(invoke_context, instruction_context, 2)?;
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             vote_state::process_vote(
                 me,
                 &slot_hashes,
@@ -141,7 +137,7 @@ pub fn process_instruction(
                         .signer_key()
                         .ok_or(InstructionError::MissingRequiredSignature)?;
                 let clock =
-                    get_sysvar_with_account_check2::clock(invoke_context, instruction_context, 1)?;
+                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 vote_state::authorize(
                     me,
                     voter_pubkey,
