@@ -3761,6 +3761,8 @@ version = "1.10.4"
 dependencies = [
  "crossbeam-channel",
  "log",
+ "solana-client",
+ "solana-measure",
  "solana-metrics",
  "solana-runtime",
  "solana-sdk",
