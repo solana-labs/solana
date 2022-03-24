@@ -5492,14 +5492,14 @@ impl AccountsDb {
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
-            let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
-                Some((&self.accounts_cache, ancestors))
+            let ancestors = if can_cached_slot_be_unflushed {
+                Some(ancestors)
             } else {
                 None
             };
 
             let mut collect_time = Measure::start("collect");
-            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
+            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, ancestors);
             collect_time.stop();
 
             let mut sort_time = Measure::start("sort_storages");
@@ -5525,7 +5525,7 @@ impl AccountsDb {
                 use_bg_thread_pool: !is_startup,
                 stats: timings,
                 check_hash,
-                accounts_cache_and_ancestors,
+                ancestors,
             })
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5754,8 +5754,8 @@ impl AccountsDb {
                     &bounds,
                     config.check_hash,
                     config
-                        .accounts_cache_and_ancestors
-                        .map(|(a, b)| (a, b, &self.accounts_index)),
+                        .ancestors
+                        .map(|a| (&self.accounts_cache, a, &self.accounts_index)),
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
@@ -7929,7 +7929,7 @@ pub mod tests {
                 use_bg_thread_pool: false,
                 stats: HashStats::default(),
                 check_hash: false,
-                accounts_cache_and_ancestors: None,
+                ancestors: None,
             })
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -7953,7 +7953,7 @@ pub mod tests {
                 use_bg_thread_pool: false,
                 stats: HashStats::default(),
                 check_hash: false,
-                accounts_cache_and_ancestors: None,
+                ancestors: None,
             })
             .unwrap();
 

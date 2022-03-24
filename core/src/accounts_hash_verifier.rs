@@ -119,7 +119,7 @@ impl AccountsHashVerifier {
                     use_bg_thread_pool: true,
                     stats: HashStats::default(),
                     check_hash: false,
-                    accounts_cache_and_ancestors: None,
+                    ancestors: None,
                 })
                 .unwrap();
 

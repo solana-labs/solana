@@ -1,8 +1,5 @@
 use {
-    crate::{
-        accounts_cache::AccountsCache, accounts_db::SnapshotStorages, ancestors::Ancestors,
-        sorted_storages::SortedStorages,
-    },
+    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, sorted_storages::SortedStorages},
     log::*,
     rayon::prelude::*,
     solana_measure::measure::Measure,
@@ -28,7 +25,7 @@ pub struct CalcAccountsHashConfig<'a> {
     pub use_bg_thread_pool: bool,
     pub stats: HashStats,
     pub check_hash: bool,
-    pub accounts_cache_and_ancestors: Option<(&'a AccountsCache, &'a Ancestors)>,
+    pub ancestors: Option<&'a Ancestors>,
     // to come soon
     /*
     pub rent_collector: RentCollector,
