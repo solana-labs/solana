@@ -77,15 +77,17 @@ pub mod solana_sdk {
             pub fn new() -> Keypair {
                 Keypair
             }
+        }
 
-            pub fn pubkey(&self) -> Pubkey {
+        impl Signer for Keypair {
+            fn pubkey(&self) -> Pubkey {
                 Pubkey::default()
             }
         }
 
-        impl Signer for Keypair {}
-
-        pub trait Signer {}
+        pub trait Signer {
+            fn pubkey(&self) -> Pubkey;
+        }
     }
 
     pub mod signers {
