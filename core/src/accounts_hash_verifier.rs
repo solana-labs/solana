@@ -245,7 +245,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
         snapshot_config: Option<&SnapshotConfig>,
-        accounts_hash: &Hash,
+        accounts_hash: Hash,
     ) {
         if accounts_package.snapshot_type.is_none()
             || pending_snapshot_package.is_none()
