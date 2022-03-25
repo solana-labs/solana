@@ -162,6 +162,7 @@ pub enum CliCommand {
         address: Option<SignerIndex>,
         use_deprecated_loader: bool,
         allow_excessive_balance: bool,
+        skip_fee_check: bool,
     },
     Program(ProgramCliCommand),
     // Stake Commands
@@ -744,6 +745,7 @@ pub fn parse_command(
                 signers.push(signer);
                 1
             });
+            let skip_fee_check = matches.is_present("skip_fee_check");
 
             Ok(CliCommandInfo {
                 command: CliCommand::Deploy {
@@ -751,6 +753,7 @@ pub fn parse_command(
                     address,
                     use_deprecated_loader: matches.is_present("use_deprecated_loader"),
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
+                    skip_fee_check,
                 },
                 signers,
             })
@@ -1129,6 +1132,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             address,
             use_deprecated_loader,
             allow_excessive_balance,
+            skip_fee_check,
         } => process_deploy(
             rpc_client,
             config,
@@ -1136,6 +1140,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *address,
             *use_deprecated_loader,
             *allow_excessive_balance,
+            *skip_fee_check,
         ),
         CliCommand::Program(program_subcommand) => {
             process_program_subcommand(rpc_client, config, program_subcommand)
@@ -1967,6 +1972,7 @@ mod tests {
                     address: None,
                     use_deprecated_loader: false,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -1989,6 +1995,7 @@ mod tests {
                     address: Some(1),
                     use_deprecated_loader: false,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2382,6 +2389,7 @@ mod tests {
             address: None,
             use_deprecated_loader: false,
             allow_excessive_balance: false,
+            skip_fee_check: false,
         };
         config.output_format = OutputFormat::JsonCompact;
         let result = process_command(&config);
@@ -2402,6 +2410,7 @@ mod tests {
             address: None,
             use_deprecated_loader: false,
             allow_excessive_balance: false,
+            skip_fee_check: false,
         };
         assert!(process_command(&config).is_err());
     }
