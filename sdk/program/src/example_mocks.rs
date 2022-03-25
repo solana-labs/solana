@@ -15,18 +15,38 @@
 
 pub mod solana_client {
     pub mod client_error {
-        use thiserror::Error;
-
-        #[derive(Error, Debug)]
+        #[derive(thiserror::Error, Debug)]
         #[error("mock-error")]
         pub struct ClientError;
         pub type Result<T> = std::result::Result<T, ClientError>;
     }
 
+    pub mod nonce_utils {
+        use {
+            super::super::solana_sdk::{
+                account::ReadableAccount, account_utils::StateMut, hash::Hash, pubkey::Pubkey,
+            },
+            crate::nonce::state::{Data, Versions},
+        };
+
+        #[derive(thiserror::Error, Debug)]
+        #[error("mock-error")]
+        pub struct Error;
+
+        pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
+            _account: &T,
+        ) -> Result<Data, Error> {
+            Ok(Data::new(Pubkey::new_unique(), Hash::default(), 5000))
+        }
+    }
+
     pub mod rpc_client {
         use super::{
-            super::solana_sdk::{hash::Hash, signature::Signature, transaction::Transaction},
-            client_error::Result as ClientResult,
+            super::solana_sdk::{
+                account::Account, hash::Hash, pubkey::Pubkey, signature::Signature,
+                transaction::Transaction,
+            },
+            client_error::{ClientError, Result as ClientResult},
         };
 
         pub struct RpcClient;
@@ -53,6 +73,14 @@ pub mod solana_client {
             ) -> ClientResult<u64> {
                 Ok(0)
             }
+
+            pub fn get_account(&self, _pubkey: &Pubkey) -> Result<Account, ClientError> {
+                Ok(Account {})
+            }
+
+            pub fn get_balance(&self, _pubkey: &Pubkey) -> ClientResult<u64> {
+                Ok(0)
+            }
         }
     }
 }
@@ -63,7 +91,33 @@ pub mod solana_client {
 /// This lets examples in solana-program appear to be written as client
 /// programs.
 pub mod solana_sdk {
-    pub use crate::{hash, instruction, message, nonce, pubkey, system_instruction};
+    pub use crate::{
+        hash, instruction, message, nonce,
+        pubkey::{self, Pubkey},
+        system_instruction,
+    };
+
+    pub mod account {
+        pub struct Account;
+
+        pub trait ReadableAccount: Sized {
+            fn data(&self) -> &[u8];
+        }
+
+        impl ReadableAccount for Account {
+            fn data(&self) -> &[u8] {
+                &[0]
+            }
+        }
+    }
+
+    pub mod account_utils {
+        use super::account::Account;
+
+        pub trait StateMut<T> {}
+
+        impl<T> StateMut<T> for Account {}
+    }
 
     pub mod signature {
         use crate::pubkey::Pubkey;
@@ -93,6 +147,9 @@ pub mod solana_sdk {
     pub mod signers {
         use super::signature::Signer;
 
+        #[derive(Debug, thiserror::Error, PartialEq)]
+        pub enum SignerError {}
+
         pub trait Signers {}
 
         impl<T: Signer> Signers for [&T; 1] {}
@@ -101,10 +158,12 @@ pub mod solana_sdk {
 
     pub mod transaction {
         use {
-            super::signers::Signers,
+            super::signers::{SignerError, Signers},
             crate::{hash::Hash, instruction::Instruction, message::Message, pubkey::Pubkey},
+            serde::Serialize,
         };
 
+        #[derive(Serialize)]
         pub struct Transaction {
             pub message: Message,
         }
@@ -143,6 +202,14 @@ pub mod solana_sdk {
             }
 
             pub fn sign<T: Signers>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}
+
+            pub fn try_sign<T: Signers>(
+                &mut self,
+                _keypairs: &T,
+                _recent_blockhash: Hash,
+            ) -> Result<(), SignerError> {
+                Ok(())
+            }
         }
     }
 }
