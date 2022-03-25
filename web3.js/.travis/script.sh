@@ -9,6 +9,6 @@ ls -l lib
 test -r lib/index.iife.js
 test -r lib/index.cjs.js
 test -r lib/index.esm.js
-npm run ok
-npm run codecov
-npm run test:live-with-test-validator
+# npm run ok
+# npm run codecov
+DEBUG=start-server-and-test npm run test:live-with-test-validator
