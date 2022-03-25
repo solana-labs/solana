@@ -258,9 +258,6 @@ export type Finality = 'confirmed' | 'finalized';
  */
 export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 
-/**
- * Configuration object for changing `getLargestAccounts` query behavior
- */
 export type GetLargestAccountsConfig = {
   /** The level of commitment desired */
   commitment?: Commitment;
@@ -268,9 +265,6 @@ export type GetLargestAccountsConfig = {
   filter?: LargestAccountsFilter;
 };
 
-/**
- * Configuration object for changing `getSupply` request behavior
- */
 export type GetSupplyConfig = {
   /** The level of commitment desired */
   commitment?: Commitment;
@@ -1751,9 +1745,6 @@ export type DataSizeFilter = {
  */
 export type GetProgramAccountsFilter = MemcmpFilter | DataSizeFilter;
 
-/**
- * Configuration object for getProgramAccounts requests
- */
 export type GetProgramAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
@@ -1767,9 +1758,6 @@ export type GetProgramAccountsConfig = {
   filters?: GetProgramAccountsFilter[];
 };
 
-/**
- * Configuration object for getParsedProgramAccounts
- */
 export type GetParsedProgramAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
@@ -1777,9 +1765,6 @@ export type GetParsedProgramAccountsConfig = {
   filters?: GetProgramAccountsFilter[];
 };
 
-/**
- * Configuration object for getMultipleAccounts
- */
 export type GetMultipleAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
@@ -2056,9 +2041,6 @@ export type FetchMiddleware = (
   fetch: (modifiedUrl: string, modifiedOptions: any) => void,
 ) => void;
 
-/**
- * Configuration for instantiating a Connection
- */
 export type ConnectionConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
