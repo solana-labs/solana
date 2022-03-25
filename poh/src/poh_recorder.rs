@@ -618,7 +618,7 @@ impl PohRecorder {
 
     fn report_poh_timing_point(&self) {
         // send poh slot end timing point
-        if self.working_bank_end() && self.has_bank() {
+        if self.working_bank_end() {
             //  bank producer
             self.report_poh_timing_point_by_working_bank()
         } else {
