@@ -1260,7 +1260,7 @@ fn load_frozen_forks(
                         new_root_bank.exhaustively_free_unused_resource(*last_full_snapshot_slot);
                         last_free = Instant::now();
                         new_root_bank.update_accounts_hash_with_index_option(
-                            snapshot_config.accounts_hash_use_index,
+                            false,
                             snapshot_config.accounts_hash_debug_verify,
                             false,
                         );
