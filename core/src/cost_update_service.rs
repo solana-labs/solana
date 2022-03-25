@@ -119,8 +119,10 @@ impl CostUpdateService {
     ) -> u64 {
         let mut update_count = 0_u64;
         for (program_id, program_timings) in &mut execute_timings.details.per_program_timings {
-            let current_estimated_program_cost =
-                cost_model.read().unwrap().find_instruction_cost(program_id);
+            let current_estimated_program_cost = cost_model
+                .read()
+                .unwrap()
+                .find_average_program_cost(program_id);
             program_timings.coalesce_error_timings(current_estimated_program_cost);
 
             if program_timings.count < 1 {
@@ -159,7 +161,6 @@ mod tests {
         let mut execute_timings = ExecuteTimings::default();
 
         let program_key_1 = Pubkey::new_unique();
-        let mut expected_cost: u64;
 
         // add new program
         {
@@ -167,7 +168,7 @@ mod tests {
             let accumulated_units: u64 = 100;
             let total_errored_units = 0;
             let count: u32 = 10;
-            expected_cost = accumulated_units / count as u64;
+            let expected_cost = accumulated_units / count as u64;
 
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
@@ -188,7 +189,14 @@ mod tests {
                 cost_model
                     .read()
                     .unwrap()
-                    .find_instruction_cost(&program_key_1)
+                    .find_average_program_cost(&program_key_1)
+            );
+            assert_eq!(
+                expected_cost,
+                cost_model
+                    .read()
+                    .unwrap()
+                    .find_inflated_program_cost(&program_key_1)
             );
         }
 
@@ -197,8 +205,9 @@ mod tests {
             let accumulated_us: u64 = 2000;
             let accumulated_units: u64 = 200;
             let count: u32 = 10;
-            // to expect new cost is Average(new_value, existing_value)
-            expected_cost = ((accumulated_units / count as u64) + expected_cost) / 2;
+            // the theta = 200/10 - 100/10 = 10
+            let expected_average_cost = 11u64;
+            let expected_inflated_cost = 13u64;
 
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
@@ -215,11 +224,18 @@ mod tests {
                 CostUpdateService::update_cost_model(&cost_model, &mut execute_timings),
             );
             assert_eq!(
-                expected_cost,
+                expected_average_cost,
                 cost_model
                     .read()
                     .unwrap()
-                    .find_instruction_cost(&program_key_1)
+                    .find_average_program_cost(&program_key_1)
+            );
+            assert_eq!(
+                expected_inflated_cost,
+                cost_model
+                    .read()
+                    .unwrap()
+                    .find_inflated_program_cost(&program_key_1)
             );
         }
     }
@@ -273,17 +289,28 @@ mod tests {
                 cost_model
                     .read()
                     .unwrap()
-                    .find_instruction_cost(&program_key_1)
+                    .find_average_program_cost(&program_key_1)
+            );
+            assert_eq!(
+                current_program_cost,
+                cost_model
+                    .read()
+                    .unwrap()
+                    .find_inflated_program_cost(&program_key_1)
             );
         }
 
         // Test updating cost model with only erroring compute costs where the `cost_per_error` is
         // greater than the current instruction cost for the program. Should update with the
         // new erroring compute costs
-        let cost_per_error = 1000;
-        // the expect cost is (previous_cost + new_cost)/2 = (100 + 1000)/2 = 550
-        let expected_units = 550;
+        let cost_per_error = 900
+            + cost_model
+                .read()
+                .unwrap()
+                .find_average_program_cost(&program_key_1);
         {
+            let expected_average_cost = 109u64;
+            let expected_inflated_cost = 289u64;
             let errored_txs_compute_consumed = vec![cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
             execute_timings.details.per_program_timings.insert(
@@ -301,19 +328,33 @@ mod tests {
                 1
             );
             assert_eq!(
-                expected_units,
+                expected_average_cost,
                 cost_model
                     .read()
                     .unwrap()
-                    .find_instruction_cost(&program_key_1)
+                    .find_average_program_cost(&program_key_1)
+            );
+            assert_eq!(
+                expected_inflated_cost,
+                cost_model
+                    .read()
+                    .unwrap()
+                    .find_inflated_program_cost(&program_key_1)
             );
         }
 
         // Test updating cost model with only erroring compute costs where the error cost is
         // `smaller_cost_per_error`, less than the current instruction cost for the program.
-        // The cost should not decrease for these new lesser errors
-        let smaller_cost_per_error = expected_units - 10;
+        // The average cost should not decrease for these new lesser errors, but the inflated
+        // cost should decrease due to reduced variance.
+        let smaller_cost_per_error = cost_model
+            .read()
+            .unwrap()
+            .find_average_program_cost(&program_key_1)
+            - 10;
         {
+            let expected_average_cost = 109u64;
+            let expected_inflated_cost = 288u64;
             let errored_txs_compute_consumed = vec![smaller_cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
             execute_timings.details.per_program_timings.insert(
@@ -331,11 +372,18 @@ mod tests {
                 1
             );
             assert_eq!(
-                expected_units,
+                expected_average_cost,
                 cost_model
                     .read()
                     .unwrap()
-                    .find_instruction_cost(&program_key_1)
+                    .find_average_program_cost(&program_key_1)
+            );
+            assert_eq!(
+                expected_inflated_cost,
+                cost_model
+                    .read()
+                    .unwrap()
+                    .find_inflated_program_cost(&program_key_1)
             );
         }
     }

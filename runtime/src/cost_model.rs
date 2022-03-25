@@ -111,9 +111,18 @@ impl CostModel {
             .upsert(program_key, cost);
     }
 
-    pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
-        match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => *cost,
+    pub fn find_average_program_cost(&self, program_key: &Pubkey) -> u64 {
+        self.instruction_execution_cost_table
+            .get_average_program_units(program_key)
+            .unwrap_or_else(|| self.instruction_execution_cost_table.get_default_units())
+    }
+
+    pub fn find_inflated_program_cost(&self, program_key: &Pubkey) -> u64 {
+        match self
+            .instruction_execution_cost_table
+            .get_inflated_program_units(program_key)
+        {
+            Some(cost) => cost,
             None => {
                 let default_value = self.instruction_execution_cost_table.get_default_units();
                 debug!(
@@ -165,11 +174,10 @@ impl CostModel {
         let mut bpf_costs = 0u64;
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
-            // to keep the same behavior, look for builtin first
             if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                 builtin_costs = builtin_costs.saturating_add(*builtin_cost);
             } else {
-                let instruction_cost = self.find_instruction_cost(program_id);
+                let instruction_cost = self.find_inflated_program_cost(program_id);
                 trace!(
                     "instruction {:?} has cost of {}",
                     instruction,
@@ -279,15 +287,15 @@ mod tests {
         let known_key = Pubkey::from_str("known11111111111111111111111111111111111111").unwrap();
         testee.upsert_instruction_cost(&known_key, 100);
         // find cost for known programs
-        assert_eq!(100, testee.find_instruction_cost(&known_key));
+        assert_eq!(100, testee.find_inflated_program_cost(&known_key));
 
         testee.upsert_instruction_cost(&bpf_loader::id(), 1999);
-        assert_eq!(1999, testee.find_instruction_cost(&bpf_loader::id()));
+        assert_eq!(1999, testee.find_inflated_program_cost(&bpf_loader::id()));
 
         // unknown program is assigned with default cost
         assert_eq!(
             testee.instruction_execution_cost_table.get_default_units(),
-            testee.find_instruction_cost(
+            testee.find_inflated_program_cost(
                 &Pubkey::from_str("unknown111111111111111111111111111111111111").unwrap()
             )
         );
@@ -466,14 +474,14 @@ mod tests {
             cost_model
                 .instruction_execution_cost_table
                 .get_default_units(),
-            cost_model.find_instruction_cost(&key1)
+            cost_model.find_inflated_program_cost(&key1)
         );
 
         // insert instruction cost to table
         cost_model.upsert_instruction_cost(&key1, cost1);
 
         // now it is known instruction with known cost
-        assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
+        assert_eq!(cost1, cost_model.find_inflated_program_cost(&key1));
     }
 
     #[test]
@@ -509,11 +517,11 @@ mod tests {
 
         // insert instruction cost to table
         cost_model.upsert_instruction_cost(&key1, cost1);
-        assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
+        assert_eq!(cost1, cost_model.find_inflated_program_cost(&key1));
 
         // update instruction cost
         cost_model.upsert_instruction_cost(&key1, cost2);
-        assert_eq!(updated_cost, cost_model.find_instruction_cost(&key1));
+        assert_eq!(updated_cost, cost_model.find_inflated_program_cost(&key1));
     }
 
     #[test]
@@ -588,17 +596,17 @@ mod tests {
 
         // verify
         for (id, cost) in cost_table.iter() {
-            assert_eq!(*cost, cost_model.find_instruction_cost(id));
+            assert_eq!(*cost, cost_model.find_inflated_program_cost(id));
         }
 
         // verify built-in programs are not in bpf_costs
         assert!(cost_model
             .instruction_execution_cost_table
-            .get_cost(&system_program::id())
+            .get_inflated_program_units(&system_program::id())
             .is_none());
         assert!(cost_model
             .instruction_execution_cost_table
-            .get_cost(&solana_vote_program::id())
+            .get_inflated_program_units(&solana_vote_program::id())
             .is_none());
     }
 }
