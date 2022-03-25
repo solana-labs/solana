@@ -11,4 +11,4 @@ test -r lib/index.cjs.js
 test -r lib/index.esm.js
 # npm run ok
 # npm run codecov
-DEBUG=start-server-and-test npm run test:live-with-test-validator
+START_SERVER_AND_TEST_INSECURE=true DEBUG=start-server-and-test npm run test:live-with-test-validator
