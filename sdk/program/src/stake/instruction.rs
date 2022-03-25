@@ -46,6 +46,17 @@ pub enum StakeError {
 
     #[error("custodian signature not present")]
     CustodianSignatureMissing,
+
+    #[error("insufficient voting activity in the reference vote account")]
+    InsufficientReferenceVotes,
+
+    #[error("stake account is not delegated to the provided vote account")]
+    VoteAddressMismatch,
+
+    #[error(
+        "stake account has not been delinquent for the minimum epochs required for deactivation"
+    )]
+    MinimumDelinquentEpochsForDeactivationNotMet,
 }
 
 impl<E> DecodeError<E> for StakeError {
@@ -234,6 +245,19 @@ pub enum StakeInstruction {
     ///
     /// [`get_minimum_delegation()`]: super::tools::get_minimum_delegation
     GetMinimumDelegation,
+
+    /// Deactivate stake delegated to a vote account that has been delinquent for at least
+    /// `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` epochs.
+    ///
+    /// No signer is required for this instruction as it is a common good to deactivate abandoned
+    /// stake.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Delegated stake account
+    ///   1. `[]` Delinquent vote account for the delegated stake account
+    ///   2. `[]` Reference vote account that has voted at least once in the last
+    ///      `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` epochs
+    DeactivateDelinquent,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -696,6 +720,19 @@ pub fn get_minimum_delegation() -> Instruction {
         &StakeInstruction::GetMinimumDelegation,
         Vec::default(),
     )
+}
+
+pub fn deactivate_delinquent_stake(
+    stake_account: &Pubkey,
+    delinquent_vote_account: &Pubkey,
+    reference_vote_account: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_account, false),
+        AccountMeta::new_readonly(*delinquent_vote_account, false),
+        AccountMeta::new_readonly(*reference_vote_account, false),
+    ];
+    Instruction::new_with_bincode(id(), &StakeInstruction::DeactivateDelinquent, account_metas)
 }
 
 #[cfg(test)]
