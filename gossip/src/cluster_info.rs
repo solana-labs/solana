@@ -635,6 +635,10 @@ impl ClusterInfo {
         self.my_contact_info.write().unwrap().id = id;
 
         self.insert_self();
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::Version(Version::new(self.id())),
+            &self.keypair(),
+        ));
         self.push_self(&HashMap::new(), None);
     }
 
