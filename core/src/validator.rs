@@ -1799,6 +1799,44 @@ mod tests {
         std::fs::remove_dir_all,
     };
 
+    fn validator_exit() {
+        solana_logger::setup();
+        let leader_keypair = Keypair::new();
+        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+
+        let validator_keypair = Keypair::new();
+        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+        let genesis_config =
+            create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                .genesis_config;
+        let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+
+        let voting_keypair = Arc::new(Keypair::new());
+        let config = ValidatorConfig {
+            rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
+            ..ValidatorConfig::default_for_test()
+        };
+        let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+        let validator = Validator::new(
+            validator_node,
+            Arc::new(validator_keypair),
+            &validator_ledger_path,
+            &voting_keypair.pubkey(),
+            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
+            vec![leader_node.info],
+            &config,
+            true, // should_check_duplicate_instance
+            start_progress.clone(),
+            SocketAddrSpace::Unspecified,
+        );
+        assert_eq!(
+            *start_progress.read().unwrap(),
+            ValidatorStartProgress::Running
+        );
+        validator.close();
+        remove_dir_all(validator_ledger_path).unwrap();
+    }
+
     #[test]
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
@@ -1838,44 +1876,6 @@ mod tests {
                     .is_empty());
             }
         }
-    }
-
-    fn validator_single_exit() {
-        solana_logger::setup();
-        let leader_keypair = Keypair::new();
-        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-
-        let validator_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-        let genesis_config =
-            create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
-                .genesis_config;
-        let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-
-        let voting_keypair = Arc::new(Keypair::new());
-        let config = ValidatorConfig {
-            rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
-            ..ValidatorConfig::default_for_test()
-        };
-        let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
-        let validator = Validator::new(
-            validator_node,
-            Arc::new(validator_keypair),
-            &validator_ledger_path,
-            &voting_keypair.pubkey(),
-            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
-            vec![leader_node.info],
-            &config,
-            true, // should_check_duplicate_instance
-            start_progress.clone(),
-            SocketAddrSpace::Unspecified,
-        );
-        assert_eq!(
-            *start_progress.read().unwrap(),
-            ValidatorStartProgress::Running
-        );
-        validator.close();
-        remove_dir_all(validator_ledger_path).unwrap();
     }
 
     fn validator_parallel_exit() {
@@ -1927,7 +1927,7 @@ mod tests {
 
     #[test]
     fn test_validator_exit() {
-        validator_single_exit();
+        validator_exit();
         validator_parallel_exit();
     }
 
