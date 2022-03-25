@@ -166,10 +166,10 @@ mod tests {
         old_genesis_config: &GenesisConfig,
         account_paths: &[PathBuf],
     ) {
-        let (snapshot_path, snapshot_archives_dir) = old_bank_forks
+        let snapshot_archives_dir = old_bank_forks
             .snapshot_config
             .as_ref()
-            .map(|c| (&c.bank_snapshots_dir, &c.snapshot_archives_dir))
+            .map(|c| &c.snapshot_archives_dir)
             .unwrap();
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
@@ -213,12 +213,6 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(*bank, deserialized_bank);
-
-        let bank_snapshots = snapshot_utils::get_bank_snapshots(&snapshot_path);
-
-        for p in bank_snapshots {
-            snapshot_utils::remove_bank_snapshot(p.slot, &snapshot_path).unwrap();
-        }
     }
 
     // creates banks up to "last_slot" and runs the input function `f` on each bank created
@@ -274,7 +268,7 @@ mod tests {
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
         let last_bank_snapshot_info =
-            snapshot_utils::get_highest_bank_snapshot_info(bank_snapshots_dir)
+            snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
                 .expect("no bank snapshots found in path");
         let accounts_package = AccountsPackage::new(
             last_bank,
@@ -289,6 +283,10 @@ mod tests {
             Some(SnapshotType::FullSnapshot),
         )
         .unwrap();
+        solana_runtime::serde_snapshot::reserialize_bank(
+            accounts_package.snapshot_links.path(),
+            accounts_package.slot,
+        );
         let snapshot_package = SnapshotPackage::from(accounts_package);
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
@@ -472,7 +470,7 @@ mod tests {
         // currently sitting in the channel
         snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-        let mut bank_snapshots = snapshot_utils::get_bank_snapshots(&bank_snapshots_dir);
+        let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
         bank_snapshots.sort_unstable();
         assert!(bank_snapshots
             .into_iter()
@@ -511,6 +509,10 @@ mod tests {
                     .unwrap()
                     .take()
                     .unwrap();
+                solana_runtime::serde_snapshot::reserialize_bank(
+                    accounts_package.snapshot_links.path(),
+                    accounts_package.slot,
+                );
                 let snapshot_package = SnapshotPackage::from(accounts_package);
                 pending_snapshot_package
                     .lock()
@@ -547,6 +549,9 @@ mod tests {
             },
         )
         .unwrap();
+
+        // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
+        solana_runtime::serde_snapshot::reserialize_bank(saved_snapshots_dir.path(), saved_slot);
 
         snapshot_utils::verify_snapshot_archive(
             saved_archive_path.unwrap(),
@@ -751,7 +756,7 @@ mod tests {
         let slot = bank.slot();
         info!("Making full snapshot archive from bank at slot: {}", slot);
         let bank_snapshot_info =
-            snapshot_utils::get_bank_snapshots(&snapshot_config.bank_snapshots_dir)
+            snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
                 .into_iter()
                 .find(|elem| elem.slot == slot)
                 .ok_or_else(|| {
@@ -786,7 +791,7 @@ mod tests {
             slot, incremental_snapshot_base_slot,
         );
         let bank_snapshot_info =
-            snapshot_utils::get_bank_snapshots(&snapshot_config.bank_snapshots_dir)
+            snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
                 .into_iter()
                 .find(|elem| elem.slot == slot)
                 .ok_or_else(|| {

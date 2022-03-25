@@ -14,6 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
+        snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -283,6 +284,21 @@ where
         warn!("bankrc_to_stream error: {:?}", err);
         err
     })
+}
+
+pub fn reserialize_bank(bank_snapshots_dir: impl AsRef<Path>, slot: Slot) {
+    let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
+    let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
+    let mut bank_pre = bank_post.clone();
+    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+
+    // some tests don't create the file
+    if bank_pre.is_file() {
+        // replace the original file with the newly serialized one
+        // atm, this just copies the file and deletes the old one
+        std::fs::copy(&bank_pre, bank_post).unwrap();
+        std::fs::remove_file(bank_pre).unwrap();
+    }
 }
 
 struct SerializableBankAndStorage<'a, C> {
