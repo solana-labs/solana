@@ -242,6 +242,7 @@ fn run_transactions_dos(
             Some(1),
             false,
             true,
+            true, /* skip_fee_check */
         )
         .expect("deploy didn't pass");
     } else {
