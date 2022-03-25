@@ -2020,7 +2020,7 @@ impl Blockstore {
 
             // send
             if let Some(ref sender) = self.shred_timing_point_sender {
-                info!("PohTimingPoint:Full {}", slot);
+                trace!("PohTimingPoint:Full {}", slot);
                 let _ = sender.try_send((
                     slot,
                     Some(self.last_root()),

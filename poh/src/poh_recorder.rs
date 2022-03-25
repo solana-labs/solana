@@ -465,7 +465,7 @@ impl PohRecorder {
 
         if let Some(ref sender) = self.poh_timing_point_sender {
             let slot = self.start_slot() + 1;
-            info!("PohTimingPoint:Start {}", slot);
+            trace!("PohTimingPoint:Start {}", slot);
             let _ = sender.try_send((
                 slot,
                 None,
@@ -498,7 +498,7 @@ impl PohRecorder {
         // send poh slot start timing point
         if let Some(ref sender) = self.poh_timing_point_sender {
             if let Some(slot) = self.working_slot() {
-                info!("PohTimingPoint:Start {}", slot);
+                trace!("PohTimingPoint:Start {}", slot);
                 let _ = sender.try_send((
                     slot,
                     None,
@@ -578,7 +578,7 @@ impl PohRecorder {
         if self.tick_height % self.ticks_per_slot == 0 {
             let slot = self.slot_for_tick_height(self.tick_height);
             if let Some(ref sender) = self.poh_timing_point_sender {
-                info!("PohTimingPoint:End {}", slot);
+                trace!("PohTimingPoint:End {}", slot);
                 let _ = sender.try_send((
                     slot,
                     None,
@@ -591,7 +591,7 @@ impl PohRecorder {
         if self.tick_height % self.ticks_per_slot == 1 {
             let slot = self.slot_for_tick_height(self.tick_height);
             if let Some(ref sender) = self.poh_timing_point_sender {
-                info!("PohTimingPoint:Start {}", slot);
+                trace!("PohTimingPoint:Start {}", slot);
                 let _ = sender.try_send((
                     slot,
                     None,
@@ -604,7 +604,7 @@ impl PohRecorder {
     fn report_poh_timing_point_by_working_bank(&self) {
         if let Some(slot) = self.working_slot() {
             if let Some(ref sender) = self.poh_timing_point_sender {
-                info!("PohTimingPoint:End {}", slot);
+                trace!("PohTimingPoint:End {}", slot);
                 let _ = sender.try_send((
                     slot,
                     None,
