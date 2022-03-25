@@ -113,6 +113,13 @@ pub fn account_identity_ok<T: ReadableAccount>(account: &T) -> Result<(), Error>
 ///
 ///     // Sign the tx with nonce_account's `blockhash` instead of the
 ///     // network's latest blockhash.
+///     # client.set_get_account_response(nonce_account_pubkey, Account {
+///     #   lamports: 1,
+///     #   data: vec![0],
+///     #   owner: solana_sdk::system_program::ID,
+///     #   executable: false,
+///     #   rent_epoch: 1,
+///     # });
 ///     let nonce_account = client.get_account(&nonce_account_pubkey)?;
 ///     let nonce_state = nonce_utils::state_from_account(&nonce_account)?;
 ///
@@ -197,6 +204,13 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
 ///
 ///     // Sign the tx with nonce_account's `blockhash` instead of the
 ///     // network's latest blockhash.
+///     # client.set_get_account_response(nonce_account_pubkey, Account {
+///     #   lamports: 1,
+///     #   data: vec![0],
+///     #   owner: solana_sdk::system_program::ID,
+///     #   executable: false,
+///     #   rent_epoch: 1,
+///     # });
 ///     let nonce_account = client.get_account(&nonce_account_pubkey)?;
 ///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
 ///     let blockhash = nonce_data.blockhash;

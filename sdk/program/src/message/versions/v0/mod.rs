@@ -138,6 +138,85 @@ impl Sanitize for Message {
 }
 
 impl Message {
+    /// Create a signable transaction message from a `payer` public key,
+    /// `recent_blockhash`, list of `instructions`, and a list of
+    /// `address_lookup_table_accounts`.
+    ///
+    /// # Examples
+    ///
+    /// This example uses the [`solana_address_lookup_table_program`], [`solana_client`], [`solana_sdk`], and [`anyhow`] crates.
+    ///
+    /// [`solana_address_lookup_table_program`]: https://docs.rs/solana-address-lookup-table-program
+    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_sdk`]: https://docs.rs/solana-sdk
+    /// [`anyhow`]: https://docs.rs/anyhow
+    ///
+    /// ```
+    /// # use solana_program::example_mocks::{
+    /// #     solana_address_lookup_table_program,
+    /// #     solana_client,
+    /// #     solana_sdk,
+    /// # };
+    /// # use std::borrow::Cow;
+    /// # use solana_sdk::account::Account;
+    /// use anyhow::Result;
+    /// use solana_address_lookup_table_program::state::AddressLookupTable;
+    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_sdk::{
+    ///      address_lookup_table_account::AddressLookupTableAccount,
+    ///      instruction::{AccountMeta, Instruction},
+    ///      message::{VersionedMessage, v0},
+    ///      pubkey::Pubkey,
+    ///      signature::{Keypair, Signer},
+    ///      transaction::VersionedTransaction,
+    /// };
+    ///
+    /// fn create_tx_with_address_table_lookup(
+    ///     client: &RpcClient,
+    ///     instruction: Instruction,
+    ///     address_lookup_table_key: Pubkey,
+    ///     payer: &Keypair,
+    /// ) -> Result<VersionedTransaction> {
+    ///     # client.set_get_account_response(address_lookup_table_key, Account {
+    ///     #   lamports: 1,
+    ///     #   data: AddressLookupTable {
+    ///     #     addresses: Cow::Owned(instruction.accounts.iter().map(|meta| meta.pubkey).collect()),
+    ///     #   }.serialize_for_tests().unwrap(),
+    ///     #   owner: solana_address_lookup_table_program::ID,
+    ///     #   executable: false,
+    ///     #   rent_epoch: 1,
+    ///     # });
+    ///     let raw_account = client.get_account(&address_lookup_table_key)?;
+    ///     let address_lookup_table = AddressLookupTable::deserialize(&raw_account.data)?;
+    ///     let address_lookup_table_account = AddressLookupTableAccount {
+    ///         key: address_lookup_table_key,
+    ///         addresses: address_lookup_table.addresses.to_vec(),
+    ///     };
+    ///
+    ///     let blockhash = client.get_latest_blockhash()?;
+    ///     let tx = VersionedTransaction::try_new(
+    ///         VersionedMessage::V0(v0::Message::try_compile(
+    ///             &payer.pubkey(),
+    ///             &[instruction],
+    ///             &[address_lookup_table_account],
+    ///             blockhash,
+    ///         )?),
+    ///         &[payer],
+    ///     )?;
+    ///
+    ///     # assert!(tx.message.address_table_lookups().unwrap().len() > 0);
+    ///     Ok(tx)
+    /// }
+    /// #
+    /// # let client = RpcClient::new(String::new());
+    /// # let payer = Keypair::new();
+    /// # let address_lookup_table_key = Pubkey::new_unique();
+    /// # let instruction = Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![
+    /// #   AccountMeta::new(Pubkey::new_unique(), false),
+    /// # ]);
+    /// # create_tx_with_address_table_lookup(&client, instruction, address_lookup_table_key, &payer)?;
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn try_compile(
         payer: &Pubkey,
         instructions: &[Instruction],

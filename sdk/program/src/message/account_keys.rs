@@ -82,6 +82,26 @@ impl<'a> AccountKeys<'a> {
 
     /// Compile instructions using the order of account keys to determine
     /// compiled instruction account indexes.
+    ///
+    /// # Panics
+    ///
+    /// Panics when compiling fails. See [`AccountKeys::try_compile_instructions`]
+    /// for a full description of failure scenarios.
+    pub fn compile_instructions(&self, instructions: &[Instruction]) -> Vec<CompiledInstruction> {
+        self.try_compile_instructions(instructions)
+            .expect("compilation failure")
+    }
+
+    /// Compile instructions using the order of account keys to determine
+    /// compiled instruction account indexes.
+    ///
+    /// # Errors
+    ///
+    /// Compilation will fail if any `instructions` use account keys which are not
+    /// present in this account key collection.
+    ///
+    /// Compilation will fail if any `instructions` use account keys which are located
+    /// at an index which cannot be cast to a `u8` without overflow.
     pub fn try_compile_instructions(
         &self,
         instructions: &[Instruction],
