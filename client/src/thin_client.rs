@@ -613,7 +613,7 @@ impl<C: 'static + TpuConnection> AsyncClient for ThinClient<C> {
     fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
         let batch: Vec<VersionedTransaction> = transactions.into_iter().map(Into::into).collect();
         self.tpu_connection()
-            .par_serialize_and_send_transaction_batch(&batch)?;
+            .par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
     }
 
