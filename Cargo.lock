@@ -5074,6 +5074,7 @@ version = "1.10.6"
 dependencies = [
  "assert_matches",
  "bincode",
+ "bitflags",
  "byteorder",
  "chrono",
  "chrono-humanize",
@@ -5084,6 +5085,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
+ "lru",
  "matches",
  "num-derive",
  "num-traits",
