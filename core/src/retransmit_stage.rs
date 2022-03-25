@@ -314,19 +314,22 @@ fn retransmit(
             .fetch_add(retransmit_time.as_us(), Ordering::Relaxed);
         num_nodes
     };
-    fn merge<K, V>(mut acc: HashMap<K, V>, other: HashMap<K, V>) -> HashMap<K, V>
-    where
-        K: Eq + std::hash::Hash,
-        V: Default + AddAssign,
-    {
-        if acc.len() < other.len() {
-            return merge(other, acc);
+
+    let merge = |acc: HashMap<_, _>, other: HashMap<_, _>| {
+        let do_merge = |mut dest: HashMap<_, _>, src: HashMap<_, _>| -> HashMap<_, _> {
+            src.into_iter().for_each(|x| {
+                *dest.entry(x.0).or_default() += x.1;
+            });
+            dest
+        };
+
+        if acc.len() > other.len() {
+            do_merge(acc, other)
+        } else {
+            do_merge(other, acc)
         }
-        for (key, value) in other {
-            *acc.entry(key).or_default() += value;
-        }
-        acc
-    }
+    };
+
     let slot_stats = thread_pool.install(|| {
         shreds
             .into_par_iter()
@@ -341,8 +344,10 @@ fn retransmit(
                 HashMap::<Slot, RetransmitSlotStats>::new,
                 |mut acc, (slot, num_nodes)| {
                     let stats = acc.entry(slot).or_default();
-                    stats.num_nodes += num_nodes;
-                    stats.num_shreds += 1;
+                    *stats += RetransmitSlotStats {
+                        num_shreds: 1,
+                        num_nodes: num_nodes,
+                    };
                     acc
                 },
             )
@@ -644,5 +649,37 @@ mod tests {
         // Another unique coding at (1, 5) always blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));
+    }
+
+    #[test]
+    fn test_hashmap_merge() {
+        let merge = |acc: HashMap<_, _>, other: HashMap<_, _>| {
+            let do_merge = |mut dest: HashMap<_, _>, src: HashMap<_, _>| -> HashMap<_, _> {
+                src.into_iter().for_each(|x| {
+                    *dest.entry(x.0).or_default() += x.1;
+                });
+                dest
+            };
+
+            if acc.len() > other.len() {
+                do_merge(acc, other)
+            } else {
+                do_merge(other, acc)
+            }
+        };
+        let mut dest = HashMap::new();
+        let mut src = HashMap::new();
+
+        dest.insert(1, 1);
+        dest.insert(2, 1);
+        dest.insert(3, 1);
+
+        src.insert(1, 1);
+        src.insert(2, 1);
+
+        let r = merge(dest, src);
+        assert!(r[&1] == 2);
+        assert!(r[&2] == 2);
+        assert!(r[&3] == 1);
     }
 }
