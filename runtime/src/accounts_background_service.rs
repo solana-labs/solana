@@ -94,7 +94,6 @@ impl SnapshotRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
@@ -145,6 +144,7 @@ impl SnapshotRequestHandler {
                 }
                 flush_accounts_cache_time.stop();
 
+                let use_index_hash_calculation = false;
                 let mut hash_time = Measure::start("hash_time");
                 let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
                     use_index_hash_calculation,
@@ -320,7 +320,6 @@ impl AbsRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
@@ -330,7 +329,6 @@ impl AbsRequestHandler {
                 snapshot_request_handler.handle_snapshot_requests(
                     accounts_db_caching_enabled,
                     test_hash_calculation,
-                    use_index_hash_calculation,
                     non_snapshot_time_us,
                     last_full_snapshot_slot,
                 )
@@ -362,7 +360,6 @@ impl AccountsBackgroundService {
         request_handler: AbsRequestHandler,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        use_index_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         info!("AccountsBackgroundService active");
@@ -421,7 +418,6 @@ impl AccountsBackgroundService {
                         .handle_snapshot_requests(
                             accounts_db_caching_enabled,
                             test_hash_calculation,
-                            use_index_hash_calculation,
                             non_snapshot_time,
                             &mut last_full_snapshot_slot,
                         );

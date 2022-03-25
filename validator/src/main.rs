@@ -1585,14 +1585,16 @@ pub fn main() {
             Arg::with_name("accounts_db_index_hashing")
                 .long("accounts-db-index-hashing")
                 .help("Enables the use of the index in hash calculation in \
-                       AccountsHashVerifier/Accounts Background Service."),
+                       AccountsHashVerifier/Accounts Background Service.")
+                .hidden(true),
         )
         .arg(
             Arg::with_name("no_accounts_db_index_hashing")
                 .long("no-accounts-db-index-hashing")
                 .help("This is obsolete. See --accounts-db-index-hashing. \
                        Disables the use of the index in hash calculation in \
-                       AccountsHashVerifier/Accounts Background Service."),
+                       AccountsHashVerifier/Accounts Background Service.")
+                .hidden(true),
         )
         .arg(
             // legacy nop argument
@@ -2274,6 +2276,37 @@ pub fn main() {
         warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
     }
 
+<<<<<<< HEAD
+=======
+    if matches.is_present("enable_cpi_and_log_storage") {
+        warn!(
+            "--enable-cpi-and-log-storage is deprecated. Please update the \
+            launch args to use --enable-extended-tx-metadata-storage and remove \
+            --enable-cpi-and-log-storage"
+        );
+    }
+
+    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
+        || matches.is_present("enable_bigtable_ledger_upload")
+    {
+        Some(RpcBigtableConfig {
+            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
+            bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
+            timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
+                .ok()
+                .map(Duration::from_secs),
+        })
+    } else {
+        None
+    };
+
+    if matches.is_present("accounts_db_index_hashing") {
+        info!("The accounts hash is only calculated without using the index. --accounts-db-index-hashing is deprecated and can be removed from the command line");
+    }
+    if matches.is_present("no_accounts_db_index_hashing") {
+        info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
+    }
+>>>>>>> c24de1727 (remove index hash calculation as an option (#23928))
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2392,7 +2425,6 @@ pub fn main() {
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
-        accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
@@ -2535,7 +2567,6 @@ pub fn main() {
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
-        accounts_hash_use_index: validator_config.accounts_db_use_index_hash_calculation,
         accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
     });
