@@ -574,30 +574,32 @@ impl PohRecorder {
     }
 
     fn report_poh_timing_point_by_tick(&self) {
-        // reaching the end of the slot
-        if self.tick_height % self.ticks_per_slot == 0 {
-            let slot = self.slot_for_tick_height(self.tick_height);
-            if let Some(ref sender) = self.poh_timing_point_sender {
-                trace!("PohTimingPoint:End {}", slot);
-                let _ = sender.try_send((
-                    slot,
-                    None,
-                    PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
-                ));
+        match self.tick_height % self.ticks_per_slot {
+            // reaching the end of the slot
+            0 => {
+                let slot = self.slot_for_tick_height(self.tick_height);
+                if let Some(ref sender) = self.poh_timing_point_sender {
+                    trace!("PohTimingPoint:End {}", slot);
+                    let _ = sender.try_send((
+                        slot,
+                        None,
+                        PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
+                    ));
+                }
             }
-        }
-
-        // beginning of a slot
-        if self.tick_height % self.ticks_per_slot == 1 {
-            let slot = self.slot_for_tick_height(self.tick_height);
-            if let Some(ref sender) = self.poh_timing_point_sender {
-                trace!("PohTimingPoint:Start {}", slot);
-                let _ = sender.try_send((
-                    slot,
-                    None,
-                    PohTimingPoint::PohSlotStart(solana_sdk::timing::timestamp()),
-                ));
+            // beginning of a slot
+            1 => {
+                let slot = self.slot_for_tick_height(self.tick_height);
+                if let Some(ref sender) = self.poh_timing_point_sender {
+                    trace!("PohTimingPoint:Start {}", slot);
+                    let _ = sender.try_send((
+                        slot,
+                        None,
+                        PohTimingPoint::PohSlotStart(solana_sdk::timing::timestamp()),
+                    ));
+                }
             }
+            _ => {}
         }
     }
 
