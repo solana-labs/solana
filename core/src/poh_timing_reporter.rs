@@ -42,14 +42,31 @@ impl SlotPohTimestamp {
         }
     }
 
-    /// Return the time difference from slot full to slot start
-    pub fn slot_full_to_start_time(&self) -> i64 {
-        (self.start_time as i64).saturating_sub(self.full_time as i64)
+    /// Return the time difference from slot start to slot full
+    fn slot_start_to_full_time(&self) -> i64 {
+        (self.full_time as i64).saturating_sub(self.start_time as i64)
     }
 
     /// Return the time difference from slot full to slot end
-    pub fn slot_full_to_end_time(&self) -> i64 {
+    fn slot_full_to_end_time(&self) -> i64 {
         (self.end_time as i64).saturating_sub(self.full_time as i64)
+    }
+
+    /// Report PohTiming for a slot
+    pub fn report(&self, slot: Slot) {
+        datapoint_info!(
+            "poh_slot_timing",
+            ("slot", slot as i64, i64),
+            ("start_time", self.start_time as i64, i64),
+            ("end_time", self.end_time as i64, i64),
+            ("full_time", self.full_time as i64, i64),
+            (
+                "start_to_full_time_diff",
+                self.slot_start_to_full_time(),
+                i64
+            ),
+            ("full_to_end_time_diff", self.slot_full_to_end_time(), i64),
+        );
     }
 }
 
@@ -72,55 +89,31 @@ impl PohTimingReporter {
         }
     }
 
-    /// Report PohTiming for a slot
-    pub fn report(&self, slot: Slot, slot_timestamp: &SlotPohTimestamp) {
-        datapoint_info!(
-            "poh_slot_timing",
-            ("slot", slot as i64, i64),
-            ("start_time", slot_timestamp.start_time as i64, i64),
-            ("end_time", slot_timestamp.end_time as i64, i64),
-            ("full_time", slot_timestamp.full_time as i64, i64),
-            (
-                "full_to_start_time_diff",
-                slot_timestamp.slot_full_to_start_time(),
-                i64
-            ),
-            (
-                "full_to_end_time_diff",
-                slot_timestamp.slot_full_to_end_time(),
-                i64
-            ),
-        );
-    }
-
     /// Process incoming PohTimingPoint from the channel
     pub fn process(&mut self, slot: Slot, root_slot: Option<Slot>, t: PohTimingPoint) -> bool {
-        let mut completed = false;
         let slot_timestamp = self
             .slot_timestamps
             .entry(slot)
             .or_insert_with(SlotPohTimestamp::default);
 
         slot_timestamp.update(t);
-        if let Some(slot_timestamp) = self.slot_timestamps.get(&slot) {
-            if slot_timestamp.is_complete() {
-                self.report(slot, slot_timestamp);
-                completed = true;
-            }
+        let is_completed = slot_timestamp.is_complete();
+        if is_completed {
+            slot_timestamp.report(slot);
         }
 
         // delete slots that are older than the root_slot
         if let Some(root_slot) = root_slot {
-            if root_slot != self.last_root_slot {
+            if root_slot > self.last_root_slot {
                 self.slot_timestamps.retain(|&k, _| k >= root_slot);
                 self.last_root_slot = root_slot;
             }
         }
-        completed
+        is_completed
     }
 
-    /// Return the size of slot_timestamps in memory
-    pub fn timestamp_size(&self) -> usize {
+    /// Return the count of slot_timestamps in tracking
+    pub fn slot_count(&self) -> usize {
         self.slot_timestamps.len()
     }
 }
@@ -157,7 +150,7 @@ mod test {
         assert!(complete);
 
         // assert that only one timestamp is kept
-        assert_eq!(reporter.timestamp_size(), 1)
+        assert_eq!(reporter.slot_count(), 1)
     }
 
     #[test]
