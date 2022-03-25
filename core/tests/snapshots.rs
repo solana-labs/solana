@@ -265,8 +265,7 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler
-                    .handle_snapshot_requests(false, false, false, 0, &mut None);
+                snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
             }
         }
 
@@ -709,7 +708,6 @@ mod tests {
                 snapshot_request_handler.handle_snapshot_requests(
                     false,
                     false,
-                    false,
                     0,
                     &mut last_full_snapshot_slot,
                 );
@@ -946,7 +944,6 @@ mod tests {
             bank_forks.clone(),
             &exit,
             abs_request_handler,
-            false,
             false,
             true,
             None,
