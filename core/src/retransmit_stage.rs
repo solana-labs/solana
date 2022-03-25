@@ -346,7 +346,7 @@ fn retransmit(
                     let stats = acc.entry(slot).or_default();
                     *stats += RetransmitSlotStats {
                         num_shreds: 1,
-                        num_nodes: num_nodes,
+                        num_nodes,
                     };
                     acc
                 },
