@@ -4,8 +4,8 @@ use {
     std::{collections::HashMap, fmt},
 };
 
-/// A PohTimestamp records timing of the events during the processing of a slot
-/// by the validator
+/// A SlotPohTimestamp records timing of the events during the processing of a
+/// slot by the validator
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SlotPohTimestamp {
     /// Slot start time from poh
