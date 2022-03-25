@@ -56,7 +56,7 @@
     "test": "mocha -r ts-node/register './test/**/*.test.ts'",
     "test:cover": "TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' nyc --reporter=lcov mocha -r ts-node/register './test/**/*.test.ts'",
     "test:live": "TEST_LIVE=1 npm run test",
-    "test:live-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:live"
+    "test:live-with-test-validator": "start-server-and-test '../validator/solana-test-validator --reset --quiet' http://localhost:8899/health test:live"
   },
   "dependencies": {
     "@babel/runtime": "^7.12.5",

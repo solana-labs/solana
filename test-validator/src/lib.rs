@@ -688,7 +688,6 @@ impl TestValidator {
                 snapshot_archives_dir: ledger_path.to_path_buf(),
                 ..SnapshotConfig::default()
             }),
-            enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
             bpf_jit: !config.no_bpf_jit,
             validator_exit: config.validator_exit.clone(),
@@ -696,7 +695,8 @@ impl TestValidator {
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
-            ..ValidatorConfig::default_for_test()
+            ..ValidatorConfig::default_for_test(),
+            enforce_ulimit_nofile: false,
         };
         if let Some(ref tower_storage) = config.tower_storage {
             validator_config.tower_storage = tower_storage.clone();
