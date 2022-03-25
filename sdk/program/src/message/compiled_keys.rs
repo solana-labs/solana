@@ -20,10 +20,10 @@ pub(crate) struct CompiledKeys {
 
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
 pub enum CompileError {
-    #[error("cannot compile messages with too many account keys")]
-    TooManyAccountKeys,
-    #[error("cannot compile messages using lookup tables with too many addresses")]
-    TooManyLookupTableAddresses,
+    #[error("account index overflowed during compilation")]
+    AccountIndexOverflow,
+    #[error("address lookup table index overflowed during compilation")]
+    AddressTableLookupIndexOverflow,
     #[error("encountered unknown account key `{0}` during instruction compilation")]
     UnknownInstructionKey(Pubkey),
 }
@@ -85,7 +85,7 @@ impl CompiledKeys {
         self,
     ) -> Result<(MessageHeader, Vec<Pubkey>), CompileError> {
         let try_into_u8 = |num: usize| -> Result<u8, CompileError> {
-            u8::try_from(num).map_err(|_| CompileError::TooManyAccountKeys)
+            u8::try_from(num).map_err(|_| CompileError::AccountIndexOverflow)
         };
 
         let signers_len = self
@@ -156,7 +156,7 @@ fn try_drain_keys_found_in_lookup_table(
             if key == search_key {
                 lookup_table_index = Some(
                     u8::try_from(key_index)
-                        .map_err(|_| CompileError::TooManyLookupTableAddresses)?,
+                        .map_err(|_| CompileError::AddressTableLookupIndexOverflow)?,
                 );
                 break;
             }
@@ -362,7 +362,7 @@ mod tests {
         for test_keys in test_keys_list {
             assert_eq!(
                 test_keys.try_into_message_components(),
-                Err(CompileError::TooManyAccountKeys)
+                Err(CompileError::AccountIndexOverflow)
             );
         }
     }
@@ -445,7 +445,7 @@ mod tests {
 
         assert_eq!(
             compiled_keys.try_extract_table_lookup(&lookup_table_account),
-            Err(CompileError::TooManyLookupTableAddresses),
+            Err(CompileError::AddressTableLookupIndexOverflow),
         );
     }
 
@@ -527,7 +527,7 @@ mod tests {
         let drain_result = try_drain_keys_found_in_lookup_table(&mut keys, &lookup_table_addresses);
         assert_eq!(
             drain_result.err(),
-            Some(CompileError::TooManyLookupTableAddresses)
+            Some(CompileError::AddressTableLookupIndexOverflow)
         );
     }
 }

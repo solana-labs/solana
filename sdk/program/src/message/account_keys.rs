@@ -88,7 +88,7 @@ impl<'a> AccountKeys<'a> {
     ) -> Result<Vec<CompiledInstruction>, CompileError> {
         let mut account_index_map = BTreeMap::<&Pubkey, u8>::new();
         for (index, key) in self.iter().enumerate() {
-            let index = u8::try_from(index).map_err(|_| CompileError::TooManyAccountKeys)?;
+            let index = u8::try_from(index).map_err(|_| CompileError::AccountIndexOverflow)?;
             account_index_map.insert(key, index);
         }
 
@@ -308,7 +308,7 @@ mod tests {
         let account_keys = AccountKeys::new(&static_keys, Some(&dynamic_keys));
         assert_eq!(
             account_keys.try_compile_instructions(&[]),
-            Err(CompileError::TooManyAccountKeys)
+            Err(CompileError::AccountIndexOverflow)
         );
     }
 }
