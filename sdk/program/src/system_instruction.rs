@@ -494,6 +494,115 @@ pub fn create_nonce_account_with_seed(
     ]
 }
 
+/// Create an account containing a durable transaction nonce.
+///
+/// This function produces a vector of [`Instruction`]s which must be submitted
+/// in a [`Transaction`] or [invoked] to take effect.
+///
+/// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
+/// [invoked]: crate::program::invoke
+///
+/// A [durable transaction nonce][dtn] is a special account that enables
+/// execution of transactions that have been signed in the past.
+///
+/// Standard Solana transactions include a [recent blockhash][rbh] (sometimes
+/// referred to as a _[nonce]_). During execution the Solana runtime verifies
+/// the recent blockhash is approximately less than two minutes old, and that in
+/// those two minutes no other identical transaction with the same blockhash has
+/// been executed. These checks prevent accidental replay of transactions.
+/// Consequently, it is not possible to sign a transaction, wait more than two
+/// minutes, then successfully execute that transaction.
+///
+/// [dtn]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+/// [rbh]: crate::message::Message::recent_blockhash
+/// [nonce]: https://en.wikipedia.org/wiki/Cryptographic_nonce
+///
+/// Durable transaction nonces are an alternative to the standard recent
+/// blockhash nonce. They are stored in accounts on chain, and every time they
+/// are used their value is changed to a new value for their next use. The
+/// runtime verifies that each durable nonce value is only used once, and there
+/// are no restrictions on how "old" the nonce is. Because they are stored on
+/// chain and require additional instructions to use, transacting with durable
+/// transaction nonces is more expensive than with standard transactions.
+///
+/// The value of the durable nonce is itself a blockhash and is accessible via
+/// the [`blockhash`] field of [`nonce::state::Data`], which is deserialized
+/// from the nonce account data.
+///
+/// [`blockhash`]: crate::nonce::state::Data::blockhash
+/// [`nonce::state::Data`]: crate::nonce::state::Data
+///
+/// The basic durable transaction nonce lifecycle is
+///
+/// 1) Create the nonce account with the `create_nonce_account` instruction.
+/// 2) Submit specially-formed transactions that include the
+///    [`advance_nonce_account`] instruction.
+/// 3) Destroy the nonce account by withdrawing its lamports with the
+///    [`withdraw_nonce_account`] instruction.
+///
+/// Nonce accounts have an associated _authority_ account, which is stored in
+/// their account data, and can be changed with the [`authorize_nonce_account`]
+/// instruction. The authority must sign transactions that include the
+/// `advance_nonce_account`, `authorize_nonce_account` and
+/// `withdraw_nonce_account` instructions.
+///
+/// Nonce accounts are owned by the system program.
+///
+/// This constructor creates a [`SystemInstruction::CreateAccount`] instruction
+/// and a [`SystemInstruction::InitializeNonceAccount`] instruction.
+///
+/// # Required signers
+///
+/// The `from_pubkey` and `nonce_pubkey` signers must sign the transaction.
+///
+/// # Examples
+///
+/// Create a nonce account from an off-chain client:
+///
+/// ```
+/// # use solana_program::example_mocks::solana_sdk;
+/// # use solana_program::example_mocks::solana_client;
+/// use solana_client::rpc_client::RpcClient;
+/// use solana_sdk::{
+/// #   pubkey::Pubkey,
+///     signature::{Keypair, Signer},
+///     system_instruction,
+///     transaction::Transaction,
+///     nonce::State,
+/// };
+/// use anyhow::Result;
+///
+/// fn submit_create_nonce_account_tx(
+///     client: &RpcClient,
+///     payer: &Keypair,
+/// ) -> Result<()> {
+///
+///     let nonce_account = Keypair::new();
+///
+///     let nonce_rent = client.get_minimum_balance_for_rent_exemption(State::size())?;
+///     let instr = system_instruction::create_nonce_account(
+///         &payer.pubkey(),
+///         &nonce_account.pubkey(),
+///         &payer.pubkey(), // Make the fee payer the nonce account authority
+///         nonce_rent,
+///     );
+///
+///     let mut tx = Transaction::new_with_payer(&instr, Some(&payer.pubkey()));
+///
+///     let blockhash = client.get_latest_blockhash()?;
+///     tx.try_sign(&[&nonce_account, payer], blockhash)?;
+///
+///     client.send_and_confirm_transaction(&tx)?;
+///
+///     Ok(())
+/// }
+/// #
+/// # let client = RpcClient::new(String::new());
+/// # let payer = Keypair::new();
+/// # submit_create_nonce_account_tx(&client, &payer)?;
+/// #
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn create_nonce_account(
     from_pubkey: &Pubkey,
     nonce_pubkey: &Pubkey,
@@ -521,6 +630,122 @@ pub fn create_nonce_account(
     ]
 }
 
+/// Advance the value of a durable transaction nonce.
+///
+/// This function produces an [`Instruction`] which must be submitted in a
+/// [`Transaction`] or [invoked] to take effect.
+///
+/// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
+/// [invoked]: crate::program::invoke
+///
+/// Every transaction that relies on a durable transaction nonce must contain a
+/// [`SystemInstruction::AdvanceNonceAccount`] instruction as the first
+/// instruction in the [`Message`], as created by this function. When included
+/// in the first position, the Solana runtime recognizes the transaction as one
+/// that relies on a durable transaction nonce and processes it accordingly. The
+/// [`Message::new_with_nonce`] function can be used to construct a `Message` in
+/// the correct format without calling `advance_nonce_account` directly.
+///
+/// When constructing a transaction that includes an `AdvanceNonceInstruction`
+/// the [`recent_blockhash`] must be treated differently &mdash; instead of
+/// setting it to a recent blockhash, the value of the nonce must be retreived
+/// and deserialized from the nonce account, and that value specified as the
+/// "recent blockhash". A nonce account can be deserialized with the
+/// [`solana_client::nonce_utils::data_from_account`][dfa] function.
+///
+/// For further description of durable transaction nonces see
+/// [`create_nonce_account`].
+///
+/// [`Message`]: crate::message::Message
+/// [`Message::new_with_nonce`]: crate::message::Message::new_with_nonce
+/// [`recent_blockhash`]: crate::message::Message::recent_blockhash
+/// [dfa]: https://docs.rs/solana-client/latest/solana_client/nonce_utils/fn.data_from_account.html
+///
+/// # Required signers
+///
+/// The `authorized_pubkey` signer must sign the transaction.
+///
+/// # Examples
+///
+/// Create and sign a transaction with a durable nonce:
+///
+/// ```
+/// # use solana_program::example_mocks::solana_sdk;
+/// # use solana_program::example_mocks::solana_client;
+/// use solana_client::{
+///     rpc_client::RpcClient,
+///     nonce_utils,
+/// };
+/// use solana_sdk::{
+///     message::Message,
+///     pubkey::Pubkey,
+///     signature::{Keypair, Signer},
+///     system_instruction,
+///     transaction::Transaction,
+/// };
+/// use std::path::Path;
+/// use anyhow::Result;
+/// # use anyhow::anyhow;
+///
+/// fn create_transfer_tx_with_nonce(
+///     client: &RpcClient,
+///     nonce_account_pubkey: &Pubkey,
+///     payer: &Keypair,
+///     receiver: &Pubkey,
+///     amount: u64,
+///     tx_path: &Path,
+/// ) -> Result<()> {
+///
+///     let instr_transfer = system_instruction::transfer(
+///         &payer.pubkey(),
+///         receiver,
+///         amount,
+///     );
+///
+///     // In this example, `payer` is `nonce_account_pubkey`'s authority
+///     let instr_advance_nonce_account = system_instruction::advance_nonce_account(
+///         nonce_account_pubkey,
+///         &payer.pubkey(),
+///     );
+///
+///     // The `advance_nonce_account` instruction must be the first issued in
+///     // the transaction.
+///     let message = Message::new(
+///         &[
+///             instr_advance_nonce_account,
+///             instr_transfer
+///         ],
+///         Some(&payer.pubkey()),
+///     );
+///
+///     let mut tx = Transaction::new_unsigned(message);
+///
+///     // Sign the tx with nonce_account's `blockhash` instead of the
+///     // network's latest blockhash.
+///     let nonce_account = client.get_account(&nonce_account_pubkey)?;
+///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
+///     let blockhash = nonce_data.blockhash;
+///
+///     tx.try_sign(&[payer], blockhash)?;
+///
+///     // Save the signed transaction locally for later submission.
+///     save_tx_to_file(&tx_path, &tx)?;
+///
+///     Ok(())
+/// }
+/// #
+/// # fn save_tx_to_file(path: &Path, tx: &Transaction) -> Result<()> {
+/// #     Ok(())
+/// # }
+/// #
+/// # let client = RpcClient::new(String::new());
+/// # let nonce_account_pubkey = Pubkey::new_unique();
+/// # let payer = Keypair::new();
+/// # let receiver = Pubkey::new_unique();
+/// # create_transfer_tx_with_nonce(&client, &nonce_account_pubkey, &payer, &receiver, 1024, Path::new("new_tx"))?;
+/// #
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*nonce_pubkey, false),
@@ -535,6 +760,77 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
     )
 }
 
+/// Withdraw lamports from a durable transaction nonce account.
+///
+/// This function produces an [`Instruction`] which must be submitted in a
+/// [`Transaction`] or [invoked] to take effect.
+///
+/// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
+/// [invoked]: crate::program::invoke
+///
+/// Withdrawing the entire balance of a nonce account will cause the runtime to
+/// destroy it upon successful completion of the transaction.
+///
+/// Otherwise, nonce accounts must maintain a balance greater than or equal to
+/// the minimum required for [rent exemption]. If the result of this instruction
+/// would leave the nonce account with a balance less than required for rent
+/// exemption, but also greater than zero, then the transaction will fail.
+///
+/// [rent exemption]: https://docs.solana.com/developing/programming-model/accounts#rent-exemption
+///
+/// This constructor creates a [`SystemInstruction::WithdrawNonceAccount`]
+/// instruction.
+///
+/// # Required signers
+///
+/// The `authorized_pubkey` signer must sign the transaction.
+///
+/// # Examples
+///
+/// ```
+/// # use solana_program::example_mocks::solana_sdk;
+/// # use solana_program::example_mocks::solana_client;
+/// use solana_client::rpc_client::RpcClient;
+/// use solana_sdk::{
+///     pubkey::Pubkey,
+///     signature::{Keypair, Signer},
+///     system_instruction,
+///     transaction::Transaction,
+/// };
+/// use anyhow::Result;
+///
+/// fn submit_withdraw_nonce_account_tx(
+///     client: &RpcClient,
+///     nonce_account_pubkey: &Pubkey,
+///     authorized_account: &Keypair,
+/// ) -> Result<()> {
+///
+///     let nonce_balance = client.get_balance(nonce_account_pubkey)?;
+///
+///     let instr = system_instruction::withdraw_nonce_account(
+///         &nonce_account_pubkey,
+///         &authorized_account.pubkey(),
+///         &authorized_account.pubkey(),
+///         nonce_balance,
+///     );
+///
+///     let mut tx = Transaction::new_with_payer(&[instr], Some(&authorized_account.pubkey()));
+///
+///     let blockhash = client.get_latest_blockhash()?;
+///     tx.try_sign(&[authorized_account], blockhash)?;
+///
+///     client.send_and_confirm_transaction(&tx)?;
+///
+///     Ok(())
+/// }
+/// #
+/// # let client = RpcClient::new(String::new());
+/// # let nonce_account_pubkey = Pubkey::new_unique();
+/// # let payer = Keypair::new();
+/// # submit_withdraw_nonce_account_tx(&client, &nonce_account_pubkey, &payer)?;
+/// #
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn withdraw_nonce_account(
     nonce_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
@@ -556,6 +852,66 @@ pub fn withdraw_nonce_account(
     )
 }
 
+/// Change the authority of a durable transaction nonce account.
+///
+/// This function produces an [`Instruction`] which must be submitted in a
+/// [`Transaction`] or [invoked] to take effect.
+///
+/// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
+/// [invoked]: crate::program::invoke
+///
+/// This constructor creates a [`SystemInstruction::AuthorizeNonceAccount`]
+/// instruction.
+///
+/// # Required signers
+///
+/// The `authorized_pubkey` signer must sign the transaction.
+///
+/// # Examples
+///
+/// ```
+/// # use solana_program::example_mocks::solana_sdk;
+/// # use solana_program::example_mocks::solana_client;
+/// use solana_client::rpc_client::RpcClient;
+/// use solana_sdk::{
+///     pubkey::Pubkey,
+///     signature::{Keypair, Signer},
+///     system_instruction,
+///     transaction::Transaction,
+/// };
+/// use anyhow::Result;
+///
+/// fn authorize_nonce_account_tx(
+///     client: &RpcClient,
+///     nonce_account_pubkey: &Pubkey,
+///     authorized_account: &Keypair,
+///     new_authority_pubkey: &Pubkey,
+/// ) -> Result<()> {
+///
+///     let instr = system_instruction::authorize_nonce_account(
+///         &nonce_account_pubkey,
+///         &authorized_account.pubkey(),
+///         &new_authority_pubkey,
+///     );
+///
+///     let mut tx = Transaction::new_with_payer(&[instr], Some(&authorized_account.pubkey()));
+///
+///     let blockhash = client.get_latest_blockhash()?;
+///     tx.try_sign(&[authorized_account], blockhash)?;
+///
+///     client.send_and_confirm_transaction(&tx)?;
+///
+///     Ok(())
+/// }
+/// #
+/// # let client = RpcClient::new(String::new());
+/// # let nonce_account_pubkey = Pubkey::new_unique();
+/// # let payer = Keypair::new();
+/// # let new_authority_pubkey = Pubkey::new_unique();
+/// # authorize_nonce_account_tx(&client, &nonce_account_pubkey, &payer, &new_authority_pubkey)?;
+/// #
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn authorize_nonce_account(
     nonce_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
