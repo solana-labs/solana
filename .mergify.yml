@@ -93,6 +93,7 @@ pull_request_rules:
       - author=mergify[bot]
       - head~=^mergify/bp/
       - "#status-failure=0"
+      - "-merged"
     actions:
       label:
         add:
