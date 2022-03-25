@@ -154,6 +154,66 @@ mod test {
     }
 
     #[test]
+    /// Test poh_timing_reporter
+    fn test_poh_timing_reporter_out_of_order() {
+        // create a reporter
+        let mut reporter = PohTimingReporter::default();
+
+        // process all relevant PohTimingPoints for slot 42/43 out of order
+        let mut c = 0;
+        // slot_start 42
+        c += reporter.process(42, None, PohTimingPoint::PohSlotStart(100)) as i32;
+        // slot_full 42
+        c += reporter.process(42, None, PohTimingPoint::FullSlotReceived(120)) as i32;
+        // slot_full 43
+        c += reporter.process(43, None, PohTimingPoint::FullSlotReceived(140)) as i32;
+        // slot_end 42
+        c += reporter.process(42, None, PohTimingPoint::PohSlotEnd(200)) as i32;
+        // slot start 43
+        c += reporter.process(43, None, PohTimingPoint::PohSlotStart(100)) as i32;
+        // slot end 43
+        c += reporter.process(43, None, PohTimingPoint::PohSlotEnd(200)) as i32;
+
+        // assert that both timing point are complete
+        assert_eq!(c, 2);
+
+        // assert that both timestamp is kept
+        assert_eq!(reporter.slot_count(), 2)
+    }
+
+    #[test]
+    /// Test poh_timing_reporter
+    fn test_poh_timing_reporter_never_complete() {
+        // create a reporter
+        let mut reporter = PohTimingReporter::default();
+
+        let mut c = 0;
+
+        // process all relevant PohTimingPoints for slot 42/43 out of order
+        // slot_start 42
+        c += reporter.process(42, None, PohTimingPoint::PohSlotStart(100)) as i32;
+
+        // slot_full 42
+        c += reporter.process(42, None, PohTimingPoint::FullSlotReceived(120)) as i32;
+
+        // slot_full 43
+        c += reporter.process(43, None, PohTimingPoint::FullSlotReceived(140)) as i32;
+
+        // skip slot 42, jump to slot 43
+        // slot start 43
+        c += reporter.process(43, None, PohTimingPoint::PohSlotStart(100)) as i32;
+
+        // slot end 43
+        c += reporter.process(43, None, PohTimingPoint::PohSlotEnd(200)) as i32;
+
+        // assert that only one timing point is complete
+        assert_eq!(c, 1);
+
+        // assert that both timestamp is kept
+        assert_eq!(reporter.slot_count(), 2)
+    }
+
+    #[test]
     fn test_poh_timing_reporter_overflow() {
         // create a reporter
         let mut reporter = PohTimingReporter::default();
