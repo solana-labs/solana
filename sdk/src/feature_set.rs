@@ -271,6 +271,10 @@ pub mod update_syscall_base_costs {
     solana_sdk::declare_id!("2h63t332mGCCsWK2nqqqHhN4U9ayyqhLVFvczznHDoTZ");
 }
 
+pub mod stake_deactivate_delinquent_instruction {
+    solana_sdk::declare_id!("437r62HoAdUb63amq3D7ENnBLDhHT2xY8eFkLJYVKK4x");
+}
+
 pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
@@ -401,6 +405,7 @@ lazy_static! {
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
         (update_syscall_base_costs::id(), "update syscall base costs"),
+        (stake_deactivate_delinquent_instruction::id(), "enable the deactivate delinquent stake instruction #23932"),
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
         (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),

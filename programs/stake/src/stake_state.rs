@@ -24,6 +24,7 @@ use {
             config::Config,
             instruction::{LockupArgs, StakeError},
             program::id,
+            tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
         transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
@@ -128,7 +129,7 @@ fn redelegate(
     Ok(())
 }
 
-fn new_stake(
+pub(crate) fn new_stake(
     stake: u64,
     voter_pubkey: &Pubkey,
     vote_state: &VoteState,
@@ -860,6 +861,57 @@ pub fn withdraw(
     let mut to = instruction_context.try_borrow_account(transaction_context, to_index)?;
     to.checked_add_lamports(lamports)?;
     Ok(())
+}
+
+pub(crate) fn deactivate_delinquent(
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
+    stake_account: &mut BorrowedAccount,
+    delinquent_vote_account_index: usize,
+    reference_vote_account_index: usize,
+    current_epoch: Epoch,
+) -> Result<(), InstructionError> {
+    let delinquent_vote_account_pubkey = transaction_context.get_key_of_account_at_index(
+        instruction_context.get_index_in_transaction(delinquent_vote_account_index)?,
+    )?;
+    let delinquent_vote_account = instruction_context
+        .try_borrow_account(transaction_context, delinquent_vote_account_index)?;
+    if *delinquent_vote_account.get_owner() != solana_vote_program::id() {
+        return Err(InstructionError::IncorrectProgramId);
+    }
+    let delinquent_vote_state = delinquent_vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
+
+    let reference_vote_account = instruction_context
+        .try_borrow_account(transaction_context, reference_vote_account_index)?;
+    if *reference_vote_account.get_owner() != solana_vote_program::id() {
+        return Err(InstructionError::IncorrectProgramId);
+    }
+    let reference_vote_state = reference_vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
+
+    if !acceptable_reference_epoch_credits(&reference_vote_state.epoch_credits, current_epoch) {
+        return Err(StakeError::InsufficientReferenceVotes.into());
+    }
+
+    if let StakeState::Stake(meta, mut stake) = stake_account.get_state()? {
+        if stake.delegation.voter_pubkey != *delinquent_vote_account_pubkey {
+            return Err(StakeError::VoteAddressMismatch.into());
+        }
+
+        // Deactivate the stake account if its delegated vote account has never voted or has not
+        // voted in the last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`
+        if eligible_for_deactivate_delinquent(&delinquent_vote_state.epoch_credits, current_epoch) {
+            stake.deactivate(current_epoch)?;
+            stake_account.set_state(&StakeState::Stake(meta, stake))
+        } else {
+            Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into())
+        }
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
 }
 
 /// After calling `validate_delegated_amount()`, this struct contains calculated values that are used
