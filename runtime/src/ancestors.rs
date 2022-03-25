@@ -1,5 +1,5 @@
 use {
-    crate::accounts_index::RollingBitField,
+    crate::rolling_bit_field::RollingBitField,
     core::fmt::{Debug, Formatter},
     solana_sdk::clock::Slot,
     std::collections::HashMap,

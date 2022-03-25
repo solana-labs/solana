@@ -40,31 +40,53 @@ mod tests {
         assert!(bank0_cached_epoch_schedule.is_ok());
         assert!(bank0_cached_fees.is_ok());
         assert!(bank0_cached_rent.is_ok());
-        assert!(bank0
-            .sysvar_cache
-            .read()
-            .unwrap()
-            .get_slot_hashes()
-            .is_err());
+        assert!(bank0_sysvar_cache.get_slot_hashes().is_err());
 
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.slot() + 1);
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            bank0.slot() + 1,
+        ));
 
         let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
         let bank1_cached_clock = bank1_sysvar_cache.get_clock();
-        let bank1_cached_epoch_schedule = bank0_sysvar_cache.get_epoch_schedule();
-        let bank1_cached_fees = bank0_sysvar_cache.get_fees();
-        let bank1_cached_rent = bank0_sysvar_cache.get_rent();
+        let bank1_cached_epoch_schedule = bank1_sysvar_cache.get_epoch_schedule();
+        let bank1_cached_fees = bank1_sysvar_cache.get_fees();
+        let bank1_cached_rent = bank1_sysvar_cache.get_rent();
 
         assert!(bank1_cached_clock.is_ok());
         assert!(bank1_cached_epoch_schedule.is_ok());
         assert!(bank1_cached_fees.is_ok());
         assert!(bank1_cached_rent.is_ok());
-        assert!(bank1.sysvar_cache.read().unwrap().get_slot_hashes().is_ok());
+        assert!(bank1_sysvar_cache.get_slot_hashes().is_ok());
 
         assert_ne!(bank0_cached_clock, bank1_cached_clock);
         assert_eq!(bank0_cached_epoch_schedule, bank1_cached_epoch_schedule);
-        assert_eq!(bank0_cached_fees, bank1_cached_fees);
+        assert_ne!(bank0_cached_fees, bank1_cached_fees);
         assert_eq!(bank0_cached_rent, bank1_cached_rent);
+
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.slot() + 1);
+
+        let bank2_sysvar_cache = bank2.sysvar_cache.read().unwrap();
+        let bank2_cached_clock = bank2_sysvar_cache.get_clock();
+        let bank2_cached_epoch_schedule = bank2_sysvar_cache.get_epoch_schedule();
+        let bank2_cached_fees = bank2_sysvar_cache.get_fees();
+        let bank2_cached_rent = bank2_sysvar_cache.get_rent();
+
+        assert!(bank2_cached_clock.is_ok());
+        assert!(bank2_cached_epoch_schedule.is_ok());
+        assert!(bank2_cached_fees.is_ok());
+        assert!(bank2_cached_rent.is_ok());
+        assert!(bank2_sysvar_cache.get_slot_hashes().is_ok());
+
+        assert_ne!(bank1_cached_clock, bank2_cached_clock);
+        assert_eq!(bank1_cached_epoch_schedule, bank2_cached_epoch_schedule);
+        assert_eq!(bank1_cached_fees, bank2_cached_fees);
+        assert_eq!(bank1_cached_rent, bank2_cached_rent);
+        assert_ne!(
+            bank1_sysvar_cache.get_slot_hashes(),
+            bank2_sysvar_cache.get_slot_hashes(),
+        );
     }
 
     #[test]

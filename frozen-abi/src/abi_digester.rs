@@ -562,6 +562,17 @@ mod tests {
     #[derive(Serialize, AbiExample)]
     struct TestNewtypeStruct(i8);
 
+    #[frozen_abi(digest = "Hbs1X2X7TF2gFEfsspwfZ1JKr8ZGbLY3uidQBebqcMYt")]
+    #[derive(Serialize, AbiExample)]
+    struct Foo<'a> {
+        #[serde(with = "serde_bytes")]
+        data1: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        data2: &'a [u8],
+        #[serde(with = "serde_bytes")]
+        data3: &'a Vec<u8>,
+    }
+
     #[frozen_abi(digest = "5qio5qYurHDv6fq5kcwP2ue2RBEazSZF8CPk2kUuwC2j")]
     #[derive(Serialize, AbiExample)]
     struct TestStructReversed {

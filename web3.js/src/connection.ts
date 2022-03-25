@@ -1,7 +1,6 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import fetch from 'cross-fetch';
-import type {Response} from 'cross-fetch';
 import {
   type as pick,
   number,
@@ -2228,6 +2227,13 @@ export class Connection {
    */
   get commitment(): Commitment | undefined {
     return this._commitment;
+  }
+
+  /**
+   * The RPC endpoint
+   */
+  get rpcEndpoint(): string {
+    return this._rpcEndpoint;
   }
 
   /**

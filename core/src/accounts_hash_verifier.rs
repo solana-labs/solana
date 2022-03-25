@@ -6,12 +6,10 @@
 
 use {
     crossbeam_channel::RecvTimeoutError,
-    rayon::ThreadPool,
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure::Measure,
     solana_runtime::{
-        accounts_db::{self, AccountsDb},
-        accounts_hash::HashStats,
+        accounts_hash::{CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             AccountsPackage, AccountsPackageReceiver, PendingSnapshotPackage, SnapshotPackage,
@@ -22,7 +20,6 @@ use {
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{HashMap, HashSet},
-        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -46,7 +43,6 @@ impl AccountsHashVerifier {
         halt_on_known_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
         snapshot_config: Option<SnapshotConfig>,
-        ledger_path: PathBuf,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -54,7 +50,6 @@ impl AccountsHashVerifier {
             .name("solana-hash-accounts".to_string())
             .spawn(move || {
                 let mut hashes = vec![];
-                let mut thread_pool = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -62,11 +57,6 @@ impl AccountsHashVerifier {
 
                     match accounts_package_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(accounts_package) => {
-                            if accounts_package.hash_for_testing.is_some() && thread_pool.is_none()
-                            {
-                                thread_pool = Some(accounts_db::make_min_priority_thread_pool());
-                            }
-
                             Self::process_accounts_package(
                                 accounts_package,
                                 &cluster_info,
@@ -77,8 +67,6 @@ impl AccountsHashVerifier {
                                 &exit,
                                 fault_injection_rate_slots,
                                 snapshot_config.as_ref(),
-                                thread_pool.as_ref(),
-                                &ledger_path,
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -103,10 +91,8 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
-        thread_pool: Option<&ThreadPool>,
-        ledger_path: &Path,
     ) {
-        Self::verify_accounts_package_hash(&accounts_package, thread_pool, ledger_path);
+        Self::verify_accounts_package_hash(&accounts_package);
 
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
@@ -121,25 +107,32 @@ impl AccountsHashVerifier {
         Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config);
     }
 
-    fn verify_accounts_package_hash(
-        accounts_package: &AccountsPackage,
-        thread_pool: Option<&ThreadPool>,
-        ledger_path: &Path,
-    ) {
+    fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
         let mut measure_hash = Measure::start("hash");
-        if let Some(expected_hash) = accounts_package.hash_for_testing {
+        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
+            let mut sort_time = Measure::start("sort_storages");
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
-            let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
-                ledger_path,
-                &sorted_storages,
-                thread_pool,
-                HashStats::default(),
-                false,
-                None,
-                None, // this will fail with filler accounts
-                None, // this code path is only for testing, so use default # passes here
-            )
-            .unwrap();
+            sort_time.stop();
+
+            let mut timings = HashStats {
+                storage_sort_us: sort_time.as_us(),
+                ..HashStats::default()
+            };
+            timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
+
+            let (hash, lamports) = accounts_package
+                .accounts
+                .accounts_db
+                .calculate_accounts_hash_without_index(
+                    &CalcAccountsHashConfig {
+                        storages: &sorted_storages,
+                        use_bg_thread_pool: true,
+                        check_hash: false,
+                        ancestors: None,
+                    },
+                    timings,
+                )
+                .unwrap();
 
             assert_eq!(accounts_package.expected_capitalization, lamports);
             assert_eq!(expected_hash, hash);
@@ -160,7 +153,7 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
     ) {
-        let hash = accounts_package.hash;
+        let hash = accounts_package.accounts_hash;
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -353,6 +346,7 @@ mod tests {
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             ..SnapshotConfig::default()
         };
+        let accounts = Arc::new(solana_runtime::accounts::Accounts::default_for_tests());
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {
                 slot: full_snapshot_archive_interval_slots + i as u64,
@@ -360,17 +354,16 @@ mod tests {
                 slot_deltas: vec![],
                 snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: vec![],
-                hash: hash(&[i as u8]),
+                accounts_hash: hash(&[i as u8]),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_archives_dir: PathBuf::default(),
                 expected_capitalization: 0,
-                hash_for_testing: None,
+                accounts_hash_for_testing: None,
                 cluster_type: ClusterType::MainnetBeta,
                 snapshot_type: None,
+                accounts: Arc::clone(&accounts),
             };
-
-            let ledger_path = TempDir::new().unwrap();
 
             AccountsHashVerifier::process_accounts_package(
                 accounts_package,
@@ -382,8 +375,6 @@ mod tests {
                 &exit,
                 0,
                 Some(&snapshot_config),
-                None,
-                ledger_path.path(),
             );
 
             // sleep for 1ms to create a newer timestmap for gossip entry

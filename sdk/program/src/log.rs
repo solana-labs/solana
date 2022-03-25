@@ -1,4 +1,37 @@
-//! Solana Rust-based BPF program logging
+//! Logging utilities for Rust-based Solana programs.
+//!
+//! Logging is the main mechanism for getting debugging information out of
+//! running Solana programs, and there are several functions available for doing
+//! so efficiently, depending on the type of data being logged.
+//!
+//! The most common way to emit logs is through the [`msg!`] macro, which logs
+//! simple strings, as well as [formatted strings][fs].
+//!
+//! [`msg!`]: msg
+//! [fs]: https://doc.rust-lang.org/std/fmt/
+//!
+//! Logs can be viewed in multiple ways:
+//!
+//! - The `solana logs` command displays logs for all transactions executed on a
+//!   network. Note though that transactions that fail during pre-flight
+//!   simulation are not displayed here.
+//! - When submitting transactions via [`RpcClient`], if Rust's own logging is
+//!   active then the `solana_client` crate logs at the "debug" level any logs
+//!   for transactions that failed during simulation. If using [`env_logger`]
+//!   these logs can be activated by setting `RUST_LOG=solana_client=debug`.
+//! - Logs can be retrieved from a finalized transaction by calling
+//!   [`RpcClient::get_transaction`].
+//! - Block explorers may display logs.
+//!
+//! [`RpcClient`]: https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html
+//! [`env_logger`]: https://docs.rs/env_logger
+//! [`RpcClient::get_transaction`]: https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#method.get_transaction
+//!
+//! While most logging functions are defined in this module, [`Pubkey`]s can
+//! also be efficiently logged with the [`Pubkey::log`] function.
+//!
+//! [`Pubkey`]: crate::pubkey::Pubkey
+//! [`Pubkey::log`]: crate::pubkey::Pubkey::log
 
 use crate::account_info::AccountInfo;
 
@@ -19,14 +52,33 @@ macro_rules! info {
     };
 }
 
-/// Print a message to the log
+/// Print a message to the log.
 ///
-/// Fast form:
-/// 1. Single string: `msg!("hi")`
+/// Supports simple strings as well as Rust [format strings][fs]. When passed a
+/// single expression it will be passed directly to [`sol_log`]. The expression
+/// must have type `&str`, and is typically used for logging static strings.
+/// When passed something other than an expression, particularly
+/// a sequence of expressions, the tokens will be passed through the
+/// [`format!`] macro before being logged with `sol_log`.
 ///
-/// The generic form incurs a very large runtime overhead so it should be used with care:
-/// 3. Generalized format string: `msg!("Hello {}: 1, 2, {}", "World", 3)`
+/// [fs]: https://doc.rust-lang.org/std/fmt/
+/// [`format!`]: https://doc.rust-lang.org/std/fmt/fn.format.html
 ///
+/// Note that Rust's formatting machinery is relatively CPU-intensive
+/// for constrained environments like the Solana VM.
+///
+/// # Examples
+///
+/// ```
+/// use solana_program::msg;
+///
+/// // The fast form
+/// msg!("verifying multisig");
+///
+/// // With formatting
+/// let err = "not enough signers";
+/// msg!("multisig failed: {}", err);
+/// ```
 #[macro_export]
 macro_rules! msg {
     ($msg:expr) => {
@@ -35,9 +87,7 @@ macro_rules! msg {
     ($($arg:tt)*) => ($crate::log::sol_log(&format!($($arg)*)));
 }
 
-/// Print a string to the log
-///
-/// @param message - Message to print
+/// Print a string to the log.
 #[inline]
 pub fn sol_log(message: &str) {
     #[cfg(target_arch = "bpf")]
@@ -54,10 +104,7 @@ extern "C" {
     fn sol_log_(message: *const u8, len: u64);
 }
 
-/// Print 64-bit values represented as hexadecimal to the log
-///
-/// @param argx - integer arguments to print
-
+/// Print 64-bit values represented as hexadecimal to the log.
 #[inline]
 pub fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     #[cfg(target_arch = "bpf")]
@@ -74,9 +121,7 @@ extern "C" {
     fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64);
 }
 
-/// Print some slices as base64
-///
-/// @param data - The slices to print
+/// Print some slices as base64.
 pub fn sol_log_data(data: &[&[u8]]) {
     #[cfg(target_arch = "bpf")]
     {
@@ -91,9 +136,7 @@ pub fn sol_log_data(data: &[&[u8]]) {
     crate::program_stubs::sol_log_data(data);
 }
 
-/// Print the hexadecimal representation of a slice
-///
-/// @param slice - The array to print
+/// Print the hexadecimal representation of a slice.
 #[allow(dead_code)]
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
@@ -101,10 +144,10 @@ pub fn sol_log_slice(slice: &[u8]) {
     }
 }
 
-/// Print the hexadecimal representation of the program's input parameters
+/// Print the hexadecimal representation of the program's input parameters.
 ///
-/// @param ka - A pointer to an array of `AccountInfo` to print
-/// @param data - A pointer to the instruction data to print
+/// - `accounts` - A slice of [`AccountInfo`].
+/// - `data` - The instruction data.
 #[allow(dead_code)]
 pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     for (i, account) in accounts.iter().enumerate() {
@@ -125,7 +168,7 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     sol_log_slice(data);
 }
 
-/// Print the remaining compute units the program may consume
+/// Print the remaining compute units available to the program.
 #[inline]
 pub fn sol_log_compute_units() {
     #[cfg(target_arch = "bpf")]

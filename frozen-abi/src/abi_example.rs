@@ -415,6 +415,13 @@ impl AbiExample for &Vec<u8> {
     }
 }
 
+impl AbiExample for &[u8] {
+    fn example() -> Self {
+        info!("AbiExample for (&[u8]): {}", type_name::<Self>());
+        &VEC_U8[..]
+    }
+}
+
 impl<T: AbiExample> AbiExample for VecDeque<T> {
     fn example() -> Self {
         info!("AbiExample for (Vec<T>): {}", type_name::<Self>());

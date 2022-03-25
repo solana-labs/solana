@@ -230,7 +230,6 @@ impl Tvu {
             tvu_config.halt_on_known_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
             snapshot_config.clone(),
-            blockstore.ledger_path().to_path_buf(),
         );
 
         let (snapshot_request_sender, snapshot_request_handler) = match snapshot_config {

@@ -22,6 +22,7 @@ use {
             Result as TransactionResult, Transaction, TransactionError, TransactionVersion,
             VersionedTransaction,
         },
+        transaction_context::TransactionReturnData,
     },
     std::fmt,
     thiserror::Error,
@@ -279,6 +280,7 @@ pub struct TransactionStatusMeta {
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
     pub rewards: Option<Rewards>,
     pub loaded_addresses: LoadedAddresses,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -294,6 +296,7 @@ impl Default for TransactionStatusMeta {
             post_token_balances: None,
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
+            return_data: None,
         }
     }
 }
@@ -314,6 +317,7 @@ pub struct UiTransactionStatusMeta {
     pub rewards: Option<Rewards>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_addresses: Option<UiLoadedAddresses>,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 /// A duplicate representation of LoadedAddresses
@@ -364,6 +368,7 @@ impl UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
+            return_data: meta.return_data,
         }
     }
 }
@@ -388,6 +393,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
+            return_data: meta.return_data,
         }
     }
 }

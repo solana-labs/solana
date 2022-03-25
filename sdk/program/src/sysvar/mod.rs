@@ -101,6 +101,13 @@ pub trait Sysvar:
     fn size_of() -> usize {
         bincode::serialized_size(&Self::default()).unwrap() as usize
     }
+
+    /// Deserializes a sysvar from its `AccountInfo`.
+    ///
+    /// # Errors
+    ///
+    /// If `account_info` does not have the same ID as the sysvar
+    /// this function returns [`ProgramError::InvalidArgument`].
     fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
         if !Self::check_id(account_info.unsigned_key()) {
             return Err(ProgramError::InvalidArgument);

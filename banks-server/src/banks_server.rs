@@ -24,7 +24,7 @@ use {
         transaction::{self, SanitizedTransaction, Transaction},
     },
     solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo},
+        send_transaction_service::{SendTransactionService, TransactionInfo, DEFAULT_TPU_USE_QUIC},
         tpu_info::NullTpuInfo,
     },
     std::{
@@ -266,6 +266,7 @@ impl Banks for BanksServer {
             logs,
             post_simulation_accounts: _,
             units_consumed,
+            return_data,
         } = self
             .bank(commitment)
             .simulate_transaction_unchecked(sanitized_transaction)
@@ -275,6 +276,7 @@ impl Banks for BanksServer {
                 simulation_details: Some(TransactionSimulationDetails {
                     logs,
                     units_consumed,
+                    return_data,
                 }),
             };
         }
@@ -399,6 +401,7 @@ pub async fn start_tcp_server(
                 receiver,
                 5_000,
                 0,
+                DEFAULT_TPU_USE_QUIC,
             );
 
             let server = BanksServer::new(

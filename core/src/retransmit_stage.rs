@@ -240,7 +240,7 @@ fn retransmit(
     epoch_fetch.stop();
     stats.epoch_fetch += epoch_fetch.as_us();
 
-    let mut epoch_cache_update = Measure::start("retransmit_epoch_cach_update");
+    let mut epoch_cache_update = Measure::start("retransmit_epoch_cache_update");
     maybe_reset_shreds_received_cache(shreds_received, hasher_reset_ts);
     epoch_cache_update.stop();
     stats.epoch_cache_update += epoch_cache_update.as_us();

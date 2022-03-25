@@ -14,6 +14,7 @@ use {
         signature::Signature,
         stake,
         transaction::{TransactionError, TransactionVersion, VersionedTransaction},
+        transaction_context::TransactionReturnData,
     },
     solana_transaction_status::{Rewards, UiTransactionStatusMeta},
     spl_memo::{id as spl_memo_id, v1::id as spl_memo_v1_id},
@@ -246,6 +247,7 @@ fn write_transaction<W: io::Write>(
         write_fees(w, transaction_status.fee, prefix)?;
         write_balances(w, transaction_status, prefix)?;
         write_log_messages(w, transaction_status.log_messages.as_ref(), prefix)?;
+        write_return_data(w, transaction_status.return_data.as_ref(), prefix)?;
         write_rewards(w, transaction_status.rewards.as_ref(), prefix)?;
     } else {
         writeln!(w, "{}Status: Unavailable", prefix)?;
@@ -576,6 +578,25 @@ fn write_balances<W: io::Write>(
     Ok(())
 }
 
+fn write_return_data<W: io::Write>(
+    w: &mut W,
+    return_data: Option<&TransactionReturnData>,
+    prefix: &str,
+) -> io::Result<()> {
+    if let Some(return_data) = return_data {
+        if !return_data.data.is_empty() {
+            use pretty_hex::*;
+            writeln!(
+                w,
+                "{}Return Data from Program {}:",
+                prefix, return_data.program_id
+            )?;
+            writeln!(w, "{}  {:?}", prefix, return_data.data.hex_dump())?;
+        }
+    }
+    Ok(())
+}
+
 fn write_log_messages<W: io::Write>(
     w: &mut W,
     log_messages: Option<&Vec<String>>,
@@ -750,6 +771,10 @@ mod test {
                 commission: None,
             }]),
             loaded_addresses: LoadedAddresses::default(),
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_from_array([2u8; 32]),
+                data: vec![1, 2, 3],
+            }),
         };
 
         let output = {
@@ -786,6 +811,9 @@ Status: Ok
   Account 1 balance: ◎0.00001 -> ◎0.0000099
 Log Messages:
   Test message
+Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
+  Length: 3 (0x3) bytes
+0000:   01 02 03                                             ...
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi        rent        -◎0.000000100     ◎0.000009900       \0
@@ -820,6 +848,10 @@ Rewards:
                 commission: None,
             }]),
             loaded_addresses,
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_from_array([2u8; 32]),
+                data: vec![1, 2, 3],
+            }),
         };
 
         let output = {
@@ -865,6 +897,9 @@ Status: Ok
   Account 3 balance: ◎0.00002
 Log Messages:
   Test message
+Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
+  Length: 3 (0x3) bytes
+0000:   01 02 03                                             ...
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8        rent        -◎0.000000100     ◎0.000014900       \0

@@ -284,20 +284,18 @@ mod test {
             message::Message,
             pubkey::Pubkey,
             stake::{
+                config,
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
+            sysvar,
         },
     };
 
     #[test]
-    #[allow(clippy::same_item_push)]
-    fn test_parse_stake_instruction() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..6 {
-            keys.push(Pubkey::new_unique());
-        }
-
+    fn test_parse_stake_initialize_ix() {
+        let from_pubkey = Pubkey::new_unique();
+        let stake_pubkey = Pubkey::new_unique();
         let authorized = Authorized {
             staker: Pubkey::new_unique(),
             withdrawer: Pubkey::new_unique(),
@@ -309,20 +307,25 @@ mod test {
         };
         let lamports = 55;
 
-        let instructions =
-            instruction::create_account(&keys[0], &keys[1], &authorized, &lockup, lamports);
+        let instructions = instruction::create_account(
+            &from_pubkey,
+            &stake_pubkey,
+            &authorized,
+            &lockup,
+            lamports,
+        );
         let message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(
                 &message.instructions[1],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initialize".to_string(),
                 info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "rentSysvar": keys[2].to_string(),
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
                     "authorized": {
                         "staker": authorized.staker.to_string(),
                         "withdrawer": authorized.withdrawer.to_string(),
@@ -337,225 +340,21 @@ mod test {
         );
         assert!(parse_stake(
             &message.instructions[1],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+    }
 
-        let instruction =
-            instruction::authorize(&keys[1], &keys[0], &keys[3], StakeAuthorize::Staker, None);
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "authorize".to_string(),
-                info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "clockSysvar": keys[2].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[3].to_string(),
-                    "authorityType": StakeAuthorize::Staker,
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
-        )
-        .is_err());
-
+    #[test]
+    fn test_parse_stake_authorize_ix() {
+        let stake_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+        let custodian_pubkey = Pubkey::new_unique();
         let instruction = instruction::authorize(
-            &keys[2],
-            &keys[0],
-            &keys[4],
-            StakeAuthorize::Withdrawer,
-            Some(&keys[1]),
-        );
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "authorize".to_string(),
-                info: json!({
-                    "stakeAccount": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[4].to_string(),
-                    "authorityType": StakeAuthorize::Withdrawer,
-                    "custodian": keys[1].to_string(),
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
-        )
-        .is_err());
-
-        let instruction = instruction::delegate_stake(&keys[1], &keys[0], &keys[2]);
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..6], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "delegate".to_string(),
-                info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "voteAccount": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "stakeHistorySysvar": keys[4].to_string(),
-                    "stakeConfigAccount": keys[5].to_string(),
-                    "stakeAuthority": keys[0].to_string(),
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[0],
-            &AccountKeys::new(&keys[0..5], None)
-        )
-        .is_err());
-
-        // This looks wrong, but in an actual compiled instruction, the order is:
-        //  * split account (signer, allocate + assign first)
-        //  * stake authority (signer)
-        //  * stake account
-        let instructions = instruction::split(&keys[2], &keys[1], lamports, &keys[0]);
-        let message = Message::new(&instructions, None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[2],
-                &AccountKeys::new(&keys[0..3], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "split".to_string(),
-                info: json!({
-                    "stakeAccount": keys[2].to_string(),
-                    "newSplitAccount": keys[0].to_string(),
-                    "stakeAuthority": keys[1].to_string(),
-                    "lamports": lamports,
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[2],
-            &AccountKeys::new(&keys[0..2], None)
-        )
-        .is_err());
-
-        let instruction = instruction::withdraw(&keys[1], &keys[0], &keys[2], lamports, None);
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..5], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "withdraw".to_string(),
-                info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "destination": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "stakeHistorySysvar": keys[4].to_string(),
-                    "withdrawAuthority": keys[0].to_string(),
-                    "lamports": lamports,
-                }),
-            }
-        );
-        let instruction =
-            instruction::withdraw(&keys[2], &keys[0], &keys[3], lamports, Some(&keys[1]));
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..6], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "withdraw".to_string(),
-                info: json!({
-                    "stakeAccount": keys[2].to_string(),
-                    "destination": keys[3].to_string(),
-                    "clockSysvar": keys[4].to_string(),
-                    "stakeHistorySysvar": keys[5].to_string(),
-                    "withdrawAuthority": keys[0].to_string(),
-                    "custodian": keys[1].to_string(),
-                    "lamports": lamports,
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[0],
-            &AccountKeys::new(&keys[0..4], None)
-        )
-        .is_err());
-
-        let instruction = instruction::deactivate_stake(&keys[1], &keys[0]);
-        let message = Message::new(&[instruction], None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "deactivate".to_string(),
-                info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "clockSysvar": keys[2].to_string(),
-                    "stakeAuthority": keys[0].to_string(),
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
-        )
-        .is_err());
-
-        let instructions = instruction::merge(&keys[1], &keys[0], &keys[2]);
-        let message = Message::new(&instructions, None);
-        assert_eq!(
-            parse_stake(
-                &message.instructions[0],
-                &AccountKeys::new(&keys[0..5], None)
-            )
-            .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "merge".to_string(),
-                info: json!({
-                    "destination": keys[1].to_string(),
-                    "source": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "stakeHistorySysvar": keys[4].to_string(),
-                    "stakeAuthority": keys[0].to_string(),
-                }),
-            }
-        );
-        assert!(parse_stake(
-            &message.instructions[0],
-            &AccountKeys::new(&keys[0..4], None)
-        )
-        .is_err());
-
-        let seed = "test_seed";
-        let instruction = instruction::authorize_with_seed(
-            &keys[1],
-            &keys[0],
-            seed.to_string(),
-            &keys[0],
-            &keys[3],
+            &stake_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
             StakeAuthorize::Staker,
             None,
         );
@@ -563,61 +362,335 @@ mod test {
         assert_eq!(
             parse_stake(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..3], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "authorizeWithSeed".to_string(),
+                instruction_type: "authorize".to_string(),
                 info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "authorityOwner": keys[0].to_string(),
-                    "newAuthorized": keys[3].to_string(),
-                    "authorityBase": keys[0].to_string(),
-                    "authoritySeed": seed,
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authority": authorized_pubkey.to_string(),
+                    "newAuthority": new_authorized_pubkey.to_string(),
                     "authorityType": StakeAuthorize::Staker,
-                    "clockSysvar": keys[2].to_string(),
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..2], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
 
-        let instruction = instruction::authorize_with_seed(
-            &keys[2],
-            &keys[0],
-            seed.to_string(),
-            &keys[0],
-            &keys[4],
+        let instruction = instruction::authorize(
+            &stake_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
             StakeAuthorize::Withdrawer,
-            Some(&keys[1]),
+            Some(&custodian_pubkey),
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "authorizeWithSeed".to_string(),
+                instruction_type: "authorize".to_string(),
                 info: json!({
-                    "stakeAccount": keys[2].to_string(),
-                    "authorityOwner": keys[0].to_string(),
-                    "newAuthorized": keys[4].to_string(),
-                    "authorityBase": keys[0].to_string(),
-                    "authoritySeed": seed,
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authority": authorized_pubkey.to_string(),
+                    "newAuthority": new_authorized_pubkey.to_string(),
                     "authorityType": StakeAuthorize::Withdrawer,
-                    "clockSysvar": keys[3].to_string(),
-                    "custodian": keys[1].to_string(),
+                    "custodian": custodian_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..2], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_delegate_ix() {
+        let stake_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let vote_pubkey = Pubkey::new_unique();
+        let instruction =
+            instruction::delegate_stake(&stake_pubkey, &authorized_pubkey, &vote_pubkey);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "delegate".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "voteAccount": vote_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "stakeHistorySysvar": sysvar::stake_history::ID.to_string(),
+                    "stakeConfigAccount": config::ID.to_string(),
+                    "stakeAuthority": authorized_pubkey.to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..5], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_split_ix() {
+        let lamports = 55;
+        let stake_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let split_stake_pubkey = Pubkey::new_unique();
+        let instructions = instruction::split(
+            &stake_pubkey,
+            &authorized_pubkey,
+            lamports,
+            &split_stake_pubkey,
+        );
+        let message = Message::new(&instructions, None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[2],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "split".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "newSplitAccount": split_stake_pubkey.to_string(),
+                    "stakeAuthority": authorized_pubkey.to_string(),
+                    "lamports": lamports,
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[2],
+            &AccountKeys::new(&message.account_keys[0..2], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_withdraw_ix() {
+        let lamports = 55;
+        let stake_pubkey = Pubkey::new_unique();
+        let withdrawer_pubkey = Pubkey::new_unique();
+        let to_pubkey = Pubkey::new_unique();
+        let custodian_pubkey = Pubkey::new_unique();
+        let instruction = instruction::withdraw(
+            &stake_pubkey,
+            &withdrawer_pubkey,
+            &to_pubkey,
+            lamports,
+            None,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "withdraw".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "destination": to_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "stakeHistorySysvar": sysvar::stake_history::ID.to_string(),
+                    "withdrawAuthority": withdrawer_pubkey.to_string(),
+                    "lamports": lamports,
+                }),
+            }
+        );
+        let instruction = instruction::withdraw(
+            &stake_pubkey,
+            &withdrawer_pubkey,
+            &to_pubkey,
+            lamports,
+            Some(&custodian_pubkey),
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "withdraw".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "destination": to_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "stakeHistorySysvar": sysvar::stake_history::ID.to_string(),
+                    "withdrawAuthority": withdrawer_pubkey.to_string(),
+                    "custodian": custodian_pubkey.to_string(),
+                    "lamports": lamports,
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..4], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_deactivate_stake_ix() {
+        let stake_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let instruction = instruction::deactivate_stake(&stake_pubkey, &authorized_pubkey);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "deactivate".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "stakeAuthority": authorized_pubkey.to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..2], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_merge_ix() {
+        let destination_stake_pubkey = Pubkey::new_unique();
+        let source_stake_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let instructions = instruction::merge(
+            &destination_stake_pubkey,
+            &source_stake_pubkey,
+            &authorized_pubkey,
+        );
+        let message = Message::new(&instructions, None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "merge".to_string(),
+                info: json!({
+                    "destination": destination_stake_pubkey.to_string(),
+                    "source": source_stake_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "stakeHistorySysvar": sysvar::stake_history::ID.to_string(),
+                    "stakeAuthority": authorized_pubkey.to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..4], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_authorize_with_seed_ix() {
+        let stake_pubkey = Pubkey::new_unique();
+        let authority_base_pubkey = Pubkey::new_unique();
+        let authority_owner_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+        let custodian_pubkey = Pubkey::new_unique();
+
+        let seed = "test_seed";
+        let instruction = instruction::authorize_with_seed(
+            &stake_pubkey,
+            &authority_base_pubkey,
+            seed.to_string(),
+            &authority_owner_pubkey,
+            &new_authorized_pubkey,
+            StakeAuthorize::Staker,
+            None,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeWithSeed".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "authorityOwner": authority_owner_pubkey.to_string(),
+                    "newAuthorized": new_authorized_pubkey.to_string(),
+                    "authorityBase": authority_base_pubkey.to_string(),
+                    "authoritySeed": seed,
+                    "authorityType": StakeAuthorize::Staker,
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..2], None)
+        )
+        .is_err());
+
+        let instruction = instruction::authorize_with_seed(
+            &stake_pubkey,
+            &authority_base_pubkey,
+            seed.to_string(),
+            &authority_owner_pubkey,
+            &new_authorized_pubkey,
+            StakeAuthorize::Withdrawer,
+            Some(&custodian_pubkey),
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeWithSeed".to_string(),
+                info: json!({
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "authorityOwner": authority_owner_pubkey.to_string(),
+                    "newAuthorized": new_authorized_pubkey.to_string(),
+                    "authorityBase": authority_base_pubkey.to_string(),
+                    "authoritySeed": seed,
+                    "authorityType": StakeAuthorize::Withdrawer,
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "custodian": custodian_pubkey.to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
     }
@@ -807,48 +880,53 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
-    fn test_parse_stake_checked_instructions() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..6 {
-            keys.push(Pubkey::new_unique());
-        }
+    fn test_parse_stake_create_account_checked_ix() {
+        let from_pubkey = Pubkey::new_unique();
+        let stake_pubkey = Pubkey::new_unique();
 
         let authorized = Authorized {
-            staker: keys[3],
-            withdrawer: keys[0],
+            staker: Pubkey::new_unique(),
+            withdrawer: Pubkey::new_unique(),
         };
         let lamports = 55;
 
         let instructions =
-            instruction::create_account_checked(&keys[0], &keys[1], &authorized, lamports);
+            instruction::create_account_checked(&from_pubkey, &stake_pubkey, &authorized, lamports);
         let message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(
                 &message.instructions[1],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeChecked".to_string(),
                 info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "rentSysvar": keys[2].to_string(),
-                    "staker": keys[3].to_string(),
-                    "withdrawer": keys[0].to_string(),
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
+                    "staker": authorized.staker.to_string(),
+                    "withdrawer": authorized.withdrawer.to_string(),
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[1],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_authorize_checked_ix() {
+        let stake_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+        let custodian_pubkey = Pubkey::new_unique();
 
         let instruction = instruction::authorize_checked(
-            &keys[2],
-            &keys[0],
-            &keys[1],
+            &stake_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
             StakeAuthorize::Staker,
             None,
         );
@@ -856,65 +934,74 @@ mod test {
         assert_eq!(
             parse_stake(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeChecked".to_string(),
                 info: json!({
-                    "stakeAccount": keys[2].to_string(),
-                    "clockSysvar": keys[3].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[1].to_string(),
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authority": authorized_pubkey.to_string(),
+                    "newAuthority": new_authorized_pubkey.to_string(),
                     "authorityType": StakeAuthorize::Staker,
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
 
         let instruction = instruction::authorize_checked(
-            &keys[3],
-            &keys[0],
-            &keys[1],
+            &stake_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
             StakeAuthorize::Withdrawer,
-            Some(&keys[2]),
+            Some(&custodian_pubkey),
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..5], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeChecked".to_string(),
                 info: json!({
-                    "stakeAccount": keys[3].to_string(),
-                    "clockSysvar": keys[4].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[1].to_string(),
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authority": authorized_pubkey.to_string(),
+                    "newAuthority": new_authorized_pubkey.to_string(),
                     "authorityType": StakeAuthorize::Withdrawer,
-                    "custodian": keys[2].to_string(),
+                    "custodian": custodian_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..4], None)
+            &AccountKeys::new(&message.account_keys[0..4], None)
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_parse_stake_authorize_checked_with_seed_ix() {
+        let stake_pubkey = Pubkey::new_unique();
+        let authority_base_pubkey = Pubkey::new_unique();
+        let authority_owner_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+        let custodian_pubkey = Pubkey::new_unique();
 
         let seed = "test_seed";
         let instruction = instruction::authorize_checked_with_seed(
-            &keys[2],
-            &keys[0],
+            &stake_pubkey,
+            &authority_base_pubkey,
             seed.to_string(),
-            &keys[0],
-            &keys[1],
+            &authority_owner_pubkey,
+            &new_authorized_pubkey,
             StakeAuthorize::Staker,
             None,
         );
@@ -922,61 +1009,61 @@ mod test {
         assert_eq!(
             parse_stake(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..4], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeCheckedWithSeed".to_string(),
                 info: json!({
-                    "stakeAccount": keys[2].to_string(),
-                    "authorityOwner": keys[0].to_string(),
-                    "newAuthorized": keys[1].to_string(),
-                    "authorityBase": keys[0].to_string(),
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "authorityOwner": authority_owner_pubkey.to_string(),
+                    "newAuthorized": new_authorized_pubkey.to_string(),
+                    "authorityBase": authority_base_pubkey.to_string(),
                     "authoritySeed": seed,
                     "authorityType": StakeAuthorize::Staker,
-                    "clockSysvar": keys[3].to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..3], None)
+            &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
 
         let instruction = instruction::authorize_checked_with_seed(
-            &keys[3],
-            &keys[0],
+            &stake_pubkey,
+            &authority_base_pubkey,
             seed.to_string(),
-            &keys[0],
-            &keys[1],
+            &authority_owner_pubkey,
+            &new_authorized_pubkey,
             StakeAuthorize::Withdrawer,
-            Some(&keys[2]),
+            Some(&custodian_pubkey),
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(
                 &message.instructions[0],
-                &AccountKeys::new(&keys[0..5], None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeCheckedWithSeed".to_string(),
                 info: json!({
-                    "stakeAccount": keys[3].to_string(),
-                    "authorityOwner": keys[0].to_string(),
-                    "newAuthorized": keys[1].to_string(),
-                    "authorityBase": keys[0].to_string(),
+                    "stakeAccount": stake_pubkey.to_string(),
+                    "authorityOwner": authority_owner_pubkey.to_string(),
+                    "newAuthorized": new_authorized_pubkey.to_string(),
+                    "authorityBase": authority_base_pubkey.to_string(),
                     "authoritySeed": seed,
                     "authorityType": StakeAuthorize::Withdrawer,
-                    "clockSysvar": keys[4].to_string(),
-                    "custodian": keys[2].to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "custodian": custodian_pubkey.to_string(),
                 }),
             }
         );
         assert!(parse_stake(
             &message.instructions[0],
-            &AccountKeys::new(&keys[0..4], None)
+            &AccountKeys::new(&message.account_keys[0..4], None)
         )
         .is_err());
     }

@@ -34,7 +34,7 @@ use {
         snapshot_utils,
         transaction_batch::TransactionBatch,
         transaction_cost_metrics_sender::TransactionCostMetricsSender,
-        vote_account::VoteAccount,
+        vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -178,6 +178,7 @@ fn execute_batch(
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
+        transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
@@ -1348,7 +1349,7 @@ fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<S
 fn supermajority_root_from_vote_accounts(
     bank_slot: Slot,
     total_epoch_stake: u64,
-    vote_accounts: &HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
+    vote_accounts: &VoteAccountsHashMap,
 ) -> Option<Slot> {
     let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
         .iter()
@@ -1550,8 +1551,11 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_runtime::genesis_utils::{
-            self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+        solana_runtime::{
+            genesis_utils::{
+                self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+            },
+            vote_account::VoteAccount,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -3510,6 +3514,7 @@ pub mod tests {
             false,
             false,
             false,
+            false,
             &mut ExecuteTimings::default(),
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
@@ -3797,27 +3802,23 @@ pub mod tests {
     #[test]
     #[allow(clippy::field_reassign_with_default)]
     fn test_supermajority_root_from_vote_accounts() {
-        let convert_to_vote_accounts =
-            |roots_stakes: Vec<(Slot, u64)>| -> HashMap<Pubkey, (u64, VoteAccount)> {
-                roots_stakes
-                    .into_iter()
-                    .map(|(root, stake)| {
-                        let mut vote_state = VoteState::default();
-                        vote_state.root_slot = Some(root);
-                        let mut vote_account = AccountSharedData::new(
-                            1,
-                            VoteState::size_of(),
-                            &solana_vote_program::id(),
-                        );
-                        let versioned = VoteStateVersions::new_current(vote_state);
-                        VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
-                        (
-                            solana_sdk::pubkey::new_rand(),
-                            (stake, VoteAccount::from(vote_account)),
-                        )
-                    })
-                    .collect()
-            };
+        let convert_to_vote_accounts = |roots_stakes: Vec<(Slot, u64)>| -> VoteAccountsHashMap {
+            roots_stakes
+                .into_iter()
+                .map(|(root, stake)| {
+                    let mut vote_state = VoteState::default();
+                    vote_state.root_slot = Some(root);
+                    let mut vote_account =
+                        AccountSharedData::new(1, VoteState::size_of(), &solana_vote_program::id());
+                    let versioned = VoteStateVersions::new_current(vote_state);
+                    VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
+                    (
+                        solana_sdk::pubkey::new_rand(),
+                        (stake, VoteAccount::from(vote_account)),
+                    )
+                })
+                .collect()
+        };
 
         let total_stake = 10;
         let slot = 100;

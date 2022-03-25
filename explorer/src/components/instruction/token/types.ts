@@ -166,6 +166,10 @@ const BurnChecked = type({
   tokenAmount: TokenAmountUi,
 });
 
+const SyncNative = type({
+  account: PublicKeyFromString,
+});
+
 export type TokenInstructionType = Infer<typeof TokenInstructionType>;
 export const TokenInstructionType = enums([
   "initializeMint",
@@ -188,6 +192,7 @@ export const TokenInstructionType = enums([
   "approveChecked",
   "mintToChecked",
   "burnChecked",
+  "syncNative",
 ]);
 
 export const IX_STRUCTS = {
@@ -211,6 +216,7 @@ export const IX_STRUCTS = {
   approveChecked: ApproveChecked,
   mintToChecked: MintToChecked,
   burnChecked: BurnChecked,
+  syncNative: SyncNative,
 };
 
 export const IX_TITLES = {
@@ -234,4 +240,5 @@ export const IX_TITLES = {
   approveChecked: "Approve (Checked)",
   mintToChecked: "Mint To (Checked)",
   burnChecked: "Burn (Checked)",
+  syncNative: "Sync Native",
 };

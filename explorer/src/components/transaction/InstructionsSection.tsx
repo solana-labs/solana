@@ -21,8 +21,8 @@ import { WormholeDetailsCard } from "components/instruction/WormholeDetailsCard"
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import { BonfidaBotDetailsCard } from "components/instruction/BonfidaBotDetails";
 import {
-  SignatureProps,
   INNER_INSTRUCTIONS_START_SLOT,
+  SignatureProps,
 } from "pages/TransactionDetailsPage";
 import { intoTransactionInstruction } from "utils/tx";
 import { isSerumInstruction } from "components/instruction/serum/types";
@@ -39,10 +39,12 @@ import { BpfUpgradeableLoaderDetailsCard } from "components/instruction/bpf-upgr
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
 import { isWormholeInstruction } from "components/instruction/wormhole/types";
 import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTokenDetailsCard";
-import { isMangoInstruction } from "components/instruction/mango/types";
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
 import { isPythInstruction } from "components/instruction/pyth/types";
 import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
+import { isInstructionFromAnAnchorProgram } from "../instruction/anchor/types";
+import { GenericAnchorDetailsCard } from "../instruction/GenericAnchorDetails";
+import { isMangoInstruction } from "../instruction/mango/types";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -214,6 +216,8 @@ function renderInstructionCard({
 
   if (isBonfidaBotInstruction(transactionIx)) {
     return <BonfidaBotDetailsCard key={key} {...props} />;
+  } else if (isInstructionFromAnAnchorProgram(transactionIx)) {
+    return <GenericAnchorDetailsCard key={key} {...props} />;
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {

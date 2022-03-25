@@ -500,7 +500,7 @@ export function decodeInitOpenOrders(
       openOrders: ix.keys[0].pubkey,
       openOrdersOwner: ix.keys[1].pubkey,
       market: ix.keys[2].pubkey,
-      openOrdersMarketAuthority: ix.keys[4].pubkey,
+      openOrdersMarketAuthority: ix.keys[4]?.pubkey,
     },
   };
 }

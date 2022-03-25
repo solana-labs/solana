@@ -25,8 +25,8 @@ use {
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{
-            self, AccessType, BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRecoveryMode,
-            Database,
+            self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Database,
+            LedgerColumnOptions,
         },
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -323,6 +323,26 @@ fn output_ledger(
 
     if method == LedgerOutputMethod::Json {
         stdout().write_all(b"\n]}\n").expect("close array");
+    }
+}
+
+fn output_account(
+    pubkey: &Pubkey,
+    account: &AccountSharedData,
+    modified_slot: Option<Slot>,
+    print_account_data: bool,
+) {
+    println!("{}", pubkey);
+    println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
+    println!("  owner: '{}'", account.owner());
+    println!("  executable: {}", account.executable());
+    if let Some(slot) = modified_slot {
+        println!("  slot: {}", slot);
+    }
+    println!("  rent_epoch: {}", account.rent_epoch());
+    println!("  data_len: {}", account.data().len());
+    if print_account_data {
+        println!("  data: '{}'", bs58::encode(account.data()).into_string());
     }
 }
 
@@ -1162,6 +1182,24 @@ fn main() {
             SubCommand::with_name("genesis")
             .about("Prints the ledger's genesis config")
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(
+                Arg::with_name("accounts")
+                    .long("accounts")
+                    .takes_value(false)
+                    .help("Print the ledger's genesis accounts"),
+            )
+            .arg(
+                Arg::with_name("no_account_data")
+                    .long("no-account-data")
+                    .takes_value(false)
+                    .requires("accounts")
+                    .help("Do not print account data when printing account contents."),
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("genesis-hash")
+            .about("Prints the ledger's genesis hash")
+            .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
             SubCommand::with_name("parse_full_frozen")
@@ -1176,11 +1214,6 @@ fn main() {
                     .takes_value(true)
                     .help("path to log file to parse"),
             )
-        )
-        .subcommand(
-            SubCommand::with_name("genesis-hash")
-            .about("Prints the ledger's genesis hash")
-            .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
             SubCommand::with_name("modify-genesis")
@@ -1457,11 +1490,10 @@ fn main() {
                     .takes_value(false)
                     .help("Do not print contents of each account, which is very slow with lots of accounts."),
             )
-            .arg(
-                Arg::with_name("no_account_data")
-                    .long("no-account-data")
-                    .takes_value(false)
-                    .help("Do not print account data when printing account contents."),
+            .arg(Arg::with_name("no_account_data")
+                .long("no-account-data")
+                .takes_value(false)
+                .help("Do not print account data when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -1690,7 +1722,21 @@ fn main() {
                 }
             }
             ("genesis", Some(arg_matches)) => {
-                println!("{}", open_genesis_config_by(&ledger_path, arg_matches));
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let print_accouunts = arg_matches.is_present("accounts");
+                if print_accouunts {
+                    let print_account_data = !arg_matches.is_present("no_account_data");
+                    for (pubkey, account) in genesis_config.accounts {
+                        output_account(
+                            &pubkey,
+                            &AccountSharedData::from(account),
+                            None,
+                            print_account_data,
+                        );
+                    }
+                } else {
+                    println!("{}", genesis_config);
+                }
             }
             ("genesis-hash", Some(arg_matches)) => {
                 println!(
@@ -1719,7 +1765,7 @@ fn main() {
                     &output_directory,
                     &genesis_config,
                     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-                    BlockstoreAdvancedOptions::default(),
+                    LedgerColumnOptions::default(),
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to write genesis config: {:?}", err);
@@ -2560,17 +2606,7 @@ fn main() {
                     let print_account_data = !arg_matches.is_present("no_account_data");
                     let mut measure = Measure::start("printing account contents");
                     for (pubkey, (account, slot)) in accounts.into_iter() {
-                        let data_len = account.data().len();
-                        println!("{}:", pubkey);
-                        println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
-                        println!("  - owner: '{}'", account.owner());
-                        println!("  - executable: {}", account.executable());
-                        println!("  - slot: {}", slot);
-                        println!("  - rent_epoch: {}", account.rent_epoch());
-                        if print_account_data {
-                            println!("  - data: '{}'", bs58::encode(account.data()).into_string());
-                        }
-                        println!("  - data_len: {}", data_len);
+                        output_account(&pubkey, &account, Some(slot), print_account_data);
                     }
                     measure.stop();
                     info!("{}", measure);

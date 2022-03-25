@@ -7,6 +7,7 @@ use {
         hash::Hash,
         inflation::Inflation,
         transaction::{Result, TransactionError},
+        transaction_context::TransactionReturnData,
     },
     solana_transaction_status::{
         ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
@@ -347,6 +348,7 @@ pub struct RpcSimulateTransactionResult {
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
