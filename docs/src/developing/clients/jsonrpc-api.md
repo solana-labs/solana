@@ -776,7 +776,7 @@ Returns a list of confirmed blocks between two slots
 #### Parameters:
 
 - `<u64>` - start_slot, as u64 integer
-- `<u64>` - (optional) end_slot, as u64 integer
+- `<u64>` - (optional) end_slot, as u64 integer (must be no more than 500,000 blocks higher than the `start_slot`)
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
@@ -808,7 +808,7 @@ Returns a list of confirmed blocks starting at the given slot
 #### Parameters:
 
 - `<u64>` - start_slot, as u64 integer
-- `<u64>` - limit, as u64 integer
+- `<u64>` - limit, as u64 integer (must be no more than 500,000 blocks higher than the `start_slot`)
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
@@ -1732,11 +1732,11 @@ Result:
 
 ### getMultipleAccounts
 
-Returns the account information for a list of Pubkeys
+Returns the account information for a list of Pubkeys.
 
 #### Parameters:
 
-- `<array>` - An array of Pubkeys to query, as base-58 encoded strings
+- `<array>` - An array of Pubkeys to query, as base-58 encoded strings (up to a maximum of 100).
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
@@ -1887,7 +1887,7 @@ Returns all accounts owned by the provided program Pubkey
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
-  - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
+  - (optional) `filters: <array>` - filter results using up to 4 [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
   - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
 
 ##### Filters:
@@ -2135,7 +2135,7 @@ active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 
-- `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings
+- `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings (up to a maximum of 256)
 - `<object>` - (optional) Configuration object containing the following field:
   - `searchTransactionHistory: <bool>` - if true, a Solana node will search its ledger cache for any signatures not found in the recent status cache
 
@@ -2318,7 +2318,7 @@ Returns the slot leaders for a given slot range
 #### Parameters:
 
 - `<u64>` - Start slot, as u64 integer
-- `<u64>` - Limit, as u64 integer
+- `<u64>` - Limit, as u64 integer (between 1 and 5,000)
 
 #### Results:
 
