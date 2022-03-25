@@ -59,6 +59,7 @@ impl SlotPohTimestamp {
 pub struct PohTimingReporter {
     /// Storage map of SlotPohTimestamp per slot
     slot_timestamps: HashMap<Slot, SlotPohTimestamp>,
+    last_root_slot: Slot,
 }
 
 impl PohTimingReporter {
@@ -110,7 +111,10 @@ impl PohTimingReporter {
 
         // delete slots that are older than the root_slot
         if let Some(root_slot) = root_slot {
-            self.slot_timestamps.retain(|&k, _| k >= root_slot);
+            if root_slot != self.last_root_slot {
+                self.slot_timestamps.retain(|&k, _| k >= root_slot);
+                self.last_root_slot = root_slot;
+            }
         }
         completed
     }
