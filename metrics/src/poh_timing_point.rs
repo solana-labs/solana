@@ -138,35 +138,60 @@ mod test {
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
+        assert_eq!(
+            format!("{}", p),
+            "PohTimingPoint: slot=100, root_slot=101, poh_start=100"
+        );
 
         // create slot start without root
         let p = create_slot_poh_start_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
+        assert_eq!(
+            format!("{}", p),
+            "PohTimingPoint: slot=100, root_slot=0, poh_start=100"
+        );
 
         // create slot end with root
         let p = create_slot_poh_end_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
+        assert_eq!(
+            format!("{}", p),
+            "PohTimingPoint: slot=100, root_slot=101, poh_end=100"
+        );
 
         // create slot end without root
         let p = create_slot_poh_end_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
+        assert_eq!(
+            format!("{}", p),
+            "PohTimingPoint: slot=100, root_slot=0, poh_end=100"
+        );
 
         // create slot full with root
         let p = create_slot_poh_full_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
+        assert_eq!(
+            format!("{}", p),
+            "PohTimingPoint: slot=100, root_slot=101, poh_full=100"
+        );
 
         // create slot full without root
         let p = create_slot_poh_full_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
+
+        assert_eq!(
+            format!("{}", p),
+            "PohTimingPoint: slot=100, root_slot=0, poh_full=100"
+        );
     }
 }
