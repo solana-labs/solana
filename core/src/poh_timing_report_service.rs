@@ -1,7 +1,7 @@
 //! PohTimingReportService module
 use {
     crate::poh_timing_reporter::PohTimingReporter,
-    solana_metrics::poh_timing_point::{PohTimingPoint, PohTimingReceiver, SlotPohTimingInfo},
+    solana_metrics::poh_timing_point::{PohTimingReceiver, SlotPohTimingInfo},
     std::{
         string::ToString,
         sync::{
@@ -54,7 +54,9 @@ impl PohTimingReportService {
 
 #[cfg(test)]
 mod test {
-    use {super::*, crossbeam_channel::unbounded};
+    use {
+        super::*, crossbeam_channel::unbounded, solana_metrics::poh_timing_point::PohTimingPoint,
+    };
 
     #[test]
     /// Test the life cycle of the PohTimingReportService
