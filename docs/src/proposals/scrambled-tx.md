@@ -43,6 +43,8 @@ This construction is called *scrambling* across this proposal.
 Conversely, the forced computation to reveal the transaction details by solving
 the recursive sha256 is called *descrambling*.
 
+backrunning will be allowed still after this proposal, with fair fcfs-then-bidding order.
+
 ### Summary of consensus changes
 
 In addition to the obvious change of submission of scrambled transactions by
@@ -83,6 +85,13 @@ clients.
 - Reliance of local wall clock time
 - Pretty invasive system change
 
+
+### Assumptions of other subsystem's improvements
+
+- bankless leader
+- randomized leader schedule (or stop 4-slot grouping at the very least)
+- on-chain mempool with bidding
+
 ### Scrambling details
 
 As said above, scrambling refers to a specially-arranged encryption scheme where
@@ -97,24 +106,21 @@ All of fields in a transaction are scrambled with randomized padding, including
 fee payer to avoid any kind of fingerprinting while allowing garbage-based
 spamming with amplification risk.
 
-Also, scrambled transaction expires very quickly based on wall clock time,
-usually less than the targeted duration of difficulty to protest against
-processing stalls by malicious leaders for MEV.
+Also, scrambled transaction expires very quickly based on wall clock time, less
+than the targeted duration of difficulty to protect from processing stalls by
+malicious leaders for MEV.
 
-So, given the raw transaction binary:
-
-```
-[transaction details]
-```
-
-, scrambling encloses it like this:
+So, scrambled transaction binary format will be like this
 
 ```
+
+[scrambled transaction marker]
 [seed to recursive sha256]
 [recursion count]
-[encrypted authentication tag]
-[encrypted expiration unix time]
-[encrypted transaction details]
+aes256-ed..
+  [aes256 key used to scramble] # this works as authentication tag
+  [expiration in unix time]
+  [normal transaction details...] # fee payer sig cover the scrambling key to avoid unauthorized scrambling
 ```
 
 So, this assumes quic to bypass the transaction udp packet size limit.
@@ -214,6 +220,8 @@ malice leader can still annoy the cluster by stalling the descrambling phase
 in this way. To mitigate this, we allow subsequent leaders can also propagate
 the revealed keys shreds.
 
+#### Selfish mining by only including theirs own transactions
+
 #### Stalling the banking stage after full revelation of scrambled transactions
 
 Likewise above, the mitigation here is that the next leader can replay the
@@ -271,6 +279,12 @@ layer, opening fierce yet cooperative validator competition.
 
 All in all, the induced latency should be worth as the trade-off to realize
 these technical breakthroughs.
+
+### Alternative approch
+
+multiple block producers concurrently. todo: and collect and analyze anatoly's thoughts.
+
+also, this proposal is trying even to work for realizaton of fair palys for on-chain quiz.
 
 ### Prior work
 
