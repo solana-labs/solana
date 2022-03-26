@@ -304,7 +304,7 @@ also, this proposal is trying even to work for realizaton of fair palys for on-c
 
 stake centralization? ohoh, scrambled block incentivise just high uptime for validator to earn more.
 
-#### spaning of off-chain marketplace like flashbots
+#### possible off-chain marketplace like flashbots
 
 should be economically inferior because of existense of this unified on-chain one.
 
