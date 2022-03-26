@@ -290,6 +290,8 @@ multiple block producers concurrently. todo: and collect and analyze anatoly's t
 
 also, this proposal is trying even to work for realizaton of fair palys for on-chain quiz.
 
+stake centralization? ohoh, scrambled block incentivise just high uptime for validator to earn more.
+
 ### Prior work
 
 None? This scrambling is leveraging the fact Solana's very short block time and
