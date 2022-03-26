@@ -1,10 +1,10 @@
 #[cfg(not(target_arch = "bpf"))]
-use crate::message::v0::{LoadedAddresses, MessageAddressTableLookup};
+use crate::{
+    address_lookup_table_account::AddressLookupTableAccount,
+    message::v0::{LoadedAddresses, MessageAddressTableLookup},
+};
 use {
-    crate::{
-        address_lookup_table_account::AddressLookupTableAccount, instruction::Instruction,
-        message::MessageHeader, pubkey::Pubkey,
-    },
+    crate::{instruction::Instruction, message::MessageHeader, pubkey::Pubkey},
     std::collections::BTreeMap,
     thiserror::Error,
 };
@@ -18,6 +18,7 @@ pub(crate) struct CompiledKeys {
     readonly_non_signer_keys: Vec<Pubkey>,
 }
 
+#[allow(dead_code)]
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
 pub enum CompileError {
     #[error("account index overflowed during compilation")]
@@ -142,6 +143,7 @@ impl CompiledKeys {
     }
 }
 
+#[allow(dead_code)]
 fn try_drain_keys_found_in_lookup_table(
     keys: &mut Vec<Pubkey>,
     lookup_table_addresses: &[Pubkey],
