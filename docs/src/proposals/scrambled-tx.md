@@ -16,9 +16,11 @@ impractical in the first place.
 
 Any temporal market imbalance should be corrected strictly on the grounds of a
 fair game, basically the golden first-come-first-served rule (with optional
-bidding for priority). This means this proposal doesn't try to mitigate one of
-MEV types: back-running.
+bidding for priority).
 
+Note that this proposal doesn't fully mitigate one of MEV types, unlike all
+other fully-neutralized types: back-running. Back-running can be exercised
+while the golden rule is strictly and fairly enforced.
 
 ### Summary of Proposed Solution
 
