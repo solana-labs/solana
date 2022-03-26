@@ -247,9 +247,11 @@ transactions from cluster stalls. So, they make transactions quickly expire.
 Thus, their strategy for most likely favorable trade is submission of their
 transaction as fast as possible as determined.
 
-Lastly, transactions are now included into a block very greedily. And
-observation by the cluster can be signalled very reliably. So, clients (esp.
-bots) are less incentivised to spamming for the race of inclusion.
+Lastly, transactions are now included into a block very greedily, meaning the
+5000 lamports fee will be debited once broadcast (and included into a block).
+And observation by the cluster can be signalled very timely and very reliably
+to that client. So, clients (esp.  bots) are less incentivised to spamming for
+the race of inclusion.
 
 #### Leaders
 
