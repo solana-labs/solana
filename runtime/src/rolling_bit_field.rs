@@ -2,7 +2,7 @@
 //! Relies on there being a sliding window of key values. The key values continue to increase.
 //! Old key values are removed from the lesser values and do not accumulate.
 
-use {bv::BitVec, std::collections::HashSet};
+use {bv::BitVec, solana_sdk::clock::Slot, std::collections::HashSet};
 
 #[derive(Debug, Default, AbiExample, Clone)]
 pub struct RollingBitField {
@@ -239,6 +239,27 @@ impl RollingBitField {
         self.max_exclusive.saturating_sub(1)
     }
 
+    /// return all items < 'max_slot_exclusive'
+    #[allow(dead_code)] // temporary
+    pub fn get_all_less_than(&self, max_slot_exclusive: Slot) -> Vec<u64> {
+        let mut all = Vec::with_capacity(self.count);
+        self.excess.iter().for_each(|slot| {
+            if slot < &max_slot_exclusive {
+                all.push(*slot)
+            }
+        });
+        for key in self.min..self.max_exclusive {
+            if key >= max_slot_exclusive {
+                break;
+            }
+
+            if self.contains_assume_in_range(&key) {
+                all.push(key);
+            }
+        }
+        all
+    }
+
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| all.push(*slot));
@@ -253,13 +274,66 @@ impl RollingBitField {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, log::*, solana_measure::measure::Measure, solana_sdk::clock::Slot};
+    use {super::*, log::*, solana_measure::measure::Measure};
 
     impl RollingBitField {
         pub fn clear(&mut self) {
             let mut n = Self::new(self.max_width);
             std::mem::swap(&mut n, self);
         }
+    }
+
+    #[test]
+    fn test_get_all_less_than() {
+        solana_logger::setup();
+        let len = 16;
+        let mut bitfield = RollingBitField::new(len);
+        assert!(bitfield.get_all_less_than(0).is_empty());
+        bitfield.insert(0);
+        assert!(bitfield.get_all_less_than(0).is_empty());
+        assert_eq!(bitfield.get_all_less_than(1), vec![0]);
+        bitfield.insert(1);
+        assert_eq!(bitfield.get_all_less_than(1), vec![0]);
+        let last_item_not_in_excess = len - 1;
+        bitfield.insert(last_item_not_in_excess);
+        assert!(bitfield.excess.is_empty());
+        assert_eq!(
+            bitfield.get_all_less_than(last_item_not_in_excess),
+            vec![0, 1]
+        );
+        assert_eq!(
+            bitfield.get_all_less_than(last_item_not_in_excess + 1),
+            vec![0, 1, last_item_not_in_excess]
+        );
+        let first_item_in_excess = last_item_not_in_excess + 1;
+        bitfield.insert(first_item_in_excess);
+        assert!(bitfield.excess.contains(&0));
+        assert_eq!(
+            bitfield.get_all_less_than(last_item_not_in_excess),
+            vec![0, 1]
+        );
+        assert_eq!(
+            bitfield.get_all_less_than(last_item_not_in_excess + 1),
+            vec![0, 1, last_item_not_in_excess]
+        );
+        assert_eq!(
+            bitfield.get_all_less_than(first_item_in_excess + 1),
+            vec![0, 1, last_item_not_in_excess, first_item_in_excess]
+        );
+
+        bitfield.insert(len * 2);
+        let mut less = bitfield.get_all_less_than(len * 2);
+        less.sort_unstable();
+        assert_eq!(
+            vec![0, 1, last_item_not_in_excess, first_item_in_excess],
+            less
+        );
+        let mut less = bitfield.get_all_less_than(len * 2 + 1);
+        less.sort_unstable();
+        assert_eq!(
+            vec![0, 1, last_item_not_in_excess, first_item_in_excess, len * 2],
+            less
+        );
     }
 
     #[test]

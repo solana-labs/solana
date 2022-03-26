@@ -42,6 +42,7 @@ export function SearchBar() {
       <div className="row align-items-center">
         <div className="col">
           <Select
+            autoFocus
             ref={(ref) => (selectRef.current = ref)}
             options={buildOptions(
               search,
