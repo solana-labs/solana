@@ -309,7 +309,7 @@ impl PohRecorder {
     }
 
     pub fn working_bank_end_slot(&self) -> Option<Slot> {
-        self.working_bank.as_ref().map_or(None, |w| {
+        self.working_bank.as_ref().and_then(|w| {
             if w.max_tick_height == self.tick_height {
                 Some(w.bank.slot())
             } else {
@@ -613,7 +613,7 @@ impl PohRecorder {
         if let Some(ref sender) = self.poh_timing_point_sender {
             trace!("PohTimingPoint:End {}", slot);
             let _ = sender.try_send(SlotPohTimingInfo {
-                slot: slot,
+                slot,
                 root_slot: None,
                 timing_point: PohTimingPoint::PohSlotEnd(solana_sdk::timing::timestamp()),
             });
