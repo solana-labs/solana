@@ -320,7 +320,8 @@ mod tests {
 
     #[test]
     fn test_try_compile_instructions_with_too_many_account_keys() {
-        let static_keys = vec![Pubkey::default(); 256];
+        const MAX_LENGTH_WITHOUT_OVERFLOW: usize = u8::MAX as usize + 1;
+        let static_keys = vec![Pubkey::default(); MAX_LENGTH_WITHOUT_OVERFLOW];
         let dynamic_keys = LoadedAddresses {
             writable: vec![Pubkey::default()],
             readonly: vec![],

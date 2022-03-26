@@ -437,7 +437,8 @@ mod tests {
             ..CompiledKeys::default()
         };
 
-        let mut addresses = vec![Pubkey::default(); 256];
+        const MAX_LENGTH_WITHOUT_OVERFLOW: usize = u8::MAX as usize + 1;
+        let mut addresses = vec![Pubkey::default(); MAX_LENGTH_WITHOUT_OVERFLOW];
         addresses.push(compiled_keys.writable_non_signer_keys[0]);
 
         let lookup_table_account = AddressLookupTableAccount {
@@ -523,7 +524,8 @@ mod tests {
     #[test]
     fn test_try_drain_keys_found_in_lookup_table_with_too_many_addresses() {
         let mut keys = vec![Pubkey::new_unique()];
-        let mut lookup_table_addresses = vec![Pubkey::default(); 256];
+        const MAX_LENGTH_WITHOUT_OVERFLOW: usize = u8::MAX as usize + 1;
+        let mut lookup_table_addresses = vec![Pubkey::default(); MAX_LENGTH_WITHOUT_OVERFLOW];
         lookup_table_addresses.push(keys[0]);
 
         let drain_result = try_drain_keys_found_in_lookup_table(&mut keys, &lookup_table_addresses);
