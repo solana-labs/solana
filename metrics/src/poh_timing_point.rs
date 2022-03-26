@@ -4,7 +4,7 @@ use {
 };
 
 /// PohTimingPoint. Each TimingPoint is annotated with a timestamp in milliseconds.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PohTimingPoint {
     PohSlotStart(u64),
     PohSlotEnd(u64),
@@ -100,15 +100,37 @@ pub type PohTimingSender = Sender<SlotPohTimingInfo>;
 
 #[cfg(test)]
 mod test {
+    use super::*;
     #[test]
     fn test_poh_timing_point() {
-        let _ = create_slot_poh_start_time_point!(100, 101, 100);
-        let _ = create_slot_poh_start_time_point!(100, 100);
+        let p = create_slot_poh_start_time_point!(100, 101, 100);
+        assert!(p.slot == 100);
+        assert_eq!(p.root_slot, Some(101));
+        assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
 
-        let _ = create_slot_poh_end_time_point!(100, 101, 100);
-        let _ = create_slot_poh_end_time_point!(100, 100);
+        let p = create_slot_poh_start_time_point!(100, 100);
+        assert!(p.slot == 100);
+        assert_eq!(p.root_slot, None);
+        assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
 
-        let _ = create_slot_poh_full_time_point!(100, 101, 100);
-        let _ = create_slot_poh_full_time_point!(100, 100);
+        let p = create_slot_poh_end_time_point!(100, 101, 100);
+        assert!(p.slot == 100);
+        assert_eq!(p.root_slot, Some(101));
+        assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
+
+        let p = create_slot_poh_end_time_point!(100, 100);
+        assert!(p.slot == 100);
+        assert_eq!(p.root_slot, None);
+        assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
+
+        let p = create_slot_poh_full_time_point!(100, 101, 100);
+        assert!(p.slot == 100);
+        assert_eq!(p.root_slot, Some(101));
+        assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
+
+        let p = create_slot_poh_full_time_point!(100, 100);
+        assert!(p.slot == 100);
+        assert_eq!(p.root_slot, None);
+        assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
     }
 }
