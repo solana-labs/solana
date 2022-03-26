@@ -91,6 +91,7 @@ clients.
 - bankless leader
 - randomized leader schedule (or stop 4-slot grouping at the very least)
 - on-chain mempool with bidding
+- quic adaption for tpu (for ipv6-mtu-exeeding transaction packet and ddos prevention)
 
 ### Scrambling details
 
@@ -177,12 +178,13 @@ accumulation. The new pre-vote opt-conf duration should be a small portion of
 it, namely the block propagation and vote accumulation.
 
 We can also exclude the vote accumulation duration because the block propagation
-duration is the only duration which needs to remain scrambled. We can securely
-derive the stake-weighted duration of block propagation from timestamps in past
-pre-votes (could be hard-coded initially) on epoch basis.
+duration is the only duration which needs to remain scrambled. We can
+stake-weightedly derive the duration of block propagation from stake-weighted
+timestamps in past pre-votes (could be hard-coded initially) on epoch basis.
 
-Lastly, block propagation should finish within a slot or two, otherwise cluster
-isn't healthy in the first place.
+Lastly, block propagation for any given slot should finish within a slot or
+two, otherwise cluster isn't healthy in the first place, causing unrecoverable
+desync acorss significant number of staked nodes.
 
 Thus, approximately 4 slots (~1.6s) will be scrambling target difficulty. This
 is major component of induced latency. In addition to this, scrambled keys must
