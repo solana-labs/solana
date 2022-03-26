@@ -294,6 +294,14 @@ layer, opening fierce yet cooperative validator competition.
 All in all, the induced latency should be worth as the trade-off to realize
 these technical breakthroughs.
 
+Assuming all relevant parties are directed towards their each own profit
+maximization according to incentives in this proposal, MEV players will compete
+fully on chain as the new and last battle frontier for any conceivable edges,
+using the on-chain transaction submission mechanism for smallest latency, which
+will be introduced in the future. This will nullify co-location advantage with
+highly-staked validators (or first-hand MEV-ing by the validators, exploiting
+the block-production privilege).
+
 ### Alternative approch
 
 #### multiple block producers concurrently.
@@ -325,6 +333,3 @@ abundance of online GPU resources.
   reordering?
 
 - sha256-ing throughput difference between cpu and gpu?
-
-- mev searchers will compete on the on-chain mempool with on-chain transaction
-  submission mechanism as new battle frontier.
