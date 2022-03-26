@@ -296,11 +296,17 @@ these technical breakthroughs.
 
 ### Alternative approch
 
-multiple block producers concurrently. todo: and collect and analyze anatoly's thoughts.
+#### multiple block producers concurrently.
+
+todo: and collect and analyze anatoly's thoughts.
 
 also, this proposal is trying even to work for realizaton of fair palys for on-chain quiz.
 
 stake centralization? ohoh, scrambled block incentivise just high uptime for validator to earn more.
+
+#### spaning of off-chain marketplace like flashbots
+
+should be economically inferior because of existense of this unified on-chain one.
 
 ### Prior work
 
