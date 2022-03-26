@@ -24,7 +24,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{
         create_slot_poh_end_time_point, create_slot_poh_start_time_point,
-        poh_timing_point::{PohTimingPoint, PohTimingSender},
+        poh_timing_point::PohTimingSender,
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
