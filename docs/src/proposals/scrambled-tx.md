@@ -116,7 +116,6 @@ malicious leaders for MEV.
 So, scrambled transaction binary format will be like this
 
 ```
-
 [scrambled transaction marker]
 [seed to recursive sha256]
 [recursion count]
@@ -225,6 +224,11 @@ in this way. To mitigate this, we allow subsequent leaders can also propagate
 the revealed keys shreds.
 
 #### Selfish mining by only including theirs own transactions
+
+#### Spamming with garbage scrambles by leader or (malicious) validators
+
+- generally should be fine. the leader just caps the max txes in a block
+ - mining bad scramble reward less or none? (forced and chunked descrabmling will be needed for proper rewarding system in that case)
 
 #### Stalling the banking stage after full revelation of scrambled transactions
 
