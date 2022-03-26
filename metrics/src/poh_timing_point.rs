@@ -138,41 +138,35 @@ mod test {
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
-        println!("{}", p);
 
         // create slot start without root
         let p = create_slot_poh_start_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
-        println!("{}", p);
 
         // create slot end with root
         let p = create_slot_poh_end_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
-        println!("{}", p);
 
         // create slot end without root
         let p = create_slot_poh_end_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
-        println!("{}", p);
 
         // create slot full with root
         let p = create_slot_poh_full_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
-        println!("{}", p);
 
         // create slot full without root
         let p = create_slot_poh_full_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
-        println!("{}", p);
     }
 }
