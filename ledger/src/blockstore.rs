@@ -1626,7 +1626,7 @@ impl Blockstore {
             }
         }
         if slot_meta.is_full() {
-            // send
+            // send slot full timing point to poh_timing_report service
             if let Some(ref sender) = self.shred_timing_point_sender {
                 trace!("PohTimingPoint:Full {}", slot);
                 let _ = sender.try_send(SlotPohTimingInfo {

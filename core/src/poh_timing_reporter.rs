@@ -174,10 +174,10 @@ mod test {
         // slot end 43
         c += reporter.process(43, None, PohTimingPoint::PohSlotEnd(200)) as i32;
 
-        // assert that both timing point are complete
+        // assert that both timing points are complete
         assert_eq!(c, 2);
 
-        // assert that both timestamp is kept
+        // assert that both timestamp is being tracked
         assert_eq!(reporter.slot_count(), 2)
     }
 
@@ -209,7 +209,7 @@ mod test {
         // assert that only one timing point is complete
         assert_eq!(c, 1);
 
-        // assert that both timestamp is kept
+        // assert that both timestamp is in track
         assert_eq!(reporter.slot_count(), 2)
     }
 
