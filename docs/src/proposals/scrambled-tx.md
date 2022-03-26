@@ -223,7 +223,11 @@ malice leader can still annoy the cluster by stalling the descrambling phase
 in this way. To mitigate this, we allow subsequent leaders can also propagate
 the revealed keys shreds.
 
-#### Selfish mining by only including theirs own transactions
+#### Selfish mining by only including theirs own MEV transactions
+
+the node must be smarter than all, otherwise reward will be less.
+
+also, may impose 1/3+ vote instruction in block not to be skipped.
 
 #### Spamming with garbage scrambles by leader or (malicious) validators
 
@@ -279,8 +283,8 @@ This proposal lays down the foundation for further protocol extension.
 
 Firstly, this whole new descrambling process can be regarded as a deterministic
 and async commit-and-reveal. This means a non-interactive, unbiasble,
-deterministic and free random number can be provided at the consensus layer as
-by-product, with a few tweaks of this proposal.
+deterministic and free-as-in-beer random number can be provided at the
+consensus layer as by-product, with a few tweaks of this proposal.
 
 That random can easily be fed into transaction runtime for one thing. Further,
 this random number is also used to combat against verifiers's dilemma (or
