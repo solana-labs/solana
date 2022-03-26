@@ -1298,6 +1298,7 @@ fn load_blockstore(
         BlockstoreOptions {
             recovery_mode: config.wal_recovery_mode.clone(),
             column_options: config.ledger_column_options.clone(),
+            enforce_ulimit_nofile: config.enforce_ulimit_nofile,
             ..BlockstoreOptions::default()
         },
     )
