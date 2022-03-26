@@ -665,9 +665,9 @@ impl Validator {
                 blockstore.new_shreds_signals.first().cloned(),
                 &leader_schedule_cache,
                 &poh_config,
+                Some(poh_timing_point_sender),
                 exit.clone(),
             );
-        poh_recorder.poh_timing_point_sender = Some(poh_timing_point_sender);
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));

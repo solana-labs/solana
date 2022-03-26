@@ -208,7 +208,7 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntry>,
-    pub poh_timing_point_sender: Option<PohTimingSender>,
+    poh_timing_point_sender: Option<PohTimingSender>,
     leader_first_tick_height_including_grace_ticks: Option<u64>,
     leader_last_tick_height: u64, // zero if none
     grace_ticks: u64,
@@ -800,6 +800,7 @@ impl PohRecorder {
         clear_bank_signal: Option<Sender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
+        poh_timing_point_sender: Option<PohTimingSender>,
         is_exited: Arc<AtomicBool>,
     ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
         let tick_number = 0;
@@ -825,7 +826,7 @@ impl PohRecorder {
                 tick_cache: vec![],
                 working_bank: None,
                 sender,
-                poh_timing_point_sender: None,
+                poh_timing_point_sender,
                 clear_bank_signal,
                 start_bank,
                 start_tick_height: tick_height + 1,
@@ -883,6 +884,7 @@ impl PohRecorder {
             None,
             leader_schedule_cache,
             poh_config,
+            None,
             is_exited,
         )
     }
@@ -1583,6 +1585,7 @@ mod tests {
                     Some(sender),
                     &Arc::new(LeaderScheduleCache::default()),
                     &Arc::new(PohConfig::default()),
+                    None,
                     Arc::new(AtomicBool::default()),
                 );
             poh_recorder.set_bank(&bank);
