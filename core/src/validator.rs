@@ -45,7 +45,10 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint::PohTimingPoint, datapoint_info},
+    solana_metrics::{
+        datapoint_info,
+        poh_timing_point::{PohTimingPoint, PohTimingSender, SlotPohTimingInfo},
+    },
     solana_poh::{
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
@@ -1267,7 +1270,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
-    poh_timing_point_sender: Option<Sender<(Slot, Option<Slot>, PohTimingPoint)>>,
+    poh_timing_point_sender: Option<PohTimingSender>,
 ) -> (
     GenesisConfig,
     BankForks,

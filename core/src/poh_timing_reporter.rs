@@ -1,5 +1,5 @@
 use {
-    solana_metrics::{datapoint::PohTimingPoint, datapoint_info},
+    solana_metrics::{datapoint_info, poh_timing_point::PohTimingPoint},
     solana_sdk::clock::Slot,
     std::{collections::HashMap, fmt},
 };
