@@ -28,8 +28,8 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{
-        datapoint_debug, datapoint_error,
-        poh_timing_point::{PohTimingPoint, PohTimingSender, SlotPohTimingInfo},
+        create_slot_poh_full_time_point, datapoint_debug, datapoint_error,
+        poh_timing_point::PohTimingSender,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
@@ -1628,12 +1628,13 @@ impl Blockstore {
         if slot_meta.is_full() {
             // send slot full timing point to poh_timing_report service
             if let Some(ref sender) = self.shred_timing_point_sender {
-                trace!("PohTimingPoint:Full {}", slot);
-                let _ = sender.try_send(SlotPohTimingInfo {
+                let slot_full = create_slot_poh_full_time_point!(
                     slot,
-                    root_slot: Some(self.last_root()),
-                    timing_point: PohTimingPoint::FullSlotReceived(solana_sdk::timing::timestamp()),
-                });
+                    self.last_root(),
+                    solana_sdk::timing::timestamp()
+                );
+                trace!("PohTimingPoint: {:?}", slot_full);
+                let _ = sender.try_send(slot_full);
             }
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
