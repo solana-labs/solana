@@ -329,7 +329,7 @@ pub struct Validator {
     cache_block_meta_service: Option<CacheBlockMetaService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
-    poh_timing_report_service: Option<PohTimingReportService>,
+    poh_timing_report_service: PohTimingReportService,
     stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
@@ -490,10 +490,8 @@ impl Validator {
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
-        let poh_timing_report_service = Some(PohTimingReportService::new(
-            poh_timing_point_receiver,
-            exit.clone(),
-        ));
+        let poh_timing_report_service =
+            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
 
         let (
             genesis_config,
@@ -1127,11 +1125,9 @@ impl Validator {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
 
-        if let Some(poh_timing_report_service) = self.poh_timing_report_service {
-            poh_timing_report_service
-                .join()
-                .expect("poh_timing_report_service");
-        }
+        self.poh_timing_report_service
+            .join()
+            .expect("poh_timing_report_service");
     }
 }
 
