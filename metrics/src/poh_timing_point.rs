@@ -1,4 +1,7 @@
-use crossbeam_channel::{Receiver, Sender};
+use {
+    crossbeam_channel::{Receiver, Sender},
+    solana_sdk::clock::Slot,
+};
 
 /// PohTimingPoint. Each TimingPoint is annotated a timestamp in milliseconds.
 #[derive(Debug, Clone)]
@@ -12,9 +15,9 @@ pub enum PohTimingPoint {
 #[derive(Clone, Debug)]
 pub struct SlotPohTimingInfo {
     /// current slot
-    pub slot: u64,
+    pub slot: Slot,
     /// root slot
-    pub root_slot: Option<u64>,
+    pub root_slot: Option<Slot>,
     /// timing events
     pub timing_point: PohTimingPoint,
 }

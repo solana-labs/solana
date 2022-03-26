@@ -1,9 +1,7 @@
 //! PohTimingReportService module
 use {
     crate::poh_timing_reporter::PohTimingReporter,
-    crossbeam_channel::Receiver,
     solana_metrics::poh_timing_point::{PohTimingPoint, PohTimingReceiver, SlotPohTimingInfo},
-    solana_sdk::clock::Slot,
     std::{
         string::ToString,
         sync::{

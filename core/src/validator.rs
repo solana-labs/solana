@@ -21,7 +21,7 @@ use {
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
-    crossbeam_channel::{bounded, unbounded, Receiver, Sender},
+    crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -45,10 +45,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
-    solana_metrics::{
-        datapoint_info,
-        poh_timing_point::{PohTimingPoint, PohTimingSender, SlotPohTimingInfo},
-    },
+    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
     solana_poh::{
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
@@ -647,27 +644,26 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
-        let (mut poh_recorder, entry_receiver, record_receiver) =
-            PohRecorder::new_with_clear_signal(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.clone(),
-                leader_schedule_cache.next_leader_slot(
-                    &id,
-                    bank.slot(),
-                    &bank,
-                    Some(&blockstore),
-                    GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
-                ),
-                bank.ticks_per_slot(),
+        let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new_with_clear_signal(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.clone(),
+            leader_schedule_cache.next_leader_slot(
                 &id,
-                &blockstore,
-                blockstore.new_shreds_signals.first().cloned(),
-                &leader_schedule_cache,
-                &poh_config,
-                Some(poh_timing_point_sender),
-                exit.clone(),
-            );
+                bank.slot(),
+                &bank,
+                Some(&blockstore),
+                GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
+            ),
+            bank.ticks_per_slot(),
+            &id,
+            &blockstore,
+            blockstore.new_shreds_signals.first().cloned(),
+            &leader_schedule_cache,
+            &poh_config,
+            Some(poh_timing_point_sender),
+            exit.clone(),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
