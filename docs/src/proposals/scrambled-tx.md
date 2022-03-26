@@ -167,7 +167,7 @@ in trade for the MEV immunity.
 
 Descrambling difficulty can be targeted to be 2x of current opt-conf duration as
 a very crude approach. The 2x is needed as a safe buffer (TODO: needs proper
-statistical analysis).
+statistical analysis) for variation of sha256 throughput across hardware.
 
 However this is quite inefficient and too naive.
 
