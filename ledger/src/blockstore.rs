@@ -1633,7 +1633,7 @@ impl Blockstore {
                     self.last_root(),
                     solana_sdk::timing::timestamp()
                 );
-                trace!("PohTimingPoint: {:?}", slot_full);
+                trace!("{}", slot_full);
                 let _ = sender.try_send(slot_full);
             }
         }

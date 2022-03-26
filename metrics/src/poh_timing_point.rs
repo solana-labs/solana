@@ -1,6 +1,9 @@
+//! A poh_timing_point module
+
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_sdk::clock::Slot,
+    std::fmt,
 };
 
 /// PohTimingPoint. Each TimingPoint is annotated with a timestamp in milliseconds.
@@ -11,7 +14,18 @@ pub enum PohTimingPoint {
     FullSlotReceived(u64),
 }
 
-/// SlotPohTimingInfo
+impl fmt::Display for PohTimingPoint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PohTimingPoint::PohSlotStart(t) => write!(f, "poh_start={}", t),
+            PohTimingPoint::PohSlotEnd(t) => write!(f, "poh_end={}", t),
+            PohTimingPoint::FullSlotReceived(t) => write!(f, "poh_full={}", t),
+        }
+    }
+}
+
+/// SlotPohTimingInfo. This struct is sent to channel and received by
+/// poh_timing_report service.
 #[derive(Clone, Debug)]
 pub struct SlotPohTimingInfo {
     /// current slot
@@ -22,6 +36,19 @@ pub struct SlotPohTimingInfo {
     pub timing_point: PohTimingPoint,
 }
 
+impl fmt::Display for SlotPohTimingInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "PohTimingPoint: slot={}, root_slot={}, {}",
+            self.slot,
+            self.root_slot.unwrap_or(0),
+            self.timing_point
+        )
+    }
+}
+
+/// create slot poh timing point w/o root info.
 #[macro_export]
 macro_rules! create_slot_poh_time_point {
     ($slot:expr, $timestamp:expr) => {
@@ -41,6 +68,7 @@ macro_rules! create_slot_poh_time_point {
     };
 }
 
+/// create slot poh start timing point w/o root info.
 #[macro_export]
 macro_rules! create_slot_poh_start_time_point {
     ($slot:expr, $timestamp:expr) => {
@@ -58,6 +86,7 @@ macro_rules! create_slot_poh_start_time_point {
     };
 }
 
+/// create slot poh end timing point w/o root info.
 #[macro_export]
 macro_rules! create_slot_poh_end_time_point {
     ($slot:expr, $timestamp:expr) => {
@@ -75,6 +104,7 @@ macro_rules! create_slot_poh_end_time_point {
     };
 }
 
+/// create slot poh full timing point w/o root info.
 #[macro_export]
 macro_rules! create_slot_poh_full_time_point {
     ($slot:expr, $timestamp:expr) => {
@@ -103,34 +133,46 @@ mod test {
     use super::*;
     #[test]
     fn test_poh_timing_point() {
+        // create slot start with root
         let p = create_slot_poh_start_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
+        println!("{}", p);
 
+        // create slot start without root
         let p = create_slot_poh_start_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
+        println!("{}", p);
 
+        // create slot end with root
         let p = create_slot_poh_end_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
+        println!("{}", p);
 
+        // create slot end without root
         let p = create_slot_poh_end_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
+        println!("{}", p);
 
+        // create slot full with root
         let p = create_slot_poh_full_time_point!(100, 101, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
+        println!("{}", p);
 
+        // create slot full without root
         let p = create_slot_poh_full_time_point!(100, 100);
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
+        println!("{}", p);
     }
 }

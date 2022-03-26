@@ -477,7 +477,7 @@ impl PohRecorder {
                 solana_sdk::timing::timestamp()
             );
 
-            trace!("PohTimingPoint: {:?}", slot_start);
+            trace!("{}", slot_start);
             let _ = sender.try_send(slot_start);
         }
 
@@ -506,7 +506,7 @@ impl PohRecorder {
                 let slot_start =
                     create_slot_poh_start_time_point!(slot, solana_sdk::timing::timestamp());
 
-                trace!("PohTimingPoint: {:?}", slot_start);
+                trace!("{}", slot_start);
                 let _ = sender.try_send(slot_start);
             }
         }
@@ -590,7 +590,7 @@ impl PohRecorder {
                         self.slot_for_tick_height(self.tick_height),
                         solana_sdk::timing::timestamp()
                     );
-                    trace!("PohTimingPoint: {:?}", slot_end);
+                    trace!("{}", slot_end);
                     let _ = sender.try_send(slot_end);
                 }
             }
@@ -602,7 +602,7 @@ impl PohRecorder {
                         solana_sdk::timing::timestamp()
                     );
 
-                    trace!("PohTimingPoint: {:?}", slot_start);
+                    trace!("{}", slot_start);
                     let _ = sender.try_send(slot_start);
                 }
             }
@@ -613,7 +613,7 @@ impl PohRecorder {
     fn report_poh_timing_point_by_working_bank(&self, slot: Slot) {
         if let Some(ref sender) = self.poh_timing_point_sender {
             let slot_end = create_slot_poh_end_time_point!(slot, solana_sdk::timing::timestamp());
-            trace!("PohTimingPoint: {:?}", slot_end);
+            trace!("{}", slot_end);
             let _ = sender.try_send(slot_end);
         }
     }
