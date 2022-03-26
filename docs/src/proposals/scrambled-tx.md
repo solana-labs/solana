@@ -16,7 +16,9 @@ impractical in the first place.
 
 Any temporal market imbalance should be corrected strictly on the grounds of a
 fair game, basically the golden first-come-first-served rule (with optional
-bidding for priority).
+bidding for priority). This means this proposal doesn't try to mitigate one of
+MEV types: back-running.
+
 
 ### Summary of Proposed Solution
 
@@ -42,8 +44,6 @@ This construction is called *scrambling* across this proposal.
 
 Conversely, the forced computation to reveal the transaction details by solving
 the recursive sha256 is called *descrambling*.
-
-backrunning will be allowed still after this proposal, with fair fcfs-then-bidding order.
 
 ### Summary of consensus changes
 
