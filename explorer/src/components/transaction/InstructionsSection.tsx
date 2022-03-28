@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ErrorCard } from "components/common/ErrorCard";
 import {
   ParsedInnerInstruction,
@@ -58,12 +58,60 @@ export type InstructionDetailsProps = {
 export function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
-  const { cluster } = useCluster();
+  const { cluster, url } = useCluster();
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
+  const [instructionDetails, setInstructionDetails] = useState<JSX.Element[]>([]);
+
+
+  useEffect(() => {
+    console.log('running', details);
+    if (!status?.data?.info || !details?.data?.transaction) { return };
+    console.log('here?', details);
+
+    const { transaction } = details.data?.transaction;
+    const ixDetails = transaction.message.instructions.map(
+      async (instruction, index) => {
+        let innerCards: JSX.Element[] = [];
+
+        if (index in innerInstructions) {
+          innerInstructions[index].forEach(async (ix, childIndex) => {
+            if (typeof ix.programId === "string") {
+              ix.programId = new PublicKey(ix.programId);
+            }
+
+            let res = await renderInstructionCard({
+              index,
+              ix,
+              result,
+              signature,
+              tx: transaction,
+              childIndex,
+              url
+            });
+
+            innerCards.push(res);
+          });
+        }
+
+        return await renderInstructionCard({
+          index,
+          ix: instruction,
+          result,
+          signature,
+          tx: transaction,
+          innerCards,
+          url
+        });
+      }
+    );
+
+    Promise.all(ixDetails)
+    .then((details) => setInstructionDetails(details))
+    .catch((_err) => console.error("Unexpected error processing instructions:", _err));
+  }, [details]);
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
-
   const { transaction } = details.data.transaction;
   const { meta } = details.data.transaction;
 
@@ -92,39 +140,6 @@ export function InstructionsSection({ signature }: SignatureProps) {
   }
 
   const result = status.data.info.result;
-  const instructionDetails = transaction.message.instructions.map(
-    (instruction, index) => {
-      let innerCards: JSX.Element[] = [];
-
-      if (index in innerInstructions) {
-        innerInstructions[index].forEach((ix, childIndex) => {
-          if (typeof ix.programId === "string") {
-            ix.programId = new PublicKey(ix.programId);
-          }
-
-          let res = renderInstructionCard({
-            index,
-            ix,
-            result,
-            signature,
-            tx: transaction,
-            childIndex,
-          });
-
-          innerCards.push(res);
-        });
-      }
-
-      return renderInstructionCard({
-        index,
-        ix: instruction,
-        result,
-        signature,
-        tx: transaction,
-        innerCards,
-      });
-    }
-  );
 
   return (
     <>
@@ -142,7 +157,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
   );
 }
 
-function renderInstructionCard({
+async function renderInstructionCard({
   ix,
   tx,
   result,
@@ -150,6 +165,7 @@ function renderInstructionCard({
   signature,
   innerCards,
   childIndex,
+  url
 }: {
   ix: ParsedInstruction | PartiallyDecodedInstruction;
   tx: ParsedTransaction;
@@ -158,6 +174,7 @@ function renderInstructionCard({
   signature: TransactionSignature;
   innerCards?: JSX.Element[];
   childIndex?: number;
+  url: string
 }) {
   const key = `${index}-${childIndex}`;
 
@@ -216,7 +233,7 @@ function renderInstructionCard({
 
   if (isBonfidaBotInstruction(transactionIx)) {
     return <BonfidaBotDetailsCard key={key} {...props} />;
-  } else if (isInstructionFromAnAnchorProgram(transactionIx)) {
+  } else if (await isInstructionFromAnAnchorProgram(url, transactionIx)) {
     return <GenericAnchorDetailsCard key={key} {...props} />;
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;

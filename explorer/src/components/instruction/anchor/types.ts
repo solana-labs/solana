@@ -1,16 +1,20 @@
+import { Connection } from "@solana/web3.js";
 import { TransactionInstruction } from "@solana/web3.js";
-
-// list of programs written in anchor
-// - should have idl on-chain for GenericAnchorDetailsCard to work out of the box
-// - before adding another program to this list, please make sure that the ix
-// are decoding without any errors
-const knownAnchorPrograms = [
-  // https://github.com/blockworks-foundation/voter-stake-registry
-  "4Q6WW2ouZ6V3iaNm56MTd5n2tnTm4C5fiH8miFHnAFHo",
-];
+import {
+  Program,
+  Provider,
+} from "@project-serum/anchor";
 
 export const isInstructionFromAnAnchorProgram = (
-  instruction: TransactionInstruction
+  url: string,
+  ix: TransactionInstruction
 ) => {
-  return knownAnchorPrograms.includes(instruction.programId.toBase58());
+  const checkIdl = async () => {
+    return Program.fetchIdl(ix.programId, {
+      connection: new Connection(url),
+    } as Provider)
+    .then((_idl) => { return true })
+    .catch((_err) => { return false });
+  }
+  return checkIdl()
 };
