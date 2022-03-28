@@ -798,9 +798,7 @@ impl Validator {
                 let enable_gossip_push = config
                     .accounts_db_config
                     .as_ref()
-                    .and_then(|config| config.filler_accounts.as_ref())
-                    .and_then(|config| config.count)
-                    .map(|count| count == 0)
+                    .map(|config| config.filler_accounts_config.count == 0)
                     .unwrap_or(true);
 
                 let snapshot_packager_service = SnapshotPackagerService::new(

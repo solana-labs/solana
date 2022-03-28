@@ -1606,7 +1606,8 @@ pub fn main() {
             .value_name("BYTES")
             .validator(is_parsable::<usize>)
             .takes_value(true)
-            .help("Size per filler account in bytes. [default: 0]"))
+            .default_value("0")
+            .help("Size per filler account in bytes."))
          .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
@@ -2257,19 +2258,15 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB);
 
-    let mut filler_accounts_config = FillerAccountsConfig::default();
-    if let Some(count) = value_t!(matches, "accounts_filler_count", usize).ok() {
-        filler_accounts_config.count = Some(count);
-    }
-
-    if let Some(size) = value_t!(matches, "accounts_filler_size", usize).ok() {
-        filler_accounts_config.size = Some(size);
-    }
+    let filler_accounts_config = FillerAccountsConfig {
+        count: value_t!(matches, "accounts_filler_count", usize).unwrap(),
+        size: value_t!(matches, "accounts_filler_size", usize).unwrap(),
+    };
 
     let mut accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
-        filler_accounts: Some(filler_accounts_config),
+        filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),

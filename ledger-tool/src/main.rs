@@ -934,7 +934,8 @@ fn main() {
         .value_name("BYTES")
         .validator(is_parsable::<usize>)
         .takes_value(true)
-        .help("Size per filler account in bytes. [default: 0]");
+        .default_value("0")
+        .help("Size per filler account in bytes.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -2073,19 +2074,15 @@ fn main() {
                     accounts_index_config.drives = Some(accounts_index_paths);
                 }
 
-                let mut filler_accounts_config = FillerAccountsConfig::default();
-                if let Some(count) = value_t!(arg_matches, "accounts_filler_count", usize).ok() {
-                    filler_accounts_config.count = Some(count);
-                }
-
-                if let Some(size) = value_t!(arg_matches, "accounts_filler_size", usize).ok() {
-                    filler_accounts_config.size = Some(size);
-                }
+                let filler_accounts_config = FillerAccountsConfig {
+                    count: value_t!(matches, "accounts_filler_count", usize).unwrap(),
+                    size: value_t!(matches, "accounts_filler_size", usize).unwrap(),
+                };
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
-                    filler_accounts: Some(filler_accounts_config),
+                    filler_accounts_config,
                     ..AccountsDbConfig::default()
                 });
 
