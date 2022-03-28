@@ -29,7 +29,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{
         create_slot_poh_full_time_point, datapoint_debug, datapoint_error,
-        poh_timing_point::PohTimingSender,
+        poh_timing_point::{send_poh_timing_point, PohTimingSender},
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
@@ -1562,8 +1562,7 @@ impl Blockstore {
                 self.last_root(),
                 solana_sdk::timing::timestamp()
             );
-            trace!("{}", slot_full);
-            let _ = sender.try_send(slot_full);
+            send_poh_timing_point(sender, slot_full);
         }
     }
 

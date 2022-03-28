@@ -2,6 +2,7 @@
 
 use {
     crossbeam_channel::{Receiver, Sender},
+    log::*,
     solana_sdk::clock::Slot,
     std::fmt,
 };
@@ -127,6 +128,13 @@ pub type PohTimingReceiver = Receiver<SlotPohTimingInfo>;
 
 /// Sender of SlotPohTimingInfo to the channel
 pub type PohTimingSender = Sender<SlotPohTimingInfo>;
+
+pub fn send_poh_timing_point(sender: &PohTimingSender, slot_timing: SlotPohTimingInfo) {
+    trace!("{}", slot_timing);
+    if let Err(e) = sender.try_send(slot_timing) {
+        info!("failed to send slot poh timing {:?}", e);
+    }
+}
 
 #[cfg(test)]
 mod test {
