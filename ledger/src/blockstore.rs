@@ -1557,12 +1557,14 @@ impl Blockstore {
     /// send slot full timing point to poh_timing_report service
     fn send_slot_full_timing(&self, slot: Slot) {
         if let Some(ref sender) = self.shred_timing_point_sender {
-            let slot_full = create_slot_poh_full_time_point!(
-                slot,
-                self.last_root(),
-                solana_sdk::timing::timestamp()
+            send_poh_timing_point(
+                sender,
+                create_slot_poh_full_time_point!(
+                    slot,
+                    self.last_root(),
+                    solana_sdk::timing::timestamp()
+                ),
             );
-            send_poh_timing_point(sender, slot_full);
         }
     }
 
