@@ -59,7 +59,7 @@ mod tests {
         solana_runtime::{
             accounts_background_service::{
                 AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
-                SnapshotRequestHandler,
+                SendDroppedBankCallback, SnapshotRequestHandler,
             },
             accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
             accounts_index::AccountSecondaryIndexes,
@@ -896,17 +896,11 @@ mod tests {
         let pending_snapshot_package = PendingSnapshotPackage::default();
 
         let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
-        let callback = bank_forks
-            .read()
+        let bank_drop_callback = SendDroppedBankCallback::new(pruned_banks_sender);
+        bank_forks
+            .write()
             .unwrap()
-            .root_bank()
-            .rc
-            .accounts
-            .accounts_db
-            .create_drop_bank_callback(pruned_banks_sender);
-        for bank in bank_forks.read().unwrap().banks().values() {
-            bank.set_callback(Some(Box::new(callback.clone())));
-        }
+            .set_bank_drop_callback(bank_drop_callback);
 
         let abs_request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
         let snapshot_request_handler = Some(SnapshotRequestHandler {

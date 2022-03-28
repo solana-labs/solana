@@ -1901,7 +1901,7 @@ impl Bank {
             .filter(move |slot| *slot != self.slot)
     }
 
-    pub fn set_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
+    pub fn set_drop_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
         *self.drop_callback.write().unwrap() = OptionalDropCallback(callback);
     }
 
@@ -6759,6 +6759,7 @@ impl Drop for Bank {
             // AccountsBackgroundService to perform cleanups yet.
             self.rc
                 .accounts
+                .accounts_db
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
@@ -14497,7 +14498,7 @@ pub(crate) mod tests {
             accounts_db_caching_enabled,
             AccountShrinkThreshold::default(),
         ));
-        bank0.set_callback(drop_callback);
+        bank0.set_drop_callback(drop_callback);
 
         // Set up pubkeys to write to
         let total_pubkeys = ITER_BATCH_SIZE * 10;

@@ -40,7 +40,8 @@ use {
     },
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+            SendDroppedBankCallback, SnapshotRequestHandler,
         },
         accounts_db::AccountShrinkThreshold,
         bank_forks::BankForks,
@@ -57,7 +58,6 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
-        boxed::Box,
         collections::HashSet,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
@@ -251,17 +251,11 @@ impl Tvu {
         // Before replay starts, set the callbacks in each of the banks in BankForks
         // Note after this callback is created, only the AccountsBackgroundService should be calling
         // AccountsDb::purge_slot() to clean up dropped banks.
-        let callback = bank_forks
-            .read()
+        let bank_drop_callback = SendDroppedBankCallback::new(pruned_banks_sender);
+        bank_forks
+            .write()
             .unwrap()
-            .root_bank()
-            .rc
-            .accounts
-            .accounts_db
-            .create_drop_bank_callback(pruned_banks_sender);
-        for bank in bank_forks.read().unwrap().banks().values() {
-            bank.set_callback(Some(Box::new(callback.clone())));
-        }
+            .set_bank_drop_callback(bank_drop_callback);
 
         let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
 

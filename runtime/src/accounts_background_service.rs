@@ -342,6 +342,7 @@ impl AbsRequestHandler {
             count += 1;
             bank.rc
                 .accounts
+                .accounts_db
                 .purge_slot(pruned_slot, pruned_bank_id, is_from_abs);
         }
 

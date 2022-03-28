@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequest},
+        accounts_background_service::{AbsRequestSender, SendDroppedBankCallback, SnapshotRequest},
         bank::Bank,
         snapshot_config::SnapshotConfig,
     },
@@ -501,6 +501,21 @@ impl BankForks {
             prune_slots_time.as_ms(),
             prune_remove_time.as_ms(),
         )
+    }
+
+    /// Set the drop-callback for all the banks, and then enable the bank-drop-callback flag.
+    ///
+    /// This fn shall be called only once, and before Replay starts, IFF AccountsBackgroundService
+    /// shall be responsible for calling AccountsDb::purge_slot() to clean up dropped banks.
+    pub fn set_bank_drop_callback(&mut self, bank_drop_callback: SendDroppedBankCallback) {
+        self.banks().values().for_each(|bank| {
+            bank.set_drop_callback(Some(Box::new(bank_drop_callback.clone())));
+        });
+        self.root_bank()
+            .rc
+            .accounts
+            .accounts_db
+            .enable_bank_drop_callback()
     }
 
     pub fn set_snapshot_config(&mut self, snapshot_config: Option<SnapshotConfig>) {

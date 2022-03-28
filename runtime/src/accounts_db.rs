@@ -21,7 +21,6 @@
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
-        accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
             AccountsHash, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
@@ -4007,17 +4006,15 @@ impl AccountsDb {
             .is_none());
     }
 
-    pub fn create_drop_bank_callback(
-        &self,
-        pruned_banks_sender: DroppedSlotsSender,
-    ) -> SendDroppedBankCallback {
+    /// Set the bank-drop-callback flag to ENABLED
+    pub(crate) fn enable_bank_drop_callback(&self) {
         self.is_bank_drop_callback_enabled
             .store(true, Ordering::SeqCst);
-        SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
-    /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
-    /// comment below for more explanation.
+    /// Purge a slot if it is not a root (root slots cannot be purged)
+    /// This should only be called after the `Bank::drop()` runs in bank.rs
+    /// See BANK_DROP_SAFETY comment below for more explanation
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
         if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
