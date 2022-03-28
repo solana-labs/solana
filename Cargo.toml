@@ -30,6 +30,7 @@ members = [
     "gossip",
     "install",
     "keygen",
+    "kzg",
     "ledger",
     "ledger-tool",
     "local-cluster",

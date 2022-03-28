@@ -301,14 +301,26 @@ dependencies = [
 
 [[package]]
 name = "bitvec"
-version = "0.19.5"
+version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8942c8d352ae1838c9dda0b0ca2ab657696ef2232a20147cf1b30ae1a9cb4321"
+checksum = "a7ba35e9565969edb811639dbebfe34edc0368e472c5018474c8eb2543397f81"
 dependencies = [
  "funty",
- "radium",
+ "radium 0.5.3",
  "tap",
- "wyz",
+ "wyz 0.2.0",
+]
+
+[[package]]
+name = "bitvec"
+version = "0.22.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5237f00a8c86130a0cc317830e558b966dd7850d48a953d998c813f01a41b527"
+dependencies = [
+ "funty",
+ "radium 0.6.2",
+ "tap",
+ "wyz 0.4.0",
 ]
 
 [[package]]
@@ -385,6 +397,33 @@ name = "block-padding"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
+
+[[package]]
+name = "blst"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f073f59a150a1dca74aab43d794ae5a7578d52bb1e73121e559f3ee3e6a837e"
+dependencies = [
+ "cc",
+ "glob",
+ "threadpool",
+ "zeroize",
+]
+
+[[package]]
+name = "blstrs"
+version = "0.4.1"
+source = "git+https://github.com/proxima-one/blstrs.git?rev=b98fc83#b98fc83543946f0971104a32f6b8806b45f10815"
+dependencies = [
+ "blst",
+ "byte-slice-cast",
+ "ff",
+ "group",
+ "pairing",
+ "rand_core 0.6.3",
+ "serde",
+ "subtle",
+]
 
 [[package]]
 name = "borsh"
@@ -470,6 +509,12 @@ dependencies = [
  "feature-probe",
  "serde",
 ]
+
+[[package]]
+name = "byte-slice-cast"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87c5fdd0166095e1d463fc6cc01aa8ce547ad77a4e84d42eb6762b084e28067e"
 
 [[package]]
 name = "byte-tools"
@@ -617,7 +662,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db507a7679252d2276ed0dd8113c6875ec56d3089f9225b2b42c30cc1f8e5c89"
 dependencies = [
- "nom 6.1.2",
+ "nom 6.1.1",
 ]
 
 [[package]]
@@ -1391,6 +1436,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "835a3dc7d1ec9e75e2b5fb4ba75396837112d2060b03f7d43bc1897c7f7211da"
 
 [[package]]
+name = "ff"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2958d04124b9f27f175eaeb9a9f383d026098aa837eadd8ba22c11f13a05b9e"
+dependencies = [
+ "bitvec 0.22.3",
+ "rand_core 0.6.3",
+ "subtle",
+]
+
+[[package]]
 name = "filedescriptor"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1476,9 +1532,9 @@ checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
 name = "funty"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
+checksum = "1847abb9cb65d566acd5942e94aea9c8f547ad02c98e1649326fc0e8910b8b1e"
 
 [[package]]
 name = "futures"
@@ -1704,6 +1760,20 @@ dependencies = [
  "log",
  "plain",
  "scroll",
+]
+
+[[package]]
+name = "group"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5ac374b108929de78460075f3dc439fa66df9d8fc77e8f12caa5165fcf0c89"
+dependencies = [
+ "byteorder",
+ "ff",
+ "rand 0.8.4",
+ "rand_core 0.6.3",
+ "rand_xorshift",
+ "subtle",
 ]
 
 [[package]]
@@ -2227,6 +2297,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kzg"
+version = "0.8.0-beta.1"
+source = "git+https://github.com/proxima-one/kzg.git#06979a9bb9b3f4d8645f579708912d335d93c6f2"
+dependencies = [
+ "blstrs",
+ "pairing",
+ "thiserror",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2576,12 +2656,11 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "6.1.2"
+version = "6.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7413f999671bd4745a7b624bd370a569fb6bc574b23c83a3c5ed2e453f3d5e2"
+checksum = "3d521ee2250f619dd5e06515ba405858d249edc8fae9ddee2dba0695e57db01b"
 dependencies = [
- "bitvec",
- "funty",
+ "bitvec 0.19.4",
  "memchr",
  "version_check",
 ]
@@ -2803,6 +2882,15 @@ dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
  "syn 1.0.81",
+]
+
+[[package]]
+name = "pairing"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2e415e349a3006dd7d9482cdab1c980a845bed1377777d768cb693a44540b42"
+dependencies = [
+ "group",
 ]
 
 [[package]]
@@ -3322,6 +3410,12 @@ name = "radium"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "941ba9d78d8e2f7ce474c015eea4d9c6d25b6a3327f9832ee29a4de27f91bbb8"
+
+[[package]]
+name = "radium"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "643f8f41a8ebc4c5dc4515c82bb8abd397b527fc20fd681b7c011c2aee5d44fb"
 
 [[package]]
 name = "rand"
@@ -5070,6 +5164,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-kzg"
+version = "1.11.0"
+dependencies = [
+ "blstrs",
+ "kzg",
+ "lazy_static",
+ "pairing",
+ "rand 0.8.4",
+ "rayon",
+ "serde",
+ "sha2 0.9.9",
+ "solana-rayon-threadlimit",
+]
+
+[[package]]
 name = "solana-ledger"
 version = "1.11.0"
 dependencies = [
@@ -6577,6 +6686,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "threadpool"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
+dependencies = [
+ "num_cpus",
+]
+
+[[package]]
 name = "tikv-jemalloc-sys"
 version = "0.4.2+5.2.1-patched.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7481,6 +7599,15 @@ name = "wyz"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
+
+[[package]]
+name = "wyz"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "129e027ad65ce1453680623c3fb5163cbf7107bfe1aa32257e7d0e63f9ced188"
+dependencies = [
+ "tap",
+]
 
 [[package]]
 name = "xattr"

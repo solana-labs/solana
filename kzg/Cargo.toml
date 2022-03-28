@@ -1,0 +1,32 @@
+[package]
+name = "solana-kzg"
+version = "1.11.0"
+description = "Solana key generation utility"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-keygen"
+edition = "2021"
+
+[dependencies]
+blstrs = { git = "https://github.com/proxima-one/blstrs.git", rev = "b98fc83" }
+kzg = { git = "https://github.com/proxima-one/kzg.git", version = "0.8.0-beta.1" }
+lazy_static = "1.4.0"
+pairing = "0.21.0"
+rand = "0.8.4"
+#rayon = { version = "1.5.1", optional = true }
+rayon = "1.5.1"
+sha2 = "0.9.9"
+serde = { version = "1", optional = true, features = ["derive"] }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
+
+[features]
+#parallel = ["rayon"]
+serde_support = ["serde"]
+
+[[bench]]
+name = "kzg"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
