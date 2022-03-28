@@ -2,12 +2,14 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
+    solana_client::connection_cache,
+    solana_measure::measure::Measure,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature},
     std::{
         collections::hash_map::{Entry, HashMap},
-        net::{SocketAddr, UdpSocket},
+        net::SocketAddr,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -65,12 +67,15 @@ struct ProcessTransactionsResult {
     retained: u64,
 }
 
+pub const DEFAULT_TPU_USE_QUIC: bool = false;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub retry_rate_ms: u64,
     pub leader_forward_count: u64,
     pub default_max_retries: Option<usize>,
     pub service_max_retries: usize,
+    pub use_quic: bool,
 }
 
 impl Default for Config {
@@ -80,6 +85,7 @@ impl Default for Config {
             leader_forward_count: DEFAULT_LEADER_FORWARD_COUNT,
             default_max_retries: None,
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
+            use_quic: DEFAULT_TPU_USE_QUIC,
         }
     }
 }
@@ -92,10 +98,12 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         retry_rate_ms: u64,
         leader_forward_count: u64,
+        use_quic: bool,
     ) -> Self {
         let config = Config {
             retry_rate_ms,
             leader_forward_count,
+            use_quic,
             ..Config::default()
         };
         Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
@@ -128,12 +136,11 @@ impl SendTransactionService {
         let mut last_status_check = Instant::now();
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         if let Some(leader_info) = leader_info.as_mut() {
             leader_info.refresh_recent_peers();
         }
-
+        connection_cache::set_use_quic(config.use_quic);
         Builder::new()
             .name("send-tx-sv2".to_string())
             .spawn(move || loop {
@@ -158,11 +165,7 @@ impl SendTransactionService {
                                 })
                                 .unwrap_or_else(|| vec![&tpu_address]);
                             for address in addresses {
-                                Self::send_transaction(
-                                    &send_socket,
-                                    address,
-                                    &transaction_info.wire_transaction,
-                                );
+                                Self::send_transaction(address, &transaction_info.wire_transaction);
                             }
                             if transactions_len < MAX_TRANSACTION_QUEUE_SIZE {
                                 inc_new_counter_info!("send_transaction_service-insert-tx", 1);
@@ -193,7 +196,6 @@ impl SendTransactionService {
                         let _result = Self::process_transactions(
                             &working_bank,
                             &root_bank,
-                            &send_socket,
                             &tpu_address,
                             &mut transactions,
                             &leader_info,
@@ -215,7 +217,6 @@ impl SendTransactionService {
     fn process_transactions<T: TpuInfo>(
         working_bank: &Arc<Bank>,
         root_bank: &Arc<Bank>,
-        send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: &Option<T>,
@@ -286,11 +287,7 @@ impl SendTransactionService {
                         })
                         .unwrap_or_else(|| vec![tpu_address]);
                     for address in addresses {
-                        Self::send_transaction(
-                            send_socket,
-                            address,
-                            &transaction_info.wire_transaction,
-                        );
+                        Self::send_transaction(address, &transaction_info.wire_transaction);
                     }
                     true
                 }
@@ -311,14 +308,19 @@ impl SendTransactionService {
         result
     }
 
-    fn send_transaction(
-        send_socket: &UdpSocket,
-        tpu_address: &SocketAddr,
-        wire_transaction: &[u8],
-    ) {
-        if let Err(err) = send_socket.send_to(wire_transaction, tpu_address) {
+    fn send_transaction(tpu_address: &SocketAddr, wire_transaction: &[u8]) {
+        let mut measure = Measure::start("send_transaction_service-us");
+
+        if let Err(err) = connection_cache::send_wire_transaction(wire_transaction, tpu_address) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
+        measure.stop();
+        inc_new_counter_info!(
+            "send_transaction_service-us",
+            measure.as_us() as usize,
+            1000,
+            1000
+        );
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -352,6 +354,7 @@ mod test {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
 
         drop(sender);
@@ -365,7 +368,6 @@ mod test {
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
             leader_forward_count: 1,
@@ -412,7 +414,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -441,7 +442,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -470,7 +470,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -499,7 +498,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -529,7 +527,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -569,7 +566,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -587,7 +583,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -610,7 +605,6 @@ mod test {
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
             leader_forward_count: 1,
@@ -667,7 +661,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -695,7 +688,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -725,7 +717,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -753,7 +744,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -782,7 +772,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -811,7 +800,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -841,7 +829,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,
@@ -866,7 +853,6 @@ mod test {
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
-            &send_socket,
             &tpu_address,
             &mut transactions,
             &None,

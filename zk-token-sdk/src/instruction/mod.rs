@@ -14,6 +14,7 @@ use {
         errors::ProofError,
     },
     curve25519_dalek::scalar::Scalar,
+    subtle::ConstantTimeEq,
 };
 pub use {
     close_account::CloseAccountData, transfer::TransferData,
@@ -38,13 +39,22 @@ pub enum Role {
 ///  - the `bit_length` low bits of `amount` interpretted as u64
 ///  - the (64 - `bit_length`) high bits of `amount` interpretted as u64
 #[cfg(not(target_arch = "bpf"))]
-pub fn split_u64(amount: u64, bit_length: usize) -> (u64, u64) {
-    assert!(bit_length <= 64);
+pub fn split_u64(
+    amount: u64,
+    lo_bit_length: usize,
+    hi_bit_length: usize,
+) -> Result<(u64, u64), ProofError> {
+    assert!(lo_bit_length <= 64);
+    assert!(hi_bit_length <= 64);
 
-    let lo = amount << (64 - bit_length) >> (64 - bit_length);
-    let hi = amount >> bit_length;
+    if !bool::from((amount >> (lo_bit_length + hi_bit_length)).ct_eq(&0u64)) {
+        return Err(ProofError::TransferAmount);
+    }
 
-    (lo, hi)
+    let lo = amount << (64 - lo_bit_length) >> (64 - lo_bit_length);
+    let hi = amount >> lo_bit_length;
+
+    Ok((lo, hi))
 }
 
 #[cfg(not(target_arch = "bpf"))]

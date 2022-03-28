@@ -238,8 +238,27 @@ impl<'a> TypeContext<'a> for Context {
             .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
             .clone();
 
+        // for now, prior_roots is the same as 'roots' and is redundant with the storages we persist in the snapshot
+        let prior_roots = serializable_db
+            .accounts_db
+            .accounts_index
+            .roots_tracker
+            .read()
+            .unwrap()
+            .roots
+            .get_all();
+        let prior_roots_with_hash = Vec::<(Slot, Hash)>::default();
+
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        let result = (entries, version, slot, hash).serialize(serializer);
+        let result = (
+            entries,
+            version,
+            slot,
+            hash,
+            prior_roots,
+            prior_roots_with_hash,
+        )
+            .serialize(serializer);
         serialize_account_storage_timer.stop();
         datapoint_info!(
             "serialize_account_storage_ms",

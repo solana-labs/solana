@@ -1531,7 +1531,7 @@ Returns the latest blockhash
 
 - `RpcResponse<object>` - RpcResponse JSON object with `value` field set to a JSON object including:
 - `blockhash: <string>` - a Hash as base-58 encoded string
-- `lastValidBlockHeight: u64` - Slot
+- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which the blockhash will be valid
 
 #### Example:
 
@@ -3059,7 +3059,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.10.4" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -5147,7 +5147,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 - `blockhash: <string>` - a Hash as base-58 encoded string
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
 - `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
-- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which a blockhash will be valid
+- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which the blockhash will be valid
 
 #### Example:
 

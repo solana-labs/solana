@@ -55,7 +55,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         warp_slot: config.warp_slot,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
-        accounts_db_use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
         tpu_coalesce_ms: config.tpu_coalesce_ms,
         validator_exit: Arc::new(RwLock::new(Exit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
@@ -63,7 +62,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_config: config.accounts_db_config.clone(),
         wait_to_vote_slot: config.wait_to_vote_slot,
-        blockstore_advanced_options: config.blockstore_advanced_options.clone(),
+        ledger_column_options: config.ledger_column_options.clone(),
     }
 }
 

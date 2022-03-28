@@ -98,7 +98,6 @@ pub struct TvuConfig {
     pub accounts_hash_fault_injection_slots: u64,
     pub accounts_db_caching_enabled: bool,
     pub test_hash_calculation: bool,
-    pub use_index_hash_calculation: bool,
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
@@ -230,7 +229,6 @@ impl Tvu {
             tvu_config.halt_on_known_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
             snapshot_config.clone(),
-            blockstore.ledger_path().to_path_buf(),
         );
 
         let (snapshot_request_sender, snapshot_request_handler) = match snapshot_config {
@@ -359,7 +357,6 @@ impl Tvu {
             accounts_background_request_handler,
             tvu_config.accounts_db_caching_enabled,
             tvu_config.test_hash_calculation,
-            tvu_config.use_index_hash_calculation,
             last_full_snapshot_slot,
         );
 

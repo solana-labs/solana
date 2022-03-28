@@ -11,7 +11,6 @@ use {
         instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
         system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
     },
-    std::collections::HashMap,
 };
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
@@ -81,10 +80,6 @@ impl CostModel {
             .for_each(|(program_id, cost)| {
                 self.upsert_instruction_cost(program_id, *cost);
             });
-        debug!(
-            "restored cost model instruction cost table from blockstore, current values: {:?}",
-            self.get_instruction_cost_table()
-        );
     }
 
     pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
@@ -103,10 +98,6 @@ impl CostModel {
     pub fn upsert_instruction_cost(&mut self, program_key: &Pubkey, cost: u64) {
         self.instruction_execution_cost_table
             .upsert(program_key, cost);
-    }
-
-    pub fn get_instruction_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        self.instruction_execution_cost_table.get_cost_table()
     }
 
     pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {

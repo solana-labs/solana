@@ -77,15 +77,17 @@ pub mod solana_sdk {
             pub fn new() -> Keypair {
                 Keypair
             }
+        }
 
-            pub fn pubkey(&self) -> Pubkey {
+        impl Signer for Keypair {
+            fn pubkey(&self) -> Pubkey {
                 Pubkey::default()
             }
         }
 
-        impl Signer for Keypair {}
-
-        pub trait Signer {}
+        pub trait Signer {
+            fn pubkey(&self) -> Pubkey;
+        }
     }
 
     pub mod signers {
@@ -128,6 +130,16 @@ pub mod solana_sdk {
                 Transaction {
                     message: Message::new(&[], None),
                 }
+            }
+
+            pub fn new_signed_with_payer<T: Signers>(
+                instructions: &[Instruction],
+                payer: Option<&Pubkey>,
+                signing_keypairs: &T,
+                recent_blockhash: Hash,
+            ) -> Self {
+                let message = Message::new(instructions, payer);
+                Self::new(signing_keypairs, message, recent_blockhash)
             }
 
             pub fn sign<T: Signers>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}

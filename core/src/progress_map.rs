@@ -7,7 +7,7 @@ use {
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::timings::ExecuteTimingType,
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
+    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccountsHashMap},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
@@ -516,7 +516,7 @@ impl PropagatedStats {
         &mut self,
         node_pubkey: &Pubkey,
         vote_account_pubkeys: &[Pubkey],
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
+        epoch_vote_accounts: &VoteAccountsHashMap,
     ) {
         self.propagated_node_ids.insert(*node_pubkey);
         for vote_account_pubkey in vote_account_pubkeys.iter() {
@@ -695,7 +695,7 @@ impl ProgressMap {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, solana_runtime::vote_account::VoteAccount};
 
     #[test]
     fn test_add_vote_pubkey() {

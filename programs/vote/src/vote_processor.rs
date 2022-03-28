@@ -10,12 +10,10 @@ use {
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
-        keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         program_utils::limited_deserialize,
-        pubkey::Pubkey,
         sysvar::rent::Rent,
     },
-    std::collections::HashSet,
 };
 
 pub fn process_instruction(
@@ -23,6 +21,8 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
@@ -33,25 +33,18 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[first_instruction_account..]);
+    let signers = instruction_context.get_signers(transaction_context);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             verify_rent_exemption(me, &rent)?;
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
-                invoke_context,
-            )?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             vote_state::initialize_account(me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
-                invoke_context,
-            )?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
             vote_state::authorize(
                 me,
                 &voter_pubkey,
@@ -71,14 +64,10 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
-            let slot_hashes = get_sysvar_with_account_check::slot_hashes(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
-                invoke_context,
-            )?;
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
-                invoke_context,
-            )?;
+            let slot_hashes =
+                get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             vote_state::process_vote(
                 me,
                 &slot_hashes,
@@ -147,10 +136,8 @@ pub fn process_instruction(
                     &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
                         .signer_key()
                         .ok_or(InstructionError::MissingRequiredSignature)?;
-                let clock = get_sysvar_with_account_check::clock(
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
-                    invoke_context,
-                )?;
+                let clock =
+                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 vote_state::authorize(
                     me,
                     voter_pubkey,
@@ -201,9 +188,10 @@ mod tests {
             feature_set::FeatureSet,
             hash::Hash,
             instruction::{AccountMeta, Instruction},
+            pubkey::Pubkey,
             sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
         },
-        std::str::FromStr,
+        std::{collections::HashSet, str::FromStr},
     };
 
     fn create_default_account() -> AccountSharedData {

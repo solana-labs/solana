@@ -44,8 +44,8 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
-            disable_bpf_unresolved_symbols_at_runtime, do_support_realloc,
-            reduce_required_deploy_balance, requestable_heap_size,
+            disable_bpf_unresolved_symbols_at_runtime, disable_deprecated_loader,
+            do_support_realloc, reduce_required_deploy_balance, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         keyed_account::{keyed_account_at_index, KeyedAccount},
@@ -387,6 +387,10 @@ fn process_instruction_common(
         )
     } else {
         debug_assert_eq!(first_instruction_account, 1);
+
+        let disable_deprecated_loader = invoke_context
+            .feature_set
+            .is_active(&disable_deprecated_loader::id());
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 first_instruction_account,
@@ -394,13 +398,18 @@ fn process_instruction_common(
                 invoke_context,
                 use_jit,
             )
-        } else if bpf_loader::check_id(program_id) || bpf_loader_deprecated::check_id(program_id) {
+        } else if bpf_loader::check_id(program_id)
+            || (!disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id))
+        {
             process_loader_instruction(
                 first_instruction_account,
                 instruction_data,
                 invoke_context,
                 use_jit,
             )
+        } else if disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id) {
+            ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
+            Err(InstructionError::UnsupportedProgramId)
         } else {
             ic_logger_msg!(log_collector, "Invalid BPF loader id");
             Err(InstructionError::IncorrectProgramId)
@@ -483,20 +492,9 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(3),
             )?;
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(4),
-                )?,
-                invoke_context,
-            )?;
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(5),
-                )?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(7),
@@ -674,20 +672,9 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(2),
             )?;
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(4),
-                )?,
-                invoke_context,
-            )?;
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(5),
-                )?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(6),

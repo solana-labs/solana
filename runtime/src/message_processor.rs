@@ -162,7 +162,7 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
-            message::Message,
+            message::{AccountKeys, Message},
             native_loader::{self, create_loadable_account_for_test},
             pubkey::Pubkey,
             secp256k1_instruction::new_secp256k1_instruction,
@@ -219,7 +219,10 @@ mod tests {
             }
         }
 
-        let mock_system_program_id = Pubkey::new(&[2u8; 32]);
+        let writable_pubkey = Pubkey::new_unique();
+        let readonly_pubkey = Pubkey::new_unique();
+        let mock_system_program_id = Pubkey::new_unique();
+
         let rent_collector = RentCollector::default();
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_system_program_id,
@@ -228,11 +231,11 @@ mod tests {
 
         let accounts = vec![
             (
-                solana_sdk::pubkey::new_rand(),
+                writable_pubkey,
                 AccountSharedData::new(100, 1, &mock_system_program_id),
             ),
             (
-                solana_sdk::pubkey::new_rand(),
+                readonly_pubkey,
                 AccountSharedData::new(0, 1, &mock_system_program_id),
             ),
             (
@@ -243,24 +246,25 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
+        let account_keys = transaction_context.get_keys_of_accounts().to_vec();
         let account_metas = vec![
-            AccountMeta::new(
-                *transaction_context.get_key_of_account_at_index(0).unwrap(),
-                true,
-            ),
-            AccountMeta::new_readonly(
-                *transaction_context.get_key_of_account_at_index(1).unwrap(),
-                false,
-            ),
+            AccountMeta::new(writable_pubkey, true),
+            AccountMeta::new_readonly(readonly_pubkey, false),
         ];
 
-        let message = SanitizedMessage::Legacy(Message::new(
-            &[Instruction::new_with_bincode(
-                mock_system_program_id,
-                &MockSystemInstruction::Correct,
-                account_metas.clone(),
-            )],
-            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
+        let message = SanitizedMessage::Legacy(Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            account_keys.clone(),
+            Hash::default(),
+            AccountKeys::new(&account_keys, None).compile_instructions(&[
+                Instruction::new_with_bincode(
+                    mock_system_program_id,
+                    &MockSystemInstruction::Correct,
+                    account_metas.clone(),
+                ),
+            ]),
         ));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
@@ -297,13 +301,19 @@ mod tests {
             0
         );
 
-        let message = SanitizedMessage::Legacy(Message::new(
-            &[Instruction::new_with_bincode(
-                mock_system_program_id,
-                &MockSystemInstruction::TransferLamports { lamports: 50 },
-                account_metas.clone(),
-            )],
-            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
+        let message = SanitizedMessage::Legacy(Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            account_keys.clone(),
+            Hash::default(),
+            AccountKeys::new(&account_keys, None).compile_instructions(&[
+                Instruction::new_with_bincode(
+                    mock_system_program_id,
+                    &MockSystemInstruction::TransferLamports { lamports: 50 },
+                    account_metas.clone(),
+                ),
+            ]),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -329,13 +339,19 @@ mod tests {
             ))
         );
 
-        let message = SanitizedMessage::Legacy(Message::new(
-            &[Instruction::new_with_bincode(
-                mock_system_program_id,
-                &MockSystemInstruction::ChangeData { data: 50 },
-                account_metas,
-            )],
-            Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
+        let message = SanitizedMessage::Legacy(Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            account_keys.clone(),
+            Hash::default(),
+            AccountKeys::new(&account_keys, None).compile_instructions(&[
+                Instruction::new_with_bincode(
+                    mock_system_program_id,
+                    &MockSystemInstruction::ChangeData { data: 50 },
+                    account_metas,
+                ),
+            ]),
         ));
         let result = MessageProcessor::process_message(
             builtin_programs,

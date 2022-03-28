@@ -327,6 +327,14 @@ pub mod limit_secp256k1_recovery_id {
     solana_sdk::declare_id!("7g9EUwj4j7CS21Yx1wvgWLjSZeh5aPq8x9kpoPwXM8n8");
 }
 
+pub mod disable_deprecated_loader {
+    solana_sdk::declare_id!("GTUMCZ8LTNxVfxdrw7ZsDFTxXb7TutYkzJnFwinpE6dg");
+}
+
+pub mod check_slice_translation_size {
+    solana_sdk::declare_id!("GmC19j9qLn2RFk5NduX6QXaDhVpGncVVBzyM8e9WMz2F");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -403,6 +411,8 @@ lazy_static! {
         (syscall_saturated_math::id(), "syscalls use saturated math"),
         (check_physical_overlapping::id(), "check physical overlapping regions"),
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
+        (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
+        (check_slice_translation_size::id(), "check size when translating slices",)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

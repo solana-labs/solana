@@ -265,8 +265,7 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler
-                    .handle_snapshot_requests(false, false, false, 0, &mut None);
+                snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
             }
         }
 
@@ -709,7 +708,6 @@ mod tests {
                 snapshot_request_handler.handle_snapshot_requests(
                     false,
                     false,
-                    false,
                     0,
                     &mut last_full_snapshot_slot,
                 );
@@ -931,7 +929,6 @@ mod tests {
             true,
         );
 
-        let tmpdir = TempDir::new().unwrap();
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_package_receiver,
             Some(pending_snapshot_package),
@@ -941,14 +938,12 @@ mod tests {
             false,
             0,
             Some(snapshot_test_config.snapshot_config.clone()),
-            tmpdir.path().to_path_buf(),
         );
 
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
             &exit,
             abs_request_handler,
-            false,
             false,
             true,
             None,

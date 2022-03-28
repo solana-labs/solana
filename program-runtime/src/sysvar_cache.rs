@@ -5,7 +5,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
-        keyed_account::KeyedAccount,
         pubkey::Pubkey,
         sysvar::{
             clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
@@ -180,60 +179,6 @@ impl SysvarCache {
 /// as `solana_sdk::keyed_account::from_keyed_account` despite dynamically
 /// loading them instead of deserializing from account data.
 pub mod get_sysvar_with_account_check {
-    use super::*;
-
-    fn check_sysvar_keyed_account<S: Sysvar>(
-        keyed_account: &KeyedAccount,
-    ) -> Result<(), InstructionError> {
-        if !S::check_id(keyed_account.unsigned_key()) {
-            return Err(InstructionError::InvalidArgument);
-        }
-        Ok(())
-    }
-
-    pub fn clock(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<Clock>, InstructionError> {
-        check_sysvar_keyed_account::<Clock>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_clock()
-    }
-
-    pub fn rent(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<Rent>, InstructionError> {
-        check_sysvar_keyed_account::<Rent>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_rent()
-    }
-
-    pub fn slot_hashes(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<SlotHashes>, InstructionError> {
-        check_sysvar_keyed_account::<SlotHashes>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_slot_hashes()
-    }
-
-    #[allow(deprecated)]
-    pub fn recent_blockhashes(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<RecentBlockhashes>, InstructionError> {
-        check_sysvar_keyed_account::<RecentBlockhashes>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_recent_blockhashes()
-    }
-
-    pub fn stake_history(
-        keyed_account: &KeyedAccount,
-        invoke_context: &InvokeContext,
-    ) -> Result<Arc<StakeHistory>, InstructionError> {
-        check_sysvar_keyed_account::<StakeHistory>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_stake_history()
-    }
-}
-
-pub mod get_sysvar_with_account_check2 {
     use super::*;
 
     fn check_sysvar_account<S: Sysvar>(

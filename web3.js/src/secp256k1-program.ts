@@ -46,7 +46,21 @@ export type CreateSecp256k1InstructionWithPrivateKeyParams = {
   instructionIndex?: number;
 };
 
-const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
+const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct<
+  Readonly<{
+    ethAddress: Uint8Array;
+    ethAddressInstructionIndex: number;
+    ethAddressOffset: number;
+    messageDataOffset: number;
+    messageDataSize: number;
+    messageInstructionIndex: number;
+    numSignatures: number;
+    recoveryId: number;
+    signature: Uint8Array;
+    signatureInstructionIndex: number;
+    signatureOffset: number;
+  }>
+>([
   BufferLayout.u8('numSignatures'),
   BufferLayout.u16('signatureOffset'),
   BufferLayout.u8('signatureInstructionIndex'),

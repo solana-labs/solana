@@ -38,7 +38,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
-        blockstore_db::{BlockstoreAdvancedOptions, BlockstoreOptions, BlockstoreRecoveryMode},
+        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
@@ -162,13 +162,12 @@ pub struct ValidatorConfig {
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
-    pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
     pub wait_to_vote_slot: Option<Slot>,
-    pub blockstore_advanced_options: BlockstoreAdvancedOptions,
+    pub ledger_column_options: LedgerColumnOptions,
 }
 
 impl Default for ValidatorConfig {
@@ -223,14 +222,13 @@ impl Default for ValidatorConfig {
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
-            accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
             wait_to_vote_slot: None,
-            blockstore_advanced_options: BlockstoreAdvancedOptions::default(),
+            ledger_column_options: LedgerColumnOptions::default(),
         }
     }
 }
@@ -915,7 +913,6 @@ impl Validator {
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
                 test_hash_calculation: config.accounts_db_test_hash_calculation,
-                use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
@@ -1297,7 +1294,8 @@ fn load_blockstore(
         ledger_path,
         BlockstoreOptions {
             recovery_mode: config.wal_recovery_mode.clone(),
-            advanced_options: config.blockstore_advanced_options.clone(),
+            column_options: config.ledger_column_options.clone(),
+            enforce_ulimit_nofile: config.enforce_ulimit_nofile,
             ..BlockstoreOptions::default()
         },
     )
@@ -1331,7 +1329,7 @@ fn load_blockstore(
                 blockstore.clone(),
                 exit,
                 enable_rpc_transaction_history,
-                config.rpc_config.enable_cpi_and_log_storage,
+                config.rpc_config.enable_extended_tx_metadata_storage,
                 transaction_notifier,
             )
         } else {
@@ -1538,7 +1536,7 @@ fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
     enable_rpc_transaction_history: bool,
-    enable_cpi_and_log_storage: bool,
+    enable_extended_tx_metadata_storage: bool,
     transaction_notifier: Option<TransactionNotifierLock>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
@@ -1552,7 +1550,7 @@ fn initialize_rpc_transaction_history_services(
         enable_rpc_transaction_history,
         transaction_notifier.clone(),
         blockstore.clone(),
-        enable_cpi_and_log_storage,
+        enable_extended_tx_metadata_storage,
         exit,
     ));
 
@@ -1799,7 +1797,6 @@ mod tests {
         std::fs::remove_dir_all,
     };
 
-    #[test]
     fn validator_exit() {
         solana_logger::setup();
         let leader_keypair = Keypair::new();
@@ -1879,7 +1876,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -1925,6 +1921,12 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_validator_exit() {
+        validator_exit();
+        validator_parallel_exit();
     }
 
     #[test]
