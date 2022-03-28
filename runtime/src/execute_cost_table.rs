@@ -20,11 +20,11 @@ const OCCURRENCES_WEIGHT: i64 = 100;
 
 const DEFAULT_CAPACITY: usize = 1024;
 
-// The coefficient represents the degree of weighting decrease in EMA,
-// a constant smoothing factor between 0 and 1. A higher coefficient
+// The EMA_ALPHA represents the degree of weighting decrease in EMA,
+// a constant smoothing factor between 0 and 1. A higher alpha
 // discounts older observations faster.
 // Estimate it to 0.01 by `2/(N+1)` where N is 200 samples
-const COEFFICIENT: f64 = 0.01;
+const EMA_ALPHA: f64 = 0.01;
 
 #[derive(Debug, Default)]
 struct AggregatedVarianceStats {
@@ -135,9 +135,9 @@ impl ExecuteCostTable {
             Entry::Occupied(mut entry) => {
                 let aggregated_variance_stats = entry.get_mut();
                 let theta = value as f64 - aggregated_variance_stats.ema;
-                aggregated_variance_stats.ema += theta * COEFFICIENT;
-                aggregated_variance_stats.ema_var = (1.0 - COEFFICIENT)
-                    * (aggregated_variance_stats.ema_var + COEFFICIENT * theta * theta);
+                aggregated_variance_stats.ema += theta * EMA_ALPHA;
+                aggregated_variance_stats.ema_var = (1.0 - EMA_ALPHA)
+                    * (aggregated_variance_stats.ema_var + EMA_ALPHA * theta * theta);
             }
             Entry::Vacant(entry) => {
                 // the starting values
@@ -491,7 +491,7 @@ mod tests {
         {
             let theta = 500u64;
             let cost2 = execute_cost_table.get_average_program_units(&key).unwrap() + theta;
-            let expected_ema = 1005u64; // ema+theta*COEFFICIENT
+            let expected_ema = 1005u64; // ema+theta*EMA_ALPHA
             let expected_inflated_units = 1105u64; //ema+2*stddev
             execute_cost_table.upsert(&key, cost2);
             assert_eq!(
@@ -508,7 +508,7 @@ mod tests {
         {
             let theta = 500u64;
             let cost3 = execute_cost_table.get_average_program_units(&key).unwrap() - theta;
-            let expected_ema = 1000u64; // ema+theta*COEFFICIENT
+            let expected_ema = 1000u64; // ema+theta*EMA_ALPHA
             let expected_inflated_units = 1141u64; //ema+2*stddev
             execute_cost_table.upsert(&key, cost3);
             assert_eq!(
