@@ -2276,37 +2276,13 @@ pub fn main() {
         warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
     }
 
-<<<<<<< HEAD
-=======
-    if matches.is_present("enable_cpi_and_log_storage") {
-        warn!(
-            "--enable-cpi-and-log-storage is deprecated. Please update the \
-            launch args to use --enable-extended-tx-metadata-storage and remove \
-            --enable-cpi-and-log-storage"
-        );
-    }
-
-    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
-        || matches.is_present("enable_bigtable_ledger_upload")
-    {
-        Some(RpcBigtableConfig {
-            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
-            bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
-            timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
-                .ok()
-                .map(Duration::from_secs),
-        })
-    } else {
-        None
-    };
-
     if matches.is_present("accounts_db_index_hashing") {
         info!("The accounts hash is only calculated without using the index. --accounts-db-index-hashing is deprecated and can be removed from the command line");
     }
     if matches.is_present("no_accounts_db_index_hashing") {
         info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
     }
->>>>>>> c24de1727 (remove index hash calculation as an option (#23928))
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
