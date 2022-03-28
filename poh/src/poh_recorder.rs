@@ -650,6 +650,7 @@ impl PohRecorder {
         if let Some(poh_entry) = poh_entry {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
+            self.report_poh_timing_point();
 
             if self
                 .leader_first_tick_height_including_grace_ticks
@@ -686,8 +687,6 @@ impl PohRecorder {
             )
             .1;
             self.total_sleep_us += sleep_time.as_us();
-
-            self.report_poh_timing_point();
         }
     }
 
