@@ -123,7 +123,6 @@ const renderAccountRow = (key: string, value: any) => {
     } else {
       displayValue = JSON.stringify(value)
     }
-    //<Address pubkey={account.pubkey} alignRight raw />
   }
   return (
     <tr key={key}>
