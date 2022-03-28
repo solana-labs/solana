@@ -4,6 +4,8 @@
 //! it is independent of zk-tokens.
 
 #[cfg(not(target_arch = "bpf"))]
+pub mod curve_syscall_traits;
 pub mod errors;
-pub mod ops;
-pub mod pod;
+pub mod edwards;
+pub mod ristretto;
+pub mod scalar;

@@ -2174,6 +2174,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
         let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
 
         match op {
+            OP_EDWARDS_VALIDATE => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_op_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+            }
+
             OP_EDWARDS_ADD | OP_EDWARDS_SUB => {
                 let cost = invoke_context
                     .get_compute_budget()
@@ -2194,6 +2206,35 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                     OP_EDWARDS_SUB => subtract_edwards(left_point, right_point),
                     _ => None,
                 } {
+                    *question_mark!(
+                        translate_type_mut::<PodEdwardsPoint>(
+                            memory_mapping,
+                            result_addr,
+                            loader_id,
+                        ),
+                        result
+                    ) = result_point;
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            }
+            OP_EDWARDS_MUL => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_mul_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+                let scalar = question_mark!(
+                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
+                    result
+                );
+
+                if let Some(result_point) = multiply_edwards(point, scalar) {
                     *question_mark!(
                         translate_type_mut::<PodEdwardsPoint>(
                             memory_mapping,
@@ -2229,66 +2270,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
                 } {
                     *question_mark!(
                         translate_type_mut::<PodRistrettoPoint>(
-                            memory_mapping,
-                            result_addr,
-                            loader_id,
-                        ),
-                        result
-                    ) = result_point;
-                    *result = Ok(0);
-                } else {
-                    *result = Ok(1);
-                }
-            }
-            OP_SCALAR_ADD | OP_SCALAR_SUB | OP_SCALAR_MUL | OP_SCALAR_DIV => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_scalar_op_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-                let left_scalar = question_mark!(
-                    translate_type::<PodScalar>(memory_mapping, left_addr, loader_id),
-                    result
-                );
-                let right_scalar = question_mark!(
-                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
-                    result
-                );
-
-                if let Some(result_point) = match op {
-                    OP_SCALAR_ADD => add_scalar(left_scalar, right_scalar),
-                    OP_SCALAR_SUB => subtract_scalar(left_scalar, right_scalar),
-                    OP_SCALAR_MUL => multiply_scalar(left_scalar, right_scalar),
-                    OP_SCALAR_DIV => divide_scalar(left_scalar, right_scalar),
-                    _ => None,
-                } {
-                    *question_mark!(
-                        translate_type_mut::<PodScalar>(memory_mapping, result_addr, loader_id,),
-                        result
-                    ) = result_point;
-                    *result = Ok(0);
-                } else {
-                    *result = Ok(1);
-                }
-            }
-            OP_EDWARDS_MUL => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_edwards_mul_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-                let point = question_mark!(
-                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
-                    result
-                );
-                let scalar = question_mark!(
-                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
-                    result
-                );
-
-                if let Some(result_point) = multiply_edwards(point, scalar) {
-                    *question_mark!(
-                        translate_type_mut::<PodEdwardsPoint>(
                             memory_mapping,
                             result_addr,
                             loader_id,
