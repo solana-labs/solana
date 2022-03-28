@@ -1,3 +1,5 @@
+//! A poh_timing_reporter module implement poh timing point and timing reporter
+//! structs.
 use {
     solana_metrics::{datapoint_info, poh_timing_point::PohTimingPoint},
     solana_sdk::clock::Slot,
@@ -149,7 +151,7 @@ mod test {
         // assert that the PohTiming is complete
         assert!(complete);
 
-        // assert that only one timestamp is kept
+        // assert that only one timestamp remains in track
         assert_eq!(reporter.slot_count(), 1)
     }
 
@@ -177,7 +179,7 @@ mod test {
         // assert that both timing points are complete
         assert_eq!(c, 2);
 
-        // assert that both timestamp is being tracked
+        // assert that both timestamps remain in track
         assert_eq!(reporter.slot_count(), 2)
     }
 
