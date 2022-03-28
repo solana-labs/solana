@@ -1554,6 +1554,19 @@ impl Blockstore {
             .unwrap_or_default()
     }
 
+    /// send slot full timing point to poh_timing_report service
+    fn send_slot_full_timing(&self, slot: Slot) {
+        if let Some(ref sender) = self.shred_timing_point_sender {
+            let slot_full = create_slot_poh_full_time_point!(
+                slot,
+                self.last_root(),
+                solana_sdk::timing::timestamp()
+            );
+            trace!("{}", slot_full);
+            let _ = sender.try_send(slot_full);
+        }
+    }
+
     fn insert_data_shred(
         &self,
         slot_meta: &mut SlotMeta,
@@ -1625,18 +1638,12 @@ impl Blockstore {
                 slots_stats.set_full(slot_meta);
             }
         }
+
+        // slot is full, send slot full timing to poh_timing_report service.
         if slot_meta.is_full() {
-            // send slot full timing point to poh_timing_report service
-            if let Some(ref sender) = self.shred_timing_point_sender {
-                let slot_full = create_slot_poh_full_time_point!(
-                    slot,
-                    self.last_root(),
-                    solana_sdk::timing::timestamp()
-                );
-                trace!("{}", slot_full);
-                let _ = sender.try_send(slot_full);
-            }
+            self.send_slot_full_timing(slot);
         }
+
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
 
         Ok(newly_completed_data_sets)
