@@ -32,6 +32,12 @@ struct AggregatedVarianceStats {
     ema_var: f64,
 }
 
+impl AggregatedVarianceStats {
+    fn get_ema_as_u64(&self) -> u64 {
+        self.ema.ceil() as u64
+    }
+}
+
 #[derive(Debug)]
 pub struct ExecuteCostTable {
     capacity: usize,
@@ -70,7 +76,7 @@ impl ExecuteCostTable {
         } else {
             self.table
                 .iter()
-                .map(|(_, value)| value.ema.ceil() as u64)
+                .map(|(_, value)| value.get_ema_as_u64())
                 .sum::<u64>()
                 / self.get_count() as u64
         }
@@ -88,14 +94,14 @@ impl ExecuteCostTable {
                 .map(|(key, _)| key)
                 .expect("cannot find mode from cost table");
 
-            self.table.get(key).unwrap().ema.ceil() as u64
+            self.table.get(key).unwrap().get_ema_as_u64()
         }
     }
 
     /// return program average cost units, or None if program doesn't exist in table.
     pub fn get_average_program_units(&self, key: &Pubkey) -> Option<u64> {
         let aggregated_variance_stats = self.table.get(key)?;
-        Some(aggregated_variance_stats.ema.ceil() as u64)
+        Some(aggregated_variance_stats.get_ema_as_u64())
     }
 
     /// returns inflated program cost units, which is `ema + 2*stddev`, or None
