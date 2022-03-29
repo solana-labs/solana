@@ -7,6 +7,12 @@ use {
     std::fmt,
 };
 
+/// Receiver of SlotPohTimingInfo from the channel
+pub type PohTimingReceiver = Receiver<SlotPohTimingInfo>;
+
+/// Sender of SlotPohTimingInfo to the channel
+pub type PohTimingSender = Sender<SlotPohTimingInfo>;
+
 /// PohTimingPoint. Each TimingPoint is annotated with a timestamp in milliseconds.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PohTimingPoint {
@@ -122,12 +128,6 @@ macro_rules! create_slot_poh_full_time_point {
         )
     };
 }
-
-/// Receiver of SlotPohTimingInfo from the channel
-pub type PohTimingReceiver = Receiver<SlotPohTimingInfo>;
-
-/// Sender of SlotPohTimingInfo to the channel
-pub type PohTimingSender = Sender<SlotPohTimingInfo>;
 
 pub fn send_poh_timing_point(sender: &PohTimingSender, slot_timing: SlotPohTimingInfo) {
     trace!("{}", slot_timing);
