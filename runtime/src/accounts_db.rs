@@ -5113,8 +5113,7 @@ impl AccountsDb {
     fn calculate_accounts_hash(
         &self,
         slot: Slot,
-        ancestors: &Ancestors,
-        check_hash: bool, // this will not be supported anymore
+        config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
@@ -5147,7 +5146,7 @@ impl AccountsDb {
                                 return None;
                             }
                             if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                                self.accounts_index.get(pubkey, config.ancestors, Some(slot))
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
@@ -5170,7 +5169,7 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
-                                            if check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
+                                            if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey);
                                                 if computed_hash != loaded_hash {
@@ -5200,7 +5199,7 @@ impl AccountsDb {
                 }).collect()
         };
 
-        let hashes: Vec<Vec<Hash>> = if check_hash {
+        let hashes: Vec<Vec<Hash>> = if config.check_hash {
             get_hashes()
         } else {
             self.thread_pool_clean.install(get_hashes)
@@ -5523,7 +5522,15 @@ impl AccountsDb {
                 timings,
             )
         } else {
-            self.calculate_accounts_hash(slot, ancestors, check_hash)
+            self.calculate_accounts_hash(
+                slot,
+                &CalcAccountsHashConfig {
+                    storages: &SortedStorages::empty(), // unused
+                    use_bg_thread_pool: !is_startup,
+                    check_hash,
+                    ancestors: Some(ancestors),
+                },
+            )
         }
     }
 
