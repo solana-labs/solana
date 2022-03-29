@@ -26,7 +26,6 @@ use {
 };
 
 pub struct Dashboard {
-    //progress_bar: ProgressBar,
     ledger_path: PathBuf,
     exit: Arc<AtomicBool>,
 }
