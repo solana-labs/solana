@@ -17,7 +17,7 @@ language: minimal
 jobs:
   include:
     - name: "Export Github Repositories"
-      if: type IN (push, cron) AND branch = master
+      if: type IN (push, cron, pull_request) AND branch = master
       language: python
       git:
         depth: false
