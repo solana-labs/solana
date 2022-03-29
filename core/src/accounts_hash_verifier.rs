@@ -134,6 +134,7 @@ impl AccountsHashVerifier {
                 )
                 .unwrap();
 
+            panic!("hash: {}, {}", accounts_package.expected_capitalization, lamports);
             assert_eq!(accounts_package.expected_capitalization, lamports);
             assert_eq!(expected_hash, hash);
         };
