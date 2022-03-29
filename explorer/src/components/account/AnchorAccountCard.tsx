@@ -34,8 +34,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
         return;
       }
 
-      // TODO this should come from somewhere inside the client already? This lookup seems bad.
-      // Appears we don't cache data for accounts we don't know the type of?
+      // TODO: this should be cached
       const accountInfo = await connection.getAccountInfo(account.pubkey);
       const discriminator = accountInfo?.data.slice(0, 8);
       if (!discriminator) {
@@ -110,7 +109,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
 export const hasAnchorIDL = async (
   address: PublicKey,
   url: string
-): Promise<Boolean> => {
+): Promise<boolean> => {
   const connection = new Connection(url);
   const provider = new Provider(connection, new NodeWallet(Keypair.generate()), {
     skipPreflight: false,

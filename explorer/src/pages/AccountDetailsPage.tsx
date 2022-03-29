@@ -228,8 +228,8 @@ function DetailsSections({
   tab?: string;
   info?: CacheEntry<Account>;
 }) {
-  const [isAnchorAccount, setIsAnchorAccount] = React.useState<Boolean>(false);
-  const [isAnchorProgram, setIsAnchorProgram] = React.useState<Boolean>(false);
+  const [isAnchorAccount, setIsAnchorAccount] = React.useState<boolean>(false);
+  const [isAnchorProgram, setIsAnchorProgram] = React.useState<boolean>(false);
   const { url } = useCluster();
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
@@ -256,23 +256,7 @@ function DetailsSections({
 
   const account = info.data;
   const data = account?.details?.data;
-  const tabs = getTabs(data);
-
-  // This is a bad way to do this. This should happen inside getTabs?
-  if (isAnchorAccount) {
-    tabs.push({
-      slug: "anchor-account",
-      title: "Anchor IDL",
-      path: "/anchor-account",
-    });
-  }
-  if (isAnchorProgram) {
-    tabs.push({
-      slug: "anchor-program",
-      title: "Anchor IDL",
-      path: "/anchor-program",
-    });
-  }
+  const tabs = getTabs(data, isAnchorAccount, isAnchorProgram);
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -431,7 +415,7 @@ function MoreSection({
   );
 }
 
-function getTabs(data?: ProgramData): Tab[] {
+function getTabs(data?: ProgramData, isAnchorAccount?: Boolean, isAnchorProgram?: Boolean): Tab[] {
   const tabs: Tab[] = [
     {
       slug: "history",
@@ -478,6 +462,22 @@ function getTabs(data?: ProgramData): Tab[] {
       slug: "domains",
       title: "Domains",
       path: "/domains",
+    });
+  }
+
+  // Add anchor tabs
+  if (isAnchorAccount) {
+    tabs.push({
+      slug: "anchor-account",
+      title: "Anchor IDL",
+      path: "/anchor-account",
+    });
+  }
+  if (isAnchorProgram) {
+    tabs.push({
+      slug: "anchor-program",
+      title: "Anchor IDL",
+      path: "/anchor-program",
     });
   }
 
