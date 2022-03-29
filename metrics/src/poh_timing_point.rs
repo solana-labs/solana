@@ -84,7 +84,7 @@ impl IntoSlotTimingInfoParams for (Slot, Slot, u64) {
 }
 
 impl SlotPohTimingInfo {
-    /// create slot poh timing point w/o root info.
+    /// create slot poh timing point
     fn new_slot_poh_time_point<A, F>(args: A, f: F) -> SlotPohTimingInfo
     where
         A: IntoSlotTimingInfoParams,
@@ -105,7 +105,7 @@ impl SlotPohTimingInfo {
         }
     }
 
-    /// create slot start poh timing point w/o root info.
+    /// create slot start poh timing point with or without root
     pub fn new_slot_start_poh_time_point<A>(args: A) -> SlotPohTimingInfo
     where
         A: IntoSlotTimingInfoParams,
@@ -113,7 +113,7 @@ impl SlotPohTimingInfo {
         SlotPohTimingInfo::new_slot_poh_time_point(args, PohTimingPoint::PohSlotStart)
     }
 
-    /// create slot end poh timing point w/o root info.
+    /// create slot end poh timing point with or without root
     pub fn new_slot_end_poh_time_point<A>(args: A) -> SlotPohTimingInfo
     where
         A: IntoSlotTimingInfoParams,
@@ -121,7 +121,7 @@ impl SlotPohTimingInfo {
         SlotPohTimingInfo::new_slot_poh_time_point(args, PohTimingPoint::PohSlotEnd)
     }
 
-    /// create slot full poh timing point w/o root info.
+    /// create slot full poh timing point with or without root
     pub fn new_slot_full_poh_time_point<A>(args: A) -> SlotPohTimingInfo
     where
         A: IntoSlotTimingInfoParams,
