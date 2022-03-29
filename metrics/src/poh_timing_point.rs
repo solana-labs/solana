@@ -110,7 +110,7 @@ impl SlotPohTimingInfo {
     where
         A: IntoSlotTimingInfoParams,
     {
-        SlotPohTimingInfo::new_slot_poh_time_point(args, |t| PohTimingPoint::PohSlotStart(t))
+        SlotPohTimingInfo::new_slot_poh_time_point(args, PohTimingPoint::PohSlotStart)
     }
 
     /// create slot end poh timing point w/o root info.
@@ -118,7 +118,7 @@ impl SlotPohTimingInfo {
     where
         A: IntoSlotTimingInfoParams,
     {
-        SlotPohTimingInfo::new_slot_poh_time_point(args, |t| PohTimingPoint::PohSlotEnd(t))
+        SlotPohTimingInfo::new_slot_poh_time_point(args, PohTimingPoint::PohSlotEnd)
     }
 
     /// create slot full poh timing point w/o root info.
@@ -126,7 +126,7 @@ impl SlotPohTimingInfo {
     where
         A: IntoSlotTimingInfoParams,
     {
-        SlotPohTimingInfo::new_slot_poh_time_point(args, |t| PohTimingPoint::FullSlotReceived(t))
+        SlotPohTimingInfo::new_slot_poh_time_point(args, PohTimingPoint::FullSlotReceived)
     }
 }
 
