@@ -40,7 +40,10 @@ import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
-import { AnchorAccountCard, hasAnchorIDL } from "components/account/AnchorAccountCard";
+import {
+  AnchorAccountCard,
+  hasAnchorIDL,
+} from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
 
 const IDENTICON_WIDTH = 64;
@@ -225,25 +228,22 @@ function DetailsSections({
   tab?: string;
   info?: CacheEntry<Account>;
 }) {
-  const [ isAnchorAccount, setIsAnchorAccount ] = React.useState<Boolean>(false);
-  const [ isAnchorProgram, setIsAnchorProgram ] = React.useState<Boolean>(false);
-  const { url } = useCluster()
+  const [isAnchorAccount, setIsAnchorAccount] = React.useState<Boolean>(false);
+  const [isAnchorProgram, setIsAnchorProgram] = React.useState<Boolean>(false);
+  const { url } = useCluster();
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const location = useLocation();
   const { flaggedAccounts } = useFlaggedAccounts();
 
-  React.useEffect(()=>{
-    if (info && info.data ) {
-      hasAnchorIDL(info.data.pubkey, url)
-      .then(setIsAnchorProgram)
+  React.useEffect(() => {
+    if (info && info.data) {
+      hasAnchorIDL(info.data.pubkey, url).then(setIsAnchorProgram);
       if (info.data.details) {
-        hasAnchorIDL(info.data.details.owner, url)
-        .then(setIsAnchorAccount)
+        hasAnchorIDL(info.data.details.owner, url).then(setIsAnchorAccount);
       }
     }
-  },[info, url])
-
+  }, [info, url]);
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -425,16 +425,8 @@ function MoreSection({
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
-      {tab === "anchor-account" && (
-        <AnchorAccountCard
-          account={(account)}
-        />
-      )}
-      {tab === "anchor-program" && (
-        <AnchorProgramCard
-          account={(account)}
-        />
-      )}
+      {tab === "anchor-account" && <AnchorAccountCard account={account} />}
+      {tab === "anchor-program" && <AnchorProgramCard account={account} />}
     </>
   );
 }

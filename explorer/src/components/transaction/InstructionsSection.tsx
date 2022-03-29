@@ -61,13 +61,16 @@ export function InstructionsSection({ signature }: SignatureProps) {
   const { cluster, url } = useCluster();
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
-  const [instructionDetails, setInstructionDetails] = useState<JSX.Element[]>([]);
-
+  const [instructionDetails, setInstructionDetails] = useState<JSX.Element[]>(
+    []
+  );
 
   useEffect(() => {
-    console.log('running', details);
-    if (!status?.data?.info || !details?.data?.transaction) { return };
-    console.log('here?', details);
+    console.log("running", details);
+    if (!status?.data?.info || !details?.data?.transaction) {
+      return;
+    }
+    console.log("here?", details);
 
     const { transaction } = details.data?.transaction;
     const ixDetails = transaction.message.instructions.map(
@@ -87,7 +90,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
               signature,
               tx: transaction,
               childIndex,
-              url
+              url,
             });
 
             innerCards.push(res);
@@ -101,14 +104,16 @@ export function InstructionsSection({ signature }: SignatureProps) {
           signature,
           tx: transaction,
           innerCards,
-          url
+          url,
         });
       }
     );
 
     Promise.all(ixDetails)
-    .then((details) => setInstructionDetails(details))
-    .catch((_err) => console.error("Unexpected error processing instructions:", _err));
+      .then((details) => setInstructionDetails(details))
+      .catch((_err) =>
+        console.error("Unexpected error processing instructions:", _err)
+      );
   }, [details]);
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
@@ -165,7 +170,7 @@ async function renderInstructionCard({
   signature,
   innerCards,
   childIndex,
-  url
+  url,
 }: {
   ix: ParsedInstruction | PartiallyDecodedInstruction;
   tx: ParsedTransaction;
@@ -174,7 +179,7 @@ async function renderInstructionCard({
   signature: TransactionSignature;
   innerCards?: JSX.Element[];
   childIndex?: number;
-  url: string
+  url: string;
 }) {
   const key = `${index}-${childIndex}`;
 

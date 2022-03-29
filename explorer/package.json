@@ -40,6 +40,7 @@
     "classnames": "2.3.1",
     "coingecko-api": "^1.0.10",
     "cross-fetch": "^3.1.4",
+    "crypto": "^1.0.1",
     "humanize-duration-ts": "^2.1.1",
     "prettier": "^2.5.1",
     "react": "^17.0.2",

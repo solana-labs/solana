@@ -66,7 +66,7 @@ export function GenericAnchorDetailsCard(props: {
         .join(" ");
       setProgramName(_programName);
 
-      const coder = new InstructionCoder(idl)
+      const coder = new InstructionCoder(idl);
       const decodedIx = coder.decode(ix.data);
       if (!decodedIx) {
         return;
