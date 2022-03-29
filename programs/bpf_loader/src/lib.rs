@@ -139,14 +139,15 @@ pub fn create_executor(
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let mut executable = {
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let programdata = keyed_account_at_index(keyed_accounts, programdata_account_index)?;
-        create_executor_metrics.program_id = programdata.unsigned_key().to_string();
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let programdata = instruction_context
+            .try_borrow_account(transaction_context, programdata_account_index)?;
+        create_executor_metrics.program_id = programdata.get_key().to_string();
         let mut load_elf_time = Measure::start("load_elf_time");
         let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             programdata
-                .try_account_ref()?
-                .data()
+                .get_data()
                 .get(programdata_offset..)
                 .ok_or(InstructionError::AccountDataTooSmall)?,
             None,
