@@ -303,7 +303,7 @@ fn process_instruction_common(
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     let second_account =
         keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(1));
-    let (program, next_first_instruction_account) = if first_account_key == program_id {
+    let (program, program_account_index) = if first_account_key == program_id {
         (first_account, first_instruction_account)
     } else if second_account_key
         .map(|key| key == program_id)
@@ -389,11 +389,7 @@ fn process_instruction_common(
             get_or_create_executor_time.as_us()
         );
 
-        executor.execute(
-            next_first_instruction_account,
-            instruction_data,
-            invoke_context,
-        )
+        executor.execute(program_account_index, instruction_data, invoke_context)
     } else {
         debug_assert_eq!(first_instruction_account, 1);
 
