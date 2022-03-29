@@ -290,16 +290,23 @@ fn process_instruction_common(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let program_id = instruction_context.get_program_key(transaction_context)?;
+    let first_account_key = transaction_context.get_key_of_account_at_index(
+        instruction_context.get_index_in_transaction(first_instruction_account)?,
+    )?;
+    let second_account_key = instruction_context
+        .get_index_in_transaction(first_instruction_account.saturating_add(1))
+        .and_then(|index_in_transaction| {
+            transaction_context.get_key_of_account_at_index(index_in_transaction)
+        });
 
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     let second_account =
         keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(1));
-    let (program, next_first_instruction_account) = if first_account.unsigned_key() == program_id {
+    let (program, next_first_instruction_account) = if first_account_key == program_id {
         (first_account, first_instruction_account)
-    } else if second_account
-        .as_ref()
-        .map(|keyed_account| keyed_account.unsigned_key() == program_id)
+    } else if second_account_key
+        .map(|key| key == program_id)
         .unwrap_or(false)
     {
         (second_account?, first_instruction_account.saturating_add(1))
@@ -332,7 +339,7 @@ fn process_instruction_common(
                 programdata_address,
             } = program.state()?
             {
-                if programdata_address != *first_account.unsigned_key() {
+                if programdata_address != *first_account_key {
                     ic_logger_msg!(
                         log_collector,
                         "Wrong ProgramData account for this Program account"
