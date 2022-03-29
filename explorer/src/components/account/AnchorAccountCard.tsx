@@ -6,9 +6,11 @@ import { Address } from "components/common/Address";
 import {
   Program,
   Provider,
-  Wallet,
-  AccountsCoder,
+  BorshAccountsCoder,
 } from "@project-serum/anchor";
+
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
+
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 
 export function AnchorAccountCard({ account }: { account: Account }) {
@@ -22,15 +24,11 @@ export function AnchorAccountCard({ account }: { account: Account }) {
     setDecodedAnchorAccountData(undefined);
     (async () => {
       const connection = new Connection(url);
-      const provider = new Provider(
-        connection,
-        new Wallet(Keypair.generate()),
-        {
-          skipPreflight: false,
-          commitment: "confirmed",
-          preflightCommitment: "confirmed",
-        }
-      );
+      const provider = new Provider(connection, new NodeWallet(Keypair.generate()), {
+        skipPreflight: false,
+        commitment: "confirmed",
+        preflightCommitment: "confirmed",
+      });
 
       if (!account.details) {
         return;
@@ -51,7 +49,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
             Object.keys(program.account).forEach((accountType) => {
               const layoutName = capitalizeFirstLetter(accountType);
               const discriminatorToCheck =
-                AccountsCoder.accountDiscriminator(layoutName);
+                BorshAccountsCoder.accountDiscriminator(layoutName);
 
               if (equal(discriminatorToCheck, discriminator)) {
                 const decodedAnchorObject = program.account[
@@ -64,7 +62,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
           }
         })
         .catch((error) => {
-          console.log("No IDL found for address. Why did the tab load?", error);
+          console.log("Erroring loading idl", error);
         });
     })();
   }, [account, url]);
@@ -114,19 +112,17 @@ export const hasAnchorIDL = async (
   url: string
 ): Promise<Boolean> => {
   const connection = new Connection(url);
-  const provider = new Provider(connection, new Wallet(Keypair.generate()), {
+  const provider = new Provider(connection, new NodeWallet(Keypair.generate()), {
     skipPreflight: false,
     commitment: "confirmed",
     preflightCommitment: "confirmed",
   });
 
   const program = await Program.at(address, provider).catch(() => {});
-  console.log("Program found!!!!");
   return !!program;
 };
 
 const renderAccountRow = (key: string, value: any) => {
-  console.log("Value", value);
   let displayValue = value.toString();
   if (value.constructor.name === "PublicKey") {
     displayValue = <Address pubkey={value} link />;

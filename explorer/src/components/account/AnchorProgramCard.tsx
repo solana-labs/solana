@@ -2,13 +2,10 @@ import React from "react";
 
 import { Account } from "providers/accounts";
 import { useCluster } from "providers/cluster";
-import {
-  Program,
-  Provider,
-  Wallet,
-  AccountsCoder,
-} from "@project-serum/anchor";
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+import { Program, Provider } from "@project-serum/anchor";
+import { Connection, Keypair } from "@solana/web3.js";
+
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 import ReactJson from "react-json-view";
 
@@ -22,7 +19,7 @@ export function AnchorProgramCard({ account }: { account: Account }) {
       const connection = new Connection(url);
       const provider = new Provider(
         connection,
-        new Wallet(Keypair.generate()),
+        new NodeWallet(Keypair.generate()),
         {
           skipPreflight: false,
           commitment: "confirmed",
@@ -35,7 +32,7 @@ export function AnchorProgramCard({ account }: { account: Account }) {
           setDecodedAnchorAccountData(program.idl);
         })
         .catch((error) => {
-          console.log("No IDL found for address. Why did the tab load?", error);
+          console.log("Error loading idl", error);
         });
     })();
   }, [account, url]);

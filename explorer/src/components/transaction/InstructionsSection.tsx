@@ -66,11 +66,9 @@ export function InstructionsSection({ signature }: SignatureProps) {
   );
 
   useEffect(() => {
-    console.log("running", details);
     if (!status?.data?.info || !details?.data?.transaction) {
       return;
     }
-    console.log("here?", details);
 
     const { transaction } = details.data?.transaction;
     const ixDetails = transaction.message.instructions.map(

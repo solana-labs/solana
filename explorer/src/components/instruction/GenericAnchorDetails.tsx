@@ -5,7 +5,7 @@ import {
 } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
 import {
-  InstructionCoder,
+  BorshInstructionCoder,
   Idl,
   Program,
   Provider,
@@ -66,7 +66,7 @@ export function GenericAnchorDetailsCard(props: {
         .join(" ");
       setProgramName(_programName);
 
-      const coder = new InstructionCoder(idl);
+      const coder = new BorshInstructionCoder(idl);
       const decodedIx = coder.decode(ix.data);
       if (!decodedIx) {
         return;
