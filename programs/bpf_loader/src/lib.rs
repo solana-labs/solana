@@ -299,8 +299,6 @@ fn process_instruction_common(
             transaction_context.get_key_of_account_at_index(index_in_transaction)
         });
 
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     let program_account_index = if first_account_key == program_id {
         first_instruction_account
     } else if second_account_key
@@ -309,7 +307,10 @@ fn process_instruction_common(
     {
         first_instruction_account.saturating_add(1)
     } else {
-        if first_account.executable()? {
+        if instruction_context
+            .try_borrow_account(transaction_context, first_instruction_account)?
+            .is_executable()
+        {
             ic_logger_msg!(log_collector, "BPF loader is executable");
             return Err(InstructionError::IncorrectProgramId);
         }
@@ -347,7 +348,9 @@ fn process_instruction_common(
                     return Err(InstructionError::InvalidArgument);
                 }
                 if !matches!(
-                    first_account.state()?,
+                    instruction_context
+                        .try_borrow_account(transaction_context, first_instruction_account)?
+                        .get_state()?,
                     UpgradeableLoaderState::ProgramData {
                         slot: _,
                         upgrade_authority_address: _,
