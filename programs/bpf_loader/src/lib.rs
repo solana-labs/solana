@@ -301,21 +301,19 @@ fn process_instruction_common(
 
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-    let second_account =
-        keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(1));
-    let (_program, program_account_index) = if first_account_key == program_id {
-        (first_account, first_instruction_account)
+    let program_account_index = if first_account_key == program_id {
+        first_instruction_account
     } else if second_account_key
         .map(|key| key == program_id)
         .unwrap_or(false)
     {
-        (second_account?, first_instruction_account.saturating_add(1))
+        first_instruction_account.saturating_add(1)
     } else {
         if first_account.executable()? {
             ic_logger_msg!(log_collector, "BPF loader is executable");
             return Err(InstructionError::IncorrectProgramId);
         }
-        (first_account, first_instruction_account)
+        first_instruction_account
     };
 
     let program =
