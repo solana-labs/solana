@@ -205,17 +205,17 @@ fn write_program_data(
     let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
     let mut account = program.try_account_ref_mut()?;
     let data = &mut account.data_as_mut_slice();
-    let len = bytes.len();
-    if data.len() < program_data_offset.saturating_add(len) {
+    let write_offset = program_data_offset.saturating_add(bytes.len());
+    if data.len() < write_offset {
         ic_msg!(
             invoke_context,
             "Write overflow: {} < {}",
             data.len(),
-            program_data_offset.saturating_add(len),
+            write_offset,
         );
         return Err(InstructionError::AccountDataTooSmall);
     }
-    data.get_mut(program_data_offset..program_data_offset.saturating_add(len))
+    data.get_mut(program_data_offset..write_offset)
         .ok_or(InstructionError::AccountDataTooSmall)?
         .copy_from_slice(bytes);
     Ok(())
