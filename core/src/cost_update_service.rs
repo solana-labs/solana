@@ -206,8 +206,8 @@ mod tests {
             let accumulated_units: u64 = 200;
             let count: u32 = 10;
             // the theta = 200/10 - 100/10 = 10
-            let expected_average_cost = 11u64;
-            let expected_inflated_cost = 13u64;
+            let expected_average_cost = 10u64;
+            let expected_inflated_cost = 10u64;
 
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
@@ -354,7 +354,7 @@ mod tests {
             - 10;
         {
             let expected_average_cost = 109u64;
-            let expected_inflated_cost = 288u64;
+            let expected_inflated_cost = 289u64;
             let errored_txs_compute_consumed = vec![smaller_cost_per_error; 3];
             let total_errored_units = errored_txs_compute_consumed.iter().sum();
             execute_timings.details.per_program_timings.insert(

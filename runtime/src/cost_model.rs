@@ -511,7 +511,7 @@ mod tests {
         let key1 = Pubkey::new_unique();
         let cost1 = 100;
         let cost2 = 200;
-        let updated_cost = (cost1 + cost2) / 2;
+        let updated_cost = 121; // by spreadsheet
 
         let mut cost_model = CostModel::default();
 

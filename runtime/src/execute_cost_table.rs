@@ -24,17 +24,61 @@ const DEFAULT_CAPACITY: usize = 1024;
 // a constant smoothing factor between 0 and 1. A higher alpha
 // discounts older observations faster.
 // Estimate it to 0.01 by `2/(N+1)` where N is 200 samples
-const EMA_ALPHA: f64 = 0.01;
+const EMA_ALPHA: u16 = 10;
+const EMA_SCALE: u16 = 1000;
 
+// exponential moving average algorithm
+// https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation
 #[derive(Debug, Default)]
 struct AggregatedVarianceStats {
-    ema: f64,
-    ema_var: f64,
+    ema: u64,
+    ema_var: u64,
 }
 
 impl AggregatedVarianceStats {
-    fn get_ema_as_u64(&self) -> u64 {
-        self.ema.ceil() as u64
+    fn get_ema(&self) -> u64 {
+        self.ema
+    }
+
+    fn get_stddev(&self) -> u64 {
+        (self.ema_var as f64).sqrt().ceil() as u64
+    }
+
+    fn aggregate_ema(&mut self, theta: Option<i64>) {
+        if let Some(theta) = theta {
+            self.ema = u64::try_from(
+                i128::from(self.ema)
+                    .saturating_mul(i128::from(EMA_SCALE))
+                    .saturating_add(
+                        i128::try_from(theta.saturating_mul(i64::from(EMA_ALPHA)))
+                            .ok()
+                            .unwrap_or(0i128),
+                    )
+                    .saturating_div(i128::from(EMA_SCALE)),
+            )
+            .ok()
+            .unwrap_or(self.ema);
+        }
+    }
+
+    fn aggregate_var(&mut self, theta: Option<i64>) {
+        if let Some(theta) = theta {
+            self.ema_var = u64::try_from(
+                i128::from(self.ema_var)
+                    .saturating_mul(i128::from(EMA_SCALE))
+                    .saturating_add(
+                        i128::try_from(
+                            theta.saturating_pow(2).saturating_mul(i64::from(EMA_ALPHA)),
+                        )
+                        .ok()
+                        .unwrap_or(0i128),
+                    )
+                    .saturating_mul(i128::from(EMA_SCALE - EMA_ALPHA))
+                    .saturating_div(i128::from(EMA_SCALE).saturating_pow(2)),
+            )
+            .ok()
+            .unwrap_or(self.ema_var);
+        }
     }
 }
 
@@ -76,7 +120,7 @@ impl ExecuteCostTable {
         } else {
             self.table
                 .iter()
-                .map(|(_, value)| value.get_ema_as_u64())
+                .map(|(_, value)| value.get_ema())
                 .sum::<u64>()
                 / self.get_count() as u64
         }
@@ -94,14 +138,14 @@ impl ExecuteCostTable {
                 .map(|(key, _)| key)
                 .expect("cannot find mode from cost table");
 
-            self.table.get(key).unwrap().get_ema_as_u64()
+            self.table.get(key).unwrap().get_ema()
         }
     }
 
     /// return program average cost units, or None if program doesn't exist in table.
     pub fn get_average_program_units(&self, key: &Pubkey) -> Option<u64> {
         let aggregated_variance_stats = self.table.get(key)?;
-        Some(aggregated_variance_stats.get_ema_as_u64())
+        Some(aggregated_variance_stats.get_ema())
     }
 
     /// returns inflated program cost units, which is `ema + 2*stddev`, or None
@@ -110,16 +154,7 @@ impl ExecuteCostTable {
     /// can be used to assign a value to new program.
     pub fn get_inflated_program_units(&self, key: &Pubkey) -> Option<u64> {
         let aggregated_variance_stats = self.table.get(key)?;
-        let cost_f64 =
-            (aggregated_variance_stats.ema + 2.0 * aggregated_variance_stats.ema_var.sqrt()).ceil();
-
-        // check if cost:f64 can be losslessly convert to u64, otherwise return None
-        let cost_u64 = cost_f64 as u64;
-        if cost_f64 == cost_u64 as f64 {
-            Some(cost_u64)
-        } else {
-            None
-        }
+        Some(aggregated_variance_stats.get_ema() + 2 * aggregated_variance_stats.get_stddev())
     }
 
     /// update-or-insert should be infallible. Query the result of upsert,
@@ -135,21 +170,21 @@ impl ExecuteCostTable {
             self.prune_to(&prune_to_size);
         }
 
-        // exponential moving average algorithm
-        // https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation
         match self.table.entry(*key) {
             Entry::Occupied(mut entry) => {
                 let aggregated_variance_stats = entry.get_mut();
-                let theta = value as f64 - aggregated_variance_stats.ema;
-                aggregated_variance_stats.ema += theta * EMA_ALPHA;
-                aggregated_variance_stats.ema_var = (1.0 - EMA_ALPHA)
-                    * (aggregated_variance_stats.ema_var + EMA_ALPHA * theta * theta);
+                let theta = i64::try_from(
+                    i128::from(value) - i128::from(aggregated_variance_stats.get_ema()),
+                )
+                .ok();
+                aggregated_variance_stats.aggregate_ema(theta);
+                aggregated_variance_stats.aggregate_var(theta);
             }
             Entry::Vacant(entry) => {
                 // the starting values
                 entry.insert(AggregatedVarianceStats {
-                    ema: value as f64,
-                    ema_var: 0.0,
+                    ema: value,
+                    ema_var: 0u64,
                 });
             }
         }
@@ -164,7 +199,7 @@ impl ExecuteCostTable {
 
     /// prune the old programs so the table contains `new_size` of records,
     /// where `old` is defined as weighted age, which is negatively correlated
-    /// with program's age and how frequently the program is occurrenced.
+    /// with program's age and how frequently the program is occurrences.
     fn prune_to(&mut self, new_size: &usize) {
         debug!(
             "prune cost table, current size {}, new size {}",
@@ -327,18 +362,15 @@ mod tests {
         );
 
         // update 1st record
-        execute_cost_table.upsert(&key1, cost2);
+        execute_cost_table.upsert(&key1, cost1);
         assert_eq!(2, execute_cost_table.get_count());
         assert_eq!(
-            ((cost1 + cost2) / 2 + cost2) / 2_u64,
+            (cost1 + cost2) / 2_u64,
             execute_cost_table.get_average_units()
         );
+        assert_eq!(cost1, execute_cost_table.get_statistical_mode_units());
         assert_eq!(
-            (cost1 + cost2) / 2,
-            execute_cost_table.get_statistical_mode_units()
-        );
-        assert_eq!(
-            ((cost1 + cost2) / 2),
+            cost1,
             execute_cost_table
                 .get_inflated_program_units(&key1)
                 .unwrap()
@@ -418,22 +450,19 @@ mod tests {
 
         // update 2nd record, so the 3rd becomes the oldest
         // add 4th record, pushes out 3rd key
-        execute_cost_table.upsert(&key2, cost1);
+        execute_cost_table.upsert(&key2, cost2);
         execute_cost_table.upsert(&key4, cost4);
         assert_eq!(
-            ((cost1 + cost2) / 2 + cost4) / 2_u64,
+            (cost2 + cost4) / 2_u64,
             execute_cost_table.get_average_units()
         );
-        assert_eq!(
-            (cost1 + cost2) / 2,
-            execute_cost_table.get_statistical_mode_units()
-        );
+        assert_eq!(cost2, execute_cost_table.get_statistical_mode_units());
         assert_eq!(2, execute_cost_table.get_count());
         assert!(execute_cost_table
             .get_inflated_program_units(&key1)
             .is_none());
         assert_eq!(
-            ((cost1 + cost2) / 2),
+            cost2,
             execute_cost_table
                 .get_inflated_program_units(&key2)
                 .unwrap()
@@ -450,29 +479,38 @@ mod tests {
     }
 
     #[test]
-    fn test_get_cost_overflow_u64() {
+    fn test_aggregate_variance_stats() {
         solana_logger::setup();
-        let mut execute_cost_table = ExecuteCostTable::default();
+        let cost: u64 = u64::MAX;
 
-        let key1 = Pubkey::new_unique();
-        let cost1: u64 = f64::MAX as u64;
-        let cost2: u64 = u64::MAX / 2; // create large variance so the final result will overflow
+        // set initial value at MAX
+        let mut aggregated_variance_stats = AggregatedVarianceStats {
+            ema: cost,
+            ema_var: 0,
+        };
+        assert_eq!(cost, aggregated_variance_stats.get_ema());
+        assert_eq!(0, aggregated_variance_stats.get_stddev());
 
-        // insert one record
-        execute_cost_table.upsert(&key1, cost1);
-        assert_eq!(1, execute_cost_table.get_count());
-        assert_eq!(
-            cost1,
-            execute_cost_table
-                .get_inflated_program_units(&key1)
-                .unwrap()
-        );
+        let theta = 100i64;
+        // expected variance should be same as theta after rounding
+        let expected_var = 100u64;
+        // insert a positive theta, ema will be saturated, hence remain at its MAX value
+        {
+            let theta: Option<i64> = Some(theta);
+            aggregated_variance_stats.aggregate_ema(theta);
+            aggregated_variance_stats.aggregate_var(theta);
+            assert_eq!(cost, aggregated_variance_stats.get_ema());
+            assert_eq!(expected_var, aggregated_variance_stats.get_stddev().pow(2));
+        }
 
-        // assert overflow
-        execute_cost_table.upsert(&key1, cost2);
-        assert!(execute_cost_table
-            .get_inflated_program_units(&key1)
-            .is_none());
+        // insert a negative theta, would reduce ema, increase variance
+        {
+            let theta: Option<i64> = Some(-100);
+            aggregated_variance_stats.aggregate_ema(theta);
+            aggregated_variance_stats.aggregate_var(theta);
+            assert!(cost > aggregated_variance_stats.get_ema());
+            assert!(expected_var < aggregated_variance_stats.get_stddev().pow(2));
+        }
     }
 
     #[test]
@@ -515,7 +553,7 @@ mod tests {
             let theta = 500u64;
             let cost3 = execute_cost_table.get_average_program_units(&key).unwrap() - theta;
             let expected_ema = 1000u64; // ema+theta*EMA_ALPHA
-            let expected_inflated_units = 1141u64; //ema+2*stddev
+            let expected_inflated_units = 1142u64; //ema+2*stddev
             execute_cost_table.upsert(&key, cost3);
             assert_eq!(
                 expected_ema,
