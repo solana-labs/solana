@@ -201,10 +201,11 @@ fn write_program_data(
     bytes: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
-    let mut account = program.try_account_ref_mut()?;
-    let data = &mut account.data_as_mut_slice();
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let mut program =
+        instruction_context.try_borrow_account(transaction_context, program_account_index)?;
+    let data = program.get_data_mut();
     let write_offset = program_data_offset.saturating_add(bytes.len());
     if data.len() < write_offset {
         ic_msg!(
