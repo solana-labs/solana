@@ -538,6 +538,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_curve25519_validate_point_enabled,
         Box::new(SyscallCurveValidatePoint {
             invoke_context: invoke_context.clone(),
+            check_aligned,
         }),
     );
     vm.bind_syscall_context_object(
@@ -2134,6 +2135,7 @@ declare_syscall!(
 // Elliptic curve point validation
 pub struct SyscallCurveValidatePoint<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+    check_aligned: bool,
 }
 
 impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
@@ -2160,8 +2162,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
             result
         );
 
-        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
-
         match curve_id {
             CURVE25519_EDWARDS => {
                 let cost = invoke_context
@@ -2170,13 +2170,17 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
-                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
+                    translate_type::<PodEdwardsPoint>(
+                        memory_mapping,
+                        left_addr,
+                        self.check_aligned
+                    ),
                     result
                 );
 
                 if let Some(validate_result) = validate_edwards(point) {
                     *question_mark!(
-                        translate_type_mut::<bool>(memory_mapping, result_addr, loader_id,),
+                        translate_type_mut::<bool>(memory_mapping, result_addr, self.check_aligned),
                         result
                     ) = validate_result;
                     *result = Ok(0);
@@ -2193,13 +2197,17 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
-                    translate_type::<PodRistrettoPoint>(memory_mapping, left_addr, loader_id),
+                    translate_type::<PodRistrettoPoint>(
+                        memory_mapping,
+                        left_addr,
+                        self.check_aligned
+                    ),
                     result
                 );
 
                 if let Some(validate_result) = validate_ristretto(point) {
                     *question_mark!(
-                        translate_type_mut::<bool>(memory_mapping, result_addr, loader_id,),
+                        translate_type_mut::<bool>(memory_mapping, result_addr, self.check_aligned),
                         result
                     ) = validate_result;
                     *result = Ok(0);
