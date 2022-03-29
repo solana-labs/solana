@@ -26,7 +26,7 @@ use {
 };
 
 pub struct Dashboard {
-    progress_bar: ProgressBar,
+    //progress_bar: ProgressBar,
     ledger_path: PathBuf,
     exit: Arc<AtomicBool>,
 }
@@ -54,18 +54,13 @@ impl Dashboard {
         Ok(Self {
             exit,
             ledger_path: ledger_path.to_path_buf(),
-            progress_bar,
         })
     }
 
     pub fn run(self, refresh_interval: Duration) {
         let Self {
-            exit,
-            ledger_path,
-            progress_bar,
-            ..
+            exit, ledger_path, ..
         } = self;
-        drop(progress_bar);
 
         let runtime = admin_rpc_service::runtime();
         while !exit.load(Ordering::Relaxed) {
