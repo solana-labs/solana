@@ -950,16 +950,10 @@ fn process_loader_upgradeable_instruction(
                 }
                 UpgradeableLoaderState::Buffer { authority_address } => {
                     instruction_context.check_number_of_instruction_accounts(3)?;
-                    let authority = keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account.saturating_add(2),
-                    )?;
-
                     common_close_account(
                         &authority_address,
-                        authority,
-                        close_account,
-                        recipient_account,
+                        first_instruction_account,
+                        keyed_accounts,
                         &log_collector,
                     )?;
 
@@ -1000,15 +994,10 @@ fn process_loader_upgradeable_instruction(
                                 return Err(InstructionError::InvalidArgument);
                             }
 
-                            let authority = keyed_account_at_index(
-                                keyed_accounts,
-                                first_instruction_account.saturating_add(2),
-                            )?;
                             common_close_account(
                                 &authority_address,
-                                authority,
-                                close_account,
-                                recipient_account,
+                                first_instruction_account,
+                                keyed_accounts,
                                 &log_collector,
                             )?;
                         }
@@ -1037,11 +1026,12 @@ fn process_loader_upgradeable_instruction(
 
 fn common_close_account(
     authority_address: &Option<Pubkey>,
-    authority_account: &KeyedAccount,
-    close_account: &KeyedAccount,
-    recipient_account: &KeyedAccount,
+    first_instruction_account: usize,
+    keyed_accounts: &[KeyedAccount],
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
 ) -> Result<(), InstructionError> {
+    let authority_account =
+        keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(2))?;
     if authority_address.is_none() {
         ic_logger_msg!(log_collector, "Account is immutable");
         return Err(InstructionError::Immutable);
@@ -1055,6 +1045,9 @@ fn common_close_account(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
+    let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+    let recipient_account =
+        keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(1))?;
     recipient_account
         .try_account_ref_mut()?
         .checked_add_lamports(close_account.lamports()?)?;
