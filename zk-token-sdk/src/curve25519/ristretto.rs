@@ -1,6 +1,5 @@
-pub use target_arch::*;
-
 use bytemuck::{Pod, Zeroable};
+pub use target_arch::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 #[repr(transparent)]
@@ -8,18 +7,18 @@ pub struct PodRistrettoPoint(pub [u8; 32]);
 
 #[cfg(not(target_arch = "bpf"))]
 mod target_arch {
-    use super::*;
-    use crate::curve25519::{
-        curve_syscall_traits::{
-            GroupOperations, MultiScalarMultiplication, PointValidation,
+    use {
+        super::*,
+        crate::curve25519::{
+            curve_syscall_traits::{GroupOperations, MultiScalarMultiplication, PointValidation},
+            errors::Curve25519Error,
+            scalar::PodScalar,
         },
-        errors::Curve25519Error,
-        scalar::PodScalar,
-    };
-    use curve25519_dalek::{
-        ristretto::{CompressedRistretto, RistrettoPoint},
-        scalar::Scalar,
-        traits::VartimeMultiscalarMul,
+        curve25519_dalek::{
+            ristretto::{CompressedRistretto, RistrettoPoint},
+            scalar::Scalar,
+            traits::VartimeMultiscalarMul,
+        },
     };
 
     pub fn validate_ristretto(point: &PodRistrettoPoint) -> Option<bool> {
@@ -47,7 +46,7 @@ mod target_arch {
         PodRistrettoPoint::multiply(scalar, point)
     }
 
-    pub fn multiscalar_multiply(
+    pub fn multiscalar_multiply_ristretto(
         scalars: Vec<&PodScalar>,
         points: Vec<&PodRistrettoPoint>,
     ) -> Option<PodRistrettoPoint> {
@@ -124,14 +123,14 @@ mod target_arch {
             .map(|result| PodRistrettoPoint::from(&result))
         }
     }
-
 }
 
 #[cfg(target_arch = "bpf")]
 #[allow(unused_variables)]
 mod target_arch {
     use {
-        super::*, crate::curve25519::curve_syscall_traits::{sol_validate_point, CURVE25519_RISTRETTO},
+        super::*,
+        crate::curve25519::curve_syscall_traits::{sol_validate_point, CURVE25519_RISTRETTO},
     };
 
     pub fn validate_ristretto(point: &PodRistrettoPoint) -> Option<bool> {
@@ -156,15 +155,25 @@ mod target_arch {
 mod tests {
     use {
         super::*,
+        crate::curve25519::scalar::PodScalar,
         curve25519_dalek::{
-            ristretto::RistrettoPoint, scalar::Scalar, traits::Identity,
+            constants::RISTRETTO_BASEPOINT_POINT as G, ristretto::RistrettoPoint, scalar::Scalar,
+            traits::Identity,
         },
         rand::rngs::OsRng,
     };
 
     #[test]
     fn test_validate_ristretto() {
+        let pod = PodRistrettoPoint(G.compress().to_bytes());
+        assert!(validate_ristretto(&pod).unwrap());
 
+        let invalid_bytes = [
+            120, 140, 152, 233, 41, 227, 203, 27, 87, 115, 25, 251, 219, 5, 84, 148, 117, 38, 84,
+            60, 87, 144, 161, 146, 42, 34, 91, 155, 158, 189, 121, 79,
+        ];
+
+        assert!(!validate_ristretto(&PodRistrettoPoint(invalid_bytes)).unwrap());
     }
 
     #[test]
@@ -225,17 +234,37 @@ mod tests {
         let point_a = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
         let point_b = PodRistrettoPoint(RistrettoPoint::random(&mut OsRng).compress().to_bytes());
 
-        let ax = multiply_ristretto(&point_a, &scalar_x).unwrap();
-        let bx = multiply_ristretto(&point_b, &scalar_x).unwrap();
+        let ax = multiply_ristretto(&scalar_x, &point_a).unwrap();
+        let bx = multiply_ristretto(&scalar_x, &point_b).unwrap();
 
         assert_eq!(
             add_ristretto(&ax, &bx),
-            multiply_ristretto(&add_ristretto(&point_a, &point_b).unwrap(), &scalar_x),
+            multiply_ristretto(&scalar_x, &add_ristretto(&point_a, &point_b).unwrap()),
         );
     }
 
     #[test]
     fn test_multiscalar_multiplication_ristretto() {
+        let scalar = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point = PodRistrettoPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
 
+        let basic_product = multiply_ristretto(&scalar, &point).unwrap();
+        let msm_product = multiscalar_multiply_ristretto(vec![&scalar], vec![&point]).unwrap();
+
+        assert_eq!(basic_product, msm_product);
+
+        let scalar_a = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let scalar_b = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point_x = PodRistrettoPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_y = PodRistrettoPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+
+        let ax = multiply_ristretto(&scalar_a, &point_x).unwrap();
+        let by = multiply_ristretto(&scalar_b, &point_y).unwrap();
+        let basic_product = add_ristretto(&ax, &by).unwrap();
+        let msm_product =
+            multiscalar_multiply_ristretto(vec![&scalar_a, &scalar_b], vec![&point_x, &point_y])
+                .unwrap();
+
+        assert_eq!(basic_product, msm_product);
     }
 }

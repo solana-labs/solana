@@ -45,23 +45,9 @@ pub const SUB: u64 = 1;
 pub const MUL: u64 = 2;
 
 extern "C" {
-    pub fn sol_validate_point(
-        curve_id: u64,
-        point: *const u8,
-        result: *mut u8,
-    ) -> u64;
+    pub fn sol_validate_point(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
 
-    pub fn sol_curve_op(
-        curve_id: u64,
-        op_id: u64,
-        point: *const u8,
-        result: *mut u8,
-    ) -> u64;
+    pub fn sol_curve_op(curve_id: u64, op_id: u64, point: *const u8, result: *mut u8) -> u64;
 
-    pub fn sol_pairing_map(
-        curve_id: u64,
-        point: *const u8,
-        result: *mut u8,
-    ) -> u64;
+    pub fn sol_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
 }
-

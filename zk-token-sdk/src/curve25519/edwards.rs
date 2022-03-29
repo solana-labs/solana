@@ -1,6 +1,5 @@
-pub use target_arch::*;
-
 use bytemuck::{Pod, Zeroable};
+pub use target_arch::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 #[repr(transparent)]
@@ -8,46 +7,46 @@ pub struct PodEdwardsPoint(pub [u8; 32]);
 
 #[cfg(not(target_arch = "bpf"))]
 mod target_arch {
-    use super::*;
-    use crate::curve25519::{
-        curve_syscall_traits::{
-            GroupOperations, MultiScalarMultiplication, PointValidation,
+    use {
+        super::*,
+        crate::curve25519::{
+            curve_syscall_traits::{GroupOperations, MultiScalarMultiplication, PointValidation},
+            errors::Curve25519Error,
+            scalar::PodScalar,
         },
-        errors::Curve25519Error,
-        scalar::PodScalar,
-    };
-    use curve25519_dalek::{
-        edwards::{CompressedEdwardsY, EdwardsPoint},
-        scalar::Scalar,
-        traits::VartimeMultiscalarMul,
+        curve25519_dalek::{
+            edwards::{CompressedEdwardsY, EdwardsPoint},
+            scalar::Scalar,
+            traits::VartimeMultiscalarMul,
+        },
     };
 
-    pub fn validate_ristretto(point: &PodEdwardsPoint) -> Option<bool> {
+    pub fn validate_edwards(point: &PodEdwardsPoint) -> Option<bool> {
         Some(point.validate_point())
     }
 
-    pub fn add_ristretto(
+    pub fn add_edwards(
         left_point: &PodEdwardsPoint,
         right_point: &PodEdwardsPoint,
     ) -> Option<PodEdwardsPoint> {
         PodEdwardsPoint::add(left_point, right_point)
     }
 
-    pub fn subtract_ristretto(
+    pub fn subtract_edwards(
         left_point: &PodEdwardsPoint,
         right_point: &PodEdwardsPoint,
     ) -> Option<PodEdwardsPoint> {
         PodEdwardsPoint::subtract(left_point, right_point)
     }
 
-    pub fn multiply_ristretto(
+    pub fn multiply_edwards(
         scalar: &PodScalar,
         point: &PodEdwardsPoint,
     ) -> Option<PodEdwardsPoint> {
         PodEdwardsPoint::multiply(scalar, point)
     }
 
-    pub fn multiscalar_multiply(
+    pub fn multiscalar_multiply_edwards(
         scalars: Vec<&PodScalar>,
         points: Vec<&PodEdwardsPoint>,
     ) -> Option<PodEdwardsPoint> {
@@ -129,7 +128,8 @@ mod target_arch {
 #[cfg(target_arch = "bpf")]
 mod target_arch {
     use {
-        super::*, crate::curve25519::curve_syscall_traits::{sol_validate_point, CURVE25519_EDWARDS},
+        super::*,
+        crate::curve25519::curve_syscall_traits::{sol_validate_point, CURVE25519_EDWARDS},
     };
 
     pub fn validate_edwards(point: &PodEdwardsPoint) -> Option<bool> {
@@ -154,16 +154,25 @@ mod target_arch {
 mod tests {
     use {
         super::*,
+        crate::curve25519::scalar::PodScalar,
         curve25519_dalek::{
-            constants::ED25519_BASEPOINT_POINT as G, edwards::EdwardsPoint,
-            scalar::Scalar, traits::Identity,
+            constants::ED25519_BASEPOINT_POINT as G, edwards::EdwardsPoint, scalar::Scalar,
+            traits::Identity,
         },
         rand::rngs::OsRng,
     };
 
     #[test]
     fn test_validate_edwards() {
+        let pod = PodEdwardsPoint(G.compress().to_bytes());
+        assert!(validate_edwards(&pod).unwrap());
 
+        let invalid_bytes = [
+            120, 140, 152, 233, 41, 227, 203, 27, 87, 115, 25, 251, 219, 5, 84, 148, 117, 38, 84,
+            60, 87, 144, 161, 146, 42, 34, 91, 155, 158, 189, 121, 79,
+        ];
+
+        assert!(!validate_edwards(&PodEdwardsPoint(invalid_bytes)).unwrap());
     }
 
     #[test]
@@ -216,21 +225,41 @@ mod tests {
 
     #[test]
     fn test_edwards_mul() {
-        let scalar_x = PodScalar(Scalar::random(&mut OsRng).to_bytes());
-        let point_a = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
-        let point_b = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let scalar_a = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point_x = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_y = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
 
-        let ax = multiply_edwards(&point_a, &scalar_x).unwrap();
-        let bx = multiply_edwards(&point_b, &scalar_x).unwrap();
+        let ax = multiply_edwards(&scalar_a, &point_x).unwrap();
+        let bx = multiply_edwards(&scalar_a, &point_y).unwrap();
 
         assert_eq!(
             add_edwards(&ax, &bx),
-            multiply_edwards(&add_edwards(&point_a, &point_b).unwrap(), &scalar_x),
+            multiply_edwards(&scalar_a, &add_edwards(&point_x, &point_y).unwrap()),
         );
     }
 
     #[test]
     fn test_multiscalar_multiplication_edwards() {
+        let scalar = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
 
+        let basic_product = multiply_edwards(&scalar, &point).unwrap();
+        let msm_product = multiscalar_multiply_edwards(vec![&scalar], vec![&point]).unwrap();
+
+        assert_eq!(basic_product, msm_product);
+
+        let scalar_a = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let scalar_b = PodScalar(Scalar::random(&mut OsRng).to_bytes());
+        let point_x = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+        let point_y = PodEdwardsPoint((Scalar::random(&mut OsRng) * G).compress().to_bytes());
+
+        let ax = multiply_edwards(&scalar_a, &point_x).unwrap();
+        let by = multiply_edwards(&scalar_b, &point_y).unwrap();
+        let basic_product = add_edwards(&ax, &by).unwrap();
+        let msm_product =
+            multiscalar_multiply_edwards(vec![&scalar_a, &scalar_b], vec![&point_x, &point_y])
+                .unwrap();
+
+        assert_eq!(basic_product, msm_product);
     }
 }
