@@ -303,7 +303,7 @@ fn process_instruction_common(
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     let second_account =
         keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(1));
-    let (program, program_account_index) = if first_account_key == program_id {
+    let (_program, program_account_index) = if first_account_key == program_id {
         (first_account, first_instruction_account)
     } else if second_account_key
         .map(|key| key == program_id)
@@ -318,7 +318,9 @@ fn process_instruction_common(
         (first_account, first_instruction_account)
     };
 
-    if program.executable()? {
+    let program =
+        instruction_context.try_borrow_account(transaction_context, program_account_index)?;
+    if program.is_executable() {
         // First instruction account can only be zero if called from CPI, which
         // means stack height better be greater than one
         debug_assert_eq!(
@@ -326,7 +328,7 @@ fn process_instruction_common(
             invoke_context.get_stack_height() > 1
         );
 
-        if !check_loader_id(&program.owner()?) {
+        if !check_loader_id(program.get_owner()) {
             ic_logger_msg!(
                 log_collector,
                 "Executable account not owned by the BPF loader"
@@ -334,10 +336,10 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let program_data_offset = if bpf_loader_upgradeable::check_id(&program.owner()?) {
+        let program_data_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
             if let UpgradeableLoaderState::Program {
                 programdata_address,
-            } = program.state()?
+            } = program.get_state()?
             {
                 if programdata_address != *first_account_key {
                     ic_logger_msg!(
@@ -364,6 +366,7 @@ fn process_instruction_common(
         } else {
             0
         };
+        drop(program);
 
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
         let executor = match invoke_context.get_executor(program_id) {
@@ -391,8 +394,8 @@ fn process_instruction_common(
 
         executor.execute(program_account_index, instruction_data, invoke_context)
     } else {
+        drop(program);
         debug_assert_eq!(first_instruction_account, 1);
-
         let disable_deprecated_loader = invoke_context
             .feature_set
             .is_active(&disable_deprecated_loader::id());
