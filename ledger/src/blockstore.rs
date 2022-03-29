@@ -1559,11 +1559,11 @@ impl Blockstore {
         if let Some(ref sender) = self.shred_timing_point_sender {
             send_poh_timing_point(
                 sender,
-                SlotPohTimingInfo::new_slot_full_poh_time_point((
+                SlotPohTimingInfo::new_slot_full_poh_time_point(
                     slot,
-                    self.last_root(),
+                    Some(self.last_root()),
                     solana_sdk::timing::timestamp(),
-                )),
+                ),
             );
         }
     }

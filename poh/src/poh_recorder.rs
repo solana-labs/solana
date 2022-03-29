@@ -471,10 +471,11 @@ impl PohRecorder {
             // start_slot() is the parent slot. current slot is start_slot() + 1.
             send_poh_timing_point(
                 sender,
-                SlotPohTimingInfo::new_slot_start_poh_time_point((
+                SlotPohTimingInfo::new_slot_start_poh_time_point(
                     self.start_slot() + 1,
+                    None,
                     solana_sdk::timing::timestamp(),
-                )),
+                ),
             );
         }
 
@@ -502,10 +503,11 @@ impl PohRecorder {
             if let Some(slot) = self.working_slot() {
                 send_poh_timing_point(
                     sender,
-                    SlotPohTimingInfo::new_slot_start_poh_time_point((
+                    SlotPohTimingInfo::new_slot_start_poh_time_point(
                         slot,
+                        None,
                         solana_sdk::timing::timestamp(),
-                    )),
+                    ),
                 );
             }
         }
@@ -587,10 +589,11 @@ impl PohRecorder {
                 if let Some(ref sender) = self.poh_timing_point_sender {
                     send_poh_timing_point(
                         sender,
-                        SlotPohTimingInfo::new_slot_end_poh_time_point((
+                        SlotPohTimingInfo::new_slot_end_poh_time_point(
                             self.slot_for_tick_height(self.tick_height),
+                            None,
                             solana_sdk::timing::timestamp(),
-                        )),
+                        ),
                     );
                 }
             }
@@ -599,10 +602,11 @@ impl PohRecorder {
                 if let Some(ref sender) = self.poh_timing_point_sender {
                     send_poh_timing_point(
                         sender,
-                        SlotPohTimingInfo::new_slot_start_poh_time_point((
+                        SlotPohTimingInfo::new_slot_start_poh_time_point(
                             self.slot_for_tick_height(self.tick_height),
+                            None,
                             solana_sdk::timing::timestamp(),
-                        )),
+                        ),
                     );
                 }
             }
@@ -614,10 +618,11 @@ impl PohRecorder {
         if let Some(ref sender) = self.poh_timing_point_sender {
             send_poh_timing_point(
                 sender,
-                SlotPohTimingInfo::new_slot_end_poh_time_point((
+                SlotPohTimingInfo::new_slot_end_poh_time_point(
                     slot,
+                    None,
                     solana_sdk::timing::timestamp(),
-                )),
+                ),
             );
         }
     }

@@ -68,12 +68,15 @@ mod test {
             PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
 
         // Send SlotPohTimingPoint
-        let _ = poh_timing_point_sender
-            .send(SlotPohTimingInfo::new_slot_start_poh_time_point((42, 100)));
-        let _ =
-            poh_timing_point_sender.send(SlotPohTimingInfo::new_slot_end_poh_time_point((42, 200)));
-        let _ = poh_timing_point_sender
-            .send(SlotPohTimingInfo::new_slot_full_poh_time_point((42, 150)));
+        let _ = poh_timing_point_sender.send(SlotPohTimingInfo::new_slot_start_poh_time_point(
+            42, None, 100,
+        ));
+        let _ = poh_timing_point_sender.send(SlotPohTimingInfo::new_slot_end_poh_time_point(
+            42, None, 200,
+        ));
+        let _ = poh_timing_point_sender.send(SlotPohTimingInfo::new_slot_full_poh_time_point(
+            42, None, 150,
+        ));
 
         // Shutdown the service
         exit.store(true, Ordering::Relaxed);
