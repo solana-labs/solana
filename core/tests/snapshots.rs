@@ -947,7 +947,7 @@ mod tests {
             &exit,
             abs_request_handler,
             false,
-            true,
+            false,
             None,
         );
 
