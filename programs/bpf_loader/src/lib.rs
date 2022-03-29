@@ -431,6 +431,7 @@ fn process_loader_upgradeable_instruction(
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
 
             if UpgradeableLoaderState::Uninitialized != buffer.state()? {
@@ -448,6 +449,7 @@ fn process_loader_upgradeable_instruction(
             })?;
         }
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
@@ -479,6 +481,7 @@ fn process_loader_upgradeable_instruction(
             )?;
         }
         UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len } => {
+            instruction_context.check_number_of_instruction_accounts(4)?;
             let payer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let programdata = keyed_account_at_index(
                 keyed_accounts,
@@ -495,6 +498,7 @@ fn process_loader_upgradeable_instruction(
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
+            instruction_context.check_number_of_instruction_accounts(8)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(7),
@@ -663,6 +667,7 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::Upgrade => {
+            instruction_context.check_number_of_instruction_accounts(3)?;
             let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let program = keyed_account_at_index(
                 keyed_accounts,
@@ -675,6 +680,7 @@ fn process_loader_upgradeable_instruction(
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
+            instruction_context.check_number_of_instruction_accounts(7)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(6),
@@ -843,6 +849,7 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::SetAuthority => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let present_authority = keyed_account_at_index(
                 keyed_accounts,
@@ -905,6 +912,7 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::Close => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let recipient_account = keyed_account_at_index(
                 keyed_accounts,
@@ -932,6 +940,7 @@ fn process_loader_upgradeable_instruction(
                     );
                 }
                 UpgradeableLoaderState::Buffer { authority_address } => {
+                    instruction_context.check_number_of_instruction_accounts(3)?;
                     let authority = keyed_account_at_index(
                         keyed_accounts,
                         first_instruction_account.saturating_add(2),
@@ -955,6 +964,7 @@ fn process_loader_upgradeable_instruction(
                     slot: _,
                     upgrade_authority_address: authority_address,
                 } => {
+                    instruction_context.check_number_of_instruction_accounts(4)?;
                     let program_account = keyed_account_at_index(
                         keyed_accounts,
                         first_instruction_account.saturating_add(3),
