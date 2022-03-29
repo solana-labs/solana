@@ -48,7 +48,7 @@ use {
             do_support_realloc, reduce_required_deploy_balance, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
-        keyed_account::{keyed_account_at_index, KeyedAccount},
+        keyed_account::keyed_account_at_index,
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         program_error::MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
@@ -56,6 +56,7 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
+        transaction_context::{InstructionContext, TransactionContext},
     },
     std::{cell::RefCell, fmt::Debug, pin::Pin, rc::Rc, sync::Arc},
     thiserror::Error,
@@ -952,8 +953,8 @@ fn process_loader_upgradeable_instruction(
                     instruction_context.check_number_of_instruction_accounts(3)?;
                     common_close_account(
                         &authority_address,
-                        first_instruction_account,
-                        keyed_accounts,
+                        transaction_context,
+                        instruction_context,
                         &log_collector,
                     )?;
 
@@ -996,8 +997,8 @@ fn process_loader_upgradeable_instruction(
 
                             common_close_account(
                                 &authority_address,
-                                first_instruction_account,
-                                keyed_accounts,
+                                transaction_context,
+                                instruction_context,
                                 &log_collector,
                             )?;
                         }
@@ -1026,32 +1027,35 @@ fn process_loader_upgradeable_instruction(
 
 fn common_close_account(
     authority_address: &Option<Pubkey>,
-    first_instruction_account: usize,
-    keyed_accounts: &[KeyedAccount],
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
 ) -> Result<(), InstructionError> {
-    let authority_account =
-        keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(2))?;
     if authority_address.is_none() {
         ic_logger_msg!(log_collector, "Account is immutable");
         return Err(InstructionError::Immutable);
     }
-    if *authority_address != Some(*authority_account.unsigned_key()) {
+    if *authority_address
+        != Some(*instruction_context.get_instruction_account_key(transaction_context, 2)?)
+    {
         ic_logger_msg!(log_collector, "Incorrect authority provided");
         return Err(InstructionError::IncorrectAuthority);
     }
-    if authority_account.signer_key().is_none() {
+    if !instruction_context.is_signer(
+        instruction_context
+            .get_number_of_program_accounts()
+            .saturating_add(2),
+    )? {
         ic_logger_msg!(log_collector, "Authority did not sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-    let recipient_account =
-        keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(1))?;
-    recipient_account
-        .try_account_ref_mut()?
-        .checked_add_lamports(close_account.lamports()?)?;
-    close_account.try_account_ref_mut()?.set_lamports(0);
+    let mut close_account =
+        instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+    let mut recipient_account =
+        instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+    recipient_account.checked_add_lamports(close_account.get_lamports())?;
+    close_account.set_lamports(0);
     close_account.set_state(&UpgradeableLoaderState::Uninitialized)?;
     Ok(())
 }
