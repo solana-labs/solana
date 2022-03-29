@@ -115,7 +115,7 @@ mod target_arch {
 
         fn multiscalar_multiply(scalars: Vec<&PodScalar>, points: Vec<&Self>) -> Option<Self> {
             EdwardsPoint::optional_multiscalar_mul(
-                scalars.into_iter().map(|scalar| Scalar::from(scalar)),
+                scalars.into_iter().map(Scalar::from),
                 points
                     .into_iter()
                     .map(|point| EdwardsPoint::try_from(point).ok()),
@@ -129,13 +129,13 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_validate_point, CURVE25519_EDWARDS},
+        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_EDWARDS},
     };
 
     pub fn validate_edwards(point: &PodEdwardsPoint) -> Option<bool> {
         let mut validate_result = 0u8;
         let result = unsafe {
-            sol_validate_point(
+            sol_curve_validate_point(
                 CURVE25519_EDWARDS,
                 &point.0 as *const u8,
                 &mut validate_result,

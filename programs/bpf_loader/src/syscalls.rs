@@ -215,44 +215,31 @@ pub fn register_syscalls(
         SyscallSecp256k1Recover::call,
     )?;
 
-    // Blake3
-    register_feature_gated_syscall!(
-        syscall_registry,
-        blake3_syscall_enabled,
-        b"sol_blake3",
-        SyscallBlake3::init,
-        SyscallBlake3::call,
-    )?;
-
-    // ZK Token
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op",
-        SyscallZkTokenElgamalOp::init,
-        SyscallZkTokenElgamalOp::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_lo_hi",
-        SyscallZkTokenElgamalOpWithLoHi::init,
-        SyscallZkTokenElgamalOpWithLoHi::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_scalar",
-        SyscallZkTokenElgamalOpWithScalar::init,
-        SyscallZkTokenElgamalOpWithScalar::call,
-    )?;
+    // curve25519 syscalls should replace zk-token-sdk syscalls
+    if invoke_context
+        .feature_set
+        .is_active(&zk_token_sdk_enabled::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_zk_token_elgamal_op", SyscallZkTokenElgamalOp::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_zk_token_elgamal_op_with_lo_hi",
+            SyscallZkTokenElgamalOpWithLoHi::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_zk_token_elgamal_op_with_scalar",
+            SyscallZkTokenElgamalOpWithScalar::call,
+        )?;
+    }
 
     if invoke_context
         .feature_set
-        .is_active(&feature_set::curve25519_basic_enabled::id())
+        .is_active(&feature_set::curve25519_validate_point_enabled::id())
     {
-        syscall_registry
-            .register_syscall_by_name(b"sol_curve25519", SyscallCurve25519BasicOps::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_validate_curve_point",
+            SyscallCurveValidatePoint::call,
+        )?;
     }
 
     syscall_registry
@@ -384,10 +371,10 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         .is_active(&sol_log_data_syscall_enabled::id());
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
-        .is_active(&feature_set::zk_token_sdk_enabled::id());
-    let is_curve25519_basic_enabled = invoke_context
+        .is_active(&feature_set::zk_token_sdk_enabled::id()); // curve25519 features should replace zk-token-sdk feature
+    let is_curve25519_validate_point_enabled = invoke_context
         .feature_set
-        .is_active(&feature_set::curve25519_basic_enabled::id());
+        .is_active(&feature_set::curve25519_validate_point_enabled::id());
     let add_get_processed_sibling_instruction_syscall = invoke_context
         .feature_set
         .is_active(&add_get_processed_sibling_instruction_syscall::id());
@@ -546,15 +533,13 @@ pub fn bind_syscall_context_objects<'a, 'b>(
             invoke_context: invoke_context.clone(),
         }),
     );
-
     bind_feature_gated_syscall_context_object!(
         vm,
-        is_curve25519_basic_enabled,
-        Box::new(SyscallCurve25519BasicOps {
+        is_curve25519_validate_point_enabled,
+        Box::new(SyscallCurveValidatePoint {
             invoke_context: invoke_context.clone(),
         }),
     );
-
     vm.bind_syscall_context_object(
         Box::new(SyscallGetClockSysvar {
             invoke_context: invoke_context.clone(),
@@ -2146,23 +2131,27 @@ declare_syscall!(
     }
 );
 
-// Curve25519
-pub struct SyscallCurve25519BasicOps<'a, 'b> {
+// Elliptic curve point validation
+pub struct SyscallCurveValidatePoint<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
 }
 
-impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
+impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
     fn call(
         &mut self,
-        op: u64,
+        curve_id: u64,
         left_addr: u64,
-        right_addr: u64,
         result_addr: u64,
+        _arg4: u64,
         _arg5: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        use solana_zk_token_sdk::curve25519::{ops::*, pod::*};
+        use solana_zk_token_sdk::curve25519::{
+            curve_syscall_traits::{CURVE25519_EDWARDS, CURVE25519_RISTRETTO},
+            edwards::{validate_edwards, PodEdwardsPoint},
+            ristretto::{validate_ristretto, PodRistrettoPoint},
+        };
 
         let invoke_context = question_mark!(
             self.invoke_context
@@ -2173,143 +2162,53 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
 
         let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
 
-        match op {
-            OP_EDWARDS_VALIDATE => {
+        match curve_id {
+            CURVE25519_EDWARDS => {
                 let cost = invoke_context
                     .get_compute_budget()
-                    .curve25519_edwards_op_cost;
+                    .curve25519_edwards_validate_point_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
                     translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
                     result
                 );
-            }
 
-            OP_EDWARDS_ADD | OP_EDWARDS_SUB => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_edwards_op_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-                let left_point = question_mark!(
-                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
-                    result
-                );
-                let right_point = question_mark!(
-                    translate_type::<PodEdwardsPoint>(memory_mapping, right_addr, loader_id),
-                    result
-                );
-
-                if let Some(result_point) = match op {
-                    OP_EDWARDS_ADD => add_edwards(left_point, right_point),
-                    OP_EDWARDS_SUB => subtract_edwards(left_point, right_point),
-                    _ => None,
-                } {
+                if let Some(validate_result) = validate_edwards(point) {
                     *question_mark!(
-                        translate_type_mut::<PodEdwardsPoint>(
-                            memory_mapping,
-                            result_addr,
-                            loader_id,
-                        ),
+                        translate_type_mut::<bool>(memory_mapping, result_addr, loader_id,),
                         result
-                    ) = result_point;
+                    ) = validate_result;
                     *result = Ok(0);
-                } else {
+                }
+                {
                     *result = Ok(1);
                 }
             }
-            OP_EDWARDS_MUL => {
+
+            CURVE25519_RISTRETTO => {
                 let cost = invoke_context
                     .get_compute_budget()
-                    .curve25519_edwards_mul_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-                let point = question_mark!(
-                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
-                    result
-                );
-                let scalar = question_mark!(
-                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
-                    result
-                );
-
-                if let Some(result_point) = multiply_edwards(point, scalar) {
-                    *question_mark!(
-                        translate_type_mut::<PodEdwardsPoint>(
-                            memory_mapping,
-                            result_addr,
-                            loader_id,
-                        ),
-                        result
-                    ) = result_point;
-                    *result = Ok(0);
-                } else {
-                    *result = Ok(1);
-                }
-            }
-            OP_RISTRETTO_ADD | OP_RISTRETTO_SUB => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_ristretto_op_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-                let left_point = question_mark!(
-                    translate_type::<PodRistrettoPoint>(memory_mapping, left_addr, loader_id),
-                    result
-                );
-                let right_point = question_mark!(
-                    translate_type::<PodRistrettoPoint>(memory_mapping, right_addr, loader_id),
-                    result
-                );
-
-                if let Some(result_point) = match op {
-                    OP_RISTRETTO_ADD => add_ristretto(left_point, right_point),
-                    OP_RISTRETTO_SUB => subtract_ristretto(left_point, right_point),
-                    _ => None,
-                } {
-                    *question_mark!(
-                        translate_type_mut::<PodRistrettoPoint>(
-                            memory_mapping,
-                            result_addr,
-                            loader_id,
-                        ),
-                        result
-                    ) = result_point;
-                    *result = Ok(0);
-                } else {
-                    *result = Ok(1);
-                }
-            }
-            OP_RISTRETTO_MUL => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_ristretto_mul_cost;
+                    .curve25519_ristretto_validate_point_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
                     translate_type::<PodRistrettoPoint>(memory_mapping, left_addr, loader_id),
                     result
                 );
-                let scalar = question_mark!(
-                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
-                    result
-                );
 
-                if let Some(result_point) = multiply_ristretto(point, scalar) {
+                if let Some(validate_result) = validate_ristretto(point) {
                     *question_mark!(
-                        translate_type_mut::<PodRistrettoPoint>(
-                            memory_mapping,
-                            result_addr,
-                            loader_id,
-                        ),
+                        translate_type_mut::<bool>(memory_mapping, result_addr, loader_id,),
                         result
-                    ) = result_point;
+                    ) = validate_result;
                     *result = Ok(0);
-                } else {
+                }
+                {
                     *result = Ok(1);
                 }
             }
+
             _ => {
                 *result = Ok(1);
             }

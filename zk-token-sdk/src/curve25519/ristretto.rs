@@ -115,7 +115,7 @@ mod target_arch {
 
         fn multiscalar_multiply(scalars: Vec<&PodScalar>, points: Vec<&Self>) -> Option<Self> {
             RistrettoPoint::optional_multiscalar_mul(
-                scalars.into_iter().map(|scalar| Scalar::from(scalar)),
+                scalars.into_iter().map(Scalar::from),
                 points
                     .into_iter()
                     .map(|point| RistrettoPoint::try_from(point).ok()),
@@ -130,13 +130,13 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_validate_point, CURVE25519_RISTRETTO},
+        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_RISTRETTO},
     };
 
     pub fn validate_ristretto(point: &PodRistrettoPoint) -> Option<bool> {
         let mut validate_result = 0u8;
         let result = unsafe {
-            sol_validate_point(
+            sol_curve_validate_point(
                 CURVE25519_RISTRETTO,
                 &point.0 as *const u8,
                 &mut validate_result,

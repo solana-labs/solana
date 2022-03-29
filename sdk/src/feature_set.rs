@@ -149,8 +149,16 @@ pub mod zk_token_sdk_enabled {
     solana_sdk::declare_id!("zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ");
 }
 
-// TODO: temporary address
-pub mod curve25519_basic_enabled {
+// TODO: temporary address for now
+pub mod curve25519_validate_point_enabled {
+    solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
+}
+
+pub mod curve25519_curve_op_enabled {
+    solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
+}
+
+pub mod curve25519_multiscalar_multiplication_enabled {
     solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
 }
 
