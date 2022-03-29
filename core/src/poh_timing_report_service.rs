@@ -55,12 +55,7 @@ impl PohTimingReportService {
 #[cfg(test)]
 mod test {
     use {
-        super::*,
-        crossbeam_channel::unbounded,
-        solana_metrics::{
-            create_slot_poh_end_time_point, create_slot_poh_full_time_point,
-            create_slot_poh_start_time_point,
-        },
+        super::*, crossbeam_channel::unbounded, solana_metrics::poh_timing_point::SlotPohTimingInfo,
     };
 
     #[test]
@@ -73,9 +68,12 @@ mod test {
             PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
 
         // Send SlotPohTimingPoint
-        let _ = poh_timing_point_sender.send(create_slot_poh_start_time_point!(42, 100));
-        let _ = poh_timing_point_sender.send(create_slot_poh_end_time_point!(42, 200));
-        let _ = poh_timing_point_sender.send(create_slot_poh_full_time_point!(42, 150));
+        let _ = poh_timing_point_sender
+            .send(SlotPohTimingInfo::new_slot_start_poh_time_point((42, 100)));
+        let _ =
+            poh_timing_point_sender.send(SlotPohTimingInfo::new_slot_end_poh_time_point((42, 200)));
+        let _ = poh_timing_point_sender
+            .send(SlotPohTimingInfo::new_slot_full_poh_time_point((42, 150)));
 
         // Shutdown the service
         exit.store(true, Ordering::Relaxed);

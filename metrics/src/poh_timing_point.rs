@@ -55,80 +55,82 @@ impl fmt::Display for SlotPohTimingInfo {
     }
 }
 
-/// create slot poh timing point w/o root info.
-#[macro_export]
-macro_rules! create_slot_poh_time_point {
-    ($slot:expr, $timestamp:expr) => {
-        $crate::poh_timing_point::SlotPohTimingInfo {
-            slot: $slot,
-            root_slot: None,
-            timing_point: $timestamp,
+/// overload parameters for SlotTimingInfo constructor
+pub enum SlotTimingInfoParams {
+    /// (slot, timestamp)
+    WithoutRoot(Slot, u64),
+
+    /// (slot, root_slot, timestamp)
+    WithRoot(Slot, Slot, u64),
+}
+
+/// overload traits
+pub trait IntoSlotTimingInfoParams {
+    fn into(self) -> SlotTimingInfoParams;
+}
+
+/// WithoutRoot
+impl IntoSlotTimingInfoParams for (Slot, u64) {
+    fn into(self) -> SlotTimingInfoParams {
+        SlotTimingInfoParams::WithoutRoot(self.0, self.1)
+    }
+}
+
+/// WithRoot
+impl IntoSlotTimingInfoParams for (Slot, Slot, u64) {
+    fn into(self) -> SlotTimingInfoParams {
+        SlotTimingInfoParams::WithRoot(self.0, self.1, self.2)
+    }
+}
+
+impl SlotPohTimingInfo {
+    /// create slot poh timing point w/o root info.
+    fn new_slot_poh_time_point<A, F>(args: A, f: F) -> SlotPohTimingInfo
+    where
+        A: IntoSlotTimingInfoParams,
+        F: FnOnce(u64) -> PohTimingPoint,
+    {
+        let param = args.into();
+        match param {
+            SlotTimingInfoParams::WithoutRoot(slot, timestamp) => SlotPohTimingInfo {
+                slot,
+                root_slot: None,
+                timing_point: f(timestamp),
+            },
+            SlotTimingInfoParams::WithRoot(slot, root_slot, timestamp) => SlotPohTimingInfo {
+                slot,
+                root_slot: Some(root_slot),
+                timing_point: f(timestamp),
+            },
         }
-    };
+    }
 
-    ($slot:expr, $root_slot:expr, $timestamp:expr ) => {
-        $crate::poh_timing_point::SlotPohTimingInfo {
-            slot: $slot,
-            root_slot: Some($root_slot),
-            timing_point: $timestamp,
-        }
-    };
+    /// create slot start poh timing point w/o root info.
+    pub fn new_slot_start_poh_time_point<A>(args: A) -> SlotPohTimingInfo
+    where
+        A: IntoSlotTimingInfoParams,
+    {
+        SlotPohTimingInfo::new_slot_poh_time_point(args, |t| PohTimingPoint::PohSlotStart(t))
+    }
+
+    /// create slot end poh timing point w/o root info.
+    pub fn new_slot_end_poh_time_point<A>(args: A) -> SlotPohTimingInfo
+    where
+        A: IntoSlotTimingInfoParams,
+    {
+        SlotPohTimingInfo::new_slot_poh_time_point(args, |t| PohTimingPoint::PohSlotEnd(t))
+    }
+
+    /// create slot full poh timing point w/o root info.
+    pub fn new_slot_full_poh_time_point<A>(args: A) -> SlotPohTimingInfo
+    where
+        A: IntoSlotTimingInfoParams,
+    {
+        SlotPohTimingInfo::new_slot_poh_time_point(args, |t| PohTimingPoint::FullSlotReceived(t))
+    }
 }
 
-/// create slot poh start timing point w/o root info.
-#[macro_export]
-macro_rules! create_slot_poh_start_time_point {
-    ($slot:expr, $timestamp:expr) => {
-        $crate::create_slot_poh_time_point!(
-            $slot,
-            $crate::poh_timing_point::PohTimingPoint::PohSlotStart($timestamp)
-        )
-    };
-    ($slot:expr, $root_slot:expr, $timestamp:expr) => {
-        $crate::create_slot_poh_time_point!(
-            $slot,
-            $root_slot,
-            $crate::poh_timing_point::PohTimingPoint::PohSlotStart($timestamp)
-        )
-    };
-}
-
-/// create slot poh end timing point w/o root info.
-#[macro_export]
-macro_rules! create_slot_poh_end_time_point {
-    ($slot:expr, $timestamp:expr) => {
-        $crate::create_slot_poh_time_point!(
-            $slot,
-            $crate::poh_timing_point::PohTimingPoint::PohSlotEnd($timestamp)
-        )
-    };
-    ($slot:expr, $root_slot:expr, $timestamp:expr) => {
-        $crate::create_slot_poh_time_point!(
-            $slot,
-            $root_slot,
-            $crate::poh_timing_point::PohTimingPoint::PohSlotEnd($timestamp)
-        )
-    };
-}
-
-/// create slot poh full timing point w/o root info.
-#[macro_export]
-macro_rules! create_slot_poh_full_time_point {
-    ($slot:expr, $timestamp:expr) => {
-        $crate::create_slot_poh_time_point!(
-            $slot,
-            $crate::poh_timing_point::PohTimingPoint::FullSlotReceived($timestamp)
-        )
-    };
-    ($slot:expr, $root_slot:expr, $timestamp:expr) => {
-        $crate::create_slot_poh_time_point!(
-            $slot,
-            $root_slot,
-            $crate::poh_timing_point::PohTimingPoint::FullSlotReceived($timestamp)
-        )
-    };
-}
-
+/// send poh timing to channel
 pub fn send_poh_timing_point(sender: &PohTimingSender, slot_timing: SlotPohTimingInfo) {
     trace!("{}", slot_timing);
     if let Err(e) = sender.try_send(slot_timing) {
@@ -142,7 +144,7 @@ mod test {
     #[test]
     fn test_poh_timing_point() {
         // create slot start with root
-        let p = create_slot_poh_start_time_point!(100, 101, 100);
+        let p = SlotPohTimingInfo::new_slot_start_poh_time_point((100, 101, 100));
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
@@ -152,7 +154,7 @@ mod test {
         );
 
         // create slot start without root
-        let p = create_slot_poh_start_time_point!(100, 100);
+        let p = SlotPohTimingInfo::new_slot_start_poh_time_point((100, 100));
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
@@ -162,7 +164,7 @@ mod test {
         );
 
         // create slot end with root
-        let p = create_slot_poh_end_time_point!(100, 101, 100);
+        let p = SlotPohTimingInfo::new_slot_end_poh_time_point((100, 101, 100));
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
@@ -172,7 +174,7 @@ mod test {
         );
 
         // create slot end without root
-        let p = create_slot_poh_end_time_point!(100, 100);
+        let p = SlotPohTimingInfo::new_slot_end_poh_time_point((100, 100));
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
@@ -182,7 +184,7 @@ mod test {
         );
 
         // create slot full with root
-        let p = create_slot_poh_full_time_point!(100, 101, 100);
+        let p = SlotPohTimingInfo::new_slot_full_poh_time_point((100, 101, 100));
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
@@ -192,7 +194,7 @@ mod test {
         );
 
         // create slot full without root
-        let p = create_slot_poh_full_time_point!(100, 100);
+        let p = SlotPohTimingInfo::new_slot_full_poh_time_point((100, 100));
         assert!(p.slot == 100);
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));

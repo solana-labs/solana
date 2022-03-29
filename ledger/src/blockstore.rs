@@ -28,8 +28,8 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{
-        create_slot_poh_full_time_point, datapoint_debug, datapoint_error,
-        poh_timing_point::{send_poh_timing_point, PohTimingSender},
+        datapoint_debug, datapoint_error,
+        poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
@@ -1559,11 +1559,11 @@ impl Blockstore {
         if let Some(ref sender) = self.shred_timing_point_sender {
             send_poh_timing_point(
                 sender,
-                create_slot_poh_full_time_point!(
+                SlotPohTimingInfo::new_slot_full_poh_time_point((
                     slot,
                     self.last_root(),
-                    solana_sdk::timing::timestamp()
-                ),
+                    solana_sdk::timing::timestamp(),
+                )),
             );
         }
     }
