@@ -211,10 +211,6 @@ pub mod send_to_tpu_vote_port {
     solana_sdk::declare_id!("C5fh68nJ7uyKAuYZg2x9sEQ5YrVf3dkW6oojNBSc3Jvo");
 }
 
-pub mod turbine_peers_shuffle {
-    solana_sdk::declare_id!("4VvpgRD6UsHvkXwpuQhtR5NG1G4esMaExeWuSEpsYRUa");
-}
-
 pub mod requestable_heap_size {
     solana_sdk::declare_id!("CCu4boMmfLuqcmfTLPHQiUo22ZdUsXjgzPAURYaWt1Bw");
 }
@@ -386,7 +382,6 @@ lazy_static! {
         (optimize_epoch_boundary_updates::id(), "optimize epoch boundary updates"),
         (remove_native_loader::id(), "remove support for the native loader"),
         (send_to_tpu_vote_port::id(), "send votes to the tpu vote port"),
-        (turbine_peers_shuffle::id(), "turbine peers shuffle patch"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
