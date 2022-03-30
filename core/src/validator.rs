@@ -1806,9 +1806,10 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
+        crossbeam_channel::{unbounded, Receiver, Sender},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        std::fs::remove_dir_all,
+        std::{fs::remove_dir_all, thread, time::Duration},
     };
 
     fn validator_exit() {
@@ -1926,11 +1927,20 @@ mod tests {
 
         // Each validator can exit in parallel to speed many sequential calls to join`
         validators.iter_mut().for_each(|v| v.exit());
-        // While join is called sequentially, the above exit call notified all the
-        // validators to exit from all their threads
-        validators.into_iter().for_each(|validator| {
-            validator.join();
+
+        // spawn a new thread to wait for the join of the validator
+        let (sender, receiver) = unbounded();
+        let _ = thread::spawn(move || {
+            validators.into_iter().for_each(|validator| {
+                validator.join();
+            });
+            sender.send(()).unwrap();
         });
+
+        // timeout of 3s for shutting down the validators
+        if let Err(_) = receiver.recv_timeout(Duration::from_secs(3)) {
+            assert!(false, "timeout for shutting down validators");
+        }
 
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
