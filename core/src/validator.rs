@@ -337,7 +337,6 @@ pub struct Validator {
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
-    pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
 }
@@ -995,7 +994,6 @@ impl Validator {
             validator_exit: config.validator_exit.clone(),
             cluster_info,
             bank_forks,
-            blockstore: blockstore.clone(),
             accountsdb_repl_service,
             geyser_plugin_service,
         }
