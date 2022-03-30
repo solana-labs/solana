@@ -125,7 +125,7 @@ impl ClusterNodes<BroadcastStage> {
         socket_addr_space: &SocketAddrSpace,
     ) -> Vec<SocketAddr> {
         const MAX_CONTACT_INFO_AGE: Duration = Duration::from_secs(2 * 60);
-        let shred_seed = shred.seed(self.pubkey, root_bank);
+        let shred_seed = shred.seed(self.pubkey);
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
             if let Some(node) = self.get_broadcast_peer(shred_seed) {
                 if socket_addr_space.check(&node.tvu) {
@@ -233,7 +233,7 @@ impl ClusterNodes<RetransmitStage> {
         Vec<&Node>, // neighbors
         Vec<&Node>, // children
     ) {
-        let shred_seed = shred.seed(slot_leader, root_bank);
+        let shred_seed = shred.seed(slot_leader);
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
             return self.get_retransmit_peers_compat(shred_seed, fanout, slot_leader);
         }

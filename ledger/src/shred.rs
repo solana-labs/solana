@@ -60,16 +60,14 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::{limited_deserialize, Packet},
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank::Bank,
     solana_sdk::{
         clock::Slot,
-        feature_set,
         hash::{hashv, Hash},
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{cell::RefCell, convert::TryInto, mem::size_of},
+    std::{cell::RefCell, mem::size_of},
     thiserror::Error,
 };
 
@@ -609,19 +607,13 @@ impl Shred {
         self.common_header.signature
     }
 
-    pub fn seed(&self, leader_pubkey: Pubkey, root_bank: &Bank) -> [u8; 32] {
-        if enable_deterministic_seed(self.slot(), root_bank) {
-            hashv(&[
-                &self.slot().to_le_bytes(),
-                &self.index().to_le_bytes(),
-                &leader_pubkey.to_bytes(),
-            ])
-            .to_bytes()
-        } else {
-            let signature = self.common_header.signature.as_ref();
-            let offset = signature.len().checked_sub(32).unwrap();
-            signature[offset..].try_into().unwrap()
-        }
+    pub fn seed(&self, leader_pubkey: Pubkey) -> [u8; 32] {
+        hashv(&[
+            &self.slot().to_le_bytes(),
+            &self.index().to_le_bytes(),
+            &leader_pubkey.to_bytes(),
+        ])
+        .to_bytes()
     }
 
     #[inline]
@@ -708,21 +700,6 @@ impl Shred {
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
-    }
-}
-
-fn enable_deterministic_seed(shred_slot: Slot, bank: &Bank) -> bool {
-    let feature_slot = bank
-        .feature_set
-        .activated_slot(&feature_set::deterministic_shred_seed_enabled::id());
-    match feature_slot {
-        None => false,
-        Some(feature_slot) => {
-            let epoch_schedule = bank.epoch_schedule();
-            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
-            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
-        }
     }
 }
 
