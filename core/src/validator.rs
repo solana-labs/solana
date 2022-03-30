@@ -1938,8 +1938,8 @@ mod tests {
             sender.send(()).unwrap();
         });
 
-        // timeout of 3s for shutting down the validators
-        if receiver.recv_timeout(Duration::from_secs(3)).is_err() {
+        // timeout of 30s for shutting down the validators
+        if receiver.recv_timeout(Duration::from_secs(30)).is_err() {
             panic!(
                 "timeout for shutting down validators: {:?}",
                 Backtrace::new()
