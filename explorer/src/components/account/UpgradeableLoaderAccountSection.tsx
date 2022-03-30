@@ -151,9 +151,6 @@ export function UpgradeableProgramSection({
         </tr>
         <tr>
           <td>
-            {
-              //TODO: display also for non upgradeable programs
-            }
             <SecurityLabel />
           </td>
           <td className="text-lg-end">
@@ -185,7 +182,10 @@ export function UpgradeableProgramSection({
 function SecurityLabel() {
   return (
     <InfoTooltip text="Security.txt helps security researchers to contact developers if they find security bugs.">
-      Security.txt
+      <a href="https://github.com/neodyme-labs/solana-security-txt">
+        Security.txt
+        <span className="fe fe-external-link ms-2"></span>
+      </a>
     </InfoTooltip>
   );
 }

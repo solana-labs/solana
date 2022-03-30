@@ -1,52 +1,40 @@
-import { PublicKey } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
-import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
-import {
-  Account,
-  useAccountInfo,
-  useFetchAccountInfo,
-} from "providers/accounts";
-import { CacheEntry, FetchStatus } from "providers/cache";
-import { ClusterStatus, useCluster } from "providers/cluster";
-import React from "react";
+import { UpgradeableLoaderAccountData } from "providers/accounts";
 import { fromProgramData, SecurityTXT } from "utils/security-txt";
 
-type Props = { address: string };
-export function SecurityDetailsPage({ address }: Props) {
-  const fetchAccount = useFetchAccountInfo();
-  const { status } = useCluster();
-  const info = useAccountInfo(address);
-  let pubkey: PublicKey | undefined;
+export function SecurityCard({ data }: { data: UpgradeableLoaderAccountData }) {
+  if (!data.programData) {
+    return <ErrorCard text="Account has no data" />;
+  }
 
-  try {
-    pubkey = new PublicKey(address);
-  } catch (err) {}
+  const securityTXT = fromProgramData(data.programData);
 
-  // Fetch account on load
-  React.useEffect(() => {
-    if (!info && status === ClusterStatus.Connected && pubkey) {
-      fetchAccount(pubkey);
-    }
-  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!securityTXT) {
+    return <ErrorCard text="Account has no security.txt" />;
+  }
 
   return (
-    <div className="container mt-n3">
-      <div className="header">
-        <div className="header-body">
-          <h6 className="header-pretitle">Details</h6>
-          <h2 className="header-title">Security</h2>
-          <small>
-            Note that this is self-reported by the author of the program and
-            might not be acurate.
-          </small>
-        </div>
+    <div className="card security-txt">
+      <div className="card-header">
+        <h3 className="card-header-title mb-0 d-flex align-items-center">
+          Overview
+        </h3>
+        <small>
+          Note that this is self-reported by the author of the program and might
+          not be accurate.
+        </small>
       </div>
-      {!pubkey ? (
-        <ErrorCard text={`Address "${address}" is not valid`} />
-      ) : (
-        <SecurityDetails pubkey={pubkey} info={info} />
-      )}
+      <TableCardBody>
+        {ROWS.filter((x) => x.key in securityTXT).map((x, idx) => {
+          return (
+            <tr key={idx}>
+              <td className="w-100">{x.display}</td>
+              <RenderEntry value={securityTXT[x.key]} type={x.type} />
+            </tr>
+          );
+        })}
+      </TableCardBody>
     </div>
   );
 }
@@ -118,57 +106,6 @@ const ROWS: TableRow[] = [
   },
 ];
 
-function SecurityDetails({
-  pubkey,
-  info,
-}: {
-  pubkey: PublicKey;
-  info?: CacheEntry<Account>;
-}) {
-  const fetchAccount = useFetchAccountInfo();
-
-  if (!info || info.status === FetchStatus.Fetching) {
-    return <LoadingCard />;
-  } else if (
-    info.status === FetchStatus.FetchFailed ||
-    info.data?.lamports === undefined
-  ) {
-    return <ErrorCard retry={() => fetchAccount(pubkey)} text="Fetch Failed" />;
-  }
-  const account = info.data;
-
-  const data = account?.details?.data;
-  if (!data || data.program !== "bpf-upgradeable-loader" || !data.programData) {
-    return <ErrorCard text="Account is not a program" />;
-  }
-
-  const securityTXT = fromProgramData(data.programData);
-
-  if (!securityTXT) {
-    return <ErrorCard text="Account has no security.txt" />;
-  }
-
-  return (
-    <div className="card security-txt">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Overview
-        </h3>
-      </div>
-      <TableCardBody>
-        {ROWS.filter((x) => x.key in securityTXT).map((x, idx) => {
-          return (
-            <tr key={idx}>
-              <td className="w-100">{x.display}</td>
-              <RenderEntry value={securityTXT[x.key]} type={x.type} />
-            </tr>
-          );
-        })}
-      </TableCardBody>
-    </div>
-  );
-}
-
 function RenderEntry({
   value,
   type,
@@ -188,6 +125,10 @@ function RenderEntry({
           <ul>
             {value?.split(",").map((c, i) => {
               const idx = c.indexOf(":");
+              if (idx < 0) {
+                //invalid contact
+                return <li key={i}>{c}</li>;
+              }
               const [type, information] = [c.slice(0, idx), c.slice(idx + 1)];
               return (
                 <li key={i}>
@@ -203,7 +144,7 @@ function RenderEntry({
         return (
           <td className="text-lg-end">
             <span className="font-monospace">
-              <a href={value}>
+              <a rel="noopener noreferrer" target="_blank" href={value}>
                 {value}
                 <span className="fe fe-external-link ms-2"></span>
               </a>
@@ -213,7 +154,7 @@ function RenderEntry({
       }
       return (
         <td className="text-lg-end">
-          <p>{value}</p>
+          <pre>{value.trim()}</pre>
         </td>
       );
     case DisplayType.Date:
@@ -223,7 +164,7 @@ function RenderEntry({
         return (
           <td className="text-lg-end">
             <span className="font-monospace">
-              <a href={value}>
+              <a rel="noopener noreferrer" target="_blank" href={value}>
                 {value}
                 <span className="fe fe-external-link ms-2"></span>
               </a>
@@ -241,7 +182,7 @@ function RenderEntry({
         return (
           <td className="text-lg-end">
             <span className="font-monospace">
-              <a href={value}>
+              <a rel="noopener noreferrer" target="_blank" href={value}>
                 {value}
                 <span className="fe fe-external-link ms-2"></span>
               </a>
@@ -277,28 +218,44 @@ function Contact({ type, information }: { type: string; information: string }) {
   switch (type) {
     case "discord":
       return (
-        <a href={`https://discordapp.com/users/${information}`}>
+        <a
+          rel="noopener noreferrer"
+          target="_blank"
+          href={`https://discordapp.com/users/${information}`}
+        >
           Discord: {information}
           <span className="fe fe-external-link ms-2"></span>
         </a>
       );
     case "email":
       return (
-        <a href={`mailto:${information}`}>
+        <a
+          rel="noopener noreferrer"
+          target="_blank"
+          href={`mailto:${information}`}
+        >
           {information}
           <span className="fe fe-external-link ms-2"></span>
         </a>
       );
     case "telegram":
       return (
-        <a href={`https://t.me/${information}`}>
+        <a
+          rel="noopener noreferrer"
+          target="_blank"
+          href={`https://t.me/${information}`}
+        >
           Telegram: {information}
           <span className="fe fe-external-link ms-2"></span>
         </a>
       );
     case "twitter":
       return (
-        <a href={`https://twitter.com/${information}`}>
+        <a
+          rel="noopener noreferrer"
+          target="_blank"
+          href={`https://twitter.com/${information}`}
+        >
           Twitter {information}
           <span className="fe fe-external-link ms-2"></span>
         </a>
@@ -306,7 +263,7 @@ function Contact({ type, information }: { type: string; information: string }) {
     case "link":
       if (isValidLink(information)) {
         return (
-          <a href={`${information}`}>
+          <a rel="noopener noreferrer" target="_blank" href={`${information}`}>
             {information}
             <span className="fe fe-external-link ms-2"></span>
           </a>

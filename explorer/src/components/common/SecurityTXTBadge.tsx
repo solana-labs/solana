@@ -1,5 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
+import { Link } from "react-router-dom";
 import { SecurityTXT } from "utils/security-txt";
+import { clusterPath } from "utils/url";
 
 export function SecurityTXTBadge({
   securityTXT,
@@ -8,18 +10,15 @@ export function SecurityTXTBadge({
   securityTXT: SecurityTXT | undefined;
   pubkey: PublicKey;
 }) {
-  //TODO: href params
   if (securityTXT) {
     return (
       <h3 className="mb-0">
-        <a
+        <Link
           className="c-pointer badge bg-success-soft rank"
-          href={`/security/${pubkey.toBase58()}${window.location.search}`}
-          target="_blank"
-          rel="noreferrer"
+          to={clusterPath(`/address/${pubkey.toBase58()}/security`)}
         >
           Included
-        </a>
+        </Link>
       </h3>
     );
   } else {
