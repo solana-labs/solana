@@ -17,6 +17,16 @@ pub struct SortedStorages<'a> {
 }
 
 impl<'a> SortedStorages<'a> {
+    /// containing nothing
+    pub fn empty() -> Self {
+        SortedStorages {
+            range: Range::default(),
+            storages: Vec::default(),
+            slot_count: 0,
+            storage_count: 0,
+        }
+    }
+
     /// primary method of retreiving (Slot, SnapshotStorage)
     pub fn iter_range<R>(&'a self, range: R) -> SortedStoragesIter<'a>
     where
