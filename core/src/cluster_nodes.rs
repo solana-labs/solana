@@ -417,37 +417,12 @@ pub fn make_test_cluster<R: Rng>(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_gossip::deprecated::{
-            shuffle_peers_and_index, sorted_retransmit_peers_and_stakes, sorted_stakes_with_index,
-        },
-    };
-
-    // Legacy methods copied for testing backward compatibility.
-
-    fn get_broadcast_peers(
-        cluster_info: &ClusterInfo,
-        stakes: Option<&HashMap<Pubkey, u64>>,
-    ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
-        let mut peers = cluster_info.tvu_peers();
-        let peers_and_stakes = stake_weight_peers(&mut peers, stakes);
-        (peers, peers_and_stakes)
-    }
-
-    fn stake_weight_peers(
-        peers: &mut Vec<ContactInfo>,
-        stakes: Option<&HashMap<Pubkey, u64>>,
-    ) -> Vec<(u64, usize)> {
-        peers.dedup();
-        sorted_stakes_with_index(peers, stakes)
-    }
+    use super::*;
 
     #[test]
     fn test_cluster_nodes_retransmit() {
         let mut rng = rand::thread_rng();
         let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
-        let this_node = cluster_info.my_contact_info();
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
         let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
@@ -471,25 +446,6 @@ mod tests {
                 }
             }
         }
-        let (peers, stakes_and_index) =
-            sorted_retransmit_peers_and_stakes(&cluster_info, Some(&stakes));
-        assert_eq!(stakes_and_index.len(), peers.len());
-        let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
-        // Remove slot leader from peers indices.
-        let stakes_and_index: Vec<_> = stakes_and_index
-            .into_iter()
-            .filter(|(_stake, index)| peers[*index].id != slot_leader)
-            .collect();
-        assert_eq!(peers.len(), stakes_and_index.len() + 1);
-        let mut shred_seed = [0u8; 32];
-        rng.fill(&mut shred_seed[..]);
-        let (self_index, shuffled_peers_and_stakes) =
-            shuffle_peers_and_index(&this_node.id, &peers, &stakes_and_index, shred_seed);
-        let shuffled_index: Vec<_> = shuffled_peers_and_stakes
-            .into_iter()
-            .map(|(_, index)| index)
-            .collect();
-        assert_eq!(this_node.id, peers[shuffled_index[self_index]].id);
     }
 
     #[test]
@@ -520,7 +476,5 @@ mod tests {
                 }
             }
         }
-        let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(&stakes));
-        assert_eq!(peers_and_stakes.len(), peers.len());
     }
 }
