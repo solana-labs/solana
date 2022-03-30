@@ -1806,7 +1806,7 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
-        crossbeam_channel::{unbounded, Receiver, Sender},
+        crossbeam_channel::unbounded,
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
