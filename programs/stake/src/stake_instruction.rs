@@ -144,7 +144,7 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(2)?;
             let split_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            me.split(lamports, split_stake, &signers)
+            me.split(invoke_context, lamports, split_stake, &signers)
         }
         StakeInstruction::Merge => {
             instruction_context.check_number_of_instruction_accounts(2)?;
