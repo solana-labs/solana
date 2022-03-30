@@ -129,6 +129,7 @@ impl AccountsHashVerifier {
                         use_bg_thread_pool: true,
                         check_hash: false,
                         ancestors: None,
+                        use_write_cache: false,
                     },
                     timings,
                 )
