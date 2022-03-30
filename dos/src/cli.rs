@@ -72,7 +72,7 @@ pub struct TransactionParams {
     pub payer_filename: Option<String>,
 }
 
-#[derive(ArgEnum, Clone, Eq, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
 pub enum Mode {
     Gossip,
     Tvu,
