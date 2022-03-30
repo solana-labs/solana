@@ -1412,22 +1412,6 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-<<<<<<< HEAD
-            ("solana_bpf_rust_alloc", 7388),
-            ("solana_bpf_rust_custom_heap", 536),
-            ("solana_bpf_rust_dep_crate", 47),
-            ("solana_bpf_rust_external_spend", 507),
-            ("solana_bpf_rust_iter", 824),
-            ("solana_bpf_rust_many_args", 1289),
-            ("solana_bpf_rust_mem", 5997),
-            ("solana_bpf_rust_membuiltins", 3976),
-            ("solana_bpf_rust_noop", 481),
-            ("solana_bpf_rust_param_passing", 146),
-            ("solana_bpf_rust_rand", 488),
-            ("solana_bpf_rust_sanity", 9128),
-            ("solana_bpf_rust_secp256k1_recover", 25889),
-            ("solana_bpf_rust_sha", 30692),
-=======
             ("solana_bpf_rust_alloc", 4459),
             ("solana_bpf_rust_custom_heap", 469),
             ("solana_bpf_rust_dep_crate", 2),
@@ -1439,10 +1423,9 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_noop", 326),
             ("solana_bpf_rust_param_passing", 146),
             ("solana_bpf_rust_rand", 429),
-            ("solana_bpf_rust_sanity", 9139),
+            ("solana_bpf_rust_sanity", 52290),
             ("solana_bpf_rust_secp256k1_recover", 25707),
-            ("solana_bpf_rust_sha", 26390),
->>>>>>> 03ed334eb (Double the chunk size for sending the program binary data in tx)
+            ("solana_bpf_rust_sha", 26384),
         ]);
     }
 
