@@ -1817,7 +1817,6 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
-        backtrace::Backtrace,
         crossbeam_channel::unbounded,
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
@@ -1951,10 +1950,7 @@ mod tests {
 
         // timeout of 30s for shutting down the validators
         if receiver.recv_timeout(Duration::from_secs(30)).is_err() {
-            panic!(
-                "timeout for shutting down validators: {:?}",
-                Backtrace::new()
-            );
+            panic!("timeout for shutting down validators",);
         }
 
         for path in ledger_paths {

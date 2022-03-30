@@ -62,7 +62,6 @@ tempfile = "3.3.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
-backtrace = "0.3"
 
 [dev-dependencies]
 matches = "0.1.9"
