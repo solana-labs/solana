@@ -1063,6 +1063,11 @@ impl Blockstore {
         Ok((newly_completed_data_sets, inserted_indices))
     }
 
+    pub fn drop_signal(&mut self) {
+        self.new_shreds_signals.clear();
+        self.completed_slots_senders.clear();
+    }
+
     /// Range-delete all entries which prefix matches the specified `slot` and
     /// clear all the related `SlotMeta` except its next_slots.
     ///
