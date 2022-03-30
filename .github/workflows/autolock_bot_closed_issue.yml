@@ -2,7 +2,7 @@ name: 'Autolock NaviBot for closed issue'
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 permissions:
