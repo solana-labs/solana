@@ -66,8 +66,30 @@ export function InstructionsSection({ signature }: SignatureProps) {
   );
 
   useEffect(() => {
-    if (!status?.data?.info || !details?.data?.transaction) {
+    const result = status?.data?.info?.result;
+    if (!result || !details?.data?.transaction) {
       return;
+    }
+    const { meta } = details.data.transaction;
+
+    const innerInstructions: {
+      [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
+    } = {};
+
+    if (
+      meta?.innerInstructions &&
+      (cluster !== Cluster.MainnetBeta ||
+        details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+    ) {
+      meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
+        if (!innerInstructions[parsed.index]) {
+          innerInstructions[parsed.index] = [];
+        }
+  
+        parsed.instructions.forEach((ix) => {
+          innerInstructions[parsed.index].push(ix);
+        });
+      });
     }
 
     const { transaction } = details.data?.transaction;
@@ -108,41 +130,18 @@ export function InstructionsSection({ signature }: SignatureProps) {
     );
 
     Promise.all(ixDetails)
-      .then((details) => setInstructionDetails(details))
-      .catch((_err) =>
-        console.error("Unexpected error processing instructions:", _err)
+      .then(setInstructionDetails)
+      .catch((err) =>
+        console.error("Unexpected error processing instructions:", err)
       );
-  }, [details]);
+  }, [cluster, details, signature, status, url]);
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
   const { transaction } = details.data.transaction;
-  const { meta } = details.data.transaction;
 
   if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
-
-  const innerInstructions: {
-    [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
-  } = {};
-
-  if (
-    meta?.innerInstructions &&
-    (cluster !== Cluster.MainnetBeta ||
-      details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
-  ) {
-    meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
-      if (!innerInstructions[parsed.index]) {
-        innerInstructions[parsed.index] = [];
-      }
-
-      parsed.instructions.forEach((ix) => {
-        innerInstructions[parsed.index].push(ix);
-      });
-    });
-  }
-
-  const result = status.data.info.result;
 
   return (
     <>
