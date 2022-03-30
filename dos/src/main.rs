@@ -28,12 +28,11 @@
 //!
 #![allow(clippy::integer_arithmetic)]
 use {
-    clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
     log::*,
     rand::{thread_rng, Rng},
-    serde::{Deserialize, Serialize},
     solana_client::rpc_client::RpcClient,
     solana_core::serve_repair::RepairProtocol,
+    solana_dos::cli::*,
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::{
         hash::Hash,
@@ -47,7 +46,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        net::{SocketAddr, UdpSocket},
+        net::UdpSocket,
         process::exit,
         str::FromStr,
         time::{Duration, Instant},
@@ -307,136 +306,9 @@ fn run_dos(
     }
 }
 
-// command line parsing
-#[derive(Parser)]
-#[clap(name = crate_name!(),
-    version = crate_version!(),
-    about = crate_description!(),
-    rename_all = "kebab-case"
-)]
-struct DosClientParameters {
-    #[clap(long, arg_enum, help = "Interface to DoS")]
-    mode: Mode,
-
-    #[clap(long, arg_enum, help = "Type of data to send")]
-    data_type: DataType,
-
-    #[clap(
-        long = "entrypoint",
-        parse(try_from_str = addr_parser),
-        default_value = "127.0.0.1:8001",
-        help = "Gossip entrypoint address. Usually <ip>:8001"
-    )]
-    entrypoint_addr: SocketAddr,
-
-    #[clap(
-        long,
-        default_value = "128",
-        required_if_eq("data-type", "random"),
-        help = "Size of packet to DoS with, relevant only for data-type=random"
-    )]
-    data_size: usize,
-
-    #[clap(long, help = "Data to send [Optional]")]
-    data_input: Option<String>,
-
-    #[clap(long, help = "Just use entrypoint address directly")]
-    skip_gossip: bool,
-
-    #[clap(long, help = "Allow contacting private ip addresses")]
-    allow_private_addr: bool,
-
-    #[clap(flatten)]
-    transaction_params: TransactionParams,
-}
-
-#[derive(Clone, Args, Serialize, Deserialize, Debug, Default)]
-#[clap(rename_all = "kebab-case")]
-struct TransactionParams {
-    #[clap(
-        long,
-        default_value = "2",
-        help = "Number of signatures in transaction"
-    )]
-    num_signatures: usize,
-
-    #[clap(long, help = "Generate a valid blockhash for transaction")]
-    valid_blockhash: bool,
-
-    #[clap(long, help = "Generate valid signature(s) for transaction")]
-    valid_signatures: bool,
-
-    #[clap(long, help = "Generate unique transactions")]
-    unique_transactions: bool,
-
-    #[clap(
-        long = "payer",
-        help = "Payer's keypair file to fund transactions [Optional]"
-    )]
-    payer_filename: Option<String>,
-}
-
-#[derive(ArgEnum, Clone, Eq, PartialEq)]
-enum Mode {
-    Gossip,
-    Tvu,
-    TvuForwards,
-    Tpu,
-    TpuForwards,
-    Repair,
-    ServeRepair,
-    Rpc,
-}
-
-#[derive(ArgEnum, Clone, Eq, PartialEq)]
-enum DataType {
-    RepairHighest,
-    RepairShred,
-    RepairOrphan,
-    Random,
-    GetAccountInfo,
-    GetProgramAccounts,
-    Transaction,
-}
-
-fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
-    match solana_net_utils::parse_host_port(addr) {
-        Ok(v) => Ok(v),
-        Err(_) => Err("failed to parse entrypoint address"),
-    }
-}
-
-/// input checks which are not covered by Clap
-fn validate_input(params: &DosClientParameters) {
-    if params.mode == Mode::Rpc
-        && (params.data_type != DataType::GetAccountInfo
-            && params.data_type != DataType::GetProgramAccounts)
-    {
-        panic!("unsupported data type");
-    }
-
-    if params.data_type != DataType::Transaction {
-        let tp = &params.transaction_params;
-        if tp.valid_blockhash
-            || tp.valid_signatures
-            || tp.unique_transactions
-            || tp.payer_filename.is_some()
-        {
-            println!("Arguments valid-blockhash, valid-sign, unique-trans, payer are ignored if data-type != transaction");
-        }
-    }
-
-    if params.transaction_params.payer_filename.is_some()
-        && params.transaction_params.valid_signatures
-    {
-        println!("Arguments valid-signatures is ignored if payer is provided");
-    }
-}
-
 fn main() {
     solana_logger::setup_with_default("solana=info");
-    let cmd_params = DosClientParameters::parse();
-    validate_input(&cmd_params);
+    let cmd_params = build_cli_parameters();
 
     let mut nodes = vec![];
     if !cmd_params.skip_gossip {
