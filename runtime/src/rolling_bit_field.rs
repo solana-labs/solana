@@ -240,7 +240,6 @@ impl RollingBitField {
     }
 
     /// return all items < 'max_slot_exclusive'
-    #[allow(dead_code)] // temporary
     pub fn get_all_less_than(&self, max_slot_exclusive: Slot) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| {

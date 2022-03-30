@@ -5512,7 +5512,7 @@ impl AccountsDb {
             };
             timings.calc_storage_size_quartiles(&combined_maps);
 
-            self.calculate_accounts_hash_without_index(
+            let result = self.calculate_accounts_hash_without_index(
                 &CalcAccountsHashConfig {
                     storages: &storages,
                     use_bg_thread_pool: !is_startup,
@@ -5520,7 +5520,11 @@ impl AccountsDb {
                     ancestors: can_cached_slot_be_unflushed.then(|| ancestors),
                 },
                 timings,
-            )
+            );
+            // now that calculate_accounts_hash_without_index is complete, we can remove old roots
+            self.remove_old_roots(slot);
+
+            result
         } else {
             self.calculate_accounts_hash(
                 slot,
@@ -5784,6 +5788,18 @@ impl AccountsDb {
             self.thread_pool_clean.install(scan_and_hash)
         } else {
             scan_and_hash()
+        }
+    }
+
+    /// get rid of old original_roots
+    fn remove_old_roots(&self, slot: Slot) {
+        // epoch_schedule::DEFAULT_SLOTS_PER_EPOCH is a sufficient approximation for now
+        let width = solana_sdk::epoch_schedule::DEFAULT_SLOTS_PER_EPOCH * 11 / 10; // a buffer
+        if slot > width {
+            let min_root = slot - width;
+            let valid_slots = HashSet::default();
+            self.accounts_index
+                .remove_old_original_roots(min_root, &valid_slots);
         }
     }
 
