@@ -10,7 +10,6 @@ use {
             TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
-    crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     solana_sdk::{
         clock::Slot, genesis_config::ClusterType, hash::Hash, sysvar::epoch_schedule::EpochSchedule,
@@ -23,14 +22,9 @@ use {
     tempfile::TempDir,
 };
 
-/// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
-pub type AccountsPackageSender = Sender<AccountsPackage>;
-
-/// The receiver side of the AccountsPackage channel, used by AccountsHashVerifier
-pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
-
-/// The error type when sending an AccountsPackage over the channel fails
-pub type AccountsPackageSendError = SendError<AccountsPackage>;
+/// The PendingAccountsPackage passes an AccountsPackage from AccountsBackgroundService to
+/// AccountsHashVerifier for hashing
+pub type PendingAccountsPackage = Arc<Mutex<Option<AccountsPackage>>>;
 
 /// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
 /// SnapshotPackagerService for archiving

@@ -7,7 +7,7 @@ use {
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{AccountsPackageSender, SnapshotType},
+        snapshot_package::{PendingAccountsPackage, SnapshotType},
         snapshot_utils::{self, SnapshotError},
     },
     crossbeam_channel::{Receiver, SendError, Sender},
@@ -85,7 +85,7 @@ pub struct SnapshotRequest {
 pub struct SnapshotRequestHandler {
     pub snapshot_config: SnapshotConfig,
     pub snapshot_request_receiver: SnapshotRequestReceiver,
-    pub accounts_package_sender: AccountsPackageSender,
+    pub pending_accounts_package: PendingAccountsPackage,
 }
 
 impl SnapshotRequestHandler {
@@ -198,7 +198,7 @@ impl SnapshotRequestHandler {
                 let result = snapshot_utils::snapshot_bank(
                     &snapshot_root_bank,
                     status_cache_slot_deltas,
-                    &self.accounts_package_sender,
+                    &self.pending_accounts_package,
                     &self.snapshot_config.bank_snapshots_dir,
                     &self.snapshot_config.snapshot_archives_dir,
                     self.snapshot_config.snapshot_version,
@@ -269,7 +269,6 @@ impl SnapshotRequestHandler {
             SnapshotError::ArchiveGenerationFailure(..) => true,
             SnapshotError::StoragePathSymlinkInvalid => true,
             SnapshotError::UnpackError(..) => true,
-            SnapshotError::AccountsPackageSendError(..) => true,
             SnapshotError::IoWithSource(..) => true,
             SnapshotError::PathToFileNameError(..) => true,
             SnapshotError::FileNameToStrError(..) => true,

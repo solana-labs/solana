@@ -80,7 +80,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_package::{AccountsPackageSender, PendingSnapshotPackage},
+        snapshot_package::{PendingAccountsPackage, PendingSnapshotPackage},
         snapshot_utils,
     },
     solana_sdk::{
@@ -460,8 +460,6 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
-        let accounts_package_channel = unbounded();
-
         let accounts_update_notifier = geyser_plugin_service
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_accounts_update_notifier());
@@ -520,6 +518,7 @@ impl Validator {
             Some(poh_timing_point_sender.clone()),
         );
 
+        let pending_accounts_package = PendingAccountsPackage::default();
         let last_full_snapshot_slot = process_blockstore(
             &blockstore,
             &mut bank_forks,
@@ -528,7 +527,7 @@ impl Validator {
             transaction_status_sender.as_ref(),
             cache_block_meta_sender.as_ref(),
             config.snapshot_config.as_ref(),
-            accounts_package_channel.0.clone(),
+            Arc::clone(&pending_accounts_package),
             blockstore_root_scan,
             pruned_banks_receiver.clone(),
         );
@@ -934,7 +933,7 @@ impl Validator {
             },
             &max_slots,
             &cost_model,
-            accounts_package_channel,
+            pending_accounts_package,
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
@@ -1414,7 +1413,7 @@ fn process_blockstore(
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
+    pending_accounts_package: PendingAccountsPackage,
     blockstore_root_scan: BlockstoreRootScan,
     pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> Option<Slot> {
@@ -1426,7 +1425,7 @@ fn process_blockstore(
         transaction_status_sender,
         cache_block_meta_sender,
         snapshot_config,
-        accounts_package_sender,
+        pending_accounts_package,
         pruned_banks_receiver,
     )
     .unwrap_or_else(|err| {
