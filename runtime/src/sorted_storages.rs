@@ -27,7 +27,7 @@ impl<'a> SortedStorages<'a> {
         }
     }
 
-    /// primary method of retreiving (Slot, SnapshotStorage)
+    /// primary method of retrieving (Slot, SnapshotStorage)
     pub fn iter_range<R>(&'a self, range: R) -> SortedStoragesIter<'a>
     where
         R: RangeBounds<Slot>,
