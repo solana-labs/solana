@@ -1035,21 +1035,26 @@ impl Validator {
         drop(self.bank_forks);
         drop(self.cluster_info);
 
+        error!("join poh_service");
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
+        error!("join rpc_service");
         if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
         }
 
+        error!("join pubsub_service");
         if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
         }
 
+        error!("join rpc_completed_slots_service");
         self.rpc_completed_slots_service
             .join()
             .expect("rpc_completed_slots_service");
 
+        error!("join optimistically_confirmed_bank_tracker");
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
         {
@@ -1058,66 +1063,88 @@ impl Validator {
                 .expect("optimistically_confirmed_bank_tracker");
         }
 
+        error!("join transaction_status_service");
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service
                 .join()
                 .expect("transaction_status_service");
         }
 
+        error!("join rewards_recorder_service");
         if let Some(rewards_recorder_service) = self.rewards_recorder_service {
             rewards_recorder_service
                 .join()
                 .expect("rewards_recorder_service");
         }
 
+        error!("join cache_block_meta_service");
         if let Some(cache_block_meta_service) = self.cache_block_meta_service {
             cache_block_meta_service
                 .join()
                 .expect("cache_block_meta_service");
         }
 
+        error!("join system_monitor_service");
         if let Some(system_monitor_service) = self.system_monitor_service {
             system_monitor_service
                 .join()
                 .expect("system_monitor_service");
         }
 
+        error!("join sample_performance_service");
         if let Some(sample_performance_service) = self.sample_performance_service {
             sample_performance_service
                 .join()
                 .expect("sample_performance_service");
         }
 
+        error!("join snapshot_packager_service");
         if let Some(s) = self.snapshot_packager_service {
             s.join().expect("snapshot_packager_service");
         }
 
+        error!("join gossip_service");
         self.gossip_service.join().expect("gossip_service");
+
+        error!("join serve_repair_service");
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+
+        error!("join stats_reporter_service");
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
+
+        error!("join tpu");
         self.tpu.join().expect("tpu");
+
+        error!("join tvu");
         self.tvu.join().expect("tvu");
+
+        error!("join completed_data_sets_service");
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
+
+        error!("join ip_echo_server");
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
         }
 
+        error!("join accountsdb_repl_service");
         if let Some(accountsdb_repl_service) = self.accountsdb_repl_service {
             accountsdb_repl_service
                 .join()
                 .expect("accountsdb_repl_service");
         }
 
+        error!("join geyser_plugin_service");
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
 
+        error!("join poh_timing_report_service");
         self.poh_timing_report_service
             .join()
             .expect("poh_timing_report_service");
