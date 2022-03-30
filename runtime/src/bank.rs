@@ -13791,11 +13791,10 @@ pub(crate) mod tests {
     #[derive(Debug)]
     struct TestExecutor {}
     impl Executor for TestExecutor {
-        fn execute<'a, 'b>(
+        fn execute(
             &self,
             _first_instruction_account: usize,
-            _instruction_data: &[u8],
-            _invoke_context: &'a mut InvokeContext<'b>,
+            _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }

@@ -62,11 +62,10 @@ impl std::fmt::Debug for BuiltinProgram {
 /// Program executor
 pub trait Executor: Debug + Send + Sync {
     /// Execute the program
-    fn execute<'a, 'b>(
+    fn execute(
         &self,
         first_instruction_account: usize,
-        instruction_data: &[u8],
-        invoke_context: &'a mut InvokeContext<'b>,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError>;
 }
 
