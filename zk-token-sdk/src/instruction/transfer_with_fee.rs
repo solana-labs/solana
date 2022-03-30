@@ -37,20 +37,20 @@ const MAX_FEE_BASIS_POINTS: u64 = 10_000;
 const ONE_IN_BASIS_POINTS: u128 = MAX_FEE_BASIS_POINTS as u128;
 
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
+const TRANSFER_SOURCE_AMOUNT_BITS: usize = 64;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH: usize = 16;
+const TRANSFER_AMOUNT_LO_BITS: usize = 16;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH: usize = 16;
+const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH: usize = 32;
+const TRANSFER_AMOUNT_HI_BITS: usize = 32;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_WITH_FEE_DELTA_BIT_LENGTH: usize = 64;
+const TRANSFER_DELTA_BITS: usize = 64;
 
 #[cfg(not(target_arch = "bpf"))]
 lazy_static::lazy_static! {
-    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode(1_u64 <<
-                                                                         TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH);
+    pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode((1_u64 <<
+                                                                         TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
     pub static ref COMMITMENT_MAX_FEE_BASIS_POINTS: PedersenCommitment = Pedersen::encode(MAX_FEE_BASIS_POINTS);
 }
 
@@ -91,8 +91,11 @@ impl TransferWithFeeData {
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) =
-            split_u64(transfer_amount, TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH);
+        let (amount_lo, amount_hi) = split_u64(
+            transfer_amount,
+            TRANSFER_AMOUNT_LO_BITS,
+            TRANSFER_AMOUNT_HI_BITS,
+        )?;
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -126,7 +129,7 @@ impl TransferWithFeeData {
             - combine_lo_hi_ciphertexts(
                 &transfer_amount_lo_source,
                 &transfer_amount_hi_source,
-                TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
+                TRANSFER_AMOUNT_LO_BITS,
             );
 
         // calculate and encrypt fee
@@ -229,7 +232,7 @@ impl TransferWithFeeData {
         let amount_hi = ciphertext_hi.decrypt_u32(sk);
 
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
-            let two_power = 1 << TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH;
+            let two_power = 1 << TRANSFER_AMOUNT_LO_BITS;
             Ok(amount_lo + two_power * amount_hi)
         } else {
             Err(ProofError::Verification)
@@ -395,7 +398,7 @@ impl TransferWithFeeProof {
 
         // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
-        let range_proof = if TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH == 32 {
+        let range_proof = if TRANSFER_AMOUNT_LO_BITS == 32 {
             RangeProof::new(
                 vec![
                     source_new_balance,
@@ -405,11 +408,11 @@ impl TransferWithFeeProof {
                     MAX_FEE_BASIS_POINTS - delta_fee,
                 ],
                 vec![
-                    TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
+                    TRANSFER_SOURCE_AMOUNT_BITS,
+                    TRANSFER_AMOUNT_LO_BITS,
+                    TRANSFER_AMOUNT_HI_BITS,
+                    TRANSFER_DELTA_BITS,
+                    TRANSFER_DELTA_BITS,
                 ],
                 vec![
                     &opening_source,
@@ -422,7 +425,7 @@ impl TransferWithFeeProof {
             )
         } else {
             let transfer_amount_lo_negated =
-                (1 << TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH) - transfer_amount_lo as u64;
+                ((1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1) - transfer_amount_lo as u64;
             let opening_lo_negated = &PedersenOpening::default() - opening_lo;
 
             RangeProof::new(
@@ -435,12 +438,12 @@ impl TransferWithFeeProof {
                     MAX_FEE_BASIS_POINTS - delta_fee,
                 ],
                 vec![
-                    TRANSFER_WITH_FEE_SOURCE_AMOUNT_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_AMOUNT_LO_NEGATED_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_AMOUNT_HI_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
-                    TRANSFER_WITH_FEE_DELTA_BIT_LENGTH,
+                    TRANSFER_SOURCE_AMOUNT_BITS,
+                    TRANSFER_AMOUNT_LO_BITS,
+                    TRANSFER_AMOUNT_LO_NEGATED_BITS,
+                    TRANSFER_AMOUNT_HI_BITS,
+                    TRANSFER_DELTA_BITS,
+                    TRANSFER_DELTA_BITS,
                 ],
                 vec![
                     &opening_source,
@@ -546,7 +549,7 @@ impl TransferWithFeeProof {
         let new_source_commitment = self.new_source_commitment.try_into()?;
         let claimed_commitment_negated = &(*COMMITMENT_MAX_FEE_BASIS_POINTS) - &claimed_commitment;
 
-        if TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH == 32 {
+        if TRANSFER_AMOUNT_LO_BITS == 32 {
             range_proof.verify(
                 vec![
                     &new_source_commitment,
@@ -695,13 +698,18 @@ impl FeeParameters {
 fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> Option<(u64, u64)> {
     let numerator = (transfer_amount as u128).checked_mul(fee_rate_basis_points as u128)?;
     let mut fee = numerator.checked_div(ONE_IN_BASIS_POINTS)?;
+    let mut delta_fee = 0_u128;
+
     let remainder = numerator.checked_rem(ONE_IN_BASIS_POINTS)?;
     if remainder > 0 {
         fee = fee.checked_add(1)?;
+
+        let scaled_fee = fee.checked_mul(ONE_IN_BASIS_POINTS)?;
+        delta_fee = scaled_fee.checked_sub(numerator)?;
     }
 
     let fee = u64::try_from(fee).ok()?;
-    Some((fee as u64, remainder as u64))
+    Some((fee as u64, delta_fee as u64))
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -714,18 +722,12 @@ fn compute_delta_commitment_and_opening(
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
     let delta_commitment = fee_commitment * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_lo_hi_commitments(
-            commitment_lo,
-            commitment_hi,
-            TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
-        ) * &fee_rate_scalar);
+        - &(&combine_lo_hi_commitments(commitment_lo, commitment_hi, TRANSFER_AMOUNT_LO_BITS)
+            * &fee_rate_scalar);
 
     let opening_delta = opening_fee * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_lo_hi_openings(
-            opening_lo,
-            opening_hi,
-            TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
-        ) * &fee_rate_scalar);
+        - &(&combine_lo_hi_openings(opening_lo, opening_hi, TRANSFER_AMOUNT_LO_BITS)
+            * &fee_rate_scalar);
 
     (delta_commitment, opening_delta)
 }
@@ -740,11 +742,8 @@ fn compute_delta_commitment(
     let fee_rate_scalar = Scalar::from(fee_rate_basis_points);
 
     fee_commitment * Scalar::from(MAX_FEE_BASIS_POINTS)
-        - &(&combine_lo_hi_commitments(
-            commitment_lo,
-            commitment_hi,
-            TRANSFER_WITH_FEE_AMOUNT_LO_BIT_LENGTH,
-        ) * &fee_rate_scalar)
+        - &(&combine_lo_hi_commitments(commitment_lo, commitment_hi, TRANSFER_AMOUNT_LO_BITS)
+            * &fee_rate_scalar)
 }
 
 #[cfg(test)]
@@ -758,6 +757,54 @@ mod test {
         let auditor_pubkey = ElGamalKeypair::new_rand().public;
         let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
 
+        // Case 1: transfer 0 amount
+        let spendable_balance: u64 = 120;
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        let transfer_amount: u64 = 0;
+
+        let fee_parameters = FeeParameters {
+            fee_rate_basis_points: 400,
+            maximum_fee: 3,
+        };
+
+        let fee_data = TransferWithFeeData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&destination_pubkey, &auditor_pubkey),
+            fee_parameters,
+            &withdraw_withheld_authority_pubkey,
+        )
+        .unwrap();
+
+        assert!(fee_data.verify().is_ok());
+
+        // Case 2: transfer max amount
+        let spendable_balance: u64 = u64::max_value();
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        let transfer_amount: u64 =
+            (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
+
+        let fee_parameters = FeeParameters {
+            fee_rate_basis_points: 400,
+            maximum_fee: 3,
+        };
+
+        let fee_data = TransferWithFeeData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&destination_pubkey, &auditor_pubkey),
+            fee_parameters,
+            &withdraw_withheld_authority_pubkey,
+        )
+        .unwrap();
+
+        assert!(fee_data.verify().is_ok());
+
+        // Case 3: general success case
         let spendable_balance: u64 = 120;
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
@@ -779,5 +826,27 @@ mod test {
         .unwrap();
 
         assert!(fee_data.verify().is_ok());
+
+        // Case 4: transfer amount too big
+        let spendable_balance: u64 = u64::max_value();
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        let transfer_amount: u64 = 1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS);
+
+        let fee_parameters = FeeParameters {
+            fee_rate_basis_points: 400,
+            maximum_fee: 3,
+        };
+
+        let fee_data = TransferWithFeeData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&destination_pubkey, &auditor_pubkey),
+            fee_parameters,
+            &withdraw_withheld_authority_pubkey,
+        );
+
+        assert!(fee_data.is_err());
     }
 }

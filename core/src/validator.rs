@@ -8,6 +8,7 @@ use {
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
@@ -44,7 +45,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
-    solana_metrics::datapoint_info,
+    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
     solana_poh::{
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
@@ -162,7 +163,6 @@ pub struct ValidatorConfig {
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
-    pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
@@ -223,7 +223,6 @@ impl Default for ValidatorConfig {
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
-            accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
@@ -325,6 +324,7 @@ pub struct Validator {
     cache_block_meta_service: Option<CacheBlockMetaService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
+    poh_timing_report_service: PohTimingReportService,
     stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
@@ -484,6 +484,10 @@ impl Validator {
             !config.no_os_network_stats_reporting,
         ));
 
+        let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
+        let poh_timing_report_service =
+            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
+
         let (
             genesis_config,
             mut bank_forks,
@@ -510,6 +514,7 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
+            Some(poh_timing_point_sender.clone()),
         );
 
         let last_full_snapshot_slot = process_blockstore(
@@ -527,7 +532,6 @@ impl Validator {
             last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
 
         maybe_warp_slot(config, ledger_path, &mut bank_forks, &leader_schedule_cache);
-
         let tower = {
             let restored_tower = Tower::restore(config.tower_storage.as_ref(), &id);
             if let Ok(tower) = &restored_tower {
@@ -655,6 +659,7 @@ impl Validator {
             blockstore.new_shreds_signals.first().cloned(),
             &leader_schedule_cache,
             &poh_config,
+            Some(poh_timing_point_sender),
             exit.clone(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
@@ -915,7 +920,6 @@ impl Validator {
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
                 test_hash_calculation: config.accounts_db_test_hash_calculation,
-                use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
@@ -976,6 +980,7 @@ impl Validator {
             cache_block_meta_service,
             system_monitor_service,
             sample_performance_service,
+            poh_timing_report_service,
             snapshot_packager_service,
             completed_data_sets_service,
             tpu,
@@ -1112,6 +1117,10 @@ impl Validator {
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
+
+        self.poh_timing_report_service
+            .join()
+            .expect("poh_timing_report_service");
     }
 }
 
@@ -1250,6 +1259,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
+    poh_timing_point_sender: Option<PohTimingSender>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1298,11 +1308,13 @@ fn load_blockstore(
         BlockstoreOptions {
             recovery_mode: config.wal_recovery_mode.clone(),
             column_options: config.ledger_column_options.clone(),
+            enforce_ulimit_nofile: config.enforce_ulimit_nofile,
             ..BlockstoreOptions::default()
         },
     )
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
+    blockstore.shred_timing_point_sender = poh_timing_point_sender;
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
@@ -1331,7 +1343,7 @@ fn load_blockstore(
                 blockstore.clone(),
                 exit,
                 enable_rpc_transaction_history,
-                config.rpc_config.enable_cpi_and_log_storage,
+                config.rpc_config.enable_extended_tx_metadata_storage,
                 transaction_notifier,
             )
         } else {
@@ -1538,7 +1550,7 @@ fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
     enable_rpc_transaction_history: bool,
-    enable_cpi_and_log_storage: bool,
+    enable_extended_tx_metadata_storage: bool,
     transaction_notifier: Option<TransactionNotifierLock>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
@@ -1552,7 +1564,7 @@ fn initialize_rpc_transaction_history_services(
         enable_rpc_transaction_history,
         transaction_notifier.clone(),
         blockstore.clone(),
-        enable_cpi_and_log_storage,
+        enable_extended_tx_metadata_storage,
         exit,
     ));
 
@@ -1799,7 +1811,6 @@ mod tests {
         std::fs::remove_dir_all,
     };
 
-    #[test]
     fn validator_exit() {
         solana_logger::setup();
         let leader_keypair = Keypair::new();
@@ -1879,7 +1890,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -1925,6 +1935,12 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_validator_exit() {
+        validator_exit();
+        validator_parallel_exit();
     }
 
     #[test]

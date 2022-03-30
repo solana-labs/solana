@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
     solana_metrics::inc_new_counter_debug,
@@ -237,6 +238,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             post_token_balances: None,
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
+            return_data: None,
         }
     }
 }
@@ -360,6 +362,27 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
     }
 }
 
+pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
+
+#[derive(Debug)]
+pub struct LedgerStorageConfig {
+    pub read_only: bool,
+    pub timeout: Option<std::time::Duration>,
+    pub credential_path: Option<String>,
+    pub instance_name: String,
+}
+
+impl Default for LedgerStorageConfig {
+    fn default() -> Self {
+        Self {
+            read_only: true,
+            timeout: None,
+            credential_path: None,
+            instance_name: DEFAULT_INSTANCE_NAME.to_string(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct LedgerStorage {
     connection: bigtable::BigTableConnection,
@@ -371,9 +394,29 @@ impl LedgerStorage {
         timeout: Option<std::time::Duration>,
         credential_path: Option<String>,
     ) -> Result<Self> {
-        let connection =
-            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout, credential_path)
-                .await?;
+        Self::new_with_config(LedgerStorageConfig {
+            read_only,
+            timeout,
+            credential_path,
+            ..LedgerStorageConfig::default()
+        })
+        .await
+    }
+
+    pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
+        let LedgerStorageConfig {
+            read_only,
+            timeout,
+            credential_path,
+            instance_name,
+        } = config;
+        let connection = bigtable::BigTableConnection::new(
+            instance_name.as_str(),
+            read_only,
+            timeout,
+            credential_path,
+        )
+        .await?;
         Ok(Self { connection })
     }
 
@@ -410,6 +453,36 @@ impl LedgerStorage {
             )
             .await?;
         Ok(blocks.into_iter().filter_map(|s| key_to_slot(&s)).collect())
+    }
+
+    // Fetches and gets a vector of confirmed blocks via a multirow fetch
+    pub async fn get_confirmed_blocks_with_data<'a>(
+        &self,
+        slots: &'a [Slot],
+    ) -> Result<impl Iterator<Item = (Slot, ConfirmedBlock)> + 'a> {
+        debug!(
+            "LedgerStorage::get_confirmed_blocks_with_data request received: {:?}",
+            slots
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+        let row_keys = slots.iter().copied().map(slot_to_blocks_key);
+        let data = bigtable
+            .get_protobuf_or_bincode_cells("blocks", row_keys)
+            .await?
+            .filter_map(
+                |(row_key, block_cell_data): (
+                    RowKey,
+                    bigtable::CellData<StoredConfirmedBlock, generated::ConfirmedBlock>,
+                )| {
+                    let block = match block_cell_data {
+                        bigtable::CellData::Bincode(block) => block.into(),
+                        bigtable::CellData::Protobuf(block) => block.try_into().ok()?,
+                    };
+                    Some((key_to_slot(&row_key).unwrap(), block))
+                },
+            );
+        Ok(data)
     }
 
     /// Fetch the confirmed block from the desired slot

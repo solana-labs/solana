@@ -25,57 +25,18 @@ use {
 };
 
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_SOURCE_AMOUNT_BIT_LENGTH: usize = 64;
+const TRANSFER_SOURCE_AMOUNT_BITS: usize = 64;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_AMOUNT_LO_BIT_LENGTH: usize = 16;
+const TRANSFER_AMOUNT_LO_BITS: usize = 16;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH: usize = 16;
+const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
 #[cfg(not(target_arch = "bpf"))]
-const TRANSFER_AMOUNT_HI_BIT_LENGTH: usize = 32;
+const TRANSFER_AMOUNT_HI_BITS: usize = 32;
 
 #[cfg(not(target_arch = "bpf"))]
 lazy_static::lazy_static! {
     pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode((1_u64 <<
-                                                                         TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH) - 1);
-}
-
-#[derive(Clone)]
-#[repr(C)]
-#[cfg(not(target_arch = "bpf"))]
-pub struct TransferAmountEncryption {
-    pub commitment: PedersenCommitment,
-    pub source_handle: DecryptHandle,
-    pub destination_handle: DecryptHandle,
-    pub auditor_handle: DecryptHandle,
-}
-
-#[cfg(not(target_arch = "bpf"))]
-impl TransferAmountEncryption {
-    pub fn new(
-        amount: u64,
-        source_pubkey: &ElGamalPubkey,
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
-    ) -> (Self, PedersenOpening) {
-        let (commitment, opening) = Pedersen::new(amount);
-        let transfer_amount_encryption = Self {
-            commitment,
-            source_handle: source_pubkey.decrypt_handle(&opening),
-            destination_handle: destination_pubkey.decrypt_handle(&opening),
-            auditor_handle: auditor_pubkey.decrypt_handle(&opening),
-        };
-
-        (transfer_amount_encryption, opening)
-    }
-
-    pub fn to_pod(&self) -> pod::TransferAmountEncryption {
-        pod::TransferAmountEncryption {
-            commitment: self.commitment.into(),
-            source_handle: self.source_handle.into(),
-            destination_handle: self.destination_handle.into(),
-            auditor_handle: self.auditor_handle.into(),
-        }
-    }
+                                                                         TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -107,7 +68,11 @@ impl TransferData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BIT_LENGTH);
+        let (amount_lo, amount_hi) = split_u64(
+            transfer_amount,
+            TRANSFER_AMOUNT_LO_BITS,
+            TRANSFER_AMOUNT_HI_BITS,
+        )?;
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -142,7 +107,7 @@ impl TransferData {
             - combine_lo_hi_ciphertexts(
                 &transfer_amount_lo_source,
                 &transfer_amount_hi_source,
-                TRANSFER_AMOUNT_LO_BIT_LENGTH,
+                TRANSFER_AMOUNT_LO_BITS,
             );
 
         // generate transcript and append all public inputs
@@ -222,7 +187,7 @@ impl TransferData {
         let amount_hi = ciphertext_hi.decrypt_u32(sk);
 
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
-            let two_power = 1 << TRANSFER_AMOUNT_LO_BIT_LENGTH;
+            let two_power = 1 << TRANSFER_AMOUNT_LO_BITS;
             Ok(amount_lo + two_power * amount_hi)
         } else {
             Err(ProofError::Decryption)
@@ -336,7 +301,7 @@ impl TransferProof {
         );
 
         // generate the range proof
-        let range_proof = if TRANSFER_AMOUNT_LO_BIT_LENGTH == 32 {
+        let range_proof = if TRANSFER_AMOUNT_LO_BITS == 32 {
             RangeProof::new(
                 vec![
                     source_new_balance,
@@ -344,16 +309,16 @@ impl TransferProof {
                     transfer_amount_hi as u64,
                 ],
                 vec![
-                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
-                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
-                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                    TRANSFER_SOURCE_AMOUNT_BITS,
+                    TRANSFER_AMOUNT_LO_BITS,
+                    TRANSFER_AMOUNT_HI_BITS,
                 ],
                 vec![&source_opening, opening_lo, opening_hi],
                 transcript,
             )
         } else {
             let transfer_amount_lo_negated =
-                (1 << TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH) - 1 - transfer_amount_lo as u64;
+                (1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1 - transfer_amount_lo as u64;
             let opening_lo_negated = &PedersenOpening::default() - opening_lo;
 
             RangeProof::new(
@@ -364,10 +329,10 @@ impl TransferProof {
                     transfer_amount_hi as u64,
                 ],
                 vec![
-                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
-                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
-                    TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH,
-                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                    TRANSFER_SOURCE_AMOUNT_BITS,
+                    TRANSFER_AMOUNT_LO_BITS,
+                    TRANSFER_AMOUNT_LO_NEGATED_BITS,
+                    TRANSFER_AMOUNT_HI_BITS,
                 ],
                 vec![&source_opening, opening_lo, &opening_lo_negated, opening_hi],
                 transcript,
@@ -424,7 +389,7 @@ impl TransferProof {
 
         // verify range proof
         let new_source_commitment = self.new_source_commitment.try_into()?;
-        if TRANSFER_AMOUNT_LO_BIT_LENGTH == 32 {
+        if TRANSFER_AMOUNT_LO_BITS == 32 {
             range_proof.verify(
                 vec![
                     &new_source_commitment,
@@ -432,9 +397,9 @@ impl TransferProof {
                     &ciphertext_hi.commitment,
                 ],
                 vec![
-                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
-                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
-                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                    TRANSFER_SOURCE_AMOUNT_BITS,
+                    TRANSFER_AMOUNT_LO_BITS,
+                    TRANSFER_AMOUNT_HI_BITS,
                 ],
                 transcript,
             )?;
@@ -449,10 +414,10 @@ impl TransferProof {
                     &ciphertext_hi.commitment,
                 ],
                 vec![
-                    TRANSFER_SOURCE_AMOUNT_BIT_LENGTH,
-                    TRANSFER_AMOUNT_LO_BIT_LENGTH,
-                    TRANSFER_AMOUNT_LO_NEGATED_BIT_LENGTH,
-                    TRANSFER_AMOUNT_HI_BIT_LENGTH,
+                    TRANSFER_SOURCE_AMOUNT_BITS,
+                    TRANSFER_AMOUNT_LO_BITS,
+                    TRANSFER_AMOUNT_LO_NEGATED_BITS,
+                    TRANSFER_AMOUNT_HI_BITS,
                 ],
                 transcript,
             )?;
@@ -502,6 +467,45 @@ impl TransferPubkeys {
     }
 }
 
+#[derive(Clone)]
+#[repr(C)]
+#[cfg(not(target_arch = "bpf"))]
+pub struct TransferAmountEncryption {
+    pub commitment: PedersenCommitment,
+    pub source_handle: DecryptHandle,
+    pub destination_handle: DecryptHandle,
+    pub auditor_handle: DecryptHandle,
+}
+
+#[cfg(not(target_arch = "bpf"))]
+impl TransferAmountEncryption {
+    pub fn new(
+        amount: u64,
+        source_pubkey: &ElGamalPubkey,
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+    ) -> (Self, PedersenOpening) {
+        let (commitment, opening) = Pedersen::new(amount);
+        let transfer_amount_encryption = Self {
+            commitment,
+            source_handle: source_pubkey.decrypt_handle(&opening),
+            destination_handle: destination_pubkey.decrypt_handle(&opening),
+            auditor_handle: auditor_pubkey.decrypt_handle(&opening),
+        };
+
+        (transfer_amount_encryption, opening)
+    }
+
+    pub fn to_pod(&self) -> pod::TransferAmountEncryption {
+        pod::TransferAmountEncryption {
+            commitment: self.commitment.into(),
+            source_handle: self.source_handle.into(),
+            destination_handle: self.destination_handle.into(),
+            auditor_handle: self.auditor_handle.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use {super::*, crate::encryption::elgamal::ElGamalKeypair};
@@ -512,6 +516,8 @@ mod test {
         let source_keypair = ElGamalKeypair::new_rand();
         let dest_pk = ElGamalKeypair::new_rand().public;
         let auditor_pk = ElGamalKeypair::new_rand().public;
+
+        // Case 1: transfer 0 amount
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 0;
@@ -531,6 +537,29 @@ mod test {
 
         assert!(transfer_data.verify().is_ok());
 
+        // Case 2: transfer max amount
+
+        // create source account spendable ciphertext
+        let spendable_balance: u64 = u64::max_value();
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        // transfer amount
+        let transfer_amount: u64 =
+            (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
+
+        // create transfer data
+        let transfer_data = TransferData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&dest_pk, &auditor_pk),
+        )
+        .unwrap();
+
+        assert!(transfer_data.verify().is_ok());
+
+        // Case 3: general success case
+
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
@@ -548,6 +577,25 @@ mod test {
         .unwrap();
 
         assert!(transfer_data.verify().is_ok());
+
+        // Case 4: transfer amount too big
+
+        // create source account spendable ciphertext
+        let spendable_balance: u64 = u64::max_value();
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        // transfer amount
+        let transfer_amount: u64 = 1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS);
+
+        // create transfer data
+        let transfer_data = TransferData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&dest_pk, &auditor_pk),
+        );
+
+        assert!(transfer_data.is_err());
     }
 
     #[test]

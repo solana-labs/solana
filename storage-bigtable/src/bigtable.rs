@@ -680,6 +680,31 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         deserialize_protobuf_or_bincode_cell_data(&row_data, table, key)
     }
 
+    pub async fn get_protobuf_or_bincode_cells<'a, B, P>(
+        &mut self,
+        table: &'a str,
+        row_keys: impl IntoIterator<Item = RowKey>,
+    ) -> Result<impl Iterator<Item = (RowKey, CellData<B, P>)> + 'a>
+    where
+        B: serde::de::DeserializeOwned,
+        P: prost::Message + Default,
+    {
+        Ok(self
+            .get_multi_row_data(
+                table,
+                row_keys.into_iter().collect::<Vec<RowKey>>().as_slice(),
+            )
+            .await?
+            .into_iter()
+            .map(|(key, row_data)| {
+                let key_str = key.to_string();
+                (
+                    key,
+                    deserialize_protobuf_or_bincode_cell_data(&row_data, table, key_str).unwrap(),
+                )
+            }))
+    }
+
     pub async fn put_bincode_cells<T>(
         &mut self,
         table: &str,
@@ -792,7 +817,7 @@ mod tests {
         prost::Message,
         solana_sdk::{
             hash::Hash, message::v0::LoadedAddresses, signature::Keypair, system_transaction,
-            transaction::VersionedTransaction,
+            transaction::VersionedTransaction, transaction_context::TransactionReturnData,
         },
         solana_storage_proto::convert::generated,
         solana_transaction_status::{
@@ -842,6 +867,7 @@ mod tests {
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
+                return_data: Some(TransactionReturnData::default()),
             },
         });
         let expected_block = ConfirmedBlock {
@@ -899,6 +925,7 @@ mod tests {
                 meta.pre_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.post_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.rewards = None; // Legacy bincode implementation does not support rewards
+                meta.return_data = None; // Legacy bincode implementation does not support return data
             }
             assert_eq!(block, bincode_block.into());
         } else {

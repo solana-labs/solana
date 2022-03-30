@@ -1,5 +1,6 @@
 use {
     crate::{
+        accounts::Accounts,
         accounts_db::SnapshotStorages,
         bank::{Bank, BankSlotDelta},
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
@@ -39,14 +40,15 @@ pub struct AccountsPackage {
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub snapshot_storages: SnapshotStorages,
-    pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
+    pub accounts_hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_archives_dir: PathBuf,
     pub expected_capitalization: u64,
-    pub hash_for_testing: Option<Hash>,
+    pub accounts_hash_for_testing: Option<Hash>,
     pub cluster_type: ClusterType,
     pub snapshot_type: Option<SnapshotType>,
+    pub accounts: Arc<Accounts>,
 }
 
 impl AccountsPackage {
@@ -61,7 +63,7 @@ impl AccountsPackage {
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
-        hash_for_testing: Option<Hash>,
+        accounts_hash_for_testing: Option<Hash>,
         snapshot_type: Option<SnapshotType>,
     ) -> Result<Self> {
         info!(
@@ -78,12 +80,6 @@ impl AccountsPackage {
                 bank.slot() > incremental_snapshot_base_slot,
                 "Incremental snapshot base slot must be less than the bank being snapshotted!"
             );
-            assert!(
-            snapshot_storages.iter().all(|storage| storage
-                .iter()
-                .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
-            "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
-            );
         }
 
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
@@ -95,9 +91,11 @@ impl AccountsPackage {
                 .path()
                 .join(bank_snapshot_info.slot.to_string());
             fs::create_dir_all(&snapshot_hardlink_dir)?;
+            let file_name =
+                snapshot_utils::path_to_file_name_str(&bank_snapshot_info.snapshot_path)?;
             fs::hard_link(
                 &bank_snapshot_info.snapshot_path,
-                &snapshot_hardlink_dir.join(bank_snapshot_info.slot.to_string()),
+                &snapshot_hardlink_dir.join(file_name),
             )?;
         }
 
@@ -107,14 +105,15 @@ impl AccountsPackage {
             slot_deltas,
             snapshot_links,
             snapshot_storages,
-            hash: bank.get_accounts_hash(),
+            accounts_hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
             snapshot_archives_dir: snapshot_archives_dir.as_ref().to_path_buf(),
             expected_capitalization: bank.capitalization(),
-            hash_for_testing,
+            accounts_hash_for_testing,
             cluster_type: bank.cluster_type(),
             snapshot_type,
+            accounts: bank.accounts(),
         })
     }
 }
@@ -136,19 +135,32 @@ impl From<AccountsPackage> for SnapshotPackage {
             "Cannot make a SnapshotPackage from an AccountsPackage when SnapshotType is None!"
         );
 
+        let mut snapshot_storages = accounts_package.snapshot_storages;
         let snapshot_archive_path = match accounts_package.snapshot_type.unwrap() {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 accounts_package.snapshot_archives_dir,
                 accounts_package.slot,
-                &accounts_package.hash,
+                &accounts_package.accounts_hash,
                 accounts_package.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+                snapshot_storages.retain(|storages| {
+                    storages
+                        .first() // storages are grouped by slot in the outer Vec, so all storages will have the same slot as the first
+                        .map(|storage| storage.slot() > incremental_snapshot_base_slot)
+                        .unwrap_or_default()
+                });
+                assert!(
+                    snapshot_storages.iter().all(|storage| storage
+                        .iter()
+                        .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
+                    "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
+                    );
                 snapshot_utils::build_incremental_snapshot_archive_path(
                     accounts_package.snapshot_archives_dir,
                     incremental_snapshot_base_slot,
                     accounts_package.slot,
-                    &accounts_package.hash,
+                    &accounts_package.accounts_hash,
                     accounts_package.archive_format,
                 )
             }
@@ -158,13 +170,13 @@ impl From<AccountsPackage> for SnapshotPackage {
             snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,
                 slot: accounts_package.slot,
-                hash: accounts_package.hash,
+                hash: accounts_package.accounts_hash,
                 archive_format: accounts_package.archive_format,
             },
             block_height: accounts_package.block_height,
             slot_deltas: accounts_package.slot_deltas,
             snapshot_links: accounts_package.snapshot_links,
-            snapshot_storages: accounts_package.snapshot_storages,
+            snapshot_storages,
             snapshot_version: accounts_package.snapshot_version,
             snapshot_type: accounts_package.snapshot_type.unwrap(),
         }

@@ -1,14 +1,19 @@
 use {
+    assert_matches::assert_matches,
+    solana_banks_client::BanksClientError,
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         account_info::{next_account_info, AccountInfo},
+        commitment_config::CommitmentLevel,
         entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction},
         msg,
         program::{get_return_data, invoke, set_return_data},
+        program_error::ProgramError,
         pubkey::Pubkey,
         signature::Signer,
         transaction::Transaction,
+        transaction_context::TransactionReturnData,
     },
     std::str::from_utf8,
 };
@@ -84,4 +89,56 @@ async fn return_data() {
         .process_transaction(transaction)
         .await
         .unwrap();
+}
+
+// Process instruction to echo input back to another program
+#[allow(clippy::unnecessary_wraps)]
+fn error_set_return_data_process_instruction(
+    _program_id: &Pubkey,
+    _accounts: &[AccountInfo],
+    input: &[u8],
+) -> ProgramResult {
+    set_return_data(input);
+    Err(ProgramError::InvalidInstructionData)
+}
+
+#[tokio::test]
+async fn simulation_return_data() {
+    let error_set_return_data_program_id = Pubkey::new_unique();
+    let program_test = ProgramTest::new(
+        "error_set_return_data",
+        error_set_return_data_program_id,
+        processor!(error_set_return_data_process_instruction),
+    );
+
+    let mut context = program_test.start_with_context().await;
+    let expected_data = vec![240, 159, 166, 150];
+    let instructions = vec![Instruction {
+        program_id: error_set_return_data_program_id,
+        accounts: vec![],
+        data: expected_data.clone(),
+    }];
+
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&context.payer.pubkey()),
+        &[&context.payer],
+        context.last_blockhash,
+    );
+
+    let error = context
+        .banks_client
+        .process_transaction_with_preflight_and_commitment(transaction, CommitmentLevel::Confirmed)
+        .await
+        .unwrap_err();
+    assert_matches!(
+        error,
+        BanksClientError::SimulationError {
+            return_data: Some(TransactionReturnData {
+                program_id,
+                data,
+            }),
+            ..
+        } if program_id == error_set_return_data_program_id && data == expected_data
+    );
 }

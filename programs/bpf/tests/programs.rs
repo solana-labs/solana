@@ -323,6 +323,7 @@ fn process_transaction_and_record_inner(
             false,
             true,
             false,
+            false,
             &mut ExecuteTimings::default(),
         )
         .0;
@@ -364,6 +365,7 @@ fn execute_transactions(
         true,
         true,
         true,
+        true,
         &mut timings,
     );
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -392,6 +394,7 @@ fn execute_transactions(
                         log_messages,
                         inner_instructions,
                         durable_nonce_fee,
+                        return_data,
                     } = details;
 
                     let lamports_per_signature = match durable_nonce_fee {
@@ -432,6 +435,7 @@ fn execute_transactions(
                         log_messages,
                         rewards: None,
                         loaded_addresses: LoadedAddresses::default(),
+                        return_data,
                     };
 
                     Ok(ConfirmedTransactionWithStatusMeta {
@@ -1424,7 +1428,7 @@ fn assert_instruction_count() {
             ("sanity", 2378),
             ("sanity++", 2278),
             ("secp256k1_recover", 25383),
-            ("sha", 1895),
+            ("sha", 1355),
             ("struct_pass", 108),
             ("struct_ret", 122),
         ]);
@@ -1444,9 +1448,9 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_noop", 315),
             ("solana_bpf_rust_param_passing", 146),
             ("solana_bpf_rust_rand", 418),
-            ("solana_bpf_rust_sanity", 9128),
+            ("solana_bpf_rust_sanity", 52170),
             ("solana_bpf_rust_secp256k1_recover", 25707),
-            ("solana_bpf_rust_sha", 27033),
+            ("solana_bpf_rust_sha", 25338),
         ]);
     }
 

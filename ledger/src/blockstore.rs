@@ -5,9 +5,8 @@ use {
     crate::{
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
-            columns as cf, AccessType, BlockstoreOptions, Column, ColumnName, Database,
-            IteratorDirection, IteratorMode, LedgerColumn, LedgerColumnOptions, Result,
-            ShredStorageType, WriteBatch,
+            columns as cf, AccessType, BlockstoreOptions, Column, Database, IteratorDirection,
+            IteratorMode, LedgerColumn, LedgerColumnOptions, Result, ShredStorageType, WriteBatch,
         },
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
@@ -16,6 +15,7 @@ use {
             max_ticks_per_n_shreds, ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType,
             Shredder, SHRED_PAYLOAD_SIZE,
         },
+        slot_stats::{ShredSource, SlotsStats},
     },
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
@@ -27,7 +27,10 @@ use {
     rocksdb::DBRawIterator,
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_debug, datapoint_error},
+    solana_metrics::{
+        datapoint_debug, datapoint_error,
+        poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
+    },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
@@ -50,7 +53,7 @@ use {
         borrow::Cow,
         cell::RefCell,
         cmp,
-        collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
+        collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap, HashSet},
         convert::TryInto,
         fs,
         io::{Error as IoError, ErrorKind},
@@ -60,7 +63,6 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
-        time::Instant,
     },
     tempfile::{Builder, TempDir},
     thiserror::Error,
@@ -75,7 +77,6 @@ pub mod blockstore_purge;
 
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
-pub const BLOCKSTORE_METRICS_ERROR: i64 = -1;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -175,30 +176,10 @@ pub struct Blockstore {
     insert_shreds_lock: Mutex<()>,
     pub new_shreds_signals: Vec<Sender<bool>>,
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
+    pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
     slots_stats: Mutex<SlotsStats>,
-    column_options: LedgerColumnOptions,
-}
-
-struct SlotsStats {
-    last_cleanup_ts: Instant,
-    stats: BTreeMap<Slot, SlotStats>,
-}
-
-impl Default for SlotsStats {
-    fn default() -> Self {
-        SlotsStats {
-            last_cleanup_ts: Instant::now(),
-            stats: BTreeMap::new(),
-        }
-    }
-}
-
-#[derive(Default)]
-struct SlotStats {
-    num_repaired: usize,
-    num_recovered: usize,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -221,13 +202,6 @@ pub struct SlotMetaWorkingSetEntry {
     /// True only if at least one shred for this SlotMeta was inserted since
     /// this struct was created.
     did_insert_occur: bool,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-enum ShredSource {
-    Turbine,
-    Repaired,
-    Recovered,
 }
 
 #[derive(Default)]
@@ -256,101 +230,6 @@ pub struct BlockstoreInsertionMetrics {
     num_coding_shreds_invalid: usize,
     num_coding_shreds_invalid_erasure_config: usize,
     num_coding_shreds_inserted: usize,
-}
-
-#[derive(Default)]
-/// A metrics struct that exposes RocksDB's column family properties.
-///
-/// Here we only expose a subset of all the internal properties which are
-/// relevant to the ledger store performance.
-///
-/// The list of completed RocksDB internal properties can be found
-/// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-pub struct BlockstoreRocksDbColumnFamilyMetrics {
-    // Size related
-
-    // The storage size occupied by the column family.
-    // RocksDB's internal property key: "rocksdb.total-sst-files-size"
-    pub total_sst_files_size: i64,
-    // The memory size occupied by the column family's in-memory buffer.
-    // RocksDB's internal property key: "rocksdb.size-all-mem-tables"
-    pub size_all_mem_tables: i64,
-
-    // Snapshot related
-
-    // Number of snapshots hold for the column family.
-    // RocksDB's internal property key: "rocksdb.num-snapshots"
-    pub num_snapshots: i64,
-    // Unit timestamp of the oldest unreleased snapshot.
-    // RocksDB's internal property key: "rocksdb.oldest-snapshot-time"
-    pub oldest_snapshot_time: i64,
-
-    // Write related
-
-    // The current actual delayed write rate. 0 means no delay.
-    // RocksDB's internal property key: "rocksdb.actual-delayed-write-rate"
-    pub actual_delayed_write_rate: i64,
-    // A flag indicating whether writes are stopped on this column family.
-    // 1 indicates writes have been stopped.
-    // RocksDB's internal property key: "rocksdb.is-write-stopped"
-    pub is_write_stopped: i64,
-
-    // Memory / block cache related
-
-    // The block cache capacity of the column family.
-    // RocksDB's internal property key: "rocksdb.block-cache-capacity"
-    pub block_cache_capacity: i64,
-    // The memory size used by the column family in the block cache.
-    // RocksDB's internal property key: "rocksdb.block-cache-usage"
-    pub block_cache_usage: i64,
-    // The memory size used by the column family in the block cache where
-    // entries are pinned.
-    // RocksDB's internal property key: "rocksdb.block-cache-pinned-usage"
-    pub block_cache_pinned_usage: i64,
-
-    // The estimated memory size used for reading SST tables in this column
-    // family such as filters and index blocks. Note that this number does not
-    // include the memory used in block cache.
-    // RocksDB's internal property key: "rocksdb.estimate-table-readers-mem"
-    pub estimate_table_readers_mem: i64,
-
-    // Flush and compaction
-
-    // A 1 or 0 flag indicating whether a memtable flush is pending.
-    // If this number is 1, it means a memtable is waiting for being flushed,
-    // but there might be too many L0 files that prevents it from being flushed.
-    // RocksDB's internal property key: "rocksdb.mem-table-flush-pending"
-    pub mem_table_flush_pending: i64,
-
-    // A 1 or 0 flag indicating whether a compaction job is pending.
-    // If this number is 1, it means some part of the column family requires
-    // compaction in order to maintain shape of LSM tree, but the compaction
-    // is pending because the desired compaction job is either waiting for
-    // other dependnent compactions to be finished or waiting for an available
-    // compaction thread.
-    // RocksDB's internal property key: "rocksdb.compaction-pending"
-    pub compaction_pending: i64,
-
-    // The number of compactions that are currently running for the column family.
-    // RocksDB's internal property key: "rocksdb.num-running-compactions"
-    pub num_running_compactions: i64,
-
-    // The number of flushes that are currently running for the column family.
-    // RocksDB's internal property key: "rocksdb.num-running-flushes"
-    pub num_running_flushes: i64,
-
-    // FIFO Compaction related
-
-    // returns an estimation of the oldest key timestamp in the DB. Only vailable
-    // for FIFO compaction with compaction_options_fifo.allow_compaction = false.
-    // RocksDB's internal property key: "rocksdb.estimate-oldest-key-time"
-    pub estimate_oldest_key_time: i64,
-
-    // Misc
-
-    // The accumulated number of RocksDB background errors.
-    // RocksDB's internal property key: "rocksdb.background-errors"
-    pub background_errors: i64,
 }
 
 impl SlotMetaWorkingSetEntry {
@@ -448,97 +327,6 @@ impl BlockstoreInsertionMetrics {
     }
 }
 
-impl BlockstoreRocksDbColumnFamilyMetrics {
-    /// Report metrics with the specified metric name and column family tag.
-    /// The metric name and the column family tag is embeded in the parameter
-    /// `metric_name_and_cf_tag` with the following format.
-    ///
-    /// For example, "blockstore_rocksdb_cfs,cf_name=shred_data".
-    pub fn report_metrics(&self, metric_name_and_cf_tag: &'static str) {
-        datapoint_info!(
-            metric_name_and_cf_tag,
-            // Size related
-            (
-                "total_sst_files_size",
-                self.total_sst_files_size as i64,
-                i64
-            ),
-            ("size_all_mem_tables", self.size_all_mem_tables as i64, i64),
-            // Snapshot related
-            ("num_snapshots", self.num_snapshots as i64, i64),
-            (
-                "oldest_snapshot_time",
-                self.oldest_snapshot_time as i64,
-                i64
-            ),
-            // Write related
-            (
-                "actual_delayed_write_rate",
-                self.actual_delayed_write_rate as i64,
-                i64
-            ),
-            ("is_write_stopped", self.is_write_stopped as i64, i64),
-            // Memory / block cache related
-            (
-                "block_cache_capacity",
-                self.block_cache_capacity as i64,
-                i64
-            ),
-            ("block_cache_usage", self.block_cache_usage as i64, i64),
-            (
-                "block_cache_pinned_usage",
-                self.block_cache_pinned_usage as i64,
-                i64
-            ),
-            (
-                "estimate_table_readers_mem",
-                self.estimate_table_readers_mem as i64,
-                i64
-            ),
-            // Flush and compaction
-            (
-                "mem_table_flush_pending",
-                self.mem_table_flush_pending as i64,
-                i64
-            ),
-            ("compaction_pending", self.compaction_pending as i64, i64),
-            (
-                "num_running_compactions",
-                self.num_running_compactions as i64,
-                i64
-            ),
-            ("num_running_flushes", self.num_running_flushes as i64, i64),
-            // FIFO Compaction related
-            (
-                "estimate_oldest_key_time",
-                self.estimate_oldest_key_time as i64,
-                i64
-            ),
-            // Misc
-            ("background_errors", self.background_errors as i64, i64),
-        );
-    }
-}
-
-macro_rules! rocksdb_metric_header {
-    ($metric_name:literal, $cf_name:literal, $column_options:expr) => {
-        match $column_options.shred_storage_type {
-            ShredStorageType::RocksLevel =>
-                rocksdb_metric_header!(@all_fields $metric_name, $cf_name, "rocks_level"),
-            ShredStorageType::RocksFifo(_) =>
-                rocksdb_metric_header!(@all_fields $metric_name, $cf_name, "rocks_fifo"),
-        }
-    };
-
-    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal) => {
-        concat!($metric_name,
-            ",cf_name=", $cf_name,
-            ",storage=", $storage_type,
-        )
-    };
-}
-use rocksdb_metric_header;
-
 impl Blockstore {
     pub fn db(self) -> Arc<Database> {
         self.db
@@ -571,7 +359,6 @@ impl Blockstore {
         let blockstore_path = ledger_path.join(Self::blockstore_directory(
             &options.column_options.shred_storage_type,
         ));
-        let column_options = options.column_options.clone();
 
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
@@ -659,12 +446,12 @@ impl Blockstore {
             bank_hash_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
+            shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             no_compaction: false,
             slots_stats: Mutex::<SlotsStats>::default(),
-            column_options,
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -961,162 +748,24 @@ impl Blockstore {
     /// Collects and reports [`BlockstoreRocksDbColumnFamilyMetrics`] for the
     /// all the column families.
     pub fn submit_rocksdb_cf_metrics_for_all_cfs(&self) {
-        let column_options = &self.column_options;
-        self.submit_rocksdb_cf_metrics::<cf::SlotMeta>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "slot_meta",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::DeadSlots>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "dead_slots",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::DuplicateSlots>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "duplicate_slots",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::ErasureMeta>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "erasure_meta",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::Orphans>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "orphans",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::BankHash>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "bank_hash",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::Root>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "root",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::Index>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "index",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::ShredData>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "shred_data",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::ShredCode>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "shred_code",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::TransactionStatus>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "transaction_status",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::AddressSignatures>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "address_signature",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::TransactionMemos>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "transaction_memos",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::TransactionStatusIndex>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "transaction_status_index",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::Rewards>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "rewards",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::Blocktime>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "blocktime",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::PerfSamples>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "perf_sample",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::BlockHeight>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "block_height",
-            column_options
-        ));
-        self.submit_rocksdb_cf_metrics::<cf::ProgramCosts>(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "program_costs",
-            column_options
-        ));
-    }
-
-    /// Collects and reports [`BlockstoreRocksDbColumnFamilyMetrics`] for the
-    /// given column family.
-    fn submit_rocksdb_cf_metrics<C: 'static + Column + ColumnName>(
-        &self,
-        metric_name_and_cf_tag: &'static str,
-    ) {
-        let cf = self.db.column::<C>();
-        let cf_rocksdb_metrics = BlockstoreRocksDbColumnFamilyMetrics {
-            total_sst_files_size: cf
-                .get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            size_all_mem_tables: cf
-                .get_int_property(RocksProperties::SIZE_ALL_MEM_TABLES)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            num_snapshots: cf
-                .get_int_property(RocksProperties::NUM_SNAPSHOTS)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            oldest_snapshot_time: cf
-                .get_int_property(RocksProperties::OLDEST_SNAPSHOT_TIME)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            actual_delayed_write_rate: cf
-                .get_int_property(RocksProperties::ACTUAL_DELAYED_WRITE_RATE)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            is_write_stopped: cf
-                .get_int_property(RocksProperties::IS_WRITE_STOPPED)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            block_cache_capacity: cf
-                .get_int_property(RocksProperties::BLOCK_CACHE_CAPACITY)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            block_cache_usage: cf
-                .get_int_property(RocksProperties::BLOCK_CACHE_USAGE)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            block_cache_pinned_usage: cf
-                .get_int_property(RocksProperties::BLOCK_CACHE_PINNED_USAGE)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            estimate_table_readers_mem: cf
-                .get_int_property(RocksProperties::ESTIMATE_TABLE_READERS_MEM)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            mem_table_flush_pending: cf
-                .get_int_property(RocksProperties::MEM_TABLE_FLUSH_PENDING)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            compaction_pending: cf
-                .get_int_property(RocksProperties::COMPACTION_PENDING)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            num_running_compactions: cf
-                .get_int_property(RocksProperties::NUM_RUNNING_COMPACTIONS)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            num_running_flushes: cf
-                .get_int_property(RocksProperties::NUM_RUNNING_FLUSHES)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            estimate_oldest_key_time: cf
-                .get_int_property(RocksProperties::ESTIMATE_OLDEST_KEY_TIME)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-            background_errors: cf
-                .get_int_property(RocksProperties::BACKGROUND_ERRORS)
-                .unwrap_or(BLOCKSTORE_METRICS_ERROR),
-        };
-        cf_rocksdb_metrics.report_metrics(metric_name_and_cf_tag);
+        self.meta_cf.submit_rocksdb_cf_metrics();
+        self.dead_slots_cf.submit_rocksdb_cf_metrics();
+        self.duplicate_slots_cf.submit_rocksdb_cf_metrics();
+        self.erasure_meta_cf.submit_rocksdb_cf_metrics();
+        self.orphans_cf.submit_rocksdb_cf_metrics();
+        self.index_cf.submit_rocksdb_cf_metrics();
+        self.data_shred_cf.submit_rocksdb_cf_metrics();
+        self.code_shred_cf.submit_rocksdb_cf_metrics();
+        self.transaction_status_cf.submit_rocksdb_cf_metrics();
+        self.address_signatures_cf.submit_rocksdb_cf_metrics();
+        self.transaction_memos_cf.submit_rocksdb_cf_metrics();
+        self.transaction_status_index_cf.submit_rocksdb_cf_metrics();
+        self.rewards_cf.submit_rocksdb_cf_metrics();
+        self.blocktime_cf.submit_rocksdb_cf_metrics();
+        self.perf_samples_cf.submit_rocksdb_cf_metrics();
+        self.block_height_cf.submit_rocksdb_cf_metrics();
+        self.program_costs_cf.submit_rocksdb_cf_metrics();
+        self.bank_hash_cf.submit_rocksdb_cf_metrics();
     }
 
     fn try_shred_recovery(
@@ -1250,13 +899,13 @@ impl Blockstore {
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
+            let shred_source = if is_repaired {
+                ShredSource::Repaired
+            } else {
+                ShredSource::Turbine
+            };
             match shred.shred_type() {
                 ShredType::Data => {
-                    let shred_source = if is_repaired {
-                        ShredSource::Repaired
-                    } else {
-                        ShredSource::Turbine
-                    };
                     match self.check_insert_data_shred(
                         shred,
                         &mut erasure_metas,
@@ -1295,7 +944,7 @@ impl Blockstore {
                         &mut index_meta_time,
                         handle_duplicate,
                         is_trusted,
-                        is_repaired,
+                        shred_source,
                         metrics,
                     );
                 }
@@ -1464,10 +1113,9 @@ impl Blockstore {
     }
 
     fn erasure_mismatch(shred1: &Shred, shred2: &Shred) -> bool {
-        // TODO should also compare first-coding-index once position field is
-        // populated across cluster.
         shred1.coding_header.num_coding_shreds != shred2.coding_header.num_coding_shreds
             || shred1.coding_header.num_data_shreds != shred2.coding_header.num_data_shreds
+            || shred1.first_coding_index() != shred2.first_coding_index()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1481,7 +1129,7 @@ impl Blockstore {
         index_meta_time: &mut u64,
         handle_duplicate: &F,
         is_trusted: bool,
-        is_repaired: bool,
+        shred_source: ShredSource,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> bool
     where
@@ -1548,13 +1196,10 @@ impl Blockstore {
 
             return false;
         }
-
-        if is_repaired {
-            let mut slots_stats = self.slots_stats.lock().unwrap();
-            let mut e = slots_stats.stats.entry(slot).or_default();
-            e.num_repaired += 1;
-        }
-
+        self.slots_stats
+            .lock()
+            .unwrap()
+            .add_shred(slot, shred_source);
         // insert coding shred into rocks
         let result = self
             .insert_coding_shred(index_meta, &shred, write_batch)
@@ -1700,7 +1345,7 @@ impl Blockstore {
                 just_inserted_shreds,
                 &self.last_root,
                 leader_schedule,
-                shred_source.clone(),
+                shred_source,
             ) {
                 return Err(InsertDataShredError::InvalidShred);
             }
@@ -1908,6 +1553,20 @@ impl Blockstore {
             .unwrap_or_default()
     }
 
+    /// send slot full timing point to poh_timing_report service
+    fn send_slot_full_timing(&self, slot: Slot) {
+        if let Some(ref sender) = self.shred_timing_point_sender {
+            send_poh_timing_point(
+                sender,
+                SlotPohTimingInfo::new_slot_full_poh_time_point(
+                    slot,
+                    Some(self.last_root()),
+                    solana_sdk::timing::timestamp(),
+                ),
+            );
+        }
+    }
+
     fn insert_data_shred(
         &self,
         slot_meta: &mut SlotMeta,
@@ -1972,51 +1631,21 @@ impl Blockstore {
             end_index,
         })
         .collect();
-        if shred_source == ShredSource::Repaired || shred_source == ShredSource::Recovered {
+        {
             let mut slots_stats = self.slots_stats.lock().unwrap();
-            let mut e = slots_stats.stats.entry(slot_meta.slot).or_default();
-            if shred_source == ShredSource::Repaired {
-                e.num_repaired += 1;
-            }
-            if shred_source == ShredSource::Recovered {
-                e.num_recovered += 1;
+            slots_stats.add_shred(slot_meta.slot, shred_source);
+            if slot_meta.is_full() {
+                slots_stats.set_full(slot_meta);
             }
         }
+
+        // slot is full, send slot full timing to poh_timing_report service.
         if slot_meta.is_full() {
-            let (num_repaired, num_recovered) = {
-                let mut slots_stats = self.slots_stats.lock().unwrap();
-                if let Some(e) = slots_stats.stats.remove(&slot_meta.slot) {
-                    if slots_stats.last_cleanup_ts.elapsed().as_secs() > 30 {
-                        let root = self.last_root();
-                        slots_stats.stats = slots_stats.stats.split_off(&root);
-                        slots_stats.last_cleanup_ts = Instant::now();
-                    }
-                    (e.num_repaired, e.num_recovered)
-                } else {
-                    (0, 0)
-                }
-            };
-            datapoint_info!(
-                "shred_insert_is_full",
-                (
-                    "total_time_ms",
-                    solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
-                    i64
-                ),
-                ("slot", slot_meta.slot, i64),
-                (
-                    "last_index",
-                    slot_meta
-                        .last_index
-                        .and_then(|ix| i64::try_from(ix).ok())
-                        .unwrap_or(-1),
-                    i64
-                ),
-                ("num_repaired", num_repaired, i64),
-                ("num_recovered", num_recovered, i64),
-            );
+            self.send_slot_full_timing(slot);
         }
+
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
+
         Ok(newly_completed_data_sets)
     }
 
@@ -4358,6 +3987,7 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
                 shred_storage_type: $crate::blockstore_db::ShredStorageType::RocksFifo(
                     $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
                 ),
+                ..$crate::blockstore_db::LedgerColumnOptions::default()
             },
         )
     };
@@ -4666,6 +4296,7 @@ pub mod tests {
             pubkey::Pubkey,
             signature::Signature,
             transaction::{Transaction, TransactionError},
+            transaction_context::TransactionReturnData,
         },
         solana_storage_proto::convert::generated,
         solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance},
@@ -4722,6 +4353,7 @@ pub mod tests {
                     shred_storage_type: ShredStorageType::RocksFifo(
                         BlockstoreRocksFifoOptions::default(),
                     ),
+                    ..LedgerColumnOptions::default()
                 },
                 ..BlockstoreOptions::default()
             },
@@ -6355,7 +5987,7 @@ pub mod tests {
                 panic!("no dupes");
             },
             false,
-            false,
+            ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
         ));
 
@@ -6373,7 +6005,7 @@ pub mod tests {
                 counter.fetch_add(1, Ordering::Relaxed);
             },
             false,
-            false,
+            ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
         ));
         assert_eq!(counter.load(Ordering::Relaxed), 1);
@@ -6487,7 +6119,7 @@ pub mod tests {
             );
             coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
             coding_shred.coding_header.num_data_shreds = 2;
-            coding_shred.coding_header.num_coding_shreds = 3;
+            coding_shred.coding_header.num_coding_shreds = 4;
             coding_shred.coding_header.position = 1;
             coding_shred.common_header.index = std::u32::MAX - 1;
             assert!(!Blockstore::should_insert_coding_shred(
@@ -6826,6 +6458,7 @@ pub mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
+                    return_data: Some(TransactionReturnData::default()),
                 }
                 .into();
                 blockstore
@@ -6843,6 +6476,7 @@ pub mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
+                    return_data: Some(TransactionReturnData::default()),
                 }
                 .into();
                 blockstore
@@ -6860,6 +6494,7 @@ pub mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
+                    return_data: Some(TransactionReturnData::default()),
                 }
                 .into();
                 blockstore
@@ -6879,6 +6514,7 @@ pub mod tests {
                         post_token_balances: Some(vec![]),
                         rewards: Some(vec![]),
                         loaded_addresses: LoadedAddresses::default(),
+                        return_data: Some(TransactionReturnData::default()),
                     },
                 }
             })
@@ -6991,6 +6627,10 @@ pub mod tests {
             writable: vec![Pubkey::new_unique()],
             readonly: vec![Pubkey::new_unique()],
         };
+        let test_return_data = TransactionReturnData {
+            program_id: Pubkey::new_unique(),
+            data: vec![1, 2, 3],
+        };
 
         // result not found
         assert!(transaction_status_cf
@@ -7010,6 +6650,7 @@ pub mod tests {
             post_token_balances: Some(post_token_balances_vec.clone()),
             rewards: Some(rewards_vec.clone()),
             loaded_addresses: test_loaded_addresses.clone(),
+            return_data: Some(test_return_data.clone()),
         }
         .into();
         assert!(transaction_status_cf
@@ -7028,6 +6669,7 @@ pub mod tests {
             post_token_balances,
             rewards,
             loaded_addresses,
+            return_data,
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
             .unwrap()
@@ -7044,6 +6686,7 @@ pub mod tests {
         assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         assert_eq!(rewards.unwrap(), rewards_vec);
         assert_eq!(loaded_addresses, test_loaded_addresses);
+        assert_eq!(return_data.unwrap(), test_return_data);
 
         // insert value
         let status = TransactionStatusMeta {
@@ -7057,6 +6700,7 @@ pub mod tests {
             post_token_balances: Some(post_token_balances_vec.clone()),
             rewards: Some(rewards_vec.clone()),
             loaded_addresses: test_loaded_addresses.clone(),
+            return_data: Some(test_return_data.clone()),
         }
         .into();
         assert!(transaction_status_cf
@@ -7075,6 +6719,7 @@ pub mod tests {
             post_token_balances,
             rewards,
             loaded_addresses,
+            return_data,
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                 0,
@@ -7097,6 +6742,7 @@ pub mod tests {
         assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         assert_eq!(rewards.unwrap(), rewards_vec);
         assert_eq!(loaded_addresses, test_loaded_addresses);
+        assert_eq!(return_data.unwrap(), test_return_data);
     }
 
     #[test]
@@ -7325,6 +6971,7 @@ pub mod tests {
             post_token_balances: Some(vec![]),
             rewards: Some(vec![]),
             loaded_addresses: LoadedAddresses::default(),
+            return_data: Some(TransactionReturnData::default()),
         }
         .into();
 
@@ -7520,6 +7167,7 @@ pub mod tests {
             post_token_balances: Some(vec![]),
             rewards: Some(vec![]),
             loaded_addresses: LoadedAddresses::default(),
+            return_data: Some(TransactionReturnData::default()),
         }
         .into();
 
@@ -7691,6 +7339,10 @@ pub mod tests {
                 let post_token_balances = Some(vec![]);
                 let rewards = Some(vec![]);
                 let signature = transaction.signatures[0];
+                let return_data = Some(TransactionReturnData {
+                    program_id: Pubkey::new_unique(),
+                    data: vec![1, 2, 3],
+                });
                 let status = TransactionStatusMeta {
                     status: Ok(()),
                     fee: 42,
@@ -7702,6 +7354,7 @@ pub mod tests {
                     post_token_balances: post_token_balances.clone(),
                     rewards: rewards.clone(),
                     loaded_addresses: LoadedAddresses::default(),
+                    return_data: return_data.clone(),
                 }
                 .into();
                 blockstore
@@ -7721,6 +7374,7 @@ pub mod tests {
                         post_token_balances,
                         rewards,
                         loaded_addresses: LoadedAddresses::default(),
+                        return_data,
                     },
                 }
             })
@@ -7792,6 +7446,10 @@ pub mod tests {
                 let pre_token_balances = Some(vec![]);
                 let post_token_balances = Some(vec![]);
                 let rewards = Some(vec![]);
+                let return_data = Some(TransactionReturnData {
+                    program_id: Pubkey::new_unique(),
+                    data: vec![1, 2, 3],
+                });
                 let signature = transaction.signatures[0];
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -7804,6 +7462,7 @@ pub mod tests {
                     post_token_balances: post_token_balances.clone(),
                     rewards: rewards.clone(),
                     loaded_addresses: LoadedAddresses::default(),
+                    return_data: return_data.clone(),
                 }
                 .into();
                 blockstore
@@ -7823,6 +7482,7 @@ pub mod tests {
                         post_token_balances,
                         rewards,
                         loaded_addresses: LoadedAddresses::default(),
+                        return_data,
                     },
                 }
             })
@@ -8582,6 +8242,7 @@ pub mod tests {
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
+                return_data: Some(TransactionReturnData::default()),
             }
             .into();
             transaction_status_cf
@@ -9139,6 +8800,10 @@ pub mod tests {
                 commission: None,
             }]),
             loaded_addresses: LoadedAddresses::default(),
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_unique(),
+                data: vec![1, 2, 3],
+            }),
         };
         let deprecated_status: StoredTransactionStatusMeta = status.clone().try_into().unwrap();
         let protobuf_status: generated::TransactionStatusMeta = status.into();

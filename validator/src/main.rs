@@ -9,6 +9,7 @@ use {
     console::style,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
+    send_transaction_service::DEFAULT_TPU_USE_QUIC,
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
@@ -33,13 +34,16 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::{
-        BlockstoreRecoveryMode, BlockstoreRocksFifoOptions, LedgerColumnOptions, ShredStorageType,
-        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
-    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
+    solana_rpc::{
+        rpc::{JsonRpcConfig, RpcBigtableConfig},
+        rpc_pubsub_service::PubSubConfig,
+    },
     solana_runtime::{
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
@@ -456,6 +460,7 @@ pub fn main() {
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
+    let default_tpu_use_quic = &DEFAULT_TPU_USE_QUIC.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -651,8 +656,18 @@ pub fn main() {
                 .long("enable-cpi-and-log-storage")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
-                .help("Include CPI inner instructions and logs in the \
-                        historical transaction info stored"),
+                .hidden(true)
+                .help("Deprecated, please use \"enable-extended-tx-metadata-storage\". \
+                       Include CPI inner instructions, logs and return data in \
+                       the historical transaction info stored"),
+        )
+        .arg(
+            Arg::with_name("enable_extended_tx_metadata_storage")
+                .long("enable-extended-tx-metadata-storage")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Include CPI inner instructions, logs, and return data in \
+                       the historical transaction info stored"),
         )
         .arg(
             Arg::with_name("rpc_max_multiple_accounts")
@@ -997,6 +1012,18 @@ pub fn main() {
                        The suggested value is 50% of your ledger storage size in bytes."),
         )
         .arg(
+            Arg::with_name("rocksdb_ledger_compression")
+                .hidden(true)
+                .long("rocksdb-ledger-compression")
+                .value_name("COMPRESSION_TYPE")
+                .takes_value(true)
+                .possible_values(&["none", "lz4", "snappy", "zlib"])
+                .default_value("none")
+                .help("The compression alrogithm that is used to compress \
+                       transaction status data.  \
+                       Turning on compression can save ~10% of the ledger size."),
+        )
+        .arg(
             Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
@@ -1145,6 +1172,14 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
+            Arg::with_name("tpu_use_quic")
+                .long("tpu-use-quic")
+                .takes_value(true)
+                .value_name("BOOLEAN")
+                .default_value(default_tpu_use_quic)
+                .help("When this is set to true, the system will use QUIC to send transactions."),
+        )
+        .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
@@ -1195,6 +1230,14 @@ pub fn main() {
                 .takes_value(true)
                 .default_value("30")
                 .help("Number of seconds before timing out RPC requests backed by BigTable"),
+        )
+        .arg(
+            Arg::with_name("rpc_bigtable_instance_name")
+                .long("rpc-bigtable-instance-name")
+                .takes_value(true)
+                .value_name("INSTANCE_NAME")
+                .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
+                .help("Name of the Bigtable instance to upload to")
         )
         .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
@@ -1575,14 +1618,16 @@ pub fn main() {
             Arg::with_name("accounts_db_index_hashing")
                 .long("accounts-db-index-hashing")
                 .help("Enables the use of the index in hash calculation in \
-                       AccountsHashVerifier/Accounts Background Service."),
+                       AccountsHashVerifier/Accounts Background Service.")
+                .hidden(true),
         )
         .arg(
             Arg::with_name("no_accounts_db_index_hashing")
                 .long("no-accounts-db-index-hashing")
                 .help("This is obsolete. See --accounts-db-index-hashing. \
                        Disables the use of the index in hash calculation in \
-                       AccountsHashVerifier/Accounts Background Service."),
+                       AccountsHashVerifier/Accounts Background Service.")
+                .hidden(true),
         )
         .arg(
             // legacy nop argument
@@ -2095,6 +2140,8 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
+    let tpu_use_quic = value_t_or_exit!(matches, "tpu_use_quic", bool);
+
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
         eprintln!(
@@ -2259,9 +2306,37 @@ pub fn main() {
     };
 
     if matches.is_present("minimal_rpc_api") {
-        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args")
+        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args");
     }
 
+    if matches.is_present("enable_cpi_and_log_storage") {
+        warn!(
+            "--enable-cpi-and-log-storage is deprecated. Please update the \
+            launch args to use --enable-extended-tx-metadata-storage and remove \
+            --enable-cpi-and-log-storage"
+        );
+    }
+
+    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
+        || matches.is_present("enable_bigtable_ledger_upload")
+    {
+        Some(RpcBigtableConfig {
+            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
+            bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
+            timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
+                .ok()
+                .map(Duration::from_secs),
+        })
+    } else {
+        None
+    };
+
+    if matches.is_present("accounts_db_index_hashing") {
+        info!("The accounts hash is only calculated without using the index. --accounts-db-index-hashing is deprecated and can be removed from the command line");
+    }
+    if matches.is_present("no_accounts_db_index_hashing") {
+        info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
+    }
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2276,10 +2351,9 @@ pub fn main() {
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
-            enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
-            enable_bigtable_ledger_storage: matches
-                .is_present("enable_rpc_bigtable_ledger_storage"),
-            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
+            enable_extended_tx_metadata_storage: matches.is_present("enable_cpi_and_log_storage")
+                || matches.is_present("enable_extended_tx_metadata_storage"),
+            rpc_bigtable_config,
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
@@ -2297,9 +2371,6 @@ pub fn main() {
             ),
             rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
             rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
-            rpc_bigtable_timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
-                .ok()
-                .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
@@ -2366,6 +2437,7 @@ pub fn main() {
                 "rpc_send_transaction_service_max_retries",
                 usize
             ),
+            use_quic: tpu_use_quic,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
@@ -2379,7 +2451,6 @@ pub fn main() {
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
-        accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
@@ -2522,7 +2593,6 @@ pub fn main() {
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
-        accounts_hash_use_index: validator_config.accounts_db_use_index_hash_calculation,
         accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
     });
@@ -2568,6 +2638,19 @@ pub fn main() {
     }
 
     validator_config.ledger_column_options = LedgerColumnOptions {
+        compression_type: match matches.value_of("rocksdb_ledger_compression") {
+            None => BlockstoreCompressionType::default(),
+            Some(ledger_compression_string) => match ledger_compression_string {
+                "none" => BlockstoreCompressionType::None,
+                "snappy" => BlockstoreCompressionType::Snappy,
+                "lz4" => BlockstoreCompressionType::Lz4,
+                "zlib" => BlockstoreCompressionType::Zlib,
+                _ => panic!(
+                    "Unsupported ledger_compression: {}",
+                    ledger_compression_string
+                ),
+            },
+        },
         shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
             None => ShredStorageType::default(),
             Some(shred_compaction_string) => match shred_compaction_string {

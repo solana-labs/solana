@@ -75,7 +75,7 @@ use {
         },
     },
     solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo},
+        send_transaction_service::{SendTransactionService, TransactionInfo, DEFAULT_TPU_USE_QUIC},
         tpu_info::NullTpuInfo,
     },
     solana_storage_bigtable::Error as StorageError,
@@ -143,16 +143,14 @@ fn is_finalized(
 #[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
-    pub enable_cpi_and_log_storage: bool,
+    pub enable_extended_tx_metadata_storage: bool,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
-    pub enable_bigtable_ledger_storage: bool,
-    pub enable_bigtable_ledger_upload: bool,
+    pub rpc_bigtable_config: Option<RpcBigtableConfig>,
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
     pub rpc_niceness_adj: i8,
-    pub rpc_bigtable_timeout: Option<Duration>,
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
@@ -163,6 +161,24 @@ impl JsonRpcConfig {
         Self {
             full_api: true,
             ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RpcBigtableConfig {
+    pub enable_bigtable_ledger_upload: bool,
+    pub bigtable_instance_name: String,
+    pub timeout: Option<Duration>,
+}
+
+impl Default for RpcBigtableConfig {
+    fn default() -> Self {
+        let bigtable_instance_name = solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string();
+        Self {
+            enable_bigtable_ledger_upload: false,
+            bigtable_instance_name,
+            timeout: None,
         }
     }
 }
@@ -323,6 +339,7 @@ impl JsonRpcRequestProcessor {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
 
         Self {
@@ -3534,6 +3551,7 @@ pub mod rpc_full {
                     logs,
                     post_simulation_accounts: _,
                     units_consumed,
+                    return_data,
                 } = preflight_bank.simulate_transaction(transaction)
                 {
                     match err {
@@ -3551,6 +3569,7 @@ pub mod rpc_full {
                             logs: Some(logs),
                             accounts: None,
                             units_consumed: Some(units_consumed),
+                            return_data,
                         },
                     }
                     .into());
@@ -3608,6 +3627,7 @@ pub mod rpc_full {
                 logs,
                 post_simulation_accounts,
                 units_consumed,
+                return_data,
             } = bank.simulate_transaction(transaction);
 
             let accounts = if let Some(config_accounts) = config.accounts {
@@ -3659,6 +3679,7 @@ pub mod rpc_full {
                     logs: Some(logs),
                     accounts,
                     units_consumed: Some(units_consumed),
+                    return_data,
                 },
             ))
         }
@@ -5557,6 +5578,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
                     ],
+                    "returnData":null,
                     "unitsConsumed":0
                 }
             },
@@ -5643,6 +5665,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
                     ],
+                    "returnData":null,
                     "unitsConsumed":0
                 }
             },
@@ -5671,6 +5694,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
                     ],
+                    "returnData":null,
                     "unitsConsumed":0
                 }
             },
@@ -5720,6 +5744,7 @@ pub mod tests {
                     "err":"BlockhashNotFound",
                     "accounts":null,
                     "logs":[],
+                    "returnData":null,
                     "unitsConsumed":0
                 }
             },
@@ -5749,6 +5774,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
                     ],
+                    "returnData":null,
                     "unitsConsumed":0
                 }
             },
@@ -6087,6 +6113,7 @@ pub mod tests {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
 
         let mut bad_transaction = system_transaction::transfer(
@@ -6105,7 +6132,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[],"unitsConsumed":0}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
             )
         );
 
@@ -6352,6 +6379,7 @@ pub mod tests {
             receiver,
             1000,
             1,
+            DEFAULT_TPU_USE_QUIC,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),

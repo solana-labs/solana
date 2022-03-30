@@ -29,6 +29,7 @@ pub struct BucketMapHolderStats {
     pub updates_in_mem: AtomicU64,
     pub items: AtomicU64,
     pub items_us: AtomicU64,
+    pub failed_to_evict: AtomicU64,
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
@@ -152,6 +153,16 @@ impl BucketMapHolderStats {
         } else {
             0
         }
+    }
+
+    /// This is an estimate of the # of items in mem that are awaiting flushing to disk.
+    /// returns (# items in mem) - (# items we intend to hold in mem for performance heuristics)
+    /// The result is also an estimate because 'held_in_mem' is based on a stat that is swapped out when stats are reported.
+    pub fn get_remaining_items_to_flush_estimate(&self) -> usize {
+        let in_mem = self.count_in_mem.load(Ordering::Relaxed) as u64;
+        let held_in_mem = self.held_in_mem_slot_list_cached.load(Ordering::Relaxed)
+            + self.held_in_mem_slot_list_len.load(Ordering::Relaxed);
+        in_mem.saturating_sub(held_in_mem) as usize
     }
 
     pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
@@ -307,6 +318,11 @@ impl BucketMapHolderStats {
                 (
                     "entry_missing_us",
                     self.entry_missing_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "failed_to_evict",
+                    self.failed_to_evict.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (

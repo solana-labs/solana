@@ -4,7 +4,8 @@
 
 extern crate solana_program;
 use solana_program::{
-    account_info::AccountInfo, bpf_loader, entrypoint::ProgramResult, log::*, msg, pubkey::Pubkey,
+    account_info::AccountInfo, bpf_loader, entrypoint::ProgramResult, log::*, msg,
+    program::check_type_assumptions, pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -69,6 +70,8 @@ pub fn process_instruction(
         // check that the result is in a correct interval close to 1.998614185980905
         assert!(1.9986f64 < num && num < 2.0f64);
     }
+
+    check_type_assumptions();
 
     sol_log_compute_units();
     Ok(())
