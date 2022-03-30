@@ -85,7 +85,7 @@ const ROWS: TableRow[] = [
     type: DisplayType.URL,
   },
   {
-    display: "Encryption",
+    display: "Secure Contact Encryption",
     key: "encryption",
     type: DisplayType.PGP,
   },
