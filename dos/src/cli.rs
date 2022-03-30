@@ -33,7 +33,7 @@ pub struct DosClientParameters {
     )]
     pub data_size: usize,
 
-    #[clap(long, help = "Data to send [Optional]")]
+    #[clap(long, required_if_eq("mode", "rpc"), help = "Data to send [Optional]")]
     pub data_input: Option<String>,
 
     #[clap(long, help = "Just use entrypoint address directly")]
@@ -84,7 +84,7 @@ pub enum Mode {
     Rpc,
 }
 
-#[derive(ArgEnum, Clone, Eq, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
 pub enum DataType {
     RepairHighest,
     RepairShred,

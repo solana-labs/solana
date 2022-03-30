@@ -53,6 +53,11 @@ use {
     },
 };
 
+static REPORT_EACH_MILLIS: u128 = 10_000;
+fn compute_tps(count: usize) -> usize {
+    (count * 1000) / (REPORT_EACH_MILLIS as usize)
+}
+
 fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     let source = thread_rng().gen_range(0, nodes.len());
     let mut contact = nodes[source].clone();
@@ -212,6 +217,58 @@ fn get_target_and_client(
     (target, rpc_client)
 }
 
+fn run_dos_rpc_mode(
+    rpc_client: Option<RpcClient>,
+    iterations: usize,
+    data_type: DataType,
+    data_input: Option<String>,
+) {
+    let mut last_log = Instant::now();
+    let mut total_count: usize = 0;
+    let mut count = 0;
+    let mut error_count = 0;
+    loop {
+        match data_type {
+            DataType::GetAccountInfo => {
+                let res = rpc_client
+                    .as_ref()
+                    .unwrap()
+                    .get_account(&Pubkey::from_str(data_input.as_ref().unwrap()).unwrap());
+                if res.is_err() {
+                    error_count += 1;
+                }
+            }
+            DataType::GetProgramAccounts => {
+                let res = rpc_client
+                    .as_ref()
+                    .unwrap()
+                    .get_program_accounts(&Pubkey::from_str(data_input.as_ref().unwrap()).unwrap());
+                if res.is_err() {
+                    error_count += 1;
+                }
+            }
+            _ => {
+                panic!("unsupported data type");
+            }
+        }
+        count += 1;
+        total_count += 1;
+        if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
+            info!(
+                "count: {}, errors: {}, tps: {}",
+                count,
+                error_count,
+                compute_tps(count)
+            );
+            last_log = Instant::now();
+            count = 0;
+        }
+        if iterations != 0 && total_count >= iterations {
+            break;
+        }
+    }
+}
+
 fn run_dos(
     nodes: &[ContactInfo],
     iterations: usize,
@@ -219,76 +276,60 @@ fn run_dos(
     params: DosClientParameters,
 ) {
     let (target, rpc_client) = get_target_and_client(nodes, params.mode, params.entrypoint_addr);
-    let target = target.expect("should have target");
-    info!("Targeting {}", target);
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    if params.mode == Mode::Rpc {
+        run_dos_rpc_mode(rpc_client, iterations, params.data_type, params.data_input);
+    } else {
+        let target = target.expect("should have target");
+        info!("Targeting {}", target);
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-    let mut data = Vec::new();
-    let mut transaction_generator = None;
+        let mut data = Vec::new();
+        let mut transaction_generator = None;
 
-    match params.data_type {
-        DataType::RepairHighest => {
-            let slot = 100;
-            let req = RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
-        }
-        DataType::RepairShred => {
-            let slot = 100;
-            let req =
-                RepairProtocol::HighestWindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
-        }
-        DataType::RepairOrphan => {
-            let slot = 100;
-            let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
-            data = bincode::serialize(&req).unwrap();
-        }
-        DataType::Random => {
-            data.resize(params.data_size, 0);
-        }
-        DataType::Transaction => {
-            let tp = params.transaction_params.clone();
-            info!("{:?}", tp);
-
-            let mut tg = TransactionGenerator::new(tp);
-            let tx = tg.generate(payer, &rpc_client);
-            info!("{:?}", tx);
-            data = bincode::serialize(&tx).unwrap();
-            if params.transaction_params.unique_transactions {
-                transaction_generator = Some(tg);
+        match params.data_type {
+            DataType::RepairHighest => {
+                let slot = 100;
+                let req =
+                    RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
+                data = bincode::serialize(&req).unwrap();
             }
-        }
-        DataType::GetAccountInfo => {}
-        DataType::GetProgramAccounts => {}
-    }
-
-    let mut last_log = Instant::now();
-    let mut count = 0;
-    let mut error_count = 0;
-    loop {
-        if params.mode == Mode::Rpc {
-            match params.data_type {
-                DataType::GetAccountInfo => {
-                    let res = rpc_client.as_ref().unwrap().get_account(
-                        &Pubkey::from_str(params.data_input.as_ref().unwrap()).unwrap(),
-                    );
-                    if res.is_err() {
-                        error_count += 1;
-                    }
-                }
-                DataType::GetProgramAccounts => {
-                    let res = rpc_client.as_ref().unwrap().get_program_accounts(
-                        &Pubkey::from_str(params.data_input.as_ref().unwrap()).unwrap(),
-                    );
-                    if res.is_err() {
-                        error_count += 1;
-                    }
-                }
-                _ => {
-                    panic!("unsupported data type");
-                }
+            DataType::RepairShred => {
+                let slot = 100;
+                let req = RepairProtocol::HighestWindowIndexWithNonce(
+                    get_repair_contact(nodes),
+                    slot,
+                    0,
+                    0,
+                );
+                data = bincode::serialize(&req).unwrap();
             }
-        } else {
+            DataType::RepairOrphan => {
+                let slot = 100;
+                let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
+                data = bincode::serialize(&req).unwrap();
+            }
+            DataType::Random => {
+                data.resize(params.data_size, 0);
+            }
+            DataType::Transaction => {
+                let tp = params.transaction_params;
+                info!("{:?}", tp);
+
+                transaction_generator = Some(TransactionGenerator::new(tp));
+                let tx = transaction_generator
+                    .as_mut()
+                    .unwrap()
+                    .generate(payer, &rpc_client);
+                info!("{:?}", tx);
+                data = bincode::serialize(&tx).unwrap();
+            }
+            _ => panic!("Unsupported data_type detected"),
+        }
+
+        let mut last_log = Instant::now();
+        let mut count = 0;
+        let mut error_count = 0;
+        loop {
             if params.data_type == DataType::Random {
                 thread_rng().fill(&mut data[..]);
             }
@@ -301,15 +342,15 @@ fn run_dos(
             if res.is_err() {
                 error_count += 1;
             }
-        }
-        count += 1;
-        if last_log.elapsed().as_millis() > 10_000 {
-            info!("count: {} errors: {}", count, error_count);
-            last_log = Instant::now();
-            count = 0;
-        }
-        if iterations != 0 && count >= iterations {
-            break;
+            count += 1;
+            if last_log.elapsed().as_millis() > 10_000 {
+                info!("count: {} errors: {}", count, error_count);
+                last_log = Instant::now();
+                count = 0;
+            }
+            if iterations != 0 && count >= iterations {
+                break;
+            }
         }
     }
 }
