@@ -415,7 +415,11 @@ function MoreSection({
   );
 }
 
-function getTabs(data?: ProgramData, isAnchorAccount?: Boolean, isAnchorProgram?: Boolean): Tab[] {
+function getTabs(
+  data?: ProgramData,
+  isAnchorAccount?: Boolean,
+  isAnchorProgram?: Boolean
+): Tab[] {
   const tabs: Tab[] = [
     {
       slug: "history",

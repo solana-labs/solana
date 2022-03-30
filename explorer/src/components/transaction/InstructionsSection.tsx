@@ -85,7 +85,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
         if (!innerInstructions[parsed.index]) {
           innerInstructions[parsed.index] = [];
         }
-  
+
         parsed.instructions.forEach((ix) => {
           innerInstructions[parsed.index].push(ix);
         });
