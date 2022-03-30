@@ -46,7 +46,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         process::exit,
         str::FromStr,
         time::{Duration, Instant},
@@ -167,30 +167,29 @@ impl TransactionGenerator {
     }
 }
 
-fn run_dos(
+fn get_target_and_client(
     nodes: &[ContactInfo],
-    iterations: usize,
-    payer: Option<&Keypair>,
-    params: DosClientParameters,
-) {
+    mode: Mode,
+    entrypoint_addr: SocketAddr,
+) -> (Option<SocketAddr>, Option<RpcClient>) {
     let mut target = None;
     let mut rpc_client = None;
     if nodes.is_empty() {
-        if params.mode == Mode::Rpc {
-            rpc_client = Some(RpcClient::new_socket(params.entrypoint_addr));
+        if mode == Mode::Rpc {
+            rpc_client = Some(RpcClient::new_socket(entrypoint_addr));
         }
-        target = Some(params.entrypoint_addr);
+        target = Some(entrypoint_addr);
     } else {
         info!("************ NODE ***********");
         for node in nodes {
             info!("{:?}", node);
         }
-        info!("ADDR = {}", params.entrypoint_addr);
+        info!("ADDR = {}", entrypoint_addr);
 
         for node in nodes {
-            if node.gossip == params.entrypoint_addr {
+            if node.gossip == entrypoint_addr {
                 info!("{}", node.gossip);
-                target = match params.mode {
+                target = match mode {
                     Mode::Gossip => Some(node.gossip),
                     Mode::Tvu => Some(node.tvu),
                     Mode::TvuForwards => Some(node.tvu_forwards),
@@ -210,8 +209,17 @@ fn run_dos(
             }
         }
     }
-    let target = target.expect("should have target");
+    (target, rpc_client)
+}
 
+fn run_dos(
+    nodes: &[ContactInfo],
+    iterations: usize,
+    payer: Option<&Keypair>,
+    params: DosClientParameters,
+) {
+    let (target, rpc_client) = get_target_and_client(nodes, params.mode, params.entrypoint_addr);
+    let target = target.expect("should have target");
     info!("Targeting {}", target);
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
