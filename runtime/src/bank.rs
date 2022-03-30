@@ -1725,7 +1725,7 @@ impl Bank {
                     .is_active(&feature_set::cap_accounts_data_len::id())
                     .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
             )),
-            sysvar_cache: RwLock::new(SysvarCache::default()),
+            sysvar_cache: RwLock::new(SysvarCache::new(epoch)),
             accounts_data_len: AtomicU64::new(accounts_data_len),
             fee_structure: parent.fee_structure.clone(),
         };
@@ -1954,12 +1954,16 @@ impl Bank {
         let mut clock = new.clock();
         clock.epoch_start_timestamp = parent_timestamp;
         clock.unix_timestamp = parent_timestamp;
-        new.update_sysvar_account(&sysvar::clock::id(), |account| {
-            create_account(
-                &clock,
-                new.inherit_specially_retained_account_fields(account),
-            )
-        });
+        new.update_sysvar_account(
+            &sysvar::clock::id(),
+            |account| {
+                create_account(
+                    &clock,
+                    new.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
         new.fill_missing_sysvar_cache_entries();
         new.freeze();
         new
@@ -2041,7 +2045,7 @@ impl Bank {
                     .is_active(&feature_set::cap_accounts_data_len::id())
                     .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
             )),
-            sysvar_cache: RwLock::new(SysvarCache::default()),
+            sysvar_cache: RwLock::new(SysvarCache::new(fields.epoch)),
             accounts_data_len: AtomicU64::new(accounts_data_len),
             fee_structure: FeeStructure::default(),
         };
@@ -2202,7 +2206,7 @@ impl Bank {
         self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
     }
 
-    fn update_sysvar_account<F>(&self, pubkey: &Pubkey, updater: F)
+    fn update_sysvar_account<F>(&self, pubkey: &Pubkey, updater: F, update_cache: bool)
     where
         F: Fn(&Option<AccountSharedData>) -> AccountSharedData,
     {
@@ -2216,6 +2220,17 @@ impl Bank {
         // although there is no such sysvars currently.
         self.adjust_sysvar_balance_for_rent(&mut new_account);
         self.store_account_and_update_capitalization(pubkey, &new_account);
+
+        if update_cache {
+            // This looks like overkill since we're deserializing after serializing,
+            // but it ensures that the account lamports look exactly the same in the db and
+            // in the cache.
+            self.sysvar_cache
+                .write()
+                .unwrap()
+                .set_account(pubkey, &new_account)
+                .unwrap();
+        }
     }
 
     fn inherit_specially_retained_account_fields(
@@ -2306,24 +2321,32 @@ impl Bank {
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp,
         };
-        self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            create_account(
-                &clock,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &sysvar::clock::id(),
+            |account| {
+                create_account(
+                    &clock,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
     }
 
     pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)
     where
         T: Sysvar + SysvarId,
     {
-        self.update_sysvar_account(&T::id(), |account| {
-            create_account(
-                sysvar,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &T::id(),
+            |account| {
+                create_account(
+                    sysvar,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
         // Simply force fill sysvar cache rather than checking which sysvar was
         // actually updated since tests don't need to be optimized for performance.
         self.reset_sysvar_cache();
@@ -2331,31 +2354,41 @@ impl Bank {
     }
 
     fn update_slot_history(&self) {
-        self.update_sysvar_account(&sysvar::slot_history::id(), |account| {
-            let mut slot_history = account
-                .as_ref()
-                .map(|account| from_account::<SlotHistory, _>(account).unwrap())
-                .unwrap_or_default();
-            slot_history.add(self.slot());
-            create_account(
-                &slot_history,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        // slot history is only updated during bank freeze, so no need for the
+        // cache to be updated too
+        self.update_sysvar_account(
+            &sysvar::slot_history::id(),
+            |account| {
+                let mut slot_history = account
+                    .as_ref()
+                    .map(|account| from_account::<SlotHistory, _>(account).unwrap())
+                    .unwrap_or_default();
+                slot_history.add(self.slot());
+                create_account(
+                    &slot_history,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            false,
+        );
     }
 
     fn update_slot_hashes(&self) {
-        self.update_sysvar_account(&sysvar::slot_hashes::id(), |account| {
-            let mut slot_hashes = account
-                .as_ref()
-                .map(|account| from_account::<SlotHashes, _>(account).unwrap())
-                .unwrap_or_default();
-            slot_hashes.add(self.parent_slot, self.parent_hash);
-            create_account(
-                &slot_hashes,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &sysvar::slot_hashes::id(),
+            |account| {
+                let mut slot_hashes = account
+                    .as_ref()
+                    .map(|account| from_account::<SlotHashes, _>(account).unwrap())
+                    .unwrap_or_default();
+                slot_hashes.add(self.parent_slot, self.parent_hash);
+                create_account(
+                    &slot_hashes,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {
@@ -2399,31 +2432,43 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::disable_fees_sysvar::id())
         {
-            self.update_sysvar_account(&sysvar::fees::id(), |account| {
-                create_account(
-                    &sysvar::fees::Fees::new(&self.fee_rate_governor.create_fee_calculator()),
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
+            self.update_sysvar_account(
+                &sysvar::fees::id(),
+                |account| {
+                    create_account(
+                        &sysvar::fees::Fees::new(&self.fee_rate_governor.create_fee_calculator()),
+                        self.inherit_specially_retained_account_fields(account),
+                    )
+                },
+                true,
+            );
         }
     }
 
     fn update_rent(&self) {
-        self.update_sysvar_account(&sysvar::rent::id(), |account| {
-            create_account(
-                &self.rent_collector.rent,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &sysvar::rent::id(),
+            |account| {
+                create_account(
+                    &self.rent_collector.rent,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
     }
 
     fn update_epoch_schedule(&self) {
-        self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
-            create_account(
-                &self.epoch_schedule,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &sysvar::epoch_schedule::id(),
+            |account| {
+                create_account(
+                    &self.epoch_schedule,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
     }
 
     fn update_stake_history(&self, epoch: Option<Epoch>) {
@@ -2431,12 +2476,16 @@ impl Bank {
             return;
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
-        self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
-            create_account::<sysvar::stake_history::StakeHistory>(
-                self.stakes_cache.stakes().history(),
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &sysvar::stake_history::id(),
+            |account| {
+                create_account::<sysvar::stake_history::StakeHistory>(
+                    self.stakes_cache.stakes().history(),
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
     }
 
     pub fn epoch_duration_in_years(&self, prev_epoch: Epoch) -> f64 {
@@ -2523,12 +2572,16 @@ impl Bank {
             .is_active(&feature_set::deprecate_rewards_sysvar::id())
         {
             // this sysvar can be retired once `pico_inflation` is enabled on all clusters
-            self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                create_account(
-                    &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
+            self.update_sysvar_account(
+                &sysvar::rewards::id(),
+                |account| {
+                    create_account(
+                        &sysvar::rewards::Rewards::new(validator_point_value),
+                        self.inherit_specially_retained_account_fields(account),
+                    )
+                },
+                false,
+            );
         }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
@@ -2902,13 +2955,17 @@ impl Bank {
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
-        self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
-            let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
-            recent_blockhashes_account::create_account_with_data_and_fields(
-                recent_blockhash_iter,
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        self.update_sysvar_account(
+            &sysvar::recent_blockhashes::id(),
+            |account| {
+                let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
+                recent_blockhashes_account::create_account_with_data_and_fields(
+                    recent_blockhash_iter,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+            true,
+        );
     }
 
     pub fn update_recent_blockhashes(&self) {
@@ -4111,6 +4168,7 @@ impl Bank {
             &self.rent_collector,
             &self.feature_set,
             &self.fee_structure,
+            &self.sysvar_cache.read().unwrap(),
         );
         load_time.stop();
 
@@ -10581,10 +10639,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_bank_update_sysvar_account() {
+    fn test_bank_create_and_update_sysvar_account() {
         use sysvar::clock::Clock;
 
-        let dummy_clock_id = solana_sdk::pubkey::new_rand();
+        let dummy_clock_id = Pubkey::new_unique();
         let dummy_rent_epoch = 44;
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
 
@@ -10599,19 +10657,23 @@ pub(crate) mod tests {
         assert_capitalization_diff(
             &bank1,
             || {
-                bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                    assert!(optional_account.is_none());
+                bank1.update_sysvar_account(
+                    &dummy_clock_id,
+                    |optional_account| {
+                        assert!(optional_account.is_none());
 
-                    let mut account = create_account(
-                        &Clock {
-                            slot: expected_previous_slot,
-                            ..Clock::default()
-                        },
-                        bank1.inherit_specially_retained_account_fields(optional_account),
-                    );
-                    account.set_rent_epoch(dummy_rent_epoch);
-                    account
-                });
+                        let mut account = create_account(
+                            &Clock {
+                                slot: expected_previous_slot,
+                                ..Clock::default()
+                            },
+                            bank1.inherit_specially_retained_account_fields(optional_account),
+                        );
+                        account.set_rent_epoch(dummy_rent_epoch);
+                        account
+                    },
+                    false,
+                );
                 let current_account = bank1.get_account(&dummy_clock_id).unwrap();
                 assert_eq!(
                     expected_previous_slot,
@@ -10630,17 +10692,21 @@ pub(crate) mod tests {
         assert_capitalization_diff(
             &bank1,
             || {
-                bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                    assert!(optional_account.is_some());
+                bank1.update_sysvar_account(
+                    &dummy_clock_id,
+                    |optional_account| {
+                        assert!(optional_account.is_some());
 
-                    create_account(
-                        &Clock {
-                            slot: expected_previous_slot,
-                            ..Clock::default()
-                        },
-                        bank1.inherit_specially_retained_account_fields(optional_account),
-                    )
-                })
+                        create_account(
+                            &Clock {
+                                slot: expected_previous_slot,
+                                ..Clock::default()
+                            },
+                            bank1.inherit_specially_retained_account_fields(optional_account),
+                        )
+                    },
+                    false,
+                )
             },
             |old, new| {
                 // creating new sysvar twice in a slot shouldn't increment capitalization twice
@@ -10653,20 +10719,24 @@ pub(crate) mod tests {
         assert_capitalization_diff(
             &bank2,
             || {
-                bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                    let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
-                        .unwrap()
-                        .slot
-                        + 1;
+                bank2.update_sysvar_account(
+                    &dummy_clock_id,
+                    |optional_account| {
+                        let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
+                            .unwrap()
+                            .slot
+                            + 1;
 
-                    create_account(
-                        &Clock {
-                            slot,
-                            ..Clock::default()
-                        },
-                        bank2.inherit_specially_retained_account_fields(optional_account),
-                    )
-                });
+                        create_account(
+                            &Clock {
+                                slot,
+                                ..Clock::default()
+                            },
+                            bank2.inherit_specially_retained_account_fields(optional_account),
+                        )
+                    },
+                    false,
+                );
                 let current_account = bank2.get_account(&dummy_clock_id).unwrap();
                 assert_eq!(
                     expected_next_slot,
@@ -10686,20 +10756,24 @@ pub(crate) mod tests {
         assert_capitalization_diff(
             &bank2,
             || {
-                bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                    let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
-                        .unwrap()
-                        .slot
-                        + 1;
+                bank2.update_sysvar_account(
+                    &dummy_clock_id,
+                    |optional_account| {
+                        let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
+                            .unwrap()
+                            .slot
+                            + 1;
 
-                    create_account(
-                        &Clock {
-                            slot,
-                            ..Clock::default()
-                        },
-                        bank2.inherit_specially_retained_account_fields(optional_account),
-                    )
-                });
+                        create_account(
+                            &Clock {
+                                slot,
+                                ..Clock::default()
+                            },
+                            bank2.inherit_specially_retained_account_fields(optional_account),
+                        )
+                    },
+                    false,
+                );
                 let current_account = bank2.get_account(&dummy_clock_id).unwrap();
                 assert_eq!(
                     expected_next_slot,
@@ -10711,6 +10785,148 @@ pub(crate) mod tests {
                 assert_eq!(old, new);
             },
         );
+    }
+
+    #[test]
+    fn test_bank_update_sysvar_account_with_cache() {
+        use sysvar::clock::Clock;
+
+        let clock_id = sysvar::clock::id();
+        let rent_epoch = 44;
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
+
+        let expected_previous_slot = 3;
+        let mut expected_next_slot = expected_previous_slot + 1;
+
+        // First, initialize the clock sysvar
+        activate_all_features(&mut genesis_config);
+        let bank1 = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
+
+        assert_capitalization_diff(
+            &bank1,
+            || {
+                bank1.update_sysvar_account(
+                    &clock_id,
+                    |optional_account| {
+                        assert!(optional_account.is_some());
+
+                        let mut account = create_account(
+                            &Clock {
+                                slot: expected_previous_slot,
+                                ..Clock::default()
+                            },
+                            bank1.inherit_specially_retained_account_fields(optional_account),
+                        );
+                        account.set_rent_epoch(rent_epoch);
+                        account
+                    },
+                    true,
+                );
+                bank1
+                    .sysvar_cache
+                    .write()
+                    .unwrap()
+                    .set_rent_epoch(rent_epoch);
+                let current_account = bank1.get_account(&clock_id).unwrap();
+                assert_eq!(
+                    expected_previous_slot,
+                    from_account::<Clock, _>(&current_account).unwrap().slot
+                );
+                assert_eq!(rent_epoch, current_account.rent_epoch());
+                let cached_account = bank1
+                    .sysvar_cache
+                    .read()
+                    .unwrap()
+                    .get_account(&sysvar::clock::id())
+                    .unwrap();
+                assert_eq!(
+                    expected_previous_slot,
+                    from_account::<Clock, _>(&cached_account).unwrap().slot
+                );
+                assert_eq!(rent_epoch, cached_account.rent_epoch());
+            },
+            |old, new| {
+                // no account created, no capitalization change
+                assert_eq!(old, new);
+            },
+        );
+
+        // Updating should increment the clock's slot
+        let bank2 = Arc::new(Bank::new_from_parent(
+            &bank1,
+            &Pubkey::default(),
+            expected_previous_slot,
+        ));
+        bank2.update_sysvar_account(
+            &clock_id,
+            |optional_account| {
+                let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
+                    .unwrap()
+                    .slot
+                    + 1;
+
+                create_account(
+                    &Clock {
+                        slot,
+                        ..Clock::default()
+                    },
+                    bank2.inherit_specially_retained_account_fields(optional_account),
+                )
+            },
+            true,
+        );
+        bank2
+            .sysvar_cache
+            .write()
+            .unwrap()
+            .set_rent_epoch(rent_epoch);
+        let current_account = bank2.get_account(&clock_id).unwrap();
+        assert_eq!(
+            expected_next_slot,
+            from_account::<Clock, _>(&current_account).unwrap().slot
+        );
+        assert_eq!(rent_epoch, current_account.rent_epoch());
+        let cached_account = bank2
+            .sysvar_cache
+            .read()
+            .unwrap()
+            .get_account(&sysvar::clock::id())
+            .unwrap();
+        assert_eq!(
+            expected_next_slot,
+            from_account::<Clock, _>(&cached_account).unwrap().slot
+        );
+        assert_eq!(rent_epoch, cached_account.rent_epoch());
+
+        // Updating again should give bank2's sysvar to the closure not bank1's.
+        // Thus, increment expected_next_slot accordingly
+        expected_next_slot += 1;
+        bank2.update_sysvar_account(
+            &clock_id,
+            |optional_account| {
+                let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
+                    .unwrap()
+                    .slot
+                    + 1;
+
+                create_account(
+                    &Clock {
+                        slot,
+                        ..Clock::default()
+                    },
+                    bank2.inherit_specially_retained_account_fields(optional_account),
+                )
+            },
+            true,
+        );
+        let current_account = bank2.get_account(&clock_id).unwrap();
+        assert_eq!(
+            expected_next_slot,
+            from_account::<Clock, _>(&current_account).unwrap().slot
+        );
+        let cached_clock = bank2.sysvar_cache.read().unwrap().get_clock().unwrap();
+        assert_eq!(expected_next_slot, cached_clock.slot);
     }
 
     #[test]
@@ -17101,6 +17317,7 @@ pub(crate) mod tests {
             &bank.rent_collector,
             &bank.feature_set,
             &FeeStructure::default(),
+            &SysvarCache::default(),
         );
 
         let compute_budget = bank

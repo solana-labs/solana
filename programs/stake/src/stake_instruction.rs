@@ -437,7 +437,8 @@ mod tests {
         },
         bincode::serialize,
         solana_program_runtime::{
-            invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
+            invoke_context::mock_process_instruction,
+            sysvar_cache::{SysvarCache, SysvarWithLamports},
         },
         solana_sdk::{
             account::{self, AccountSharedData, ReadableAccount, WritableAccount},
@@ -2495,10 +2496,13 @@ mod tests {
         // Define rent here so that it's used consistently for setting the rent exempt reserve
         // and in the sysvar cache used for mock instruction processing.
         let mut sysvar_cache_override = SysvarCache::default();
-        sysvar_cache_override.set_rent(Rent {
-            lamports_per_byte_year: 0,
-            ..Rent::default()
-        });
+        sysvar_cache_override.set_rent(SysvarWithLamports::new(
+            Rent {
+                lamports_per_byte_year: 0,
+                ..Rent::default()
+            },
+            0,
+        ));
 
         for state in [
             StakeState::Initialized(Meta::auto(&stake_address)),

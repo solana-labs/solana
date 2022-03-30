@@ -24,6 +24,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
+    solana_program_runtime::sysvar_cache::SysvarCache,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -230,6 +231,20 @@ impl Accounts {
         })
     }
 
+    fn construct_sysvar_account(
+        &self,
+        pubkey: &Pubkey,
+        ancestors: &Ancestors,
+        sysvar_cache: &SysvarCache,
+    ) -> AccountSharedData {
+        sysvar_cache.get_account(pubkey).unwrap_or_else(|_| {
+            self.accounts_db
+                .load_with_fixed_root(ancestors, pubkey)
+                .map(|(account, _)| account)
+                .unwrap_or_default()
+        })
+    }
+
     fn load_transaction(
         &self,
         ancestors: &Ancestors,
@@ -238,6 +253,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
+        sysvar_cache: &SysvarCache,
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
@@ -262,12 +278,17 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-                    if solana_sdk::sysvar::instructions::check_id(key) {
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                        )
+                    if sysvar::is_sysvar_id(key) {
+                        if sysvar::instructions::check_id(key) {
+                            Self::construct_instructions_account(
+                                message,
+                                feature_set.is_active(
+                                    &feature_set::instructions_sysvar_owned_by_sysvar::id(),
+                                ),
+                            )
+                        } else {
+                            self.construct_sysvar_account(key, ancestors, sysvar_cache)
+                        }
                     } else {
                         let (account, rent) = self
                             .accounts_db
@@ -486,6 +507,7 @@ impl Accounts {
         Ok(account_indices)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
@@ -496,6 +518,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
+        sysvar_cache: &SysvarCache,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -525,6 +548,7 @@ impl Accounts {
                         error_counters,
                         rent_collector,
                         feature_set,
+                        sysvar_cache,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -1404,6 +1428,7 @@ mod tests {
         error_counters: &mut ErrorCounters,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
+        sysvar_cache: &SysvarCache,
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
@@ -1429,6 +1454,7 @@ mod tests {
             rent_collector,
             feature_set,
             fee_structure,
+            sysvar_cache,
         )
     }
 
@@ -1446,6 +1472,7 @@ mod tests {
             error_counters,
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
+            &SysvarCache::default(),
         )
     }
 
@@ -1685,6 +1712,7 @@ mod tests {
             &mut error_counters,
             &feature_set,
             &FeeStructure::default(),
+            &SysvarCache::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
@@ -1701,6 +1729,7 @@ mod tests {
             &mut error_counters,
             &feature_set,
             &FeeStructure::default(),
+            &SysvarCache::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
@@ -1716,6 +1745,7 @@ mod tests {
             &mut error_counters,
             &feature_set,
             &FeeStructure::default(),
+            &SysvarCache::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
@@ -3036,6 +3066,7 @@ mod tests {
             &rent_collector,
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
+            &SysvarCache::default(),
         )
     }
 
