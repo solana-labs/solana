@@ -872,8 +872,11 @@ impl Validator {
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
 
-        let rpc_completed_slots_service =
-            RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+        let rpc_completed_slots_service = RpcCompletedSlotsService::spawn(
+            completed_slots_receiver,
+            rpc_subscriptions.clone(),
+            exit.clone(),
+        );
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
