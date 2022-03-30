@@ -29,16 +29,16 @@ impl RpcCompletedSlotsService {
                     break;
                 }
 
-                completed_slots_receiver.try_iter().for_each(|slots| {
+                if let Ok(slots) = completed_slots_receiver
+                    .recv_timeout(Duration::from_millis(COMPLETE_SLOT_REPORT_SLEEP_MS))
+                {
                     for slot in slots {
                         rpc_subscriptions.notify_slot_update(SlotUpdate::Completed {
                             slot,
                             timestamp: timestamp(),
                         });
                     }
-                });
-
-                sleep(Duration::from_millis(COMPLETE_SLOT_REPORT_SLEEP_MS));
+                }
             })
             .unwrap()
     }
