@@ -3,11 +3,7 @@ import React from "react";
 import { Account } from "providers/accounts";
 import { useCluster } from "providers/cluster";
 import { Address } from "components/common/Address";
-import {
-  Program,
-  Provider,
-  BorshAccountsCoder,
-} from "@project-serum/anchor";
+import { Program, Provider, BorshAccountsCoder } from "@project-serum/anchor";
 
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
@@ -24,11 +20,15 @@ export function AnchorAccountCard({ account }: { account: Account }) {
     setDecodedAnchorAccountData(undefined);
     (async () => {
       const connection = new Connection(url);
-      const provider = new Provider(connection, new NodeWallet(Keypair.generate()), {
-        skipPreflight: false,
-        commitment: "confirmed",
-        preflightCommitment: "confirmed",
-      });
+      const provider = new Provider(
+        connection,
+        new NodeWallet(Keypair.generate()),
+        {
+          skipPreflight: false,
+          commitment: "confirmed",
+          preflightCommitment: "confirmed",
+        }
+      );
 
       if (!account.details) {
         return;
@@ -51,9 +51,13 @@ export function AnchorAccountCard({ account }: { account: Account }) {
                 BorshAccountsCoder.accountDiscriminator(layoutName);
 
               if (equal(discriminatorToCheck, discriminator)) {
-                const decodedAnchorObject = program.account[
-                  accountType
-                ].coder.accounts.decode(layoutName, accountInfo.data);
+                const accountDecoder = program.account[accountType];
+                const decodedAnchorObject =
+                  accountDecoder.coder.accounts.decode(
+                    layoutName,
+                    accountInfo.data
+                  );
+
                 setDecodedAnchorAccountName(layoutName);
                 setDecodedAnchorAccountData(decodedAnchorObject);
               }
@@ -111,11 +115,15 @@ export const hasAnchorIDL = async (
   url: string
 ): Promise<boolean> => {
   const connection = new Connection(url);
-  const provider = new Provider(connection, new NodeWallet(Keypair.generate()), {
-    skipPreflight: false,
-    commitment: "confirmed",
-    preflightCommitment: "confirmed",
-  });
+  const provider = new Provider(
+    connection,
+    new NodeWallet(Keypair.generate()),
+    {
+      skipPreflight: false,
+      commitment: "confirmed",
+      preflightCommitment: "confirmed",
+    }
+  );
 
   const program = await Program.at(address, provider).catch(() => {});
   return !!program;
