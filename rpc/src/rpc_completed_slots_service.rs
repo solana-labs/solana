@@ -8,7 +8,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc,
         },
-        thread::{sleep, Builder, JoinHandle},
+        thread::{Builder, JoinHandle},
         time::Duration,
     },
 };
