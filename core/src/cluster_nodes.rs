@@ -8,13 +8,17 @@ use {
         cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+<<<<<<< HEAD
         weighted_shuffle::{weighted_best, weighted_shuffle, WeightedShuffle},
+=======
+        crds_value::{CrdsData, CrdsValue},
+        weighted_shuffle::WeightedShuffle,
+>>>>>>> d0b850cdd (removes turbine peers shuffle patch feature)
     },
     solana_ledger::shred::Shred,
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
-        feature_set,
         pubkey::Pubkey,
         timing::timestamp,
     },
@@ -52,10 +56,6 @@ pub struct ClusterNodes<T> {
     // Reverse index from nodes pubkey to their index in self.nodes.
     index: HashMap<Pubkey, /*index:*/ usize>,
     weighted_shuffle: WeightedShuffle</*stake:*/ u64>,
-    // Weights and indices for sampling peers. weighted_{shuffle,best} expect
-    // weights >= 1. For backward compatibility we use max(1, stake) for
-    // weights and exclude nodes with no contact-info.
-    compat_index: Vec<(/*weight:*/ u64, /*index:*/ usize)>,
     _phantom: PhantomData<T>,
 }
 
@@ -88,14 +88,15 @@ impl Node {
 
 impl<T> ClusterNodes<T> {
     pub(crate) fn num_peers(&self) -> usize {
-        self.compat_index.len()
+        self.nodes.len().saturating_sub(1)
     }
 
     // A peer is considered live if they generated their contact info recently.
     pub(crate) fn num_peers_live(&self, now: u64) -> usize {
-        self.compat_index
+        self.nodes
             .iter()
-            .filter_map(|(_, index)| self.nodes[*index].contact_info())
+            .filter(|node| node.pubkey() != self.pubkey)
+            .filter_map(|node| node.contact_info())
             .filter(|node| {
                 let elapsed = if node.wallclock < now {
                     now - node.wallclock
@@ -116,20 +117,12 @@ impl ClusterNodes<BroadcastStage> {
     pub(crate) fn get_broadcast_addrs(
         &self,
         shred: &Shred,
-        root_bank: &Bank,
+        _root_bank: &Bank,
         fanout: usize,
         socket_addr_space: &SocketAddrSpace,
     ) -> Vec<SocketAddr> {
         const MAX_CONTACT_INFO_AGE: Duration = Duration::from_secs(2 * 60);
         let shred_seed = shred.seed(self.pubkey);
-        if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
-            if let Some(node) = self.get_broadcast_peer(shred_seed) {
-                if socket_addr_space.check(&node.tvu) {
-                    return vec![node.tvu];
-                }
-            }
-            return Vec::default();
-        }
         let mut rng = ChaChaRng::from_seed(shred_seed);
         let index = match self.weighted_shuffle.first(&mut rng) {
             None => return Vec::default(),
@@ -171,20 +164,6 @@ impl ClusterNodes<BroadcastStage> {
             .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
             .collect()
     }
-
-    /// Returns the root of turbine broadcast tree, which the leader sends the
-    /// shred to.
-    fn get_broadcast_peer(&self, shred_seed: [u8; 32]) -> Option<&ContactInfo> {
-        if self.compat_index.is_empty() {
-            None
-        } else {
-            let index = weighted_best(&self.compat_index, shred_seed);
-            match &self.nodes[index].node {
-                NodeId::ContactInfo(node) => Some(node),
-                NodeId::Pubkey(_) => panic!("this should not happen!"),
-            }
-        }
-    }
 }
 
 impl ClusterNodes<RetransmitStage> {
@@ -219,20 +198,23 @@ impl ClusterNodes<RetransmitStage> {
             .collect()
     }
 
-    fn get_retransmit_peers(
+    pub fn get_retransmit_peers(
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
-        root_bank: &Bank,
+        _root_bank: &Bank,
         fanout: usize,
     ) -> (
         Vec<&Node>, // neighbors
         Vec<&Node>, // children
     ) {
         let shred_seed = shred.seed(slot_leader);
+<<<<<<< HEAD
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
             return self.get_retransmit_peers_compat(shred_seed, fanout, slot_leader);
         }
+=======
+>>>>>>> d0b850cdd (removes turbine peers shuffle patch feature)
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == self.pubkey {
@@ -255,6 +237,7 @@ impl ClusterNodes<RetransmitStage> {
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
         (neighbors, children)
     }
+<<<<<<< HEAD
 
     fn get_retransmit_peers_compat(
         &self,
@@ -295,6 +278,8 @@ impl ClusterNodes<RetransmitStage> {
         let children = children.into_iter().map(|i| &self.nodes[i]).collect();
         (neighbors, children)
     }
+=======
+>>>>>>> d0b850cdd (removes turbine peers shuffle patch feature)
 }
 
 fn new_cluster_nodes<T: 'static>(
@@ -314,26 +299,11 @@ fn new_cluster_nodes<T: 'static>(
     if broadcast {
         weighted_shuffle.remove_index(index[&self_pubkey]);
     }
-    // For backward compatibility:
-    //   * nodes which do not have contact-info are excluded.
-    //   * stakes are floored at 1.
-    // The sorting key here should be equivalent to
-    // solana_gossip::deprecated::sorted_stakes_with_index.
-    // Leader itself is excluded when sampling broadcast peers.
-    let compat_index = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, node)| node.contact_info().is_some())
-        .filter(|(_, node)| !broadcast || node.pubkey() != self_pubkey)
-        .sorted_by_key(|(_, node)| Reverse((node.stake.max(1), node.pubkey())))
-        .map(|(index, node)| (node.stake.max(1), index))
-        .collect();
     ClusterNodes {
         pubkey: self_pubkey,
         nodes,
         index,
         weighted_shuffle,
-        compat_index,
         _phantom: PhantomData::default(),
     }
 }
@@ -369,21 +339,6 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
     // will keep nodes with contact-info.
     .dedup_by(|a, b| a.pubkey() == b.pubkey())
     .collect()
-}
-
-fn enable_turbine_peers_shuffle_patch(shred_slot: Slot, root_bank: &Bank) -> bool {
-    let feature_slot = root_bank
-        .feature_set
-        .activated_slot(&feature_set::turbine_peers_shuffle::id());
-    match feature_slot {
-        None => false,
-        Some(feature_slot) => {
-            let epoch_schedule = root_bank.epoch_schedule();
-            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
-            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
-        }
-    }
 }
 
 impl<T> ClusterNodesCache<T> {
@@ -553,7 +508,6 @@ mod tests {
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
         let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
         // All nodes with contact-info should be in the index.
-        assert_eq!(cluster_nodes.compat_index.len(), nodes.len());
         // Staked nodes with no contact-info should be included.
         assert!(cluster_nodes.nodes.len() > nodes.len());
         // Assert that all nodes keep their contact-info.
@@ -576,22 +530,6 @@ mod tests {
         let (peers, stakes_and_index) =
             sorted_retransmit_peers_and_stakes(&cluster_info, Some(&stakes));
         assert_eq!(stakes_and_index.len(), peers.len());
-        assert_eq!(cluster_nodes.compat_index.len(), peers.len());
-        for (i, node) in cluster_nodes
-            .compat_index
-            .iter()
-            .map(|(_, i)| &cluster_nodes.nodes[*i])
-            .enumerate()
-        {
-            let (stake, index) = stakes_and_index[i];
-            // Wallclock may be update by ClusterInfo::push_self.
-            if node.pubkey() == this_node.id {
-                assert_eq!(this_node.id, peers[index].id)
-            } else {
-                assert_eq!(node.contact_info().unwrap(), &peers[index]);
-            }
-            assert_eq!(node.stake.max(1), stake);
-        }
         let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
         // Remove slot leader from peers indices.
         let stakes_and_index: Vec<_> = stakes_and_index
@@ -608,21 +546,6 @@ mod tests {
             .map(|(_, index)| index)
             .collect();
         assert_eq!(this_node.id, peers[shuffled_index[self_index]].id);
-        for fanout in 1..200 {
-            let (neighbors_indices, children_indices) =
-                compute_retransmit_peers(fanout, self_index, &shuffled_index);
-            let (neighbors, children) =
-                cluster_nodes.get_retransmit_peers_compat(shred_seed, fanout, slot_leader);
-            assert_eq!(children.len(), children_indices.len());
-            for (node, index) in children.into_iter().zip(children_indices) {
-                assert_eq!(*node.contact_info().unwrap(), peers[index]);
-            }
-            assert_eq!(neighbors.len(), neighbors_indices.len());
-            assert_eq!(neighbors[0].pubkey(), peers[neighbors_indices[0]].id);
-            for (node, index) in neighbors.into_iter().zip(neighbors_indices).skip(1) {
-                assert_eq!(*node.contact_info().unwrap(), peers[index]);
-            }
-        }
     }
 
     #[test]
@@ -634,7 +557,6 @@ mod tests {
         let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
         // All nodes with contact-info should be in the index.
         // Excluding this node itself.
-        assert_eq!(cluster_nodes.compat_index.len() + 1, nodes.len());
         // Staked nodes with no contact-info should be included.
         assert!(cluster_nodes.nodes.len() > nodes.len());
         // Assert that all nodes keep their contact-info.
@@ -656,23 +578,5 @@ mod tests {
         }
         let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(&stakes));
         assert_eq!(peers_and_stakes.len(), peers.len());
-        assert_eq!(cluster_nodes.compat_index.len(), peers.len());
-        for (i, node) in cluster_nodes
-            .compat_index
-            .iter()
-            .map(|(_, i)| &cluster_nodes.nodes[*i])
-            .enumerate()
-        {
-            let (stake, index) = peers_and_stakes[i];
-            assert_eq!(node.contact_info().unwrap(), &peers[index]);
-            assert_eq!(node.stake.max(1), stake);
-        }
-        for _ in 0..100 {
-            let mut shred_seed = [0u8; 32];
-            rng.fill(&mut shred_seed[..]);
-            let index = weighted_best(&peers_and_stakes, shred_seed);
-            let peer = cluster_nodes.get_broadcast_peer(shred_seed).unwrap();
-            assert_eq!(*peer, peers[index]);
-        }
     }
 }
