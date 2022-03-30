@@ -5434,6 +5434,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",
+ "memoffset",
  "num-derive",
  "num-traits",
  "parking_lot 0.12.0",
