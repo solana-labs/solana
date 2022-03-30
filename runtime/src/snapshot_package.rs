@@ -91,9 +91,11 @@ impl AccountsPackage {
                 .path()
                 .join(bank_snapshot_info.slot.to_string());
             fs::create_dir_all(&snapshot_hardlink_dir)?;
+            let file_name =
+                snapshot_utils::path_to_file_name_str(&bank_snapshot_info.snapshot_path)?;
             fs::hard_link(
                 &bank_snapshot_info.snapshot_path,
-                &snapshot_hardlink_dir.join(bank_snapshot_info.slot.to_string()),
+                &snapshot_hardlink_dir.join(file_name),
             )?;
         }
 
