@@ -1812,7 +1812,6 @@ mod tests {
     };
 
     fn validator_exit() {
-        solana_logger::setup();
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
@@ -1939,6 +1938,7 @@ mod tests {
 
     #[test]
     fn test_validator_exit() {
+        solana_logger::setup_with("debug");
         validator_exit();
         validator_parallel_exit();
     }
