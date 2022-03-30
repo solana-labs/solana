@@ -84,7 +84,12 @@ impl TransactionGenerator {
         }
     }
 
-    fn generate(&mut self, payer: Option<&Keypair>, rpc_client: &Option<RpcClient>) -> Transaction {
+    fn generate(
+        &mut self,
+        payer: Option<&Keypair>,
+        kpvals: Option<Vec<Keypair>>, // provided for valid signatures
+        rpc_client: &Option<RpcClient>,
+    ) -> Transaction {
         if !self.transaction_params.unique_transactions && self.cached_transaction.is_some() {
             return self.cached_transaction.as_ref().unwrap().clone();
         }
@@ -126,10 +131,6 @@ impl TransactionGenerator {
         } else if self.transaction_params.valid_signatures {
             // Since we don't provide a payer, this transaction will end up
             // filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
-            let kpvals: Vec<Keypair> = (0..self.transaction_params.num_signatures)
-                .map(|_| Keypair::new())
-                .collect();
-            let keypairs: Vec<&Keypair> = kpvals.iter().collect();
 
             let instructions = vec![CompiledInstruction::new(
                 0,
@@ -137,6 +138,8 @@ impl TransactionGenerator {
                 vec![0, 1],
             )];
 
+            let kpvals = kpvals.unwrap();
+            let keypairs: Vec<&Keypair> = kpvals.iter().collect();
             Transaction::new_with_compiled_instructions(
                 &keypairs,
                 &[],
@@ -280,6 +283,8 @@ fn run_dos_transactions(
 ) {
     info!("{:?}", transaction_params);
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let num_signatures = transaction_params.num_signatures;
+    let valid_signatures = transaction_params.valid_signatures;
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
 
     let mut last_log = Instant::now();
@@ -289,8 +294,14 @@ fn run_dos_transactions(
     let mut generation_elapsed: u64 = 0;
     let mut send_elapsed: u64 = 0;
     loop {
+        let kpvals: Option<Vec<Keypair>> = if valid_signatures {
+            Some((0..num_signatures).map(|_| Keypair::new()).collect())
+        } else {
+            None
+        };
+
         let generation_start = Instant::now();
-        let tx = transaction_generator.generate(payer, &rpc_client);
+        let tx = transaction_generator.generate(payer, kpvals, &rpc_client);
         generation_elapsed =
             generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
 
@@ -378,7 +389,7 @@ fn run_dos(
                 info!("{:?}", tp);
 
                 let mut transaction_generator = TransactionGenerator::new(tp);
-                let tx = transaction_generator.generate(payer, &rpc_client);
+                let tx = transaction_generator.generate(payer, None, &rpc_client);
                 info!("{:?}", tx);
                 bincode::serialize(&tx).unwrap()
             }
@@ -407,7 +418,7 @@ fn run_dos(
                     compute_tps(count)
                 );
                 last_log = Instant::now();
-                total_count.saturating_add(count);
+                total_count = total_count.saturating_add(count);
                 count = 0;
             }
             if iterations != 0 && total_count >= iterations {
@@ -760,7 +771,7 @@ pub mod test {
         run_dos(
             &nodes_slice,
             100000,
-            Some(&cluster.funding_keypair), // TODO temporary use it as must
+            None, //Some(&cluster.funding_keypair), // TODO temporary use it as must
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
