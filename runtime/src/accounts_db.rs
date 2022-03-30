@@ -5518,6 +5518,7 @@ impl AccountsDb {
                     use_bg_thread_pool: !is_startup,
                     check_hash,
                     ancestors: can_cached_slot_be_unflushed.then(|| ancestors),
+                    use_write_cache: can_cached_slot_be_unflushed,
                 },
                 timings,
             );
@@ -5533,6 +5534,7 @@ impl AccountsDb {
                     use_bg_thread_pool: !is_startup,
                     check_hash,
                     ancestors: Some(ancestors),
+                    use_write_cache: can_cached_slot_be_unflushed,
                 },
             )
         }
@@ -5760,9 +5762,15 @@ impl AccountsDb {
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
                     config.check_hash,
-                    config
-                        .ancestors
-                        .map(|a| (&self.accounts_cache, a, &self.accounts_index)),
+                    // if we can use write cache, then pass Some(write cache, ancestors, index)
+                    // otherwise, ancestors is irrelevant because storages were accumulated using ancestors already
+                    (config.use_write_cache && config.ancestors.is_some()).then(|| {
+                        (
+                            &self.accounts_cache,
+                            config.ancestors.unwrap(),
+                            &self.accounts_index,
+                        )
+                    }),
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
@@ -7949,6 +7957,7 @@ pub mod tests {
                     use_bg_thread_pool: false,
                     check_hash: false,
                     ancestors: None,
+                    use_write_cache: false,
                 },
                 HashStats::default(),
             )
@@ -7975,6 +7984,7 @@ pub mod tests {
                     use_bg_thread_pool: false,
                     check_hash: false,
                     ancestors: None,
+                    use_write_cache: false,
                 },
                 HashStats::default(),
             )
