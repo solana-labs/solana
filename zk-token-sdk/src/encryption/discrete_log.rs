@@ -7,7 +7,7 @@ use {
         traits::Identity,
     },
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, sync::mpsc, thread},
+    std::{collections::HashMap, thread},
 };
 
 const TWO16: u64 = 65536; // 2^16
@@ -94,46 +94,33 @@ impl DiscreteLog {
     /// is a 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
         let mut starting_point = self.target;
-        let (tx, rx) = mpsc::channel();
-
         let handles = (0..self.num_threads)
             .into_iter()
             .map(|i| {
-                let tx = tx.clone();
                 let ristretto_iterator = RistrettoIterator::new(
                     (starting_point, i as u64),
                     (-(&self.step_point), self.num_threads as u64),
                 );
 
-                let handle = thread::spawn(move || {
-                    let decoded = self.decode_range(ristretto_iterator, self.range_bound);
-                    tx.send(decoded).unwrap();
-                });
+                let handle =
+                    thread::spawn(move || Self::decode_range(ristretto_iterator, self.range_bound));
 
                 starting_point -= G;
                 handle
             })
             .collect::<Vec<_>>();
 
-        drop(tx);
         let mut solution = None;
-        for received in rx {
-            if received.is_some() {
-                solution = received;
-            }
-        }
-
         for handle in handles {
-            handle.join().unwrap();
+            let discrete_log = handle.join().unwrap();
+            if discrete_log.is_some() {
+                solution = discrete_log;
+            }
         }
         solution
     }
 
-    fn decode_range(
-        self,
-        ristretto_iterator: RistrettoIterator,
-        range_bound: usize,
-    ) -> Option<u64> {
+    fn decode_range(ristretto_iterator: RistrettoIterator, range_bound: usize) -> Option<u64> {
         let hashmap = &DECODE_PRECOMPUTATION_FOR_G;
         let mut decoded = None;
         for (point, x_lo) in ristretto_iterator.take(range_bound) {
@@ -274,3 +261,4 @@ mod tests {
         assert_eq!(amount, decoded.unwrap());
     }
 }
+
