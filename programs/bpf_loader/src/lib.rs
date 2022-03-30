@@ -257,12 +257,12 @@ pub fn create_vm<'a, 'b>(
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
         first_instruction_account,
-        instruction_data,
+        _instruction_data,
         invoke_context,
         false,
     )
@@ -270,12 +270,12 @@ pub fn process_instruction(
 
 pub fn process_instruction_jit(
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
         first_instruction_account,
-        instruction_data,
+        _instruction_data,
         invoke_context,
         true,
     )
@@ -283,7 +283,7 @@ pub fn process_instruction_jit(
 
 fn process_instruction_common(
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -394,7 +394,7 @@ fn process_instruction_common(
             get_or_create_executor_time.as_us()
         );
 
-        executor.execute(program_account_index, instruction_data, invoke_context)
+        executor.execute(program_account_index, _instruction_data, invoke_context)
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
@@ -404,7 +404,7 @@ fn process_instruction_common(
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 first_instruction_account,
-                instruction_data,
+                _instruction_data,
                 invoke_context,
                 use_jit,
             )
@@ -413,7 +413,7 @@ fn process_instruction_common(
         {
             process_loader_instruction(
                 first_instruction_account,
-                instruction_data,
+                _instruction_data,
                 invoke_context,
                 use_jit,
             )
@@ -429,13 +429,14 @@ fn process_instruction_common(
 
 fn process_loader_upgradeable_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
@@ -1062,12 +1063,13 @@ fn common_close_account(
 
 fn process_loader_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -1589,7 +1591,7 @@ mod tests {
             None,
             Err(InstructionError::ProgramFailedToComplete),
             |first_instruction_account: usize,
-             instruction_data: &[u8],
+             _instruction_data: &[u8],
              invoke_context: &mut InvokeContext| {
                 invoke_context
                     .get_compute_meter()
@@ -1597,7 +1599,7 @@ mod tests {
                     .mock_set_remaining(0);
                 super::process_instruction(
                     first_instruction_account,
-                    instruction_data,
+                    _instruction_data,
                     invoke_context,
                 )
             },

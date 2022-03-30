@@ -22,9 +22,12 @@ use {
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
     match limited_deserialize(instruction_data)? {
         ProgramInstruction::CreateLookupTable {
             recent_slot,

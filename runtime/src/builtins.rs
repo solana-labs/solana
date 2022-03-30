@@ -18,7 +18,7 @@ use {
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
     first_instruction_account: usize,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_log_collector();
@@ -27,7 +27,7 @@ fn process_instruction_with_program_logging(
     let program_id = instruction_context.get_program_key(transaction_context)?;
     stable_log::program_invoke(&logger, program_id, invoke_context.get_stack_height());
 
-    let result = process_instruction(first_instruction_account, instruction_data, invoke_context);
+    let result = process_instruction(first_instruction_account, _instruction_data, invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -42,12 +42,12 @@ fn process_instruction_with_program_logging(
 macro_rules! with_program_logging {
     ($process_instruction:expr) => {
         |first_instruction_account: usize,
-         instruction_data: &[u8],
+         _instruction_data: &[u8],
          invoke_context: &mut InvokeContext| {
             process_instruction_with_program_logging(
                 $process_instruction,
                 first_instruction_account,
-                instruction_data,
+                _instruction_data,
                 invoke_context,
             )
         }

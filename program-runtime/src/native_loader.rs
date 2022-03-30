@@ -34,7 +34,7 @@ use {
 /// invoke_context: Invocation context
 pub type LoaderEntrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
-    instruction_data: &[u8],
+    _instruction_data: &[u8],
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError>;
 
@@ -166,7 +166,7 @@ impl NativeLoader {
     pub fn process_instruction(
         &self,
         first_instruction_account: usize,
-        instruction_data: &[u8],
+        _instruction_data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let (program_id, name_vec) = {
@@ -206,6 +206,9 @@ impl NativeLoader {
         trace!("Call native {:?}", name);
         #[allow(deprecated)]
         invoke_context.remove_first_keyed_account()?;
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let instruction_data = instruction_context.get_instruction_data();
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;

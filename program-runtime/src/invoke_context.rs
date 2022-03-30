@@ -1301,11 +1301,12 @@ mod tests {
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
         _first_instruction_account: usize,
-        data: &[u8],
+        _data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
+        let instruction_data = instruction_context.get_instruction_data();
         let program_id = instruction_context.get_program_key(transaction_context)?;
         assert_eq!(
             program_id,
@@ -1322,7 +1323,7 @@ mod tests {
                 .get_key()
         );
 
-        if let Ok(instruction) = bincode::deserialize(data) {
+        if let Ok(instruction) = bincode::deserialize(instruction_data) {
             match instruction {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),

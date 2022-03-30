@@ -7820,12 +7820,13 @@ pub(crate) mod tests {
 
         fn mock_process_instruction(
             _first_instruction_account: usize,
-            data: &[u8],
+            _data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
-            if let Ok(instruction) = bincode::deserialize(data) {
+            let instruction_data = instruction_context.get_instruction_data();
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockInstruction::Deduction => {
                         instruction_context
@@ -12565,12 +12566,13 @@ pub(crate) mod tests {
 
         fn mock_process_instruction(
             _first_instruction_account: usize,
-            data: &[u8],
+            _data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
-            let lamports = data[0] as u64;
+            let instruction_data = instruction_context.get_instruction_data();
+            let lamports = instruction_data[0] as u64;
             instruction_context
                 .try_borrow_instruction_account(transaction_context, 2)?
                 .checked_sub_lamports(lamports)?;
@@ -15508,14 +15510,16 @@ pub(crate) mod tests {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         fn mock_process_instruction(
             _first_instruction_account: usize,
-            data: &[u8],
+            _data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let mock_program_id = Pubkey::new(&[2u8; 32]);
             let transaction_context = &mut invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let instruction_data = instruction_context.get_instruction_data();
             let mut return_data = [0u8; MAX_RETURN_DATA];
-            if !data.is_empty() {
-                let index = usize::from_le_bytes(data.try_into().unwrap());
+            if !instruction_data.is_empty() {
+                let index = usize::from_le_bytes(instruction_data.try_into().unwrap());
                 return_data[index] = 1;
                 transaction_context
                     .set_return_data(mock_program_id, return_data.to_vec())
@@ -16383,12 +16387,13 @@ pub(crate) mod tests {
 
     fn mock_transfer_process_instruction(
         _first_instruction_account: usize,
-        data: &[u8],
+        _data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        if let Ok(instruction) = bincode::deserialize(data) {
+        let instruction_data = instruction_context.get_instruction_data();
+        if let Ok(instruction) = bincode::deserialize(instruction_data) {
             match instruction {
                 MockTransferInstruction::Transfer(amount) => {
                     instruction_context
@@ -17151,12 +17156,13 @@ pub(crate) mod tests {
 
     fn mock_realloc_process_instruction(
         _first_instruction_account: usize,
-        data: &[u8],
+        _data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        if let Ok(instruction) = bincode::deserialize(data) {
+        let instruction_data = instruction_context.get_instruction_data();
+        if let Ok(instruction) = bincode::deserialize(instruction_data) {
             match instruction {
                 MockReallocInstruction::Realloc(new_size, new_balance, _) => {
                     // Set data length
