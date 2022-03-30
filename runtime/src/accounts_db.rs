@@ -5497,7 +5497,7 @@ impl AccountsDb {
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_root();
             let storages = SortedStorages::new_with_slots(
-                combined_maps.iter().zip(slots.iter()),
+                combined_maps.iter().zip(slots.into_iter()),
                 min_root,
                 Some(slot),
             );
