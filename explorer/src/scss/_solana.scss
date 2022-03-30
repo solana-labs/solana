@@ -454,7 +454,7 @@ p.updated-time {
     padding-inline-start: 0;
 }
 
-.security-txt p {
+.security-txt p, pre {
     text-align: left !important;
     margin: 0;
 }
@@ -470,4 +470,8 @@ p.updated-time {
 .security-txt code {
     white-space: pre-wrap;
     display: block;
+}
+
+.security-txt-link-color-hack-reee {
+  color: white;
 }

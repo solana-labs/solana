@@ -1,15 +1,17 @@
 import { PublicKey } from "@solana/web3.js";
 import { Link } from "react-router-dom";
-import { SecurityTXT } from "utils/security-txt";
+import { fromProgramData } from "utils/security-txt";
 import { clusterPath } from "utils/url";
+import { ProgramDataAccountInfo } from "validators/accounts/upgradeable-program";
 
 export function SecurityTXTBadge({
-  securityTXT,
+  programData,
   pubkey,
 }: {
-  securityTXT: SecurityTXT | undefined;
+  programData: ProgramDataAccountInfo;
   pubkey: PublicKey;
 }) {
+  const { securityTXT, error } = fromProgramData(programData);
   if (securityTXT) {
     return (
       <h3 className="mb-0">
@@ -24,7 +26,7 @@ export function SecurityTXTBadge({
   } else {
     return (
       <h3 className="mb-0">
-        <span className="badge bg-warning-soft rank">Not included</span>
+        <span className="badge bg-warning-soft rank">{error}</span>
       </h3>
     );
   }

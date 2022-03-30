@@ -36,18 +36,18 @@ const FOOTER = "=======END SECURITY.TXT V1=======\0";
 
 export const fromProgramData = (
   programData: ProgramDataAccountInfo
-): SecurityTXT | undefined => {
+): { securityTXT?: SecurityTXT; error?: string } => {
   const [data, encoding] = programData.data;
-
-  if (!(data && encoding === "base64")) return undefined;
+  if (!(data && encoding === "base64"))
+    return { securityTXT: undefined, error: "Failed to decode program data" };
 
   const decoded = Buffer.from(data, encoding);
 
-  const header_idx = decoded.indexOf(HEADER);
-  const footer_idx = decoded.indexOf(FOOTER);
+  const headerIdx = decoded.indexOf(HEADER);
+  const footerIdx = decoded.indexOf(FOOTER);
 
-  if (header_idx < 0 || footer_idx < 0) {
-    return undefined;
+  if (headerIdx < 0 || footerIdx < 0) {
+    return { securityTXT: undefined, error: "Program has no security.txt" };
   }
 
   /*
@@ -55,7 +55,7 @@ export const fromProgramData = (
   of ascii encoded key value pairs seperated by null characters.
   e.g. key1\0value1\0key2\0value2\0
   */
-  const content = decoded.subarray(header_idx + HEADER.length, footer_idx);
+  const content = decoded.subarray(headerIdx + HEADER.length, footerIdx);
 
   const map = content
     .reduce<number[][]>(
@@ -91,7 +91,10 @@ export const fromProgramData = (
       { map: {}, key: undefined }
     ).map;
   if (!REQUIRED_KEYS.every((k) => k in map)) {
-    throw new Error(`some required fields (${REQUIRED_KEYS}) are missing`);
+    return {
+      securityTXT: undefined,
+      error: `some required fields (${REQUIRED_KEYS}) are missing`,
+    };
   }
-  return map as SecurityTXT;
+  return { securityTXT: map as SecurityTXT, error: undefined };
 };

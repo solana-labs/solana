@@ -112,7 +112,7 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
   "bpf-upgradeable-loader": [
     {
       slug: "security",
-      title: "Security.txt",
+      title: "Security",
       path: "/security",
     },
   ],

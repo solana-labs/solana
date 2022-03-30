@@ -8,17 +8,16 @@ export function SecurityCard({ data }: { data: UpgradeableLoaderAccountData }) {
     return <ErrorCard text="Account has no data" />;
   }
 
-  const securityTXT = fromProgramData(data.programData);
-
+  const { securityTXT, error } = fromProgramData(data.programData);
   if (!securityTXT) {
-    return <ErrorCard text="Account has no security.txt" />;
+    return <ErrorCard text={error!} />;
   }
 
   return (
     <div className="card security-txt">
       <div className="card-header">
         <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Overview
+          Security.txt
         </h3>
         <small>
           Note that this is self-reported by the author of the program and might
