@@ -25,6 +25,7 @@ impl RpcCompletedSlotsService {
         Builder::new()
             .name("solana-rpc-completed-slots-service".to_string())
             .spawn(move || loop {
+                // shutdown the service
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
