@@ -25,7 +25,7 @@ jobs:
         - .travis/export-github-repo.sh web3.js/ solana-web3.js
 
     - &release-artifacts
-      if: type IN (api, cron) OR tag IS present
+      if: type IN (api, cron, pull_request) OR tag IS present
       name: "macOS release artifacts"
       os: osx
       osx_image: xcode12
