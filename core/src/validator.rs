@@ -337,6 +337,7 @@ pub struct Validator {
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
+    pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
 }
@@ -994,6 +995,7 @@ impl Validator {
             validator_exit: config.validator_exit.clone(),
             cluster_info,
             bank_forks,
+            blockstore: blockstore.clone(),
             accountsdb_repl_service,
             geyser_plugin_service,
         }
@@ -1038,26 +1040,21 @@ impl Validator {
         drop(self.bank_forks);
         drop(self.cluster_info);
 
-        info!("join poh_service");
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
-        info!("join rpc_service");
         if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
         }
 
-        info!("join pubsub_service");
         if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
         }
 
-        info!("join rpc_completed_slots_service");
         self.rpc_completed_slots_service
             .join()
             .expect("rpc_completed_slots_service");
 
-        info!("join optimistically_confirmed_bank_tracker");
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
         {
@@ -1066,88 +1063,72 @@ impl Validator {
                 .expect("optimistically_confirmed_bank_tracker");
         }
 
-        info!("join transaction_status_service");
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service
                 .join()
                 .expect("transaction_status_service");
         }
 
-        info!("join rewards_recorder_service");
         if let Some(rewards_recorder_service) = self.rewards_recorder_service {
             rewards_recorder_service
                 .join()
                 .expect("rewards_recorder_service");
         }
 
-        info!("join cache_block_meta_service");
         if let Some(cache_block_meta_service) = self.cache_block_meta_service {
             cache_block_meta_service
                 .join()
                 .expect("cache_block_meta_service");
         }
 
-        info!("join system_monitor_service");
         if let Some(system_monitor_service) = self.system_monitor_service {
             system_monitor_service
                 .join()
                 .expect("system_monitor_service");
         }
 
-        info!("join sample_performance_service");
         if let Some(sample_performance_service) = self.sample_performance_service {
             sample_performance_service
                 .join()
                 .expect("sample_performance_service");
         }
 
-        info!("join snapshot_packager_service");
         if let Some(s) = self.snapshot_packager_service {
             s.join().expect("snapshot_packager_service");
         }
 
-        info!("join gossip_service");
         self.gossip_service.join().expect("gossip_service");
 
-        info!("join serve_repair_service");
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
 
-        info!("join stats_reporter_service");
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
 
-        info!("join tpu");
         self.tpu.join().expect("tpu");
 
-        info!("join tvu");
         self.tvu.join().expect("tvu");
 
-        info!("join completed_data_sets_service");
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
 
-        info!("join ip_echo_server");
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
         }
 
-        info!("join accountsdb_repl_service");
         if let Some(accountsdb_repl_service) = self.accountsdb_repl_service {
             accountsdb_repl_service
                 .join()
                 .expect("accountsdb_repl_service");
         }
 
-        info!("join geyser_plugin_service");
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
 
-        info!("join poh_timing_report_service");
         self.poh_timing_report_service
             .join()
             .expect("poh_timing_report_service");
