@@ -3541,6 +3541,7 @@ mod tests {
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
+            program::check_type_assumptions,
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
         },
@@ -4906,9 +4907,6 @@ mod tests {
 
     #[test]
     fn test_check_type_assumptions() {
-        // Code in this file assumes that u64 and usize are the same
-        assert_eq!(size_of::<u64>(), size_of::<usize>());
-        // Code in this file assumes that u8 is byte aligned
-        assert_eq!(1, align_of::<u8>());
+        check_type_assumptions();
     }
 }
