@@ -1492,9 +1492,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
 
 /// This function is incorrect due to arithmetic overflow and only exists for
 /// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
+#[allow(clippy::integer_arithmetic)]
 fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
-    (src_addr <= dst_addr && src_addr.saturating_add(n) > dst_addr)
-        || (dst_addr <= src_addr && dst_addr.saturating_add(n) > src_addr)
+    (src_addr <= dst_addr && src_addr + n > dst_addr)
+        || (dst_addr <= src_addr && dst_addr + n > src_addr)
 }
 
 fn mem_op_consume<'a, 'b>(
