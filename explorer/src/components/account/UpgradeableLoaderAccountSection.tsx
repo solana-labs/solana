@@ -182,7 +182,7 @@ export function UpgradeableProgramSection({
 function SecurityLabel() {
   return (
     <InfoTooltip text="Security.txt helps security researchers to contact developers if they find security bugs.">
-      <a href="https://github.com/neodyme-labs/solana-security-txt">
+      <a rel="noopener noreferrer" target="_blank" href="https://github.com/neodyme-labs/solana-security-txt">
         Security.txt
         <span className="fe fe-external-link ms-2"></span>
       </a>
