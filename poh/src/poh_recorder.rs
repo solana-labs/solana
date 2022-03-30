@@ -22,6 +22,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
+    solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
@@ -207,6 +208,7 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntry>,
+    poh_timing_point_sender: Option<PohTimingSender>,
     leader_first_tick_height_including_grace_ticks: Option<u64>,
     leader_last_tick_height: u64, // zero if none
     grace_ticks: u64,
@@ -304,6 +306,20 @@ impl PohRecorder {
             working_bank: w.bank.clone(),
             bank_creation_time: w.start.clone(),
         })
+    }
+
+    pub fn working_bank_end_slot(&self) -> Option<Slot> {
+        self.working_bank.as_ref().and_then(|w| {
+            if w.max_tick_height == self.tick_height {
+                Some(w.bank.slot())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn working_slot(&self) -> Option<Slot> {
+        self.working_bank.as_ref().map(|w| w.bank.slot())
     }
 
     pub fn has_bank(&self) -> bool {
@@ -451,6 +467,18 @@ impl PohRecorder {
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
 
+        if let Some(ref sender) = self.poh_timing_point_sender {
+            // start_slot() is the parent slot. current slot is start_slot() + 1.
+            send_poh_timing_point(
+                sender,
+                SlotPohTimingInfo::new_slot_start_poh_time_point(
+                    self.start_slot() + 1,
+                    None,
+                    solana_sdk::timing::timestamp(),
+                ),
+            );
+        }
+
         let (leader_first_tick_height_including_grace_ticks, leader_last_tick_height, grace_ticks) =
             Self::compute_leader_slot_tick_heights(next_leader_slot, self.ticks_per_slot);
         self.grace_ticks = grace_ticks;
@@ -469,6 +497,21 @@ impl PohRecorder {
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
         self.working_bank = Some(working_bank);
+
+        // send poh slot start timing point
+        if let Some(ref sender) = self.poh_timing_point_sender {
+            if let Some(slot) = self.working_slot() {
+                send_poh_timing_point(
+                    sender,
+                    SlotPohTimingInfo::new_slot_start_poh_time_point(
+                        slot,
+                        None,
+                        solana_sdk::timing::timestamp(),
+                    ),
+                );
+            }
+        }
+
         // TODO: adjust the working_bank.start time based on number of ticks
         // that have already elapsed based on current tick height.
         let _ = self.flush_cache(false);
@@ -539,6 +582,62 @@ impl PohRecorder {
         Ok(())
     }
 
+    fn report_poh_timing_point_by_tick(&self) {
+        match self.tick_height % self.ticks_per_slot {
+            // reaching the end of the slot
+            0 => {
+                if let Some(ref sender) = self.poh_timing_point_sender {
+                    send_poh_timing_point(
+                        sender,
+                        SlotPohTimingInfo::new_slot_end_poh_time_point(
+                            self.slot_for_tick_height(self.tick_height),
+                            None,
+                            solana_sdk::timing::timestamp(),
+                        ),
+                    );
+                }
+            }
+            // beginning of a slot
+            1 => {
+                if let Some(ref sender) = self.poh_timing_point_sender {
+                    send_poh_timing_point(
+                        sender,
+                        SlotPohTimingInfo::new_slot_start_poh_time_point(
+                            self.slot_for_tick_height(self.tick_height),
+                            None,
+                            solana_sdk::timing::timestamp(),
+                        ),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn report_poh_timing_point_by_working_bank(&self, slot: Slot) {
+        if let Some(ref sender) = self.poh_timing_point_sender {
+            send_poh_timing_point(
+                sender,
+                SlotPohTimingInfo::new_slot_end_poh_time_point(
+                    slot,
+                    None,
+                    solana_sdk::timing::timestamp(),
+                ),
+            );
+        }
+    }
+
+    fn report_poh_timing_point(&self) {
+        // send poh slot end timing point
+        if let Some(slot) = self.working_bank_end_slot() {
+            //  bank producer
+            self.report_poh_timing_point_by_working_bank(slot)
+        } else {
+            // validator
+            self.report_poh_timing_point_by_tick()
+        }
+    }
+
     pub fn tick(&mut self) {
         let ((poh_entry, target_time), tick_lock_contention_time) = Measure::this(
             |_| {
@@ -559,6 +658,7 @@ impl PohRecorder {
         if let Some(poh_entry) = poh_entry {
             self.tick_height += 1;
             trace!("tick_height {}", self.tick_height);
+            self.report_poh_timing_point();
 
             if self
                 .leader_first_tick_height_including_grace_ticks
@@ -706,6 +806,7 @@ impl PohRecorder {
         clear_bank_signal: Option<Sender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
+        poh_timing_point_sender: Option<PohTimingSender>,
         is_exited: Arc<AtomicBool>,
     ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
         let tick_number = 0;
@@ -731,6 +832,7 @@ impl PohRecorder {
                 tick_cache: vec![],
                 working_bank: None,
                 sender,
+                poh_timing_point_sender,
                 clear_bank_signal,
                 start_bank,
                 start_tick_height: tick_height + 1,
@@ -788,6 +890,7 @@ impl PohRecorder {
             None,
             leader_schedule_cache,
             poh_config,
+            None,
             is_exited,
         )
     }
@@ -1488,6 +1591,7 @@ mod tests {
                     Some(sender),
                     &Arc::new(LeaderScheduleCache::default()),
                     &Arc::new(PohConfig::default()),
+                    None,
                     Arc::new(AtomicBool::default()),
                 );
             poh_recorder.set_bank(&bank);
