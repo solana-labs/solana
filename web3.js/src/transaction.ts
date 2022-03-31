@@ -175,6 +175,11 @@ export class Transaction {
   _message?: Message;
 
   /**
+   * @internal
+   */
+  _originalTransaction?: Transaction;
+
+  /**
    * Construct an empty Transaction
    */
   constructor(opts?: TransactionCtorFields) {
@@ -189,9 +194,6 @@ export class Transaction {
       Transaction | TransactionInstruction | TransactionInstructionCtorFields
     >
   ): Transaction {
-    if (this._message) {
-      throw new Error('Transaction populated from Message');
-    }
     if (items.length === 0) {
       throw new Error('No instructions');
     }
@@ -212,7 +214,80 @@ export class Transaction {
    * Compile transaction data
    */
   compileMessage(): Message {
-    if (this._message) return this._message;
+    if (this._message) {
+      const originalTransaction = this._originalTransaction;
+      if (!originalTransaction) {
+        throw new Error(
+          'Transaction mutated after being populated from Message',
+        );
+      }
+
+      if (
+        !this.recentBlockhash ||
+        this.recentBlockhash !== originalTransaction.recentBlockhash
+      ) {
+        throw new Error(
+          'Transaction mutated after being populated from Message',
+        );
+      }
+
+      if (
+        !this.feePayer ||
+        !originalTransaction.feePayer ||
+        !this.feePayer.equals(originalTransaction.feePayer)
+      ) {
+        throw new Error(
+          'Transaction mutated after being populated from Message',
+        );
+      }
+
+      const instructions = this.instructions;
+      const originalInstructions = originalTransaction.instructions;
+      if (instructions.length !== originalInstructions.length) {
+        throw new Error(
+          'Transaction mutated after being populated from Message',
+        );
+      }
+
+      for (let i = 0; i < instructions.length; i++) {
+        const instruction = instructions[i];
+        const originalInstruction = originalInstructions[i];
+        if (
+          !instruction ||
+          !instruction.programId.equals(originalInstruction.programId) ||
+          !instruction.data.equals(originalInstruction.data)
+        ) {
+          throw new Error(
+            'Transaction mutated after being populated from Message',
+          );
+        }
+
+        const keys = instruction.keys;
+        const originalKeys = originalInstruction.keys;
+        if (keys.length !== originalKeys.length) {
+          throw new Error(
+            'Transaction mutated after being populated from Message',
+          );
+        }
+
+        for (let k = 0; k < keys.length; k++) {
+          const key = keys[k];
+          const originalKey = originalKeys[k];
+
+          if (
+            key.isSigner !== originalKey.isSigner ||
+            key.isWritable !== originalKey.isWritable ||
+            !key.pubkey.equals(originalKey.pubkey)
+          ) {
+            throw new Error(
+              'Transaction mutated after being populated from Message',
+            );
+          }
+        }
+      }
+
+      return this._message;
+    }
 
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
@@ -729,6 +804,32 @@ export class Transaction {
         }),
       );
     });
+
+    const originalTransaction = (transaction._originalTransaction =
+      new Transaction());
+    originalTransaction.recentBlockhash = transaction.recentBlockhash;
+    originalTransaction.feePayer = transaction.feePayer;
+
+    for (const instruction of transaction.instructions) {
+      originalTransaction.instructions.push(
+        new TransactionInstruction({
+          keys: instruction.keys.map(({pubkey, isSigner, isWritable}) => ({
+            pubkey: new PublicKey(pubkey.toBytes()),
+            isSigner,
+            isWritable,
+          })),
+          programId: new PublicKey(instruction.programId.toBytes()),
+          data: Buffer.from(instruction.data),
+        }),
+      );
+    }
+
+    for (const {signature, publicKey} of transaction.signatures) {
+      originalTransaction.signatures.push({
+        signature: signature && Buffer.from(signature),
+        publicKey: new PublicKey(publicKey.toBytes()),
+      });
+    }
 
     return transaction;
   }
