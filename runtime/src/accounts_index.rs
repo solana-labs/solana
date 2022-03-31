@@ -400,7 +400,12 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
 
 #[derive(Debug)]
 pub struct RootsTracker {
+    /// current set of roots active in approx. the current epoch
     pub(crate) roots: RollingBitField,
+    /// Set of roots approx. within the current epoch that are roots now or were roots at one point in time.
+    /// A root could remain here if all entries in the append vec at that root are cleaned/shrunk and there are no
+    ///  more entries that slot. 'roots' will no longer contain such roots.
+    pub(crate) roots_original: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -418,6 +423,7 @@ impl RootsTracker {
     pub fn new(max_width: u64) -> Self {
         Self {
             roots: RollingBitField::new(max_width),
+            roots_original: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
@@ -1682,7 +1688,9 @@ impl<T: IndexValue> AccountsIndex<T> {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
         assert!(slot >= w_roots_tracker.roots.max_inclusive());
+        // 'slot' is a root, so it is both 'root' and 'original'
         w_roots_tracker.roots.insert(slot);
+        w_roots_tracker.roots_original.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
@@ -1699,6 +1707,51 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     pub fn max_root_inclusive(&self) -> Slot {
         self.roots_tracker.read().unwrap().roots.max_inclusive()
+    }
+
+    /// return the lowest original root >= slot, including roots_original and ancestors
+    pub fn get_next_original_root(
+        &self,
+        slot: Slot,
+        ancestors: Option<&Ancestors>,
+    ) -> Option<Slot> {
+        {
+            let roots_tracker = self.roots_tracker.read().unwrap();
+            for root in slot..roots_tracker.roots_original.max_exclusive() {
+                if roots_tracker.roots_original.contains(&root) {
+                    return Some(root);
+                }
+            }
+        }
+        // ancestors are higher than roots, so look for roots first
+        if let Some(ancestors) = ancestors {
+            let min = std::cmp::max(slot, ancestors.min_slot());
+            for root in min..=ancestors.max_slot() {
+                if ancestors.contains_key(&root) {
+                    return Some(root);
+                }
+            }
+        }
+        None
+    }
+
+    /// roots are inserted into 'roots_original' and 'roots' as a new root is made.
+    /// roots are removed form 'roots' as all entries in the append vec become outdated.
+    /// This function exists to clean older entries from 'roots_original'.
+    /// all roots < 'oldest_slot_to_keep' are removed from 'roots_original'.
+    pub fn remove_old_original_roots(&self, oldest_slot_to_keep: Slot, keep: &HashSet<Slot>) {
+        let w_roots_tracker = self.roots_tracker.read().unwrap();
+        let mut roots = w_roots_tracker
+            .roots_original
+            .get_all_less_than(oldest_slot_to_keep);
+        roots.retain(|root| !keep.contains(root));
+        drop(w_roots_tracker);
+        if !roots.is_empty() {
+            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+            roots.into_iter().for_each(|root| {
+                w_roots_tracker.roots_original.remove(&root);
+            });
+        }
     }
 
     /// Remove the slot when the storage for the slot is freed
@@ -1933,6 +1986,134 @@ pub mod tests {
         ) -> AccountIndexGetResult<T> {
             self.get(pubkey, ancestors, max_root)
         }
+    }
+
+    #[test]
+    fn test_get_next_original_root() {
+        let ancestors = None;
+        let index = AccountsIndex::<bool>::default_for_tests();
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), None);
+        }
+        // roots are now [1]. 0 and 1 both return 1
+        index.add_root(1, true);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        assert_eq!(index.get_next_original_root(2, ancestors), None); // no roots after 1, so asking for root >= 2 is None
+
+        // roots are now [1, 3]. 0 and 1 both return 1. 2 and 3 both return 3
+        index.add_root(3, true);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        for slot in 2..4 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(3));
+        }
+        assert_eq!(index.get_next_original_root(4, ancestors), None); // no roots after 3, so asking for root >= 4 is None
+    }
+
+    #[test]
+    fn test_get_next_original_root_ancestors() {
+        let orig_ancestors = Ancestors::default();
+        let ancestors = Some(&orig_ancestors);
+        let index = AccountsIndex::<bool>::default_for_tests();
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), None);
+        }
+        // ancestors are now [1]. 0 and 1 both return 1
+        let orig_ancestors = Ancestors::from(vec![1]);
+        let ancestors = Some(&orig_ancestors);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        assert_eq!(index.get_next_original_root(2, ancestors), None); // no roots after 1, so asking for root >= 2 is None
+
+        // ancestors are now [1, 3]. 0 and 1 both return 1. 2 and 3 both return 3
+        let orig_ancestors = Ancestors::from(vec![1, 3]);
+        let ancestors = Some(&orig_ancestors);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        for slot in 2..4 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(3));
+        }
+        assert_eq!(index.get_next_original_root(4, ancestors), None); // no roots after 3, so asking for root >= 4 is None
+    }
+
+    #[test]
+    fn test_get_next_original_root_roots_and_ancestors() {
+        let orig_ancestors = Ancestors::default();
+        let ancestors = Some(&orig_ancestors);
+        let index = AccountsIndex::<bool>::default_for_tests();
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), None);
+        }
+        // roots are now [1]. 0 and 1 both return 1
+        index.add_root(1, true);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        assert_eq!(index.get_next_original_root(2, ancestors), None); // no roots after 1, so asking for root >= 2 is None
+
+        // roots are now [1] and ancestors are now [3]. 0 and 1 both return 1. 2 and 3 both return 3
+        let orig_ancestors = Ancestors::from(vec![3]);
+        let ancestors = Some(&orig_ancestors);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        for slot in 2..4 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(3));
+        }
+        assert_eq!(index.get_next_original_root(4, ancestors), None); // no roots after 3, so asking for root >= 4 is None
+    }
+
+    #[test]
+    fn test_remove_old_original_roots() {
+        let index = AccountsIndex::<bool>::default_for_tests();
+        index.add_root(1, true);
+        index.add_root(2, true);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1, 2]
+        );
+        let empty_hash_set = HashSet::default();
+        index.remove_old_original_roots(2, &empty_hash_set);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![2]
+        );
+        index.remove_old_original_roots(3, &empty_hash_set);
+        assert!(
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .roots_original
+                .is_empty(),
+            "{:?}",
+            index.roots_tracker.read().unwrap().roots_original.get_all()
+        );
+
+        // now use 'keep'
+        let index = AccountsIndex::<bool>::default_for_tests();
+        index.add_root(1, true);
+        index.add_root(2, true);
+        let hash_set_1 = vec![1].into_iter().collect();
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1, 2]
+        );
+        index.remove_old_original_roots(2, &hash_set_1);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1, 2]
+        );
+        index.remove_old_original_roots(3, &hash_set_1);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1]
+        );
     }
 
     const COLLECT_ALL_UNSORTED_FALSE: bool = false;

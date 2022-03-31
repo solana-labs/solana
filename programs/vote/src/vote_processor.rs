@@ -54,11 +54,15 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
-        VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
-            me,
-            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.unsigned_key(),
-            &signers,
-        ),
+        VoteInstruction::UpdateValidatorIdentity => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
+            vote_state::update_validator_identity(
+                me,
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
+                    .unsigned_key(),
+                &signers,
+            )
+        }
         VoteInstruction::UpdateCommission(commission) => {
             vote_state::update_commission(me, commission, &signers)
         }
@@ -99,6 +103,7 @@ pub fn process_instruction(
             }
         }
         VoteInstruction::Withdraw(lamports) => {
+            instruction_context.check_number_of_instruction_accounts(2)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let rent_sysvar = if invoke_context
                 .feature_set
@@ -132,6 +137,7 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
+                instruction_context.check_number_of_instruction_accounts(4)?;
                 let voter_pubkey =
                     &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
                         .signer_key()
@@ -210,6 +216,7 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -227,6 +234,7 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
             expected_result,
             |first_instruction_account: usize,
              instruction_data: &[u8],

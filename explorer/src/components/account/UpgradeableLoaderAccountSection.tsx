@@ -18,6 +18,7 @@ import { Downloadable } from "components/common/Downloadable";
 import { CheckingBadge, VerifiedBadge } from "components/common/VerifiedBadge";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { useVerifiableBuilds } from "utils/program-verification";
+import { SecurityTXTBadge } from "components/common/SecurityTXTBadge";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -147,6 +148,17 @@ export function UpgradeableProgramSection({
           </td>
         </tr>
         <tr>
+          <td>
+            <SecurityLabel />
+          </td>
+          <td className="text-lg-end">
+            <SecurityTXTBadge
+              programData={programData}
+              pubkey={account.pubkey}
+            />
+          </td>
+        </tr>
+        <tr>
           <td>Last Deployed Slot</td>
           <td className="text-lg-end">
             <Slot slot={programData.slot} link />
@@ -162,6 +174,21 @@ export function UpgradeableProgramSection({
         )}
       </TableCardBody>
     </div>
+  );
+}
+
+function SecurityLabel() {
+  return (
+    <InfoTooltip text="Security.txt helps security researchers to contact developers if they find security bugs.">
+      <a
+        rel="noopener noreferrer"
+        target="_blank"
+        href="https://github.com/neodyme-labs/solana-security-txt"
+      >
+        <span className="security-txt-link-color-hack-reee">Security.txt</span>
+        <span className="fe fe-external-link ms-2"></span>
+      </a>
+    </InfoTooltip>
   );
 }
 

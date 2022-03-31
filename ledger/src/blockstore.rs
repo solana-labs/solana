@@ -27,7 +27,10 @@ use {
     rocksdb::DBRawIterator,
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_debug, datapoint_error},
+    solana_metrics::{
+        datapoint_debug, datapoint_error,
+        poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
+    },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
@@ -173,6 +176,7 @@ pub struct Blockstore {
     insert_shreds_lock: Mutex<()>,
     pub new_shreds_signals: Vec<Sender<bool>>,
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
+    pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
     pub slots_stats: SlotsStats,
@@ -442,6 +446,7 @@ impl Blockstore {
             bank_hash_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
+            shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
@@ -1108,10 +1113,9 @@ impl Blockstore {
     }
 
     fn erasure_mismatch(shred1: &Shred, shred2: &Shred) -> bool {
-        // TODO should also compare first-coding-index once position field is
-        // populated across cluster.
         shred1.coding_header.num_coding_shreds != shred2.coding_header.num_coding_shreds
             || shred1.coding_header.num_data_shreds != shred2.coding_header.num_data_shreds
+            || shred1.first_coding_index() != shred2.first_coding_index()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1549,6 +1553,20 @@ impl Blockstore {
             .unwrap_or_default()
     }
 
+    /// send slot full timing point to poh_timing_report service
+    fn send_slot_full_timing(&self, slot: Slot) {
+        if let Some(ref sender) = self.shred_timing_point_sender {
+            send_poh_timing_point(
+                sender,
+                SlotPohTimingInfo::new_slot_full_poh_time_point(
+                    slot,
+                    Some(self.last_root()),
+                    solana_sdk::timing::timestamp(),
+                ),
+            );
+        }
+    }
+
     fn insert_data_shred(
         &self,
         slot_meta: &mut SlotMeta,
@@ -1621,7 +1639,13 @@ impl Blockstore {
             Some(slot_meta),
         );
 
+        // slot is full, send slot full timing to poh_timing_report service.
+        if slot_meta.is_full() {
+            self.send_slot_full_timing(slot);
+        }
+
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
+
         Ok(newly_completed_data_sets)
     }
 
@@ -6095,7 +6119,7 @@ pub mod tests {
             );
             coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
             coding_shred.coding_header.num_data_shreds = 2;
-            coding_shred.coding_header.num_coding_shreds = 3;
+            coding_shred.coding_header.num_coding_shreds = 4;
             coding_shred.coding_header.position = 1;
             coding_shred.common_header.index = std::u32::MAX - 1;
             assert!(!Blockstore::should_insert_coding_shred(

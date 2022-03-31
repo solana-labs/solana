@@ -6,18 +6,13 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_client::{
-        thin_client::{create_client, ThinClient},
-        udp_client::UdpTpuConnection,
-    },
+    solana_client::thin_client::{create_client, ThinClient},
     solana_core::{
         tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
-        cluster_info::{Node, VALIDATOR_PORT_RANGE},
-        contact_info::ContactInfo,
-        gossip_service::discover_cluster,
+        cluster_info::Node, contact_info::ContactInfo, gossip_service::discover_cluster,
     },
     solana_ledger::create_new_tmp_ledger,
     solana_runtime::genesis_utils::{
@@ -393,10 +388,7 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let client = create_client(
-            self.entry_point_info.client_facing_addr(),
-            VALIDATOR_PORT_RANGE,
-        );
+        let client = create_client(self.entry_point_info.client_facing_addr());
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -480,10 +472,7 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let client = create_client(
-            self.entry_point_info.client_facing_addr(),
-            VALIDATOR_PORT_RANGE,
-        );
+        let client = create_client(self.entry_point_info.client_facing_addr());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -538,7 +527,7 @@ impl LocalCluster {
     }
 
     fn transfer_with_client(
-        client: &ThinClient<UdpTpuConnection>,
+        client: &ThinClient,
         source_keypair: &Keypair,
         dest_pubkey: &Pubkey,
         lamports: u64,
@@ -567,7 +556,7 @@ impl LocalCluster {
     }
 
     fn setup_vote_and_stake_accounts(
-        client: &ThinClient<UdpTpuConnection>,
+        client: &ThinClient,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
         amount: u64,
@@ -704,13 +693,10 @@ impl Cluster for LocalCluster {
         self.validators.keys().cloned().collect()
     }
 
-    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient<UdpTpuConnection>> {
-        self.validators.get(pubkey).map(|f| {
-            create_client(
-                f.info.contact_info.client_facing_addr(),
-                VALIDATOR_PORT_RANGE,
-            )
-        })
+    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
+        self.validators
+            .get(pubkey)
+            .map(|f| create_client(f.info.contact_info.client_facing_addr()))
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {

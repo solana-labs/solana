@@ -1,11 +1,12 @@
 use {
-    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, sorted_storages::SortedStorages},
+    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, rent_collector::RentCollector},
     log::*,
     rayon::prelude::*,
     solana_measure::measure::Measure,
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{borrow::Borrow, convert::TryInto, sync::Mutex},
 };
@@ -20,16 +21,21 @@ pub struct PreviousPass {
 }
 
 /// parameters to calculate accounts hash
+#[derive(Debug)]
 pub struct CalcAccountsHashConfig<'a> {
-    pub storages: &'a SortedStorages<'a>,
+    /// true to use a thread pool dedicated to bg operations
     pub use_bg_thread_pool: bool,
+    /// verify every hash in append vec/write cache with a recalculated hash
+    /// this option will be removed
     pub check_hash: bool,
+    /// 'ancestors' is used to get storages and also used if 'use_write_cache' is true to
+    /// get account data from the write cache
     pub ancestors: Option<&'a Ancestors>,
-    // to come soon
-    /*
-    pub rent_collector: RentCollector,
-    pub epoch_schedule: EpochSchedule,
-    */
+    /// does hash calc need to consider account data that exists in the write cache?
+    /// if so, 'ancestors' will be used for this purpose as well as storages.
+    pub use_write_cache: bool,
+    pub epoch_schedule: &'a EpochSchedule,
+    pub rent_collector: &'a RentCollector,
 }
 
 // smallest, 3 quartiles, largest, average

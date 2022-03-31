@@ -21,6 +21,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 itertools =  "0.10.1"
 lazy_static = "1.4.0"
 log = "0.4.14"
+memoffset = "0.6"
 num-derive = "0.3"
 num-traits = "0.2"
 rustversion = "1.0.3"

@@ -4604,6 +4604,7 @@ dependencies = [
 name = "solana-client"
 version = "1.11.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "async-mutex",
  "async-trait",
@@ -5434,6 +5435,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",
+ "memoffset",
  "num-derive",
  "num-traits",
  "parking_lot 0.12.0",

@@ -8,6 +8,7 @@ use {
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
@@ -44,7 +45,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
-    solana_metrics::datapoint_info,
+    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
     solana_poh::{
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
@@ -323,6 +324,7 @@ pub struct Validator {
     cache_block_meta_service: Option<CacheBlockMetaService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
+    poh_timing_report_service: PohTimingReportService,
     stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
@@ -482,6 +484,10 @@ impl Validator {
             !config.no_os_network_stats_reporting,
         ));
 
+        let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
+        let poh_timing_report_service =
+            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
+
         let (
             genesis_config,
             mut bank_forks,
@@ -508,6 +514,7 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
+            Some(poh_timing_point_sender.clone()),
         );
 
         let last_full_snapshot_slot = process_blockstore(
@@ -525,7 +532,6 @@ impl Validator {
             last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
 
         maybe_warp_slot(config, ledger_path, &mut bank_forks, &leader_schedule_cache);
-
         let tower = {
             let restored_tower = Tower::restore(config.tower_storage.as_ref(), &id);
             if let Ok(tower) = &restored_tower {
@@ -653,6 +659,7 @@ impl Validator {
             blockstore.new_shreds_signals.first().cloned(),
             &leader_schedule_cache,
             &poh_config,
+            Some(poh_timing_point_sender),
             exit.clone(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
@@ -865,8 +872,11 @@ impl Validator {
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
 
-        let rpc_completed_slots_service =
-            RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+        let rpc_completed_slots_service = RpcCompletedSlotsService::spawn(
+            completed_slots_receiver,
+            rpc_subscriptions.clone(),
+            exit.clone(),
+        );
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
@@ -973,6 +983,7 @@ impl Validator {
             cache_block_meta_service,
             system_monitor_service,
             sample_performance_service,
+            poh_timing_report_service,
             snapshot_packager_service,
             completed_data_sets_service,
             tpu,
@@ -1109,6 +1120,10 @@ impl Validator {
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
+
+        self.poh_timing_report_service
+            .join()
+            .expect("poh_timing_report_service");
     }
 }
 
@@ -1247,6 +1262,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
+    poh_timing_point_sender: Option<PohTimingSender>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1301,6 +1317,7 @@ fn load_blockstore(
     )
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
+    blockstore.shred_timing_point_sender = poh_timing_point_sender;
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
@@ -1792,9 +1809,10 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
+        crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        std::fs::remove_dir_all,
+        std::{fs::remove_dir_all, thread, time::Duration},
     };
 
     fn validator_exit() {
@@ -1912,11 +1930,21 @@ mod tests {
 
         // Each validator can exit in parallel to speed many sequential calls to join`
         validators.iter_mut().for_each(|v| v.exit());
-        // While join is called sequentially, the above exit call notified all the
-        // validators to exit from all their threads
-        validators.into_iter().for_each(|validator| {
-            validator.join();
+
+        // spawn a new thread to wait for the join of the validator
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            validators.into_iter().for_each(|validator| {
+                validator.join();
+            });
+            sender.send(()).unwrap();
         });
+
+        // timeout of 30s for shutting down the validators
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            panic!("timeout for shutting down validators",);
+        }
 
         for path in ledger_paths {
             remove_dir_all(path).unwrap();

@@ -53,6 +53,7 @@ tungstenite = { version = "0.17.2", features = ["rustls-tls-webpki-roots"] }
 url = "2.2.2"
 
 [dev-dependencies]
+anyhow = "1.0.45"
 assert_matches = "1.5.0"
 jsonrpc-http-server = "18.0.0"
 solana-logger = { path = "../logger", version = "=1.11.0" }
