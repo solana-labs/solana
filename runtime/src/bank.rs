@@ -5857,8 +5857,8 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
-            Some(self.epoch_schedule()),
-            Some(&self.rent_collector),
+            self.epoch_schedule(),
+            &self.rent_collector,
         )
     }
 
@@ -5926,8 +5926,8 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
-            Some(self.epoch_schedule()),
-            Some(&self.rent_collector),
+            self.epoch_schedule(),
+            &self.rent_collector,
         )
     }
 
@@ -5980,8 +5980,8 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
-                Some(self.epoch_schedule()),
-                Some(&self.rent_collector),
+                self.epoch_schedule(),
+                &self.rent_collector,
                 is_startup,
             );
         if total_lamports != self.capitalization() {
@@ -6006,8 +6006,8 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
-                        Some(self.epoch_schedule()),
-                        Some(&self.rent_collector),
+                        self.epoch_schedule(),
+                        &self.rent_collector,
                         is_startup,
                     );
             }
