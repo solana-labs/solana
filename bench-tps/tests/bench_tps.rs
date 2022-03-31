@@ -9,7 +9,6 @@ use {
     solana_client::thin_client::create_client,
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet_with_port,
-    solana_gossip::cluster_info::VALIDATOR_PORT_RANGE,
     solana_local_cluster::{
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::make_identical_validator_configs,
@@ -45,10 +44,10 @@ fn test_bench_tps_local_cluster(config: Config) {
         100_000_000,
     );
 
-    let client = Arc::new(create_client(
-        (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
-        VALIDATOR_PORT_RANGE,
-    ));
+    let client = Arc::new(create_client((
+        cluster.entry_point_info.rpc,
+        cluster.entry_point_info.tpu,
+    )));
 
     let (addr_sender, addr_receiver) = unbounded();
     run_local_faucet_with_port(faucet_keypair, addr_sender, None, 0);
