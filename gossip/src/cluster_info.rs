@@ -14,7 +14,7 @@
 //! Bank needs to provide an interface for us to query the stake weight
 
 #[deprecated(
-    since = "1.10.0",
+    since = "1.10.6",
     note = "Please use `solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE}` instead"
 )]
 #[allow(deprecated)]
