@@ -1,3 +1,5 @@
+//! The [`ProgramError`] type and related definitions.
+
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{decode_error::DecodeError, instruction::InstructionError, msg, pubkey::PubkeyError},

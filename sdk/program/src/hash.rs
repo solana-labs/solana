@@ -1,4 +1,6 @@
-//! The `hash` module provides functions for creating SHA-256 hashes.
+//! Hashing with the [SHA-256] hash function.
+//!
+//! [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
 
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
@@ -8,10 +10,20 @@ use {
     thiserror::Error,
 };
 
+/// Size of a hash in bytes.
 pub const HASH_BYTES: usize = 32;
-/// Maximum string length of a base58 encoded hash
+/// Maximum string length of a base58 encoded hash.
 const MAX_BASE58_LEN: usize = 44;
 
+/// A SHA-256 hash.
+///
+/// _Note_: This type is just a 32-byte blob, which is size-compatible with the
+/// blake3 hashes created by the [`blake3`] module. There are cases where this
+/// type actually contains a blake3 hash, not a SHA-256 hash, particularly as
+/// computed by [`Message::hash`].
+///
+/// [`blake3`]: crate::blake3
+/// [`Message::hash`]: crate::message::Message::hash
 #[wasm_bindgen]
 #[derive(
     Serialize,

@@ -1,3 +1,5 @@
+//! Cross-program invocation.
+
 use crate::{
     account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction, pubkey::Pubkey,
 };

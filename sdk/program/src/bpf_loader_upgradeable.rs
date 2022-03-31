@@ -1,12 +1,19 @@
-//! An Upgradeable Solana BPF loader.
+//! An upgradeable BPF loader native program.
 //!
 //! The upgradeable BPF loader is responsible for deploying, upgrading, and
-//! executing BPF programs.  The upgradeable loader allows a program's authority
-//! to update the program at any time.  This ability break's the "code is law"
+//! executing BPF programs. The upgradeable loader allows a program's authority
+//! to update the program at any time. This ability break's the "code is law"
 //! contract the usually enforces the policy that once a program is on-chain it
-//! becomes immutable.  Because of this, care should be taken before executing
-//! upgradeable programs which still have a functioning authority.  For more
-//! information refer to `loader_upgradeable_instruction.rs`
+//! becomes immutable. Because of this, care should be taken before executing
+//! upgradeable programs which still have a functioning authority. For more
+//! information refer to the [`loader_upgradeable_instruction`] module.
+//!
+//! The `solana deploy` and `solana program deploy` CLI commands use the
+//! upgradeable BPF loader. Calling `solana program deploy --final` deploys a
+//! program that cannot be upgraded, but it does so by revoking the authority to
+//! upgrade, not by using the non-upgradeable loader.
+//!
+//! [`loader_upgradeable_instruction`]: crate::loader_upgradeable_instruction
 
 use {
     crate::{
