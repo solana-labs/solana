@@ -657,7 +657,12 @@ impl Validator {
             bank.ticks_per_slot(),
             &id,
             &blockstore,
-            blockstore.new_shreds_signals.first().cloned(),
+            blockstore
+                .new_shreds_signals
+                .lock()
+                .unwrap()
+                .first()
+                .cloned(),
             &leader_schedule_cache,
             &poh_config,
             Some(poh_timing_point_sender),
@@ -857,7 +862,7 @@ impl Validator {
             record_receiver,
         );
         assert_eq!(
-            blockstore.new_shreds_signals.len(),
+            blockstore.new_shreds_signals.lock().unwrap().len(),
             1,
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
