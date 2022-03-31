@@ -1503,7 +1503,7 @@ mod tests {
                     .filter(|p| !p.meta.discard())
                     .for_each(|p| start.push(p.clone()))
             });
-            start.sort_by_key(|p| p.data);
+            start.sort_by_cached_key(|p| p.data.clone());
 
             let packet_count = count_valid_packets(&batches);
             let res = shrink_batches(&mut batches);
@@ -1517,7 +1517,7 @@ mod tests {
                     .filter(|p| !p.meta.discard())
                     .for_each(|p| end.push(p.clone()))
             });
-            end.sort_by_key(|p| p.data);
+            end.sort_by_cached_key(|p| p.data.clone());
             let packet_count2 = count_valid_packets(&batches);
             assert_eq!(packet_count, packet_count2);
             assert_eq!(start, end);

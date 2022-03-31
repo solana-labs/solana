@@ -38,12 +38,12 @@ pub struct Meta {
 #[derive(Clone)]
 #[repr(C)]
 pub struct Packet {
-    pub data: [u8; PACKET_DATA_SIZE],
+    pub data: Vec<u8>,
     pub meta: Meta,
 }
 
 impl Packet {
-    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
+    pub fn new(data: Vec<u8>, meta: Meta) -> Self {
         Self { data, meta }
     }
 
@@ -84,7 +84,7 @@ impl fmt::Debug for Packet {
 impl Default for Packet {
     fn default() -> Packet {
         Packet {
-            data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
+            data: vec![0; PACKET_DATA_SIZE],
             meta: Meta::default(),
         }
     }
@@ -92,9 +92,7 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
-        let self_data: &[u8] = self.data.as_ref();
-        let other_data: &[u8] = other.data.as_ref();
-        self.meta == other.meta && self_data[..self.meta.size] == other_data[..self.meta.size]
+        self.meta == other.meta && self.data[..self.meta.size] == other.data[..self.meta.size]
     }
 }
 
