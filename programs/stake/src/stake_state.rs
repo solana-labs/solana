@@ -14,11 +14,11 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::{State, StateMut},
         clock::{Clock, Epoch},
-        feature_set::stake_merge_with_unmatched_credits_observed,
+        feature_set::{stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar},
         instruction::{checked_add, InstructionError},
         keyed_account::KeyedAccount,
         pubkey::Pubkey,
-        rent::Rent,
+        rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
         stake::{
             config::Config,
             instruction::{LockupArgs, StakeError},
@@ -627,12 +627,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Stake(meta, mut stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let validated_split_info = validate_split_amount(
+                    invoke_context,
                     self,
                     split,
                     lamports,
                     &meta,
                     Some(&stake),
-                    invoke_context.get_sysvar_cache().get_rent()?.as_ref(),
                 )?;
 
                 // split the stake, subtract rent_exempt_balance unless
@@ -677,14 +677,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
-                let validated_split_info = validate_split_amount(
-                    self,
-                    split,
-                    lamports,
-                    &meta,
-                    None,
-                    invoke_context.get_sysvar_cache().get_rent()?.as_ref(),
-                )?;
+                let validated_split_info =
+                    validate_split_amount(invoke_context, self, split, lamports, &meta, None)?;
                 let mut split_meta = meta;
                 split_meta.rent_exempt_reserve =
                     validated_split_info.destination_rent_exempt_reserve;
@@ -869,12 +863,12 @@ struct ValidatedSplitInfo {
 /// delegation, and that the source account has enough lamports for the request split amount.  If
 /// not, return an error.
 fn validate_split_amount(
+    invoke_context: &InvokeContext,
     source_account: &KeyedAccount,
     destination_account: &KeyedAccount,
     lamports: u64,
     source_meta: &Meta,
     source_stake: Option<&Stake>,
-    rent: &Rent,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
     let source_lamports = source_account.lamports()?;
     let destination_lamports = destination_account.lamports()?;
@@ -912,7 +906,19 @@ fn validate_split_amount(
     // This must handle:
     // 1. The destination account having a different rent exempt reserve due to data size changes
     // 2. The destination account being prefunded, which would lower the minimum split amount
-    let destination_rent_exempt_reserve = rent.minimum_balance(destination_account.data_len()?);
+    let destination_rent_exempt_reserve = if invoke_context
+        .feature_set
+        .is_active(&stake_split_uses_rent_sysvar::ID)
+    {
+        let rent = invoke_context.get_sysvar_cache().get_rent()?;
+        rent.minimum_balance(destination_account.data_len()?)
+    } else {
+        calculate_split_rent_exempt_reserve(
+            source_meta.rent_exempt_reserve,
+            source_account.data_len()? as u64,
+            destination_account.data_len()? as u64,
+        )
+    };
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(MINIMUM_STAKE_DELEGATION);
     let destination_balance_deficit =
@@ -1259,6 +1265,19 @@ pub fn calculate_points(
     } else {
         Err(InstructionError::InvalidAccountData)
     }
+}
+
+// utility function, used by Split
+//This emulates current Rent math in order to preserve backward compatibility. In the future, and
+//to support variable rent, the Split instruction should pass in the Rent sysvar instead.
+fn calculate_split_rent_exempt_reserve(
+    source_rent_exempt_reserve: u64,
+    source_data_len: u64,
+    split_data_len: u64,
+) -> u64 {
+    let lamports_per_byte_year =
+        source_rent_exempt_reserve / (source_data_len + ACCOUNT_STORAGE_OVERHEAD);
+    lamports_per_byte_year * (split_data_len + ACCOUNT_STORAGE_OVERHEAD)
 }
 
 pub type RewriteStakeStatus = (&'static str, (u64, u64), (u64, u64));
@@ -4090,6 +4109,43 @@ mod tests {
             "stake minimum_balance: {} lamports, {} SOL",
             minimum_balance,
             minimum_balance as f64 / solana_sdk::native_token::LAMPORTS_PER_SOL as f64
+        );
+    }
+
+    #[test]
+    fn test_calculate_lamports_per_byte_year() {
+        let rent = Rent::default();
+        let data_len = 200u64;
+        let rent_exempt_reserve = rent.minimum_balance(data_len as usize);
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, data_len),
+            rent_exempt_reserve
+        );
+
+        let larger_data = 4008u64;
+        let larger_rent_exempt_reserve = rent.minimum_balance(larger_data as usize);
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, larger_data),
+            larger_rent_exempt_reserve
+        );
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(larger_rent_exempt_reserve, larger_data, data_len),
+            rent_exempt_reserve
+        );
+
+        let even_larger_data = solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
+        let even_larger_rent_exempt_reserve = rent.minimum_balance(even_larger_data as usize);
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, even_larger_data),
+            even_larger_rent_exempt_reserve
+        );
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(
+                even_larger_rent_exempt_reserve,
+                even_larger_data,
+                data_len
+            ),
+            rent_exempt_reserve
         );
     }
 
