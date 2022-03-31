@@ -97,7 +97,6 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::vote_state::VoteState,
     std::{
-        cell::{RefCell, RefMut},
         collections::{HashMap, HashSet},
         net::SocketAddr,
         path::{Path, PathBuf},
