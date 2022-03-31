@@ -18,7 +18,7 @@ pub(crate) struct CompiledKeys {
     readonly_non_signer_keys: Vec<Pubkey>,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(target_arch = "bpf", allow(dead_code))]
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
 pub enum CompileError {
     #[error("account index overflowed during compilation")]
@@ -143,7 +143,7 @@ impl CompiledKeys {
     }
 }
 
-#[allow(dead_code)]
+#[cfg_attr(target_arch = "bpf", allow(dead_code))]
 fn try_drain_keys_found_in_lookup_table(
     keys: &mut Vec<Pubkey>,
     lookup_table_addresses: &[Pubkey],
