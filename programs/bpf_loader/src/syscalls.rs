@@ -1492,9 +1492,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
 
 /// This function is incorrect due to arithmetic overflow and only exists for
 /// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
+#[allow(clippy::integer_arithmetic)]
 fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
-    (src_addr <= dst_addr && src_addr.saturating_add(n) > dst_addr)
-        || (dst_addr <= src_addr && dst_addr.saturating_add(n) > src_addr)
+    (src_addr <= dst_addr && src_addr + n > dst_addr)
+        || (dst_addr <= src_addr && dst_addr + n > src_addr)
 }
 
 fn mem_op_consume<'a, 'b>(
@@ -2552,16 +2553,6 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.check_aligned)?;
 
-        debug_assert_eq!(
-            std::mem::size_of_val(&ix_c.accounts_len),
-            std::mem::size_of::<usize>(),
-            "non-64-bit host"
-        );
-        debug_assert_eq!(
-            std::mem::size_of_val(&ix_c.data_len),
-            std::mem::size_of::<usize>(),
-            "non-64-bit host"
-        );
         check_instruction_size(
             ix_c.accounts_len as usize,
             ix_c.data_len as usize,
@@ -3541,6 +3532,7 @@ mod tests {
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
+            program::check_type_assumptions,
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
         },
@@ -4906,9 +4898,6 @@ mod tests {
 
     #[test]
     fn test_check_type_assumptions() {
-        // Code in this file assumes that u64 and usize are the same
-        assert_eq!(size_of::<u64>(), size_of::<usize>());
-        // Code in this file assumes that u8 is byte aligned
-        assert_eq!(1, align_of::<u8>());
+        check_type_assumptions();
     }
 }

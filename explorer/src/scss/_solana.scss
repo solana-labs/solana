@@ -445,3 +445,33 @@ p.updated-time {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+// security-txt css hacks
+.security-txt ul {
+    list-style: none;
+    text-align: right;
+    margin: 0;
+    padding-inline-start: 0;
+}
+
+.security-txt p, pre {
+    text-align: left !important;
+    margin: 0;
+}
+
+.security-txt a {
+    white-space: nowrap;
+}
+
+.security-txt td {
+    white-space: unset;
+}
+
+.security-txt code {
+    white-space: pre-wrap;
+    display: block;
+}
+
+.security-txt-link-color-hack-reee {
+  color: white;
+}

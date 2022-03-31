@@ -1333,6 +1333,7 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -1585,6 +1586,7 @@ mod tests {
             &[],
             vec![(program_id, program_account.clone())],
             Vec::new(),
+            None,
             Err(InstructionError::ProgramFailedToComplete),
             |first_instruction_account: usize,
              instruction_data: &[u8],
@@ -2855,6 +2857,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts,
                 instruction_accounts,
+                None,
                 expected_result,
                 super::process_instruction,
             )
