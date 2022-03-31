@@ -24,8 +24,8 @@ const DEFAULT_CAPACITY: usize = 1024;
 // a constant smoothing factor between 0 and 1. A higher alpha
 // discounts older observations faster.
 // Estimate it to 0.01 by `2/(N+1)` where N is 200 samples
-const EMA_ALPHA: u16 = 10;
-const EMA_SCALE: u16 = 1000;
+const EMA_ALPHA: i128 = 10;
+const EMA_SCALE: i128 = 1000;
 
 // exponential moving average algorithm
 // https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation
@@ -44,41 +44,27 @@ impl AggregatedVarianceStats {
         (self.ema_var as f64).sqrt().ceil() as u64
     }
 
-    fn aggregate_ema(&mut self, theta: Option<i64>) {
-        if let Some(theta) = theta {
-            self.ema = u64::try_from(
-                i128::from(self.ema)
-                    .saturating_mul(i128::from(EMA_SCALE))
-                    .saturating_add(
-                        i128::try_from(theta.saturating_mul(i64::from(EMA_ALPHA)))
-                            .ok()
-                            .unwrap_or(0i128),
-                    )
-                    .saturating_div(i128::from(EMA_SCALE)),
-            )
-            .ok()
-            .unwrap_or(self.ema);
-        }
+    fn aggregate_ema(&mut self, theta: i128) {
+        self.ema = u64::try_from(
+            i128::from(self.ema)
+                .saturating_mul(EMA_SCALE)
+                .saturating_add(theta.saturating_mul(EMA_ALPHA))
+                .saturating_div(EMA_SCALE),
+        )
+        .ok()
+        .unwrap_or(self.ema);
     }
 
-    fn aggregate_var(&mut self, theta: Option<i64>) {
-        if let Some(theta) = theta {
-            self.ema_var = u64::try_from(
-                i128::from(self.ema_var)
-                    .saturating_mul(i128::from(EMA_SCALE))
-                    .saturating_add(
-                        i128::try_from(
-                            theta.saturating_pow(2).saturating_mul(i64::from(EMA_ALPHA)),
-                        )
-                        .ok()
-                        .unwrap_or(0i128),
-                    )
-                    .saturating_mul(i128::from(EMA_SCALE - EMA_ALPHA))
-                    .saturating_div(i128::from(EMA_SCALE).saturating_pow(2)),
-            )
-            .ok()
-            .unwrap_or(self.ema_var);
-        }
+    fn aggregate_variance(&mut self, theta: i128) {
+        self.ema_var = u64::try_from(
+            i128::from(self.ema_var)
+                .saturating_mul(EMA_SCALE)
+                .saturating_add(theta.saturating_pow(2).saturating_mul(EMA_ALPHA))
+                .saturating_mul(EMA_SCALE - EMA_ALPHA)
+                .saturating_div(EMA_SCALE.saturating_pow(2)),
+        )
+        .ok()
+        .unwrap_or(self.ema_var);
     }
 }
 
@@ -173,12 +159,9 @@ impl ExecuteCostTable {
         match self.table.entry(*key) {
             Entry::Occupied(mut entry) => {
                 let aggregated_variance_stats = entry.get_mut();
-                let theta = i64::try_from(
-                    i128::from(value) - i128::from(aggregated_variance_stats.get_ema()),
-                )
-                .ok();
+                let theta = i128::from(value) - i128::from(aggregated_variance_stats.get_ema());
                 aggregated_variance_stats.aggregate_ema(theta);
-                aggregated_variance_stats.aggregate_var(theta);
+                aggregated_variance_stats.aggregate_variance(theta);
             }
             Entry::Vacant(entry) => {
                 // the starting values
@@ -491,23 +474,22 @@ mod tests {
         assert_eq!(cost, aggregated_variance_stats.get_ema());
         assert_eq!(0, aggregated_variance_stats.get_stddev());
 
-        let theta = 100i64;
         // expected variance should be same as theta after rounding
         let expected_var = 100u64;
         // insert a positive theta, ema will be saturated, hence remain at its MAX value
         {
-            let theta: Option<i64> = Some(theta);
+            let theta = 100i128;
             aggregated_variance_stats.aggregate_ema(theta);
-            aggregated_variance_stats.aggregate_var(theta);
+            aggregated_variance_stats.aggregate_variance(theta);
             assert_eq!(cost, aggregated_variance_stats.get_ema());
             assert_eq!(expected_var, aggregated_variance_stats.get_stddev().pow(2));
         }
 
         // insert a negative theta, would reduce ema, increase variance
         {
-            let theta: Option<i64> = Some(-100);
+            let theta = -100i128;
             aggregated_variance_stats.aggregate_ema(theta);
-            aggregated_variance_stats.aggregate_var(theta);
+            aggregated_variance_stats.aggregate_variance(theta);
             assert!(cost > aggregated_variance_stats.get_ema());
             assert!(expected_var < aggregated_variance_stats.get_stddev().pow(2));
         }
