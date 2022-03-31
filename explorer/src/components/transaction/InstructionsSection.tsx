@@ -42,7 +42,7 @@ import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTok
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
 import { isPythInstruction } from "components/instruction/pyth/types";
 import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
-import { GenericAnchorDetailsCard } from "../instruction/GenericAnchorDetails";
+import { AnchorDetailsCard, GenericAnchorDetailsCard } from "../instruction/GenericAnchorDetails";
 import { isMangoInstruction } from "../instruction/mango/types";
 import { useAnchorProgram } from "providers/anchor";
 import { LoadingCard } from "components/common/LoadingCard";
@@ -146,7 +146,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
                   url={url}
                 />
               );
-          })
+            })
         }
       </React.Suspense>
     </>
@@ -231,8 +231,8 @@ function InstructionCard({
     return <BonfidaBotDetailsCard key={key} {...props} />;
   } else if (anchorProgram) {
     return (
-      <ErrorBoundary key={key} fallback={<UnknownDetailsCard key={key} {...props} />}>
-        <GenericAnchorDetailsCard key={key} program={anchorProgram} {...props} />
+      <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
+        <AnchorDetailsCard key={key} program={anchorProgram} {...props} />
       </ErrorBoundary>
     );
   } else if (isMangoInstruction(transactionIx)) {

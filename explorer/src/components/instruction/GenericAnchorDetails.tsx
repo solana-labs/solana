@@ -11,6 +11,28 @@ import {
 import { useMemo } from "react";
 import { Address } from "../common/Address";
 import { snakeCase } from "snake-case";
+import { ErrorBoundary } from "@sentry/react";
+import { UnknownDetailsCard } from "./UnknownDetailsCard";
+import { getAnchorNameForInstruction, getProgramName, ProgramName } from "utils/anchor";
+import { useCluster } from "providers/cluster";
+import { program } from "@project-serum/anchor/dist/cjs/spl/token";
+
+export function AnchorDetailsCard(props: {
+  key: string,
+  ix: TransactionInstruction;
+  index: number;
+  result: SignatureResult;
+  signature: string;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
+  program: Program<Idl>
+}) {
+  const { cluster } = useCluster();
+  const ixName = getAnchorNameForInstruction(props.ix, props.program) ?? getProgramName(props.program) ?? "Unknown Program: Unknown Instruction";
+  return (
+      <InstructionCard title={ixName} defaultRaw {...props} />
+  );
+}
 
 export function GenericAnchorDetailsCard(props: {
   ix: TransactionInstruction;
@@ -53,11 +75,11 @@ export function GenericAnchorDetailsCard(props: {
       return null;
     }
     const ixAccounts = idlInstructions[0].accounts as {
-        // type coercing since anchor doesn't export the underlying type
-        name: string;
-        isMut: boolean;
-        isSigner: boolean;
-        pda?: Object;
+      // type coercing since anchor doesn't export the underlying type
+      name: string;
+      isMut: boolean;
+      isSigner: boolean;
+      pda?: Object;
     }[];
 
     return { ixTitle, ixAccounts, programName }
@@ -97,7 +119,7 @@ export function GenericAnchorDetailsCard(props: {
                       snakeCase(ixAccounts[keyIndex].name)}
                     {!ixAccounts[keyIndex] &&
                       "remaining account #" +
-                        (keyIndex - ixAccounts.length + 1)}
+                      (keyIndex - ixAccounts.length + 1)}
                   </div>
                   {am.isWritable && (
                     <span className="badge bg-info-soft me-1">Writable</span>
