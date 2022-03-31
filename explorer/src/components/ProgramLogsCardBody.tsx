@@ -1,11 +1,8 @@
 import { Message, ParsedMessage, PublicKey } from "@solana/web3.js";
-import { Cluster, clusterUrl, DEFAULT_CUSTOM_URL } from "providers/cluster";
+import { Cluster } from "providers/cluster";
 import { TableCardBody } from "components/common/TableCardBody";
-import { programLabel } from "utils/tx";
 import { InstructionLogs } from "utils/program-logs";
-import { useAnchorProgram } from "providers/anchor";
-import { Program } from "@project-serum/anchor";
-import { getProgramName } from "utils/anchor";
+import { ProgramName } from "utils/anchor";
 
 export function ProgramLogsCardBody({
   message,
@@ -44,16 +41,10 @@ function ProgramInstructionLog({ index, programId, programLogs, cluster }: {
   programLogs: InstructionLogs | undefined,
   cluster: Cluster
 }) {
-  let url = clusterUrl(cluster, DEFAULT_CUSTOM_URL);
-  const program = useAnchorProgram(programId.toString(), url);
-
   let badgeColor = "white";
   if (programLogs) {
     badgeColor = programLogs.failed ? "warning" : "success";
   }
-
-  const programName =
-    getProgramName(program) ?? (programLabel(programId.toBase58(), cluster) || "Unknown Program");
 
   return (
     <tr key={index}>
@@ -62,7 +53,7 @@ function ProgramInstructionLog({ index, programId, programLogs, cluster }: {
           <span className={`badge bg-${badgeColor}-soft me-2`}>
             #{index + 1}
           </span>
-          {programName} Instruction
+          <ProgramName programId={programId} cluster={cluster} /> Instruction
         </div>
         {programLogs && (
           <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">
