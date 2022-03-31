@@ -338,7 +338,7 @@ pub struct Validator {
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
-    pub blockstore: Arc<RefCell<Blockstore>>,
+    pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
 }
@@ -996,7 +996,7 @@ impl Validator {
             validator_exit: config.validator_exit.clone(),
             cluster_info,
             bank_forks,
-            blockstore: RefCell::new(blockstore.clone()),
+            blockstore: blockstore.clone(),
             accountsdb_repl_service,
             geyser_plugin_service,
         }
@@ -1102,23 +1102,17 @@ impl Validator {
         }
 
         self.gossip_service.join().expect("gossip_service");
-
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
-
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
-
         self.tpu.join().expect("tpu");
-
         self.tvu.join().expect("tvu");
-
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
-
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
         }
@@ -1821,7 +1815,7 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
-        crossbeam_channel::unbounded,
+        crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -1944,7 +1938,7 @@ mod tests {
         validators.iter_mut().for_each(|v| v.exit());
 
         // spawn a new thread to wait for the join of the validator
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = bounded(0);
         let _ = thread::spawn(move || {
             validators.into_iter().for_each(|validator| {
                 validator.join();
@@ -1953,7 +1947,8 @@ mod tests {
         });
 
         // timeout of 30s for shutting down the validators
-        if receiver.recv_timeout(Duration::from_secs(30)).is_err() {
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             panic!("timeout for shutting down validators",);
         }
 
