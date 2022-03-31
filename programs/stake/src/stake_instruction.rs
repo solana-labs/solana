@@ -2373,10 +2373,11 @@ mod tests {
 
         // Define rent here so that it's used consistently for setting the rent exempt reserve
         // and in the sysvar cache used for mock instruction processing.
-        let mut rent = Rent::default();
-        rent.lamports_per_byte_year = 0;
         let mut sysvar_cache_override = SysvarCache::default();
-        sysvar_cache_override.set_rent(rent.clone());
+        sysvar_cache_override.set_rent(Rent {
+            lamports_per_byte_year: 0,
+            ..Rent::default()
+        });
 
         for state in [
             StakeState::Initialized(Meta::auto(&stake_address)),
