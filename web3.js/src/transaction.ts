@@ -128,6 +128,13 @@ export type NonceInformation = {
   nonceInstruction: TransactionInstruction;
 };
 
+type PopulatedTransactionFields =
+  | 'recentBlockhash'
+  | 'feePayer'
+  | 'nonceInfo'
+  | 'instructions'
+  | 'signatures';
+
 /**
  * Transaction class
  */
@@ -177,7 +184,7 @@ export class Transaction {
   /**
    * @internal
    */
-  _originalTransaction?: Transaction;
+  _populatedTransactionFields?: Record<PopulatedTransactionFields, string>;
 
   /**
    * Construct an empty Transaction
@@ -215,137 +222,29 @@ export class Transaction {
    */
   compileMessage(): Message {
     if (this._message) {
-      const originalTransaction = this._originalTransaction;
-      if (!originalTransaction) {
+      const populatedTransactionFields = this._populatedTransactionFields;
+      if (!populatedTransactionFields) {
         throw new Error(
           'Transaction mutated after being populated from Message',
         );
       }
 
       if (
-        !this.recentBlockhash ||
-        this.recentBlockhash !== originalTransaction.recentBlockhash
+        JSON.stringify(this.recentBlockhash) !==
+          JSON.stringify(populatedTransactionFields.recentBlockhash) ||
+        JSON.stringify(this.feePayer) !==
+          JSON.stringify(populatedTransactionFields.feePayer) ||
+        JSON.stringify(this.nonceInfo) !==
+          JSON.stringify(populatedTransactionFields.nonceInfo) ||
+        JSON.stringify(this.instructions) !==
+          JSON.stringify(populatedTransactionFields.instructions) ||
+        JSON.stringify(this.signatures) !==
+          JSON.stringify(populatedTransactionFields.signatures)
       ) {
         throw new Error(
           'Transaction mutated after being populated from Message',
         );
       }
-
-      if (
-        !this.feePayer ||
-        !originalTransaction.feePayer ||
-        !this.feePayer.equals(originalTransaction.feePayer)
-      ) {
-        throw new Error(
-          'Transaction mutated after being populated from Message',
-        );
-      }
-
-      const nonceInfo = this.nonceInfo;
-      const originalNonceInfo = originalTransaction.nonceInfo;
-      if (nonceInfo) {
-        if (!originalNonceInfo) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        if (nonceInfo.nonce !== originalNonceInfo.nonce) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        const nonceInstruction = nonceInfo.nonceInstruction;
-        const originalNonceInstruction = originalNonceInfo.nonceInstruction;
-
-        if (
-          !nonceInstruction.programId.equals(originalNonceInstruction.programId)
-        ) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        if (!nonceInstruction.data.equals(originalNonceInstruction.data)) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        const keys = nonceInstruction.keys;
-        const originalKeys = originalNonceInstruction.keys;
-        if (keys.length !== originalKeys.length) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        for (let k = 0; k < keys.length; k++) {
-          const key = keys[k];
-          const originalKey = originalKeys[k];
-
-          if (
-            key.isSigner !== originalKey.isSigner ||
-            key.isWritable !== originalKey.isWritable ||
-            !key.pubkey.equals(originalKey.pubkey)
-          ) {
-            throw new Error(
-              'Transaction mutated after being populated from Message',
-            );
-          }
-        }
-      } else if (originalTransaction.nonceInfo) {
-        throw new Error(
-          'Transaction mutated after being populated from Message',
-        );
-      }
-
-      const instructions = this.instructions;
-      const originalInstructions = originalTransaction.instructions;
-      if (instructions.length !== originalInstructions.length) {
-        throw new Error(
-          'Transaction mutated after being populated from Message',
-        );
-      }
-
-      for (let i = 0; i < instructions.length; i++) {
-        const instruction = instructions[i];
-        const originalInstruction = originalInstructions[i];
-        if (
-          !instruction ||
-          !instruction.programId.equals(originalInstruction.programId) ||
-          !instruction.data.equals(originalInstruction.data)
-        ) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        const keys = instruction.keys;
-        const originalKeys = originalInstruction.keys;
-        if (keys.length !== originalKeys.length) {
-          throw new Error(
-            'Transaction mutated after being populated from Message',
-          );
-        }
-
-        for (let k = 0; k < keys.length; k++) {
-          const key = keys[k];
-          const originalKey = originalKeys[k];
-
-          if (
-            key.isSigner !== originalKey.isSigner ||
-            key.isWritable !== originalKey.isWritable ||
-            !key.pubkey.equals(originalKey.pubkey)
-          ) {
-            throw new Error(
-              'Transaction mutated after being populated from Message',
-            );
-          }
-        }
-      }
-
       return this._message;
     }
 
@@ -865,47 +764,13 @@ export class Transaction {
       );
     });
 
-    const originalTransaction = (transaction._originalTransaction =
-      new Transaction());
-    originalTransaction.recentBlockhash = transaction.recentBlockhash;
-    originalTransaction.feePayer = transaction.feePayer;
-
-    if (transaction.nonceInfo) {
-      const nonceInstruction = transaction.nonceInfo.nonceInstruction;
-      originalTransaction.nonceInfo = {
-        nonce: transaction.nonceInfo.nonce,
-        nonceInstruction: new TransactionInstruction({
-          keys: nonceInstruction.keys.map(({pubkey, isSigner, isWritable}) => ({
-            pubkey: new PublicKey(pubkey.toBytes()),
-            isSigner,
-            isWritable,
-          })),
-          programId: new PublicKey(nonceInstruction.programId.toBytes()),
-          data: Buffer.from(nonceInstruction.data),
-        }),
-      };
-    }
-
-    for (const instruction of transaction.instructions) {
-      originalTransaction.instructions.push(
-        new TransactionInstruction({
-          keys: instruction.keys.map(({pubkey, isSigner, isWritable}) => ({
-            pubkey: new PublicKey(pubkey.toBytes()),
-            isSigner,
-            isWritable,
-          })),
-          programId: new PublicKey(instruction.programId.toBytes()),
-          data: Buffer.from(instruction.data),
-        }),
-      );
-    }
-
-    for (const {signature, publicKey} of transaction.signatures) {
-      originalTransaction.signatures.push({
-        signature: signature && Buffer.from(signature),
-        publicKey: new PublicKey(publicKey.toBytes()),
-      });
-    }
+    transaction._populatedTransactionFields = {
+      recentBlockhash: JSON.stringify(transaction.recentBlockhash),
+      feePayer: JSON.stringify(transaction.feePayer),
+      nonceInfo: JSON.stringify(transaction.nonceInfo),
+      instructions: JSON.stringify(transaction.instructions),
+      signatures: JSON.stringify(transaction.signatures),
+    };
 
     return transaction;
   }
