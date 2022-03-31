@@ -108,7 +108,8 @@ impl ExecuteCostTable {
                 .iter()
                 .map(|(_, value)| value.get_ema())
                 .sum::<u64>()
-                / self.get_count() as u64
+                .checked_div(self.get_count() as u64)
+                .unwrap_or_else(|| self.get_default_units())
         }
     }
 
