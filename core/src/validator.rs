@@ -1096,7 +1096,6 @@ impl Validator {
         }
 
         self.gossip_service.join().expect("gossip_service");
-
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
