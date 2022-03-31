@@ -1,5 +1,5 @@
 use {
-    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, sorted_storages::SortedStorages},
+    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors},
     log::*,
     rayon::prelude::*,
     solana_measure::measure::Measure,
@@ -20,8 +20,8 @@ pub struct PreviousPass {
 }
 
 /// parameters to calculate accounts hash
+#[derive(Debug)]
 pub struct CalcAccountsHashConfig<'a> {
-    pub storages: &'a SortedStorages<'a>,
     /// true to use a thread pool dedicated to bg operations
     pub use_bg_thread_pool: bool,
     /// verify every hash in append vec/write cache with a recalculated hash

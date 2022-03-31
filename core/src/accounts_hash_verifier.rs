@@ -125,12 +125,12 @@ impl AccountsHashVerifier {
                 .accounts_db
                 .calculate_accounts_hash_without_index(
                     &CalcAccountsHashConfig {
-                        storages: &sorted_storages,
                         use_bg_thread_pool: true,
                         check_hash: false,
                         ancestors: None,
                         use_write_cache: false,
                     },
+                    &sorted_storages,
                     timings,
                 )
                 .unwrap();

@@ -5483,15 +5483,12 @@ impl AccountsDb {
         &self,
         use_index: bool,
         slot: Slot,
-        ancestors: &Ancestors,
-        check_hash: bool, // this will not be supported anymore
-        can_cached_slot_be_unflushed: bool,
+        config: &CalcAccountsHashConfig<'_>,
         slots_per_epoch: Option<Slot>,
-        is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
             let mut collect_time = Measure::start("collect");
-            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
+            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
             collect_time.stop();
 
             let mut sort_time = Measure::start("sort_storages");
@@ -5512,31 +5509,14 @@ impl AccountsDb {
             };
             timings.calc_storage_size_quartiles(&combined_maps);
 
-            let result = self.calculate_accounts_hash_without_index(
-                &CalcAccountsHashConfig {
-                    storages: &storages,
-                    use_bg_thread_pool: !is_startup,
-                    check_hash,
-                    ancestors: can_cached_slot_be_unflushed.then(|| ancestors),
-                    use_write_cache: can_cached_slot_be_unflushed,
-                },
-                timings,
-            );
+            let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
+
             // now that calculate_accounts_hash_without_index is complete, we can remove old roots
             self.remove_old_roots(slot);
 
             result
         } else {
-            self.calculate_accounts_hash(
-                slot,
-                &CalcAccountsHashConfig {
-                    storages: &SortedStorages::empty(), // unused
-                    use_bg_thread_pool: !is_startup,
-                    check_hash,
-                    ancestors: Some(ancestors),
-                    use_write_cache: can_cached_slot_be_unflushed,
-                },
-            )
+            self.calculate_accounts_hash(slot, config)
         }
     }
 
@@ -5546,34 +5526,17 @@ impl AccountsDb {
         use_index: bool,
         debug_verify: bool,
         slot: Slot,
-        ancestors: &Ancestors,
+        config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
-        can_cached_slot_be_unflushed: bool,
-        check_hash: bool,
         slots_per_epoch: Option<Slot>,
-        is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
-        let (hash, total_lamports) = self.calculate_accounts_hash_helper(
-            use_index,
-            slot,
-            ancestors,
-            check_hash,
-            can_cached_slot_be_unflushed,
-            slots_per_epoch,
-            is_startup,
-        )?;
+        let (hash, total_lamports) =
+            self.calculate_accounts_hash_helper(use_index, slot, &config, slots_per_epoch)?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
-            let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
-                !use_index,
-                slot,
-                ancestors,
-                check_hash,
-                can_cached_slot_be_unflushed,
-                None,
-                is_startup,
-            )?;
+            let (hash_other, total_lamports_other) =
+                self.calculate_accounts_hash_helper(!use_index, slot, &config, None)?;
 
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
@@ -5603,12 +5566,14 @@ impl AccountsDb {
                 use_index,
                 debug_verify,
                 slot,
-                ancestors,
+                CalcAccountsHashConfig {
+                    use_bg_thread_pool: !is_startup,
+                    check_hash,
+                    ancestors: Some(ancestors),
+                    use_write_cache: can_cached_slot_be_unflushed,
+                },
                 expected_capitalization,
-                can_cached_slot_be_unflushed,
-                check_hash,
                 slots_per_epoch,
-                is_startup,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
         let mut bank_hashes = self.bank_hashes.write().unwrap();
@@ -5731,6 +5696,7 @@ impl AccountsDb {
     pub fn calculate_accounts_hash_without_index(
         &self,
         config: &CalcAccountsHashConfig<'_>,
+        storages: &SortedStorages<'_>,
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
@@ -5757,7 +5723,7 @@ impl AccountsDb {
 
                 let result = Self::scan_snapshot_stores_with_cache(
                     &cache_hash_data,
-                    config.storages,
+                    storages,
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
@@ -5787,7 +5753,7 @@ impl AccountsDb {
 
             info!(
                 "calculate_accounts_hash_without_index: slot (exclusive): {} {:?}",
-                config.storages.range().end,
+                storages.range().end,
                 final_result
             );
             Ok(final_result)
@@ -5850,12 +5816,14 @@ impl AccountsDb {
                 use_index,
                 test_hash_calculation,
                 slot,
-                ancestors,
+                CalcAccountsHashConfig {
+                    use_bg_thread_pool: !is_startup,
+                    check_hash,
+                    ancestors: Some(ancestors),
+                    use_write_cache: can_cached_slot_be_unflushed,
+                },
                 None,
-                can_cached_slot_be_unflushed,
-                check_hash,
                 None, // could use epoch_schedule.slots_per_epoch here
-                is_startup,
             )?;
 
         if calculated_lamports != total_lamports {
@@ -7953,12 +7921,12 @@ pub mod tests {
         let result = db
             .calculate_accounts_hash_without_index(
                 &CalcAccountsHashConfig {
-                    storages: &get_storage_refs(&storages),
                     use_bg_thread_pool: false,
                     check_hash: false,
                     ancestors: None,
                     use_write_cache: false,
                 },
+                &get_storage_refs(&storages),
                 HashStats::default(),
             )
             .unwrap();
@@ -7980,12 +7948,12 @@ pub mod tests {
         let result = db
             .calculate_accounts_hash_without_index(
                 &CalcAccountsHashConfig {
-                    storages: &get_storage_refs(&storages),
                     use_bg_thread_pool: false,
                     check_hash: false,
                     ancestors: None,
                     use_write_cache: false,
                 },
+                &get_storage_refs(&storages),
                 HashStats::default(),
             )
             .unwrap();
@@ -9998,7 +9966,15 @@ pub mod tests {
         for use_index in [true, false] {
             assert!(db
                 .calculate_accounts_hash_helper(
-                    use_index, some_slot, &ancestors, check_hash, false, None, false,
+                    use_index,
+                    some_slot,
+                    &CalcAccountsHashConfig {
+                        use_bg_thread_pool: true, // is_startup used to be false
+                        check_hash,
+                        ancestors: Some(&ancestors),
+                        use_write_cache: false,
+                    },
+                    None
                 )
                 .is_err());
         }
@@ -10021,11 +9997,27 @@ pub mod tests {
         let check_hash = true;
         assert_eq!(
             db.calculate_accounts_hash_helper(
-                false, some_slot, &ancestors, check_hash, false, None, false,
+                false,
+                some_slot,
+                &CalcAccountsHashConfig {
+                    use_bg_thread_pool: true, // is_startup used to be false
+                    check_hash,
+                    ancestors: Some(&ancestors),
+                    use_write_cache: false,
+                },
+                None,
             )
             .unwrap(),
             db.calculate_accounts_hash_helper(
-                true, some_slot, &ancestors, check_hash, false, None, false,
+                true,
+                some_slot,
+                &CalcAccountsHashConfig {
+                    use_bg_thread_pool: true, // is_startup used to be false
+                    check_hash,
+                    ancestors: Some(&ancestors),
+                    use_write_cache: false,
+                },
+                None,
             )
             .unwrap(),
         );
