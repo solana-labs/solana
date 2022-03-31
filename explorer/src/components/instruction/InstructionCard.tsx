@@ -68,9 +68,8 @@ export function InstructionCard({
 
         <button
           disabled={defaultRaw}
-          className={`btn btn-sm d-flex ${
-            showRaw ? "btn-black active" : "btn-white"
-          }`}
+          className={`btn btn-sm d-flex ${showRaw ? "btn-black active" : "btn-white"
+            }`}
           onClick={rawClickHandler}
         >
           <span className="fe fe-code me-1"></span>

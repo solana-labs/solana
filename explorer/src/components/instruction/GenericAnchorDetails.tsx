@@ -8,14 +8,10 @@ import {
   Program,
   BorshInstructionCoder
 } from "@project-serum/anchor";
-import { useMemo } from "react";
-import { Address } from "../common/Address";
-import { snakeCase } from "snake-case";
-import { ErrorBoundary } from "@sentry/react";
-import { UnknownDetailsCard } from "./UnknownDetailsCard";
-import { getAnchorNameForInstruction, getProgramName, ProgramName } from "utils/anchor";
-import { useCluster } from "providers/cluster";
-import { program } from "@project-serum/anchor/dist/cjs/spl/token";
+import { getAnchorNameForInstruction, getProgramName, capitalizeFirstLetter, getAnchorAccountsFromInstruction } from "utils/anchor";
+import { HexData } from "components/common/HexData";
+import { Address } from "components/common/Address";
+import ReactJson from "react-json-view";
 
 export function AnchorDetailsCard(props: {
   key: string,
@@ -25,127 +21,80 @@ export function AnchorDetailsCard(props: {
   signature: string;
   innerCards?: JSX.Element[];
   childIndex?: number;
-  program: Program<Idl>
+  anchorProgram: Program<Idl>
 }) {
-  const { cluster } = useCluster();
-  const ixName = getAnchorNameForInstruction(props.ix, props.program) ?? getProgramName(props.program) ?? "Unknown Program: Unknown Instruction";
+  const { ix, anchorProgram } = props;
+  const programName = getProgramName(anchorProgram) ?? "Unknown Program";
+  
+  const ixName = getAnchorNameForInstruction(ix, anchorProgram) ?? "Unknown Instruction";
+  const cardTitle = `${programName}: ${ixName}`;
+
   return (
-      <InstructionCard title={ixName} defaultRaw {...props} />
+    <InstructionCard title={cardTitle} {...props}>
+      <RawAnchorDetails ix={ix} anchorProgram={anchorProgram} />
+    </InstructionCard>
   );
 }
 
-export function GenericAnchorDetailsCard(props: {
-  ix: TransactionInstruction;
-  index: number;
-  result: SignatureResult;
-  signature: string;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-  program: Program<Idl>
+function RawAnchorDetails({
+  ix,
+  anchorProgram,
+}: {
+  ix: TransactionInstruction,
+  anchorProgram: Program
 }) {
-  const { ix, index, result, innerCards, childIndex, program } = props;
 
-  const idl = program.idl;
-  const renderProps = useMemo(() => {
-    // e.g. voter stake registry -> Voter Stake Registry
-    var _programName = program.idl.name.replaceAll("_", " ").trim();
-    _programName = _programName
-      .toLowerCase()
-      .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.substring(1))
-      .join(" ");
-    const programName = _programName.charAt(0).toUpperCase() + _programName.slice(1);
-
-    const coder = new BorshInstructionCoder(idl);
-    const decodedIx = coder.decode(ix.data);
-
-    if (!decodedIx) {
-      return null;
-    }
-
-    // get ix title, pascal case it
-    var _ixTitle = decodedIx.name;
-    const ixTitle = _ixTitle.charAt(0).toUpperCase() + _ixTitle.slice(1);
-
-    // get ix accounts
-    const idlInstructions = idl.instructions.filter(
-      (ix) => ix.name === decodedIx.name
-    );
-    if (idlInstructions.length === 0) {
-      return null;
-    }
-    const ixAccounts = idlInstructions[0].accounts as {
-      // type coercing since anchor doesn't export the underlying type
-      name: string;
-      isMut: boolean;
-      isSigner: boolean;
-      pda?: Object;
-    }[];
-
-    return { ixTitle, ixAccounts, programName }
-  }, [ix.data, program, idl]);
-
-  if (!renderProps) {
-    throw new Error("Failed to deserialize instruction data");
+  let ixAccounts: {
+    name: string;
+    isMut: boolean;
+    isSigner: boolean;
+    pda?: Object;
+  }[] | null = null;
+  var decodedIxData = null;
+  if (anchorProgram) {
+    const decoder = new BorshInstructionCoder(anchorProgram.idl);
+    decodedIxData = decoder.decode(ix.data);
+    ixAccounts = getAnchorAccountsFromInstruction(decodedIxData, anchorProgram);
   }
 
-  const { ixTitle, ixAccounts, programName } = renderProps;
-
   return (
-    <div>
-      {idl && (
-        <InstructionCard
-          ix={ix}
-          index={index}
-          result={result}
-          title={`${programName || "Unknown"}: ${ixTitle || "Unknown"}`}
-          innerCards={innerCards}
-          childIndex={childIndex}
-        >
-          <tr key={ix.programId.toBase58()}>
-            <td>Program</td>
+    <>
+      {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => {
+        return (
+          <tr key={keyIndex}>
+            <td>
+              <div className="me-2 d-md-inline">
+                {ixAccounts && keyIndex < ixAccounts.length ? `${capitalizeFirstLetter(ixAccounts[keyIndex].name)}` : `Account #${keyIndex + 1}`}
+              </div>
+              {isWritable && (
+                <span className="badge bg-info-soft me-1">Writable</span>
+              )}
+              {isSigner && (
+                <span className="badge bg-info-soft me-1">Signer</span>
+              )}
+            </td>
             <td className="text-lg-end">
-              <Address pubkey={ix.programId} alignRight link />
+              <Address pubkey={pubkey} alignRight link />
             </td>
           </tr>
+        )
+      })}
 
-          {ixAccounts != null &&
-            ix.keys.map((am, keyIndex) => (
-              <tr key={keyIndex}>
-                <td>
-                  <div className="me-2 d-md-inline">
-                    {/* remaining accounts would not have a name */}
-                    {ixAccounts[keyIndex] &&
-                      snakeCase(ixAccounts[keyIndex].name)}
-                    {!ixAccounts[keyIndex] &&
-                      "remaining account #" +
-                      (keyIndex - ixAccounts.length + 1)}
-                  </div>
-                  {am.isWritable && (
-                    <span className="badge bg-info-soft me-1">Writable</span>
-                  )}
-                  {am.isSigner && (
-                    <span className="badge bg-info-soft me-1">Signer</span>
-                  )}
-                </td>
-                <td>
-                  <Address pubkey={am.pubkey} alignRight link />
-                </td>
-              </tr>
-            ))}
-        </InstructionCard>
-      )}
-      {!idl && (
-        <InstructionCard
-          ix={ix}
-          index={index}
-          result={result}
-          title={`Unknown Program: Unknown Instruction`}
-          innerCards={innerCards}
-          childIndex={childIndex}
-          defaultRaw
-        />
-      )}
-    </div>
+      <tr>
+        <td>
+          Instruction Data <span className="text-muted">(Hex)</span>
+        </td>
+        {
+          decodedIxData ?
+            <td className="metadata-json-viewer m-4">
+              <ReactJson src={JSON.parse(JSON.stringify(decodedIxData))} theme="solarized" />
+            </td>
+            :
+            <td className="text-lg-end">
+              < HexData raw={ix.data} />
+            </td>
+        }
+      </tr>
+    </>
   );
 }

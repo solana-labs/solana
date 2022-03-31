@@ -51,6 +51,10 @@ export function useAnchorProgram(
         })
         throw cacheEntry.promise;
     }
+
+    if (cacheEntry?._type === 'result') {
+        return cacheEntry.result
+    }
     return anchorProgram;
 }
 

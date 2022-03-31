@@ -1,13 +1,23 @@
 import React from 'react';
 import { clusterUrl, Cluster, DEFAULT_CUSTOM_URL } from "providers/cluster";
-import { PublicKey, Connection, TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { BorshInstructionCoder, Program } from "@project-serum/anchor";
 import { useAnchorAccount, useAnchorProgram } from 'providers/anchor';
 import { programLabel } from "utils/tx";
 import { ErrorBoundary } from '@sentry/react';
 
+function snakeToPascal(string: string) {
+  return string.split("/")
+    .map(snake => snake.split("_")
+      .map(substr => substr.charAt(0)
+        .toUpperCase() +
+        substr.slice(1))
+      .join(""))
+    .join("/");
+};
+
 export function getProgramName(program: Program | null): string | undefined {
-  return program ? capitalizeFirstLetter(program.idl.name) : undefined
+  return program ? snakeToPascal(program.idl.name) : undefined
 }
 
 export function capitalizeFirstLetter(input: string) {
@@ -23,7 +33,8 @@ function AnchorProgramName({
 }) {
   let url = clusterUrl(cluster, DEFAULT_CUSTOM_URL);
   const program = useAnchorProgram(programId.toString(), url);
-  return <>{getProgramName(program)}</>
+  const programName = getProgramName(program);
+  return <>{programName}</>
 }
 
 export function ProgramName({
@@ -54,7 +65,6 @@ function AnchorAccountName({
   let url = clusterUrl(cluster, DEFAULT_CUSTOM_URL);
   const account = useAnchorAccount(accountPubkey.toString(), programId.toString(), url);
   if (!account) throw new Error("Unable to decode anchor account for pubkey");
-  console.log("Account:", account.layout);
 
   return <>{camelToUnderscore(account.layout)}</>
 }
@@ -87,21 +97,16 @@ export function getAnchorNameForInstruction(ix: TransactionInstruction, program:
   return _ixTitle.charAt(0).toUpperCase() + _ixTitle.slice(1);
 }
 
-export function getAnchorAccountsFromInstruction(ix: TransactionInstruction, program: Program): {
+export function getAnchorAccountsFromInstruction(decodedIx: Object | null, program: Program): {
   name: string;
   isMut: boolean;
   isSigner: boolean;
   pda?: Object;
 }[] | null {
-  const coder = new BorshInstructionCoder(program.idl);
-  const decodedIx = coder.decode(ix.data);
-
   if (decodedIx) {
-    var _ixTitle = decodedIx.name;
-    const ixTitle = _ixTitle.charAt(0).toUpperCase() + _ixTitle.slice(1);
-
     // get ix accounts
     const idlInstructions = program.idl.instructions.filter(
+      // @ts-ignore
       (ix) => ix.name === decodedIx.name
     );
     if (idlInstructions.length === 0) {

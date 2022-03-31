@@ -42,7 +42,7 @@ import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTok
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
 import { isPythInstruction } from "components/instruction/pyth/types";
 import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
-import { AnchorDetailsCard, GenericAnchorDetailsCard } from "../instruction/GenericAnchorDetails";
+import { AnchorDetailsCard } from "../instruction/GenericAnchorDetails";
 import { isMangoInstruction } from "../instruction/mango/types";
 import { useAnchorProgram } from "providers/anchor";
 import { LoadingCard } from "components/common/LoadingCard";
@@ -174,6 +174,7 @@ function InstructionCard({
 }) {
   const key = `${index}-${childIndex}`;
   const anchorProgram = useAnchorProgram(ix.programId.toString(), url);
+
   if ("parsed" in ix) {
     const props = {
       tx,
@@ -229,12 +230,6 @@ function InstructionCard({
 
   if (isBonfidaBotInstruction(transactionIx)) {
     return <BonfidaBotDetailsCard key={key} {...props} />;
-  } else if (anchorProgram) {
-    return (
-      <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
-        <AnchorDetailsCard key={key} program={anchorProgram} {...props} />
-      </ErrorBoundary>
-    );
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {
@@ -247,6 +242,12 @@ function InstructionCard({
     return <WormholeDetailsCard key={key} {...props} />;
   } else if (isPythInstruction(transactionIx)) {
     return <PythDetailsCard key={key} {...props} />;
+  } else if (anchorProgram) {
+    return (
+      <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
+        <AnchorDetailsCard key={key} anchorProgram={anchorProgram} {...props} />
+      </ErrorBoundary>
+    );
   } else {
     return <UnknownDetailsCard key={key} {...props} />;
   }

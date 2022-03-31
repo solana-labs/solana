@@ -139,7 +139,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
 
   try {
     pubkey = new PublicKey(address);
-  } catch (err) {}
+  } catch (err) { }
 
   // Fetch account on load
   React.useEffect(() => {
@@ -238,10 +238,8 @@ function DetailsSections({
   info?: CacheEntry<Account>;
 }) {
   const { url } = useCluster();
-  const anchorProgram = useAnchorProgram(info?.data?.pubkey.toString() ?? "", url);
-  const isAnchorProgram = !!anchorProgram;
+  const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
   const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
-  const isAnchorAccount = !!accountAnchorProgram;
 
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
@@ -259,7 +257,7 @@ function DetailsSections({
 
   const account = info.data;
   const data = account?.details?.data;
-  const tabs = getTabs(data, isAnchorAccount, isAnchorProgram);
+  const tabs = getTabs(data, anchorProgram ?? undefined, accountAnchorProgram ?? undefined);
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -277,14 +275,15 @@ function DetailsSections({
         </div>
       )}
       {<InfoSection account={account} />}
-      {<MoreSection account={account} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} tab={moreTab} tabs={tabs} />}
+      <React.Suspense fallback={<LoadingCard message="Loading account sections" />}>
+        <MoreSection account={account} tab={moreTab} tabs={tabs} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} />
+      </React.Suspense>
     </>
   );
 }
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
-  console.log("account", account);
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -347,20 +346,22 @@ export type MoreTabs =
 
 function MoreSection({
   account,
-  anchorProgram,
-  accountAnchorProgram,
   tab,
   tabs,
+  anchorProgram,
+  accountAnchorProgram,
 }: {
   account: Account;
-  anchorProgram: Program | null;
-  accountAnchorProgram: Program | null;
   tab: MoreTabs;
   tabs: Tab[];
+  anchorProgram: Program | null;
+  accountAnchorProgram: Program | null;
 }) {
+
   const pubkey = account.pubkey;
   const address = account.pubkey.toBase58();
   const data = account?.details?.data;
+
   return (
     <>
       <div className="container">
@@ -420,16 +421,17 @@ function MoreSection({
       {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
         <SecurityCard data={data} />
       )}
-      {/* {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
-      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />} */}
+      {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
+      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />}
     </>
   );
 }
 
+
 function getTabs(
   data?: ProgramData,
-  isAnchorAccount?: Boolean,
-  isAnchorProgram?: Boolean
+  anchorProgram?: Program,
+  accountAnchorProgram?: Program,
 ): Tab[] {
   const tabs: Tab[] = [
     {
@@ -480,21 +482,19 @@ function getTabs(
     });
   }
 
-  // Add anchor tabs
-  if (isAnchorAccount) {
-    tabs.push({
-      slug: "anchor-account",
-      title: "Anchor IDL",
-      path: "/anchor-account",
-    });
-  }
-  if (isAnchorProgram) {
+  if (anchorProgram) {
     tabs.push({
       slug: "anchor-program",
-      title: "Anchor IDL",
+      title: "Anchor Program IDL",
       path: "/anchor-program",
     });
   }
-
+  if (accountAnchorProgram) {
+    tabs.push({
+      slug: "anchor-account",
+      title: "Anchor Account",
+      path: "/anchor-account",
+    });
+  }
   return tabs;
 }
