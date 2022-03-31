@@ -1947,7 +1947,8 @@ mod tests {
         });
 
         // timeout of 30s for shutting down the validators
-        if receiver.recv_timeout(Duration::from_secs(30)).is_err() {
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             panic!("timeout for shutting down validators",);
         }
 
