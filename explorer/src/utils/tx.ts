@@ -17,11 +17,9 @@ import {
   Secp256k1Program,
   Ed25519Program,
 } from "@solana/web3.js";
-import { Cluster, clusterUrl, DEFAULT_CUSTOM_URL} from "providers/cluster";
+import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
-import { Program, Provider } from "@project-serum/anchor";
-import { NodeWallet } from "@metaplex/js";
 
 export enum PROGRAM_NAMES {
   // native built-ins

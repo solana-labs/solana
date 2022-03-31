@@ -2,13 +2,12 @@ import React from "react";
 import { TransactionInstruction } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { HexData } from "components/common/HexData";
-import { AccountName, capitalizeFirstLetter, getAnchorAccountsFromInstruction } from "utils/anchor";
+import { capitalizeFirstLetter, getAnchorAccountsFromInstruction } from "utils/anchor";
 import { useCluster } from "providers/cluster";
-import { BorshInstructionCoder } from "@project-serum/anchor";
 import { useAnchorProgram } from "providers/anchor";
 
 export function RawDetails({ ix }: { ix: TransactionInstruction }) {
-  const { cluster, url } = useCluster();
+  const { url } = useCluster();
   const program = useAnchorProgram(ix.programId.toString(), url);
 
   let ixAccounts: {
@@ -28,7 +27,6 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
           <tr key={keyIndex}>
             <td>
               <div className="me-2 d-md-inline">
-                {/* <AccountName accountPubkey={pubkey} programId={ix.programId} cluster={cluster} defaultAccountName={`Account #${keyIndex + 1}`} /> */}
                 {ixAccounts && keyIndex < ixAccounts.length ? `${capitalizeFirstLetter(ixAccounts[keyIndex].name)}` : `Account #${keyIndex+1}`}
               </div>
               {isWritable && (

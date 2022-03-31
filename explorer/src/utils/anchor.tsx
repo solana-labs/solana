@@ -1,6 +1,6 @@
 import React from 'react';
 import { clusterUrl, Cluster, DEFAULT_CUSTOM_URL } from "providers/cluster";
-import { PublicKey, Connection, TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { BorshInstructionCoder, Program } from "@project-serum/anchor";
 import { useAnchorAccount, useAnchorProgram } from 'providers/anchor';
 import { programLabel } from "utils/tx";
@@ -97,9 +97,6 @@ export function getAnchorAccountsFromInstruction(ix: TransactionInstruction, pro
   const decodedIx = coder.decode(ix.data);
 
   if (decodedIx) {
-    var _ixTitle = decodedIx.name;
-    const ixTitle = _ixTitle.charAt(0).toUpperCase() + _ixTitle.slice(1);
-
     // get ix accounts
     const idlInstructions = program.idl.instructions.filter(
       (ix) => ix.name === decodedIx.name
