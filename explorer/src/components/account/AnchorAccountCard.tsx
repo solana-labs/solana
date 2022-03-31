@@ -4,8 +4,8 @@ import { Account } from "providers/accounts";
 import { useCluster } from "providers/cluster";
 import { Address } from "components/common/Address";
 import { Program, BorshAccountsCoder } from "@project-serum/anchor";
-
 import { Connection } from "@solana/web3.js";
+import { capitalizeFirstLetter } from "utils/anchor";
 
 export function AnchorAccountCard({ account, program }: { account: Account, program: Program }) {
   const { url } = useCluster();
@@ -111,10 +111,6 @@ const renderAccountRow = (key: string, value: any) => {
     </tr>
   );
 };
-
-function capitalizeFirstLetter(input: string) {
-  return input.charAt(0).toUpperCase() + input.slice(1);
-}
 
 function equal(buf1: Buffer, buf2: Buffer) {
   if (buf1.byteLength !== buf2.byteLength) return false;

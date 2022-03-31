@@ -79,6 +79,7 @@ export function GenericAnchorDetailsCard(props: {
           title={`${programName || "Unknown"}: ${ixTitle || "Unknown"}`}
           innerCards={innerCards}
           childIndex={childIndex}
+          defaultRaw
         >
           <tr key={ix.programId.toBase58()}>
             <td>Program</td>
