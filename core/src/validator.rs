@@ -1938,7 +1938,7 @@ mod tests {
         validators.iter_mut().for_each(|v| v.exit());
 
         // spawn a new thread to wait for the join of the validator
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = bounded(0);
         let _ = thread::spawn(move || {
             validators.into_iter().for_each(|validator| {
                 validator.join();
