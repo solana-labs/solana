@@ -8,8 +8,9 @@ import { Program, Provider, BorshAccountsCoder } from "@project-serum/anchor";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+import { useAnchorProgram } from "providers/anchor";
 
-export function AnchorAccountCard({ account }: { account: Account }) {
+export function AnchorAccountCard({ account, program }: { account: Account, program: Program }) {
   const { url } = useCluster();
   const [decodedAnchorAccountData, setDecodedAnchorAccountData] =
     React.useState<any>();
@@ -41,32 +42,26 @@ export function AnchorAccountCard({ account }: { account: Account }) {
         return;
       }
 
-      await Program.at(account.details.owner, provider)
-        .then((program) => {
-          if (program && accountInfo && accountInfo.data) {
-            // Iterate all the structs, see if any of the name-hashes match
-            Object.keys(program.account).forEach((accountType) => {
-              const layoutName = capitalizeFirstLetter(accountType);
-              const discriminatorToCheck =
-                BorshAccountsCoder.accountDiscriminator(layoutName);
+      if (program && accountInfo && accountInfo.data) {
+        // Iterate all the structs, see if any of the name-hashes match
+        Object.keys(program.account).forEach((accountType) => {
+          const layoutName = capitalizeFirstLetter(accountType);
+          const discriminatorToCheck =
+            BorshAccountsCoder.accountDiscriminator(layoutName);
 
-              if (equal(discriminatorToCheck, discriminator)) {
-                const accountDecoder = program.account[accountType];
-                const decodedAnchorObject =
-                  accountDecoder.coder.accounts.decode(
-                    layoutName,
-                    accountInfo.data
-                  );
+          if (equal(discriminatorToCheck, discriminator)) {
+            const accountDecoder = program.account[accountType];
+            const decodedAnchorObject =
+              accountDecoder.coder.accounts.decode(
+                layoutName,
+                accountInfo.data
+              );
 
-                setDecodedAnchorAccountName(layoutName);
-                setDecodedAnchorAccountData(decodedAnchorObject);
-              }
-            });
+            setDecodedAnchorAccountName(layoutName);
+            setDecodedAnchorAccountData(decodedAnchorObject);
           }
-        })
-        .catch((error) => {
-          console.log("Erroring loading idl", error);
         });
+      }
     })();
   }, [account, url]);
 

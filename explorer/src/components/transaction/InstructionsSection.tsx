@@ -42,9 +42,11 @@ import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTok
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
 import { isPythInstruction } from "components/instruction/pyth/types";
 import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
-import { isInstructionFromAnAnchorProgram } from "../instruction/anchor/types";
 import { GenericAnchorDetailsCard } from "../instruction/GenericAnchorDetails";
 import { isMangoInstruction } from "../instruction/mango/types";
+import { useAnchorProgram } from "providers/anchor";
+import { LoadingCard } from "components/common/LoadingCard";
+import { ErrorBoundary } from "@sentry/react";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -65,81 +67,47 @@ export function InstructionsSection({ signature }: SignatureProps) {
     []
   );
 
-  useEffect(() => {
-    const result = status?.data?.info?.result;
-    if (!result || !details?.data?.transaction) {
-      return;
-    }
-    const { meta } = details.data.transaction;
+  const result = status?.data?.info?.result;
+    // if (!result || !details?.data?.transaction) {
+    // return <ErrorCard retry={refreshDetails} text="No instructions found" />;
+    // }
+    // const { meta } = details.data.transaction;
 
-    const innerInstructions: {
-      [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
-    } = {};
 
-    if (
-      meta?.innerInstructions &&
-      (cluster !== Cluster.MainnetBeta ||
-        details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
-    ) {
-      meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
-        if (!innerInstructions[parsed.index]) {
-          innerInstructions[parsed.index] = [];
-        }
+    // const { transaction } = details.data?.transaction;
 
-        parsed.instructions.forEach((ix) => {
-          innerInstructions[parsed.index].push(ix);
-        });
-      });
-    }
+  // useEffect(() => {
+    // Promise.all(ixDetails)
+    //   .then(setInstructionDetails)
+    //   .catch((err) =>
+    //     console.error("Unexpected error processing instructions:", err)
+    //   );
+  // }, [cluster, details, signature, status, url]);
 
-    const { transaction } = details.data?.transaction;
-    const ixDetails = transaction.message.instructions.map(
-      async (instruction, index) => {
-        let innerCards: JSX.Element[] = [];
+  // if (!status?.data?.info || !details?.data?.transaction) return null;
 
-        if (index in innerInstructions) {
-          innerInstructions[index].forEach(async (ix, childIndex) => {
-            if (typeof ix.programId === "string") {
-              ix.programId = new PublicKey(ix.programId);
-            }
+  const { transaction } = details?.data?.transaction ?? { transaction: { message: { instructions: []}} };
+    // const innerInstructions: {
+    //   [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
+    // } = {};
 
-            let res = await renderInstructionCard({
-              index,
-              ix,
-              result,
-              signature,
-              tx: transaction,
-              childIndex,
-              url,
-            });
+    // if (
+    //   meta?.innerInstructions &&
+    //   (cluster !== Cluster.MainnetBeta ||
+    //     details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+    // ) {
+    //   meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
+    //     if (!innerInstructions[parsed.index]) {
+    //       innerInstructions[parsed.index] = [];
+    //     }
 
-            innerCards.push(res);
-          });
-        }
+    //     parsed.instructions.forEach((ix) => {
+    //       innerInstructions[parsed.index].push(ix);
+    //     });
+    //   });
+    // }
 
-        return await renderInstructionCard({
-          index,
-          ix: instruction,
-          result,
-          signature,
-          tx: transaction,
-          innerCards,
-          url,
-        });
-      }
-    );
-
-    Promise.all(ixDetails)
-      .then(setInstructionDetails)
-      .catch((err) =>
-        console.error("Unexpected error processing instructions:", err)
-      );
-  }, [cluster, details, signature, status, url]);
-
-  if (!status?.data?.info || !details?.data?.transaction) return null;
-  const { transaction } = details.data.transaction;
-
-  if (transaction.message.instructions.length === 0) {
+  if (!result || transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
 
@@ -154,12 +122,53 @@ export function InstructionsSection({ signature }: SignatureProps) {
           </div>
         </div>
       </div>
-      {instructionDetails}
+      <React.Suspense fallback={<LoadingCard message="Loading" />}>
+        {
+          transaction.message.instructions.map(
+            (instruction, index) => {
+              let innerCards: JSX.Element[] = [];
+
+              // if (index in innerInstructions) {
+              //   innerInstructions[index].forEach(async (ix, childIndex) => {
+              //     if (typeof ix.programId === "string") {
+              //       ix.programId = new PublicKey(ix.programId);
+              //     }
+
+              //     let res = InstructionCard({
+              //       index,
+              //       ix,
+              //       result,
+              //       signature,
+              //       tx: transaction,
+              //       childIndex,
+              //       url,
+              //     });
+
+              //     innerCards.push(res);
+              //   });
+              // }
+
+              return (
+                <React.Suspense fallback={<LoadingCard message="Inner ix loading" />}>
+                <InstructionCard
+                  index={index}
+                  ix={instruction}
+                  result={result}
+                  signature={signature}
+                  tx={transaction as any as ParsedTransaction}
+                  innerCards={innerCards}
+                  url={url}
+                />
+              </React.Suspense>
+              );
+          })
+        }
+      </React.Suspense>
     </>
   );
 }
 
-async function renderInstructionCard({
+function InstructionCard({
   ix,
   tx,
   result,
@@ -179,7 +188,7 @@ async function renderInstructionCard({
   url: string;
 }) {
   const key = `${index}-${childIndex}`;
-
+  const anchorProgram = useAnchorProgram(ix.programId.toString(), url);
   if ("parsed" in ix) {
     const props = {
       tx,
@@ -235,8 +244,12 @@ async function renderInstructionCard({
 
   if (isBonfidaBotInstruction(transactionIx)) {
     return <BonfidaBotDetailsCard key={key} {...props} />;
-  } else if (await isInstructionFromAnAnchorProgram(url, transactionIx)) {
-    return <GenericAnchorDetailsCard key={key} {...props} />;
+  } else if (anchorProgram) {
+    return (
+      <ErrorBoundary fallback={<UnknownDetailsCard key={key} {...props} />}>
+        <GenericAnchorDetailsCard key={key} program={anchorProgram} {...props} />
+      </ErrorBoundary>
+    );
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {

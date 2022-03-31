@@ -74,7 +74,7 @@ export function clusterUrl(cluster: Cluster, customUrl: string): string {
 }
 
 export const DEFAULT_CLUSTER = Cluster.MainnetBeta;
-const DEFAULT_CUSTOM_URL = "http://localhost:8899";
+export const DEFAULT_CUSTOM_URL = "http://localhost:8899";
 
 type Action = State;
 interface State {

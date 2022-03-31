@@ -9,33 +9,8 @@ import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 import ReactJson from "react-json-view";
 
-export function AnchorProgramCard({ account }: { account: Account }) {
+export function AnchorProgramCard({ program }: { program: Program }) {
   const { url } = useCluster();
-  const [decodedAnchorAccountData, setDecodedAnchorAccountData] =
-    React.useState<Object>();
-
-  React.useEffect(() => {
-    (async () => {
-      const connection = new Connection(url);
-      const provider = new Provider(
-        connection,
-        new NodeWallet(Keypair.generate()),
-        {
-          skipPreflight: false,
-          commitment: "confirmed",
-          preflightCommitment: "confirmed",
-        }
-      );
-
-      await Program.at(account.pubkey, provider)
-        .then((program) => {
-          setDecodedAnchorAccountData(program.idl);
-        })
-        .catch((error) => {
-          console.log("Error loading idl", error);
-        });
-    })();
-  }, [account, url]);
 
   return (
     <>
@@ -50,7 +25,7 @@ export function AnchorProgramCard({ account }: { account: Account }) {
 
         <div className="card metadata-json-viewer m-4">
           <ReactJson
-            src={decodedAnchorAccountData!}
+            src={program.idl}
             theme={"solarized"}
             style={{ padding: 25 }}
           />

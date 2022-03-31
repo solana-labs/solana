@@ -42,9 +42,10 @@ import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import {
   AnchorAccountCard,
-  hasAnchorIDL,
 } from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
+import { Program } from '@project-serum/anchor';
+import { useAnchorProgram } from "providers/anchor";
 
 const IDENTICON_WIDTH = 64;
 
@@ -228,22 +229,16 @@ function DetailsSections({
   tab?: string;
   info?: CacheEntry<Account>;
 }) {
-  const [isAnchorAccount, setIsAnchorAccount] = React.useState<boolean>(false);
-  const [isAnchorProgram, setIsAnchorProgram] = React.useState<boolean>(false);
   const { url } = useCluster();
+  const anchorProgram = useAnchorProgram(info?.data?.pubkey.toString() ?? "", url);
+  const isAnchorProgram = !!anchorProgram;
+  const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
+  const isAnchorAccount = !!accountAnchorProgram;
+
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const location = useLocation();
   const { flaggedAccounts } = useFlaggedAccounts();
-
-  React.useEffect(() => {
-    if (info && info.data) {
-      hasAnchorIDL(info.data.pubkey, url).then(setIsAnchorProgram);
-      if (info.data.details) {
-        hasAnchorIDL(info.data.details.owner, url).then(setIsAnchorAccount);
-      }
-    }
-  }, [info, url]);
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -274,7 +269,7 @@ function DetailsSections({
         </div>
       )}
       {<InfoSection account={account} />}
-      {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
+      {<MoreSection account={account} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} tab={moreTab} tabs={tabs} />}
     </>
   );
 }
@@ -343,10 +338,14 @@ export type MoreTabs =
 
 function MoreSection({
   account,
+  anchorProgram,
+  accountAnchorProgram,
   tab,
   tabs,
 }: {
   account: Account;
+  anchorProgram: Program | null;
+  accountAnchorProgram: Program | null;
   tab: MoreTabs;
   tabs: Tab[];
 }) {
@@ -409,8 +408,8 @@ function MoreSection({
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
-      {tab === "anchor-account" && <AnchorAccountCard account={account} />}
-      {tab === "anchor-program" && <AnchorProgramCard account={account} />}
+      {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
+      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />}
     </>
   );
 }
