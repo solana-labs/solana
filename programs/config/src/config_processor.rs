@@ -17,7 +17,6 @@ use {
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    _data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;

@@ -257,33 +257,20 @@ pub fn create_vm<'a, 'b>(
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(
-        first_instruction_account,
-        _instruction_data,
-        invoke_context,
-        false,
-    )
+    process_instruction_common(first_instruction_account, invoke_context, false)
 }
 
 pub fn process_instruction_jit(
     first_instruction_account: usize,
-    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(
-        first_instruction_account,
-        _instruction_data,
-        invoke_context,
-        true,
-    )
+    process_instruction_common(first_instruction_account, invoke_context, true)
 }
 
 fn process_instruction_common(
     first_instruction_account: usize,
-    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -404,19 +391,13 @@ fn process_instruction_common(
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 first_instruction_account,
-                _instruction_data,
                 invoke_context,
                 use_jit,
             )
         } else if bpf_loader::check_id(program_id)
             || (!disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id))
         {
-            process_loader_instruction(
-                first_instruction_account,
-                _instruction_data,
-                invoke_context,
-                use_jit,
-            )
+            process_loader_instruction(first_instruction_account, invoke_context, use_jit)
         } else if disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id) {
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
@@ -429,7 +410,6 @@ fn process_instruction_common(
 
 fn process_loader_upgradeable_instruction(
     first_instruction_account: usize,
-    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1063,7 +1043,6 @@ fn common_close_account(
 
 fn process_loader_instruction(
     first_instruction_account: usize,
-    _instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1589,18 +1568,12 @@ mod tests {
             Vec::new(),
             None,
             Err(InstructionError::ProgramFailedToComplete),
-            |first_instruction_account: usize,
-             _instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context
                     .get_compute_meter()
                     .borrow_mut()
                     .mock_set_remaining(0);
-                super::process_instruction(
-                    first_instruction_account,
-                    _instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         );
 

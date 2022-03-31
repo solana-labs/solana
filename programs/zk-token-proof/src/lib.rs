@@ -27,7 +27,6 @@ fn verify<T: Pod + Verifiable>(invoke_context: &mut InvokeContext) -> Result<(),
 
 pub fn process_instruction(
     _first_instruction_account: usize,
-    _input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {

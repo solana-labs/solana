@@ -18,7 +18,6 @@ use {
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    _data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -237,15 +236,9 @@ mod tests {
             instruction_accounts,
             None,
             expected_result,
-            |first_instruction_account: usize,
-             _instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
-                super::process_instruction(
-                    first_instruction_account,
-                    _instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         )
     }
