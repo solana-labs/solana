@@ -323,7 +323,9 @@ mod tests {
             Meta, Stake, StakeState,
         },
         bincode::serialize,
-        solana_program_runtime::invoke_context::mock_process_instruction,
+        solana_program_runtime::{
+            invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
+        },
         solana_sdk::{
             account::{self, AccountSharedData, ReadableAccount, WritableAccount},
             account_utils::StateMut,
@@ -374,12 +376,29 @@ mod tests {
         instruction_accounts: Vec<AccountMeta>,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
+        process_instruction_with_sysvar_cache(
+            instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            None,
+            expected_result,
+        )
+    }
+
+    fn process_instruction_with_sysvar_cache(
+        instruction_data: &[u8],
+        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+        instruction_accounts: Vec<AccountMeta>,
+        sysvar_cache_override: Option<&SysvarCache>,
+        expected_result: Result<(), InstructionError>,
+    ) -> Vec<AccountSharedData> {
         mock_process_instruction(
             &id(),
             Vec::new(),
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            sysvar_cache_override,
             expected_result,
             super::process_instruction,
         )
@@ -2352,6 +2371,13 @@ mod tests {
             },
         ];
 
+        // Define rent here so that it's used consistently for setting the rent exempt reserve
+        // and in the sysvar cache used for mock instruction processing.
+        let mut rent = Rent::default();
+        rent.lamports_per_byte_year = 0;
+        let mut sysvar_cache_override = SysvarCache::default();
+        sysvar_cache_override.set_rent(rent.clone());
+
         for state in [
             StakeState::Initialized(Meta::auto(&stake_address)),
             just_stake(Meta::auto(&stake_address), stake_lamports),
@@ -2366,18 +2392,20 @@ mod tests {
             transaction_accounts[0] = (stake_address, stake_account);
 
             // should fail, split more than available
-            process_instruction(
+            process_instruction_with_sysvar_cache(
                 &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
+                Some(&sysvar_cache_override),
                 Err(InstructionError::InsufficientFunds),
             );
 
             // should pass
-            let accounts = process_instruction(
+            let accounts = process_instruction_with_sysvar_cache(
                 &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
+                Some(&sysvar_cache_override),
                 Ok(()),
             );
             // no lamport leakage

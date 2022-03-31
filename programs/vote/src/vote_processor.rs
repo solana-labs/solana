@@ -216,6 +216,7 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -233,6 +234,7 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
             expected_result,
             |first_instruction_account: usize,
              instruction_data: &[u8],
