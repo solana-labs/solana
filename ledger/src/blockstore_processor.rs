@@ -3164,6 +3164,7 @@ pub mod tests {
 
         // Test process_blockstore_from_root() from slot 1 onwards
         let (accounts_package_sender, _) = unbounded();
+        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         process_blockstore_from_root(
             &blockstore,
             &mut bank_forks,
@@ -3173,6 +3174,7 @@ pub mod tests {
             None,
             None,
             accounts_package_sender,
+            pruned_banks_receiver,
         )
         .unwrap();
 
@@ -3273,6 +3275,7 @@ pub mod tests {
         let (accounts_package_sender, accounts_package_receiver) = unbounded();
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
 
+        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         process_blockstore_from_root(
             &blockstore,
             &mut bank_forks,
@@ -3282,6 +3285,7 @@ pub mod tests {
             None,
             Some(&snapshot_config),
             accounts_package_sender.clone(),
+            pruned_banks_receiver,
         )
         .unwrap();
 

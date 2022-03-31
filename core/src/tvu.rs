@@ -446,6 +446,7 @@ pub mod tests {
         let tower = Tower::default();
         let accounts_package_channel = unbounded();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -495,6 +496,7 @@ pub mod tests {
             None,
             None,
             None,
+            pruned_banks_receiver,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
