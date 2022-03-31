@@ -468,13 +468,8 @@ impl Blockstore {
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
-        {
-            let mut new_shred_signals = blockstore.new_shreds_signals.lock().unwrap();
-            new_shred_signals.push(ledger_signal_sender);
-
-            let mut completed_slots_senders = blockstore.completed_slots_senders.lock().unwrap();
-            completed_slots_senders.push(completed_slots_sender);
-        }
+        blockstore.add_new_shred_signal(ledger_signal_sender);
+        blockstore.add_completed_slots_signal(completed_slots_sender);
 
         Ok(BlockstoreSignals {
             blockstore,
@@ -1066,6 +1061,14 @@ impl Blockstore {
         metrics.index_meta_time += index_meta_time;
 
         Ok((newly_completed_data_sets, inserted_indices))
+    }
+
+    pub fn add_new_shred_signal(&self, s: Sender<bool>) {
+        self.new_shreds_signals.lock().unwrap().push(s);
+    }
+
+    pub fn add_completed_slots_signal(&self, s: CompletedSlotsSender) {
+        self.completed_slots_senders.lock().unwrap().push(s);
     }
 
     pub fn drop_signal(&self) {
