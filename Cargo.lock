@@ -4773,6 +4773,7 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "serde",
+ "solana-bench-tps",
  "solana-client",
  "solana-core",
  "solana-gossip",
