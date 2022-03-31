@@ -40,6 +40,7 @@ import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
+import { SecurityCard } from "components/account/SecurityCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -106,6 +107,13 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "stake-history",
       title: "Stake History",
       path: "/stake-history",
+    },
+  ],
+  "bpf-upgradeable-loader": [
+    {
+      slug: "security",
+      title: "Security",
+      path: "/security",
     },
   ],
 };
@@ -319,7 +327,8 @@ export type MoreTabs =
   | "instructions"
   | "rewards"
   | "metadata"
-  | "domains";
+  | "domains"
+  | "security";
 
 function MoreSection({
   account,
@@ -389,6 +398,9 @@ function MoreSection({
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
+      {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
+        <SecurityCard data={data} />
+      )}
     </>
   );
 }
