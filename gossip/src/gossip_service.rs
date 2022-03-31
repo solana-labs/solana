@@ -1,16 +1,10 @@
 //! The `gossip_service` module implements the network control plane.
 
 use {
-    crate::{
-        cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE},
-        contact_info::ContactInfo,
-    },
+    crate::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{
-        thin_client::{create_client, ThinClient},
-        udp_client::UdpTpuConnection,
-    },
+    solana_client::thin_client::{create_client, ThinClient},
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
@@ -20,7 +14,7 @@ use {
     solana_streamer::{socket::SocketAddrSpace, streamer},
     std::{
         collections::HashSet,
-        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+        net::{SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -197,51 +191,37 @@ pub fn discover(
 }
 
 /// Creates a ThinClient per valid node
-pub fn get_clients(
-    nodes: &[ContactInfo],
-    socket_addr_space: &SocketAddrSpace,
-) -> Vec<ThinClient<UdpTpuConnection>> {
+pub fn get_clients(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -> Vec<ThinClient> {
     nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
-        .map(|addrs| create_client(addrs, VALIDATOR_PORT_RANGE))
+        .map(create_client)
         .collect()
 }
 
 /// Creates a ThinClient by selecting a valid node at random
-pub fn get_client(
-    nodes: &[ContactInfo],
-    socket_addr_space: &SocketAddrSpace,
-) -> ThinClient<UdpTpuConnection> {
+pub fn get_client(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -> ThinClient {
     let nodes: Vec<_> = nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
         .collect();
     let select = thread_rng().gen_range(0, nodes.len());
-    create_client(nodes[select], VALIDATOR_PORT_RANGE)
+    create_client(nodes[select])
 }
 
 pub fn get_multi_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
-) -> (ThinClient<UdpTpuConnection>, usize) {
+) -> (ThinClient, usize) {
     let addrs: Vec<_> = nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = solana_net_utils::bind_in_range(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        VALIDATOR_PORT_RANGE,
-    )
-    .unwrap();
+
     let num_nodes = tpu_addrs.len();
-    (
-        //TODO: make it configurable whether to use quic
-        ThinClient::<UdpTpuConnection>::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
-        num_nodes,
-    )
+    (ThinClient::new_from_addrs(rpc_addrs, tpu_addrs), num_nodes)
 }
 
 fn spy(
