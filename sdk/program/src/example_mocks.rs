@@ -47,7 +47,7 @@ pub mod solana_client {
                     account::Account, hash::Hash, pubkey::Pubkey, signature::Signature,
                     transaction::Transaction,
                 },
-                client_error::{ClientError, Result as ClientResult},
+                client_error::Result as ClientResult,
             },
             std::{cell::RefCell, collections::HashMap, rc::Rc},
         };
