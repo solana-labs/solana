@@ -113,7 +113,7 @@ pub fn account_identity_ok<T: ReadableAccount>(account: &T) -> Result<(), Error>
 ///
 ///     // Sign the tx with nonce_account's `blockhash` instead of the
 ///     // network's latest blockhash.
-///     let nonce_account = client.get_account(&nonce_account_pubkey)?;
+///     let nonce_account = client.get_account(nonce_account_pubkey)?;
 ///     let nonce_state = nonce_utils::state_from_account(&nonce_account)?;
 ///
 ///     Ok(!matches!(nonce_state, State::Uninitialized))
@@ -197,7 +197,7 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
 ///
 ///     // Sign the tx with nonce_account's `blockhash` instead of the
 ///     // network's latest blockhash.
-///     let nonce_account = client.get_account(&nonce_account_pubkey)?;
+///     let nonce_account = client.get_account(nonce_account_pubkey)?;
 ///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
 ///     let blockhash = nonce_data.blockhash;
 ///

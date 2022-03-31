@@ -41,19 +41,25 @@ pub mod solana_client {
     }
 
     pub mod rpc_client {
-        use super::{
-            super::solana_sdk::{
-                account::Account, hash::Hash, pubkey::Pubkey, signature::Signature,
-                transaction::Transaction,
+        use {
+            super::{
+                super::solana_sdk::{
+                    account::Account, hash::Hash, pubkey::Pubkey, signature::Signature,
+                    transaction::Transaction,
+                },
+                client_error::Result as ClientResult,
             },
-            client_error::{ClientError, Result as ClientResult},
+            std::{cell::RefCell, collections::HashMap, rc::Rc},
         };
 
-        pub struct RpcClient;
+        #[derive(Default)]
+        pub struct RpcClient {
+            get_account_responses: Rc<RefCell<HashMap<Pubkey, Account>>>,
+        }
 
         impl RpcClient {
             pub fn new(_url: String) -> Self {
-                RpcClient
+                RpcClient::default()
             }
 
             pub fn get_latest_blockhash(&self) -> ClientResult<Hash> {
@@ -74,8 +80,19 @@ pub mod solana_client {
                 Ok(0)
             }
 
-            pub fn get_account(&self, _pubkey: &Pubkey) -> Result<Account, ClientError> {
-                Ok(Account {})
+            pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
+                Ok(self
+                    .get_account_responses
+                    .borrow()
+                    .get(pubkey)
+                    .cloned()
+                    .unwrap())
+            }
+
+            pub fn set_get_account_response(&self, pubkey: Pubkey, account: Account) {
+                self.get_account_responses
+                    .borrow_mut()
+                    .insert(pubkey, account);
             }
 
             pub fn get_balance(&self, _pubkey: &Pubkey) -> ClientResult<u64> {
@@ -92,13 +109,21 @@ pub mod solana_client {
 /// programs.
 pub mod solana_sdk {
     pub use crate::{
-        hash, instruction, message, nonce,
+        address_lookup_table_account, hash, instruction, message, nonce,
         pubkey::{self, Pubkey},
-        system_instruction,
+        system_instruction, system_program,
     };
 
     pub mod account {
-        pub struct Account;
+        use crate::{clock::Epoch, pubkey::Pubkey};
+        #[derive(Clone)]
+        pub struct Account {
+            pub lamports: u64,
+            pub data: Vec<u8>,
+            pub owner: Pubkey,
+            pub executable: bool,
+            pub rent_epoch: Epoch,
+        }
 
         pub trait ReadableAccount: Sized {
             fn data(&self) -> &[u8];
@@ -106,7 +131,7 @@ pub mod solana_sdk {
 
         impl ReadableAccount for Account {
             fn data(&self) -> &[u8] {
-                &[0]
+                &self.data
             }
         }
     }
@@ -147,21 +172,48 @@ pub mod solana_sdk {
     pub mod signers {
         use super::signature::Signer;
 
-        #[derive(Debug, thiserror::Error, PartialEq)]
-        pub enum SignerError {}
-
         pub trait Signers {}
 
         impl<T: Signer> Signers for [&T; 1] {}
         impl<T: Signer> Signers for [&T; 2] {}
     }
 
+    pub mod signer {
+        use thiserror::Error;
+
+        #[derive(Error, Debug)]
+        #[error("mock-error")]
+        pub struct SignerError;
+    }
+
     pub mod transaction {
         use {
-            super::signers::{SignerError, Signers},
-            crate::{hash::Hash, instruction::Instruction, message::Message, pubkey::Pubkey},
+            super::{signature::Signature, signer::SignerError, signers::Signers},
+            crate::{
+                hash::Hash,
+                instruction::Instruction,
+                message::{Message, VersionedMessage},
+                pubkey::Pubkey,
+            },
             serde::Serialize,
         };
+
+        pub struct VersionedTransaction {
+            pub signatures: Vec<Signature>,
+            pub message: VersionedMessage,
+        }
+
+        impl VersionedTransaction {
+            pub fn try_new<T: Signers>(
+                message: VersionedMessage,
+                _keypairs: &T,
+            ) -> std::result::Result<Self, SignerError> {
+                Ok(VersionedTransaction {
+                    signatures: vec![],
+                    message,
+                })
+            }
+        }
 
         #[derive(Serialize)]
         pub struct Transaction {
@@ -209,6 +261,37 @@ pub mod solana_sdk {
                 _recent_blockhash: Hash,
             ) -> Result<(), SignerError> {
                 Ok(())
+            }
+        }
+    }
+}
+
+pub mod solana_address_lookup_table_program {
+    crate::declare_id!("AddressLookupTab1e1111111111111111111111111");
+
+    pub mod state {
+        use {
+            crate::{instruction::InstructionError, pubkey::Pubkey},
+            std::borrow::Cow,
+        };
+
+        pub struct AddressLookupTable<'a> {
+            pub addresses: Cow<'a, [Pubkey]>,
+        }
+
+        impl<'a> AddressLookupTable<'a> {
+            pub fn serialize_for_tests(self) -> Result<Vec<u8>, InstructionError> {
+                let mut data = vec![];
+                self.addresses.iter().for_each(|address| {
+                    data.extend_from_slice(address.as_ref());
+                });
+                Ok(data)
+            }
+
+            pub fn deserialize(data: &'a [u8]) -> Result<AddressLookupTable<'a>, InstructionError> {
+                Ok(Self {
+                    addresses: Cow::Borrowed(bytemuck::try_cast_slice(data).unwrap()),
+                })
             }
         }
     }
