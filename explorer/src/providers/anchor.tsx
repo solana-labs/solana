@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Idl, Program, Provider } from "@project-serum/anchor";
 import { Connection, Keypair } from '@solana/web3.js';
 import { NodeWallet } from '@metaplex/js';

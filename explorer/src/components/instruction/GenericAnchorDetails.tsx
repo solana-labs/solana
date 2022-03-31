@@ -1,5 +1,4 @@
 import {
-  Connection,
   SignatureResult,
   TransactionInstruction,
 } from "@solana/web3.js";
@@ -8,14 +7,10 @@ import {
   BorshInstructionCoder,
   Idl,
   Program,
-  Provider,
 } from "@project-serum/anchor";
-import React, { useEffect, useState, useMemo } from "react";
-import { useCluster } from "../../providers/cluster";
+import { useMemo } from "react";
 import { Address } from "../common/Address";
 import { snakeCase } from "snake-case";
-import { decode } from "bs58";
-import { camelToTitleCase } from "utils";
 
 export function GenericAnchorDetailsCard(props: {
   ix: TransactionInstruction;
@@ -27,10 +22,8 @@ export function GenericAnchorDetailsCard(props: {
   program: Program<Idl>
 }) {
   const { ix, index, result, innerCards, childIndex, program } = props;
-  const cluster = useCluster();
 
   const idl = program.idl;
-
   const renderProps = useMemo(() => {
     // e.g. voter stake registry -> Voter Stake Registry
     var _programName = program.idl.name.replaceAll("_", " ").trim();
@@ -68,7 +61,7 @@ export function GenericAnchorDetailsCard(props: {
     }[];
 
     return { ixTitle, ixAccounts, programName }
-  }, [cluster]);
+  }, [ix.data, program, idl]);
 
   if (!renderProps) {
     throw new Error("Failed to deserialize instruction data");

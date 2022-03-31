@@ -152,7 +152,9 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} info={info} />
+        <React.Suspense fallback={<LoadingCard message="Loading account details" />}>
+          <DetailsSections pubkey={pubkey} tab={tab} info={info} />
+        </React.Suspense>
       )}
     </div>
   );
@@ -408,8 +410,8 @@ function MoreSection({
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
-      {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
-      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />}
+      {/* {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
+      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />} */}
     </>
   );
 }

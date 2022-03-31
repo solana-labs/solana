@@ -76,6 +76,11 @@ export type ConfigProgramData = {
   parsed: ConfigAccount;
 };
 
+export type RawAccountData =  {
+  program: "raw",
+  parsed: Buffer
+}
+
 export type ProgramData =
   | UpgradeableLoaderAccountData
   | StakeProgramData

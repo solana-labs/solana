@@ -1,17 +1,8 @@
-import React from "react";
-
-import { Account } from "providers/accounts";
-import { useCluster } from "providers/cluster";
-import { Program, Provider } from "@project-serum/anchor";
-import { Connection, Keypair } from "@solana/web3.js";
-
-import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
+import { Program } from "@project-serum/anchor";
 
 import ReactJson from "react-json-view";
 
 export function AnchorProgramCard({ program }: { program: Program }) {
-  const { url } = useCluster();
-
   return (
     <>
       <div className="card">

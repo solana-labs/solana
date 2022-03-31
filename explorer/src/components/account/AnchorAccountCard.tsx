@@ -3,12 +3,9 @@ import React from "react";
 import { Account } from "providers/accounts";
 import { useCluster } from "providers/cluster";
 import { Address } from "components/common/Address";
-import { Program, Provider, BorshAccountsCoder } from "@project-serum/anchor";
+import { Program, BorshAccountsCoder } from "@project-serum/anchor";
 
-import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
-import { useAnchorProgram } from "providers/anchor";
+import { Connection } from "@solana/web3.js";
 
 export function AnchorAccountCard({ account, program }: { account: Account, program: Program }) {
   const { url } = useCluster();
@@ -21,15 +18,6 @@ export function AnchorAccountCard({ account, program }: { account: Account, prog
     setDecodedAnchorAccountData(undefined);
     (async () => {
       const connection = new Connection(url);
-      const provider = new Provider(
-        connection,
-        new NodeWallet(Keypair.generate()),
-        {
-          skipPreflight: false,
-          commitment: "confirmed",
-          preflightCommitment: "confirmed",
-        }
-      );
 
       if (!account.details) {
         return;
@@ -63,7 +51,7 @@ export function AnchorAccountCard({ account, program }: { account: Account, prog
         });
       }
     })();
-  }, [account, url]);
+  }, [account, url, program]);
 
   return (
     <>
@@ -104,25 +92,6 @@ export function AnchorAccountCard({ account, program }: { account: Account, prog
     </>
   );
 }
-
-export const hasAnchorIDL = async (
-  address: PublicKey,
-  url: string
-): Promise<boolean> => {
-  const connection = new Connection(url);
-  const provider = new Provider(
-    connection,
-    new NodeWallet(Keypair.generate()),
-    {
-      skipPreflight: false,
-      commitment: "confirmed",
-      preflightCommitment: "confirmed",
-    }
-  );
-
-  const program = await Program.at(address, provider).catch(() => {});
-  return !!program;
-};
 
 const renderAccountRow = (key: string, value: any) => {
   let displayValue = value.toString();

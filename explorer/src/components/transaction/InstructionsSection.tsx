@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { ErrorCard } from "components/common/ErrorCard";
 import {
   ParsedInnerInstruction,
@@ -63,52 +63,36 @@ export function InstructionsSection({ signature }: SignatureProps) {
   const { cluster, url } = useCluster();
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
-  const [instructionDetails, setInstructionDetails] = useState<JSX.Element[]>(
-    []
-  );
 
   const result = status?.data?.info?.result;
-    // if (!result || !details?.data?.transaction) {
-    // return <ErrorCard retry={refreshDetails} text="No instructions found" />;
-    // }
-    // const { meta } = details.data.transaction;
-
-
-    // const { transaction } = details.data?.transaction;
-
-  // useEffect(() => {
-    // Promise.all(ixDetails)
-    //   .then(setInstructionDetails)
-    //   .catch((err) =>
-    //     console.error("Unexpected error processing instructions:", err)
-    //   );
-  // }, [cluster, details, signature, status, url]);
-
-  // if (!status?.data?.info || !details?.data?.transaction) return null;
-
-  const { transaction } = details?.data?.transaction ?? { transaction: { message: { instructions: []}} };
-    // const innerInstructions: {
-    //   [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
-    // } = {};
-
-    // if (
-    //   meta?.innerInstructions &&
-    //   (cluster !== Cluster.MainnetBeta ||
-    //     details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
-    // ) {
-    //   meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
-    //     if (!innerInstructions[parsed.index]) {
-    //       innerInstructions[parsed.index] = [];
-    //     }
-
-    //     parsed.instructions.forEach((ix) => {
-    //       innerInstructions[parsed.index].push(ix);
-    //     });
-    //   });
-    // }
-
-  if (!result || transaction.message.instructions.length === 0) {
+  if (!result || !details?.data?.transaction) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
+  }
+  const { meta } = details.data.transaction;
+  const { transaction } = details.data?.transaction;
+
+  if (transaction.message.instructions.length === 0) {
+    return <ErrorCard retry={refreshDetails} text="No instructions found" />;
+  }
+
+  const innerInstructions: {
+    [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
+  } = {};
+
+  if (
+    meta?.innerInstructions &&
+    (cluster !== Cluster.MainnetBeta ||
+      details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+  ) {
+    meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
+      if (!innerInstructions[parsed.index]) {
+        innerInstructions[parsed.index] = [];
+      }
+
+      parsed.instructions.forEach((ix) => {
+        innerInstructions[parsed.index].push(ix);
+      });
+    });
   }
 
   return (
@@ -117,49 +101,50 @@ export function InstructionsSection({ signature }: SignatureProps) {
         <div className="header">
           <div className="header-body">
             <h3 className="mb-0">
-              {instructionDetails.length > 1 ? "Instructions" : "Instruction"}
+              {transaction.message.instructions.length > 1 ? "Instructions" : "Instruction"}
             </h3>
           </div>
         </div>
       </div>
-      <React.Suspense fallback={<LoadingCard message="Loading" />}>
+      <React.Suspense fallback={<LoadingCard message="Loading Instructions" />}>
         {
           transaction.message.instructions.map(
             (instruction, index) => {
               let innerCards: JSX.Element[] = [];
 
-              // if (index in innerInstructions) {
-              //   innerInstructions[index].forEach(async (ix, childIndex) => {
-              //     if (typeof ix.programId === "string") {
-              //       ix.programId = new PublicKey(ix.programId);
-              //     }
+              if (index in innerInstructions) {
+                innerInstructions[index].forEach((ix, childIndex) => {
+                  if (typeof ix.programId === "string") {
+                    ix.programId = new PublicKey(ix.programId);
+                  }
 
-              //     let res = InstructionCard({
-              //       index,
-              //       ix,
-              //       result,
-              //       signature,
-              //       tx: transaction,
-              //       childIndex,
-              //       url,
-              //     });
-
-              //     innerCards.push(res);
-              //   });
-              // }
+                  let res = (
+                    <InstructionCard
+                      key={`${index}-${childIndex}`}
+                      index={index}
+                      ix={ix}
+                      result={result}
+                      signature={signature}
+                      tx={transaction}
+                      childIndex={childIndex}
+                      url={url}
+                    />
+                  );
+                  innerCards.push(res);
+                });
+              }
 
               return (
-                <React.Suspense fallback={<LoadingCard message="Inner ix loading" />}>
                 <InstructionCard
+                  key={`${index}`}
                   index={index}
                   ix={instruction}
                   result={result}
                   signature={signature}
-                  tx={transaction as any as ParsedTransaction}
+                  tx={transaction}
                   innerCards={innerCards}
                   url={url}
                 />
-              </React.Suspense>
               );
           })
         }
@@ -246,7 +231,7 @@ function InstructionCard({
     return <BonfidaBotDetailsCard key={key} {...props} />;
   } else if (anchorProgram) {
     return (
-      <ErrorBoundary fallback={<UnknownDetailsCard key={key} {...props} />}>
+      <ErrorBoundary key={key} fallback={<UnknownDetailsCard key={key} {...props} />}>
         <GenericAnchorDetailsCard key={key} program={anchorProgram} {...props} />
       </ErrorBoundary>
     );
