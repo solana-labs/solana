@@ -463,7 +463,7 @@ impl Blockstore {
         ledger_path: &Path,
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
-        let mut blockstore = Self::open_with_options(ledger_path, options)?;
+        let blockstore = Self::open_with_options(ledger_path, options)?;
         let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
