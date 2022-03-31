@@ -5322,12 +5322,9 @@ impl AccountsDb {
 
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, F2>(
+        &self,
         cache_hash_data: &CacheHashData,
-        accounts_cache_and_ancestors: Option<(
-            &AccountsCache,
-            &Ancestors,
-            &AccountInfoAccountsIndex,
-        )>,
+        config: &CalcAccountsHashConfig<'_>,
         snapshot_storages: &SortedStorages,
         scan_func: F,
         after_func: F2,
@@ -5370,9 +5367,8 @@ impl AccountsDb {
                 }
 
                 let mut file_name = String::default();
-                if accounts_cache_and_ancestors.is_none()
-                    && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK
-                {
+                // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
+                if !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
@@ -5436,11 +5432,12 @@ impl AccountsDb {
 
                 for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                     let valid_slot = sub_storages.is_some();
-                    if let Some((cache, ancestors, accounts_index)) = accounts_cache_and_ancestors {
-                        if let Some(slot_cache) = cache.slot_cache(slot) {
+                    if config.use_write_cache {
+                        let ancestors = config.ancestors.as_ref().unwrap();
+                        if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
                             if valid_slot
                                 || ancestors.contains_key(&slot)
-                                || accounts_index.is_root(slot)
+                                || self.accounts_index.is_root(slot)
                             {
                                 let keys = slot_cache.get_all_pubkeys();
                                 for key in keys {
@@ -5603,17 +5600,13 @@ impl AccountsDb {
     }
 
     fn scan_snapshot_stores_with_cache(
+        &self,
         cache_hash_data: &CacheHashData,
         storage: &SortedStorages,
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
-        check_hash: bool,
-        accounts_cache_and_ancestors: Option<(
-            &AccountsCache,
-            &Ancestors,
-            &AccountInfoAccountsIndex,
-        )>,
+        config: &CalcAccountsHashConfig<'_>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
@@ -5625,9 +5618,9 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);
 
-        let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
+        let result: Vec<BinnedHashData> = self.scan_account_storage_no_bank(
             cache_hash_data,
-            accounts_cache_and_ancestors,
+            config,
             storage,
             |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 let pubkey = loaded_account.pubkey();
@@ -5650,7 +5643,9 @@ impl AccountsDb {
                 let source_item =
                     CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
 
-                if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
+                if config.check_hash
+                    && !Self::is_filler_account_helper(pubkey, filler_account_suffix)
+                {
                     // this will not be supported anymore
                     let computed_hash = loaded_account.compute_hash(slot, pubkey);
                     if computed_hash != source_item.hash {
@@ -5677,7 +5672,7 @@ impl AccountsDb {
 
         stats.sort_time_total_us += sort_time.load(Ordering::Relaxed);
 
-        if check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
+        if config.check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
             warn!(
                 "{} mismatched account hash(es) found",
                 mismatch_found.load(Ordering::Relaxed)
@@ -5741,22 +5736,13 @@ impl AccountsDb {
                     },
                 };
 
-                let result = Self::scan_snapshot_stores_with_cache(
+                let result = self.scan_snapshot_stores_with_cache(
                     &cache_hash_data,
                     storages,
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
-                    config.check_hash,
-                    // if we can use write cache, then pass Some(write cache, ancestors, index)
-                    // otherwise, ancestors is irrelevant because storages were accumulated using ancestors already
-                    (config.use_write_cache && config.ancestors.is_some()).then(|| {
-                        (
-                            &self.accounts_cache,
-                            config.ancestors.unwrap(),
-                            &self.accounts_index,
-                        )
-                    }),
+                    config,
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
@@ -7576,6 +7562,7 @@ pub mod tests {
 
     impl AccountsDb {
         fn scan_snapshot_stores(
+            &self,
             storage: &SortedStorages,
             stats: &mut crate::accounts_hash::HashStats,
             bins: usize,
@@ -7584,14 +7571,20 @@ pub mod tests {
         ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path();
-            Self::scan_snapshot_stores_with_cache(
+            self.scan_snapshot_stores_with_cache(
                 &CacheHashData::new(&accounts_hash_cache_path),
                 storage,
                 stats,
                 bins,
                 bin_range,
-                check_hash,
-                None,
+                &CalcAccountsHashConfig {
+                    use_bg_thread_pool: false,
+                    check_hash,
+                    ancestors: None,
+                    use_write_cache: false,
+                    epoch_schedule: &EpochSchedule::default(),
+                    rent_collector: &RentCollector::default(),
+                },
                 None,
             )
         }
@@ -7612,8 +7605,11 @@ pub mod tests {
     fn test_accountsdb_scan_snapshot_stores_illegal_range_start() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 2, end: 2 };
+        let accounts_db = AccountsDb::new_single_for_tests();
 
-        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false).unwrap();
+        accounts_db
+            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .unwrap();
     }
     #[test]
     #[should_panic(
@@ -7623,7 +7619,10 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 3 };
 
-        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false).unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db
+            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .unwrap();
     }
 
     #[test]
@@ -7634,7 +7633,10 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false).unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db
+            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .unwrap();
     }
 
     fn sample_storages_and_account_in_slot(
@@ -7713,31 +7715,35 @@ pub mod tests {
         let bins = 1;
         let mut stats = HashStats::default();
 
-        let result = AccountsDb::scan_snapshot_stores(
-            &get_storage_refs(&storages),
-            &mut stats,
-            bins,
-            &Range {
-                start: 0,
-                end: bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &get_storage_refs(&storages),
+                &mut stats,
+                bins,
+                &Range {
+                    start: 0,
+                    end: bins,
+                },
+                false,
+            )
+            .unwrap();
         assert_eq!(result, vec![vec![raw_expected.clone()]]);
 
         let bins = 2;
-        let result = AccountsDb::scan_snapshot_stores(
-            &get_storage_refs(&storages),
-            &mut stats,
-            bins,
-            &Range {
-                start: 0,
-                end: bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &get_storage_refs(&storages),
+                &mut stats,
+                bins,
+                &Range {
+                    start: 0,
+                    end: bins,
+                },
+                false,
+            )
+            .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
@@ -7746,17 +7752,19 @@ pub mod tests {
         assert_eq!(result, vec![expected]);
 
         let bins = 4;
-        let result = AccountsDb::scan_snapshot_stores(
-            &get_storage_refs(&storages),
-            &mut stats,
-            bins,
-            &Range {
-                start: 0,
-                end: bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &get_storage_refs(&storages),
+                &mut stats,
+                bins,
+                &Range {
+                    start: 0,
+                    end: bins,
+                },
+                false,
+            )
+            .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[1].push(raw_expected[1].clone());
@@ -7765,17 +7773,19 @@ pub mod tests {
         assert_eq!(result, vec![expected]);
 
         let bins = 256;
-        let result = AccountsDb::scan_snapshot_stores(
-            &get_storage_refs(&storages),
-            &mut stats,
-            bins,
-            &Range {
-                start: 0,
-                end: bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &get_storage_refs(&storages),
+                &mut stats,
+                bins,
+                &Range {
+                    start: 0,
+                    end: bins,
+                },
+                false,
+            )
+            .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[127].push(raw_expected[1].clone());
@@ -7796,17 +7806,19 @@ pub mod tests {
             SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
-        let result = AccountsDb::scan_snapshot_stores(
-            &sorted_storages,
-            &mut stats,
-            bins,
-            &Range {
-                start: 0,
-                end: bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &sorted_storages,
+                &mut stats,
+                bins,
+                &Range {
+                    start: 0,
+                    end: bins,
+                },
+                false,
+            )
+            .unwrap();
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), bins);
         assert_eq!(0, result[0].iter().map(|x| x.len()).sum::<usize>()); // nothing found in bin 0
@@ -7822,34 +7834,38 @@ pub mod tests {
         // just the first bin of 2
         let bins = 2;
         let half_bins = bins / 2;
-        let result = AccountsDb::scan_snapshot_stores(
-            &get_storage_refs(&storages),
-            &mut stats,
-            bins,
-            &Range {
-                start: 0,
-                end: half_bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &get_storage_refs(&storages),
+                &mut stats,
+                bins,
+                &Range {
+                    start: 0,
+                    end: half_bins,
+                },
+                false,
+            )
+            .unwrap();
         let mut expected = vec![Vec::new(); half_bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
         assert_eq!(result, vec![expected]);
 
         // just the second bin of 2
-        let result = AccountsDb::scan_snapshot_stores(
-            &get_storage_refs(&storages),
-            &mut stats,
-            bins,
-            &Range {
-                start: 1,
-                end: bins,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &get_storage_refs(&storages),
+                &mut stats,
+                bins,
+                &Range {
+                    start: 1,
+                    end: bins,
+                },
+                false,
+            )
+            .unwrap();
 
         let mut expected = vec![Vec::new(); half_bins];
         let starting_bin_index = 0;
@@ -7859,18 +7875,21 @@ pub mod tests {
 
         // 1 bin at a time of 4
         let bins = 4;
+        let accounts_db = AccountsDb::new_single_for_tests();
+
         for (bin, expected_item) in raw_expected.iter().enumerate().take(bins) {
-            let result = AccountsDb::scan_snapshot_stores(
-                &get_storage_refs(&storages),
-                &mut stats,
-                bins,
-                &Range {
-                    start: bin,
-                    end: bin + 1,
-                },
-                false,
-            )
-            .unwrap();
+            let result = accounts_db
+                .scan_snapshot_stores(
+                    &get_storage_refs(&storages),
+                    &mut stats,
+                    bins,
+                    &Range {
+                        start: bin,
+                        end: bin + 1,
+                    },
+                    false,
+                )
+                .unwrap();
             let mut expected = vec![Vec::new(); 1];
             expected[0].push(expected_item.clone());
             assert_eq!(result, vec![expected]);
@@ -7880,17 +7899,19 @@ pub mod tests {
         let bin_locations = vec![0, 127, 128, 255];
         let range = 1;
         for bin in 0..bins {
-            let result = AccountsDb::scan_snapshot_stores(
-                &get_storage_refs(&storages),
-                &mut stats,
-                bins,
-                &Range {
-                    start: bin,
-                    end: bin + range,
-                },
-                false,
-            )
-            .unwrap();
+            let accounts_db = AccountsDb::new_single_for_tests();
+            let result = accounts_db
+                .scan_snapshot_stores(
+                    &get_storage_refs(&storages),
+                    &mut stats,
+                    bins,
+                    &Range {
+                        start: bin,
+                        end: bin + range,
+                    },
+                    false,
+                )
+                .unwrap();
             let mut expected = vec![];
             if let Some(index) = bin_locations.iter().position(|&r| r == bin) {
                 expected = vec![vec![Vec::new(); range]];
@@ -7915,17 +7936,19 @@ pub mod tests {
         let mut stats = HashStats::default();
         let range = 1;
         let start = 127;
-        let result = AccountsDb::scan_snapshot_stores(
-            &sorted_storages,
-            &mut stats,
-            bins,
-            &Range {
-                start,
-                end: start + range,
-            },
-            false,
-        )
-        .unwrap();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let result = accounts_db
+            .scan_snapshot_stores(
+                &sorted_storages,
+                &mut stats,
+                bins,
+                &Range {
+                    start,
+                    end: start + range,
+                },
+                false,
+            )
+            .unwrap();
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), range);
         assert_eq!(0, result[0].iter().map(|x| x.len()).sum::<usize>()); // nothing found in bin 0
@@ -8030,9 +8053,18 @@ pub mod tests {
         let calls = AtomicU64::new(0);
         let temp_dir = TempDir::new().unwrap();
         let accounts_hash_cache_path = temp_dir.path();
-        let result = AccountsDb::scan_account_storage_no_bank(
+        let accounts_db = AccountsDb::new_single_for_tests();
+
+        let result = accounts_db.scan_account_storage_no_bank(
             &CacheHashData::new(&accounts_hash_cache_path),
-            None,
+            &CalcAccountsHashConfig {
+                use_bg_thread_pool: false,
+                check_hash: false,
+                ancestors: None,
+                use_write_cache: false,
+                epoch_schedule: &EpochSchedule::default(),
+                rent_collector: &RentCollector::default(),
+            },
             &get_storage_refs(&storages),
             |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
