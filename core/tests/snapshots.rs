@@ -21,11 +21,6 @@ macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
             }
 
             #[test]
-            fn test_concurrent_snapshot_packaging() {
-                run_test_concurrent_snapshot_packaging(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-
-            #[test]
             fn test_slots_to_snapshot() {
                 run_test_slots_to_snapshot(SNAPSHOT_VERSION, CLUSTER_TYPE)
             }
@@ -46,10 +41,7 @@ macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
 #[cfg(test)]
 mod tests {
     use {
-        bincode::serialize_into,
         crossbeam_channel::unbounded,
-        fs_extra::dir::CopyOptions,
-        itertools::Itertools,
         log::{info, trace},
         solana_core::{
             accounts_hash_verifier::AccountsHashVerifier,
@@ -63,7 +55,7 @@ mod tests {
             },
             accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
             accounts_index::AccountSecondaryIndexes,
-            bank::{Bank, BankSlotDelta},
+            bank::Bank,
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             snapshot_archive_info::FullSnapshotArchiveInfo,
@@ -85,8 +77,6 @@ mod tests {
         },
         solana_streamer::socket::SocketAddrSpace,
         std::{
-            collections::HashSet,
-            fs,
             io::{Error, ErrorKind},
             path::PathBuf,
             sync::{
@@ -340,223 +330,6 @@ mod tests {
                 return;
             }
         }
-    }
-
-    fn run_test_concurrent_snapshot_packaging(
-        snapshot_version: SnapshotVersion,
-        cluster_type: ClusterType,
-    ) {
-        solana_logger::setup();
-
-        // Set up snapshotting config
-        let mut snapshot_test_config =
-            SnapshotTestConfig::new(snapshot_version, cluster_type, 1, 1, Slot::MAX);
-
-        let bank_forks = &mut snapshot_test_config.bank_forks;
-        let snapshot_config = &snapshot_test_config.snapshot_config;
-        let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
-        let snapshot_archives_dir = &snapshot_config.snapshot_archives_dir;
-        let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
-        let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
-
-        // Take snapshot of zeroth bank
-        let bank0 = bank_forks.get(0).unwrap();
-        let storages = bank0.get_snapshot_storages(None);
-        snapshot_utils::add_bank_snapshot(bank_snapshots_dir, bank0, &storages, snapshot_version)
-            .unwrap();
-
-        // Set up snapshotting channels
-        let (sender, receiver) = unbounded();
-        let (fake_sender, _fake_receiver) = unbounded();
-
-        // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
-        // and the snapshot purging logic will run on every snapshot taken. This means the three
-        // (including snapshot for bank0 created above) earliest snapshots will get purged by the
-        // time this loop is done.
-
-        // Also, make a saved copy of the state of the snapshot for a bank with
-        // bank.slot == saved_slot, so we can use it for a correctness check later.
-        let saved_snapshots_dir = TempDir::new().unwrap();
-        let saved_accounts_dir = TempDir::new().unwrap();
-        let saved_slot = 4;
-        let mut saved_archive_path = None;
-
-        for forks in 0..snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
-            let bank = Bank::new_from_parent(
-                &bank_forks[forks as u64],
-                &Pubkey::default(),
-                (forks + 1) as u64,
-            );
-            let slot = bank.slot();
-            let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            bank.squash();
-            let accounts_hash = bank.update_accounts_hash();
-
-            let package_sender = {
-                if slot == saved_slot as u64 {
-                    // Only send one package on the real sender so that the packaging service
-                    // doesn't take forever to run the packaging logic on all MAX_CACHE_ENTRIES
-                    // later
-                    &sender
-                } else {
-                    &fake_sender
-                }
-            };
-
-            snapshot_utils::snapshot_bank(
-                &bank,
-                vec![],
-                package_sender,
-                bank_snapshots_dir,
-                snapshot_archives_dir,
-                snapshot_config.snapshot_version,
-                snapshot_config.archive_format,
-                None,
-                Some(SnapshotType::FullSnapshot),
-            )
-            .unwrap();
-
-            bank_forks.insert(bank);
-            if slot == saved_slot as u64 {
-                // Find the relevant snapshot storages
-                let snapshot_storage_files: HashSet<_> = bank_forks[slot]
-                    .get_snapshot_storages(None)
-                    .into_iter()
-                    .flatten()
-                    .map(|s| s.get_path())
-                    .collect();
-
-                // Only save off the files returned by `get_snapshot_storages`. This is because
-                // some of the storage entries in the accounts directory may be filtered out by
-                // `get_snapshot_storages()` and will not be included in the snapshot. Ultimately,
-                // this means copying natively everything in `accounts_dir` to the `saved_accounts_dir`
-                // will lead to test failure by mismatch when `saved_accounts_dir` is compared to
-                // the unpacked snapshot later in this test's call to `verify_snapshot_archive()`.
-                for file in snapshot_storage_files {
-                    fs::copy(
-                        &file,
-                        &saved_accounts_dir.path().join(file.file_name().unwrap()),
-                    )
-                    .unwrap();
-                }
-                let last_snapshot_path = fs::read_dir(bank_snapshots_dir)
-                    .unwrap()
-                    .filter_map(|entry| {
-                        let e = entry.unwrap();
-                        let file_path = e.path();
-                        let file_name = file_path.file_name().unwrap();
-                        file_name
-                            .to_str()
-                            .map(|s| s.parse::<u64>().ok().map(|_| file_path.clone()))
-                            .unwrap_or(None)
-                    })
-                    .sorted()
-                    .last()
-                    .unwrap();
-                // only save off the snapshot of this slot, we don't need the others.
-                let options = CopyOptions::new();
-                fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
-
-                saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
-                    snapshot_archives_dir,
-                    slot,
-                    &accounts_hash,
-                    ArchiveFormat::TarBzip2,
-                ));
-            }
-        }
-
-        // Purge all the outdated snapshots, including the ones needed to generate the package
-        // currently sitting in the channel
-        snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
-
-        let mut bank_snapshots = snapshot_utils::get_bank_snapshots(&bank_snapshots_dir);
-        bank_snapshots.sort_unstable();
-        assert!(bank_snapshots
-            .into_iter()
-            .map(|path| path.slot)
-            .eq(3..=snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN as u64 + 2));
-
-        // Create a SnapshotPackagerService to create tarballs from all the pending
-        // SnapshotPackage's on the channel. By the time this service starts, we have already
-        // purged the first two snapshots, which are needed by every snapshot other than
-        // the last two snapshots. However, the packaging service should still be able to
-        // correctly construct the earlier snapshots because the SnapshotPackage's on the
-        // channel hold hard links to these deleted snapshots. We verify this is the case below.
-        let exit = Arc::new(AtomicBool::new(false));
-
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-
-        let pending_snapshot_package = PendingSnapshotPackage::default();
-        let snapshot_packager_service = SnapshotPackagerService::new(
-            pending_snapshot_package.clone(),
-            None,
-            &exit,
-            &cluster_info,
-            snapshot_config.clone(),
-            true,
-        );
-
-        let _package_receiver = std::thread::Builder::new()
-            .name("package-receiver".to_string())
-            .spawn(move || {
-                while let Ok(mut accounts_package) = receiver.recv() {
-                    // Only package the latest
-                    while let Ok(new_accounts_package) = receiver.try_recv() {
-                        accounts_package = new_accounts_package;
-                    }
-
-                    let snapshot_package = SnapshotPackage::from(accounts_package);
-                    *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
-                }
-
-                // Wait until the package is consumed by SnapshotPackagerService
-                while pending_snapshot_package.lock().unwrap().is_some() {
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-
-                // Shutdown SnapshotPackagerService
-                exit.store(true, Ordering::Relaxed);
-            })
-            .unwrap();
-
-        // Close the channel so that the package receiver will exit after reading all the
-        // packages off the channel
-        drop(sender);
-
-        // Wait for service to finish
-        snapshot_packager_service
-            .join()
-            .expect("SnapshotPackagerService exited with error");
-
-        // Check the archive we cached the state for earlier was generated correctly
-
-        // before we compare, stick an empty status_cache in this dir so that the package comparison works
-        // This is needed since the status_cache is added by the packager and is not collected from
-        // the source dir for snapshots
-        snapshot_utils::serialize_snapshot_data_file(
-            &saved_snapshots_dir
-                .path()
-                .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME),
-            |stream| {
-                serialize_into(stream, &[] as &[BankSlotDelta])?;
-                Ok(())
-            },
-        )
-        .unwrap();
-
-        snapshot_utils::verify_snapshot_archive(
-            saved_archive_path.unwrap(),
-            saved_snapshots_dir.path(),
-            saved_accounts_dir.path(),
-            ArchiveFormat::TarBzip2,
-        );
     }
 
     fn run_test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: ClusterType) {
