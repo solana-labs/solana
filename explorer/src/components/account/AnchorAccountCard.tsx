@@ -5,6 +5,8 @@ import { Address } from "components/common/Address";
 import { Program, BorshAccountsCoder } from "@project-serum/anchor";
 import { capitalizeFirstLetter } from "utils/anchor";
 import { ErrorCard } from "components/common/ErrorCard";
+import { ErrorBoundary } from "@sentry/react";
+import ReactJson from "react-json-view";
 
 export function AnchorAccountCard({
   account,
@@ -56,7 +58,9 @@ export function AnchorAccountCard({
   }
 
   return (
-    <>
+    <ErrorBoundary
+      fallback={<ErrorCard text="Unable to decode anchor account data" />}
+    >
       <div className="card">
         <div className="card-header">
           <div className="row align-items-center">
@@ -92,21 +96,29 @@ export function AnchorAccountCard({
           </div>
         </div>
       </div>
-    </>
+    </ErrorBoundary>
   );
 }
 
 const renderAccountRow = (key: string, value: any) => {
-  let displayValue = value.toString();
-  if (value.constructor.name === "PublicKey") {
+  let displayValue: JSX.Element;
+  if (value && value.constructor && value.constructor.name === "PublicKey") {
     displayValue = <Address pubkey={value} link />;
-  } else if (displayValue === {}.toString()) {
-    if (Object.keys(value).length === 1) {
-      displayValue = Object.keys(value)[0];
-    } else {
-      displayValue = JSON.stringify(value);
-    }
+  } else if (value && value.constructor && value.constructor.name === "BN") {
+    displayValue = <>{value.toNumber()}</>;
+  } else if (value) {
+    const displayObject = createDisplayObject(value);
+    displayValue = (
+      <ReactJson
+        src={JSON.parse(JSON.stringify(displayObject))}
+        collapsed={1}
+        theme="solarized"
+      />
+    );
+  } else {
+    displayValue = <>null</>;
   }
+
   return (
     <tr key={key}>
       <td className="w-1 text-monospace">{camelToUnderscore(key)}</td>
@@ -118,4 +130,41 @@ const renderAccountRow = (key: string, value: any) => {
 function camelToUnderscore(key: string) {
   var result = key.replace(/([A-Z])/g, " $1");
   return result.split(" ").join("_").toLowerCase();
+}
+
+function createDisplayObject(object: Object): Object {
+  if (!Array.isArray(object)) {
+    if (
+      object &&
+      object.constructor &&
+      object.constructor.name === "PublicKey"
+    ) {
+      return object.toString();
+    } else if (
+      object &&
+      object.constructor &&
+      object.constructor.name === "BN"
+    ) {
+      // @ts-ignore
+      return object.toNumber();
+    } else {
+      const parsedObject: typeof object = {};
+      Object.keys(object).map((key) => {
+        // @ts-ignore
+        let value = object[key];
+        if (value && typeof value === "object") {
+          value = createDisplayObject(value);
+        }
+        // @ts-ignore
+        parsedObject[key] = value;
+        return null;
+      });
+      return parsedObject;
+    }
+  }
+  return object.map((innerObject) =>
+    typeof innerObject === "object"
+      ? createDisplayObject(innerObject)
+      : innerObject
+  );
 }

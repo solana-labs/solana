@@ -90,6 +90,7 @@ function RawAnchorDetails({
           <td className="metadata-json-viewer m-4">
             <ReactJson
               src={JSON.parse(JSON.stringify(decodedIxData))}
+              collapsed={2}
               theme="solarized"
             />
           </td>

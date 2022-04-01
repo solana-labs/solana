@@ -1,26 +1,13 @@
 import { useState } from "react";
-import {
-  Idl,
-  Program,
-  Provider,
-  BorshAccountsCoder,
-} from "@project-serum/anchor";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { Idl, Program, Provider } from "@project-serum/anchor";
+import { Connection, Keypair } from "@solana/web3.js";
 import { NodeWallet } from "@metaplex/js";
-import { capitalizeFirstLetter } from "../utils/anchor";
 
 /// Promises to fetch and decode anchor programs
-let cachedAnchorProgramPromises: {
+const cachedAnchorProgramPromises: {
   [key: string]:
     | { _type: "promise"; promise: Promise<Program<Idl> | null> }
     | { _type: "result"; result: Program<Idl> | null };
-} = {};
-
-/// Promises to fetch and decode anchor accounts
-let cachedAnchorAccountPromises: {
-  [key: string]:
-    | { _type: "promise"; promise: Promise<AnchorAccount | null> }
-    | { _type: "result"; result: AnchorAccount | null };
 } = {};
 
 export function useAnchorProgram(
