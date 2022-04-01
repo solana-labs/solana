@@ -1,6 +1,6 @@
 name: Feature Gate Tracker
 description: Track the development and status of an on-chain feature
-title: "[Feature Gate]: "
+title: "Feature Gate: "
 labels: ["feature-gate"]
 body:
   - type: markdown
@@ -51,20 +51,20 @@ body:
     id: testnet
     attributes:
       label: Testnet Activation Epoch
-      placeholder: Leave empty if not yet activated
+      placeholder: Edit this response when feature is activated on this cluster
     validations:
       required: false
   - type: input
     id: devnet
     attributes:
       label: Devnet Activation Epoch
-      placeholder: Leave empty if not yet activated
+      placeholder: Edit this response when feature is activated on this cluster
     validations:
       required: false
   - type: input
     id: mainnet-beta
     attributes:
       label: Mainnet-Beta Activation Epoch
-      placeholder: Leave empty if not yet activated
+      placeholder: Edit this response when feature is activated on this cluster
     validations:
       required: false
