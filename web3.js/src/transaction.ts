@@ -66,6 +66,16 @@ export type SerializeConfig = {
   verifySignatures?: boolean;
 };
 
+interface TransactionInstructionJSON {
+  keys: {
+    pubkey: string;
+    isSigner: boolean;
+    isWritable: boolean;
+  }[];
+  programId: string;
+  data: number[];
+}
+
 /**
  * Transaction Instruction class
  */
@@ -92,6 +102,18 @@ export class TransactionInstruction {
     if (opts.data) {
       this.data = opts.data;
     }
+  }
+
+  toJSON(): TransactionInstructionJSON {
+    return {
+      keys: this.keys.map(({pubkey, isSigner, isWritable}) => ({
+        pubkey: pubkey.toJSON(),
+        isSigner,
+        isWritable,
+      })),
+      programId: this.programId.toJSON(),
+      data: [...this.data],
+    };
   }
 }
 
@@ -128,12 +150,16 @@ export type NonceInformation = {
   nonceInstruction: TransactionInstruction;
 };
 
-type PopulatedTransactionFields =
-  | 'recentBlockhash'
-  | 'feePayer'
-  | 'nonceInfo'
-  | 'instructions'
-  | 'signatures';
+interface TransactionJSON {
+  recentBlockhash: string | null;
+  feePayer: string | null;
+  nonceInfo: {
+    nonce: string;
+    nonceInstruction: TransactionInstructionJSON;
+  } | null;
+  instructions: TransactionInstructionJSON[];
+  signatures: {publicKey: string; signature: number[] | null}[];
+}
 
 /**
  * Transaction class
@@ -184,13 +210,31 @@ export class Transaction {
   /**
    * @internal
    */
-  _populatedTransactionFields?: Record<PopulatedTransactionFields, string>;
+  _json?: TransactionJSON;
 
   /**
    * Construct an empty Transaction
    */
   constructor(opts?: TransactionCtorFields) {
     opts && Object.assign(this, opts);
+  }
+
+  toJSON(): TransactionJSON {
+    return {
+      recentBlockhash: this.recentBlockhash || null,
+      feePayer: this.feePayer ? this.feePayer.toJSON() : null,
+      nonceInfo: this.nonceInfo
+        ? {
+            nonce: this.nonceInfo.nonce,
+            nonceInstruction: this.nonceInfo.nonceInstruction.toJSON(),
+          }
+        : null,
+      instructions: this.instructions.map(instruction => instruction.toJSON()),
+      signatures: this.signatures.map(({publicKey, signature}) => ({
+        publicKey: publicKey.toJSON(),
+        signature: signature ? [...signature] : null,
+      })),
+    };
   }
 
   /**
@@ -222,25 +266,7 @@ export class Transaction {
    */
   compileMessage(): Message {
     if (this._message) {
-      const populatedTransactionFields = this._populatedTransactionFields;
-      if (!populatedTransactionFields) {
-        throw new Error(
-          'Transaction mutated after being populated from Message',
-        );
-      }
-
-      if (
-        JSON.stringify(this.recentBlockhash) !==
-          JSON.stringify(populatedTransactionFields.recentBlockhash) ||
-        JSON.stringify(this.feePayer) !==
-          JSON.stringify(populatedTransactionFields.feePayer) ||
-        JSON.stringify(this.nonceInfo) !==
-          JSON.stringify(populatedTransactionFields.nonceInfo) ||
-        JSON.stringify(this.instructions) !==
-          JSON.stringify(populatedTransactionFields.instructions) ||
-        JSON.stringify(this.signatures) !==
-          JSON.stringify(populatedTransactionFields.signatures)
-      ) {
+      if (JSON.stringify(this) !== JSON.stringify(this._json)) {
         throw new Error(
           'Transaction mutated after being populated from Message',
         );
@@ -726,7 +752,6 @@ export class Transaction {
     signatures: Array<string> = [],
   ): Transaction {
     const transaction = new Transaction();
-    transaction._message = message;
     transaction.recentBlockhash = message.recentBlockhash;
     if (message.header.numRequiredSignatures > 0) {
       transaction.feePayer = message.accountKeys[0];
@@ -764,13 +789,8 @@ export class Transaction {
       );
     });
 
-    transaction._populatedTransactionFields = {
-      recentBlockhash: JSON.stringify(transaction.recentBlockhash),
-      feePayer: JSON.stringify(transaction.feePayer),
-      nonceInfo: JSON.stringify(transaction.nonceInfo),
-      instructions: JSON.stringify(transaction.instructions),
-      signatures: JSON.stringify(transaction.signatures),
-    };
+    transaction._message = message;
+    transaction._json = transaction.toJSON();
 
     return transaction;
   }
