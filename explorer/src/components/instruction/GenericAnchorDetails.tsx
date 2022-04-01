@@ -10,8 +10,6 @@ import {
 } from "@project-serum/anchor";
 import { getAnchorNameForInstruction, getProgramName, capitalizeFirstLetter, getAnchorAccountsFromInstruction } from "utils/anchor";
 import { HexData } from "components/common/HexData";
-import { useCluster } from "providers/cluster";
-import { useAnchorProgram } from "providers/anchor";
 import { Address } from "components/common/Address";
 import ReactJson from "react-json-view";
 
@@ -27,6 +25,7 @@ export function AnchorDetailsCard(props: {
 }) {
   const { ix, anchorProgram } = props;
   const programName = getProgramName(anchorProgram) ?? "Unknown Program";
+  
   const ixName = getAnchorNameForInstruction(ix, anchorProgram) ?? "Unknown Instruction";
   const cardTitle = `${programName}: ${ixName}`;
 
@@ -44,6 +43,7 @@ function RawAnchorDetails({
   ix: TransactionInstruction,
   anchorProgram: Program
 }) {
+
   let ixAccounts: {
     name: string;
     isMut: boolean;
@@ -52,10 +52,9 @@ function RawAnchorDetails({
   }[] | null = null;
   var decodedIxData = null;
   if (anchorProgram) {
-    ixAccounts = getAnchorAccountsFromInstruction(ix, anchorProgram);
-
     const decoder = new BorshInstructionCoder(anchorProgram.idl);
     decodedIxData = decoder.decode(ix.data);
+    ixAccounts = getAnchorAccountsFromInstruction(decodedIxData, anchorProgram);
   }
 
   return (

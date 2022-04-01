@@ -12,7 +12,6 @@ import {
   useRawTransactionDetails,
 } from "providers/transactions/raw";
 import { Address } from "components/common/Address";
-import { Program } from '@project-serum/anchor';
 
 type InstructionProps = {
   title: string;
@@ -21,7 +20,6 @@ type InstructionProps = {
   index: number;
   ix: TransactionInstruction | ParsedInstruction;
   defaultRaw?: boolean;
-  anchorProgram?: Program,
   innerCards?: JSX.Element[];
   childIndex?: number;
 };
@@ -34,7 +32,6 @@ export function InstructionCard({
   ix,
   defaultRaw,
   innerCards,
-  anchorProgram,
   childIndex,
 }: InstructionProps) {
   const [resultClass] = ixResult(result, index);

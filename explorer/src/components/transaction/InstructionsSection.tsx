@@ -230,12 +230,6 @@ function InstructionCard({
 
   if (isBonfidaBotInstruction(transactionIx)) {
     return <BonfidaBotDetailsCard key={key} {...props} />;
-  } else if (anchorProgram) {
-    return (
-      <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
-        <AnchorDetailsCard key={key} anchorProgram={anchorProgram} {...props} />
-      </ErrorBoundary>
-    );
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {
@@ -248,6 +242,12 @@ function InstructionCard({
     return <WormholeDetailsCard key={key} {...props} />;
   } else if (isPythInstruction(transactionIx)) {
     return <PythDetailsCard key={key} {...props} />;
+  } else if (anchorProgram) {
+    return (
+      <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
+        <AnchorDetailsCard key={key} anchorProgram={anchorProgram} {...props} />
+      </ErrorBoundary>
+    );
   } else {
     return <UnknownDetailsCard key={key} {...props} />;
   }

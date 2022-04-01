@@ -1,10 +1,8 @@
 import React from "react";
 
-import { Account, useAccountInfo } from "providers/accounts";
-import { useCluster } from "providers/cluster";
+import { Account } from "providers/accounts";
 import { Address } from "components/common/Address";
 import { Program, BorshAccountsCoder } from "@project-serum/anchor";
-import { Connection } from "@solana/web3.js";
 import { capitalizeFirstLetter } from "utils/anchor";
 import { ErrorCard } from "components/common/ErrorCard";
 

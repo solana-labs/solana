@@ -3,7 +3,6 @@ import { Idl, Program, Provider, BorshAccountsCoder } from "@project-serum/ancho
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { NodeWallet } from '@metaplex/js';
 import { capitalizeFirstLetter } from '../utils/anchor';
-import { useEffect } from 'react';
 
 /// Promises to fetch and decode anchor programs
 let cachedAnchorProgramPromises: {
@@ -53,12 +52,9 @@ export function useAnchorProgram(
         throw cacheEntry.promise;
     }
 
-    useEffect(() => {
-        if (cacheEntry?._type === 'result') {
-            setAnchorProgram(cacheEntry?.result)
-        }
-    }, [])
-
+    if (cacheEntry?._type === 'result') {
+        return cacheEntry.result
+    }
     return anchorProgram;
 }
 

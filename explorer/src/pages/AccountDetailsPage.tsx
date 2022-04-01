@@ -234,9 +234,6 @@ function DetailsSections({
   const { url } = useCluster();
   const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
   const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
-  // console.log("AnchorProgram", anchorProgram);
-  console.log("accountAnchorProgram", accountAnchorProgram);
-  console.log("owner", info?.data?.details?.owner.toString() ?? undefined);
 
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
@@ -485,7 +482,7 @@ function getTabs(
   if (accountAnchorProgram) {
     tabs.push({
       slug: "anchor-account",
-      title: "Anchor Account IDL",
+      title: "Anchor Account",
       path: "/anchor-account",
     });
   }
