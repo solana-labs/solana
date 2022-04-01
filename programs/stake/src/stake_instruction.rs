@@ -3463,6 +3463,26 @@ mod tests {
     /// - Assert 2: accounts with a balance less-than the minimum do not initialize
     #[test]
     fn test_initialize_minimum_stake_delegation() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let instruction_data = serialize(&StakeInstruction::Initialize(
+            Authorized::auto(&stake_address),
+            Lockup::default(),
+        ))
+        .unwrap();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::rent::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
         for (stake_delegation, expected_result) in [
             (MINIMUM_STAKE_DELEGATION, Ok(())),
             (
@@ -3470,23 +3490,22 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            let rent = Rent::default();
-            let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-            let stake_pubkey = Pubkey::new_unique();
-            let stake_account = AccountSharedData::new_ref(
+            let stake_account = AccountSharedData::new(
                 stake_delegation + rent_exempt_reserve,
                 std::mem::size_of::<StakeState>(),
                 &id(),
             );
-            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
-
-            assert_eq!(
+            process_instruction(
+                &instruction_data,
+                vec![
+                    (stake_address, stake_account),
+                    (
+                        sysvar::rent::id(),
+                        account::create_account_shared_data_for_test(&rent),
+                    ),
+                ],
+                instruction_accounts.clone(),
                 expected_result,
-                stake_keyed_account.initialize(
-                    &Authorized::auto(&stake_pubkey),
-                    &Lockup::default(),
-                    &rent
-                ),
             );
         }
     }
