@@ -1815,6 +1815,7 @@ mod tests {
         std::{fs::remove_dir_all, thread, time::Duration},
     };
 
+    #[test]
     fn validator_exit() {
         solana_logger::setup();
         let leader_keypair = Keypair::new();
@@ -1894,6 +1895,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -1949,12 +1951,6 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
-    }
-
-    #[test]
-    fn test_validator_exit() {
-        validator_exit();
-        validator_parallel_exit();
     }
 
     #[test]
