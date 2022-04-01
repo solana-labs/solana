@@ -1,5 +1,6 @@
 use {
     crate::blockstore_meta::SlotMeta,
+    bitflags::bitflags,
     lru::LruCache,
     solana_sdk::clock::Slot,
     std::{
@@ -8,7 +9,7 @@ use {
     },
 };
 
-const SLOTS_STATS_CACHE_CAPACITY: usize = 1_000;
+const SLOTS_STATS_CACHE_CAPACITY: usize = 300;
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum ShredSource {
@@ -17,13 +18,22 @@ pub(crate) enum ShredSource {
     Recovered,
 }
 
+bitflags! {
+    #[derive(Default)]
+    struct SlotFlags: u8 {
+        const DEAD   = 0b00000001;
+        const FULL   = 0b00000010;
+        const ROOTED = 0b00000100;
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct SlotStats {
     turbine_fec_set_index_counts: HashMap</*fec_set_index*/ u32, /*count*/ usize>,
     num_repaired: usize,
     num_recovered: usize,
     last_index: u64,
-    is_full: bool,
+    flags: SlotFlags,
 }
 
 impl SlotStats {
@@ -35,7 +45,7 @@ impl SlotStats {
             .unwrap_or(0)
     }
 
-    fn report_complete(&self, slot: Slot, reason: SlotStatsReportingReason) {
+    fn report(&self, slot: Slot) {
         let min_fec_set_count = self.get_min_index_count();
         datapoint_info!(
             "slot_stats_tracking_complete",
@@ -44,23 +54,9 @@ impl SlotStats {
             ("num_repaired", self.num_repaired, i64),
             ("num_recovered", self.num_recovered, i64),
             ("min_turbine_fec_set_count", min_fec_set_count, i64),
-            ("is_full", self.is_full, bool),
-            (
-                "is_rooted",
-                reason == SlotStatsReportingReason::Rooted,
-                bool
-            ),
-            ("is_dead", reason == SlotStatsReportingReason::Dead, bool),
-            (
-                "is_evicted",
-                reason == SlotStatsReportingReason::Evicted,
-                bool
-            ),
-            (
-                "is_pruned",
-                reason == SlotStatsReportingReason::Pruned,
-                bool
-            ),
+            ("is_full", self.flags.contains(SlotFlags::FULL), bool),
+            ("is_rooted", self.flags.contains(SlotFlags::ROOTED), bool),
+            ("is_dead", self.flags.contains(SlotFlags::DEAD), bool),
         );
     }
 }
@@ -75,14 +71,6 @@ impl Default for SlotsStats {
             stats: Mutex::new(LruCache::new(SLOTS_STATS_CACHE_CAPACITY)),
         }
     }
-}
-
-#[derive(PartialEq)]
-pub enum SlotStatsReportingReason {
-    Rooted,
-    Dead,
-    Evicted,
-    Pruned,
 }
 
 impl SlotsStats {
@@ -100,23 +88,6 @@ impl SlotsStats {
         };
         stats.get_or_insert(slot, SlotStats::default);
         (stats.get_mut(&slot).unwrap(), evicted)
-    }
-
-    fn prune<'a>(
-        stats: &'a mut MutexGuard<LruCache<Slot, SlotStats>>,
-        slot: &Slot,
-    ) -> Vec<(Slot, SlotStats)> {
-        let prune_slots: Vec<_> = stats
-            .iter()
-            .filter_map(|(s, _)| if *s <= *slot { Some(*s) } else { None })
-            .collect();
-        let mut pruned_entries = Vec::default();
-        for s in prune_slots.iter() {
-            if let Some(stats) = stats.pop(s) {
-                pruned_entries.push((*s, stats));
-            }
-        }
-        pruned_entries
     }
 
     pub(crate) fn record_shred(
@@ -142,8 +113,8 @@ impl SlotsStats {
         if let Some(meta) = slot_meta {
             if meta.is_full() {
                 slot_stats.last_index = meta.last_index.unwrap_or_default();
-                if !slot_stats.is_full {
-                    slot_stats.is_full = true;
+                if !slot_stats.flags.contains(SlotFlags::FULL) {
+                    slot_stats.flags |= SlotFlags::FULL;
                     slot_full_reporting_info =
                         Some((slot_stats.num_repaired, slot_stats.num_recovered));
                 }
@@ -168,26 +139,31 @@ impl SlotsStats {
             );
         }
         if let Some((evicted_slot, evicted_stats)) = evicted {
-            evicted_stats.report_complete(evicted_slot, SlotStatsReportingReason::Evicted);
+            evicted_stats.report(evicted_slot);
         }
     }
 
-    pub fn remove(&self, slot: &Slot, reason: SlotStatsReportingReason) {
-        let (removed_entry, pruned_entries) = {
+    pub fn mark_dead(&self, slot: Slot) {
+        let evicted = {
             let mut stats = self.stats.lock().unwrap();
-            let removed_entry = stats.pop(slot);
-            let pruned_entries = if reason == SlotStatsReportingReason::Rooted {
-                Self::prune(&mut stats, slot)
-            } else {
-                Vec::default()
-            };
-            (removed_entry, pruned_entries)
+            let (slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
+            slot_stats.flags |= SlotFlags::DEAD;
+            evicted
         };
-        if let Some(slot_stats) = removed_entry {
-            slot_stats.report_complete(*slot, reason);
+        if let Some((evicted_slot, evicted_stats)) = evicted {
+            evicted_stats.report(evicted_slot);
         }
-        for (pruned_slot, pruned_stats) in pruned_entries {
-            pruned_stats.report_complete(pruned_slot, SlotStatsReportingReason::Pruned);
+    }
+
+    pub fn mark_rooted(&self, slot: Slot) {
+        let evicted = {
+            let mut stats = self.stats.lock().unwrap();
+            let (slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
+            slot_stats.flags |= SlotFlags::ROOTED;
+            evicted
+        };
+        if let Some((evicted_slot, evicted_stats)) = evicted {
+            evicted_stats.report(evicted_slot);
         }
     }
 }

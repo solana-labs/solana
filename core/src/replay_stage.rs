@@ -37,7 +37,6 @@ use {
         blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
-        slot_stats::SlotStatsReportingReason,
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
@@ -1684,9 +1683,7 @@ impl ReplayStage {
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
 
-        blockstore
-            .slots_stats
-            .remove(&slot, SlotStatsReportingReason::Dead);
+        blockstore.slots_stats.mark_dead(slot);
 
         rpc_subscriptions.notify_slot_update(SlotUpdate::Dead {
             slot,
@@ -1795,9 +1792,7 @@ impl ReplayStage {
                 drop_bank_sender,
             );
 
-            blockstore
-                .slots_stats
-                .remove(&new_root, SlotStatsReportingReason::Rooted);
+            blockstore.slots_stats.mark_rooted(new_root);
 
             rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
