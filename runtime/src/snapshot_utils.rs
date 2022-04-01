@@ -162,6 +162,7 @@ struct UnpackedSnapshotsDirAndVersion {
 }
 
 #[derive(Error, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum SnapshotError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

@@ -12,10 +12,8 @@ use {
         input_validators::{is_keypair_or_ask_keyword, is_parsable, is_pubkey},
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    solana_gossip::{
-        cluster_info::{Node, VALIDATOR_PORT_RANGE},
-        contact_info::ContactInfo,
-    },
+    solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+    solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_replica_node::{
         replica_node::{ReplicaNode, ReplicaNodeConfig},
         replica_util,

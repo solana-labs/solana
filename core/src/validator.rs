@@ -872,8 +872,11 @@ impl Validator {
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
 
-        let rpc_completed_slots_service =
-            RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+        let rpc_completed_slots_service = RpcCompletedSlotsService::spawn(
+            completed_slots_receiver,
+            rpc_subscriptions.clone(),
+            exit.clone(),
+        );
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
@@ -1806,9 +1809,10 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
+        crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        std::fs::remove_dir_all,
+        std::{fs::remove_dir_all, thread, time::Duration},
     };
 
     fn validator_exit() {
@@ -1926,11 +1930,21 @@ mod tests {
 
         // Each validator can exit in parallel to speed many sequential calls to join`
         validators.iter_mut().for_each(|v| v.exit());
-        // While join is called sequentially, the above exit call notified all the
-        // validators to exit from all their threads
-        validators.into_iter().for_each(|validator| {
-            validator.join();
+
+        // spawn a new thread to wait for the join of the validator
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            validators.into_iter().for_each(|validator| {
+                validator.join();
+            });
+            sender.send(()).unwrap();
         });
+
+        // timeout of 30s for shutting down the validators
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            panic!("timeout for shutting down validators",);
+        }
 
         for path in ledger_paths {
             remove_dir_all(path).unwrap();

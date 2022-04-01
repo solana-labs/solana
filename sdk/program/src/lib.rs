@@ -558,6 +558,7 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub mod address_lookup_table_account;
 pub(crate) mod atomic_u64;
 pub mod blake3;
 pub mod borsh;
@@ -571,6 +572,7 @@ pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
+#[cfg(not(target_arch = "bpf"))]
 pub mod example_mocks;
 pub mod feature;
 pub mod fee_calculator;

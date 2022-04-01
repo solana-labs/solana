@@ -10,8 +10,11 @@ use {
         accounts_db::AccountShrinkThreshold,
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
+        rent_collector::RentCollector,
     },
-    solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey},
+    solana_sdk::{
+        genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
+    },
     std::{env, fs, path::PathBuf},
 };
 
@@ -114,7 +117,12 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results = accounts.accounts_db.update_accounts_hash(0, &ancestors);
+            let results = accounts.accounts_db.update_accounts_hash(
+                0,
+                &ancestors,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
+            );
             time.stop();
             let mut time_store = Measure::start("hash using store");
             let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
@@ -124,8 +132,8 @@ fn main() {
                 &ancestors,
                 None,
                 false,
-                None,
-                None,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
                 false,
             );
             time_store.stop();

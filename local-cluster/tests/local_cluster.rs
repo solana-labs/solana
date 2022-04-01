@@ -17,7 +17,6 @@ use {
         rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
         rpc_response::RpcSignatureResult,
         thin_client::{create_client, ThinClient},
-        udp_client::UdpTpuConnection,
     },
     solana_core::{
         broadcast_stage::BroadcastStageType,
@@ -28,7 +27,7 @@ use {
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
-    solana_gossip::{cluster_info::VALIDATOR_PORT_RANGE, gossip_service::discover_cluster},
+    solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore},
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
@@ -212,10 +211,7 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let tx_client = create_client(
-        non_bootstrap_info.client_facing_addr(),
-        VALIDATOR_PORT_RANGE,
-    );
+    let tx_client = create_client(non_bootstrap_info.client_facing_addr());
     let (blockhash, _) = tx_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
@@ -520,10 +516,7 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let client = create_client(
-        cluster.entry_point_info.client_facing_addr(),
-        VALIDATOR_PORT_RANGE,
-    );
+    let client = create_client(cluster.entry_point_info.client_facing_addr());
 
     // Programs that are available at epoch 0
     for program_id in [
@@ -2663,8 +2656,8 @@ fn setup_transfer_scan_threads(
     num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
     scan_commitment: CommitmentConfig,
-    update_client_receiver: Receiver<ThinClient<UdpTpuConnection>>,
-    scan_client_receiver: Receiver<ThinClient<UdpTpuConnection>>,
+    update_client_receiver: Receiver<ThinClient>,
+    scan_client_receiver: Receiver<ThinClient>,
 ) -> (
     JoinHandle<()>,
     JoinHandle<()>,
