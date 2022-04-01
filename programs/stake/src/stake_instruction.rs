@@ -3612,8 +3612,33 @@ mod tests {
     ///  LT     | LT   | Err
     #[test]
     fn test_split_minimum_stake_delegation() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let source_address = Pubkey::new_unique();
+        let source_meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&source_address)
+        };
+        let dest_address = Pubkey::new_unique();
+        let dest_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: source_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: dest_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
         for (source_stake_delegation, dest_stake_delegation, expected_result) in [
             (MINIMUM_STAKE_DELEGATION, MINIMUM_STAKE_DELEGATION, Ok(())),
             (
@@ -3632,52 +3657,36 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            let rent = Rent::default();
-            let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-            let source_pubkey = Pubkey::new_unique();
-            let source_meta = Meta {
-                rent_exempt_reserve,
-                ..Meta::auto(&source_pubkey)
-            };
             // The source account's starting balance is equal to *both* the source and dest
             // accounts' *final* balance
             let source_starting_balance =
                 source_stake_delegation + dest_stake_delegation + rent_exempt_reserve * 2;
-
             for source_stake_state in &[
                 StakeState::Initialized(source_meta),
-                StakeState::Stake(
-                    source_meta,
-                    just_stake(source_starting_balance - rent_exempt_reserve),
-                ),
+                just_stake(source_meta, source_starting_balance - rent_exempt_reserve),
             ] {
-                let source_account = AccountSharedData::new_ref_data_with_space(
+                let source_account = AccountSharedData::new_data_with_space(
                     source_starting_balance,
                     source_stake_state,
                     std::mem::size_of::<StakeState>(),
                     &id(),
                 )
                 .unwrap();
-                let source_keyed_account = KeyedAccount::new(&source_pubkey, true, &source_account);
-
-                let dest_pubkey = Pubkey::new_unique();
-                let dest_account = AccountSharedData::new_ref_data_with_space(
-                    0,
-                    &StakeState::Uninitialized,
-                    std::mem::size_of::<StakeState>(),
-                    &id(),
-                )
-                .unwrap();
-                let dest_keyed_account = KeyedAccount::new(&dest_pubkey, true, &dest_account);
-
-                assert_eq!(
-                    expected_result,
-                    source_keyed_account.split(
-                        &invoke_context,
+                process_instruction(
+                    &serialize(&StakeInstruction::Split(
                         dest_stake_delegation + rent_exempt_reserve,
-                        &dest_keyed_account,
-                        &HashSet::from([source_pubkey]),
-                    ),
+                    ))
+                    .unwrap(),
+                    vec![
+                        (source_address, source_account),
+                        (dest_address, dest_account.clone()),
+                        (
+                            sysvar::rent::id(),
+                            account::create_account_shared_data_for_test(&rent),
+                        ),
+                    ],
+                    instruction_accounts.clone(),
+                    expected_result.clone(),
                 );
             }
         }
