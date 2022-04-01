@@ -185,6 +185,13 @@ native machine code before execting it in the virtual machine.",
                 .short('c')
                 .long("coverage"),
         )
+        .arg(
+            Arg::new("enable_sol_alloc_free")
+                .help("Enable support for _sol_alloc_free syscall")
+                .long("enable_sol_alloc_free")
+                .takes_value(false)
+                .hide(true),
+        )
         .get_matches();
 
     log::set_boxed_logger(Box::new(Logger::new(matches.is_present("verbose")))).unwrap();
@@ -270,7 +277,11 @@ native machine code before execting it in the virtual machine.",
     file.seek(SeekFrom::Start(0)).unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
+    let syscall_registry = register_syscalls(
+        &mut invoke_context,
+        !matches.is_present("enable_sol_alloc_free"),
+    )
+    .unwrap();
     let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
         Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &contents,

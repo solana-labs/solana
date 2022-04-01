@@ -243,6 +243,7 @@ fn run_transactions_dos(
             false,
             true,
             true, /* skip_fee_check */
+            true, /* allow _sol_alloc_free dependencies */
         )
         .expect("deploy didn't pass");
     } else {

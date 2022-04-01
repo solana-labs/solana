@@ -67,6 +67,7 @@ pub enum ProgramCliCommand {
         max_len: Option<usize>,
         allow_excessive_balance: bool,
         skip_fee_check: bool,
+        enable_sol_alloc_free: bool,
     },
     WriteBuffer {
         program_location: String,
@@ -75,6 +76,7 @@ pub enum ProgramCliCommand {
         buffer_authority_signer_index: Option<SignerIndex>,
         max_len: Option<usize>,
         skip_fee_check: bool,
+        enable_sol_alloc_free: bool,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -176,6 +178,13 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
+                        )
+                        .arg(
+                            Arg::with_name("enable_sol_alloc_free")
+                                .long("enable_sol_alloc_free")
+                                .takes_value(false)
+                                .hidden(true)
+                                .help("Enable support for _sol_alloc_free syscall")
                         ),
                 )
                 .subcommand(
@@ -421,6 +430,13 @@ impl ProgramSubCommands for App<'_, '_> {
                         .long("skip-fee-check")
                         .hidden(true)
                         .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("enable_sol_alloc_free")
+                        .long("enable_sol_alloc_free")
+                        .takes_value(false)
+                        .hidden(true)
+                        .help("Enable support for _sol_alloc_free syscall")
                 ),
         )
     }
@@ -499,6 +515,7 @@ pub fn parse_program_subcommand(
                     max_len,
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
+                    enable_sol_alloc_free: matches.is_present("enable_sol_alloc_free"),
                 }),
                 signers: signer_info.signers,
             }
@@ -545,6 +562,7 @@ pub fn parse_program_subcommand(
                         .index_of_or_none(buffer_authority_pubkey),
                     max_len,
                     skip_fee_check,
+                    enable_sol_alloc_free: matches.is_present("enable_sol_alloc_free"),
                 }),
                 signers: signer_info.signers,
             }
@@ -694,6 +712,7 @@ pub fn process_program_subcommand(
             max_len,
             allow_excessive_balance,
             skip_fee_check,
+            enable_sol_alloc_free,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -707,6 +726,7 @@ pub fn process_program_subcommand(
             *max_len,
             *allow_excessive_balance,
             *skip_fee_check,
+            *enable_sol_alloc_free,
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
@@ -715,6 +735,7 @@ pub fn process_program_subcommand(
             buffer_authority_signer_index,
             max_len,
             skip_fee_check,
+            enable_sol_alloc_free,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -724,6 +745,7 @@ pub fn process_program_subcommand(
             *buffer_authority_signer_index,
             *max_len,
             *skip_fee_check,
+            *enable_sol_alloc_free,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -822,6 +844,7 @@ fn process_program_deploy(
     max_len: Option<usize>,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
+    enable_sol_alloc_free: bool,
 ) -> ProcessResult {
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_provided, buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
@@ -915,7 +938,7 @@ fn process_program_deploy(
     };
 
     let (program_data, program_len) = if let Some(program_location) = program_location {
-        let program_data = read_and_verify_elf(program_location)?;
+        let program_data = read_and_verify_elf(program_location, enable_sol_alloc_free)?;
         let program_len = program_data.len();
         (program_data, program_len)
     } else if buffer_provided {
@@ -1015,6 +1038,7 @@ fn process_write_buffer(
     buffer_authority_signer_index: Option<SignerIndex>,
     max_len: Option<usize>,
     skip_fee_check: bool,
+    enable_sol_alloc_free: bool,
 ) -> ProcessResult {
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
@@ -1059,7 +1083,7 @@ fn process_write_buffer(
         }
     }
 
-    let program_data = read_and_verify_elf(program_location)?;
+    let program_data = read_and_verify_elf(program_location, enable_sol_alloc_free)?;
     let buffer_data_len = if let Some(len) = max_len {
         len
     } else {
@@ -1670,6 +1694,7 @@ pub fn process_deploy(
     use_deprecated_loader: bool,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
+    enable_sol_alloc_free: bool,
 ) -> ProcessResult {
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
@@ -1679,7 +1704,7 @@ pub fn process_deploy(
         &buffer_keypair
     };
 
-    let program_data = read_and_verify_elf(program_location)?;
+    let program_data = read_and_verify_elf(program_location, enable_sol_alloc_free)?;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let loader_id = if use_deprecated_loader {
         bpf_loader_deprecated::id()
@@ -2027,7 +2052,10 @@ fn do_process_program_upgrade(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
-fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+fn read_and_verify_elf(
+    program_location: &str,
+    enable_sol_alloc_free: bool,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut file = File::open(program_location)
         .map_err(|err| format!("Unable to open program file: {}", err))?;
     let mut program_data = Vec::new();
@@ -2044,7 +2072,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
             reject_broken_elfs: true,
             ..Config::default()
         },
-        register_syscalls(&mut invoke_context).unwrap(),
+        register_syscalls(&mut invoke_context, !enable_sol_alloc_free).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 
@@ -2298,6 +2326,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2325,6 +2354,7 @@ mod tests {
                     max_len: Some(42),
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2354,6 +2384,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2385,6 +2416,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2415,6 +2447,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2448,6 +2481,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2477,6 +2511,7 @@ mod tests {
                     max_len: None,
                     skip_fee_check: false,
                     allow_excessive_balance: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2510,6 +2545,7 @@ mod tests {
                     buffer_authority_signer_index: Some(0),
                     max_len: None,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2534,6 +2570,7 @@ mod tests {
                     buffer_authority_signer_index: Some(0),
                     max_len: Some(42),
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2561,6 +2598,7 @@ mod tests {
                     buffer_authority_signer_index: Some(0),
                     max_len: None,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2591,6 +2629,7 @@ mod tests {
                     buffer_authority_signer_index: Some(1),
                     max_len: None,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2626,6 +2665,7 @@ mod tests {
                     buffer_authority_signer_index: Some(2),
                     max_len: None,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3069,6 +3109,7 @@ mod tests {
                 max_len: None,
                 allow_excessive_balance: false,
                 skip_fee_check: false,
+                enable_sol_alloc_free: false,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,

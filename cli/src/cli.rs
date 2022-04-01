@@ -164,6 +164,7 @@ pub enum CliCommand {
         use_deprecated_loader: bool,
         allow_excessive_balance: bool,
         skip_fee_check: bool,
+        enable_sol_alloc_free: bool,
     },
     Program(ProgramCliCommand),
     // Stake Commands
@@ -650,6 +651,7 @@ pub fn parse_command(
                     use_deprecated_loader: matches.is_present("use_deprecated_loader"),
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
+                    enable_sol_alloc_free: matches.is_present("enable_sol_alloc_free"),
                 },
                 signers,
             })
@@ -1029,6 +1031,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             use_deprecated_loader,
             allow_excessive_balance,
             skip_fee_check,
+            enable_sol_alloc_free,
         } => process_deploy(
             rpc_client,
             config,
@@ -1037,6 +1040,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_deprecated_loader,
             *allow_excessive_balance,
             *skip_fee_check,
+            *enable_sol_alloc_free,
         ),
         CliCommand::Program(program_subcommand) => {
             process_program_subcommand(rpc_client, config, program_subcommand)
@@ -1871,6 +1875,7 @@ mod tests {
                     use_deprecated_loader: false,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -1894,6 +1899,7 @@ mod tests {
                     use_deprecated_loader: false,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    enable_sol_alloc_free: false,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2289,6 +2295,7 @@ mod tests {
             use_deprecated_loader: false,
             allow_excessive_balance: false,
             skip_fee_check: false,
+            enable_sol_alloc_free: false,
         };
         config.output_format = OutputFormat::JsonCompact;
         let result = process_command(&config);
@@ -2310,6 +2317,7 @@ mod tests {
             use_deprecated_loader: false,
             allow_excessive_balance: false,
             skip_fee_check: false,
+            enable_sol_alloc_free: false,
         };
         assert!(process_command(&config).is_err());
     }
