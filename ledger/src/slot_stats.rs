@@ -143,11 +143,11 @@ impl SlotsStats {
         }
     }
 
-    pub fn mark_dead(&self, slot: Slot) {
+    fn add_flag(&self, slot: Slot, flag: SlotFlags) {
         let evicted = {
             let mut stats = self.stats.lock().unwrap();
             let (slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
-            slot_stats.flags |= SlotFlags::DEAD;
+            slot_stats.flags |= flag;
             evicted
         };
         if let Some((evicted_slot, evicted_stats)) = evicted {
@@ -155,15 +155,11 @@ impl SlotsStats {
         }
     }
 
+    pub fn mark_dead(&self, slot: Slot) {
+        self.add_flag(slot, SlotFlags::DEAD);
+    }
+
     pub fn mark_rooted(&self, slot: Slot) {
-        let evicted = {
-            let mut stats = self.stats.lock().unwrap();
-            let (slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
-            slot_stats.flags |= SlotFlags::ROOTED;
-            evicted
-        };
-        if let Some((evicted_slot, evicted_stats)) = evicted {
-            evicted_stats.report(evicted_slot);
-        }
+        self.add_flag(slot, SlotFlags::ROOTED);
     }
 }
