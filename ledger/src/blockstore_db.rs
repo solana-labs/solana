@@ -1979,7 +1979,12 @@ where
     C: Column + ColumnName + ColumnMetrics,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
-        self.backend.get_cf(self.handle(), &C::key(key))
+        let is_perf_context_enabled = maybe_collect_perf_context();
+        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        if is_perf_context_enabled {
+            report_read_perf_context(C::rocksdb_get_perf_metric_header(&self.column_options));
+        }
+        result
     }
 
     pub fn iter(
@@ -2049,7 +2054,12 @@ where
     }
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
-        self.backend.put_cf(self.handle(), &C::key(key), value)
+        let is_perf_context_enabled = maybe_collect_perf_context();
+        let result = self.backend.put_cf(self.handle(), &C::key(key), value);
+        if is_perf_context_enabled {
+            report_write_perf_context(C::rocksdb_put_perf_metric_header(&self.column_options));
+        }
+        result
     }
 
     /// Retrieves the specified RocksDB integer property of the current
