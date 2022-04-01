@@ -1,5 +1,6 @@
 use {
     crate::rpc_subscriptions::RpcSubscriptions,
+    crossbeam_channel::RecvTimeoutError,
     solana_client::rpc_response::SlotUpdate,
     solana_ledger::blockstore::CompletedSlotsReceiver,
     solana_sdk::timing::timestamp,
@@ -25,19 +26,26 @@ impl RpcCompletedSlotsService {
         Builder::new()
             .name("solana-rpc-completed-slots-service".to_string())
             .spawn(move || loop {
-                // shutdown the service
+                // received exit signal, shutdown the service
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
 
-                if let Ok(slots) = completed_slots_receiver
+                match completed_slots_receiver
                     .recv_timeout(Duration::from_millis(COMPLETE_SLOT_REPORT_SLEEP_MS))
                 {
-                    for slot in slots {
-                        rpc_subscriptions.notify_slot_update(SlotUpdate::Completed {
-                            slot,
-                            timestamp: timestamp(),
-                        });
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Err(RecvTimeoutError::Disconnected) => {
+                        info!("RpcCompletedSlotService channel disconnected, exiting.");
+                        break;
+                    }
+                    Ok(slots) => {
+                        for slot in slots {
+                            rpc_subscriptions.notify_slot_update(SlotUpdate::Completed {
+                                slot,
+                                timestamp: timestamp(),
+                            });
+                        }
                     }
                 }
             })
