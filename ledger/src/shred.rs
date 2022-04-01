@@ -504,9 +504,10 @@ impl Shred {
     pub(crate) fn first_coding_index(&self) -> Option<u32> {
         match self.shred_type() {
             ShredType::Data => None,
-            // TODO should be: self.index() - self.coding_header.position
-            // once position field is populated.
-            ShredType::Code => Some(self.fec_set_index()),
+            ShredType::Code => {
+                let position = u32::from(self.coding_header.position);
+                self.index().checked_sub(position)
+            }
         }
     }
 
@@ -536,25 +537,25 @@ impl Shred {
 
     // Returns the block index within the erasure coding set.
     fn erasure_block_index(&self) -> Option<usize> {
-        let index = self.index().checked_sub(self.fec_set_index())?;
-        let index = usize::try_from(index).ok()?;
         match self.shred_type() {
-            ShredType::Data => Some(index),
+            ShredType::Data => {
+                let index = self.index().checked_sub(self.fec_set_index())?;
+                usize::try_from(index).ok()
+            }
             ShredType::Code => {
-                // TODO should use first_coding_index once position field is
-                // populated.
                 // Assert that the last shred index in the erasure set does not
                 // overshoot u32.
                 self.fec_set_index().checked_add(u32::from(
-                    self.coding_header
-                        .num_data_shreds
-                        .max(self.coding_header.num_coding_shreds)
-                        .checked_sub(1)?,
+                    self.coding_header.num_data_shreds.checked_sub(1)?,
+                ))?;
+                self.first_coding_index()?.checked_add(u32::from(
+                    self.coding_header.num_coding_shreds.checked_sub(1)?,
                 ))?;
                 let num_data_shreds = usize::from(self.coding_header.num_data_shreds);
                 let num_coding_shreds = usize::from(self.coding_header.num_coding_shreds);
+                let position = usize::from(self.coding_header.position);
                 let fec_set_size = num_data_shreds.checked_add(num_coding_shreds)?;
-                let index = index.checked_add(num_data_shreds)?;
+                let index = position.checked_add(num_data_shreds)?;
                 (index < fec_set_size).then(|| index)
             }
         }

@@ -1464,10 +1464,9 @@ impl Blockstore {
     }
 
     fn erasure_mismatch(shred1: &Shred, shred2: &Shred) -> bool {
-        // TODO should also compare first-coding-index once position field is
-        // populated across cluster.
         shred1.coding_header.num_coding_shreds != shred2.coding_header.num_coding_shreds
             || shred1.coding_header.num_data_shreds != shred2.coding_header.num_data_shreds
+            || shred1.first_coding_index() != shred2.first_coding_index()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -6487,7 +6486,7 @@ pub mod tests {
             );
             coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
             coding_shred.coding_header.num_data_shreds = 2;
-            coding_shred.coding_header.num_coding_shreds = 3;
+            coding_shred.coding_header.num_coding_shreds = 4;
             coding_shred.coding_header.position = 1;
             coding_shred.common_header.index = std::u32::MAX - 1;
             assert!(!Blockstore::should_insert_coding_shred(
