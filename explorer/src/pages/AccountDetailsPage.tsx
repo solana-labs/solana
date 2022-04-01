@@ -232,6 +232,8 @@ function DetailsSections({
   info?: CacheEntry<Account>;
 }) {
   const { url } = useCluster();
+  const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
+  const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
 
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
@@ -249,7 +251,7 @@ function DetailsSections({
 
   const account = info.data;
   const data = account?.details?.data;
-  const tabs = getTabs(data);
+  const tabs = getTabs(data, anchorProgram ?? undefined, accountAnchorProgram ?? undefined);
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -268,7 +270,7 @@ function DetailsSections({
       )}
       {<InfoSection account={account} />}
       <React.Suspense fallback={<LoadingCard message="Loading account sections" />}>
-        {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
+        {<MoreSection account={account} tab={moreTab} tabs={tabs} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} />}
       </React.Suspense>
     </>
   );
@@ -339,36 +341,19 @@ function MoreSection({
   account,
   tab,
   tabs,
+  anchorProgram,
+  accountAnchorProgram,
 }: {
   account: Account;
   tab: MoreTabs;
   tabs: Tab[];
+  anchorProgram: Program | null;
+  accountAnchorProgram: Program | null;
 }) {
 
   const pubkey = account.pubkey;
   const address = account.pubkey.toBase58();
   const data = account?.details?.data;
-
-  const { url } = useCluster();
-  const anchorProgram = useAnchorProgram(account.pubkey.toString() ?? "", url);
-  const isAnchorProgram = !!anchorProgram;
-  const accountAnchorProgram = useAnchorProgram(account?.details?.owner.toString() ?? "", url);
-  const isAnchorAccount = !!accountAnchorProgram;
-
-  if (isAnchorAccount) {
-    tabs.push({
-      slug: "anchor-account",
-      title: "Anchor IDL",
-      path: "/anchor-account",
-    });
-  }
-  if (isAnchorProgram) {
-    tabs.push({
-      slug: "anchor-program",
-      title: "Anchor IDL",
-      path: "/anchor-program",
-    });
-  }
 
   return (
     <>
@@ -426,8 +411,8 @@ function MoreSection({
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
-      {tab === "anchor-program" && <AnchorProgramCard program={anchorProgram!} />}
-      {tab === "anchor-account" && <AnchorAccountCard account={account} program={accountAnchorProgram!} />}
+      {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
+      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />}
     </>
   );
 }
@@ -435,6 +420,8 @@ function MoreSection({
 
 function getTabs(
   data?: ProgramData,
+  anchorProgram?: Program,
+  accountAnchorProgram?: Program,
 ): Tab[] {
   const tabs: Tab[] = [
     {
@@ -482,6 +469,21 @@ function getTabs(
       slug: "domains",
       title: "Domains",
       path: "/domains",
+    });
+  }
+
+  if (anchorProgram) {
+    tabs.push({
+      slug: "anchor-program",
+      title: "Anchor Program IDL",
+      path: "/anchor-program",
+    });
+  }
+  if (accountAnchorProgram) {
+    tabs.push({
+      slug: "anchor-account",
+      title: "Anchor Account IDL",
+      path: "/anchor-account",
     });
   }
   return tabs;

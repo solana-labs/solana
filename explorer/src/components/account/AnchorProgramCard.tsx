@@ -1,5 +1,4 @@
 import { Program } from "@project-serum/anchor";
-
 import ReactJson from "react-json-view";
 
 export function AnchorProgramCard({ program }: { program: Program }) {
