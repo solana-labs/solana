@@ -4,6 +4,7 @@ import {
 } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
 import {
+  BorshInstructionCoder,
   Idl,
   Program,
 } from "@project-serum/anchor";
@@ -12,6 +13,7 @@ import { HexData } from "components/common/HexData";
 import { useCluster } from "providers/cluster";
 import { useAnchorProgram } from "providers/anchor";
 import { Address } from "components/common/Address";
+import ReactJson from "react-json-view";
 
 export function AnchorDetailsCard(props: {
   key: string,
@@ -48,8 +50,12 @@ function RawAnchorDetails({
     isSigner: boolean;
     pda?: Object;
   }[] | null = null;
+  var decodedIxData = null;
   if (anchorProgram) {
     ixAccounts = getAnchorAccountsFromInstruction(ix, anchorProgram);
+
+    const decoder = new BorshInstructionCoder(anchorProgram.idl);
+    decodedIxData = decoder.decode(ix.data);
   }
 
   return (
@@ -79,9 +85,16 @@ function RawAnchorDetails({
         <td>
           Instruction Data <span className="text-muted">(Hex)</span>
         </td>
-        <td className="text-lg-end">
-          <HexData raw={ix.data} />
-        </td>
+        {
+          decodedIxData ?
+            <td className="metadata-json-viewer m-4">
+              <ReactJson src={JSON.parse(JSON.stringify(decodedIxData))} theme="solarized" />
+            </td>
+            :
+            <td className="text-lg-end">
+              < HexData raw={ix.data} />
+            </td>
+        }
       </tr>
     </>
   );
