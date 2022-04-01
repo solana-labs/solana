@@ -1,22 +1,24 @@
-import React from 'react';
+import React from "react";
 import { Cluster } from "providers/cluster";
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program } from "@project-serum/anchor";
-import { useAnchorProgram } from 'providers/anchor';
+import { useAnchorProgram } from "providers/anchor";
 import { programLabel } from "utils/tx";
 
 function snakeToPascal(string: string) {
-  return string.split("/")
-    .map(snake => snake.split("_")
-      .map(substr => substr.charAt(0)
-        .toUpperCase() +
-        substr.slice(1))
-      .join(""))
+  return string
+    .split("/")
+    .map((snake) =>
+      snake
+        .split("_")
+        .map((substr) => substr.charAt(0).toUpperCase() + substr.slice(1))
+        .join("")
+    )
     .join("/");
-};
+}
 
 export function getProgramName(program: Program | null): string | undefined {
-  return program ? snakeToPascal(program.idl.name) : undefined
+  return program ? snakeToPascal(program.idl.name) : undefined;
 }
 
 export function capitalizeFirstLetter(input: string) {
@@ -27,48 +29,59 @@ function AnchorProgramName({
   programId,
   url,
 }: {
-  programId: PublicKey,
-  url: string,
+  programId: PublicKey;
+  url: string;
 }) {
   const program = useAnchorProgram(programId.toString(), url);
   const programName = getProgramName(program);
-  return <>{programName}</>
+  return <>{programName}</>;
 }
 
 export function ProgramName({
   programId,
   cluster,
-  url
+  url,
 }: {
-  programId: PublicKey,
-  cluster: Cluster
-  url: string,
+  programId: PublicKey;
+  cluster: Cluster;
+  url: string;
 }) {
-  const defaultProgramName = (programLabel(programId.toBase58(), cluster) || "Unknown Program");
+  const defaultProgramName =
+    programLabel(programId.toBase58(), cluster) || "Unknown Program";
 
   return (
     <React.Suspense fallback={defaultProgramName}>
       <AnchorProgramName programId={programId} url={url} />
     </React.Suspense>
-  )
+  );
 }
 
-export function getAnchorNameForInstruction(ix: TransactionInstruction, program: Program): string | null {
+export function getAnchorNameForInstruction(
+  ix: TransactionInstruction,
+  program: Program
+): string | null {
   const coder = new BorshInstructionCoder(program.idl);
   const decodedIx = coder.decode(ix.data);
 
-  if (!decodedIx) { return null }
+  if (!decodedIx) {
+    return null;
+  }
 
   var _ixTitle = decodedIx.name;
   return _ixTitle.charAt(0).toUpperCase() + _ixTitle.slice(1);
 }
 
-export function getAnchorAccountsFromInstruction(decodedIx: Object | null, program: Program): {
-  name: string;
-  isMut: boolean;
-  isSigner: boolean;
-  pda?: Object;
-}[] | null {
+export function getAnchorAccountsFromInstruction(
+  decodedIx: Object | null,
+  program: Program
+):
+  | {
+      name: string;
+      isMut: boolean;
+      isSigner: boolean;
+      pda?: Object;
+    }[]
+  | null {
   if (decodedIx) {
     // get ix accounts
     const idlInstructions = program.idl.instructions.filter(

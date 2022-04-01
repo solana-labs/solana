@@ -105,7 +105,9 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
       ) : (
         <SignatureContext.Provider value={signature}>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
-          <React.Suspense fallback={<LoadingCard message="Loading transaction details" />}>
+          <React.Suspense
+            fallback={<LoadingCard message="Loading transaction details" />}
+          >
             <DetailsSection signature={signature} />
           </React.Suspense>
         </SignatureContext.Provider>

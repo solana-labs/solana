@@ -67,7 +67,12 @@ export function SimulatorCard({ message }: { message: Message }) {
           Retry
         </button>
       </div>
-      <ProgramLogsCardBody message={message} logs={logs} cluster={cluster} url={url} />
+      <ProgramLogsCardBody
+        message={message}
+        logs={logs}
+        cluster={cluster}
+        url={url}
+      />
     </div>
   );
 }
