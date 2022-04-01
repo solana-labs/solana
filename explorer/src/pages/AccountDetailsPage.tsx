@@ -273,7 +273,7 @@ function DetailsSections({
       )}
       {<InfoSection account={account} />}
       <React.Suspense fallback={<LoadingCard message="Loading account sections" />}>
-        {<MoreSection account={account} tab={moreTab} tabs={tabs} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} />}
+        <MoreSection account={account} tab={moreTab} tabs={tabs} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} />
       </React.Suspense>
     </>
   );
