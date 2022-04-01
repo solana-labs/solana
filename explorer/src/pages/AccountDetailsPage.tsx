@@ -46,6 +46,7 @@ import {
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
 import { Program } from '@project-serum/anchor';
 import { useAnchorProgram } from "providers/anchor";
+import { SecurityCard } from "components/account/SecurityCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -112,6 +113,13 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "stake-history",
       title: "Stake History",
       path: "/stake-history",
+    },
+  ],
+  "bpf-upgradeable-loader": [
+    {
+      slug: "security",
+      title: "Security",
+      path: "/security",
     },
   ],
 };
@@ -335,7 +343,8 @@ export type MoreTabs =
   | "metadata"
   | "domains"
   | "anchor-account"
-  | "anchor-program";
+  | "anchor-program"
+  | "security";
 
 function MoreSection({
   account,
@@ -413,6 +422,9 @@ function MoreSection({
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
       {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
       {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />}
+      {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
+        <SecurityCard data={data} />
+      )}
     </>
   );
 }

@@ -80,7 +80,7 @@ impl InfluxDbMetricsWriter {
 impl MetricsWriter for InfluxDbMetricsWriter {
     fn write(&self, points: Vec<DataPoint>) {
         if let Some(ref write_url) = self.write_url {
-            info!("submitting {} points", points.len());
+            debug!("submitting {} points", points.len());
 
             let host_id = HOST_ID.read().unwrap();
 

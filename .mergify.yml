@@ -88,30 +88,50 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
-  - name: set automerge label on mergify backport PRs
-    conditions:
-      - author=mergify[bot]
-      - head~=^mergify/bp/
-      - "#status-failure=0"
-      - "-merged"
-    actions:
-      label:
-        add:
-          - automerge
-  - name: v1.9 backport
+  - name: v1.9 feature-gate backport
     conditions:
       - label=v1.9
+      - label=feature-gate
     actions:
       backport:
         ignore_conflicts: true
+        labels:
+          - automerge
+          - feature-gate
         branches:
           - v1.9
-  - name: v1.10 backport
+  - name: v1.9 non-feature-gate backport
     conditions:
-      - label=v1.10
+      - label=v1.9
+      - label!=feature-gate
     actions:
       backport:
         ignore_conflicts: true
+        labels:
+          - automerge
+        branches:
+          - v1.9
+  - name: v1.10 feature-gate backport
+    conditions:
+      - label=v1.10
+      - label=feature-gate
+    actions:
+      backport:
+        ignore_conflicts: true
+        labels:
+          - automerge
+          - feature-gate
+        branches:
+          - v1.10
+  - name: v1.10 non-feature-gate backport
+    conditions:
+      - label=v1.10
+      - label!=feature-gate
+    actions:
+      backport:
+        ignore_conflicts: true
+        labels:
+          - automerge
         branches:
           - v1.10
 

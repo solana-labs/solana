@@ -14,7 +14,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::{State, StateMut},
         clock::{Clock, Epoch},
-        feature_set::stake_merge_with_unmatched_credits_observed,
+        feature_set::{stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar},
         instruction::{checked_add, InstructionError},
         keyed_account::KeyedAccount,
         pubkey::Pubkey,
@@ -408,6 +408,7 @@ pub trait StakeAccount {
     ) -> Result<(), InstructionError>;
     fn split(
         &self,
+        invoke_context: &InvokeContext,
         lamports: u64,
         split_stake: &KeyedAccount,
         signers: &HashSet<Pubkey>,
@@ -604,6 +605,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
     fn split(
         &self,
+        invoke_context: &InvokeContext,
         lamports: u64,
         split: &KeyedAccount,
         signers: &HashSet<Pubkey>,
@@ -624,8 +626,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         match self.state()? {
             StakeState::Stake(meta, mut stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
-                let validated_split_info =
-                    validate_split_amount(self, split, lamports, &meta, Some(&stake))?;
+                let validated_split_info = validate_split_amount(
+                    invoke_context,
+                    self,
+                    split,
+                    lamports,
+                    &meta,
+                    Some(&stake),
+                )?;
 
                 // split the stake, subtract rent_exempt_balance unless
                 // the destination account already has those lamports
@@ -670,7 +678,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let validated_split_info =
-                    validate_split_amount(self, split, lamports, &meta, None)?;
+                    validate_split_amount(invoke_context, self, split, lamports, &meta, None)?;
                 let mut split_meta = meta;
                 split_meta.rent_exempt_reserve =
                     validated_split_info.destination_rent_exempt_reserve;
@@ -855,6 +863,7 @@ struct ValidatedSplitInfo {
 /// delegation, and that the source account has enough lamports for the request split amount.  If
 /// not, return an error.
 fn validate_split_amount(
+    invoke_context: &InvokeContext,
     source_account: &KeyedAccount,
     destination_account: &KeyedAccount,
     lamports: u64,
@@ -897,11 +906,19 @@ fn validate_split_amount(
     // This must handle:
     // 1. The destination account having a different rent exempt reserve due to data size changes
     // 2. The destination account being prefunded, which would lower the minimum split amount
-    let destination_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
-        source_meta.rent_exempt_reserve,
-        source_account.data_len()? as u64,
-        destination_account.data_len()? as u64,
-    );
+    let destination_rent_exempt_reserve = if invoke_context
+        .feature_set
+        .is_active(&stake_split_uses_rent_sysvar::ID)
+    {
+        let rent = invoke_context.get_sysvar_cache().get_rent()?;
+        rent.minimum_balance(destination_account.data_len()?)
+    } else {
+        calculate_split_rent_exempt_reserve(
+            source_meta.rent_exempt_reserve,
+            source_account.data_len()? as u64,
+            destination_account.data_len()? as u64,
+        )
+    };
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(MINIMUM_STAKE_DELEGATION);
     let destination_balance_deficit =
@@ -1417,10 +1434,11 @@ mod tests {
         proptest::prelude::*,
         solana_program_runtime::invoke_context::InvokeContext,
         solana_sdk::{
-            account::{AccountSharedData, WritableAccount},
+            account::{create_account_shared_data_for_test, AccountSharedData, WritableAccount},
             native_token,
             pubkey::Pubkey,
             system_program,
+            sysvar::SysvarId,
             transaction_context::TransactionContext,
         },
         solana_vote_program::vote_state,
@@ -2492,8 +2510,21 @@ mod tests {
         );
     }
 
+    fn create_mock_tx_context() -> TransactionContext {
+        TransactionContext::new(
+            vec![(
+                Rent::id(),
+                create_account_shared_data_for_test(&Rent::default()),
+            )],
+            1,
+            1,
+        )
+    }
+
     #[test]
     fn test_split_source_uninitialized() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -2522,6 +2553,7 @@ mod tests {
         // no signers should fail
         assert_eq!(
             stake_keyed_account.split(
+                &invoke_context,
                 stake_lamports / 2,
                 &split_stake_keyed_account,
                 &HashSet::default() // no signers
@@ -2540,26 +2572,46 @@ mod tests {
             //
             // and splitting should fail when the split amount is greater than the balance
             assert_eq!(
-                stake_keyed_account.split(stake_lamports, &stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports,
+                    &stake_keyed_account,
+                    &signers
+                ),
                 Ok(()),
             );
             assert_eq!(
-                stake_keyed_account.split(0, &stake_keyed_account, &signers),
+                stake_keyed_account.split(&invoke_context, 0, &stake_keyed_account, &signers),
                 Ok(()),
             );
             assert_eq!(
-                stake_keyed_account.split(stake_lamports / 2, &stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports / 2,
+                    &stake_keyed_account,
+                    &signers
+                ),
                 Ok(()),
             );
             assert_eq!(
-                stake_keyed_account.split(stake_lamports + 1, &stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports + 1,
+                    &stake_keyed_account,
+                    &signers
+                ),
                 Err(InstructionError::InsufficientFunds),
             );
         }
 
         // this should work
         assert_eq!(
-            stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+            stake_keyed_account.split(
+                &invoke_context,
+                stake_lamports / 2,
+                &split_stake_keyed_account,
+                &signers
+            ),
             Ok(())
         );
         assert_eq!(
@@ -2570,6 +2622,8 @@ mod tests {
 
     #[test]
     fn test_split_split_not_uninitialized() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_ref_data_with_space(
@@ -2599,7 +2653,12 @@ mod tests {
             let split_stake_keyed_account =
                 KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
             assert_eq!(
-                stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports / 2,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Err(InstructionError::InvalidAccountData)
             );
         }
@@ -2616,6 +2675,8 @@ mod tests {
 
     #[test]
     fn test_split_more_than_staked() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -2648,13 +2709,20 @@ mod tests {
         let split_stake_keyed_account =
             KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
         assert_eq!(
-            stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+            stake_keyed_account.split(
+                &invoke_context,
+                stake_lamports / 2,
+                &split_stake_keyed_account,
+                &signers
+            ),
             Err(StakeError::InsufficientStake.into())
         );
     }
 
     #[test]
     fn test_split_with_rent() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let minimum_balance = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
@@ -2698,6 +2766,7 @@ mod tests {
             // not enough to make a non-zero stake account
             assert_eq!(
                 stake_keyed_account.split(
+                    &invoke_context,
                     rent_exempt_reserve,
                     &split_stake_keyed_account,
                     &signers
@@ -2708,6 +2777,7 @@ mod tests {
             // doesn't leave enough for initial stake to be non-zero
             assert_eq!(
                 stake_keyed_account.split(
+                    &invoke_context,
                     stake_lamports - rent_exempt_reserve,
                     &split_stake_keyed_account,
                     &signers
@@ -2722,6 +2792,7 @@ mod tests {
                 .set_lamports(minimum_balance);
             assert_eq!(
                 stake_keyed_account.split(
+                    &invoke_context,
                     stake_lamports - minimum_balance,
                     &split_stake_keyed_account,
                     &signers
@@ -2758,6 +2829,8 @@ mod tests {
 
     #[test]
     fn test_split_to_account_with_rent_exempt_reserve() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
@@ -2806,13 +2879,23 @@ mod tests {
 
             // split more than available fails
             assert_eq!(
-                stake_keyed_account.split(stake_lamports + 1, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports + 1,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Err(InstructionError::InsufficientFunds)
             );
 
             // should work
             assert_eq!(
-                stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports / 2,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Ok(())
             );
             // no lamport leakage
@@ -2863,27 +2946,28 @@ mod tests {
     }
 
     #[test]
-    fn test_split_to_smaller_account_with_rent_exempt_reserve() {
+    fn test_split_from_larger_sized_account() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
+        let source_larger_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = (source_larger_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
 
         let meta = Meta {
             authorized: Authorized::auto(&stake_pubkey),
-            rent_exempt_reserve,
+            rent_exempt_reserve: source_larger_rent_exempt_reserve,
             ..Meta::default()
         };
 
-        let state = StakeState::Stake(meta, just_stake(stake_lamports - rent_exempt_reserve));
-
-        let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
-            meta.rent_exempt_reserve,
-            std::mem::size_of::<StakeState>() as u64 + 100,
-            std::mem::size_of::<StakeState>() as u64,
+        let state = StakeState::Stake(
+            meta,
+            just_stake(stake_lamports - source_larger_rent_exempt_reserve),
         );
 
         // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
@@ -2891,10 +2975,10 @@ mod tests {
         // test_split, since that test uses a Meta with rent_exempt_reserve = 0
         let split_lamport_balances = vec![
             0,
-            expected_rent_exempt_reserve - 1,
-            expected_rent_exempt_reserve,
-            expected_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
-            expected_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+            split_rent_exempt_reserve - 1,
+            split_rent_exempt_reserve,
+            split_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
+            split_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
         ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -2919,13 +3003,23 @@ mod tests {
 
             // split more than available fails
             assert_eq!(
-                stake_keyed_account.split(stake_lamports + 1, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports + 1,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Err(InstructionError::InsufficientFunds)
             );
 
             // should work
             assert_eq!(
-                stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports / 2,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Ok(())
             );
             // no lamport leakage
@@ -2938,11 +3032,11 @@ mod tests {
             if let StakeState::Stake(meta, stake) = state {
                 let expected_split_meta = Meta {
                     authorized: Authorized::auto(&stake_pubkey),
-                    rent_exempt_reserve: expected_rent_exempt_reserve,
+                    rent_exempt_reserve: split_rent_exempt_reserve,
                     ..Meta::default()
                 };
                 let expected_stake = stake_lamports / 2
-                    - (expected_rent_exempt_reserve.saturating_sub(initial_balance));
+                    - (split_rent_exempt_reserve.saturating_sub(initial_balance));
 
                 assert_eq!(
                     Ok(StakeState::Stake(
@@ -2960,15 +3054,15 @@ mod tests {
                 assert_eq!(
                     split_stake_keyed_account.account.borrow().lamports(),
                     expected_stake
-                        + expected_rent_exempt_reserve
-                        + initial_balance.saturating_sub(expected_rent_exempt_reserve)
+                        + split_rent_exempt_reserve
+                        + initial_balance.saturating_sub(split_rent_exempt_reserve)
                 );
                 assert_eq!(
                     Ok(StakeState::Stake(
                         meta,
                         Stake {
                             delegation: Delegation {
-                                stake: stake_lamports / 2 - rent_exempt_reserve,
+                                stake: stake_lamports / 2 - source_larger_rent_exempt_reserve,
                                 ..stake.delegation
                             },
                             ..stake
@@ -2981,35 +3075,38 @@ mod tests {
     }
 
     #[test]
-    fn test_split_to_larger_account() {
+    fn test_split_from_smaller_sized_account() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let source_smaller_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let split_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
 
         let meta = Meta {
             authorized: Authorized::auto(&stake_pubkey),
-            rent_exempt_reserve,
+            rent_exempt_reserve: source_smaller_rent_exempt_reserve,
             ..Meta::default()
         };
 
-        let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
-            meta.rent_exempt_reserve,
-            std::mem::size_of::<StakeState>() as u64,
-            std::mem::size_of::<StakeState>() as u64 + 100,
-        );
-        let stake_lamports = expected_rent_exempt_reserve + 1;
-        let split_amount = stake_lamports - (rent_exempt_reserve + 1); // Enough so that split stake is > 0
+        let stake_lamports = split_rent_exempt_reserve + 1;
+        let split_amount = stake_lamports - (source_smaller_rent_exempt_reserve + 1); // Enough so that split stake is > 0
 
-        let state = StakeState::Stake(meta, just_stake(stake_lamports - rent_exempt_reserve));
+        let state = StakeState::Stake(
+            meta,
+            just_stake(stake_lamports - source_smaller_rent_exempt_reserve),
+        );
 
         let split_lamport_balances = vec![
             0,
             1,
-            expected_rent_exempt_reserve,
-            expected_rent_exempt_reserve + 1,
+            split_rent_exempt_reserve,
+            split_rent_exempt_reserve + 1,
         ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -3033,19 +3130,29 @@ mod tests {
             let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
 
             // should always return error when splitting to larger account
-            let split_result =
-                stake_keyed_account.split(split_amount, &split_stake_keyed_account, &signers);
+            let split_result = stake_keyed_account.split(
+                &invoke_context,
+                split_amount,
+                &split_stake_keyed_account,
+                &signers,
+            );
             assert_eq!(split_result, Err(InstructionError::InvalidAccountData));
 
             // Splitting 100% of source should not make a difference
-            let split_result =
-                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers);
+            let split_result = stake_keyed_account.split(
+                &invoke_context,
+                stake_lamports,
+                &split_stake_keyed_account,
+                &signers,
+            );
             assert_eq!(split_result, Err(InstructionError::InvalidAccountData));
         }
     }
 
     #[test]
     fn test_split_100_percent_of_source() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
@@ -3087,7 +3194,12 @@ mod tests {
 
             // split 100% over to dest
             assert_eq!(
-                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Ok(())
             );
 
@@ -3132,6 +3244,8 @@ mod tests {
 
     #[test]
     fn test_split_100_percent_of_source_to_account_with_lamports() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
@@ -3180,7 +3294,12 @@ mod tests {
 
             // split 100% over to dest
             assert_eq!(
-                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Ok(())
             );
 
@@ -3212,23 +3331,30 @@ mod tests {
 
     #[test]
     fn test_split_rent_exemptness() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let source_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = source_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
 
         let meta = Meta {
             authorized: Authorized::auto(&stake_pubkey),
-            rent_exempt_reserve,
+            rent_exempt_reserve: source_rent_exempt_reserve,
             ..Meta::default()
         };
 
         for state in &[
             StakeState::Initialized(meta),
-            StakeState::Stake(meta, just_stake(stake_lamports - rent_exempt_reserve)),
+            StakeState::Stake(
+                meta,
+                just_stake(stake_lamports - source_rent_exempt_reserve),
+            ),
         ] {
             // Test that splitting to a larger account fails
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -3251,7 +3377,12 @@ mod tests {
             let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
 
             assert_eq!(
-                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Err(InstructionError::InvalidAccountData)
             );
 
@@ -3277,7 +3408,12 @@ mod tests {
             let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
 
             assert_eq!(
-                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers),
+                stake_keyed_account.split(
+                    &invoke_context,
+                    stake_lamports,
+                    &split_stake_keyed_account,
+                    &signers
+                ),
                 Ok(())
             );
 
@@ -3286,14 +3422,9 @@ mod tests {
                 stake_lamports
             );
 
-            let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
-                meta.rent_exempt_reserve,
-                std::mem::size_of::<StakeState>() as u64 + 100,
-                std::mem::size_of::<StakeState>() as u64,
-            );
             let expected_split_meta = Meta {
                 authorized: Authorized::auto(&stake_pubkey),
-                rent_exempt_reserve: expected_rent_exempt_reserve,
+                rent_exempt_reserve: split_rent_exempt_reserve,
                 ..Meta::default()
             };
 
@@ -3308,7 +3439,7 @@ mod tests {
                 StakeState::Stake(_meta, stake) => {
                     // Expected stake should reflect original stake amount so that extra lamports
                     // from the rent_exempt_reserve inequality do not magically activate
-                    let expected_stake = stake_lamports - rent_exempt_reserve;
+                    let expected_stake = stake_lamports - source_rent_exempt_reserve;
 
                     assert_eq!(
                         Ok(StakeState::Stake(
@@ -3325,9 +3456,7 @@ mod tests {
                     );
                     assert_eq!(
                         split_stake_keyed_account.account.borrow().lamports(),
-                        expected_stake
-                            + expected_rent_exempt_reserve
-                            + (rent_exempt_reserve - expected_rent_exempt_reserve)
+                        expected_stake + source_rent_exempt_reserve,
                     );
                     assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
                 }
@@ -4581,7 +4710,7 @@ mod tests {
 
     #[test]
     fn test_active_stake_merge() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context = create_mock_tx_context();
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let clock = Clock::default();
         let delegation_a = 4_242_424_242u64;
@@ -4823,6 +4952,8 @@ mod tests {
     ///  LT     | LT   | Err
     #[test]
     fn test_split_minimum_stake_delegation() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         for (source_stake_delegation, dest_stake_delegation, expected_result) in [
             (MINIMUM_STAKE_DELEGATION, MINIMUM_STAKE_DELEGATION, Ok(())),
             (
@@ -4882,6 +5013,7 @@ mod tests {
                 assert_eq!(
                     expected_result,
                     source_keyed_account.split(
+                        &invoke_context,
                         dest_stake_delegation + rent_exempt_reserve,
                         &dest_keyed_account,
                         &HashSet::from([source_pubkey]),
@@ -4900,6 +5032,8 @@ mod tests {
     ///             delegation is not OK
     #[test]
     fn test_split_full_amount_minimum_stake_delegation() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         for (stake_delegation, expected_result) in [
             (MINIMUM_STAKE_DELEGATION, Ok(())),
             (
@@ -4941,6 +5075,7 @@ mod tests {
                 assert_eq!(
                     expected_result,
                     source_keyed_account.split(
+                        &invoke_context,
                         source_keyed_account.lamports().unwrap(),
                         &dest_keyed_account,
                         &HashSet::from([source_pubkey]),
@@ -4954,6 +5089,8 @@ mod tests {
     /// account already has funds, ensure the minimum split amount reduces accordingly.
     #[test]
     fn test_split_destination_minimum_stake_delegation() {
+        let mut transaction_context = create_mock_tx_context();
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
 
@@ -5061,6 +5198,7 @@ mod tests {
                 assert_eq!(
                     expected_result,
                     source_keyed_account.split(
+                        &invoke_context,
                         split_amount,
                         &destination_keyed_account,
                         &HashSet::from([source_pubkey]),

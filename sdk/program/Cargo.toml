@@ -16,11 +16,12 @@ blake3 = { version = "1.2.0", features = ["traits-preview"] }
 borsh = "0.9.1"
 borsh-derive = "0.9.1"
 bs58 = "0.4.0"
-bytemuck = { version = "1.7.2", features = ["derive"] }
+bytemuck = { version = "1.8.0", features = ["derive"] }
 bv = { version = "0.11.1", features = ["serde"] }
 itertools =  "0.10.1"
 lazy_static = "1.4.0"
 log = "0.4.14"
+memoffset = "0.6"
 num-derive = "0.3"
 num-traits = "0.2"
 rustversion = "1.0.3"
