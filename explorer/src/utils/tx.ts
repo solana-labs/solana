@@ -50,6 +50,8 @@ export enum PROGRAM_NAMES {
   ACUMEN = "Acumen Program",
   BONFIDA_POOL = "Bonfida Pool Program",
   BREAK_SOLANA = "Break Solana Program",
+  CHAINLINK_ORACLE = "Chainlink OCR2 Oracle Program",
+  CHAINLINK_STORE = "Chainlink Store Program",
   MANGO_GOVERNANCE = "Mango Governance Program",
   MANGO_ICO = "Mango ICO Program",
   MANGO_1 = "Mango Program v1",
@@ -196,6 +198,14 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: {
     name: PROGRAM_NAMES.BREAK_SOLANA,
     deployments: LIVE_CLUSTERS,
+  },
+  cjg3oHmg9uuPsP8D6g29NWvhySJkdYdAo9D25PRbKXJ: {
+    name: PROGRAM_NAMES.CHAINLINK_ORACLE,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
+  HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny: {
+    name: PROGRAM_NAMES.CHAINLINK_STORE,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
   },
   GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J: {
     name: PROGRAM_NAMES.MANGO_GOVERNANCE,
