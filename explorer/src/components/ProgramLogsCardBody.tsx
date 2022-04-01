@@ -8,10 +8,12 @@ export function ProgramLogsCardBody({
   message,
   logs,
   cluster,
+  url,
 }: {
   message: Message | ParsedMessage;
   logs: InstructionLogs[];
   cluster: Cluster;
+  url: string;
 }) {
   return (
     <TableCardBody>
@@ -29,17 +31,18 @@ export function ProgramLogsCardBody({
         }
         const programLogs: InstructionLogs | undefined = logs[index];
 
-        return (<ProgramInstructionLog key={index} index={index} programId={programId} programLogs={programLogs} cluster={cluster} />);
+        return (<ProgramInstructionLog key={index} index={index} programId={programId} programLogs={programLogs} cluster={cluster} url={url} />);
       })}
     </TableCardBody>
   );
 }
 
-function ProgramInstructionLog({ index, programId, programLogs, cluster }: {
+function ProgramInstructionLog({ index, programId, programLogs, cluster, url }: {
   index: number,
   programId: PublicKey,
   programLogs: InstructionLogs | undefined,
   cluster: Cluster
+  url: string,
 }) {
   let badgeColor = "white";
   if (programLogs) {
@@ -53,7 +56,7 @@ function ProgramInstructionLog({ index, programId, programLogs, cluster }: {
           <span className={`badge bg-${badgeColor}-soft me-2`}>
             #{index + 1}
           </span>
-          <ProgramName programId={programId} cluster={cluster} /> Instruction
+          <ProgramName programId={programId} cluster={cluster} url={url} /> Instruction
         </div>
         {programLogs && (
           <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">

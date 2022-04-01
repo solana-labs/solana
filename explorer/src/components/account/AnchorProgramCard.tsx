@@ -1,3 +1,4 @@
+import React from 'react';
 import { Program } from "@project-serum/anchor";
 import ReactJson from "react-json-view";
 
