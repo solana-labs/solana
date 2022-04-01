@@ -24,7 +24,7 @@ export function BlockOverviewCard({
 }) {
   const confirmedBlock = useBlock(slot);
   const fetchBlock = useFetchBlock();
-  const { epochSchedule, status } = useCluster();
+  const { clusterInfo, status } = useCluster();
   const refresh = () => fetchBlock(slot);
 
   // Fetch block on load
@@ -45,7 +45,7 @@ export function BlockOverviewCard({
 
   const block = confirmedBlock.data.block;
   const committedTxs = block.transactions.filter((tx) => tx.meta?.err === null);
-  const epoch = epochSchedule?.getEpoch(slot);
+  const epoch = clusterInfo?.epochSchedule.getEpoch(slot);
 
   return (
     <>
@@ -58,13 +58,13 @@ export function BlockOverviewCard({
         <TableCardBody>
           <tr>
             <td className="w-100">Slot</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               <Slot slot={slot} />
             </td>
           </tr>
           <tr>
             <td className="w-100">Blockhash</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               <span>{block.blockhash}</span>
             </td>
           </tr>
@@ -72,16 +72,16 @@ export function BlockOverviewCard({
             <>
               <tr>
                 <td>Timestamp (Local)</td>
-                <td className="text-lg-right">
-                  <span className="text-monospace">
+                <td className="text-lg-end">
+                  <span className="font-monospace">
                     {displayTimestamp(block.blockTime * 1000, true)}
                   </span>
                 </td>
               </tr>
               <tr>
                 <td>Timestamp (UTC)</td>
-                <td className="text-lg-right">
-                  <span className="text-monospace">
+                <td className="text-lg-end">
+                  <span className="font-monospace">
                     {displayTimestampUtc(block.blockTime * 1000, true)}
                   </span>
                 </td>
@@ -90,46 +90,46 @@ export function BlockOverviewCard({
           ) : (
             <tr>
               <td className="w-100">Timestamp</td>
-              <td className="text-lg-right">Unavailable</td>
+              <td className="text-lg-end">Unavailable</td>
             </tr>
           )}
           <tr>
             <td className="w-100">Parent Slot</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               <Slot slot={block.parentSlot} link />
             </td>
           </tr>
           {epoch !== undefined && (
             <tr>
               <td className="w-100">Epoch</td>
-              <td className="text-lg-right text-monospace">
+              <td className="text-lg-end font-monospace">
                 <Epoch epoch={epoch} link />
               </td>
             </tr>
           )}
           <tr>
             <td className="w-100">Parent Blockhash</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               <span>{block.previousBlockhash}</span>
             </td>
           </tr>
           {confirmedBlock.data.child && (
             <tr>
               <td className="w-100">Child Slot</td>
-              <td className="text-lg-right text-monospace">
+              <td className="text-lg-end font-monospace">
                 <Slot slot={confirmedBlock.data.child} link />
               </td>
             </tr>
           )}
           <tr>
             <td className="w-100">Processed Transactions</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               <span>{block.transactions.length}</span>
             </td>
           </tr>
           <tr>
             <td className="w-100">Successful Transactions</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               <span>{committedTxs.length}</span>
             </td>
           </tr>

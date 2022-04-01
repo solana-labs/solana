@@ -1,10 +1,13 @@
-use crate::{
-    clock::Epoch, program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
-};
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    cmp, fmt,
-    rc::Rc,
+use {
+    crate::{
+        clock::Epoch, debug_account_data::*, program_error::ProgramError,
+        program_memory::sol_memset, pubkey::Pubkey,
+    },
+    std::{
+        cell::{Ref, RefCell, RefMut},
+        fmt,
+        rc::Rc,
+    },
 };
 
 /// Account information
@@ -30,28 +33,19 @@ pub struct AccountInfo<'a> {
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data_len = cmp::min(64, self.data_len());
-        let data_str = if data_len > 0 {
-            format!(
-                " data: {} ...",
-                hex::encode(self.data.borrow()[..data_len].to_vec())
-            )
-        } else {
-            "".to_string()
-        };
-        write!(
-            f,
-            "AccountInfo {{ key: {} owner: {} is_signer: {} is_writable: {} executable: {} rent_epoch: {} lamports: {} data.len: {} {} }}",
-            self.key,
-            self.owner,
-            self.is_signer,
-            self.is_writable,
-            self.executable,
-            self.rent_epoch,
-            self.lamports(),
-            self.data_len(),
-            data_str,
-        )
+        let mut f = f.debug_struct("AccountInfo");
+
+        f.field("key", &self.key)
+            .field("owner", &self.owner)
+            .field("is_signer", &self.is_signer)
+            .field("is_writable", &self.is_writable)
+            .field("executable", &self.executable)
+            .field("rent_epoch", &self.rent_epoch)
+            .field("lamports", &self.lamports())
+            .field("data.len", &self.data_len());
+        debug_account_data(&self.data.borrow(), &mut f);
+
+        f.finish_non_exhaustive()
     }
 }
 
@@ -189,7 +183,7 @@ impl<'a> AccountInfo<'a> {
         bincode::deserialize(&self.data.borrow())
     }
 
-    pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
+    pub fn serialize_data<T: serde::Serialize>(&self, state: &T) -> Result<(), bincode::Error> {
         if bincode::serialized_size(state)? > self.data_len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
@@ -247,15 +241,104 @@ impl<'a, T: Account> IntoAccountInfo<'a> for &'a mut (Pubkey, T) {
     }
 }
 
-/// Return the next `AccountInfo` or a `NotEnoughAccountKeys` error.
+/// Convenience function for accessing the next item in an [`AccountInfo`]
+/// iterator.
+///
+/// This is simply a wrapper around [`Iterator::next`] that returns a
+/// [`ProgramError`] instead of an option.
+///
+/// # Errors
+///
+/// Returns [`ProgramError::NotEnoughAccountKeys`] if there are no more items in
+/// the iterator.
+///
+/// # Examples
+///
+/// ```
+/// use solana_program::{
+///    account_info::{AccountInfo, next_account_info},
+///    entrypoint::ProgramResult,
+///    pubkey::Pubkey,
+/// };
+/// # use solana_program::program_error::ProgramError;
+///
+/// pub fn process_instruction(
+///     program_id: &Pubkey,
+///     accounts: &[AccountInfo],
+///     instruction_data: &[u8],
+/// ) -> ProgramResult {
+///     let accounts_iter = &mut accounts.iter();
+///     let signer = next_account_info(accounts_iter)?;
+///     let payer = next_account_info(accounts_iter)?;
+///
+///     // do stuff ...
+///
+///     Ok(())
+/// }
+/// # let p = Pubkey::new_unique();
+/// # let l = &mut 0;
+/// # let d = &mut [0u8];
+/// # let a = AccountInfo::new(&p, false, false, l, d, &p, false, 0);
+/// # let accounts = &[a.clone(), a];
+/// # process_instruction(
+/// #    &Pubkey::new_unique(),
+/// #    accounts,
+/// #    &[],
+/// # )?;
+/// # Ok::<(), ProgramError>(())
+/// ```
 pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(
     iter: &mut I,
 ) -> Result<I::Item, ProgramError> {
     iter.next().ok_or(ProgramError::NotEnoughAccountKeys)
 }
 
-/// Return a slice of the next `count` `AccountInfo`s or a
-/// `NotEnoughAccountKeys` error.
+/// Convenience function for accessing multiple next items in an [`AccountInfo`]
+/// iterator.
+///
+/// Returns a slice containing the next `count` [`AccountInfo`]s.
+///
+/// # Errors
+///
+/// Returns [`ProgramError::NotEnoughAccountKeys`] if there are not enough items
+/// in the iterator to satisfy the request.
+///
+/// # Examples
+///
+/// ```
+/// use solana_program::{
+///    account_info::{AccountInfo, next_account_info, next_account_infos},
+///    entrypoint::ProgramResult,
+///    pubkey::Pubkey,
+/// };
+/// # use solana_program::program_error::ProgramError;
+///
+/// pub fn process_instruction(
+///     program_id: &Pubkey,
+///     accounts: &[AccountInfo],
+///     instruction_data: &[u8],
+/// ) -> ProgramResult {
+///     let accounts_iter = &mut accounts.iter();
+///     let signer = next_account_info(accounts_iter)?;
+///     let payer = next_account_info(accounts_iter)?;
+///     let outputs = next_account_infos(accounts_iter, 3)?;
+///
+///     // do stuff ...
+///
+///     Ok(())
+/// }
+/// # let p = Pubkey::new_unique();
+/// # let l = &mut 0;
+/// # let d = &mut [0u8];
+/// # let a = AccountInfo::new(&p, false, false, l, d, &p, false, 0);
+/// # let accounts = &[a.clone(), a.clone(), a.clone(), a.clone(), a];
+/// # process_instruction(
+/// #    &Pubkey::new_unique(),
+/// #    accounts,
+/// #    &[],
+/// # )?;
+/// # Ok::<(), ProgramError>(())
+/// ```
 pub fn next_account_infos<'a, 'b: 'a>(
     iter: &mut std::slice::Iter<'a, AccountInfo<'b>>,
     count: usize,
@@ -323,5 +406,91 @@ mod tests {
         let d = &mut [0u8];
         let info = AccountInfo::new(&k, false, false, l, d, &k, false, 0);
         assert_eq!(info.key, info.as_ref().key);
+    }
+
+    #[test]
+    fn test_account_info_debug_data() {
+        let key = Pubkey::new_unique();
+        let mut lamports = 42;
+        let mut data = vec![5; 80];
+        let data_str = format!("{:?}", Hex(&data[..MAX_DEBUG_ACCOUNT_DATA]));
+        let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
+        assert_eq!(
+            format!("{:?}", info),
+            format!(
+                "AccountInfo {{ \
+                key: {}, \
+                owner: {}, \
+                is_signer: {}, \
+                is_writable: {}, \
+                executable: {}, \
+                rent_epoch: {}, \
+                lamports: {}, \
+                data.len: {}, \
+                data: {}, .. }}",
+                key,
+                key,
+                false,
+                false,
+                false,
+                0,
+                lamports,
+                data.len(),
+                data_str,
+            )
+        );
+
+        let mut data = vec![5; 40];
+        let data_str = format!("{:?}", Hex(&data));
+        let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
+        assert_eq!(
+            format!("{:?}", info),
+            format!(
+                "AccountInfo {{ \
+                key: {}, \
+                owner: {}, \
+                is_signer: {}, \
+                is_writable: {}, \
+                executable: {}, \
+                rent_epoch: {}, \
+                lamports: {}, \
+                data.len: {}, \
+                data: {}, .. }}",
+                key,
+                key,
+                false,
+                false,
+                false,
+                0,
+                lamports,
+                data.len(),
+                data_str,
+            )
+        );
+
+        let mut data = vec![];
+        let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
+        assert_eq!(
+            format!("{:?}", info),
+            format!(
+                "AccountInfo {{ \
+                key: {}, \
+                owner: {}, \
+                is_signer: {}, \
+                is_writable: {}, \
+                executable: {}, \
+                rent_epoch: {}, \
+                lamports: {}, \
+                data.len: {}, .. }}",
+                key,
+                key,
+                false,
+                false,
+                false,
+                0,
+                lamports,
+                data.len(),
+            )
+        );
     }
 }

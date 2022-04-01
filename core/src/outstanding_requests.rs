@@ -1,7 +1,9 @@
-use crate::request_response::RequestResponse;
-use lru::LruCache;
-use rand::{thread_rng, Rng};
-use solana_ledger::shred::Nonce;
+use {
+    crate::request_response::RequestResponse,
+    lru::LruCache,
+    rand::{thread_rng, Rng},
+    solana_ledger::shred::Nonce,
+};
 
 pub const DEFAULT_REQUEST_EXPIRATION_MS: u64 = 60_000;
 
@@ -82,10 +84,10 @@ pub struct RequestStatus<T> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
-    use crate::serve_repair::ShredRepairType;
-    use solana_ledger::shred::Shred;
-    use solana_sdk::timing::timestamp;
+    use {
+        super::*, crate::serve_repair::ShredRepairType, solana_ledger::shred::Shred,
+        solana_sdk::timing::timestamp,
+    };
 
     #[test]
     fn test_add_request() {

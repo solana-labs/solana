@@ -1,12 +1,14 @@
-use crate::{
-    account::{from_account, AccountSharedData, ReadableAccount},
-    account_utils::{State, StateMut},
-};
-use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar};
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    iter::FromIterator,
-    rc::Rc,
+use {
+    crate::{
+        account::{AccountSharedData, ReadableAccount},
+        account_utils::{State, StateMut},
+    },
+    solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey},
+    std::{
+        cell::{Ref, RefCell, RefMut},
+        iter::FromIterator,
+        rc::Rc,
+    },
 };
 
 #[repr(C)]
@@ -196,6 +198,10 @@ pub fn create_keyed_accounts_unified<'a>(
         .collect()
 }
 
+#[deprecated(
+    since = "1.11.0",
+    note = "Please use InstructionContext::get_signers() instead"
+)]
 /// Return all the signers from a set of KeyedAccounts
 pub fn get_signers<A>(keyed_accounts: &[KeyedAccount]) -> A
 where
@@ -246,24 +252,16 @@ where
     }
 }
 
-pub fn from_keyed_account<S: Sysvar>(
-    keyed_account: &crate::keyed_account::KeyedAccount,
-) -> Result<S, InstructionError> {
-    if !S::check_id(keyed_account.unsigned_key()) {
-        return Err(InstructionError::InvalidArgument);
-    }
-    from_account::<S, AccountSharedData>(&*keyed_account.try_account_ref()?)
-        .ok_or(InstructionError::InvalidArgument)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        account::{create_account_for_test, to_account},
-        pubkey::Pubkey,
+    use {
+        super::*,
+        crate::{
+            account::{create_account_for_test, from_account, to_account},
+            pubkey::Pubkey,
+            sysvar::Sysvar,
+        },
     };
-    use std::cell::RefCell;
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -285,7 +283,6 @@ mod tests {
     fn test_sysvar_keyed_account_to_from() {
         let test_sysvar = TestSysvar::default();
         let key = crate::keyed_account::tests::id();
-        let wrong_key = Pubkey::new_unique();
 
         let account = create_account_for_test(&test_sysvar);
         let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
@@ -295,16 +292,5 @@ mod tests {
         to_account(&test_sysvar, &mut account).unwrap();
         let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
-
-        let account = RefCell::new(account);
-        let keyed_account = KeyedAccount::new(&key, false, &account);
-        let new_test_sysvar = from_keyed_account::<TestSysvar>(&keyed_account).unwrap();
-        assert_eq!(test_sysvar, new_test_sysvar);
-
-        let keyed_account = KeyedAccount::new(&wrong_key, false, &account);
-        assert_eq!(
-            from_keyed_account::<TestSysvar>(&keyed_account),
-            Err(InstructionError::InvalidArgument)
-        );
     }
 }

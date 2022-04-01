@@ -48,6 +48,9 @@ pub enum SignerError {
 
     #[error("{0}")]
     UserCancel(String),
+
+    #[error("too many signers")]
+    TooManySigners,
 }
 
 /// The `Signer` trait declares operations that all digital signature providers
@@ -100,8 +103,7 @@ pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::signer::keypair::Keypair;
+    use {super::*, crate::signer::keypair::Keypair};
 
     fn pubkeys(signers: &[&dyn Signer]) -> Vec<Pubkey> {
         signers.iter().map(|x| x.pubkey()).collect()

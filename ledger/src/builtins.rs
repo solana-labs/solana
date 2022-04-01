@@ -1,5 +1,4 @@
-use solana_runtime::builtins::{ActivationType, Builtin, Builtins};
-use solana_sdk::pubkey::Pubkey;
+use solana_runtime::builtins::{Builtin, BuiltinFeatureTransition, Builtins};
 
 macro_rules! to_builtin {
     ($b:expr) => {
@@ -9,6 +8,17 @@ macro_rules! to_builtin {
 
 /// Builtin programs that are always available
 fn genesis_builtins(bpf_jit: bool) -> Vec<Builtin> {
+    // Currently JIT is not supported on the BPF VM:
+    // !x86_64: https://github.com/qmonnet/rbpf/issues/48
+    // Windows: https://github.com/solana-labs/rbpf/issues/217
+    #[cfg(any(not(target_arch = "x86_64"), target_family = "windows"))]
+    let bpf_jit = {
+        if bpf_jit {
+            info!("BPF JIT is not supported on this target");
+        }
+        false
+    };
+
     vec![
         to_builtin!(solana_bpf_loader_deprecated_program!()),
         if bpf_jit {
@@ -24,14 +34,14 @@ fn genesis_builtins(bpf_jit: bool) -> Vec<Builtin> {
     ]
 }
 
-/// Builtin programs activated dynamically by feature
-fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
+/// Dynamic feature transitions for builtin programs
+fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![]
 }
 
 pub(crate) fn get(bpf_jit: bool) -> Builtins {
     Builtins {
         genesis_builtins: genesis_builtins(bpf_jit),
-        feature_builtins: feature_builtins(),
+        feature_transitions: builtin_feature_transitions(),
     }
 }

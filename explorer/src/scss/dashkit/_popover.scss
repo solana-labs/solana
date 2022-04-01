@@ -1,9 +1,9 @@
-//
+// 
 // popover.scss
 // Extended from Bootstrap
 //
 
-//
+// 
 // Bootstrap Overrides =====================================
 //
 
@@ -20,23 +20,16 @@
   border-bottom: 0;
 }
 
-.popover-body-label {
-  margin-left: .25rem;
-}
-
-.popover-body-value {
-  margin-left: .25rem;
-}
-
 .popover-body-indicator {
   display: inline-block;
   width: .5rem;
   height: .5rem;
+  margin-right: .25rem;
   border-radius: 50%;
 }
 
 
-// Large
+// Large 
 
 .popover-lg {
   max-width: $popover-lg-max-width;
@@ -56,7 +49,7 @@
   color: $popover-dark-header-color;
 }
 
-.popover-dark.bs-popover-top .arrow {
+.popover-dark.bs-popover-top .popover-arrow {
 
   &::before {
     border-top-color: $popover-dark-border-color;
@@ -67,7 +60,7 @@
   }
 }
 
-.popover-dark.bs-popover-right .arrow {
+.popover-dark.bs-popover-right .popover-arrow {
 
   &::before {
     border-right-color: $popover-dark-border-color;
@@ -78,7 +71,7 @@
   }
 }
 
-.popover-dark.bs-popover-bottom .arrow {
+.popover-dark.bs-popover-bottom .popover-arrow {
 
   &::before {
     border-bottom-color: $popover-dark-border-color;
@@ -89,7 +82,7 @@
   }
 }
 
-.popover-dark.bs-popover-left .arrow {
+.popover-dark.bs-popover-left .popover-arrow {
 
   &::before {
     border-left-color: $popover-dark-border-color;

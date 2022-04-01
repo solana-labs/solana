@@ -1,53 +1,55 @@
-use crate::{
-    checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
-    cli::{
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
+use {
+    crate::{
+        checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
+        memo::WithMemo,
+        nonce::check_nonce_account,
+        spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    memo::WithMemo,
-    nonce::check_nonce_account,
-    spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
-};
-use clap::{value_t, App, Arg, ArgGroup, ArgMatches, SubCommand};
-use solana_clap_utils::{
-    fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
-    input_parsers::*,
-    input_validators::*,
-    keypair::{DefaultSigner, SignerIndex},
-    memo::{memo_arg, MEMO_ARG},
-    nonce::*,
-    offline::*,
-    ArgConstant,
-};
-use solana_cli_output::{
-    return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
-    CliStakeState, CliStakeType, OutputFormat, ReturnSignersConfig,
-};
-use solana_client::{
-    blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, rpc_response::RpcInflationReward,
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::from_account,
-    account_utils::StateMut,
-    clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
-    commitment_config::CommitmentConfig,
-    epoch_schedule::EpochSchedule,
-    message::Message,
-    pubkey::Pubkey,
-    stake::{
-        self,
-        instruction::{self as stake_instruction, LockupArgs, StakeError},
-        state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
+    clap::{value_t, App, Arg, ArgGroup, ArgMatches, SubCommand},
+    solana_clap_utils::{
+        fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+        input_parsers::*,
+        input_validators::*,
+        keypair::{DefaultSigner, SignerIndex},
+        memo::{memo_arg, MEMO_ARG},
+        nonce::*,
+        offline::*,
+        ArgConstant,
     },
-    stake_history::StakeHistory,
-    system_instruction::SystemError,
-    sysvar::{clock, stake_history},
-    transaction::Transaction,
+    solana_cli_output::{
+        return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
+        CliStakeState, CliStakeType, OutputFormat, ReturnSignersConfig,
+    },
+    solana_client::{
+        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
+        rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, rpc_response::RpcInflationReward,
+    },
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::from_account,
+        account_utils::StateMut,
+        clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
+        commitment_config::CommitmentConfig,
+        epoch_schedule::EpochSchedule,
+        message::Message,
+        pubkey::Pubkey,
+        stake::{
+            self,
+            instruction::{self as stake_instruction, LockupArgs, StakeError},
+            state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
+        },
+        stake_history::StakeHistory,
+        system_instruction::SystemError,
+        sysvar::{clock, stake_history},
+        transaction::Transaction,
+    },
+    solana_vote_program::vote_state::VoteState,
+    std::{ops::Deref, sync::Arc},
 };
-use solana_vote_program::vote_state::VoteState;
-use std::{ops::Deref, sync::Arc};
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
@@ -1381,11 +1383,12 @@ pub fn process_stake_authorize(
             };
             if let Some(authorized) = authorized {
                 match authorization_type {
-                    StakeAuthorize::Staker => {
-                        check_current_authority(&authorized.staker, &authority.pubkey())?;
-                    }
+                    StakeAuthorize::Staker => check_current_authority(
+                        &[authorized.withdrawer, authorized.staker],
+                        &authority.pubkey(),
+                    )?,
                     StakeAuthorize::Withdrawer => {
-                        check_current_authority(&authorized.withdrawer, &authority.pubkey())?;
+                        check_current_authority(&[authorized.withdrawer], &authority.pubkey())?;
                     }
                 }
             } else {
@@ -1927,7 +1930,7 @@ pub fn process_stake_set_lockup(
         };
         if let Some(lockup) = lockup {
             if lockup.custodian != Pubkey::default() {
-                check_current_authority(&lockup.custodian, &custodian.pubkey())?;
+                check_current_authority(&[lockup.custodian], &custodian.pubkey())?;
             }
         } else {
             return Err(CliError::RpcRequestError(format!(
@@ -2111,13 +2114,13 @@ fn get_stake_account_state(
 }
 
 pub(crate) fn check_current_authority(
-    account_current_authority: &Pubkey,
+    permitted_authorities: &[Pubkey],
     provided_current_authority: &Pubkey,
 ) -> Result<(), CliError> {
-    if account_current_authority != provided_current_authority {
+    if !permitted_authorities.contains(provided_current_authority) {
         Err(CliError::RpcRequestError(format!(
-            "Invalid current authority provided: {:?}, expected {:?}",
-            provided_current_authority, account_current_authority
+            "Invalid authority provided: {:?}, expected {:?}",
+            provided_current_authority, permitted_authorities
         )))
     } else {
         Ok(())
@@ -2423,16 +2426,18 @@ pub fn process_delegate_stake(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clap_app::get_clap_app, cli::parse_command};
-    use solana_client::blockhash_query;
-    use solana_sdk::{
-        hash::Hash,
-        signature::{
-            keypair_from_seed, read_keypair_file, write_keypair, Keypair, Presigner, Signer,
+    use {
+        super::*,
+        crate::{clap_app::get_clap_app, cli::parse_command},
+        solana_client::blockhash_query,
+        solana_sdk::{
+            hash::Hash,
+            signature::{
+                keypair_from_seed, read_keypair_file, write_keypair, Keypair, Presigner, Signer,
+            },
         },
+        tempfile::NamedTempFile,
     };
-    use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
         let tmp_file = NamedTempFile::new().unwrap();

@@ -32,7 +32,7 @@ export function Signature({
       }`}
     >
       <Copyable text={signature} replaceText={!alignRight}>
-        <span className="text-monospace">
+        <span className="font-monospace">
           {link ? (
             <Link
               className={truncate ? "text-truncate signature-truncate" : ""}

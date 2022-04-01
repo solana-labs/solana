@@ -182,6 +182,24 @@ pub struct RpcSignatureSubscribeConfig {
     pub enable_received_notification: Option<bool>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcBlockSubscribeFilter {
+    All,
+    MentionsAccountOrProgram(String),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockSubscribeConfig {
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+    pub encoding: Option<UiTransactionEncoding>,
+    pub transaction_details: Option<TransactionDetails>,
+    pub show_rewards: Option<bool>,
+    pub max_supported_transaction_version: Option<u8>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignaturesForAddressConfig {
@@ -231,6 +249,7 @@ pub struct RpcBlockConfig {
     pub rewards: Option<bool>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub max_supported_transaction_version: Option<u8>,
 }
 
 impl EncodingConfig for RpcBlockConfig {
@@ -271,6 +290,7 @@ pub struct RpcTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub max_supported_transaction_version: Option<u8>,
 }
 
 impl EncodingConfig for RpcTransactionConfig {

@@ -1,67 +1,57 @@
-use crate::{
-    checks::*,
-    cli::{
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
+use {
+    crate::{
+        checks::*,
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
     },
-};
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use log::*;
-use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter};
-use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::{
-    display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
-    CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableBuffers,
-    CliUpgradeableProgram, CliUpgradeableProgramClosed, CliUpgradeablePrograms,
-};
-use solana_client::{
-    client_error::ClientErrorKind,
-    rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    tpu_client::{TpuClient, TpuClientConfig},
-};
-use solana_rbpf::{
-    verifier,
-    vm::{Config, Executable},
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::Account,
-    account_utils::StateMut,
-    bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    instruction::Instruction,
-    instruction::InstructionError,
-    loader_instruction,
-    message::Message,
-    native_token::Sol,
-    packet::PACKET_DATA_SIZE,
-    process_instruction::MockInvokeContext,
-    pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
-    signers::Signers,
-    system_instruction::{self, SystemError},
-    system_program,
-    transaction::Transaction,
-    transaction::TransactionError,
-};
-use solana_transaction_status::TransactionConfirmationStatus;
-use std::{
-    collections::HashMap,
-    error,
-    fs::File,
-    io::{Read, Write},
-    mem::size_of,
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-    thread::sleep,
-    time::Duration,
+    bip39::{Language, Mnemonic, MnemonicType, Seed},
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    log::*,
+    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
+    solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter},
+    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_cli_output::{
+        CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
+        CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
+        CliUpgradeableProgramClosed, CliUpgradeablePrograms,
+    },
+    solana_client::{
+        client_error::ClientErrorKind,
+        rpc_client::RpcClient,
+        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
+    solana_program_runtime::invoke_context::InvokeContext,
+    solana_rbpf::{elf::Executable, verifier, vm::Config},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::Account,
+        account_utils::StateMut,
+        bpf_loader, bpf_loader_deprecated,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        instruction::{Instruction, InstructionError},
+        loader_instruction,
+        message::Message,
+        native_token::Sol,
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
+        signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
+        system_instruction::{self, SystemError},
+        system_program,
+        transaction::{Transaction, TransactionError},
+        transaction_context::TransactionContext,
+    },
+    std::{
+        fs::File,
+        io::{Read, Write},
+        mem::size_of,
+        path::PathBuf,
+        str::FromStr,
+        sync::Arc,
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -76,6 +66,7 @@ pub enum ProgramCliCommand {
         is_final: bool,
         max_len: Option<usize>,
         allow_excessive_balance: bool,
+        skip_fee_check: bool,
     },
     WriteBuffer {
         program_location: String,
@@ -83,6 +74,7 @@ pub enum ProgramCliCommand {
         buffer_pubkey: Option<Pubkey>,
         buffer_authority_signer_index: Option<SignerIndex>,
         max_len: Option<usize>,
+        skip_fee_check: bool,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -124,6 +116,13 @@ impl ProgramSubCommands for App<'_, '_> {
             SubCommand::with_name("program")
                 .about("Program management")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
+                .arg(
+                    Arg::with_name("skip_fee_check")
+                        .long("skip-fee-check")
+                        .hidden(true)
+                        .takes_value(false)
+                        .global(true)
+                )
                 .subcommand(
                     SubCommand::with_name("deploy")
                         .about("Deploy a program")
@@ -387,6 +386,7 @@ impl ProgramSubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("deploy")
                 .about("Deploy a program")
+                .setting(AppSettings::Hidden)
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
@@ -415,6 +415,12 @@ impl ProgramSubCommands for App<'_, '_> {
                         .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
                         .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                )
+                .arg(
+                    Arg::with_name("skip_fee_check")
+                        .long("skip-fee-check")
+                        .hidden(true)
+                        .takes_value(false)
                 ),
         )
     }
@@ -425,7 +431,14 @@ pub fn parse_program_subcommand(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let response = match matches.subcommand() {
+    let (subcommand, sub_matches) = matches.subcommand();
+    let matches_skip_fee_check = matches.is_present("skip_fee_check");
+    let sub_matches_skip_fee_check = sub_matches
+        .map(|m| m.is_present("skip_fee_check"))
+        .unwrap_or(false);
+    let skip_fee_check = matches_skip_fee_check || sub_matches_skip_fee_check;
+
+    let response = match (subcommand, sub_matches) {
         ("deploy", Some(matches)) => {
             let mut bulk_signers = vec![Some(
                 default_signer.signer_from_path(matches, wallet_manager)?,
@@ -485,6 +498,7 @@ pub fn parse_program_subcommand(
                     is_final: matches.is_present("final"),
                     max_len,
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
+                    skip_fee_check,
                 }),
                 signers: signer_info.signers,
             }
@@ -530,6 +544,7 @@ pub fn parse_program_subcommand(
                     buffer_authority_signer_index: signer_info
                         .index_of_or_none(buffer_authority_pubkey),
                     max_len,
+                    skip_fee_check,
                 }),
                 signers: signer_info.signers,
             }
@@ -678,6 +693,7 @@ pub fn process_program_subcommand(
             is_final,
             max_len,
             allow_excessive_balance,
+            skip_fee_check,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -690,6 +706,7 @@ pub fn process_program_subcommand(
             *is_final,
             *max_len,
             *allow_excessive_balance,
+            *skip_fee_check,
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
@@ -697,6 +714,7 @@ pub fn process_program_subcommand(
             buffer_pubkey,
             buffer_authority_signer_index,
             max_len,
+            skip_fee_check,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -705,6 +723,7 @@ pub fn process_program_subcommand(
             *buffer_pubkey,
             *buffer_authority_signer_index,
             *max_len,
+            *skip_fee_check,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -802,6 +821,7 @@ fn process_program_deploy(
     is_final: bool,
     max_len: Option<usize>,
     allow_excessive_balance: bool,
+    skip_fee_check: bool,
 ) -> ProcessResult {
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_provided, buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
@@ -956,6 +976,7 @@ fn process_program_deploy(
             &buffer_pubkey,
             Some(upgrade_authority_signer),
             allow_excessive_balance,
+            skip_fee_check,
         )
     } else {
         do_process_program_upgrade(
@@ -966,6 +987,7 @@ fn process_program_deploy(
             config.signers[upgrade_authority_signer_index],
             &buffer_pubkey,
             buffer_signer,
+            skip_fee_check,
         )
     };
     if result.is_ok() && is_final {
@@ -992,6 +1014,7 @@ fn process_write_buffer(
     buffer_pubkey: Option<Pubkey>,
     buffer_authority_signer_index: Option<SignerIndex>,
     max_len: Option<usize>,
+    skip_fee_check: bool,
 ) -> ProcessResult {
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
@@ -1059,6 +1082,7 @@ fn process_write_buffer(
         &buffer_pubkey,
         Some(buffer_authority),
         true,
+        skip_fee_check,
     );
 
     if result.is_err() && buffer_signer_index.is_none() && buffer_signer.is_some() {
@@ -1148,18 +1172,18 @@ fn get_buffers(
 ) -> Result<CliUpgradeableBuffers, Box<dyn std::error::Error>> {
     let mut filters = vec![RpcFilterType::Memcmp(Memcmp {
         offset: 0,
-        bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1, 0, 0, 0]).into_string()),
+        bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1, 0, 0, 0]).into_string()),
         encoding: None,
     })];
     if let Some(authority_pubkey) = authority_pubkey {
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1]).into_string()),
+            bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1]).into_string()),
             encoding: None,
         }));
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE + OPTION_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(
+            bytes: MemcmpEncodedBytes::Base58(
                 bs58::encode(authority_pubkey.as_ref()).into_string(),
             ),
             encoding: None,
@@ -1201,18 +1225,18 @@ fn get_programs(
 ) -> Result<CliUpgradeablePrograms, Box<dyn std::error::Error>> {
     let mut filters = vec![RpcFilterType::Memcmp(Memcmp {
         offset: 0,
-        bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![3, 0, 0, 0]).into_string()),
+        bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![3, 0, 0, 0]).into_string()),
         encoding: None,
     })];
     if let Some(authority_pubkey) = authority_pubkey {
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE + SLOT_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1]).into_string()),
+            bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1]).into_string()),
             encoding: None,
         }));
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE + SLOT_SIZE + OPTION_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(
+            bytes: MemcmpEncodedBytes::Base58(
                 bs58::encode(authority_pubkey.as_ref()).into_string(),
             ),
             encoding: None,
@@ -1236,7 +1260,7 @@ fn get_programs(
             bytes.extend_from_slice(programdata_address.as_ref());
             let filters = vec![RpcFilterType::Memcmp(Memcmp {
                 offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(bs58::encode(bytes).into_string()),
+                bytes: MemcmpEncodedBytes::Base58(bs58::encode(bytes).into_string()),
                 encoding: None,
             })];
 
@@ -1645,6 +1669,7 @@ pub fn process_deploy(
     buffer_signer_index: Option<SignerIndex>,
     use_deprecated_loader: bool,
     allow_excessive_balance: bool,
+    skip_fee_check: bool,
 ) -> ProcessResult {
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
@@ -1675,6 +1700,7 @@ pub fn process_deploy(
         &buffer_signer.pubkey(),
         Some(buffer_signer),
         allow_excessive_balance,
+        skip_fee_check,
     );
     if result.is_err() && buffer_signer_index.is_none() {
         report_ephemeral_mnemonic(words, mnemonic);
@@ -1713,9 +1739,11 @@ fn do_process_program_write_and_deploy(
     buffer_pubkey: &Pubkey,
     buffer_authority_signer: Option<&dyn Signer>,
     allow_excessive_balance: bool,
+    skip_fee_check: bool,
 ) -> ProcessResult {
     // Build messages to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
     let (initial_message, write_messages, balance_needed) =
@@ -1761,9 +1789,10 @@ fn do_process_program_write_and_deploy(
                 )
             };
             let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new(
+                Some(Message::new_with_blockhash(
                     &initial_instructions,
                     Some(&config.signers[0].pubkey()),
+                    &blockhash,
                 ))
             } else {
                 None
@@ -1783,7 +1812,7 @@ fn do_process_program_write_and_deploy(
                 } else {
                     loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
                 };
-                Message::new(&[instruction], Some(&payer_pubkey))
+                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
             };
 
             let mut write_messages = vec![];
@@ -1812,7 +1841,7 @@ fn do_process_program_write_and_deploy(
 
     let final_message = if let Some(program_signers) = program_signers {
         let message = if loader_id == &bpf_loader_upgradeable::id() {
-            Message::new(
+            Message::new_with_blockhash(
                 &bpf_loader_upgradeable::deploy_with_max_program_len(
                     &config.signers[0].pubkey(),
                     &program_signers[0].pubkey(),
@@ -1824,11 +1853,13 @@ fn do_process_program_write_and_deploy(
                     programdata_len,
                 )?,
                 Some(&config.signers[0].pubkey()),
+                &blockhash,
             )
         } else {
-            Message::new(
+            Message::new_with_blockhash(
                 &[loader_instruction::finalize(buffer_pubkey, loader_id)],
                 Some(&config.signers[0].pubkey()),
+                &blockhash,
             )
         };
         Some(message)
@@ -1839,7 +1870,9 @@ fn do_process_program_write_and_deploy(
         messages.push(message);
     }
 
-    check_payer(&rpc_client, config, balance_needed, &messages)?;
+    if !skip_fee_check {
+        check_payer(&rpc_client, config, balance_needed, &messages)?;
+    }
 
     send_deploy_messages(
         rpc_client,
@@ -1873,6 +1906,7 @@ fn do_process_program_upgrade(
     upgrade_authority: &dyn Signer,
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
+    skip_fee_check: bool,
 ) -> ProcessResult {
     let loader_id = bpf_loader_upgradeable::id();
     let data_len = program_data.len();
@@ -1882,6 +1916,7 @@ fn do_process_program_upgrade(
 
     // Build messages to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     let (initial_message, write_messages, balance_needed) =
         if let Some(buffer_signer) = buffer_signer {
@@ -1913,9 +1948,10 @@ fn do_process_program_upgrade(
             };
 
             let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new(
+                Some(Message::new_with_blockhash(
                     &initial_instructions,
                     Some(&config.signers[0].pubkey()),
+                    &blockhash,
                 ))
             } else {
                 None
@@ -1931,7 +1967,7 @@ fn do_process_program_upgrade(
                     offset,
                     bytes,
                 );
-                Message::new(&[instruction], Some(&payer_pubkey))
+                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
             };
 
             // Create and add write messages
@@ -1958,7 +1994,7 @@ fn do_process_program_upgrade(
     }
 
     // Create and add final message
-    let final_message = Message::new(
+    let final_message = Message::new_with_blockhash(
         &[bpf_loader_upgradeable::upgrade(
             program_id,
             buffer_pubkey,
@@ -1966,10 +2002,14 @@ fn do_process_program_upgrade(
             &config.signers[0].pubkey(),
         )],
         Some(&config.signers[0].pubkey()),
+        &blockhash,
     );
     messages.push(&final_message);
 
-    check_payer(&rpc_client, config, balance_needed, &messages)?;
+    if !skip_fee_check {
+        check_payer(&rpc_client, config, balance_needed, &messages)?;
+    }
+
     send_deploy_messages(
         rpc_client,
         config,
@@ -1993,15 +2033,15 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
-    let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+    let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+    Executable::<BpfError, ThisInstructionMeter>::from_elf(
         &program_data,
         Some(verifier::check),
         Config {
-            reject_unresolved_syscalls: true,
-            verify_mul64_imm_nonzero: true, // TODO: Remove me after feature gate
+            reject_broken_elfs: true,
             ..Config::default()
         },
         register_syscalls(&mut invoke_context).unwrap(),
@@ -2040,9 +2080,7 @@ fn complete_partial_program_init(
             elf_pubkey,
             account_data_len as u64,
         ));
-        if account.owner != *loader_id {
-            instructions.push(system_instruction::assign(elf_pubkey, loader_id));
-        }
+        instructions.push(system_instruction::assign(elf_pubkey, loader_id));
         if account.lamports < minimum_balance {
             let balance = minimum_balance - account.lamports;
             instructions.push(system_instruction::transfer(
@@ -2120,16 +2158,20 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let transaction_errors = send_and_confirm_messages_with_spinner(
+            let tpu_client = TpuClient::new(
                 rpc_client.clone(),
                 &config.websocket_url,
-                write_messages,
-                &[payer_signer, write_signer],
-            )
-            .map_err(|err| format!("Data writes to account failed: {}", err))?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+                TpuClientConfig::default(),
+            )?;
+            let transaction_errors = tpu_client
+                .send_and_confirm_messages_with_spinner(
+                    write_messages,
+                    &[payer_signer, write_signer],
+                )
+                .map_err(|err| format!("Data writes to account failed: {}", err))?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
 
             if !transaction_errors.is_empty() {
                 for transaction_error in &transaction_errors {
@@ -2190,9 +2232,8 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
         words
     );
     eprintln!("{}\n{}\n{}", divider, phrase, divider);
-    eprintln!("To resume a deploy, pass the recovered keypair as");
-    eprintln!("the [PROGRAM_ADDRESS_SIGNER] argument to `solana deploy` or");
-    eprintln!("as the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.");
+    eprintln!("To resume a deploy, pass the recovered keypair as the");
+    eprintln!("[BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.");
     eprintln!("Or to recover the account's lamports, pass it as the");
     eprintln!(
         "[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{}",
@@ -2200,156 +2241,18 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
-fn send_and_confirm_messages_with_spinner<T: Signers>(
-    rpc_client: Arc<RpcClient>,
-    websocket_url: &str,
-    messages: &[Message],
-    signers: &T,
-) -> Result<Vec<Option<TransactionError>>, Box<dyn error::Error>> {
-    let commitment = rpc_client.commitment();
-
-    let progress_bar = new_spinner_progress_bar();
-    let send_transaction_interval = Duration::from_millis(10); /* ~100 TPS */
-    let mut send_retries = 5;
-
-    let (blockhash, mut last_valid_block_height) =
-        rpc_client.get_latest_blockhash_with_commitment(commitment)?;
-
-    let mut transactions = vec![];
-    let mut transaction_errors = vec![None; messages.len()];
-    for (i, message) in messages.iter().enumerate() {
-        let mut transaction = Transaction::new_unsigned(message.clone());
-        transaction.try_sign(signers, blockhash)?;
-        transactions.push((i, transaction));
-    }
-
-    progress_bar.set_message("Finding leader nodes...");
-    let tpu_client = TpuClient::new(
-        rpc_client.clone(),
-        websocket_url,
-        TpuClientConfig::default(),
-    )?;
-    loop {
-        // Send all transactions
-        let mut pending_transactions = HashMap::new();
-        let num_transactions = transactions.len();
-        for (i, transaction) in transactions {
-            if !tpu_client.send_transaction(&transaction) {
-                let _result = rpc_client
-                    .send_transaction_with_config(
-                        &transaction,
-                        RpcSendTransactionConfig {
-                            preflight_commitment: Some(commitment.commitment),
-                            ..RpcSendTransactionConfig::default()
-                        },
-                    )
-                    .ok();
-            }
-            pending_transactions.insert(transaction.signatures[0], (i, transaction));
-            progress_bar.set_message(format!(
-                "[{}/{}] Transactions sent",
-                pending_transactions.len(),
-                num_transactions
-            ));
-
-            sleep(send_transaction_interval);
-        }
-
-        // Collect statuses for all the transactions, drop those that are confirmed
-        loop {
-            let mut block_height = 0;
-            let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
-            for pending_signatures_chunk in
-                pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
-            {
-                if let Ok(result) = rpc_client.get_signature_statuses(pending_signatures_chunk) {
-                    let statuses = result.value;
-                    for (signature, status) in
-                        pending_signatures_chunk.iter().zip(statuses.into_iter())
-                    {
-                        if let Some(status) = status {
-                            if let Some(confirmation_status) = &status.confirmation_status {
-                                if *confirmation_status != TransactionConfirmationStatus::Processed
-                                {
-                                    if let Some((i, _)) = pending_transactions.remove(signature) {
-                                        transaction_errors[i] = status.err;
-                                    }
-                                }
-                            } else if status.confirmations.is_none()
-                                || status.confirmations.unwrap() > 1
-                            {
-                                if let Some((i, _)) = pending_transactions.remove(signature) {
-                                    transaction_errors[i] = status.err;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                block_height = rpc_client.get_block_height()?;
-                progress_bar.set_message(format!(
-                    "[{}/{}] Transactions confirmed. Retrying in {} blocks",
-                    num_transactions - pending_transactions.len(),
-                    num_transactions,
-                    last_valid_block_height.saturating_sub(block_height)
-                ));
-            }
-
-            if pending_transactions.is_empty() {
-                return Ok(transaction_errors);
-            }
-
-            if block_height > last_valid_block_height {
-                break;
-            }
-
-            for (_i, transaction) in pending_transactions.values() {
-                if !tpu_client.send_transaction(transaction) {
-                    let _result = rpc_client
-                        .send_transaction_with_config(
-                            transaction,
-                            RpcSendTransactionConfig {
-                                preflight_commitment: Some(commitment.commitment),
-                                ..RpcSendTransactionConfig::default()
-                            },
-                        )
-                        .ok();
-                }
-            }
-
-            if cfg!(not(test)) {
-                // Retry twice a second
-                sleep(Duration::from_millis(500));
-            }
-        }
-
-        if send_retries == 0 {
-            return Err("Transactions failed".into());
-        }
-        send_retries -= 1;
-
-        // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, new_last_valid_block_height) =
-            rpc_client.get_latest_blockhash_with_commitment(commitment)?;
-        last_valid_block_height = new_last_valid_block_height;
-        transactions = vec![];
-        for (_, (i, mut transaction)) in pending_transactions.into_iter() {
-            transaction.try_sign(signers, blockhash)?;
-            transactions.push((i, transaction));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        clap_app::get_clap_app,
-        cli::{parse_command, process_command},
+    use {
+        super::*,
+        crate::{
+            clap_app::get_clap_app,
+            cli::{parse_command, process_command},
+        },
+        serde_json::Value,
+        solana_cli_output::OutputFormat,
+        solana_sdk::signature::write_keypair_file,
     };
-    use serde_json::Value;
-    use solana_cli_output::OutputFormat;
-    use solana_sdk::signature::write_keypair_file;
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -2394,6 +2297,7 @@ mod tests {
                     is_final: false,
                     max_len: None,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2420,6 +2324,7 @@ mod tests {
                     is_final: false,
                     max_len: Some(42),
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2448,6 +2353,7 @@ mod tests {
                     is_final: false,
                     max_len: None,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2478,6 +2384,7 @@ mod tests {
                     is_final: false,
                     max_len: None,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2507,6 +2414,7 @@ mod tests {
                     is_final: false,
                     max_len: None,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2539,6 +2447,7 @@ mod tests {
                     is_final: false,
                     max_len: None,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2566,6 +2475,7 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: true,
                     max_len: None,
+                    skip_fee_check: false,
                     allow_excessive_balance: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
@@ -2599,6 +2509,7 @@ mod tests {
                     buffer_pubkey: None,
                     buffer_authority_signer_index: Some(0),
                     max_len: None,
+                    skip_fee_check: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2622,6 +2533,7 @@ mod tests {
                     buffer_pubkey: None,
                     buffer_authority_signer_index: Some(0),
                     max_len: Some(42),
+                    skip_fee_check: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2648,6 +2560,7 @@ mod tests {
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
                     buffer_authority_signer_index: Some(0),
                     max_len: None,
+                    skip_fee_check: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2677,6 +2590,7 @@ mod tests {
                     buffer_pubkey: None,
                     buffer_authority_signer_index: Some(1),
                     max_len: None,
+                    skip_fee_check: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2711,6 +2625,7 @@ mod tests {
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
                     buffer_authority_signer_index: Some(2),
                     max_len: None,
+                    skip_fee_check: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3153,6 +3068,7 @@ mod tests {
                 is_final: false,
                 max_len: None,
                 allow_excessive_balance: false,
+                skip_fee_check: false,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,

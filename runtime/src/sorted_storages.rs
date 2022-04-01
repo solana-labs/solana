@@ -1,17 +1,41 @@
-use crate::accounts_db::SnapshotStorage;
-use log::*;
-use solana_measure::measure::Measure;
-use solana_sdk::clock::Slot;
-use std::ops::Range;
+use {
+    crate::accounts_db::SnapshotStorage,
+    log::*,
+    solana_measure::measure::Measure,
+    solana_sdk::clock::Slot,
+    std::ops::{Bound, Range, RangeBounds},
+};
 
+/// Provide access to SnapshotStorages sorted by slot
 pub struct SortedStorages<'a> {
+    /// range of slots where storages exist (likely sparse)
     range: Range<Slot>,
+    /// the actual storages. index is (slot - range.start)
     storages: Vec<Option<&'a SnapshotStorage>>,
     slot_count: usize,
+    storage_count: usize,
 }
 
 impl<'a> SortedStorages<'a> {
-    pub fn get(&self, slot: Slot) -> Option<&SnapshotStorage> {
+    /// containing nothing
+    pub fn empty() -> Self {
+        SortedStorages {
+            range: Range::default(),
+            storages: Vec::default(),
+            slot_count: 0,
+            storage_count: 0,
+        }
+    }
+
+    /// primary method of retrieving (Slot, SnapshotStorage)
+    pub fn iter_range<R>(&'a self, range: R) -> SortedStoragesIter<'a>
+    where
+        R: RangeBounds<Slot>,
+    {
+        SortedStoragesIter::new(self, range)
+    }
+
+    fn get(&self, slot: Slot) -> Option<&SnapshotStorage> {
         if !self.range.contains(&slot) {
             None
         } else {
@@ -32,28 +56,28 @@ impl<'a> SortedStorages<'a> {
         self.slot_count
     }
 
+    pub fn storage_count(&self) -> usize {
+        self.storage_count
+    }
+
     // assumptions:
     // 1. each SnapshotStorage.!is_empty()
     // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
     pub fn new(source: &'a [SnapshotStorage]) -> Self {
-        let slots = source
-            .iter()
-            .map(|storages| {
-                let first = storages.first();
-                assert!(first.is_some(), "SnapshotStorage.is_empty()");
-                let storage = first.unwrap();
-                storage.slot() // this must be unique. Will be enforced in new_with_slots
-            })
-            .collect::<Vec<_>>();
-        Self::new_with_slots(source.iter().zip(slots.iter()), None, None)
+        let slots = source.iter().map(|storages| {
+            let first = storages.first();
+            assert!(first.is_some(), "SnapshotStorage.is_empty()");
+            let storage = first.unwrap();
+            storage.slot() // this must be unique. Will be enforced in new_with_slots
+        });
+        Self::new_with_slots(source.iter().zip(slots.into_iter()), None, None)
     }
 
-    // source[i] is in slot slots[i]
-    // assumptions:
-    // 1. slots vector contains unique slot #s.
-    // 2. slots and source are the same len
-    pub fn new_with_slots<'b>(
-        source: impl Iterator<Item = (&'a SnapshotStorage, &'b Slot)> + Clone,
+    /// create `SortedStorages` from 'source' iterator.
+    /// 'source' contains a SnapshotStorage and its associated slot
+    /// 'source' does not have to be sorted in any way, but is assumed to not have duplicate slot #s
+    pub fn new_with_slots(
+        source: impl Iterator<Item = (&'a SnapshotStorage, Slot)> + Clone,
         // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
         min_slot: Option<Slot>,
         // highest valid slot. Only matters if source array does not contain a slot >= max_slot_inclusive.
@@ -79,9 +103,11 @@ impl<'a> SortedStorages<'a> {
         let mut slot_count = 0;
         let mut time = Measure::start("get slot");
         let source_ = source.clone();
-        source_.for_each(|(_, slot)| {
+        let mut storage_count = 0;
+        source_.for_each(|(storages, slot)| {
+            storage_count += storages.len();
             slot_count += 1;
-            adjust_min_max(*slot);
+            adjust_min_max(slot);
         });
         time.stop();
         let mut time2 = Measure::start("sort");
@@ -109,6 +135,67 @@ impl<'a> SortedStorages<'a> {
             range,
             storages,
             slot_count,
+            storage_count,
+        }
+    }
+}
+
+/// Iterator over successive slots in 'storages' within 'range'.
+/// This enforces sequential access so that random access does not have to be implemented.
+/// Random access could be expensive with large sparse sets.
+pub struct SortedStoragesIter<'a> {
+    /// range for the iterator to iterate over (start_inclusive..end_exclusive)
+    range: Range<Slot>,
+    /// the data to return per slot
+    storages: &'a SortedStorages<'a>,
+    /// the slot to be returned the next time 'Next' is called
+    next_slot: Slot,
+}
+
+impl<'a> Iterator for SortedStoragesIter<'a> {
+    type Item = (Slot, Option<&'a SnapshotStorage>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let slot = self.next_slot;
+        if slot < self.range.end {
+            // iterator is still in range. Storage may or may not exist at this slot, but the iterator still needs to return the slot
+            self.next_slot += 1;
+            Some((slot, self.storages.get(slot)))
+        } else {
+            // iterator passed the end of the range, so from now on it returns None
+            None
+        }
+    }
+}
+
+impl<'a> SortedStoragesIter<'a> {
+    pub fn new<R: RangeBounds<Slot>>(
+        storages: &'a SortedStorages<'a>,
+        range: R,
+    ) -> SortedStoragesIter<'a> {
+        let storage_range = storages.range();
+        let next_slot = match range.start_bound() {
+            Bound::Unbounded => {
+                storage_range.start // unbounded beginning starts with the min known slot (which is inclusive)
+            }
+            Bound::Included(x) => *x,
+            Bound::Excluded(x) => *x + 1, // make inclusive
+        };
+        let end_exclusive_slot = match range.end_bound() {
+            Bound::Unbounded => {
+                storage_range.end // unbounded end ends with the max known slot (which is exclusive)
+            }
+            Bound::Included(x) => *x + 1, // make exclusive
+            Bound::Excluded(x) => *x,
+        };
+        // Note that the range can be outside the range of known storages.
+        // This is because the storages may not be the only source of valid slots.
+        // The write cache is another source of slots that 'storages' knows nothing about.
+        let range = next_slot..end_exclusive_slot;
+        SortedStoragesIter {
+            range,
+            storages,
+            next_slot,
         }
     }
 }
@@ -132,8 +219,119 @@ pub mod tests {
                 range,
                 storages,
                 slot_count,
+                storage_count: 0,
             }
         }
+
+        pub fn new_for_tests(storages: &[&'a SnapshotStorage], slots: &[Slot]) -> Self {
+            assert_eq!(storages.len(), slots.len());
+            SortedStorages::new_with_slots(
+                storages.iter().cloned().zip(slots.iter().cloned()),
+                None,
+                None,
+            )
+        }
+    }
+
+    #[test]
+    fn test_sorted_storages_range_iter() {
+        let storages = SortedStorages::empty();
+        let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
+            assert!(storages.is_none());
+            slot
+        };
+        assert_eq!(
+            (0..5).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(..5).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (1..5).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(1..5).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (0..0).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(..).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (0..0).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(1..).map(check).collect::<Vec<_>>()
+        );
+
+        // only item is slot 3
+        let s1 = Vec::new();
+        let storages = SortedStorages::new_for_tests(&[&s1], &[3]);
+        let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
+            assert!(
+                (slot != 3) ^ storages.is_some(),
+                "slot: {}, storages: {:?}",
+                slot,
+                storages
+            );
+            slot
+        };
+        for start in 0..5 {
+            for end in 0..5 {
+                assert_eq!(
+                    (start..end).into_iter().collect::<Vec<_>>(),
+                    storages
+                        .iter_range(start..end)
+                        .map(check)
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+        assert_eq!(
+            (3..5).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(..5).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (1..=3).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(1..).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (3..=3).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(..).map(check).collect::<Vec<_>>()
+        );
+
+        // items in slots 2 and 4
+        let s2 = Vec::with_capacity(2);
+        let s4 = Vec::with_capacity(4);
+        let storages = SortedStorages::new_for_tests(&[&s2, &s4], &[2, 4]);
+        let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
+            assert!(
+                (slot != 2 && slot != 4)
+                    ^ storages
+                        .map(|storages| storages.capacity() == (slot as usize))
+                        .unwrap_or(false),
+                "slot: {}, storages: {:?}",
+                slot,
+                storages
+            );
+            slot
+        };
+        for start in 0..5 {
+            for end in 0..5 {
+                assert_eq!(
+                    (start..end).into_iter().collect::<Vec<_>>(),
+                    storages
+                        .iter_range(start..end)
+                        .map(check)
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+        assert_eq!(
+            (2..5).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(..5).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (1..=4).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(1..).map(check).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (2..=4).into_iter().collect::<Vec<_>>(),
+            storages.iter_range(..).map(check).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -145,16 +343,12 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "slots are not unique")]
     fn test_sorted_storages_duplicate_slots() {
-        SortedStorages::new_with_slots(
-            [Vec::new(), Vec::new()].iter().zip([0, 0].iter()),
-            None,
-            None,
-        );
+        SortedStorages::new_for_tests(&[&Vec::new(), &Vec::new()], &[0, 0]);
     }
 
     #[test]
     fn test_sorted_storages_none() {
-        let result = SortedStorages::new_with_slots([].iter().zip([].iter()), None, None);
+        let result = SortedStorages::empty();
         assert_eq!(result.range, Range::default());
         assert_eq!(result.slot_count, 0);
         assert_eq!(result.storages.len(), 0);
@@ -166,8 +360,8 @@ pub mod tests {
         let vec = vec![];
         let vec_check = vec.clone();
         let slot = 4;
-        let vecs = [vec];
-        let result = SortedStorages::new_with_slots(vecs.iter().zip([slot].iter()), None, None);
+        let vecs = [&vec];
+        let result = SortedStorages::new_for_tests(&vecs, &[slot]);
         assert_eq!(
             result.range,
             Range {
@@ -185,8 +379,8 @@ pub mod tests {
         let vec = vec![];
         let vec_check = vec.clone();
         let slots = [4, 7];
-        let vecs = [vec.clone(), vec];
-        let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()), None, None);
+        let vecs = [&vec, &vec];
+        let result = SortedStorages::new_for_tests(&vecs, &slots);
         assert_eq!(
             result.range,
             Range {

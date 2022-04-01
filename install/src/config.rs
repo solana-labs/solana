@@ -2,9 +2,11 @@ use {
     crate::update_manifest::UpdateManifest,
     serde::{Deserialize, Serialize},
     solana_sdk::pubkey::Pubkey,
-    std::fs::{create_dir_all, File},
-    std::io::{self, Write},
-    std::path::{Path, PathBuf},
+    std::{
+        fs::{create_dir_all, File},
+        io::{self, Write},
+        path::{Path, PathBuf},
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -43,7 +45,7 @@ impl Config {
     }
 
     fn _load(config_file: &str) -> Result<Self, io::Error> {
-        let file = File::open(config_file.to_string())?;
+        let file = File::open(config_file)?;
         let config = serde_yaml::from_reader(file)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
         Ok(config)

@@ -104,16 +104,14 @@ function AccountRow({
         <div className="d-flex align-items-start flex-column">
           Account #{accountIndex + 1}
           <span className="mt-1">
-            {signer && (
-              <span className="badge badge-soft-info mr-1">Signer</span>
-            )}
+            {signer && <span className="badge bg-info-soft me-1">Signer</span>}
             {!readOnly && (
-              <span className="badge badge-soft-danger">Writable</span>
+              <span className="badge bg-danger-soft">Writable</span>
             )}
           </span>
         </div>
       </td>
-      <td className="text-lg-right">
+      <td className="text-lg-end">
         <AddressWithContext pubkey={publicKey} />
       </td>
     </tr>

@@ -281,16 +281,18 @@ pub(crate) fn move_stake_accounts(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_runtime::{bank::Bank, bank_client::BankClient};
-    use solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        client::SyncClient,
-        genesis_config::create_genesis_config,
-        signature::{Keypair, Signer},
-        stake::state::StakeState,
+    use {
+        super::*,
+        solana_runtime::{bank::Bank, bank_client::BankClient},
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            client::SyncClient,
+            genesis_config::create_genesis_config,
+            signature::{Keypair, Signer},
+            stake::state::StakeState,
+        },
+        solana_stake_program::stake_state,
     };
-    use solana_stake_program::stake_state;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
@@ -462,13 +464,16 @@ mod tests {
         let custodian_keypair = Keypair::new();
         let custodian_pubkey = custodian_keypair.pubkey();
 
+        let withdrawer_keypair = Keypair::new();
+        let withdrawer_pubkey = withdrawer_keypair.pubkey();
+
         let message = new_stake_account(
             &fee_payer_pubkey,
             &funding_pubkey,
             &base_pubkey,
             lamports,
             &Pubkey::default(),
-            &Pubkey::default(),
+            &withdrawer_pubkey,
             &custodian_pubkey,
             0,
         );
@@ -481,16 +486,17 @@ mod tests {
         let lockups = get_lockups(&bank_client, &base_pubkey, 1);
         let messages = lockup_stake_accounts(
             &fee_payer_pubkey,
-            &custodian_pubkey,
+            &withdrawer_pubkey,
             &LockupArgs {
                 unix_timestamp: Some(1),
+                custodian: Some(custodian_pubkey),
                 ..LockupArgs::default()
             },
             &lockups,
             None,
         );
 
-        let signers = [&fee_payer_keypair, &custodian_keypair];
+        let signers = [&fee_payer_keypair, &withdrawer_keypair];
         for message in messages {
             bank_client
                 .send_and_confirm_message(&signers, message)
@@ -499,6 +505,7 @@ mod tests {
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
         let lockup = stake_state::lockup_from(&account).unwrap();
+        assert_eq!(lockup.custodian, custodian_pubkey);
         assert_eq!(lockup.unix_timestamp, 1);
         assert_eq!(lockup.epoch, 0);
 

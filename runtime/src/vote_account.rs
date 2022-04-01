@@ -1,9 +1,13 @@
 use {
     itertools::Itertools,
-    serde::de::{Deserialize, Deserializer},
-    serde::ser::{Serialize, Serializer},
+    serde::{
+        de::{Deserialize, Deserializer},
+        ser::{Serialize, Serializer},
+    },
     solana_sdk::{
-        account::Account, account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
+        account::{Account, AccountSharedData, ReadableAccount},
+        instruction::InstructionError,
+        pubkey::Pubkey,
     },
     solana_vote_program::vote_state::VoteState,
     std::{
@@ -53,16 +57,20 @@ impl VoteAccount {
     }
 
     pub(crate) fn lamports(&self) -> u64 {
-        self.account().lamports
+        self.account().lamports()
     }
 
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(&inner.account.data);
+            let vote_state = VoteState::deserialize(inner.account.data());
             *inner.vote_state.write().unwrap() = vote_state;
         });
         inner.vote_state.read().unwrap()
+    }
+
+    pub fn is_deserialized(&self) -> bool {
+        self.0.vote_state_once.is_completed()
     }
 
     /// VoteState.node_pubkey of this vote-account.
@@ -325,12 +333,14 @@ impl<'de> Deserialize<'de> for VoteAccounts {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bincode::Options;
-    use rand::Rng;
-    use solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock};
-    use solana_vote_program::vote_state::{VoteInit, VoteStateVersions};
-    use std::iter::repeat_with;
+    use {
+        super::*,
+        bincode::Options,
+        rand::Rng,
+        solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock},
+        solana_vote_program::vote_state::{VoteInit, VoteStateVersions},
+        std::iter::repeat_with,
+    };
 
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,
@@ -395,7 +405,7 @@ mod tests {
     fn test_vote_account() {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
-        let lamports = account.lamports;
+        let lamports = account.lamports();
         let vote_account = VoteAccount::from(account);
         assert_eq!(lamports, vote_account.lamports());
         assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
@@ -450,7 +460,7 @@ mod tests {
     #[test]
     fn test_vote_accounts_serialize() {
         let mut rng = rand::thread_rng();
-        let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
+        let vote_accounts_hash_map: VoteAccountsHashMap =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
         let vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_hash_map.clone()));
         assert!(vote_accounts.staked_nodes().len() > 32);
@@ -469,7 +479,7 @@ mod tests {
     #[test]
     fn test_vote_accounts_deserialize() {
         let mut rng = rand::thread_rng();
-        let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
+        let vote_accounts_hash_map: VoteAccountsHashMap =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
         let data = bincode::serialize(&vote_accounts_hash_map).unwrap();
         let vote_accounts: VoteAccounts = bincode::deserialize(&data).unwrap();

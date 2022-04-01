@@ -1,17 +1,22 @@
 #![allow(clippy::integer_arithmetic)]
 #[macro_use]
 extern crate log;
-use clap::{crate_description, crate_name, value_t, App, Arg};
-use rayon::prelude::*;
-use solana_measure::measure::Measure;
-use solana_runtime::{
-    accounts::{create_test_accounts, update_accounts_bench, Accounts},
-    accounts_db::AccountShrinkThreshold,
-    accounts_index::AccountSecondaryIndexes,
-    ancestors::Ancestors,
+use {
+    clap::{crate_description, crate_name, value_t, App, Arg},
+    rayon::prelude::*,
+    solana_measure::measure::Measure,
+    solana_runtime::{
+        accounts::{create_test_accounts, update_accounts_bench, Accounts},
+        accounts_db::AccountShrinkThreshold,
+        accounts_index::AccountSecondaryIndexes,
+        ancestors::Ancestors,
+        rent_collector::RentCollector,
+    },
+    solana_sdk::{
+        genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
+    },
+    std::{env, fs, path::PathBuf},
 };
-use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
-use std::{env, fs, path::PathBuf};
 
 fn main() {
     solana_logger::setup();
@@ -112,7 +117,12 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results = accounts.accounts_db.update_accounts_hash(0, &ancestors);
+            let results = accounts.accounts_db.update_accounts_hash(
+                0,
+                &ancestors,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
+            );
             time.stop();
             let mut time_store = Measure::start("hash using store");
             let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
@@ -122,7 +132,9 @@ fn main() {
                 &ancestors,
                 None,
                 false,
-                None,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
+                false,
             );
             time_store.stop();
             if results != results_store {

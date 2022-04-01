@@ -1,13 +1,15 @@
-use crate::result::Result;
-use solana_entry::entry::Entry;
-use solana_ledger::shred::Shred;
-use solana_poh::poh_recorder::WorkingBankEntry;
-use solana_runtime::bank::Bank;
-use solana_sdk::clock::Slot;
-use std::{
-    sync::mpsc::Receiver,
-    sync::Arc,
-    time::{Duration, Instant},
+use {
+    crate::result::Result,
+    crossbeam_channel::Receiver,
+    solana_entry::entry::Entry,
+    solana_ledger::shred::Shred,
+    solana_poh::poh_recorder::WorkingBankEntry,
+    solana_runtime::bank::Bank,
+    solana_sdk::clock::Slot,
+    std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    },
 };
 
 pub(super) struct ReceiveResults {
@@ -20,6 +22,7 @@ pub(super) struct ReceiveResults {
 #[derive(Clone)]
 pub struct UnfinishedSlotInfo {
     pub next_shred_index: u32,
+    pub(crate) next_code_index: u32,
     pub slot: Slot,
     pub parent: Slot,
     // Data shreds buffered to make a batch of size
@@ -80,13 +83,15 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_sdk::genesis_config::GenesisConfig;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::Transaction;
-    use std::sync::mpsc::channel;
+    use {
+        super::*,
+        crossbeam_channel::unbounded,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_sdk::{
+            genesis_config::GenesisConfig, pubkey::Pubkey, system_transaction,
+            transaction::Transaction,
+        },
+    };
 
     fn setup_test() -> (GenesisConfig, Arc<Bank>, Transaction) {
         let GenesisConfigInfo {
@@ -110,7 +115,7 @@ mod tests {
         let (genesis_config, bank0, tx) = setup_test();
 
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let (s, r) = channel();
+        let (s, r) = unbounded();
         let mut last_hash = genesis_config.hash();
 
         assert!(bank1.max_tick_height() > 1);
@@ -140,7 +145,7 @@ mod tests {
 
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
-        let (s, r) = channel();
+        let (s, r) = unbounded();
 
         let mut last_hash = genesis_config.hash();
         assert!(bank1.max_tick_height() > 1);

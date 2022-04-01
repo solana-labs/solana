@@ -14,6 +14,7 @@ starts a full-featured, single-node cluster on the developer's workstation.
 - Direct [on-chain program](on-chain-programs/overview) deployment
   (`--bpf-program ...`)
 - Clone accounts from a public cluster, including programs (`--clone ...`)
+- Load accounts from files
 - Configurable transaction history retention (`--limit-ledger-size ...`)
 - Configurable epoch length (`--slots-per-epoch ...`)
 - Jump to an arbitrary slot (`--warp-slot ...`)
@@ -150,3 +151,19 @@ JSON RPC URL: http://127.0.0.1:8899
   [commitment levels](clients/jsonrpc-api#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
   [voting authority](/running-validator/vote-accounts#vote-authority) balance
+
+## Appendix II: Runtime Features
+
+By default, the test validator runs with all [runtime features](programming-model/runtime#features) activated.
+
+You can verify this using the [Solana command-line tools](cli/install-solana-cli-tools.md):
+
+```bash
+solana feature status -ul
+```
+
+Since this may not always be desired, especially when testing programs meant for deployment to mainnet, the CLI provides an option to deactivate specific features:
+
+```bash
+solana-test-validator --deactivate-feature <FEATURE_PUBKEY_1> --deactivate-feature <FEATURE_PUBKEY_2>
+```

@@ -6,6 +6,8 @@ title: Web3 JavaScript API
 
 The Solana-Web3.js library aims to provide complete coverage of Solana. The library was built on top of the [Solana JSON RPC API](https://docs.solana.com/developing/clients/jsonrpc-api).
 
+You can find the full documentation for the `@solana/web3.js` library [here](https://solana-labs.github.io/solana-web3.js/).
+
 ## Common Terminology
 
 | Term | Definition |
@@ -135,7 +137,7 @@ The above code achieves creating a transaction ready to be signed and broadcaste
 All that is left is to sign the transaction with keypair and send it over the network. You can accomplish sending a transaction by using `sendAndConfirmTransaction` if you wish to alert the user or do something after a transaction is finished, or use `sendTransaction` if you don't need to wait for the transaction to be confirmed.
 
 ```javascript
-const {sendAndConfirmTransaction, clusterApiUrl} = require("@solana/web3.js");
+const {sendAndConfirmTransaction, clusterApiUrl, Connection} = require("@solana/web3.js");
 
 let keypair = Keypair.generate();
 let connection = new Connection(clusterApiUrl('testnet'));
@@ -147,7 +149,7 @@ sendAndConfirmTransaction(
 );
 ```
 
-The above code takes in a `TransactionInstruction` using `SystemProgram`, creates a `Transaction`, and sends it over the network. You use `Connection` in order to define with Solana network you are connecting to, namely `mainnet-beta`, `testnet`, or `devnet`.
+The above code takes in a `TransactionInstruction` using `SystemProgram`, creates a `Transaction`, and sends it over the network. You use `Connection` in order to define which Solana network you are connecting to, namely `mainnet-beta`, `testnet`, or `devnet`.
 
 ### Interacting with Custom Programs
 

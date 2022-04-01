@@ -104,6 +104,32 @@ export const mockRpcResponse = async ({
     );
 };
 
+const latestBlockhash = async ({
+  connection,
+  commitment,
+}: {
+  connection: Connection;
+  commitment?: Commitment;
+}) => {
+  const blockhash = uniqueBlockhash();
+  const params = [];
+  if (commitment) {
+    params.push({commitment});
+  }
+
+  await mockRpcResponse({
+    method: 'getLatestBlockhash',
+    params,
+    value: {
+      blockhash,
+      lastValidBlockHeight: 3090,
+    },
+    withContext: true,
+  });
+
+  return await connection.getLatestBlockhash(commitment);
+};
+
 const recentBlockhash = async ({
   connection,
   commitment,
@@ -145,7 +171,7 @@ const processTransaction = async ({
   commitment: Commitment;
   err?: any;
 }) => {
-  const blockhash = (await recentBlockhash({connection})).blockhash;
+  const blockhash = (await latestBlockhash({connection})).blockhash;
   transaction.recentBlockhash = blockhash;
   transaction.sign(...signers);
 
@@ -211,4 +237,5 @@ export const helpers = {
   airdrop,
   processTransaction,
   recentBlockhash,
+  latestBlockhash,
 };

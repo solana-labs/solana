@@ -1,19 +1,22 @@
-use crate::{
-    checks::{check_account_for_balance_with_commitment, get_fee_for_message},
-    cli::CliError,
-};
-use clap::ArgMatches;
-use solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG};
-use solana_client::rpc_client::RpcClient;
-use solana_sdk::{
-    commitment_config::CommitmentConfig, hash::Hash, message::Message,
-    native_token::lamports_to_sol, pubkey::Pubkey,
+use {
+    crate::{
+        checks::{check_account_for_balance_with_commitment, get_fee_for_messages},
+        cli::CliError,
+    },
+    clap::ArgMatches,
+    solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG},
+    solana_client::rpc_client::RpcClient,
+    solana_sdk::{
+        commitment_config::CommitmentConfig, hash::Hash, message::Message,
+        native_token::lamports_to_sol, pubkey::Pubkey,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SpendAmount {
     All,
     Some(u64),
+    RentExempt,
 }
 
 impl Default for SpendAmount {
@@ -88,6 +91,7 @@ where
             0,
             from_pubkey,
             fee_pubkey,
+            0,
             build_message,
         )?;
         Ok((message, spend))
@@ -95,6 +99,12 @@ where
         let from_balance = rpc_client
             .get_balance_with_commitment(from_pubkey, commitment)?
             .value;
+        let from_rent_exempt_minimum = if amount == SpendAmount::RentExempt {
+            let data = rpc_client.get_account_data(from_pubkey)?;
+            rpc_client.get_minimum_balance_for_rent_exemption(data.len())?
+        } else {
+            0
+        };
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
             rpc_client,
             amount,
@@ -102,6 +112,7 @@ where
             from_balance,
             from_pubkey,
             fee_pubkey,
+            from_rent_exempt_minimum,
             build_message,
         )?;
         if from_pubkey == fee_pubkey {
@@ -138,15 +149,17 @@ fn resolve_spend_message<F>(
     from_balance: u64,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
+    from_rent_exempt_minimum: u64,
     build_message: F,
 ) -> Result<(Message, SpendAndFee), CliError>
 where
     F: Fn(u64) -> Message,
 {
     let fee = match blockhash {
-        Some(_) => {
-            let dummy_message = build_message(0);
-            get_fee_for_message(rpc_client, &[&dummy_message])?
+        Some(blockhash) => {
+            let mut dummy_message = build_message(0);
+            dummy_message.recent_blockhash = *blockhash;
+            get_fee_for_messages(rpc_client, &[&dummy_message])?
         }
         None => 0, // Offline, cannot calulate fee
     };
@@ -165,6 +178,21 @@ where
             } else {
                 from_balance
             };
+            Ok((
+                build_message(lamports),
+                SpendAndFee {
+                    spend: lamports,
+                    fee,
+                },
+            ))
+        }
+        SpendAmount::RentExempt => {
+            let mut lamports = if from_pubkey == fee_pubkey {
+                from_balance.saturating_sub(fee)
+            } else {
+                from_balance
+            };
+            lamports = lamports.saturating_sub(from_rent_exempt_minimum);
             Ok((
                 build_message(lamports),
                 SpendAndFee {

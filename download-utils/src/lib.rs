@@ -1,18 +1,21 @@
 #![allow(clippy::integer_arithmetic)]
-use console::Emoji;
-use indicatif::{ProgressBar, ProgressStyle};
-use log::*;
-use solana_runtime::{
-    snapshot_package::SnapshotType,
-    snapshot_utils::{self, ArchiveFormat},
+use {
+    console::Emoji,
+    indicatif::{ProgressBar, ProgressStyle},
+    log::*,
+    solana_runtime::{
+        snapshot_package::SnapshotType,
+        snapshot_utils::{self, ArchiveFormat},
+    },
+    solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash},
+    std::{
+        fs::{self, File},
+        io::{self, Read},
+        net::SocketAddr,
+        path::{Path, PathBuf},
+        time::{Duration, Instant},
+    },
 };
-use solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash};
-use std::fs::{self, File};
-use std::io;
-use std::io::Read;
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static SPARKLE: Emoji = Emoji("✨ ", "");
@@ -265,6 +268,10 @@ pub fn download_snapshot_archive<'a, 'b>(
         maximum_incremental_snapshot_archives_to_retain,
     );
 
+    let snapshot_archives_remote_dir =
+        snapshot_utils::build_snapshot_archives_remote_dir(snapshot_archives_dir);
+    fs::create_dir_all(&snapshot_archives_remote_dir).unwrap();
+
     for archive_format in [
         ArchiveFormat::TarZstd,
         ArchiveFormat::TarGzip,
@@ -273,14 +280,14 @@ pub fn download_snapshot_archive<'a, 'b>(
     ] {
         let destination_path = match snapshot_type {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
-                snapshot_archives_dir.to_path_buf(),
+                &snapshot_archives_remote_dir,
                 desired_snapshot_hash.0,
                 &desired_snapshot_hash.1,
                 archive_format,
             ),
             SnapshotType::IncrementalSnapshot(base_slot) => {
                 snapshot_utils::build_incremental_snapshot_archive_path(
-                    snapshot_archives_dir.to_path_buf(),
+                    &snapshot_archives_remote_dir,
                     base_slot,
                     desired_snapshot_hash.0,
                     &desired_snapshot_hash.1,

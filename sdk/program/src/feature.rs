@@ -62,8 +62,7 @@ pub fn activate_with_lamports(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_program::clock::Slot;
+    use {super::*, solana_program::clock::Slot};
 
     #[test]
     fn feature_sizeof() {

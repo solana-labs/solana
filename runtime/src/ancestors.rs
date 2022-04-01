@@ -1,12 +1,21 @@
-use crate::accounts_index::RollingBitField;
-use solana_sdk::clock::Slot;
-use std::collections::HashMap;
+use {
+    crate::rolling_bit_field::RollingBitField,
+    core::fmt::{Debug, Formatter},
+    solana_sdk::clock::Slot,
+    std::collections::HashMap,
+};
 
 pub type AncestorsForSerialization = HashMap<Slot, usize>;
 
-#[derive(Debug, Clone, PartialEq, AbiExample)]
+#[derive(Clone, PartialEq, AbiExample)]
 pub struct Ancestors {
     ancestors: RollingBitField,
+}
+
+impl Debug for Ancestors {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.keys())
+    }
 }
 
 // some tests produce ancestors ranges that are too large such
@@ -76,17 +85,20 @@ impl Ancestors {
         self.len() == 0
     }
 
+    pub fn min_slot(&self) -> Slot {
+        self.ancestors.min().unwrap_or_default()
+    }
+
     pub fn max_slot(&self) -> Slot {
-        self.ancestors.max() - 1
+        self.ancestors.max_exclusive().saturating_sub(1)
     }
 }
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::contains::Contains;
-    use log::*;
-    use solana_measure::measure::Measure;
-    use std::collections::HashSet;
+    use {
+        super::*, crate::contains::Contains, log::*, solana_measure::measure::Measure,
+        std::collections::HashSet,
+    };
 
     impl std::iter::FromIterator<(Slot, usize)> for Ancestors {
         fn from_iter<I>(iter: I) -> Self

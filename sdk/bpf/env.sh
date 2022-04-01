@@ -14,5 +14,3 @@ export CC="$bpf_sdk/dependencies/bpf-tools/llvm/bin/clang"
 export AR="$bpf_sdk/dependencies/bpf-tools/llvm/bin/llvm-ar"
 export OBJDUMP="$bpf_sdk/dependencies/bpf-tools/llvm/bin/llvm-objdump"
 export OBJCOPY="$bpf_sdk/dependencies/bpf-tools/llvm/bin/llvm-objcopy"
-
-export RUSTFLAGS="${RUSTFLAGS} -C lto=no"

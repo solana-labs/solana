@@ -27,6 +27,8 @@ steps+=(test-stable-perf)
 steps+=(test-downstream-builds)
 steps+=(test-bench)
 steps+=(test-local-cluster)
+steps+=(test-local-cluster-flakey)
+steps+=(test-local-cluster-slow)
 
 step_index=0
 if [[ -n "$1" ]]; then

@@ -5,23 +5,26 @@
 //    copies from host memory to GPU memory unless the memory is page-pinned and
 //    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
 
-use crate::perf_libs;
-use crate::recycler::{RecyclerX, Reset};
-use rand::seq::SliceRandom;
-use rand::Rng;
-use rayon::prelude::*;
-use std::ops::{Index, IndexMut};
-use std::slice::{Iter, IterMut, SliceIndex};
-use std::sync::Weak;
-
-use std::os::raw::c_int;
+use {
+    crate::{
+        perf_libs,
+        recycler::{RecyclerX, Reset},
+    },
+    rand::{seq::SliceRandom, Rng},
+    rayon::prelude::*,
+    std::{
+        ops::{Index, IndexMut},
+        os::raw::c_int,
+        slice::{Iter, IterMut, SliceIndex},
+        sync::Weak,
+    },
+};
 
 const CUDA_SUCCESS: c_int = 0;
 
 fn pin<T>(_mem: &mut Vec<T>) {
     if let Some(api) = perf_libs::api() {
-        use std::ffi::c_void;
-        use std::mem::size_of;
+        use std::{ffi::c_void, mem::size_of};
 
         let ptr = _mem.as_mut_ptr();
         let size = _mem.capacity().saturating_mul(size_of::<T>());
@@ -248,6 +251,29 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
             self.prepare_realloc(self.x.len().saturating_add(other.len()));
         self.x.append(&mut other.x);
         self.check_ptr(old_ptr, old_capacity, "resize");
+    }
+
+    /// Forces the length of the vector to `new_len`.
+    ///
+    /// This is a low-level operation that maintains none of the normal
+    /// invariants of the type. Normally changing the length of a vector
+    /// is done using one of the safe operations instead, such as
+    /// [`truncate`], [`resize`], [`extend`], or [`clear`].
+    ///
+    /// [`truncate`]: Vec::truncate
+    /// [`resize`]: Vec::resize
+    /// [`extend`]: Extend::extend
+    /// [`clear`]: Vec::clear
+    ///
+    /// # Safety
+    ///
+    /// - `new_len` must be less than or equal to [`capacity()`].
+    /// - The elements at `old_len..new_len` must be initialized.
+    ///
+    /// [`capacity()`]: Vec::capacity
+    ///
+    pub unsafe fn set_len(&mut self, size: usize) {
+        self.x.set_len(size);
     }
 
     pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {

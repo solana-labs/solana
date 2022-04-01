@@ -1,15 +1,18 @@
-use crate::bucket::Bucket;
-use crate::bucket_item::BucketItem;
-use crate::bucket_map::BucketMapError;
-use crate::bucket_stats::BucketMapStats;
-use crate::{MaxSearch, RefCount};
-use solana_sdk::pubkey::Pubkey;
-use std::ops::RangeBounds;
-use std::path::PathBuf;
-
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::sync::{RwLock, RwLockWriteGuard};
+use {
+    crate::{
+        bucket::Bucket, bucket_item::BucketItem, bucket_map::BucketMapError,
+        bucket_stats::BucketMapStats, MaxSearch, RefCount,
+    },
+    solana_sdk::pubkey::Pubkey,
+    std::{
+        ops::RangeBounds,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc, RwLock, RwLockWriteGuard,
+        },
+    },
+};
 
 type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
@@ -27,14 +30,13 @@ impl<T: Clone + Copy> BucketApi<T> {
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
-        count: Arc<AtomicU64>,
     ) -> Self {
         Self {
             drives,
             max_search,
             stats,
             bucket: RwLock::default(),
-            count,
+            count: Arc::default(),
         }
     }
 
@@ -70,12 +72,7 @@ impl<T: Clone + Copy> BucketApi<T> {
     }
 
     pub fn bucket_len(&self) -> u64 {
-        self.bucket
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|bucket| bucket.bucket_len())
-            .unwrap_or_default()
+        self.count.load(Ordering::Relaxed)
     }
 
     pub fn delete_key(&self, key: &Pubkey) {
@@ -92,11 +89,11 @@ impl<T: Clone + Copy> BucketApi<T> {
                 Arc::clone(&self.drives),
                 self.max_search,
                 Arc::clone(&self.stats),
+                Arc::clone(&self.count),
             ));
         } else {
             let write = bucket.as_mut().unwrap();
             write.handle_delayed_grows();
-            self.count.store(write.bucket_len(), Ordering::Relaxed);
         }
         bucket
     }
@@ -128,7 +125,7 @@ impl<T: Clone + Copy> BucketApi<T> {
 
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
-        F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
+        F: FnMut(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
     {
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().update(key, updatefn)

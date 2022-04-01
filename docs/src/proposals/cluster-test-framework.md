@@ -50,7 +50,7 @@ To enable specific scenarios, the cluster needs to be booted with special config
 For example:
 
 ```text
-let mut validator_config = ValidatorConfig::default();
+let mut validator_config = ValidatorConfig::default_for_test();
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,
@@ -66,7 +66,7 @@ For example, there is a bug that shows that the cluster fails when it is flooded
 Configure the RPC service:
 
 ```text
-let mut validator_config = ValidatorConfig::default();
+let mut validator_config = ValidatorConfig::default_for_test();
 validator_config.rpc_config.enable_rpc_gossip_push = true;
 validator_config.rpc_config.enable_rpc_gossip_refresh_active_set = true;
 ```

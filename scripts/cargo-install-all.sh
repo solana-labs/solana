@@ -4,6 +4,7 @@
 # other workspace crates or native program crates.
 here="$(dirname "$0")"
 readlink_cmd="readlink"
+echo "OSTYPE IS: $OSTYPE"
 if [[ $OSTYPE == darwin* ]]; then
   # Mac OS X's version of `readlink` does not support the -f option,
   # But `greadlink` does, which you can get with `brew install coreutils`
@@ -132,7 +133,7 @@ mkdir -p "$installDir/bin"
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    "$cargo" $maybeRustVersion install spl-token-cli --root "$installDir"
+    "$cargo" $maybeRustVersion install --locked spl-token-cli --root "$installDir"
   fi
 )
 
@@ -144,8 +145,12 @@ if [[ -d target/perf-libs ]]; then
   cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
 
-mkdir -p "$installDir"/bin/sdk/bpf
-cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
+if [[ -z "$validatorOnly" ]]; then
+  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+  "$cargo" $maybeRustVersion build --manifest-path programs/bpf_loader/gen-syscall-list/Cargo.toml
+  mkdir -p "$installDir"/bin/sdk/bpf
+  cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
+fi
 
 (
   set -x

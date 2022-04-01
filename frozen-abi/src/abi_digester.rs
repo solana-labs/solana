@@ -1,12 +1,16 @@
-use crate::abi_example::{normalize_type_name, AbiEnumVisitor};
-use crate::hash::{Hash, Hasher};
-use log::*;
-use serde::ser::Error as SerdeError;
-use serde::ser::*;
-use serde::{Serialize, Serializer};
-use std::any::type_name;
-use std::io::Write;
-use thiserror::Error;
+use {
+    crate::{
+        abi_example::{normalize_type_name, AbiEnumVisitor},
+        hash::{Hash, Hasher},
+    },
+    log::*,
+    serde::{
+        ser::{Error as SerdeError, *},
+        Serialize, Serializer,
+    },
+    std::{any::type_name, io::Write},
+    thiserror::Error,
+};
 
 #[derive(Debug)]
 pub struct AbiDigester {
@@ -538,8 +542,7 @@ impl SerializeStructVariant for AbiDigester {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::sync::atomic::AtomicIsize;
+    use std::{collections::HashMap, sync::atomic::AtomicIsize};
 
     #[frozen_abi(digest = "CQiGCzsGquChkwffHjZKFqa3tCYtS3GWYRRYX7iDR38Q")]
     type TestTypeAlias = i32;
@@ -558,6 +561,17 @@ mod tests {
     #[frozen_abi(digest = "FNHa6mNYJZa59Fwbipep5dXRXcFreaDHn9jEUZEH1YLv")]
     #[derive(Serialize, AbiExample)]
     struct TestNewtypeStruct(i8);
+
+    #[frozen_abi(digest = "Hbs1X2X7TF2gFEfsspwfZ1JKr8ZGbLY3uidQBebqcMYt")]
+    #[derive(Serialize, AbiExample)]
+    struct Foo<'a> {
+        #[serde(with = "serde_bytes")]
+        data1: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        data2: &'a [u8],
+        #[serde(with = "serde_bytes")]
+        data3: &'a Vec<u8>,
+    }
 
     #[frozen_abi(digest = "5qio5qYurHDv6fq5kcwP2ue2RBEazSZF8CPk2kUuwC2j")]
     #[derive(Serialize, AbiExample)]

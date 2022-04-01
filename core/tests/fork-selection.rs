@@ -1,13 +1,13 @@
 //! Fork Selection Simulation
 //!
-//! Description of the algorithm can be found in [docs/src/fork-selection.md](docs/src/fork-selection.md).
+//! Description of the algorithm can be found in [docs/src/cluster/managing-forks.md](docs/src/cluster/managing-forks.md).
 //!
 //! A test library function exists for configuring networks.
 //! ```
 //!     /// * num_partitions - 1 to 100 partitions
 //!     /// * fail_rate - 0 to 1.0 rate of packet receive failure
 //!     /// * delay_count - number of forks to observe before voting
-//!     /// * parasite_rate - number of parasite nodes that vote opposite the greedy choice
+//!     /// * parasite_rate - percentage of parasite nodes that vote opposite the greedy choice
 //!     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
 //! ```
 //! Modify the test function
@@ -74,8 +74,10 @@
 #![allow(clippy::integer_arithmetic)]
 
 extern crate rand;
-use rand::{thread_rng, Rng};
-use std::collections::{HashMap, VecDeque};
+use {
+    rand::{thread_rng, Rng},
+    std::collections::{HashMap, VecDeque},
+};
 
 #[derive(Clone, Default, Debug, Hash, Eq, PartialEq)]
 pub struct Fork {
@@ -495,7 +497,7 @@ fn test_no_partitions() {
 /// * num_partitions - 1 to 100 partitions
 /// * fail_rate - 0 to 1.0 rate of packet receive failure
 /// * delay_count - number of forks to observe before voting
-/// * parasite_rate - number of parasite nodes that vote opposite the greedy choice
+/// * parasite_rate - percentage of parasite nodes that vote opposite the greedy choice
 fn test_with_partitions(
     num_partitions: usize,
     fail_rate: f64,

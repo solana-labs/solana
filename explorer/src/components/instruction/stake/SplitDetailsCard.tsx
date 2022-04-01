@@ -24,41 +24,41 @@ export function SplitDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Split Stake"
+      title="Stake Program: Split Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={StakeProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.stakeAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.stakeAuthority} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Stake Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.newSplitAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Split Amount (SOL)</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <SolBalance lamports={info.lamports} />
         </td>
       </tr>

@@ -67,12 +67,12 @@ function StakeConfigCard({
 
         <tr>
           <td>Warmup / Cooldown Rate</td>
-          <td className="text-lg-right">{warmupCooldownFormatted}</td>
+          <td className="text-lg-end">{warmupCooldownFormatted}</td>
         </tr>
 
         <tr>
           <td>Slash Penalty</td>
-          <td className="text-lg-right">{slashPenaltyFormatted}</td>
+          <td className="text-lg-end">{slashPenaltyFormatted}</td>
         </tr>
       </TableCardBody>
     </div>
@@ -101,7 +101,7 @@ function ValidatorInfoCard({
         {configAccount.info.configData.name && (
           <tr>
             <td>Name</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {configAccount.info.configData.name}
             </td>
           </tr>
@@ -110,7 +110,7 @@ function ValidatorInfoCard({
         {configAccount.info.configData.keybaseUsername && (
           <tr>
             <td>Keybase Username</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {configAccount.info.configData.keybaseUsername}
             </td>
           </tr>
@@ -119,7 +119,7 @@ function ValidatorInfoCard({
         {configAccount.info.configData.website && (
           <tr>
             <td>Website</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <a
                 href={configAccount.info.configData.website}
                 target="_blank"
@@ -134,7 +134,7 @@ function ValidatorInfoCard({
         {configAccount.info.configData.details && (
           <tr>
             <td>Details</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {configAccount.info.configData.details}
             </td>
           </tr>
@@ -143,7 +143,7 @@ function ValidatorInfoCard({
         {configAccount.info.keys && configAccount.info.keys.length > 1 && (
           <tr>
             <td>Signer</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <Address
                 pubkey={new PublicKey(configAccount.info.keys[1].pubkey)}
                 link

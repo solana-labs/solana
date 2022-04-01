@@ -9,7 +9,7 @@ use crate::{
 crate::declare_deprecated_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
 
 #[deprecated(
-    since = "1.8.0",
+    since = "1.9.0",
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]

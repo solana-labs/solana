@@ -69,8 +69,34 @@ function generateConfig(configType, format) {
   switch (configType) {
     case 'browser':
       switch (format) {
-        case 'esm': {
+        case 'iife': {
+          config.external = ['http', 'https'];
+
           config.output = [
+            {
+              file: 'lib/index.iife.js',
+              format: 'iife',
+              name: 'solanaWeb3',
+              sourcemap: true,
+            },
+            {
+              file: 'lib/index.iife.min.js',
+              format: 'iife',
+              name: 'solanaWeb3',
+              sourcemap: true,
+              plugins: [terser({mangle: false, compress: false})],
+            },
+          ];
+
+          break;
+        }
+        default: {
+          config.output = [
+            {
+              file: 'lib/index.browser.cjs.js',
+              format: 'cjs',
+              sourcemap: true,
+            },
             {
               file: 'lib/index.browser.esm.js',
               format: 'es',
@@ -99,29 +125,6 @@ function generateConfig(configType, format) {
 
           break;
         }
-        case 'iife': {
-          config.external = ['http', 'https'];
-
-          config.output = [
-            {
-              file: 'lib/index.iife.js',
-              format: 'iife',
-              name: 'solanaWeb3',
-              sourcemap: true,
-            },
-            {
-              file: 'lib/index.iife.min.js',
-              format: 'iife',
-              name: 'solanaWeb3',
-              sourcemap: true,
-              plugins: [terser({mangle: false, compress: false})],
-            },
-          ];
-
-          break;
-        }
-        default:
-          throw new Error(`Unknown format: ${format}`);
       }
 
       // TODO: Find a workaround to avoid resolving the following JSON file:
@@ -152,6 +155,6 @@ function generateConfig(configType, format) {
 
 export default [
   generateConfig('node'),
-  generateConfig('browser', 'esm'),
+  generateConfig('browser'),
   generateConfig('browser', 'iife'),
 ];

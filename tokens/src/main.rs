@@ -1,14 +1,16 @@
-use solana_cli_config::{Config, CONFIG_FILE};
-use solana_client::rpc_client::RpcClient;
-use solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token};
-use std::{
-    env,
-    error::Error,
-    path::Path,
-    process,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+use {
+    solana_cli_config::{Config, CONFIG_FILE},
+    solana_client::rpc_client::RpcClient,
+    solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token},
+    std::{
+        env,
+        error::Error,
+        path::Path,
+        process,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     },
 };
 

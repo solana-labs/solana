@@ -113,7 +113,7 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
             >
               {fetching ? (
                 <>
-                  <span className="spinner-grow spinner-grow-sm mr-2"></span>
+                  <span className="spinner-grow spinner-grow-sm me-2"></span>
                   Loading
                 </>
               ) : (

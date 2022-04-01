@@ -1,6 +1,9 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use {
+    crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
+    lazy_static::lazy_static,
+};
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -13,18 +16,25 @@ pub mod slot_hashes;
 pub mod slot_history;
 pub mod stake_history;
 
-#[allow(deprecated)]
+lazy_static! {
+    pub static ref ALL_IDS: Vec<Pubkey> = vec![
+        clock::id(),
+        epoch_schedule::id(),
+        #[allow(deprecated)]
+        fees::id(),
+        #[allow(deprecated)]
+        recent_blockhashes::id(),
+        rent::id(),
+        rewards::id(),
+        slot_hashes::id(),
+        slot_history::id(),
+        stake_history::id(),
+        instructions::id(),
+    ];
+}
+
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
-    clock::check_id(id)
-        || epoch_schedule::check_id(id)
-        || fees::check_id(id)
-        || recent_blockhashes::check_id(id)
-        || rent::check_id(id)
-        || rewards::check_id(id)
-        || slot_hashes::check_id(id)
-        || slot_history::check_id(id)
-        || stake_history::check_id(id)
-        || instructions::check_id(id)
+    ALL_IDS.iter().any(|key| key == id)
 }
 
 #[macro_export]
@@ -91,6 +101,13 @@ pub trait Sysvar:
     fn size_of() -> usize {
         bincode::serialized_size(&Self::default()).unwrap() as usize
     }
+
+    /// Deserializes a sysvar from its `AccountInfo`.
+    ///
+    /// # Errors
+    ///
+    /// If `account_info` does not have the same ID as the sysvar
+    /// this function returns [`ProgramError::InvalidArgument`].
     fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
         if !Self::check_id(account_info.unsigned_key()) {
             return Err(ProgramError::InvalidArgument);
@@ -132,9 +149,11 @@ macro_rules! impl_sysvar_get {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
-    use std::{cell::RefCell, rc::Rc};
+    use {
+        super::*,
+        crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey},
+        std::{cell::RefCell, rc::Rc},
+    };
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]

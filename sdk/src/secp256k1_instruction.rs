@@ -1,13 +1,17 @@
 #![cfg(feature = "full")]
 
-use crate::{
-    feature_set::{libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count, FeatureSet},
-    instruction::Instruction,
-    precompiles::PrecompileError,
+use {
+    crate::{
+        feature_set::{
+            libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count, FeatureSet,
+        },
+        instruction::Instruction,
+        precompiles::PrecompileError,
+    },
+    digest::Digest,
+    serde_derive::{Deserialize, Serialize},
+    std::sync::Arc,
 };
-use digest::Digest;
-use serde_derive::{Deserialize, Serialize};
-use std::sync::Arc;
 
 pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
 pub const SIGNATURE_SERIALIZED_SIZE: usize = 64;
@@ -211,18 +215,20 @@ fn get_data_slice<'a>(
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use crate::{
-        feature_set,
-        hash::Hash,
-        secp256k1_instruction::{
-            new_secp256k1_instruction, SecpSignatureOffsets, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+    use {
+        super::*,
+        crate::{
+            feature_set,
+            hash::Hash,
+            secp256k1_instruction::{
+                new_secp256k1_instruction, SecpSignatureOffsets, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+            },
+            signature::{Keypair, Signer},
+            transaction::Transaction,
         },
-        signature::{Keypair, Signer},
-        transaction::Transaction,
+        rand::{thread_rng, Rng},
+        std::sync::Arc,
     };
-    use rand::{thread_rng, Rng};
-    use std::sync::Arc;
 
     fn test_case(
         num_signatures: u8,

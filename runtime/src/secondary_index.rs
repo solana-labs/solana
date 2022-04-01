@@ -1,11 +1,13 @@
-use dashmap::{mapref::entry::Entry::Occupied, DashMap};
-use solana_sdk::{pubkey::Pubkey, timing::AtomicInterval};
-use std::{
-    collections::HashSet,
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        RwLock,
+use {
+    dashmap::{mapref::entry::Entry::Occupied, DashMap},
+    solana_sdk::{pubkey::Pubkey, timing::AtomicInterval},
+    std::{
+        collections::HashSet,
+        fmt::Debug,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            RwLock,
+        },
     },
 };
 
@@ -127,18 +129,20 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             pubkeys_map.insert_if_not_exists(inner_key, &self.stats.num_inner_keys);
         }
 
-        let outer_keys = self.reverse_index.get(inner_key).unwrap_or_else(|| {
-            self.reverse_index
-                .entry(*inner_key)
-                .or_insert(RwLock::new(Vec::with_capacity(1)))
-                .downgrade()
-        });
+        {
+            let outer_keys = self.reverse_index.get(inner_key).unwrap_or_else(|| {
+                self.reverse_index
+                    .entry(*inner_key)
+                    .or_insert(RwLock::new(Vec::with_capacity(1)))
+                    .downgrade()
+            });
 
-        let should_insert = !outer_keys.read().unwrap().contains(key);
-        if should_insert {
-            let mut w_outer_keys = outer_keys.write().unwrap();
-            if !w_outer_keys.contains(key) {
-                w_outer_keys.push(*key);
+            let should_insert = !outer_keys.read().unwrap().contains(key);
+            if should_insert {
+                let mut w_outer_keys = outer_keys.write().unwrap();
+                if !w_outer_keys.contains(key) {
+                    w_outer_keys.push(*key);
+                }
             }
         }
 

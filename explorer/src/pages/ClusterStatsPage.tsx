@@ -10,13 +10,15 @@ import {
 import { abbreviatedNumber, lamportsToSol, slotsToHumanString } from "utils";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
-import { displayTimestampWithoutDate, displayTimestampUtc } from "utils/date";
+import { displayTimestampWithoutDate } from "utils/date";
 import { Status, useFetchSupply, useSupply } from "providers/supply";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { useVoteAccounts } from "providers/accounts/vote-accounts";
 import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { Epoch } from "components/common/Epoch";
+import { TimestampToggle } from "components/common/TimestampToggle";
+import { SolanaPingCard } from "components/SolanaPingCard";
 
 const CLUSTER_STATS_TIMEOUT = 5000;
 
@@ -35,6 +37,7 @@ export function ClusterStatsPage() {
         <StatsCardBody />
       </div>
       <TpsCard />
+      <SolanaPingCard />
     </div>
   );
 }
@@ -146,7 +149,7 @@ function StakingComponent() {
               <>
                 <h4>
                   Price{" "}
-                  <span className="ml-2 badge badge-primary rank">
+                  <span className="ms-2 badge bg-primary rank">
                     Rank #{solanaInfo.market_cap_rank}
                   </span>
                 </h4>
@@ -237,14 +240,14 @@ function StatsCardBody() {
     <TableCardBody>
       <tr>
         <td className="w-100">Slot</td>
-        <td className="text-lg-right text-monospace">
+        <td className="text-lg-end font-monospace">
           <Slot slot={absoluteSlot} link />
         </td>
       </tr>
       {blockHeight !== undefined && (
         <tr>
           <td className="w-100">Block height</td>
-          <td className="text-lg-right text-monospace">
+          <td className="text-lg-end font-monospace">
             <Slot slot={blockHeight} />
           </td>
         </tr>
@@ -252,32 +255,32 @@ function StatsCardBody() {
       {blockTime && (
         <tr>
           <td className="w-100">Cluster time</td>
-          <td className="text-lg-right text-monospace">
-            {displayTimestampUtc(blockTime)}
+          <td className="text-lg-end font-monospace">
+            <TimestampToggle unixTimestamp={blockTime}></TimestampToggle>
           </td>
         </tr>
       )}
       <tr>
         <td className="w-100">Slot time (1min average)</td>
-        <td className="text-lg-right text-monospace">{averageSlotTime}ms</td>
+        <td className="text-lg-end font-monospace">{averageSlotTime}ms</td>
       </tr>
       <tr>
         <td className="w-100">Slot time (1hr average)</td>
-        <td className="text-lg-right text-monospace">{hourlySlotTime}ms</td>
+        <td className="text-lg-end font-monospace">{hourlySlotTime}ms</td>
       </tr>
       <tr>
         <td className="w-100">Epoch</td>
-        <td className="text-lg-right text-monospace">
+        <td className="text-lg-end font-monospace">
           <Epoch epoch={epochInfo.epoch} link />
         </td>
       </tr>
       <tr>
         <td className="w-100">Epoch progress</td>
-        <td className="text-lg-right text-monospace">{epochProgress}</td>
+        <td className="text-lg-end font-monospace">{epochProgress}</td>
       </tr>
       <tr>
         <td className="w-100">Epoch time remaining (approx.)</td>
-        <td className="text-lg-right text-monospace">~{epochTimeRemaining}</td>
+        <td className="text-lg-end font-monospace">~{epochTimeRemaining}</td>
       </tr>
     </TableCardBody>
   );
@@ -309,7 +312,7 @@ export function StatsNotReady({ error }: { error: boolean }) {
             retry();
           }}
         >
-          <span className="fe fe-refresh-cw mr-2"></span>
+          <span className="fe fe-refresh-cw me-2"></span>
           Try Again
         </button>
       </div>
@@ -318,7 +321,7 @@ export function StatsNotReady({ error }: { error: boolean }) {
 
   return (
     <div className="card-body text-center">
-      <span className="spinner-grow spinner-grow-sm mr-2"></span>
+      <span className="spinner-grow spinner-grow-sm me-2"></span>
       Loading
     </div>
   );

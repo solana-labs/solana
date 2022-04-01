@@ -1,13 +1,15 @@
-//! @brief Syscall stubs when building for programs for non-BPF targets
+//! Syscall stubs when building for programs for non-BPF targets
 
 #![cfg(not(target_arch = "bpf"))]
 
-use crate::{
-    account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
-    program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+use {
+    crate::{
+        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+        program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+    },
+    itertools::Itertools,
+    std::sync::{Arc, RwLock},
 };
-use itertools::Itertools;
-use std::sync::{Arc, RwLock};
 
 lazy_static::lazy_static! {
     static ref SYSCALL_STUBS: Arc<RwLock<Box<dyn SyscallStubs>>> = Arc::new(RwLock::new(Box::new(DefaultSyscallStubs {})));
@@ -52,7 +54,7 @@ pub trait SyscallStubs: Sync + Send {
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
         assert!(
-            !(dst as usize + n > src as usize && src as usize > dst as usize),
+            is_nonoverlapping(src as usize, dst as usize, n),
             "memcpy does not support overlapping regions"
         );
         std::ptr::copy_nonoverlapping(src, dst, n as usize);
@@ -85,9 +87,15 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
         None
     }
-    fn sol_set_return_data(&mut self, _data: &[u8]) {}
+    fn sol_set_return_data(&self, _data: &[u8]) {}
     fn sol_log_data(&self, fields: &[&[u8]]) {
         println!("data: {}", fields.iter().map(base64::encode).join(" "));
+    }
+    fn sol_get_processed_sibling_instruction(&self, _index: usize) -> Option<Instruction> {
+        None
+    }
+    fn sol_get_stack_height(&self) -> u64 {
+        0
     }
 }
 
@@ -168,9 +176,52 @@ pub(crate) fn sol_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
 }
 
 pub(crate) fn sol_set_return_data(data: &[u8]) {
-    SYSCALL_STUBS.write().unwrap().sol_set_return_data(data)
+    SYSCALL_STUBS.read().unwrap().sol_set_return_data(data)
 }
 
 pub(crate) fn sol_log_data(data: &[&[u8]]) {
     SYSCALL_STUBS.read().unwrap().sol_log_data(data)
+}
+
+pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
+    SYSCALL_STUBS
+        .read()
+        .unwrap()
+        .sol_get_processed_sibling_instruction(index)
+}
+
+pub(crate) fn sol_get_stack_height() -> u64 {
+    SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
+}
+
+/// Check that two regions do not overlap.
+///
+/// Adapted from libcore, hidden to share with bpf_loader without being part of
+/// the API surface.
+#[doc(hidden)]
+pub fn is_nonoverlapping<N>(src: N, dst: N, count: N) -> bool
+where
+    N: Ord + std::ops::Sub<Output = N>,
+    <N as std::ops::Sub>::Output: Ord,
+{
+    let diff = if src > dst { src - dst } else { dst - src };
+    // If the absolute distance between the ptrs is at least as big as the size of the buffer,
+    // they do not overlap.
+    diff >= count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_nonoverlapping() {
+        assert!(is_nonoverlapping(10, 7, 3));
+        assert!(!is_nonoverlapping(10, 8, 3));
+        assert!(!is_nonoverlapping(10, 9, 3));
+        assert!(!is_nonoverlapping(10, 10, 3));
+        assert!(!is_nonoverlapping(10, 11, 3));
+        assert!(!is_nonoverlapping(10, 12, 3));
+        assert!(is_nonoverlapping(10, 13, 3));
+    }
 }

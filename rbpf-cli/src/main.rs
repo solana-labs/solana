@@ -1,50 +1,59 @@
-use clap::{crate_version, App, Arg};
-use serde::{Deserialize, Serialize};
-use serde_json::Result;
-use solana_bpf_loader_program::{
-    create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
-    ThisInstructionMeter,
+use {
+    clap::{crate_version, Arg, Command},
+    serde::{Deserialize, Serialize},
+    serde_json::Result,
+    solana_bpf_loader_program::{
+        create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
+        ThisInstructionMeter,
+    },
+    solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
+    solana_rbpf::{
+        assembler::assemble,
+        elf::Executable,
+        static_analysis::Analysis,
+        verifier::check,
+        vm::{Config, DynamicAnalysis},
+    },
+    solana_sdk::{
+        account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
+        transaction_context::TransactionContext,
+    },
+    std::{
+        fmt::{Debug, Formatter},
+        fs::File,
+        io::{Read, Seek, SeekFrom},
+        path::Path,
+        time::{Duration, Instant},
+    },
 };
-use solana_rbpf::{
-    assembler::assemble,
-    static_analysis::Analysis,
-    verifier::check,
-    vm::{Config, DynamicAnalysis, Executable},
-};
-use solana_sdk::{
-    account::AccountSharedData,
-    bpf_loader,
-    keyed_account::KeyedAccount,
-    process_instruction::{InvokeContext, MockInvokeContext},
-    pubkey::Pubkey,
-};
-use std::{cell::RefCell, fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
-use time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
+    key: Pubkey,
+    owner: Pubkey,
+    is_signer: bool,
+    is_writable: bool,
     lamports: u64,
     data: Vec<u8>,
-    owner: Pubkey,
 }
 #[derive(Serialize, Deserialize)]
 struct Input {
     accounts: Vec<Account>,
-    insndata: Vec<u8>,
+    instruction_data: Vec<u8>,
 }
 fn load_accounts(path: &Path) -> Result<Input> {
     let file = File::open(path).unwrap();
     let input: Input = serde_json::from_reader(file)?;
-    println!("Program input:");
-    println!("accounts {:?}", &input.accounts);
-    println!("insndata {:?}", &input.insndata);
-    println!("----------------------------------------");
+    eprintln!("Program input:");
+    eprintln!("accounts {:?}", &input.accounts);
+    eprintln!("instruction_data {:?}", &input.instruction_data);
+    eprintln!("----------------------------------------");
     Ok(input)
 }
 
 fn main() {
     solana_logger::setup();
-    let matches = App::new("Solana BPF CLI")
+    let matches = Command::new("Solana BPF CLI")
         .version(crate_version!())
         .author("Solana Maintainers <maintainers@solana.foundation>")
         .about(
@@ -59,21 +68,27 @@ and the following fields are required
 {
     "accounts": [
         {
-            "lamports": 1000,
-            "data": [0, 0, 0, 3],
+            "key": [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ],
             "owner": [
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ]
+            ],
+            "is_signer": false,
+            "is_writable": true,
+            "lamports": 1000,
+            "data": [0, 0, 0, 3]
         }
     ],
-    "insndata": []
+    "instruction_data": []
 }
 "##,
         )
         .arg(
             Arg::new("PROGRAM")
-                .about(
+                .help(
                     "Program file to use. This is either an ELF shared-object file to be executed, \
                      or an assembly file to be assembled and executed.",
                 )
@@ -82,7 +97,7 @@ and the following fields are required
         )
         .arg(
             Arg::new("input")
-                .about(
+                .help(
                     "Input for the program to run on, where FILE is a name of a JSON file \
 with input data, or BYTES is the number of 0-valued bytes to allocate for program parameters",
                 )
@@ -94,7 +109,7 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
         )
         .arg(
             Arg::new("memory")
-                .about("Heap memory for the program to run on")
+                .help("Heap memory for the program to run on")
                 .short('m')
                 .long("memory")
                 .value_name("BYTES")
@@ -103,7 +118,7 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
         )
         .arg(
             Arg::new("use")
-                .about(
+                .help(
                     "Method of execution to use, where 'cfg' generates Control Flow Graph \
 of the program, 'disassembler' dumps disassembled code of the program, 'interpreter' runs \
 the program in the virtual machine's interpreter, and 'jit' precompiles the program to \
@@ -118,7 +133,7 @@ native machine code before execting it in the virtual machine.",
         )
         .arg(
             Arg::new("instruction limit")
-                .about("Limit the number of instructions to execute")
+                .help("Limit the number of instructions to execute")
                 .short('l')
                 .long("limit")
                 .takes_value(true)
@@ -127,56 +142,103 @@ native machine code before execting it in the virtual machine.",
         )
         .arg(
             Arg::new("trace")
-                .about("Output trace to 'trace.out' file using tracing instrumentation")
+                .help("Output trace to 'trace.out' file using tracing instrumentation")
                 .short('t')
                 .long("trace"),
         )
         .arg(
             Arg::new("profile")
-                .about("Output profile to 'profile.dot' file using tracing instrumentation")
+                .help("Output profile to 'profile.dot' file using tracing instrumentation")
                 .short('p')
                 .long("profile"),
         )
         .arg(
             Arg::new("verify")
-                .about("Run the verifier before execution or disassembly")
+                .help("Run the verifier before execution or disassembly")
                 .short('v')
                 .long("verify"),
+        )
+        .arg(
+            Arg::new("output_format")
+                .help("Return information in specified output format")
+                .long("output")
+                .value_name("FORMAT")
+                .global(true)
+                .takes_value(true)
+                .possible_values(&["json", "json-compact"]),
         )
         .get_matches();
 
     let config = Config {
         enable_instruction_tracing: matches.is_present("trace") || matches.is_present("profile"),
+        enable_symbol_and_section_labels: true,
         ..Config::default()
     };
-    let mut accounts = Vec::new();
-    let mut account_refcells = Vec::new();
-    let default_account = RefCell::new(AccountSharedData::default());
-    let key = solana_sdk::pubkey::new_rand();
-    let (mut mem, account_lengths) = match matches.value_of("input").unwrap().parse::<usize>() {
-        Ok(allocate) => {
-            accounts.push(KeyedAccount::new(&key, false, &default_account));
-            (vec![0u8; allocate], vec![allocate])
+    let loader_id = bpf_loader::id();
+    let mut transaction_accounts = vec![
+        (
+            loader_id,
+            AccountSharedData::new(0, 0, &solana_sdk::native_loader::id()),
+        ),
+        (
+            Pubkey::new_unique(),
+            AccountSharedData::new(0, 0, &loader_id),
+        ),
+    ];
+    let mut instruction_accounts = Vec::new();
+    let instruction_data = match matches.value_of("input").unwrap().parse::<usize>() {
+        Ok(allocation_size) => {
+            let pubkey = Pubkey::new_unique();
+            transaction_accounts.push((
+                pubkey,
+                AccountSharedData::new(0, allocation_size, &Pubkey::new_unique()),
+            ));
+            instruction_accounts.push(AccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: true,
+            });
+            vec![]
         }
         Err(_) => {
             let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
-            for acc in input.accounts {
-                let asd = AccountSharedData::new_ref(acc.lamports, acc.data.len(), &acc.owner);
-                asd.borrow_mut().set_data(acc.data);
-                account_refcells.push(asd);
+            for account_info in input.accounts {
+                let mut account = AccountSharedData::new(
+                    account_info.lamports,
+                    account_info.data.len(),
+                    &account_info.owner,
+                );
+                account.set_data(account_info.data);
+                instruction_accounts.push(AccountMeta {
+                    pubkey: account_info.key,
+                    is_signer: account_info.is_signer,
+                    is_writable: account_info.is_writable,
+                });
+                transaction_accounts.push((account_info.key, account));
             }
-            for acc in &account_refcells {
-                accounts.push(KeyedAccount::new(&key, false, acc));
-            }
-            let lid = bpf_loader::id();
-            let pid = Pubkey::new(&[0u8; 32]);
-            let (mut bytes, account_lengths) =
-                serialize_parameters(&lid, &pid, &accounts, &input.insndata).unwrap();
-            (Vec::from(bytes.as_slice_mut()), account_lengths)
+            input.instruction_data
         }
     };
-    let mut invoke_context = MockInvokeContext::new(&bpf_loader::id(), accounts);
-    let logger = invoke_context.logger.clone();
+    let program_indices = [0, 1];
+    let preparation =
+        prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
+    let mut transaction_context = TransactionContext::new(preparation.transaction_accounts, 1, 1);
+    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    invoke_context
+        .push(
+            &preparation.instruction_accounts,
+            &program_indices,
+            &instruction_data,
+        )
+        .unwrap();
+    let (mut parameter_bytes, account_lengths) = serialize_parameters(
+        invoke_context.transaction_context,
+        invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap(),
+    )
+    .unwrap();
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
@@ -189,7 +251,7 @@ native machine code before execting it in the virtual machine.",
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
     let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &contents,
             None,
             config,
@@ -210,28 +272,29 @@ native machine code before execting it in the virtual machine.",
         let text_bytes = executable.get_text_bytes().1;
         check(text_bytes, &config).unwrap();
     }
-    executable.jit_compile().unwrap();
-    let analysis = Analysis::from_executable(executable.as_ref());
+    Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
+    let mut analysis = LazyAnalysis::new(&executable);
 
     match matches.value_of("use") {
         Some("cfg") => {
             let mut file = File::create("cfg.dot").unwrap();
-            analysis.visualize_graphically(&mut file, None).unwrap();
+            analysis
+                .analyze()
+                .visualize_graphically(&mut file, None)
+                .unwrap();
             return;
         }
         Some("disassembler") => {
             let stdout = std::io::stdout();
-            analysis.disassemble(&mut stdout.lock()).unwrap();
+            analysis.analyze().disassemble(&mut stdout.lock()).unwrap();
             return;
         }
         _ => {}
     }
 
-    let id = bpf_loader::id();
     let mut vm = create_vm(
-        &id,
-        executable.as_ref(),
-        &mut mem,
+        &executable,
+        parameter_bytes.as_slice_mut(),
         &mut invoke_context,
         &account_lengths,
     )
@@ -243,29 +306,80 @@ native machine code before execting it in the virtual machine.",
         vm.execute_program_jit(&mut instruction_meter)
     };
     let duration = Instant::now() - start_time;
-    if logger.log.borrow().len() > 0 {
-        println!("Program output:");
-        for s in logger.log.borrow_mut().iter() {
-            println!("{}", s);
+
+    let output = Output {
+        result: format!("{:?}", result),
+        instruction_count: vm.get_total_instruction_count(),
+        execution_time: duration,
+    };
+    match matches.value_of("output_format") {
+        Some("json") => {
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
         }
-        println!("----------------------------------------");
+        Some("json-compact") => {
+            println!("{}", serde_json::to_string(&output).unwrap());
+        }
+        _ => {
+            println!("Program output:");
+            println!("{:?}", output);
+        }
     }
-    println!("Result: {:?}", result);
-    println!("Instruction Count: {}", vm.get_total_instruction_count());
-    println!("Execution time: {} us", duration.whole_microseconds());
+
     if matches.is_present("trace") {
-        println!("Trace is saved in trace.out");
+        eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        let analysis = Analysis::from_executable(executable.as_ref());
-        vm.get_tracer().write(&mut file, &analysis).unwrap();
+        vm.get_tracer()
+            .write(&mut file, analysis.analyze())
+            .unwrap();
     }
     if matches.is_present("profile") {
-        println!("Profile is saved in profile.dot");
+        eprintln!("Profile is saved in profile.dot");
         let tracer = &vm.get_tracer();
-        let dynamic_analysis = DynamicAnalysis::new(tracer, &analysis);
+        let analysis = analysis.analyze();
+        let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();
         analysis
             .visualize_graphically(&mut file, Some(&dynamic_analysis))
             .unwrap();
+    }
+}
+
+#[derive(Serialize)]
+struct Output {
+    result: String,
+    instruction_count: u64,
+    execution_time: Duration,
+}
+
+impl Debug for Output {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Result: {}", self.result)?;
+        writeln!(f, "Instruction Count: {}", self.instruction_count)?;
+        writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
+        Ok(())
+    }
+}
+
+// Replace with std::lazy::Lazy when stabilized.
+// https://github.com/rust-lang/rust/issues/74465
+struct LazyAnalysis<'a> {
+    analysis: Option<Analysis<'a, BpfError, ThisInstructionMeter>>,
+    executable: &'a Executable<BpfError, ThisInstructionMeter>,
+}
+
+impl<'a> LazyAnalysis<'a> {
+    fn new(executable: &'a Executable<BpfError, ThisInstructionMeter>) -> Self {
+        Self {
+            analysis: None,
+            executable,
+        }
+    }
+
+    fn analyze(&mut self) -> &Analysis<BpfError, ThisInstructionMeter> {
+        if let Some(ref analysis) = self.analysis {
+            return analysis;
+        }
+        self.analysis
+            .insert(Analysis::from_executable(self.executable))
     }
 }

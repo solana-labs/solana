@@ -11,6 +11,15 @@ pre {
   color: $black;
 }
 
+.badge.bg-primary, .btn-primary {
+  color: $gray-900;
+}
+
+.table > :not(:first-child) {
+  // Bootstrap v5.1 added this and dashkit doesn't handle it yet
+  border-top: 0px solid currentColor;
+}
+
 ul.log-messages {
   padding: 0.66rem;
   margin: 1rem;
@@ -61,12 +70,14 @@ ul.log-messages {
   }
 }
 
-.modal-backdrop {
+.modal-backdrop.disable-pointer-events {
   pointer-events: none;
 }
 
-.modal.show {
-  display: block;
+.offcanvas {
+  visibility: visible;
+  // Bootstrap 5.1 updates modal-backdrop to a higher z-index
+  z-index: 1060;
 }
 
 .c-pointer {
@@ -125,7 +136,7 @@ h4.ix-pill {
   border-radius: $border-radius;
   margin-bottom: 2rem;
   margin-left: -5px;
-  background-color: theme-color-level(info, $badge-soft-bg-level);
+  background-color: shift-color($info, $bg-soft-scale);
 }
 
 h4.slot-pill {
@@ -133,7 +144,7 @@ h4.slot-pill {
   padding: 5px;
   border-radius: $border-radius;
   margin-left: -5px;
-  background-color: theme-color-level(primary, $badge-soft-bg-level);
+  background-color: shift-color($primary, $bg-soft-scale);
   margin-bottom: 1.5rem;
 }
 
@@ -222,7 +233,7 @@ h4.slot-pill {
 
 .address-truncate,
 .signature-truncate {
-  @include media-breakpoint-down(md) {
+  @include media-breakpoint-down(lg) {
     max-width: 180px;
     display: inline-block;
     vertical-align: bottom;
@@ -427,4 +438,40 @@ p.updated-time {
   align-items: center;
   justify-content: center;
   width: 150px;
+}
+
+.no-overflow-with-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// security-txt css hacks
+.security-txt ul {
+    list-style: none;
+    text-align: right;
+    margin: 0;
+    padding-inline-start: 0;
+}
+
+.security-txt p, pre {
+    text-align: left !important;
+    margin: 0;
+}
+
+.security-txt a {
+    white-space: nowrap;
+}
+
+.security-txt td {
+    white-space: unset;
+}
+
+.security-txt code {
+    white-space: pre-wrap;
+    display: block;
+}
+
+.security-txt-link-color-hack-reee {
+  color: white;
 }

@@ -1,16 +1,20 @@
 use {
-    crate::{
-        ledger_error::LedgerError,
-        locator::Manufacturer,
-        remote_wallet::{RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager},
+    crate::remote_wallet::{
+        RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
     },
     console::Emoji,
     dialoguer::{theme::ColorfulTheme, Select},
+    semver::Version as FirmwareVersion,
+    solana_sdk::derivation_path::DerivationPath,
+    std::{fmt, sync::Arc},
+};
+#[cfg(feature = "hidapi")]
+use {
+    crate::{ledger_error::LedgerError, locator::Manufacturer},
     log::*,
     num_traits::FromPrimitive,
-    semver::Version as FirmwareVersion,
-    solana_sdk::{derivation_path::DerivationPath, pubkey::Pubkey, signature::Signature},
-    std::{cmp::min, convert::TryFrom, fmt, sync::Arc},
+    solana_sdk::{pubkey::Pubkey, signature::Signature},
+    std::{cmp::min, convert::TryFrom},
 };
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
@@ -79,6 +83,7 @@ pub struct LedgerSettings {
 
 /// Ledger Wallet device
 pub struct LedgerWallet {
+    #[cfg(feature = "hidapi")]
     pub device: hidapi::HidDevice,
     pub pretty_path: String,
     pub version: FirmwareVersion,
@@ -90,6 +95,7 @@ impl fmt::Debug for LedgerWallet {
     }
 }
 
+#[cfg(feature = "hidapi")]
 impl LedgerWallet {
     pub fn new(device: hidapi::HidDevice) -> Self {
         Self {
@@ -347,7 +353,10 @@ impl LedgerWallet {
     }
 }
 
-impl RemoteWallet for LedgerWallet {
+#[cfg(not(feature = "hidapi"))]
+impl RemoteWallet<Self> for LedgerWallet {}
+#[cfg(feature = "hidapi")]
+impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
     fn name(&self) -> &str {
         "Ledger hardware wallet"
     }
@@ -364,7 +373,7 @@ impl RemoteWallet for LedgerWallet {
             .product_string()
             .unwrap_or("Unknown")
             .to_lowercase()
-            .replace(" ", "-");
+            .replace(' ', "-");
         let serial = dev_info.serial_number().unwrap_or("Unknown").to_string();
         let host_device_path = dev_info.path().to_string_lossy().to_string();
         let version = self.get_firmware_version()?;

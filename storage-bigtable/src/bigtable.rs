@@ -125,6 +125,7 @@ impl BigTableConnection {
         instance_name: &str,
         read_only: bool,
         timeout: Option<Duration>,
+        credential_path: Option<String>,
     ) -> Result<Self> {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {
@@ -134,18 +135,21 @@ impl BigTableConnection {
                     access_token: None,
                     channel: tonic::transport::Channel::from_shared(format!("http://{}", endpoint))
                         .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
-                        .connect_lazy()?,
+                        .connect_lazy(),
                     table_prefix: format!("projects/emulator/instances/{}/tables/", instance_name),
                     timeout,
                 })
             }
 
             Err(_) => {
-                let access_token = AccessToken::new(if read_only {
-                    Scope::BigTableDataReadOnly
-                } else {
-                    Scope::BigTableData
-                })
+                let access_token = AccessToken::new(
+                    if read_only {
+                        Scope::BigTableDataReadOnly
+                    } else {
+                        Scope::BigTableData
+                    },
+                    credential_path,
+                )
                 .await
                 .map_err(Error::AccessToken)?;
 
@@ -175,7 +179,7 @@ impl BigTableConnection {
 
                 Ok(Self {
                     access_token: Some(access_token),
-                    channel: endpoint.connect_lazy()?,
+                    channel: endpoint.connect_lazy(),
                     table_prefix,
                     timeout,
                 })
@@ -676,6 +680,31 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         deserialize_protobuf_or_bincode_cell_data(&row_data, table, key)
     }
 
+    pub async fn get_protobuf_or_bincode_cells<'a, B, P>(
+        &mut self,
+        table: &'a str,
+        row_keys: impl IntoIterator<Item = RowKey>,
+    ) -> Result<impl Iterator<Item = (RowKey, CellData<B, P>)> + 'a>
+    where
+        B: serde::de::DeserializeOwned,
+        P: prost::Message + Default,
+    {
+        Ok(self
+            .get_multi_row_data(
+                table,
+                row_keys.into_iter().collect::<Vec<RowKey>>().as_slice(),
+            )
+            .await?
+            .into_iter()
+            .map(|(key, row_data)| {
+                let key_str = key.to_string();
+                (
+                    key,
+                    deserialize_protobuf_or_bincode_cell_data(&row_data, table, key_str).unwrap(),
+                )
+            }))
+    }
+
     pub async fn put_bincode_cells<T>(
         &mut self,
         table: &str,
@@ -782,24 +811,52 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::StoredConfirmedBlock;
-    use prost::Message;
-    use solana_sdk::{hash::Hash, signature::Keypair, system_transaction};
-    use solana_storage_proto::convert::generated;
-    use solana_transaction_status::{
-        ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
+    use {
+        super::*,
+        crate::StoredConfirmedBlock,
+        prost::Message,
+        solana_sdk::{
+            hash::Hash, message::v0::LoadedAddresses, signature::Keypair, system_transaction,
+            transaction::VersionedTransaction, transaction_context::TransactionReturnData,
+        },
+        solana_storage_proto::convert::generated,
+        solana_transaction_status::{
+            ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
+            VersionedTransactionWithStatusMeta,
+        },
+        std::convert::TryInto,
     };
-    use std::convert::TryInto;
+
+    fn confirmed_block_into_protobuf(confirmed_block: ConfirmedBlock) -> generated::ConfirmedBlock {
+        let ConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions,
+            rewards,
+            block_time,
+            block_height,
+        } = confirmed_block;
+
+        generated::ConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
+            rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
+            block_height: block_height.map(|block_height| generated::BlockHeight { block_height }),
+        }
+    }
 
     #[test]
     fn test_deserialize_protobuf_or_bincode_cell_data() {
         let from = Keypair::new();
         let recipient = solana_sdk::pubkey::new_rand();
         let transaction = system_transaction::transfer(&from, &recipient, 42, Hash::default());
-        let with_meta = TransactionWithStatusMeta {
-            transaction,
-            meta: Some(TransactionStatusMeta {
+        let with_meta = TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+            transaction: VersionedTransaction::from(transaction),
+            meta: TransactionStatusMeta {
                 status: Ok(()),
                 fee: 1,
                 pre_balances: vec![43, 0, 1],
@@ -809,9 +866,11 @@ mod tests {
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
-            }),
-        };
-        let block = ConfirmedBlock {
+                loaded_addresses: LoadedAddresses::default(),
+                return_data: Some(TransactionReturnData::default()),
+            },
+        });
+        let expected_block = ConfirmedBlock {
             transactions: vec![with_meta],
             parent_slot: 1,
             blockhash: Hash::default().to_string(),
@@ -821,11 +880,11 @@ mod tests {
             block_height: Some(1),
         };
         let bincode_block = compress_best(
-            &bincode::serialize::<StoredConfirmedBlock>(&block.clone().into()).unwrap(),
+            &bincode::serialize::<StoredConfirmedBlock>(&expected_block.clone().into()).unwrap(),
         )
         .unwrap();
 
-        let protobuf_block = generated::ConfirmedBlock::from(block.clone());
+        let protobuf_block = confirmed_block_into_protobuf(expected_block.clone());
         let mut buf = Vec::with_capacity(protobuf_block.encoded_len());
         protobuf_block.encode(&mut buf).unwrap();
         let protobuf_block = compress_best(&buf).unwrap();
@@ -840,7 +899,7 @@ mod tests {
         )
         .unwrap();
         if let CellData::Protobuf(protobuf_block) = deserialized {
-            assert_eq!(block, protobuf_block.try_into().unwrap());
+            assert_eq!(expected_block, protobuf_block.try_into().unwrap());
         } else {
             panic!("deserialization should produce CellData::Protobuf");
         }
@@ -855,13 +914,18 @@ mod tests {
         )
         .unwrap();
         if let CellData::Bincode(bincode_block) = deserialized {
-            let mut block = block;
-            if let Some(meta) = &mut block.transactions[0].meta {
+            let mut block = expected_block;
+            if let TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
+                meta,
+                ..
+            }) = &mut block.transactions[0]
+            {
                 meta.inner_instructions = None; // Legacy bincode implementation does not support inner_instructions
                 meta.log_messages = None; // Legacy bincode implementation does not support log_messages
                 meta.pre_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.post_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.rewards = None; // Legacy bincode implementation does not support rewards
+                meta.return_data = None; // Legacy bincode implementation does not support return data
             }
             assert_eq!(block, bincode_block.into());
         } else {

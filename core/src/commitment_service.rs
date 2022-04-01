@@ -1,21 +1,25 @@
-use crate::consensus::Stake;
-use solana_measure::measure::Measure;
-use solana_metrics::datapoint_info;
-use solana_rpc::rpc_subscriptions::RpcSubscriptions;
-use solana_runtime::{
-    bank::Bank,
-    commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},
-};
-use solana_sdk::clock::Slot;
-use solana_vote_program::vote_state::VoteState;
-use std::{
-    cmp::max,
-    collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
+use {
+    crate::consensus::Stake,
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    solana_measure::measure::Measure,
+    solana_metrics::datapoint_info,
+    solana_rpc::rpc_subscriptions::RpcSubscriptions,
+    solana_runtime::{
+        bank::Bank,
+        commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},
+    },
+    solana_sdk::clock::Slot,
+    solana_vote_program::vote_state::VoteState,
+    std::{
+        cmp::max,
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 pub struct CommitmentAggregationData {
@@ -59,7 +63,7 @@ impl AggregateCommitmentService {
         let (sender, receiver): (
             Sender<CommitmentAggregationData>,
             Receiver<CommitmentAggregationData>,
-        ) = channel();
+        ) = unbounded();
         let exit_ = exit.clone();
         (
             sender,
@@ -93,11 +97,8 @@ impl AggregateCommitmentService {
                 return Ok(());
             }
 
-            let mut aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
-
-            while let Ok(new_data) = receiver.try_recv() {
-                aggregation_data = new_data;
-            }
+            let aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
+            let aggregation_data = receiver.try_iter().last().unwrap_or(aggregation_data);
 
             let ancestors = aggregation_data.bank.status_cache_ancestors();
             if ancestors.is_empty() {
@@ -247,18 +248,20 @@ impl AggregateCommitmentService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank_forks::BankForks,
-        genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
-    };
-    use solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer};
-    use solana_stake_program::stake_state;
-    use solana_vote_program::{
-        vote_state::{self, VoteStateVersions},
-        vote_transaction,
+    use {
+        super::*,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::{
+            accounts_background_service::AbsRequestSender,
+            bank_forks::BankForks,
+            genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
+        },
+        solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer},
+        solana_stake_program::stake_state,
+        solana_vote_program::{
+            vote_state::{self, VoteStateVersions},
+            vote_transaction,
+        },
     };
 
     #[test]
@@ -500,11 +503,7 @@ mod tests {
 
         let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
         let validator_keypairs = vec![&validator_vote_keypairs];
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair: _,
-            voting_keypair: _,
-        } = create_genesis_config_with_vote_accounts(
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &validator_keypairs,
             vec![100; 1],

@@ -36,7 +36,7 @@ export function VoteAccountSection({
             Authorized Voter
             {voteAccount.info.authorizedVoters.length > 1 ? "s" : ""}
           </td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             {voteAccount.info.authorizedVoters.map((voter) => {
               return (
                 <Address
@@ -53,7 +53,7 @@ export function VoteAccountSection({
 
         <tr>
           <td>Authorized Withdrawer</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address
               pubkey={voteAccount.info.authorizedWithdrawer}
               alignRight
@@ -65,19 +65,19 @@ export function VoteAccountSection({
 
         <tr>
           <td>Last Timestamp</td>
-          <td className="text-lg-right text-monospace">
+          <td className="text-lg-end font-monospace">
             {displayTimestamp(voteAccount.info.lastTimestamp.timestamp * 1000)}
           </td>
         </tr>
 
         <tr>
           <td>Commission</td>
-          <td className="text-lg-right">{voteAccount.info.commission + "%"}</td>
+          <td className="text-lg-end">{voteAccount.info.commission + "%"}</td>
         </tr>
 
         <tr>
           <td>Root Slot</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             {rootSlot !== null ? <Slot slot={rootSlot} link /> : "N/A"}
           </td>
         </tr>

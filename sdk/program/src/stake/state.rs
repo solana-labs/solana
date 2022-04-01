@@ -11,7 +11,7 @@ use {
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
-    borsh::{maybestd::io, BorshDeserialize, BorshSchema},
+    borsh::{maybestd::io, BorshDeserialize, BorshSchema, BorshSerialize},
     std::collections::HashSet,
 };
 
@@ -45,6 +45,24 @@ impl BorshDeserialize for StakeState {
                 io::ErrorKind::InvalidData,
                 "Invalid enum value",
             )),
+        }
+    }
+}
+
+impl BorshSerialize for StakeState {
+    fn serialize<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        match self {
+            StakeState::Uninitialized => writer.write_all(&0u32.to_le_bytes()),
+            StakeState::Initialized(meta) => {
+                writer.write_all(&1u32.to_le_bytes())?;
+                meta.serialize(writer)
+            }
+            StakeState::Stake(meta, stake) => {
+                writer.write_all(&2u32.to_le_bytes())?;
+                meta.serialize(writer)?;
+                stake.serialize(writer)
+            }
+            StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
         }
     }
 }
@@ -112,6 +130,7 @@ pub enum StakeAuthorize {
     AbiExample,
     BorshDeserialize,
     BorshSchema,
+    BorshSerialize,
 )]
 pub struct Lockup {
     /// UnixTimestamp at which this stake will allow withdrawal, unless the
@@ -145,6 +164,7 @@ impl Lockup {
     AbiExample,
     BorshDeserialize,
     BorshSchema,
+    BorshSerialize,
 )]
 pub struct Authorized {
     pub staker: Pubkey,
@@ -223,6 +243,7 @@ impl Authorized {
     AbiExample,
     BorshDeserialize,
     BorshSchema,
+    BorshSerialize,
 )]
 pub struct Meta {
     pub rent_exempt_reserve: u64,
@@ -235,28 +256,17 @@ impl Meta {
         &mut self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
-        clock: Option<&Clock>,
+        clock: &Clock,
     ) -> Result<(), InstructionError> {
-        match clock {
-            None => {
-                // pre-stake_program_v4 behavior: custodian can set lockups at any time
-                if !signers.contains(&self.lockup.custodian) {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
+        // post-stake_program_v4 behavior:
+        // * custodian can update the lockup while in force
+        // * withdraw authority can set a new lockup
+        if self.lockup.is_in_force(clock, None) {
+            if !signers.contains(&self.lockup.custodian) {
+                return Err(InstructionError::MissingRequiredSignature);
             }
-            Some(clock) => {
-                // post-stake_program_v4 behavior:
-                // * custodian can update the lockup while in force
-                // * withdraw authority can set a new lockup
-                //
-                if self.lockup.is_in_force(clock, None) {
-                    if !signers.contains(&self.lockup.custodian) {
-                        return Err(InstructionError::MissingRequiredSignature);
-                    }
-                } else if !signers.contains(&self.authorized.withdrawer) {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-            }
+        } else if !signers.contains(&self.authorized.withdrawer) {
+            return Err(InstructionError::MissingRequiredSignature);
         }
         if let Some(unix_timestamp) = lockup.unix_timestamp {
             self.lockup.unix_timestamp = unix_timestamp;
@@ -270,24 +280,6 @@ impl Meta {
         Ok(())
     }
 
-    pub fn rewrite_rent_exempt_reserve(
-        &mut self,
-        rent: &Rent,
-        data_len: usize,
-    ) -> Option<(u64, u64)> {
-        let corrected_rent_exempt_reserve = rent.minimum_balance(data_len);
-        if corrected_rent_exempt_reserve != self.rent_exempt_reserve {
-            // We forcibly update rent_excempt_reserve even
-            // if rent_exempt_reserve > account_balance, hoping user might restore
-            // rent_exempt status by depositing.
-            let (old, new) = (self.rent_exempt_reserve, corrected_rent_exempt_reserve);
-            self.rent_exempt_reserve = corrected_rent_exempt_reserve;
-            Some((old, new))
-        } else {
-            None
-        }
-    }
-
     pub fn auto(authorized: &Pubkey) -> Self {
         Self {
             authorized: Authorized::auto(authorized),
@@ -297,7 +289,16 @@ impl Meta {
 }
 
 #[derive(
-    Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample, BorshDeserialize, BorshSchema,
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Clone,
+    Copy,
+    AbiExample,
+    BorshDeserialize,
+    BorshSchema,
+    BorshSerialize,
 )]
 pub struct Delegation {
     /// to whom the stake is delegated
@@ -374,7 +375,7 @@ impl Delegation {
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
             history.and_then(|history| {
                 history
-                    .get(&self.deactivation_epoch)
+                    .get(self.deactivation_epoch)
                     .map(|cluster_stake_at_deactivation_epoch| {
                         (
                             history,
@@ -418,7 +419,7 @@ impl Delegation {
                 if current_epoch >= target_epoch {
                     break;
                 }
-                if let Some(current_cluster_stake) = history.get(&current_epoch) {
+                if let Some(current_cluster_stake) = history.get(current_epoch) {
                     prev_epoch = current_epoch;
                     prev_cluster_stake = current_cluster_stake;
                 } else {
@@ -458,7 +459,7 @@ impl Delegation {
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
             history.and_then(|history| {
                 history
-                    .get(&self.activation_epoch)
+                    .get(self.activation_epoch)
                     .map(|cluster_stake_at_activation_epoch| {
                         (
                             history,
@@ -503,7 +504,7 @@ impl Delegation {
                 if current_epoch >= target_epoch || current_epoch >= self.deactivation_epoch {
                     break;
                 }
-                if let Some(current_cluster_stake) = history.get(&current_epoch) {
+                if let Some(current_cluster_stake) = history.get(current_epoch) {
                     prev_epoch = current_epoch;
                     prev_cluster_stake = current_cluster_stake;
                 } else {
@@ -533,6 +534,7 @@ impl Delegation {
     AbiExample,
     BorshDeserialize,
     BorshSchema,
+    BorshSerialize,
 )]
 pub struct Stake {
     pub delegation: Delegation,
@@ -587,8 +589,14 @@ mod test {
         assert_eq!(stake, deserialized);
     }
 
+    fn check_borsh_serialization(stake: StakeState) {
+        let bincode_serialized = serialize(&stake).unwrap();
+        let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
+        assert_eq!(bincode_serialized, borsh_serialized);
+    }
+
     #[test]
-    fn bincode_vs_borsh() {
+    fn bincode_vs_borsh_deserialization() {
         check_borsh_deserialization(StakeState::Uninitialized);
         check_borsh_deserialization(StakeState::RewardsPool);
         check_borsh_deserialization(StakeState::Initialized(Meta {
@@ -600,6 +608,40 @@ mod test {
             lockup: Lockup::default(),
         }));
         check_borsh_deserialization(StakeState::Stake(
+            Meta {
+                rent_exempt_reserve: 1,
+                authorized: Authorized {
+                    staker: Pubkey::new_unique(),
+                    withdrawer: Pubkey::new_unique(),
+                },
+                lockup: Lockup::default(),
+            },
+            Stake {
+                delegation: Delegation {
+                    voter_pubkey: Pubkey::new_unique(),
+                    stake: u64::MAX,
+                    activation_epoch: Epoch::MAX,
+                    deactivation_epoch: Epoch::MAX,
+                    warmup_cooldown_rate: f64::MAX,
+                },
+                credits_observed: 1,
+            },
+        ));
+    }
+
+    #[test]
+    fn bincode_vs_borsh_serialization() {
+        check_borsh_serialization(StakeState::Uninitialized);
+        check_borsh_serialization(StakeState::RewardsPool);
+        check_borsh_serialization(StakeState::Initialized(Meta {
+            rent_exempt_reserve: u64::MAX,
+            authorized: Authorized {
+                staker: Pubkey::new_unique(),
+                withdrawer: Pubkey::new_unique(),
+            },
+            lockup: Lockup::default(),
+        }));
+        check_borsh_serialization(StakeState::Stake(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {

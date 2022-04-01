@@ -1,10 +1,12 @@
-use solana_download_utils::download_genesis_if_missing;
-use solana_runtime::hardened_unpack::unpack_genesis_archive;
-use solana_sdk::{
-    genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE},
-    hash::Hash,
+use {
+    solana_download_utils::download_genesis_if_missing,
+    solana_runtime::hardened_unpack::unpack_genesis_archive,
+    solana_sdk::{
+        genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE},
+        hash::Hash,
+    },
+    std::net::SocketAddr,
 };
-use std::net::SocketAddr;
 
 fn check_genesis_hash(
     genesis_config: &GenesisConfig,

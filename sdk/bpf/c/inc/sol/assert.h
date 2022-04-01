@@ -32,6 +32,7 @@ if (!(expr)) {          \
  * Stub functions when building tests
  */
 #include <stdio.h>
+#include <stdlib.h>
 
 void sol_panic_(const char *file, uint64_t len, uint64_t line, uint64_t column) {
   printf("Panic in %s at %d:%d\n", file, line, column);

@@ -3,18 +3,19 @@
 
 extern crate test;
 
-use rand::seq::SliceRandom;
-use raptorq::{Decoder, Encoder};
-use solana_entry::entry::{create_ticks, Entry};
-use solana_ledger::shred::{
-    max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
-    MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
-    SIZE_OF_DATA_SHRED_PAYLOAD,
+use {
+    rand::seq::SliceRandom,
+    raptorq::{Decoder, Encoder},
+    solana_entry::entry::{create_ticks, Entry},
+    solana_ledger::shred::{
+        max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
+        MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
+        SIZE_OF_DATA_SHRED_PAYLOAD,
+    },
+    solana_perf::test_tx,
+    solana_sdk::{hash::Hash, signature::Keypair},
+    test::Bencher,
 };
-use solana_perf::test_tx;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
-use test::Bencher;
 
 fn make_test_entry(txs_per_entry: u64) -> Entry {
     Entry {
@@ -39,16 +40,14 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     );
     let entries = make_large_unchained_entries(txs_per_entry, num_entries);
     let shredder = Shredder::new(1, 0, 0, 0).unwrap();
-    let data_shreds = shredder
-        .entries_to_data_shreds(
-            &Keypair::new(),
-            &entries,
-            true, // is_last_in_slot
-            0,    // next_shred_index
-            0,    // fec_set_offset
-            &mut ProcessShredsStats::default(),
-        )
-        .0;
+    let data_shreds = shredder.entries_to_data_shreds(
+        &Keypair::new(),
+        &entries,
+        true, // is_last_in_slot
+        0,    // next_shred_index
+        0,    // fec_set_offset
+        &mut ProcessShredsStats::default(),
+    );
     assert!(data_shreds.len() >= num_shreds);
     data_shreds
 }
@@ -75,7 +74,7 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
     let entries = create_ticks(num_ticks, 0, Hash::default());
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, 0, 0).unwrap();
-        shredder.entries_to_shreds(&kp, &entries, true, 0);
+        shredder.entries_to_shreds(&kp, &entries, true, 0, 0);
     })
 }
 
@@ -94,7 +93,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
     // 1Mb
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, 0, 0).unwrap();
-        shredder.entries_to_shreds(&kp, &entries, true, 0);
+        shredder.entries_to_shreds(&kp, &entries, true, 0, 0);
     })
 }
 
@@ -107,7 +106,7 @@ fn bench_deshredder(bencher: &mut Bencher) {
     let num_ticks = max_ticks_per_n_shreds(1, Some(shred_size)) * num_shreds as u64;
     let entries = create_ticks(num_ticks, 0, Hash::default());
     let shredder = Shredder::new(1, 0, 0, 0).unwrap();
-    let data_shreds = shredder.entries_to_shreds(&kp, &entries, true, 0).0;
+    let (data_shreds, _) = shredder.entries_to_shreds(&kp, &entries, true, 0, 0);
     bencher.iter(|| {
         let raw = &mut Shredder::deshred(&data_shreds).unwrap();
         assert_ne!(raw.len(), 0);
@@ -134,6 +133,7 @@ fn bench_shredder_coding(bencher: &mut Bencher) {
         Shredder::generate_coding_shreds(
             &data_shreds[..symbol_count],
             true, // is_last_in_slot
+            0,    // next_code_index
         )
         .len();
     })
@@ -146,16 +146,10 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
     let coding_shreds = Shredder::generate_coding_shreds(
         &data_shreds[..symbol_count],
         true, // is_last_in_slot
+        0,    // next_code_index
     );
     bencher.iter(|| {
-        Shredder::try_recovery(
-            coding_shreds[..].to_vec(),
-            symbol_count,
-            symbol_count,
-            0, // first index
-            1, // slot
-        )
-        .unwrap();
+        Shredder::try_recovery(coding_shreds[..].to_vec()).unwrap();
     })
 }
 

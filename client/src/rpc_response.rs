@@ -7,11 +7,13 @@ use {
         hash::Hash,
         inflation::Inflation,
         transaction::{Result, TransactionError},
+        transaction_context::TransactionReturnData,
     },
     solana_transaction_status::{
-        ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus,
+        ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
     },
     std::{collections::HashMap, fmt, net::SocketAddr},
+    thiserror::Error,
 };
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
@@ -116,7 +118,7 @@ pub struct RpcInflationRate {
     pub epoch: Epoch,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcKeyedAccount {
     pub pubkey: String,
@@ -245,7 +247,7 @@ pub struct RpcBlockProductionRange {
     pub last_slot: Slot,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockProduction {
     /// Map of leader base58 identity pubkeys to a tuple of `(number of leader slots, number of blocks produced)`
@@ -284,6 +286,16 @@ impl fmt::Display for RpcVersionInfo {
 pub struct RpcIdentity {
     /// The current node identity pubkey
     pub identity: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcVote {
+    /// Vote account address, as base-58 encoded string
+    pub vote_pubkey: String,
+    pub slots: Vec<Slot>,
+    pub hash: String,
+    pub timestamp: Option<UnixTimestamp>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -336,6 +348,7 @@ pub struct RpcSimulateTransactionResult {
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -352,7 +365,7 @@ pub struct RpcAccountBalance {
     pub lamports: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSupply {
     pub total: u64,
@@ -414,6 +427,23 @@ pub struct RpcInflationReward {
     pub amount: u64,            // lamports
     pub post_balance: u64,      // lamports
     pub commission: Option<u8>, // Vote account commission when the reward was credited
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug, Error, Eq, PartialEq)]
+pub enum RpcBlockUpdateError {
+    #[error("block store error")]
+    BlockStoreError,
+
+    #[error("unsupported transaction version ({0})")]
+    UnsupportedTransactionVersion(u8),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockUpdate {
+    pub slot: Slot,
+    pub block: Option<UiConfirmedBlock>,
+    pub err: Option<RpcBlockUpdateError>,
 }
 
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {

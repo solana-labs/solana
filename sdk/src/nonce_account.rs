@@ -1,11 +1,12 @@
-use crate::{
-    account::{AccountSharedData, ReadableAccount},
-    account_utils::StateMut,
-    fee_calculator::FeeCalculator,
-    hash::Hash,
-    nonce::{state::Versions, State},
+use {
+    crate::{
+        account::{AccountSharedData, ReadableAccount},
+        account_utils::StateMut,
+        hash::Hash,
+        nonce::{state::Versions, State},
+    },
+    std::cell::RefCell,
 };
-use std::cell::RefCell;
 
 pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
     RefCell::new(
@@ -29,20 +30,19 @@ pub fn verify_nonce_account(acc: &AccountSharedData, hash: &Hash) -> bool {
     }
 }
 
-pub fn fee_calculator_of(account: &AccountSharedData) -> Option<FeeCalculator> {
+pub fn lamports_per_signature_of(account: &AccountSharedData) -> Option<u64> {
     let state = StateMut::<Versions>::state(account)
         .ok()?
         .convert_to_current();
     match state {
-        State::Initialized(data) => Some(data.fee_calculator),
+        State::Initialized(data) => Some(data.fee_calculator.lamports_per_signature),
         _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::pubkey::Pubkey;
+    use {super::*, crate::pubkey::Pubkey};
 
     #[test]
     fn test_verify_bad_account_owner_fails() {

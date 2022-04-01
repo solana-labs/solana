@@ -49,10 +49,11 @@ impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
-    use solana_sdk::{signature::Keypair, system_transaction};
-    use std::convert::TryInto;
+    use {
+        super::*,
+        crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        solana_sdk::{signature::Keypair, system_transaction},
+    };
 
     #[test]
     fn test_transaction_batch() {
@@ -107,12 +108,18 @@ mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let txs = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
-                .try_into()
-                .unwrap(),
-            system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash())
-                .try_into()
-                .unwrap(),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
         ];
 
         (bank, txs)

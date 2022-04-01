@@ -1,6 +1,8 @@
-use solana_ledger::blockstore::Blockstore;
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::timestamp};
-use std::{collections::HashMap, net::SocketAddr};
+use {
+    solana_ledger::blockstore::Blockstore,
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::timestamp},
+    std::{collections::HashMap, net::SocketAddr},
+};
 
 // Number of validators to sample for the ancestor repair
 pub const ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: usize = 21;
@@ -26,6 +28,22 @@ pub enum DuplicateAncestorDecision {
 }
 
 impl DuplicateAncestorDecision {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            // If we get a bad sample from malicious validators, then retry
+            DuplicateAncestorDecision::InvalidSample
+            // It may be possible the validators have not yet detected duplicate confirmation
+            // so retry
+           |  DuplicateAncestorDecision::SampleNotDuplicateConfirmed => true,
+
+            DuplicateAncestorDecision::AncestorsAllMatch => false,
+
+             DuplicateAncestorDecision::ContinueSearch(_status)
+            | DuplicateAncestorDecision::EarliestAncestorNotFrozen(_status)
+            | DuplicateAncestorDecision::EarliestMismatchFound(_status) => false,
+        }
+    }
+
     pub fn repair_status(&self) -> Option<&DuplicateSlotRepairStatus> {
         match self {
             DuplicateAncestorDecision::InvalidSample
@@ -334,11 +352,13 @@ impl DeadSlotAncestorRequestStatus {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use rand::{self, seq::SliceRandom, thread_rng};
-    use solana_ledger::get_tmp_ledger_path_auto_delete;
-    use std::{collections::BTreeMap, net::IpAddr};
-    use tempfile::TempDir;
+    use {
+        super::*,
+        rand::{self, seq::SliceRandom, thread_rng},
+        solana_ledger::get_tmp_ledger_path_auto_delete,
+        std::{collections::BTreeMap, net::IpAddr},
+        tempfile::TempDir,
+    };
 
     struct TestSetup {
         sampled_addresses: Vec<SocketAddr>,

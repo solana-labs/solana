@@ -12,31 +12,30 @@ use {
         cluster_nodes::{ClusterNodes, ClusterNodesCache},
         result::{Error, Result},
     },
-    crossbeam_channel::{
-        Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
-        Sender as CrossbeamSender,
-    },
+    crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::Itertools,
-    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError},
+    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
     solana_poh::poh_recorder::WorkingBankEntry,
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
+        clock::Slot,
+        pubkey::Pubkey,
+        signature::Keypair,
         timing::{timestamp, AtomicInterval},
-        {clock::Slot, pubkey::Pubkey, signature::Keypair},
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
+        iter::repeat,
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -55,8 +54,8 @@ const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
-pub(crate) type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
-pub(crate) type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
+pub(crate) type RetransmitSlotsSender = Sender<Slot>;
+pub(crate) type RetransmitSlotsReceiver = Receiver<Slot>;
 pub(crate) type RecordReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 pub(crate) type TransmitReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 
@@ -208,13 +207,11 @@ impl BroadcastStage {
             match e {
                 Error::RecvTimeout(RecvTimeoutError::Disconnected)
                 | Error::Send
-                | Error::Recv(RecvError)
-                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Disconnected) => {
+                | Error::Recv(RecvError) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
                 Error::RecvTimeout(RecvTimeoutError::Timeout)
-                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Timeout) => (),
-                Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                | Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
                     error!("{} broadcaster error: {:?}", name, e);
@@ -253,8 +250,8 @@ impl BroadcastStage {
     ) -> Self {
         let btree = blockstore.clone();
         let exit = exit_sender.clone();
-        let (socket_sender, socket_receiver) = channel();
-        let (blockstore_sender, blockstore_receiver) = channel();
+        let (socket_sender, socket_receiver) = unbounded();
+        let (blockstore_sender, blockstore_receiver) = unbounded();
         let bs_run = broadcast_stage_run.clone();
 
         let socket_sender_ = socket_sender.clone();
@@ -339,33 +336,34 @@ impl BroadcastStage {
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
-        let timer = Duration::from_millis(100);
+        const RECV_TIMEOUT: Duration = Duration::from_millis(100);
+        let retransmit_slots: HashSet<Slot> =
+            std::iter::once(retransmit_slots_receiver.recv_timeout(RECV_TIMEOUT)?)
+                .chain(retransmit_slots_receiver.try_iter())
+                .collect();
 
-        // Check for a retransmit signal
-        let mut retransmit_slots = retransmit_slots_receiver.recv_timeout(timer)?;
-        while let Ok(new_retransmit_slots) = retransmit_slots_receiver.try_recv() {
-            retransmit_slots.extend(new_retransmit_slots);
-        }
-
-        for (_, bank) in retransmit_slots.iter() {
-            let slot = bank.slot();
+        for new_retransmit_slot in retransmit_slots {
             let data_shreds = Arc::new(
                 blockstore
-                    .get_data_shreds_for_slot(slot, 0)
+                    .get_data_shreds_for_slot(new_retransmit_slot, 0)
                     .expect("My own shreds must be reconstructable"),
             );
-            debug_assert!(data_shreds.iter().all(|shred| shred.slot() == slot));
+            debug_assert!(data_shreds
+                .iter()
+                .all(|shred| shred.slot() == new_retransmit_slot));
             if !data_shreds.is_empty() {
                 socket_sender.send((data_shreds, None))?;
             }
 
             let coding_shreds = Arc::new(
                 blockstore
-                    .get_coding_shreds_for_slot(slot, 0)
+                    .get_coding_shreds_for_slot(new_retransmit_slot, 0)
                     .expect("My own shreds must be reconstructable"),
             );
 
-            debug_assert!(coding_shreds.iter().all(|shred| shred.slot() == slot));
+            debug_assert!(coding_shreds
+                .iter()
+                .all(|shred| shred.slot() == new_retransmit_slot));
             if !coding_shreds.is_empty() {
                 socket_sender.send((coding_shreds, None))?;
             }
@@ -412,8 +410,6 @@ pub fn broadcast_shreds(
 ) -> Result<()> {
     let mut result = Ok(());
     let mut shred_select = Measure::start("shred_select");
-    // Only the leader broadcasts shreds.
-    let leader = cluster_info.id();
     let (root_bank, working_bank) = {
         let bank_forks = bank_forks.read().unwrap();
         (bank_forks.root_bank(), bank_forks.working_bank())
@@ -427,12 +423,13 @@ pub fn broadcast_shreds(
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             let root_bank = root_bank.clone();
-            shreds.filter_map(move |shred| {
-                let seed = shred.seed(leader, &root_bank);
-                let node = cluster_nodes.get_broadcast_peer(seed)?;
-                socket_addr_space
-                    .check(&node.tvu)
-                    .then(|| (&shred.payload, node.tvu))
+            shreds.flat_map(move |shred| {
+                repeat(&shred.payload).zip(cluster_nodes.get_broadcast_addrs(
+                    shred,
+                    &root_bank,
+                    DATA_PLANE_FANOUT,
+                    socket_addr_space,
+                ))
             })
         })
         .collect();
@@ -452,24 +449,28 @@ pub fn broadcast_shreds(
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use crossbeam_channel::unbounded;
-    use solana_entry::entry::create_ticks;
-    use solana_gossip::cluster_info::{ClusterInfo, Node};
-    use solana_ledger::{
-        blockstore::{make_slot_entries, Blockstore},
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
-        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
-    };
-    use solana_runtime::bank::Bank;
-    use solana_sdk::{
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    };
-    use std::{
-        path::Path, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc, thread::sleep,
+    use {
+        super::*,
+        crossbeam_channel::unbounded,
+        solana_entry::entry::create_ticks,
+        solana_gossip::cluster_info::{ClusterInfo, Node},
+        solana_ledger::{
+            blockstore::{make_slot_entries, Blockstore},
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
+            shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
+        },
+        solana_runtime::bank::Bank,
+        solana_sdk::{
+            hash::Hash,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+        },
+        std::{
+            path::Path,
+            sync::{atomic::AtomicBool, Arc},
+            thread::sleep,
+        },
     };
 
     #[allow(clippy::implicit_hasher)]
@@ -490,6 +491,7 @@ pub mod test {
             &keypair,
             &data_shreds[0..],
             true, // is_last_in_slot
+            0,    // next_code_index
             &mut ProcessShredsStats::default(),
         )
         .unwrap();
@@ -538,10 +540,8 @@ pub mod test {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let (transmit_sender, transmit_receiver) = channel();
+        let (transmit_sender, transmit_receiver) = unbounded();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
 
         // Make some shreds
         let updated_slot = 0;
@@ -561,12 +561,8 @@ pub mod test {
 
         // Insert duplicate retransmit signal, blocks should
         // only be retransmitted once
-        retransmit_slots_sender
-            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
-            .unwrap();
-        retransmit_slots_sender
-            .send(vec![(updated_slot, bank0)].into_iter().collect())
-            .unwrap();
+        retransmit_slots_sender.send(updated_slot).unwrap();
+        retransmit_slots_sender.send(updated_slot).unwrap();
         BroadcastStage::check_retransmit_signals(
             &blockstore,
             &retransmit_slots_receiver,
@@ -649,7 +645,7 @@ pub mod test {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
 
-            let (entry_sender, entry_receiver) = channel();
+            let (entry_sender, entry_receiver) = unbounded();
             let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
                 &leader_keypair.pubkey(),

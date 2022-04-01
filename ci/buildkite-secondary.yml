@@ -19,3 +19,8 @@ steps:
     timeout_in_minutes: 240
     name: "publish crate"
     branches: "!master"
+  - command: "ci/publish-tarball.sh"
+    agents:
+      - "queue=release-build-aarch64-apple-darwin"
+    timeout_in_minutes: 60
+    name: "publish tarball (aarch64-apple-darwin)"

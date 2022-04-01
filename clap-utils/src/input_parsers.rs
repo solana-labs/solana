@@ -196,10 +196,12 @@ pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentC
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use clap::{App, Arg};
-    use solana_sdk::signature::write_keypair_file;
-    use std::fs;
+    use {
+        super::*,
+        clap::{App, Arg},
+        solana_sdk::signature::write_keypair_file,
+        std::fs,
+    };
 
     fn app<'ab, 'v>() -> App<'ab, 'v> {
         App::new("test")
@@ -217,7 +219,7 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey.to_string())
+        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
     }
 
     #[test]

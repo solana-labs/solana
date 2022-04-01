@@ -70,7 +70,7 @@ for Cargo_toml in $Cargo_tomls; do
         rm -rf crate-test
         "$cargo" stable init crate-test
         cd crate-test/
-        echo "${crate_name} = \"${expectedCrateVersion}\"" >> Cargo.toml
+        echo "${crate_name} = \"=${expectedCrateVersion}\"" >> Cargo.toml
         echo "[workspace]" >> Cargo.toml
         "$cargo" stable check
       ) && really_uploaded=1

@@ -3,30 +3,34 @@
 
 extern crate test;
 
-use dashmap::DashMap;
-use rand::Rng;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use solana_runtime::{
-    accounts::{create_test_accounts, AccountAddressFilter, Accounts},
-    accounts_db::AccountShrinkThreshold,
-    accounts_index::AccountSecondaryIndexes,
-    ancestors::Ancestors,
-    bank::*,
+use {
+    dashmap::DashMap,
+    rand::Rng,
+    rayon::iter::{IntoParallelRefIterator, ParallelIterator},
+    solana_runtime::{
+        accounts::{create_test_accounts, AccountAddressFilter, Accounts},
+        accounts_db::AccountShrinkThreshold,
+        accounts_index::{AccountSecondaryIndexes, ScanConfig},
+        ancestors::Ancestors,
+        bank::*,
+        rent_collector::RentCollector,
+    },
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        genesis_config::{create_genesis_config, ClusterType},
+        hash::Hash,
+        lamports::LamportsError,
+        pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
+    },
+    std::{
+        collections::{HashMap, HashSet},
+        path::PathBuf,
+        sync::{Arc, RwLock},
+        thread::Builder,
+    },
+    test::Bencher,
 };
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
-    genesis_config::{create_genesis_config, ClusterType},
-    hash::Hash,
-    lamports::LamportsError,
-    pubkey::Pubkey,
-};
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    sync::{Arc, RwLock},
-    thread::Builder,
-};
-use test::Bencher;
 
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) -> Result<(), LamportsError> {
     for t in 0..num {
@@ -47,7 +51,6 @@ fn test_accounts_create(bencher: &mut Bencher) {
     let bank0 = Bank::new_with_paths_for_benches(
         &genesis_config,
         vec![PathBuf::from("bench_a0")],
-        &[],
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -68,7 +71,6 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     let mut prev_bank = Arc::new(Bank::new_with_paths_for_benches(
         &genesis_config,
         vec![PathBuf::from("bench_a1")],
-        &[],
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -107,14 +109,21 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let slot = 0;
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
-    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(0, &ancestors);
+    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(
+        0,
+        &ancestors,
+        &EpochSchedule::default(),
+        &RentCollector::default(),
+    );
     let test_hash_calculation = false;
     bencher.iter(|| {
         assert!(accounts.verify_bank_hash_and_lamports(
             0,
             &ancestors,
             total_lamports,
-            test_hash_calculation
+            test_hash_calculation,
+            &EpochSchedule::default(),
+            &RentCollector::default()
         ))
     });
 }
@@ -133,7 +142,12 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = Ancestors::from(vec![0]);
     bencher.iter(|| {
-        accounts.accounts_db.update_accounts_hash(0, &ancestors);
+        accounts.accounts_db.update_accounts_hash(
+            0,
+            &ancestors,
+            &EpochSchedule::default(),
+            &RentCollector::default(),
+        );
     });
 }
 
@@ -267,6 +281,7 @@ fn bench_concurrent_scan_write(bencher: &mut Bencher) {
                     &Ancestors::default(),
                     0,
                     AccountSharedData::default().owner(),
+                    &ScanConfig::default(),
                 )
                 .unwrap(),
         );

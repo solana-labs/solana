@@ -2,7 +2,9 @@
 use {
     bincode::deserialize,
     solana_banks_client::BanksClient,
-    solana_program_test::{processor, ProgramTest, ProgramTestContext, ProgramTestError},
+    solana_program_test::{
+        processor, ProgramTest, ProgramTestBanksClientExt, ProgramTestContext, ProgramTestError,
+    },
     solana_sdk::{
         account_info::{next_account_info, AccountInfo},
         clock::Clock,
@@ -70,7 +72,7 @@ async fn setup_vote(context: &mut ProgramTestContext) -> Pubkey {
     instructions.push(system_instruction::create_account(
         &context.payer.pubkey(),
         &validator_keypair.pubkey(),
-        42,
+        Rent::default().minimum_balance(0),
         0,
         &system_program::id(),
     ));
@@ -130,7 +132,7 @@ async fn clock_sysvar_updated_from_warp() {
     );
 
     let mut context = program_test.start_with_context().await;
-    let expected_slot = 100_000;
+    let mut expected_slot = 100_000;
     let instruction = Instruction::new_with_bincode(
         program_id,
         &expected_slot,
@@ -173,34 +175,18 @@ async fn clock_sysvar_updated_from_warp() {
         .await
         .unwrap();
 
-    // Try warping again to the same slot
-    assert_eq!(
-        context.warp_to_slot(expected_slot).unwrap_err(),
-        ProgramTestError::InvalidWarpSlot,
-    );
-}
-
-#[tokio::test]
-async fn rent_collected_from_warp() {
-    let program_id = Pubkey::new_unique();
-    // Initialize and start the test network
-    let program_test = ProgramTest::default();
-
-    let mut context = program_test.start_with_context().await;
-    let account_size = 100;
-    let keypair = Keypair::new();
-    let account_lamports = Rent::default().minimum_balance(account_size) - 100; // not rent exempt
-    let instruction = system_instruction::create_account(
-        &context.payer.pubkey(),
-        &keypair.pubkey(),
-        account_lamports,
-        account_size as u64,
-        &program_id,
+    // Try warping ahead one slot (corner case in warp logic)
+    expected_slot += 1;
+    assert!(context.warp_to_slot(expected_slot).is_ok());
+    let instruction = Instruction::new_with_bincode(
+        program_id,
+        &expected_slot,
+        vec![AccountMeta::new_readonly(clock::id(), false)],
     );
     let transaction = Transaction::new_signed_with_payer(
         &[instruction],
         Some(&context.payer.pubkey()),
-        &[&context.payer, &keypair],
+        &[&context.payer],
         context.last_blockhash,
     );
     context
@@ -208,27 +194,12 @@ async fn rent_collected_from_warp() {
         .process_transaction(transaction)
         .await
         .unwrap();
-    let account = context
-        .banks_client
-        .get_account(keypair.pubkey())
-        .await
-        .expect("account exists")
-        .unwrap();
-    assert_eq!(account.lamports, account_lamports);
 
-    // Warp forward and see that rent has been collected
-    // This test was a bit flaky with one warp, but two warps always works
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    context.warp_to_slot(slots_per_epoch).unwrap();
-    context.warp_to_slot(slots_per_epoch * 2).unwrap();
-
-    let account = context
-        .banks_client
-        .get_account(keypair.pubkey())
-        .await
-        .expect("account exists")
-        .unwrap();
-    assert!(account.lamports < account_lamports);
+    // Try warping again to the same slot
+    assert_eq!(
+        context.warp_to_slot(expected_slot).unwrap_err(),
+        ProgramTestError::InvalidWarpSlot,
+    );
 }
 
 #[tokio::test]
@@ -412,4 +383,31 @@ async fn stake_merge_immediately_after_activation() {
         .process_transaction(transaction)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn get_blockhash_post_warp() {
+    let program_test = ProgramTest::default();
+    let mut context = program_test.start_with_context().await;
+
+    let new_blockhash = context
+        .banks_client
+        .get_new_latest_blockhash(&context.last_blockhash)
+        .await
+        .unwrap();
+    let mut tx = Transaction::new_with_payer(&[], Some(&context.payer.pubkey()));
+    tx.sign(&[&context.payer], new_blockhash);
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    context.warp_to_slot(10).unwrap();
+
+    let new_blockhash = context
+        .banks_client
+        .get_new_latest_blockhash(&context.last_blockhash)
+        .await
+        .unwrap();
+
+    let mut tx = Transaction::new_with_payer(&[], Some(&context.payer.pubkey()));
+    tx.sign(&[&context.payer], new_blockhash);
+    context.banks_client.process_transaction(tx).await.unwrap();
 }

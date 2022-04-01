@@ -1,7 +1,7 @@
 //
 // background.scss
+// Theme utilities
 //
-
 
 // Fixed at the bottom
 
@@ -12,7 +12,8 @@
   background-attachment: fixed;
 }
 
-// Calculate the width of the main container because
+
+// Calculate the width of the main container because 
 // the background-attachment property will use 100vw instead
 
 .navbar-vertical ~ .main-content.bg-fixed-bottom {
@@ -33,13 +34,6 @@
 }
 
 
-// Auth
-
-.bg-auth {
-  background-color: $auth-bg;
-}
-
-
 // Ellipses
 
 @each $color, $value in $theme-colors {
@@ -57,17 +51,10 @@
 // Hero
 
 .bg-hero {
-  background-image: linear-gradient(to bottom, fade-out($black, .15), fade-out($black, .15)), url(../#{$path-to-img}/covers/header-cover.jpg);
+  background-image: linear-gradient(to bottom, fade-out($black, .15), fade-out($black, .15)), url(#{$path-to-img}/covers/header-cover.jpg);
   background-repeat: no-repeat, no-repeat;
   background-position: center center, center center;
   background-size: cover, cover;
-}
-
-
-// Colors
-
-.bg-lighter {
-  background-color: $lighter !important;
 }
 
 
@@ -75,6 +62,6 @@
 
 @each $color, $value in $theme-colors {
   .bg-#{$color}-soft {
-    background-color: theme-color-level($color, $bg-soft-level) !important;
+    background-color: shift-color($value, $bg-soft-scale) !important;
   }
 }

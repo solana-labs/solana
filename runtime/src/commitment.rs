@@ -1,6 +1,8 @@
-use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel};
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::collections::HashMap;
+use {
+    solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    std::collections::HashMap,
+};
 
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
@@ -191,9 +193,9 @@ impl BlockCommitmentCache {
         self.commitment_slots.highest_confirmed_root = root;
     }
 
-    pub fn initialize_slots(&mut self, slot: Slot) {
+    pub fn initialize_slots(&mut self, slot: Slot, root: Slot) {
         self.commitment_slots.slot = slot;
-        self.commitment_slots.root = slot;
+        self.commitment_slots.root = root;
     }
 
     pub fn set_all_slots(&mut self, slot: Slot, root: Slot) {

@@ -39,9 +39,9 @@ on our mainnet, cosmos, or tezos. For our network, which is primarily
 composed of high availability systems, this seems unlikely. Currently,
 we have set the threshold percentage to 4.66%, which means that if 23.68%
 have failed the network may stop finalizing blocks. For our network,
-which is primarily composed of high availability systems a 23.68% drop
-in availabilty seems unlinkely. 1:10^12 odds assuming five 4.7% staked
-nodes with 0.995 of uptime.
+which is primarily composed of high availability systems, a 23.68% drop
+in availability seems unlikely. 1:10^12 odds, assuming five 4.7% staked
+nodes with 0.995 uptime.
 
 ## Security
 

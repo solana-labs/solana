@@ -1,5 +1,7 @@
-use crate::{blockstore::*, blockstore_meta::SlotMeta};
-use solana_sdk::clock::Slot;
+use {
+    crate::{blockstore::*, blockstore_meta::SlotMeta},
+    solana_sdk::clock::Slot,
+};
 
 pub struct NextSlotsIterator<'a> {
     pending_slots: Vec<Slot>,
@@ -34,10 +36,10 @@ impl<'a> Iterator for NextSlotsIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::blockstore_processor::fill_blockstore_slot_with_ticks;
-    use solana_sdk::hash::Hash;
-    use std::collections::HashSet;
+    use {
+        super::*, crate::blockstore_processor::fill_blockstore_slot_with_ticks,
+        solana_sdk::hash::Hash, std::collections::HashSet,
+    };
 
     #[test]
     fn test_next_slots_iterator() {

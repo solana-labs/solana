@@ -1,32 +1,35 @@
-use crate::{
-    cluster_info_vote_listener::VoteTracker,
-    cluster_slot_state_verifier::{
-        DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
+use {
+    crate::{
+        cluster_info_vote_listener::VoteTracker,
+        cluster_slot_state_verifier::{
+            DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
+        },
+        cluster_slots::ClusterSlots,
+        consensus::Tower,
+        fork_choice::SelectVoteAndResetForkResult,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+        progress_map::{ForkProgress, ProgressMap},
+        replay_stage::{HeaviestForkFailures, ReplayStage},
+        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     },
-    cluster_slots::ClusterSlots,
-    consensus::Tower,
-    fork_choice::SelectVoteAndResetForkResult,
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-    progress_map::{ForkProgress, ProgressMap},
-    replay_stage::{HeaviestForkFailures, ReplayStage},
-    unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
-};
-use solana_runtime::{
-    accounts_background_service::AbsRequestSender,
-    bank::Bank,
-    bank_forks::BankForks,
-    genesis_utils::{
-        create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+    crossbeam_channel::unbounded,
+    solana_runtime::{
+        accounts_background_service::AbsRequestSender,
+        bank::Bank,
+        bank_forks::BankForks,
+        genesis_utils::{
+            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+        },
     },
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer},
+    solana_vote_program::vote_transaction,
+    std::{
+        collections::{HashMap, HashSet},
+        sync::{Arc, RwLock},
+    },
+    trees::{tr, Tree, TreeWalk},
 };
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer};
-use solana_vote_program::vote_transaction;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
-};
-use trees::{tr, Tree, TreeWalk};
 
 pub struct VoteSimulator {
     pub validator_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,
@@ -202,6 +205,7 @@ impl VoteSimulator {
     }
 
     pub fn set_root(&mut self, new_root: Slot) {
+        let (drop_bank_sender, _drop_bank_receiver) = unbounded();
         ReplayStage::handle_new_root(
             new_root,
             &self.bank_forks,
@@ -215,6 +219,7 @@ impl VoteSimulator {
             &mut true,
             &mut Vec::new(),
             &mut EpochSlotsFrozenSlots::default(),
+            &drop_bank_sender,
         )
     }
 
@@ -339,7 +344,7 @@ pub fn initialize_state(
     let GenesisConfigInfo {
         mut genesis_config,
         mint_keypair,
-        voting_keypair: _,
+        ..
     } = create_genesis_config_with_vote_accounts(
         1_000_000_000,
         &validator_keypairs,

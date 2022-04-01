@@ -1,15 +1,16 @@
-use crate::ancestors::Ancestors;
-
-use log::*;
-use rand::{thread_rng, Rng};
-use serde::Serialize;
-use solana_sdk::{
-    clock::{Slot, MAX_RECENT_BLOCKHASHES},
-    hash::Hash,
-};
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    sync::{Arc, Mutex},
+use {
+    crate::ancestors::Ancestors,
+    log::*,
+    rand::{thread_rng, Rng},
+    serde::Serialize,
+    solana_sdk::{
+        clock::{Slot, MAX_RECENT_BLOCKHASHES},
+        hash::Hash,
+    },
+    std::{
+        collections::{hash_map::Entry, HashMap, HashSet},
+        sync::{Arc, Mutex},
+    },
 };
 
 pub const MAX_CACHE_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
@@ -157,7 +158,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     /// to search all blockhashes.
     pub fn get_status_any_blockhash<K: AsRef<[u8]>>(
         &self,
-        key: &K,
+        key: K,
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let mut keys = vec![];
@@ -166,7 +167,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
         for blockhash in keys.iter() {
             trace!("get_status_any_blockhash: trying {}", blockhash);
-            let status = self.get_status(key, blockhash, ancestors);
+            let status = self.get_status(&key, blockhash, ancestors);
             if status.is_some() {
                 return status;
             }
@@ -189,7 +190,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     pub fn insert<K: AsRef<[u8]>>(
         &mut self,
         transaction_blockhash: &Hash,
-        key: &K,
+        key: K,
         slot: Slot,
         res: T,
     ) {
@@ -294,8 +295,10 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{hash::hash, signature::Signature};
+    use {
+        super::*,
+        solana_sdk::{hash::hash, signature::Signature},
+    };
 
     type BankStatusCache = StatusCache<()>;
 

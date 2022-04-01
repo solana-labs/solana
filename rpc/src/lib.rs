@@ -11,6 +11,7 @@ pub mod rpc_pubsub_service;
 pub mod rpc_service;
 pub mod rpc_subscription_tracker;
 pub mod rpc_subscriptions;
+pub mod transaction_notifier_interface;
 pub mod transaction_status_service;
 
 #[macro_use]

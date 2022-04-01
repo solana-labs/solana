@@ -1,8 +1,10 @@
-//! @brief Example Rust-based BPF program tests loop iteration
+//! Example Rust-based BPF program tests loop iteration
 
 extern crate solana_program;
-use solana_bpf_rust_param_passing_dep::{Data, TestDep};
-use solana_program::{custom_panic_default, entrypoint::SUCCESS, msg};
+use {
+    solana_bpf_rust_param_passing_dep::{Data, TestDep},
+    solana_program::{custom_panic_default, entrypoint::SUCCESS, log::sol_log_64},
+};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
@@ -17,7 +19,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     };
 
     let test_dep = TestDep::new(&data, 1, 2, 3, 4, 5);
-    msg!(0, 0, 0, 0, test_dep.thirty);
+    sol_log_64(0, 0, 0, 0, test_dep.thirty as u64);
     assert!(test_dep.thirty == 30);
 
     SUCCESS

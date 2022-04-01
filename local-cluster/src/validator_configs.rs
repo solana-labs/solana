@@ -1,6 +1,8 @@
-use solana_core::validator::ValidatorConfig;
-use solana_sdk::exit::Exit;
-use std::sync::{Arc, RwLock};
+use {
+    solana_core::validator::ValidatorConfig,
+    solana_sdk::exit::Exit,
+    std::sync::{Arc, RwLock},
+};
 
 pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
     ValidatorConfig {
@@ -13,7 +15,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),
         accountsdb_repl_service_config: config.accountsdb_repl_service_config.clone(),
-        accountsdb_plugin_config_files: config.accountsdb_plugin_config_files.clone(),
+        geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
         rpc_addrs: config.rpc_addrs,
         pubsub_config: config.pubsub_config.clone(),
         snapshot_config: config.snapshot_config.clone(),
@@ -24,13 +26,12 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         fixed_leader_schedule: config.fixed_leader_schedule.clone(),
         wait_for_supermajority: config.wait_for_supermajority,
         new_hard_forks: config.new_hard_forks.clone(),
-        trusted_validators: config.trusted_validators.clone(),
+        known_validators: config.known_validators.clone(),
         repair_validators: config.repair_validators.clone(),
         gossip_validators: config.gossip_validators.clone(),
-        halt_on_trusted_validators_accounts_hash_mismatch: config
-            .halt_on_trusted_validators_accounts_hash_mismatch,
+        halt_on_known_validators_accounts_hash_mismatch: config
+            .halt_on_known_validators_accounts_hash_mismatch,
         accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
-        frozen_accounts: config.frozen_accounts.clone(),
         no_rocksdb_compaction: config.no_rocksdb_compaction,
         rocksdb_compaction_interval: config.rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter: config.rocksdb_max_compaction_jitter,
@@ -44,23 +45,24 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         contact_debug_interval: config.contact_debug_interval,
         contact_save_interval: config.contact_save_interval,
         bpf_jit: config.bpf_jit,
-        send_transaction_retry_ms: config.send_transaction_retry_ms,
-        send_transaction_leader_forward_count: config.send_transaction_leader_forward_count,
+        send_transaction_service_config: config.send_transaction_service_config.clone(),
         no_poh_speed_test: config.no_poh_speed_test,
+        no_os_memory_stats_reporting: config.no_os_memory_stats_reporting,
+        no_os_network_stats_reporting: config.no_os_network_stats_reporting,
         poh_pinned_cpu_core: config.poh_pinned_cpu_core,
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
         warp_slot: config.warp_slot,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
-        accounts_db_use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
         tpu_coalesce_ms: config.tpu_coalesce_ms,
         validator_exit: Arc::new(RwLock::new(Exit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_config: config.accounts_db_config.clone(),
-        disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
+        wait_to_vote_slot: config.wait_to_vote_slot,
+        ledger_column_options: config.ledger_column_options.clone(),
     }
 }
 

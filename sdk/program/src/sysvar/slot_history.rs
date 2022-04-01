@@ -3,11 +3,10 @@
 //! this account carries a bitvector of slots present over the past
 //! epoch
 //!
+use crate::sysvar::Sysvar;
 pub use crate::{
     account_info::AccountInfo, program_error::ProgramError, slot_history::SlotHistory,
 };
-
-use crate::sysvar::Sysvar;
 
 crate::declare_sysvar_id!("SysvarS1otHistory11111111111111111111111111", SlotHistory);
 

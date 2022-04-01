@@ -108,7 +108,7 @@ The time, i.e. number of [slots](#slot), for which a [leader schedule](#leader-s
 
 ## fee account
 
-The fee account in the transaction is the account pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
+The fee account in the transaction is the account that pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
 
 ## finality
 

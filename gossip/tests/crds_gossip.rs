@@ -7,6 +7,7 @@ use {
     solana_gossip::{
         cluster_info,
         contact_info::ContactInfo,
+        crds::GossipRoute,
         crds_gossip::*,
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
@@ -108,8 +109,12 @@ fn star_network_create(num: usize) -> Network {
             let node = CrdsGossip::default();
             {
                 let mut node_crds = node.crds.write().unwrap();
-                node_crds.insert(new.clone(), timestamp()).unwrap();
-                node_crds.insert(entry.clone(), timestamp()).unwrap();
+                node_crds
+                    .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
+                    .unwrap();
+                node_crds
+                    .insert(entry.clone(), timestamp(), GossipRoute::LocalMessage)
+                    .unwrap();
             }
             let node = Node::new(node_keypair, contact_info, Arc::new(node));
             (new.label().pubkey(), node)
@@ -120,7 +125,7 @@ fn star_network_create(num: usize) -> Network {
     node.crds
         .write()
         .unwrap()
-        .insert(entry, timestamp())
+        .insert(entry, timestamp(), GossipRoute::LocalMessage)
         .unwrap();
     let node = Node::new(node_keypair, contact_info, Arc::new(node));
     network.insert(id, node);
@@ -137,7 +142,7 @@ fn rstar_network_create(num: usize) -> Network {
         .crds
         .write()
         .unwrap()
-        .insert(entry, timestamp())
+        .insert(entry, timestamp(), GossipRoute::LocalMessage)
         .unwrap();
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
@@ -148,13 +153,13 @@ fn rstar_network_create(num: usize) -> Network {
             node.crds
                 .write()
                 .unwrap()
-                .insert(new.clone(), timestamp())
+                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
             origin
                 .crds
                 .write()
                 .unwrap()
-                .insert(new.clone(), timestamp())
+                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
             let node = Node::new(node_keypair, contact_info, Arc::new(node));
             (new.label().pubkey(), node)
@@ -175,7 +180,7 @@ fn ring_network_create(num: usize) -> Network {
             node.crds
                 .write()
                 .unwrap()
-                .insert(new.clone(), timestamp())
+                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
             let node = Node::new(node_keypair, contact_info, Arc::new(node));
             (new.label().pubkey(), node)
@@ -192,7 +197,9 @@ fn ring_network_create(num: usize) -> Network {
         };
         let end = network.get_mut(&keys[(k + 1) % keys.len()]).unwrap();
         let mut end_crds = end.gossip.crds.write().unwrap();
-        end_crds.insert(start_info, timestamp()).unwrap();
+        end_crds
+            .insert(start_info, timestamp(), GossipRoute::LocalMessage)
+            .unwrap();
     }
     Network::new(network)
 }
@@ -208,7 +215,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             node.crds
                 .write()
                 .unwrap()
-                .insert(new.clone(), timestamp())
+                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
             let node = Node::staked(node_keypair, contact_info, Arc::new(node), stakes[n]);
             (new.label().pubkey(), node)
@@ -230,7 +237,9 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
         for k in 0..keys.len() {
             if keys[k] != *end_pubkey {
                 let start_info = start_entries[k].clone();
-                end_crds.insert(start_info, timestamp()).unwrap();
+                end_crds
+                    .insert(start_info, timestamp(), GossipRoute::LocalMessage)
+                    .unwrap();
             }
         }
     }
@@ -709,6 +718,7 @@ fn test_prune_errors() {
         .insert(
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
             0,
+            GossipRoute::LocalMessage,
         )
         .unwrap();
     crds_gossip.refresh_push_active_set(

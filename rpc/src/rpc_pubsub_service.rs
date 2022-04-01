@@ -29,22 +29,29 @@ pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 1_000_000;
 pub const DEFAULT_QUEUE_CAPACITY_ITEMS: usize = 10_000_000;
 pub const DEFAULT_TEST_QUEUE_CAPACITY_ITEMS: usize = 100;
 pub const DEFAULT_QUEUE_CAPACITY_BYTES: usize = 256 * 1024 * 1024;
+pub const DEFAULT_WORKER_THREADS: usize = 1;
 
 #[derive(Debug, Clone)]
 pub struct PubSubConfig {
+    pub enable_block_subscription: bool,
     pub enable_vote_subscription: bool,
     pub max_active_subscriptions: usize,
     pub queue_capacity_items: usize,
     pub queue_capacity_bytes: usize,
+    pub worker_threads: usize,
+    pub notification_threads: Option<usize>,
 }
 
 impl Default for PubSubConfig {
     fn default() -> Self {
         Self {
+            enable_block_subscription: false,
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
             queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
+            worker_threads: DEFAULT_WORKER_THREADS,
+            notification_threads: None,
         }
     }
 }
@@ -52,10 +59,13 @@ impl Default for PubSubConfig {
 impl PubSubConfig {
     pub fn default_for_tests() -> Self {
         Self {
+            enable_block_subscription: false,
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
             queue_capacity_items: DEFAULT_TEST_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
+            worker_threads: DEFAULT_WORKER_THREADS,
+            notification_threads: Some(2),
         }
     }
 }
@@ -77,7 +87,8 @@ impl PubSubService {
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
             .spawn(move || {
-                let runtime = tokio::runtime::Builder::new_current_thread()
+                let runtime = tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(pubsub_config.worker_threads)
                     .enable_all()
                     .build()
                     .expect("runtime creation failed");
@@ -134,6 +145,9 @@ fn count_final(params: &SubscriptionParams) {
         SubscriptionParams::Vote => {
             inc_new_counter_info!("rpc-pubsub-final-votes", 1);
         }
+        SubscriptionParams::Block(_) => {
+            inc_new_counter_info!("rpc-pubsub-final-slot-txs", 1);
+        }
     }
 }
 
@@ -144,6 +158,17 @@ impl BroadcastHandler {
             .entry(notification.subscription_id)
         {
             count_final(entry.get().params());
+
+            let time_since_created = notification.created_at.elapsed();
+
+            datapoint_info!(
+                "pubsub_notifications",
+                (
+                    "created_to_queue_time_us",
+                    time_since_created.as_micros() as i64,
+                    i64
+                ),
+            );
 
             if notification.is_final {
                 entry.remove();
@@ -168,28 +193,35 @@ pub struct TestBroadcastReceiver {
 #[cfg(test)]
 impl TestBroadcastReceiver {
     pub fn recv(&mut self) -> String {
-        use std::thread::sleep;
-        use std::time::{Duration, Instant};
-        use tokio::sync::broadcast::error::TryRecvError;
+        return match self.recv_timeout(std::time::Duration::from_secs(5)) {
+            Err(err) => panic!("broadcast receiver error: {}", err),
+            Ok(str) => str,
+        };
+    }
 
-        let timeout = Duration::from_millis(500);
-        let started = Instant::now();
+    pub fn recv_timeout(&mut self, timeout: std::time::Duration) -> Result<String, String> {
+        use {std::thread::sleep, tokio::sync::broadcast::error::TryRecvError};
+
+        let started = std::time::Instant::now();
 
         loop {
             match self.inner.try_recv() {
                 Ok(notification) => {
+                    debug!(
+                        "TestBroadcastReceiver: {:?}ms elapsed",
+                        started.elapsed().as_millis()
+                    );
                     if let Some(json) = self.handler.handle(notification).expect("handler failed") {
-                        return json.to_string();
+                        return Ok(json.to_string());
                     }
                 }
                 Err(TryRecvError::Empty) => {
-                    assert!(
-                        started.elapsed() <= timeout,
-                        "TestBroadcastReceiver: no data, timeout reached"
-                    );
-                    sleep(Duration::from_millis(50));
+                    if started.elapsed() > timeout {
+                        return Err("TestBroadcastReceiver: no data, timeout reached".into());
+                    }
+                    sleep(std::time::Duration::from_millis(50));
                 }
-                Err(err) => panic!("broadcast receiver error: {}", err),
+                Err(e) => return Err(e.to_string()),
             }
         }
     }
@@ -203,6 +235,7 @@ pub fn test_connection(
 
     let rpc_impl = RpcSolPubSubImpl::new(
         PubSubConfig {
+            enable_block_subscription: true,
             enable_vote_subscription: true,
             queue_capacity_items: 100,
             ..PubSubConfig::default()
@@ -356,7 +389,10 @@ mod tests {
         },
         std::{
             net::{IpAddr, Ipv4Addr},
-            sync::{atomic::AtomicBool, RwLock},
+            sync::{
+                atomic::{AtomicBool, AtomicU64},
+                RwLock,
+            },
         },
     };
 
@@ -364,6 +400,7 @@ mod tests {
     fn test_pubsub_new() {
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -371,6 +408,7 @@ mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             optimistically_confirmed_bank,

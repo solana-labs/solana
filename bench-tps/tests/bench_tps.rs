@@ -1,22 +1,21 @@
 #![allow(clippy::integer_arithmetic)]
-use serial_test::serial;
-use solana_bench_tps::{
-    bench::{do_bench_tps, generate_and_fund_keypairs},
-    cli::Config,
-};
-use solana_client::thin_client::create_client;
-use solana_core::validator::ValidatorConfig;
-use solana_faucet::faucet::run_local_faucet_with_port;
-use solana_gossip::cluster_info::VALIDATOR_PORT_RANGE;
-use solana_local_cluster::{
-    local_cluster::{ClusterConfig, LocalCluster},
-    validator_configs::make_identical_validator_configs,
-};
-use solana_sdk::signature::{Keypair, Signer};
-use solana_streamer::socket::SocketAddrSpace;
-use std::{
-    sync::{mpsc::channel, Arc},
-    time::Duration,
+use {
+    crossbeam_channel::unbounded,
+    serial_test::serial,
+    solana_bench_tps::{
+        bench::{do_bench_tps, generate_and_fund_keypairs},
+        cli::Config,
+    },
+    solana_client::thin_client::create_client,
+    solana_core::validator::ValidatorConfig,
+    solana_faucet::faucet::run_local_faucet_with_port,
+    solana_local_cluster::{
+        local_cluster::{ClusterConfig, LocalCluster},
+        validator_configs::make_identical_validator_configs,
+    },
+    solana_sdk::signature::{Keypair, Signer},
+    solana_streamer::socket::SocketAddrSpace,
+    std::{sync::Arc, time::Duration},
 };
 
 fn test_bench_tps_local_cluster(config: Config) {
@@ -29,7 +28,7 @@ fn test_bench_tps_local_cluster(config: Config) {
             node_stakes: vec![999_990; NUM_NODES],
             cluster_lamports: 200_000_000,
             validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default(),
+                &ValidatorConfig::default_for_test(),
                 NUM_NODES,
             ),
             native_instruction_processors,
@@ -45,12 +44,12 @@ fn test_bench_tps_local_cluster(config: Config) {
         100_000_000,
     );
 
-    let client = Arc::new(create_client(
-        (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
-        VALIDATOR_PORT_RANGE,
-    ));
+    let client = Arc::new(create_client((
+        cluster.entry_point_info.rpc,
+        cluster.entry_point_info.tpu,
+    )));
 
-    let (addr_sender, addr_receiver) = channel();
+    let (addr_sender, addr_receiver) = unbounded();
     run_local_faucet_with_port(faucet_keypair, addr_sender, None, 0);
     let faucet_addr = addr_receiver
         .recv_timeout(Duration::from_secs(2))

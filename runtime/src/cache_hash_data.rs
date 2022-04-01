@@ -1,19 +1,20 @@
 //! Cached data for hashing accounts
-use crate::accounts_hash::CalculateHashIntermediate;
-use crate::cache_hash_data_stats::CacheHashDataStats;
-use crate::pubkey_bins::PubkeyBinCalculator16;
-use log::*;
-use memmap2::MmapMut;
-use solana_measure::measure::Measure;
-use std::collections::HashSet;
-use std::fs::{self};
-use std::fs::{remove_file, OpenOptions};
-use std::io::Seek;
-use std::io::SeekFrom;
-use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use {
+    crate::{
+        accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats,
+        pubkey_bins::PubkeyBinCalculator24,
+    },
+    log::*,
+    memmap2::MmapMut,
+    solana_measure::measure::Measure,
+    std::{
+        collections::HashSet,
+        fs::{self, remove_file, OpenOptions},
+        io::{Seek, SeekFrom, Write},
+        path::{Path, PathBuf},
+        sync::{Arc, Mutex},
+    },
+};
 
 pub type EntryType = CalculateHashIntermediate;
 pub type SavedType = Vec<Vec<EntryType>>;
@@ -146,12 +147,13 @@ impl CacheHashData {
         parent_folder.as_ref().join("calculate_accounts_hash_cache")
     }
 
+    /// load from 'file_name' into 'accumulator'
     pub fn load<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
         accumulator: &mut SavedType,
         start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
     ) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.load_internal(
@@ -170,7 +172,7 @@ impl CacheHashData {
         file_name: &P,
         accumulator: &mut SavedType,
         start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
         stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("overall");
@@ -238,6 +240,7 @@ impl CacheHashData {
         Ok(())
     }
 
+    /// save 'data' to 'file_name'
     pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
@@ -245,7 +248,7 @@ impl CacheHashData {
         result
     }
 
-    pub fn save_internal(
+    fn save_internal(
         &self,
         file_name: &Path,
         data: &SavedTypeSlice,
@@ -302,8 +305,7 @@ impl CacheHashData {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use rand::Rng;
+    use {super::*, rand::Rng};
 
     #[test]
     fn test_read_write() {
@@ -316,7 +318,7 @@ pub mod tests {
         std::fs::create_dir_all(&tmpdir).unwrap();
 
         for bins in [1, 2, 4] {
-            let bin_calculator = PubkeyBinCalculator16::new(bins);
+            let bin_calculator = PubkeyBinCalculator24::new(bins);
             let num_points = 5;
             let (data, _total_points) = generate_test_data(num_points, bins, &bin_calculator);
             for passes in [1, 2] {
@@ -379,7 +381,7 @@ pub mod tests {
 
     fn bin_data(
         data: &mut SavedType,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
         bins: usize,
         start_bin: usize,
     ) {
@@ -396,7 +398,7 @@ pub mod tests {
     fn generate_test_data(
         count: usize,
         bins: usize,
-        binner: &PubkeyBinCalculator16,
+        binner: &PubkeyBinCalculator24,
     ) -> (SavedType, usize) {
         let mut rng = rand::thread_rng();
         let mut ct = 0;

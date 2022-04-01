@@ -6,7 +6,7 @@ use {
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
-        blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
+        blockstore::Blockstore, blockstore_db::BlockstoreOptions, blockstore_processor,
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_replica_lib::accountsdb_repl_client::AccountsDbReplClientServiceConfig,
@@ -26,6 +26,7 @@ use {
         snapshot_config::SnapshotConfig, snapshot_package::SnapshotType, snapshot_utils,
     },
     solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
+    solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
     std::{
         fs,
@@ -118,7 +119,6 @@ fn initialize_from_snapshot(
     );
     let (bank0, _) = snapshot_utils::bank_from_snapshot_archives(
         &replica_config.account_paths,
-        &[],
         &snapshot_config.bank_snapshots_dir,
         &archive_info,
         None,
@@ -146,7 +146,7 @@ fn initialize_from_snapshot(
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
     let mut block_commitment_cache = BlockCommitmentCache::default();
-    block_commitment_cache.initialize_slots(bank0_slot);
+    block_commitment_cache.initialize_slots(bank0_slot, bank0_slot);
     let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
     ReplicaBankInfo {
@@ -175,11 +175,12 @@ fn start_client_rpc_services(
         block_commitment_cache,
     } = bank_info;
     let blockstore = Arc::new(
-        Blockstore::open_with_access_type(
+        Blockstore::open_with_options(
             &replica_config.ledger_path,
-            AccessType::PrimaryOnly,
-            None,
-            false,
+            BlockstoreOptions {
+                enforce_ulimit_nofile: false,
+                ..BlockstoreOptions::default()
+            },
         )
         .unwrap(),
     );
@@ -191,6 +192,8 @@ fn start_client_rpc_services(
 
     let subscriptions = Arc::new(RpcSubscriptions::new(
         &exit,
+        max_complete_transaction_status_slot.clone(),
+        blockstore.clone(),
         bank_forks.clone(),
         block_commitment_cache.clone(),
         optimistically_confirmed_bank.clone(),
@@ -237,8 +240,11 @@ fn start_client_rpc_services(
             None,
             rpc_override_health_check,
             optimistically_confirmed_bank.clone(),
-            0,
-            0,
+            send_transaction_service::Config {
+                retry_rate_ms: 0,
+                leader_forward_count: 0,
+                ..send_transaction_service::Config::default()
+            },
             max_slots,
             leader_schedule_cache.clone(),
             max_complete_transaction_status_slot,

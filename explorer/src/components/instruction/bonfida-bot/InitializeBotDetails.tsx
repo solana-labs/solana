@@ -25,38 +25,38 @@ export function InitializeBotDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Pool Account</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.poolAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Mint Account</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.mintAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Pool Seed</td>
-        <td className="text-lg-right">{info.poolSeed}</td>
+        <td className="text-lg-end">{info.poolSeed}</td>
       </tr>
 
       <tr>
         <td>Max Number of Assets</td>
-        <td className="text-lg-right">{info.maxNumberOfAsset}</td>
+        <td className="text-lg-end">{info.maxNumberOfAsset}</td>
       </tr>
 
       <tr>
         <td>Number of Markets</td>
-        <td className="text-lg-right">{info.numberOfMarkets}</td>
+        <td className="text-lg-end">{info.numberOfMarkets}</td>
       </tr>
     </InstructionCard>
   );

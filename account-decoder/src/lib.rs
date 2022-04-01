@@ -17,8 +17,10 @@ pub mod validator_info;
 use {
     crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
     solana_sdk::{
-        account::ReadableAccount, account::WritableAccount, clock::Epoch,
-        fee_calculator::FeeCalculator, pubkey::Pubkey,
+        account::{ReadableAccount, WritableAccount},
+        clock::Epoch,
+        fee_calculator::FeeCalculator,
+        pubkey::Pubkey,
     },
     std::{
         io::{Read, Write},
@@ -31,7 +33,7 @@ pub type StringDecimals = String;
 pub const MAX_BASE58_BYTES: usize = 128;
 
 /// A duplicate representation of an Account for pretty JSON serialization
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAccount {
     pub lamports: u64,
@@ -134,16 +136,13 @@ impl UiAccount {
             UiAccountData::Binary(blob, encoding) => match encoding {
                 UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
                 UiAccountEncoding::Base64 => base64::decode(blob).ok(),
-                UiAccountEncoding::Base64Zstd => base64::decode(blob)
-                    .ok()
-                    .map(|zstd_data| {
-                        let mut data = vec![];
-                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
-                            .and_then(|mut reader| reader.read_to_end(&mut data))
-                            .map(|_| data)
-                            .ok()
-                    })
-                    .flatten(),
+                UiAccountEncoding::Base64Zstd => base64::decode(blob).ok().and_then(|zstd_data| {
+                    let mut data = vec![];
+                    zstd::stream::read::Decoder::new(zstd_data.as_slice())
+                        .and_then(|mut reader| reader.read_to_end(&mut data))
+                        .map(|_| data)
+                        .ok()
+                }),
                 UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;
@@ -202,8 +201,10 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::account::{Account, AccountSharedData};
+    use {
+        super::*,
+        solana_sdk::account::{Account, AccountSharedData},
+    };
 
     #[test]
     fn test_slice_data() {

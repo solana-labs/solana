@@ -1,37 +1,41 @@
-use crate::{
-    clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, spend_utils::*,
-    stake::*, validator_info::*, vote::*, wallet::*,
+use {
+    crate::{
+        clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*,
+        spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
+    },
+    clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell},
+    log::*,
+    num_traits::FromPrimitive,
+    serde_json::{self, Value},
+    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_cli_output::{
+        display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
+    },
+    solana_client::{
+        blockhash_query::BlockhashQuery,
+        client_error::{ClientError, Result as ClientResult},
+        nonce_utils,
+        rpc_client::RpcClient,
+        rpc_config::{
+            RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter,
+        },
+    },
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        commitment_config::CommitmentConfig,
+        decode_error::DecodeError,
+        hash::Hash,
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        signature::{Signature, Signer, SignerError},
+        stake::{instruction::LockupArgs, state::Lockup},
+        transaction::{TransactionError, VersionedTransaction},
+    },
+    solana_vote_program::vote_state::VoteAuthorize,
+    std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
+    thiserror::Error,
 };
-use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell};
-use log::*;
-use num_traits::FromPrimitive;
-use serde_json::{self, Value};
-use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::{
-    display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
-};
-use solana_client::{
-    blockhash_query::BlockhashQuery,
-    client_error::{ClientError, Result as ClientResult},
-    nonce_utils,
-    rpc_client::RpcClient,
-    rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    clock::{Epoch, Slot},
-    commitment_config::CommitmentConfig,
-    decode_error::DecodeError,
-    hash::Hash,
-    instruction::InstructionError,
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
-    stake::{instruction::LockupArgs, state::Lockup},
-    transaction::{Transaction, TransactionError},
-};
-use solana_vote_program::vote_state::VoteAuthorize;
-use std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration};
-use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 pub const DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS: &str = "5";
@@ -79,12 +83,12 @@ pub enum CliCommand {
         filter: RpcTransactionLogsFilter,
     },
     Ping {
-        lamports: u64,
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
         blockhash: Option<Hash>,
         print_timestamp: bool,
+        additional_fee: Option<u32>,
     },
     Rent {
         data_length: usize,
@@ -158,6 +162,7 @@ pub enum CliCommand {
         address: Option<SignerIndex>,
         use_deprecated_loader: bool,
         allow_excessive_balance: bool,
+        skip_fee_check: bool,
     },
     Program(ProgramCliCommand),
     // Stake Commands
@@ -294,7 +299,13 @@ pub enum CliCommand {
         authorized_voter: Option<Pubkey>,
         authorized_withdrawer: Pubkey,
         commission: u8,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     ShowVoteAccount {
         pubkey: Pubkey,
@@ -306,19 +317,32 @@ pub enum CliCommand {
         destination_account_pubkey: Pubkey,
         withdraw_authority: SignerIndex,
         withdraw_amount: SpendAmount,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     CloseVoteAccount {
         vote_account_pubkey: Pubkey,
         destination_account_pubkey: Pubkey,
         withdraw_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
         new_authorized_pubkey: Pubkey,
         vote_authorize: VoteAuthorize,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
         authorized: SignerIndex,
         new_authorized: Option<SignerIndex>,
     },
@@ -326,13 +350,25 @@ pub enum CliCommand {
         vote_account_pubkey: Pubkey,
         new_identity_account: SignerIndex,
         withdraw_authority: SignerIndex,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     VoteUpdateCommission {
         vote_account_pubkey: Pubkey,
         commission: u8,
         withdraw_authority: SignerIndex,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     // Wallet Commands
     Address,
@@ -350,7 +386,7 @@ pub enum CliCommand {
         seed: String,
         program_id: Pubkey,
     },
-    DecodeTransaction(Transaction),
+    DecodeTransaction(VersionedTransaction),
     ResolveSigner(Option<String>),
     ShowAccount {
         pubkey: Pubkey,
@@ -709,6 +745,7 @@ pub fn parse_command(
                 signers.push(signer);
                 1
             });
+            let skip_fee_check = matches.is_present("skip_fee_check");
 
             Ok(CliCommandInfo {
                 command: CliCommand::Deploy {
@@ -716,6 +753,7 @@ pub fn parse_command(
                     address,
                     use_deprecated_loader: matches.is_present("use_deprecated_loader"),
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
+                    skip_fee_check,
                 },
                 signers,
             })
@@ -938,21 +976,21 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::LiveSlots => process_live_slots(config),
         CliCommand::Logs { filter } => process_logs(config, filter),
         CliCommand::Ping {
-            lamports,
             interval,
             count,
             timeout,
             blockhash,
             print_timestamp,
+            additional_fee,
         } => process_ping(
             &rpc_client,
             config,
-            *lamports,
             interval,
             count,
             timeout,
             blockhash,
             *print_timestamp,
+            additional_fee,
         ),
         CliCommand::Rent {
             data_length,
@@ -1094,6 +1132,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             address,
             use_deprecated_loader,
             allow_excessive_balance,
+            skip_fee_check,
         } => process_deploy(
             rpc_client,
             config,
@@ -1101,6 +1140,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *address,
             *use_deprecated_loader,
             *allow_excessive_balance,
+            *skip_fee_check,
         ),
         CliCommand::Program(program_subcommand) => {
             process_program_subcommand(rpc_client, config, program_subcommand)
@@ -1380,7 +1420,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             authorized_voter,
             authorized_withdrawer,
             commission,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            ref nonce_account,
+            nonce_authority,
             memo,
+            fee_payer,
         } => process_create_vote_account(
             &rpc_client,
             config,
@@ -1390,7 +1436,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             authorized_voter,
             *authorized_withdrawer,
             *commission,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
+            nonce_account.as_ref(),
+            *nonce_authority,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
@@ -1408,7 +1460,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             withdraw_authority,
             withdraw_amount,
             destination_account_pubkey,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            ref nonce_account,
+            nonce_authority,
             memo,
+            fee_payer,
         } => process_withdraw_from_vote_account(
             &rpc_client,
             config,
@@ -1416,13 +1474,20 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *withdraw_authority,
             *withdraw_amount,
             destination_account_pubkey,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
+            nonce_account.as_ref(),
+            *nonce_authority,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::CloseVoteAccount {
             vote_account_pubkey,
             withdraw_authority,
             destination_account_pubkey,
             memo,
+            fee_payer,
         } => process_close_vote_account(
             &rpc_client,
             config,
@@ -1430,12 +1495,19 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *withdraw_authority,
             destination_account_pubkey,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::VoteAuthorize {
             vote_account_pubkey,
             new_authorized_pubkey,
             vote_authorize,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            nonce_account,
+            nonce_authority,
             memo,
+            fee_payer,
             authorized,
             new_authorized,
         } => process_vote_authorize(
@@ -1446,33 +1518,63 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *vote_authorize,
             *authorized,
             *new_authorized,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
+            *nonce_account,
+            *nonce_authority,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account,
             withdraw_authority,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            nonce_account,
+            nonce_authority,
             memo,
+            fee_payer,
         } => process_vote_update_validator(
             &rpc_client,
             config,
             vote_account_pubkey,
             *new_identity_account,
             *withdraw_authority,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
+            *nonce_account,
+            *nonce_authority,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
             commission,
             withdraw_authority,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            nonce_account,
+            nonce_authority,
             memo,
+            fee_payer,
         } => process_vote_update_commission(
             &rpc_client,
             config,
             vote_account_pubkey,
             *commission,
             *withdraw_authority,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
+            *nonce_account,
+            *nonce_authority,
             memo.as_ref(),
+            *fee_payer,
         ),
 
         // Wallet Commands
@@ -1607,22 +1709,26 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::{json, Value};
-    use solana_client::{
-        blockhash_query,
-        mock_sender::SIGNATURE,
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext},
+    use {
+        super::*,
+        serde_json::{json, Value},
+        solana_client::{
+            blockhash_query,
+            mock_sender_for_cli::SIGNATURE,
+            rpc_request::RpcRequest,
+            rpc_response::{Response, RpcResponseContext},
+        },
+        solana_sdk::{
+            pubkey::Pubkey,
+            signature::{
+                keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner,
+            },
+            stake, system_program,
+            transaction::TransactionError,
+        },
+        solana_transaction_status::TransactionConfirmationStatus,
+        std::path::PathBuf,
     };
-    use solana_sdk::{
-        pubkey::Pubkey,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner},
-        stake, system_program,
-        transaction::TransactionError,
-    };
-    use solana_transaction_status::TransactionConfirmationStatus;
-    use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -1866,6 +1972,7 @@ mod tests {
                     address: None,
                     use_deprecated_loader: false,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -1888,6 +1995,7 @@ mod tests {
                     address: Some(1),
                     use_deprecated_loader: false,
                     allow_excessive_balance: false,
+                    skip_fee_check: false,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -1967,7 +2075,13 @@ mod tests {
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: bob_pubkey,
             commission: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         let result = process_command(&config);
@@ -1998,7 +2112,13 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_authorized_pubkey,
             vote_authorize: VoteAuthorize::Withdrawer,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
             authorized: 0,
             new_authorized: None,
         };
@@ -2011,7 +2131,13 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 2,
             withdraw_authority: 1,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2187,7 +2313,13 @@ mod tests {
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: bob_pubkey,
             commission: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         assert!(process_command(&config).is_err());
@@ -2196,7 +2328,13 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_authorized_pubkey: bob_pubkey,
             vote_authorize: VoteAuthorize::Voter,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
             authorized: 0,
             new_authorized: None,
         };
@@ -2206,7 +2344,13 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 1,
             withdraw_authority: 1,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
         };
         assert!(process_command(&config).is_err());
 
@@ -2245,6 +2389,7 @@ mod tests {
             address: None,
             use_deprecated_loader: false,
             allow_excessive_balance: false,
+            skip_fee_check: false,
         };
         config.output_format = OutputFormat::JsonCompact;
         let result = process_command(&config);
@@ -2265,6 +2410,7 @@ mod tests {
             address: None,
             use_deprecated_loader: false,
             allow_excessive_balance: false,
+            skip_fee_check: false,
         };
         assert!(process_command(&config).is_err());
     }

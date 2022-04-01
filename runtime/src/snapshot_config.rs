@@ -1,6 +1,8 @@
-use crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion};
-use solana_sdk::clock::Slot;
-use std::path::PathBuf;
+use {
+    crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+    solana_sdk::clock::Slot,
+    std::path::PathBuf,
+};
 
 /// Snapshot configuration and runtime information
 #[derive(Clone, Debug)]
@@ -30,11 +32,11 @@ pub struct SnapshotConfig {
     /// NOTE: Incremental snapshots will only be kept for the latest full snapshot
     pub maximum_incremental_snapshot_archives_to_retain: usize,
 
-    /// This is the `use_index` parameter to use when calling `update_accounts_hash()`
-    pub accounts_hash_use_index: bool,
-
     /// This is the `debug_verify` parameter to use when calling `update_accounts_hash()`
     pub accounts_hash_debug_verify: bool,
+
+    // Thread niceness adjustment for snapshot packager service
+    pub packager_thread_niceness_adj: i8,
 }
 
 impl Default for SnapshotConfig {
@@ -52,8 +54,8 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             maximum_incremental_snapshot_archives_to_retain:
                 snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            accounts_hash_use_index: false,
             accounts_hash_debug_verify: false,
+            packager_thread_niceness_adj: 0,
         }
     }
 }

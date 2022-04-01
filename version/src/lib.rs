@@ -1,9 +1,11 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 
 extern crate serde_derive;
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::sanitize::Sanitize;
-use std::{convert::TryInto, fmt};
+use {
+    serde_derive::{Deserialize, Serialize},
+    solana_sdk::sanitize::Sanitize,
+    std::{convert::TryInto, fmt},
+};
 #[macro_use]
 extern crate solana_frozen_abi_macro;
 

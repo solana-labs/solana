@@ -51,10 +51,10 @@ export function SlotHashesCard({
 const renderAccountRow = (entry: SlotHashEntry, index: number) => {
   return (
     <tr key={index}>
-      <td className="w-1 text-monospace">
+      <td className="w-1 font-monospace">
         <Slot slot={entry.slot} link />
       </td>
-      <td className="text-monospace">{entry.hash}</td>
+      <td className="font-monospace">{entry.hash}</td>
     </tr>
   );
 };

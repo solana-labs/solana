@@ -483,9 +483,11 @@ impl Read for SharedBufferReader {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crossbeam_channel::{unbounded, Receiver};
-    use rayon::prelude::*;
+    use {
+        super::*,
+        crossbeam_channel::{unbounded, Receiver},
+        rayon::prelude::*,
+    };
 
     type SimpleReaderReceiverType = Receiver<(Vec<u8>, Option<std::io::Error>)>;
     struct SimpleReader {

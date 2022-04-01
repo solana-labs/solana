@@ -1,24 +1,27 @@
-use solana_gossip::cluster_info::{
-    ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
-};
-use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter,
-    snapshot_config::SnapshotConfig,
-    snapshot_hash::{
-        FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash, IncrementalSnapshotHashes,
-        StartingSnapshotHashes,
+use {
+    solana_gossip::cluster_info::{
+        ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
     },
-    snapshot_package::{PendingSnapshotPackage, SnapshotType},
-    snapshot_utils,
-};
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    solana_perf::thread::renice_this_thread,
+    solana_runtime::{
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_config::SnapshotConfig,
+        snapshot_hash::{
+            FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash,
+            IncrementalSnapshotHashes, StartingSnapshotHashes,
+        },
+        snapshot_package::{PendingSnapshotPackage, SnapshotType},
+        snapshot_utils,
     },
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 pub struct SnapshotPackagerService {
@@ -32,6 +35,7 @@ impl SnapshotPackagerService {
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         snapshot_config: SnapshotConfig,
+        enable_gossip_push: bool,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -47,14 +51,21 @@ impl SnapshotPackagerService {
         let t_snapshot_packager = Builder::new()
             .name("snapshot-packager".to_string())
             .spawn(move || {
-                let mut snapshot_gossip_manager = SnapshotGossipManager {
-                    cluster_info,
-                    max_full_snapshot_hashes,
-                    max_incremental_snapshot_hashes,
-                    full_snapshot_hashes: FullSnapshotHashes::default(),
-                    incremental_snapshot_hashes: IncrementalSnapshotHashes::default(),
+                renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
+                let mut snapshot_gossip_manager = if enable_gossip_push {
+                    Some(SnapshotGossipManager {
+                        cluster_info,
+                        max_full_snapshot_hashes,
+                        max_incremental_snapshot_hashes,
+                        full_snapshot_hashes: FullSnapshotHashes::default(),
+                        incremental_snapshot_hashes: IncrementalSnapshotHashes::default(),
+                    })
+                } else {
+                    None
                 };
-                snapshot_gossip_manager.push_starting_snapshot_hashes(starting_snapshot_hashes);
+                if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
+                    snapshot_gossip_manager.push_starting_snapshot_hashes(starting_snapshot_hashes);
+                }
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -78,10 +89,12 @@ impl SnapshotPackagerService {
                     )
                     .expect("failed to archive snapshot package");
 
-                    snapshot_gossip_manager.push_snapshot_hash(
-                        snapshot_package.snapshot_type,
-                        (snapshot_package.slot(), *snapshot_package.hash()),
-                    );
+                    if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
+                        snapshot_gossip_manager.push_snapshot_hash(
+                            snapshot_package.snapshot_type,
+                            (snapshot_package.slot(), *snapshot_package.hash()),
+                        );
+                    }
                 }
             })
             .unwrap();
@@ -197,22 +210,26 @@ impl SnapshotGossipManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bincode::serialize_into;
-    use solana_runtime::{
-        accounts_db::AccountStorageEntry,
-        bank::BankSlotDelta,
-        snapshot_archive_info::SnapshotArchiveInfo,
-        snapshot_package::{SnapshotPackage, SnapshotType},
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+    use {
+        super::*,
+        bincode::serialize_into,
+        solana_runtime::{
+            accounts_db::AccountStorageEntry,
+            bank::BankSlotDelta,
+            snapshot_archive_info::SnapshotArchiveInfo,
+            snapshot_package::{SnapshotPackage, SnapshotType},
+            snapshot_utils::{
+                self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILENAME,
+            },
+        },
+        solana_sdk::hash::Hash,
+        std::{
+            fs::{self, remove_dir_all, OpenOptions},
+            io::Write,
+            path::{Path, PathBuf},
+        },
+        tempfile::TempDir,
     };
-    use solana_sdk::hash::Hash;
-    use std::{
-        fs::{self, remove_dir_all, OpenOptions},
-        io::Write,
-        path::{Path, PathBuf},
-    };
-    use tempfile::TempDir;
 
     // Create temporary placeholder directory for all test files
     fn make_tmp_dir_path() -> PathBuf {
@@ -318,7 +335,7 @@ mod tests {
         // the source dir for snapshots
         let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
-            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
+            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
             |stream| {
                 serialize_into(stream, &dummy_slot_deltas)?;
                 Ok(())

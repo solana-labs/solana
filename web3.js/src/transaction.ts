@@ -2,6 +2,7 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
+import {Connection} from './connection';
 import {Message} from './message';
 import {PublicKey} from './publickey';
 import * as shortvec from './util/shortvec-encoding';
@@ -259,9 +260,12 @@ export class Transaction {
 
     // Sort. Prioritizing first by signer, then by writable
     accountMetas.sort(function (x, y) {
+      const pubkeySorting = x.pubkey
+        .toBase58()
+        .localeCompare(y.pubkey.toBase58());
       const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
       const checkWritable =
-        x.isWritable === y.isWritable ? 0 : x.isWritable ? -1 : 1;
+        x.isWritable === y.isWritable ? pubkeySorting : x.isWritable ? -1 : 1;
       return checkSigner || checkWritable;
     });
 
@@ -400,6 +404,13 @@ export class Transaction {
    */
   serializeMessage(): Buffer {
     return this._compile().serialize();
+  }
+
+  /**
+   * Get the estimated fee associated with a transaction
+   */
+  async getEstimatedFee(connection: Connection): Promise<number> {
+    return (await connection.getFeeForMessage(this.compileMessage())).value;
   }
 
   /**

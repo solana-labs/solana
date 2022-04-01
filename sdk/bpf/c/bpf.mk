@@ -17,6 +17,8 @@ OS := $(shell uname)
 LLVM_DIR = $(LOCAL_PATH)../dependencies/bpf-tools/llvm
 LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/12.0.1/include
 COMPILER_RT_DIR = $(LOCAL_PATH)../dependencies/bpf-tools/rust/lib/rustlib/bpfel-unknown-unknown/lib
+STD_INC_DIRS := $(LLVM_DIR)/include
+STD_LIB_DIRS := $(LLVM_DIR)/lib
 
 ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang
@@ -36,7 +38,8 @@ C_FLAGS := \
   -fno-builtin \
   -std=c17 \
   $(addprefix -isystem,$(SYSTEM_INC_DIRS)) \
-  $(addprefix -I,$(INC_DIRS))
+  $(addprefix -I,$(STD_INC_DIRS)) \
+  $(addprefix -I,$(INC_DIRS)) \
 
 CXX_FLAGS := \
   $(C_FLAGS) \
@@ -64,6 +67,8 @@ BPF_LLD_FLAGS := \
   --Bdynamic \
   $(LOCAL_PATH)bpf.ld \
   --entry entrypoint \
+  -L $(STD_LIB_DIRS) \
+  -lc \
 
 OBJ_DUMP_FLAGS := \
   --source \
@@ -114,6 +119,10 @@ help:
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - List of system include directories:'
 	@echo '      SYSTEM_INC_DIRS=$(SYSTEM_INC_DIRS)'
+	@echo '    - List of standard library include directories:'
+	@echo '      STD_INC_DIRS=$(STD_INC_DIRS)'
+	@echo '    - List of standard library archive directories:'
+	@echo '      STD_LIB_DIRS=$(STD_LIB_DIRS)'
 	@echo '    - Location of source directories:'
 	@echo '      SRC_DIR=$(SRC_DIR)'
 	@echo '    - Location to place output files:'

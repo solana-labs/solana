@@ -3,9 +3,10 @@
 /// unchecked.
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
-use log::*;
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
+use {
+    log::*, solana_program_runtime::compute_budget::DEFAULT_UNITS, solana_sdk::pubkey::Pubkey,
+    std::collections::HashMap,
+};
 
 // prune is rather expensive op, free up bulk space in each operation
 // would be more efficient. PRUNE_RATIO defines the after prune table
@@ -38,27 +39,28 @@ impl ExecuteCostTable {
         }
     }
 
-    pub fn get_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        &self.table
-    }
-
     pub fn get_count(&self) -> usize {
         self.table.len()
     }
 
-    // instead of assigning unknown program with a configured/hard-coded cost
-    // use average or mode function to make a educated guess.
-    pub fn get_average(&self) -> u64 {
+    /// default program cost, set to ComputeBudget::DEFAULT_UNITS
+    pub fn get_default_units(&self) -> u64 {
+        DEFAULT_UNITS as u64
+    }
+
+    /// average cost of all recorded programs
+    pub fn get_average_units(&self) -> u64 {
         if self.table.is_empty() {
-            0
+            self.get_default_units()
         } else {
             self.table.iter().map(|(_, value)| value).sum::<u64>() / self.get_count() as u64
         }
     }
 
-    pub fn get_mode(&self) -> u64 {
+    /// the most frequently occurring program's cost
+    pub fn get_statistical_mode_units(&self) -> u64 {
         if self.occurrences.is_empty() {
-            0
+            self.get_default_units()
         } else {
             let key = self
                 .occurrences
@@ -71,15 +73,17 @@ impl ExecuteCostTable {
         }
     }
 
-    // returns None if program doesn't exist in table. In this case,
-    // client is advised to call `get_average()` or `get_mode()` to
-    // assign a 'default' value for new program.
+    /// returns None if program doesn't exist in table. In this case,
+    /// `get_default_units()`, `get_average_units()` or `get_statistical_mode_units()`
+    /// can be used to assign a value to new program.
     pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
         self.table.get(key)
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) -> Option<u64> {
-        let need_to_add = self.table.get(key).is_none();
+    /// update-or-insert should be infallible. Query the result of upsert,
+    /// often requires additional calculation, should be lazy.
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
+        let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
@@ -94,15 +98,11 @@ impl ExecuteCostTable {
             .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
         *timestamp = Self::micros_since_epoch();
-
-        Some(*program_cost)
     }
 
-    // prune the old programs so the table contains `new_size` of records,
-    // where `old` is defined as weighted age, which is negatively correlated
-    // with program's age and
-    // positively correlated with how frequently the program
-    // is executed (eg. occurrence),
+    /// prune the old programs so the table contains `new_size` of records,
+    /// where `old` is defined as weighted age, which is negatively correlated
+    /// with program's age and how frequently the program is occurrenced.
     fn prune_to(&mut self, new_size: &usize) {
         debug!(
             "prune cost table, current size {}, new size {}",
@@ -185,9 +185,9 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        // simulate a lot of occurences to key1, so even there're longer than
+        // simulate a lot of occurrences to key1, so even there're longer than
         // usual delay between upsert(key1..) and upsert(key2, ..), test
-        // would still satisfy as key1 has enough occurences to compensate
+        // would still satisfy as key1 has enough occurrences to compensate
         // its age.
         for i in 0..1000 {
             testee.upsert(&key1, i);
@@ -220,23 +220,26 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_average());
-        assert_eq!(cost1, testee.get_mode());
+        assert_eq!(cost1, testee.get_average_units());
+        assert_eq!(cost1, testee.get_statistical_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average());
-        assert_eq!(cost2, testee.get_mode());
+        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average_units());
+        assert_eq!(cost2, testee.get_statistical_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // update 1st record
         testee.upsert(&key1, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(((cost1 + cost2) / 2 + cost2) / 2, testee.get_average());
-        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
+        assert_eq!(
+            ((cost1 + cost2) / 2 + cost2) / 2_u64,
+            testee.get_average_units()
+        );
+        assert_eq!((cost1 + cost2) / 2, testee.get_statistical_mode_units());
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
     }
@@ -270,8 +273,8 @@ mod tests {
         // insert 3rd record, pushes out the oldest (eg 1st) record
         testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
-        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average());
-        assert_eq!(cost3, testee.get_mode());
+        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average_units());
+        assert_eq!(cost3, testee.get_statistical_mode_units());
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
         assert_eq!(&cost3, testee.get_cost(&key3).unwrap());
@@ -280,8 +283,11 @@ mod tests {
         // add 4th record, pushes out 3rd key
         testee.upsert(&key2, cost1);
         testee.upsert(&key4, cost4);
-        assert_eq!(((cost1 + cost2) / 2 + cost4) / 2_u64, testee.get_average());
-        assert_eq!((cost1 + cost2) / 2, testee.get_mode());
+        assert_eq!(
+            ((cost1 + cost2) / 2 + cost4) / 2_u64,
+            testee.get_average_units()
+        );
+        assert_eq!((cost1 + cost2) / 2, testee.get_statistical_mode_units());
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key2).unwrap());

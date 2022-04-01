@@ -1,41 +1,45 @@
-use crate::{
-    cluster_slots::ClusterSlots,
-    duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
-    repair_response,
-    repair_service::{OutstandingShredRepairs, RepairStats},
-    request_response::RequestResponse,
-    result::{Error, Result},
-};
-use bincode::serialize;
-use lru::LruCache;
-use rand::{
-    distributions::{Distribution, WeightedError, WeightedIndex},
-    Rng,
-};
-use solana_gossip::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
-    contact_info::ContactInfo,
-    weighted_shuffle::{weighted_best, weighted_shuffle},
-};
-use solana_ledger::{
-    ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
-    blockstore::Blockstore,
-    shred::{Nonce, Shred, SIZE_OF_NONCE},
-};
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_debug;
-use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
-use solana_sdk::{
-    clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
-};
-use solana_streamer::streamer::{PacketReceiver, PacketSender};
-use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, RwLock},
-    thread::{Builder, JoinHandle},
-    time::{Duration, Instant},
+use {
+    crate::{
+        cluster_slots::ClusterSlots,
+        duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
+        packet_threshold::DynamicPacketToProcessThreshold,
+        repair_response,
+        repair_service::{OutstandingShredRepairs, RepairStats},
+        request_response::RequestResponse,
+        result::{Error, Result},
+    },
+    bincode::serialize,
+    lru::LruCache,
+    rand::{
+        distributions::{Distribution, WeightedError, WeightedIndex},
+        Rng,
+    },
+    solana_gossip::{
+        cluster_info::{ClusterInfo, ClusterInfoError},
+        contact_info::ContactInfo,
+        weighted_shuffle::{weighted_best, weighted_shuffle},
+    },
+    solana_ledger::{
+        ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
+        blockstore::Blockstore,
+        shred::{Nonce, Shred, SIZE_OF_NONCE},
+    },
+    solana_metrics::inc_new_counter_debug,
+    solana_perf::packet::{limited_deserialize, PacketBatch, PacketBatchRecycler},
+    solana_sdk::{
+        clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
+    },
+    solana_streamer::streamer::{PacketBatchReceiver, PacketBatchSender},
+    std::{
+        collections::HashSet,
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 type SlotHash = (Slot, Hash);
@@ -225,12 +229,12 @@ impl ServeRepair {
 
     fn handle_repair(
         me: &Arc<RwLock<Self>>,
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         let now = Instant::now();
 
         let my_id = me.read().unwrap().my_id();
@@ -313,12 +317,12 @@ impl ServeRepair {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
-        requests_receiver: &PacketReceiver,
-        response_sender: &PacketSender,
+        requests_receiver: &PacketBatchReceiver,
+        response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
-        max_packets: &mut usize,
+        packet_threshold: &mut DynamicPacketToProcessThreshold,
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
@@ -328,29 +332,21 @@ impl ServeRepair {
         let mut dropped_packets = 0;
         while let Ok(more) = requests_receiver.try_recv() {
             total_packets += more.packets.len();
-            if total_packets < *max_packets {
-                // Drop the rest in the channel in case of dos
-                reqs_v.push(more);
-            } else {
+            if packet_threshold.should_drop(total_packets) {
                 dropped_packets += more.packets.len();
+            } else {
+                reqs_v.push(more);
             }
         }
 
         stats.dropped_packets += dropped_packets;
         stats.total_packets += total_packets;
 
-        let mut time = Measure::start("repair::handle_packets");
+        let timer = Instant::now();
         for reqs in reqs_v {
             Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
         }
-        time.stop();
-        if total_packets >= *max_packets {
-            if time.as_ms() > 1000 {
-                *max_packets = (*max_packets * 9) / 10;
-            } else {
-                *max_packets = (*max_packets * 10) / 9;
-            }
-        }
+        packet_threshold.update(total_packets, timer.elapsed());
         Ok(())
     }
 
@@ -388,18 +384,18 @@ impl ServeRepair {
     pub fn listen(
         me: Arc<RwLock<Self>>,
         blockstore: Option<Arc<Blockstore>>,
-        requests_receiver: PacketReceiver,
-        response_sender: PacketSender,
+        requests_receiver: PacketBatchReceiver,
+        response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         Builder::new()
             .name("solana-repair-listen".to_string())
             .spawn(move || {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();
-                let mut max_packets = 1024;
+                let mut packet_threshold = DynamicPacketToProcessThreshold::default();
                 loop {
                     let result = Self::run_listen(
                         &me,
@@ -408,7 +404,7 @@ impl ServeRepair {
                         &requests_receiver,
                         &response_sender,
                         &mut stats,
-                        &mut max_packets,
+                        &mut packet_threshold,
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
@@ -428,14 +424,14 @@ impl ServeRepair {
 
     fn handle_packets(
         me: &Arc<RwLock<Self>>,
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
-        packets: Packets,
-        response_sender: &PacketSender,
+        packet_batch: PacketBatch,
+        response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
     ) {
         // iter over the packets
-        packets.packets.iter().for_each(|packet| {
+        packet_batch.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
                 .into_iter()
@@ -605,7 +601,7 @@ impl ServeRepair {
     }
 
     fn run_window_request(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from: &ContactInfo,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
@@ -613,7 +609,7 @@ impl ServeRepair {
         slot: Slot,
         shred_index: u64,
         nonce: Nonce,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         if let Some(blockstore) = blockstore {
             // Try to find the requested index in one of the slots
             let packet = repair_response::repair_response_packet(
@@ -626,7 +622,7 @@ impl ServeRepair {
 
             if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-                return Some(Packets::new_unpinned_with_recycler_data(
+                return Some(PacketBatch::new_unpinned_with_recycler_data(
                     recycler,
                     "run_window_request",
                     vec![packet],
@@ -647,13 +643,13 @@ impl ServeRepair {
     }
 
     fn run_highest_window_request(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         slot: Slot,
         highest_index: u64,
         nonce: Nonce,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         let blockstore = blockstore?;
         // Try to find the requested index in one of the slots
         let meta = blockstore.meta(slot).ok()??;
@@ -666,7 +662,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(Packets::new_unpinned_with_recycler_data(
+            return Some(PacketBatch::new_unpinned_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
@@ -676,14 +672,14 @@ impl ServeRepair {
     }
 
     fn run_orphan(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         mut slot: Slot,
         max_responses: usize,
         nonce: Nonce,
-    ) -> Option<Packets> {
-        let mut res = Packets::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
+    ) -> Option<PacketBatch> {
+        let mut res = PacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -702,8 +698,8 @@ impl ServeRepair {
                 } else {
                     break;
                 }
-                if meta.is_parent_set() && res.packets.len() <= max_responses {
-                    slot = meta.parent_slot;
+                if meta.parent_slot.is_some() && res.packets.len() <= max_responses {
+                    slot = meta.parent_slot.unwrap();
                 } else {
                     break;
                 }
@@ -716,12 +712,12 @@ impl ServeRepair {
     }
 
     fn run_ancestor_hashes(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         slot: Slot,
         nonce: Nonce,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         let blockstore = blockstore?;
         let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
             let ancestor_iterator =
@@ -742,7 +738,7 @@ impl ServeRepair {
             from_addr,
             nonce,
         )?;
-        Some(Packets::new_unpinned_with_recycler_data(
+        Some(PacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_ancestor_hashes",
             vec![packet],
@@ -752,18 +748,20 @@ impl ServeRepair {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{repair_response, result::Error};
-    use solana_gossip::{socketaddr, socketaddr_any};
-    use solana_ledger::get_tmp_ledger_path;
-    use solana_ledger::{
-        blockstore::make_many_slot_entries,
-        blockstore_processor::fill_blockstore_slot_with_ticks,
-        shred::{max_ticks_per_n_shreds, Shred},
+    use {
+        super::*,
+        crate::{repair_response, result::Error},
+        solana_gossip::{socketaddr, socketaddr_any},
+        solana_ledger::{
+            blockstore::make_many_slot_entries,
+            blockstore_processor::fill_blockstore_slot_with_ticks,
+            get_tmp_ledger_path,
+            shred::{max_ticks_per_n_shreds, Shred},
+        },
+        solana_perf::packet::Packet,
+        solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp},
+        solana_streamer::socket::SocketAddrSpace,
     };
-    use solana_perf::packet::Packet;
-    use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp};
-    use solana_streamer::socket::SocketAddrSpace;
 
     #[test]
     fn test_run_highest_window_request() {
@@ -772,7 +770,7 @@ mod tests {
 
     /// test run_window_request responds with the right shred, and do not overrun
     fn run_highest_window_request(slot: Slot, num_slots: u64, nonce: Nonce) {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -842,7 +840,7 @@ mod tests {
 
     /// test window requests respond with the right shred, and do not overrun
     fn run_window_request(slot: Slot, nonce: Nonce) {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -1011,7 +1009,7 @@ mod tests {
 
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Nonce) {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -1085,7 +1083,7 @@ mod tests {
     #[test]
     fn run_orphan_corrupted_shred_size() {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -1146,7 +1144,7 @@ mod tests {
     #[test]
     fn test_run_ancestor_hashes() {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let slot = 0;
@@ -1246,23 +1244,23 @@ mod tests {
         // 2) repair validator set only includes our own id
         // then no repairs should be generated
         for pubkey in &[solana_sdk::pubkey::new_rand(), me.id] {
-            let trusted_validators = Some(vec![*pubkey].into_iter().collect());
-            assert!(serve_repair.repair_peers(&trusted_validators, 1).is_empty());
+            let known_validators = Some(vec![*pubkey].into_iter().collect());
+            assert!(serve_repair.repair_peers(&known_validators, 1).is_empty());
             assert!(serve_repair
                 .repair_request(
                     &cluster_slots,
                     ShredRepairType::Shred(0, 0),
                     &mut LruCache::new(100),
                     &mut RepairStats::default(),
-                    &trusted_validators,
+                    &known_validators,
                     &mut OutstandingShredRepairs::default(),
                 )
                 .is_err());
         }
 
-        // If trusted validator exists in gossip, should return repair successfully
-        let trusted_validators = Some(vec![contact_info2.id].into_iter().collect());
-        let repair_peers = serve_repair.repair_peers(&trusted_validators, 1);
+        // If known validator exists in gossip, should return repair successfully
+        let known_validators = Some(vec![contact_info2.id].into_iter().collect());
+        let repair_peers = serve_repair.repair_peers(&known_validators, 1);
         assert_eq!(repair_peers.len(), 1);
         assert_eq!(repair_peers[0].id, contact_info2.id);
         assert!(serve_repair
@@ -1271,12 +1269,12 @@ mod tests {
                 ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
                 &mut RepairStats::default(),
-                &trusted_validators,
+                &known_validators,
                 &mut OutstandingShredRepairs::default(),
             )
             .is_ok());
 
-        // Using no trusted validators should default to all
+        // Using no known validators should default to all
         // validator's available in gossip, excluding myself
         let repair_peers: HashSet<Pubkey> = serve_repair
             .repair_peers(&None, 1)

@@ -260,8 +260,7 @@ impl Bip44 for Solana {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use uriparse::URIReferenceBuilder;
+    use {super::*, uriparse::URIReferenceBuilder};
 
     struct TestCoin;
     impl Bip44 for TestCoin {

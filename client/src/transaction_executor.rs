@@ -1,19 +1,21 @@
 #![allow(clippy::integer_arithmetic)]
-use crate::rpc_client::RpcClient;
-use log::*;
-use solana_measure::measure::Measure;
-use solana_sdk::{
-    commitment_config::CommitmentConfig, signature::Signature, timing::timestamp,
-    transaction::Transaction,
-};
-use std::{
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, RwLock,
+use {
+    crate::rpc_client::RpcClient,
+    log::*,
+    solana_measure::measure::Measure,
+    solana_sdk::{
+        commitment_config::CommitmentConfig, signature::Signature, timing::timestamp,
+        transaction::Transaction,
     },
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    std::{
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc, RwLock,
+        },
+        thread::{sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 // signature, timestamp, id

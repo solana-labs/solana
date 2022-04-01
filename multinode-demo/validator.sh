@@ -9,6 +9,7 @@ source "$here"/common.sh
 args=(
   --max-genesis-archive-unpacked-size 1073741824
   --no-poh-speed-test
+  --no-os-network-limits-test
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
@@ -140,6 +141,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --enable-cpi-and-log-storage ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --enable-extended-tx-metadata-storage ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
@@ -247,6 +251,8 @@ default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
+default_arg --full-rpc-api
+default_arg --no-incremental-snapshots
 
 if [[ $maybeRequireTower = true ]]; then
   default_arg --require-tower

@@ -21,9 +21,11 @@ import {
   decodeCancelSpotOrder,
   decodeChangePerpMarketParams,
   decodePlacePerpOrder,
+  decodePlacePerpOrder2,
   decodePlaceSpotOrder,
   parseMangoInstructionTitle,
 } from "./mango/types";
+import { PlacePerpOrder2DetailsCard } from "./mango/PlacePerpOrder2DetailsCard";
 
 export function MangoDetailsCard(props: {
   ix: TransactionInstruction;
@@ -99,6 +101,13 @@ export function MangoDetailsCard(props: {
             {...props}
           />
         );
+      case "PlacePerpOrder2":
+        return (
+          <PlacePerpOrder2DetailsCard
+            info={decodePlacePerpOrder2(ix)}
+            {...props}
+          />
+        );
       case "ConsumeEvents":
         return <ConsumeEventsDetailsCard {...props} />;
       case "CancelPerpOrder":
@@ -152,7 +161,7 @@ export function MangoDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={`Mango: ${title || "Unknown"}`}
+      title={`Mango Program: ${title || "Unknown"}`}
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw

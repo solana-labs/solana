@@ -1,4 +1,4 @@
-//! @brief Solana Rust-based BPF memory operations
+//! Solana Rust-based BPF memory operations
 
 /// Memcpy
 ///

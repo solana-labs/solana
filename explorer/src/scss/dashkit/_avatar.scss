@@ -3,6 +3,8 @@
 // Dashkit component
 //
 
+@use 'sass:math';
+
 // General
 
 .avatar {
@@ -10,7 +12,7 @@
   display: inline-block;
   width: $avatar-size-base;
   height: $avatar-size-base;
-  font-size: $avatar-size-base / 3;
+  font-size: math.div($avatar-size-base, 3);
 
   // Loads mask images so they don't lag on hover
 
@@ -29,7 +31,7 @@
 .avatar-img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .avatar-title {
@@ -79,36 +81,36 @@
 .avatar-xs {
   width: $avatar-size-xs;
   height: $avatar-size-xs;
-  font-size: $avatar-size-xs / 3;
+  font-size: math.div($avatar-size-xs, 3);
 }
 
 .avatar-sm {
   width: $avatar-size-sm;
   height: $avatar-size-sm;
-  font-size: $avatar-size-sm / 3;
+  font-size: math.div($avatar-size-sm, 3);
 }
 
 .avatar-lg {
   width: $avatar-size-lg;
   height: $avatar-size-lg;
-  font-size: $avatar-size-lg / 3;
+  font-size: math.div($avatar-size-lg, 3);
 }
 
 .avatar-xl {
   width: $avatar-size-xl;
   height: $avatar-size-xl;
-  font-size: $avatar-size-xl / 3;
+  font-size: math.div($avatar-size-xl, 3);
 }
 
 .avatar-xxl {
   width: $avatar-size-xl;
   height: $avatar-size-xl;
-  font-size: $avatar-size-xl / 3;
+  font-size: math.div($avatar-size-xl, 3);
 
   @include media-breakpoint-up(md) {
     width: $avatar-size-xxl;
     height: $avatar-size-xxl;
-    font-size: $avatar-size-xxl / 3;
+    font-size: math.div($avatar-size-xxl, 3);
   }
 }
 
@@ -116,27 +118,27 @@
 // Ratio
 
 .avatar.avatar-4by3 {
-  width: $avatar-size-base * 4 / 3;
+  width: math.div($avatar-size-base * 4, 3);
 }
 
 .avatar-xs.avatar-4by3 {
-  width: $avatar-size-xs * 4 / 3;
+  width: math.div($avatar-size-xs * 4, 3);
 }
 
 .avatar-sm.avatar-4by3 {
-  width: $avatar-size-sm * 4 / 3;
+  width: math.div($avatar-size-sm * 4, 3);
 }
 
 .avatar-lg.avatar-4by3 {
-  width: $avatar-size-lg * 4 / 3;
+  width: math.div($avatar-size-lg * 4, 3);
 }
 
 .avatar-xl.avatar-4by3 {
-  width: $avatar-size-xl * 4 / 3;
+  width: math.div($avatar-size-xl * 4, 3);
 }
 
 .avatar-xxl.avatar-4by3 {
-  width: $avatar-size-xxl * 4 / 3;
+  width: math.div($avatar-size-xxl * 4, 3);
 }
 
 
@@ -148,27 +150,27 @@
   // Shift every next avatar left
 
   .avatar + .avatar {
-    margin-left: -$avatar-size-base / 4;
+    margin-left: math.div(-$avatar-size-base, 4);
   }
 
   .avatar-xs + .avatar-xs {
-    margin-left: -$avatar-size-xs / 4;
+    margin-left: math.div(-$avatar-size-xs, 4);
   }
 
   .avatar-sm + .avatar-sm {
-    margin-left: -$avatar-size-sm / 4;
+    margin-left: math.div(-$avatar-size-sm, 4);
   }
 
   .avatar-lg + .avatar-lg {
-    margin-left: -$avatar-size-lg / 4;
+    margin-left: math.div(-$avatar-size-lg, 4);
   }
 
   .avatar-xl + .avatar-xl {
-    margin-left: -$avatar-size-xl / 4;
+    margin-left: math.div(-$avatar-size-xl, 4);
   }
 
   .avatar-xxl + .avatar-xxl {
-    margin-left: -$avatar-size-xxl / 4;
+    margin-left: math.div(-$avatar-size-xxl, 4);
   }
 
   // Add some spacing between avatars

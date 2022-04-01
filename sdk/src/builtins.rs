@@ -1,4 +1,4 @@
-//! @brief Solana builtin helper macros
+//! Solana builtin helper macros
 
 #[rustversion::since(1.46.0)]
 #[macro_export]
@@ -81,7 +81,6 @@ macro_rules! declare_builtin_name {
 /// fn my_process_instruction(
 ///     first_instruction_account: usize,
 ///     keyed_accounts: &[KeyedAccount],
-///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
 ///   // Process an instruction
 ///   Ok(())
@@ -112,7 +111,6 @@ macro_rules! declare_builtin_name {
 /// fn my_process_instruction(
 ///     first_instruction_account: usize,
 ///     keyed_accounts: &[KeyedAccount],
-///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
 ///   // Process an instruction
 ///   Ok(())

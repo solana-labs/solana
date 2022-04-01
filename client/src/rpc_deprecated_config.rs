@@ -71,6 +71,7 @@ impl From<RpcConfirmedBlockConfig> for RpcBlockConfig {
             transaction_details: config.transaction_details,
             rewards: config.rewards,
             commitment: config.commitment,
+            max_supported_transaction_version: None,
         }
     }
 }
@@ -98,6 +99,7 @@ impl From<RpcConfirmedTransactionConfig> for RpcTransactionConfig {
         Self {
             encoding: config.encoding,
             commitment: config.commitment,
+            max_supported_transaction_version: None,
         }
     }
 }

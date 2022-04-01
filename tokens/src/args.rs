@@ -42,6 +42,7 @@ pub struct TransactionLogArgs {
     pub output_path: String,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     DistributeTokens(DistributeTokensArgs),
     Balances(BalancesArgs),

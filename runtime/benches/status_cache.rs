@@ -2,13 +2,15 @@
 
 extern crate test;
 
-use bincode::serialize;
-use solana_runtime::status_cache::*;
-use solana_sdk::{
-    hash::{hash, Hash},
-    signature::Signature,
+use {
+    bincode::serialize,
+    solana_runtime::status_cache::*,
+    solana_sdk::{
+        hash::{hash, Hash},
+        signature::Signature,
+    },
+    test::Bencher,
 };
-use test::Bencher;
 
 type BankStatusCache = StatusCache<()>;
 

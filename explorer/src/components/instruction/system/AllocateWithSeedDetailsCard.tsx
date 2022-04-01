@@ -24,34 +24,34 @@ export function AllocateWithSeedDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Allocate Account w/ Seed"
+      title="System Program: Allocate Account w/ Seed"
       innerCards={innerCards}
       childIndex={childIndex}
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.account} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.base} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Seed</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Copyable text={info.seed}>
             <code>{info.seed}</code>
           </Copyable>
@@ -60,12 +60,12 @@ export function AllocateWithSeedDetailsCard(props: {
 
       <tr>
         <td>Allocated Data Size</td>
-        <td className="text-lg-right">{info.space} byte(s)</td>
+        <td className="text-lg-end">{info.space} byte(s)</td>
       </tr>
 
       <tr>
         <td>Assigned Program Id</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.owner} alignRight link />
         </td>
       </tr>

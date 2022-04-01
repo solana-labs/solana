@@ -1,8 +1,8 @@
-use assert_cmd::prelude::*;
-use solana_ledger::create_new_tmp_ledger;
-use solana_ledger::genesis_utils::create_genesis_config;
-use std::process::Command;
-use std::process::Output;
+use {
+    assert_cmd::prelude::*,
+    solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config},
+    std::process::{Command, Output},
+};
 
 fn run_ledger_tool(args: &[&str]) -> Output {
     Command::cargo_bin(env!("CARGO_PKG_NAME"))

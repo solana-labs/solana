@@ -1,20 +1,22 @@
-use crate::{
-    parse_account_data::{ParsableAccount, ParseAccountError},
-    StringAmount, UiFeeCalculator,
-};
-use bincode::deserialize;
-use bv::BitVec;
 #[allow(deprecated)]
 use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
-use solana_sdk::{
-    clock::{Clock, Epoch, Slot, UnixTimestamp},
-    epoch_schedule::EpochSchedule,
-    pubkey::Pubkey,
-    rent::Rent,
-    slot_hashes::SlotHashes,
-    slot_history::{self, SlotHistory},
-    stake_history::{StakeHistory, StakeHistoryEntry},
-    sysvar::{self, rewards::Rewards},
+use {
+    crate::{
+        parse_account_data::{ParsableAccount, ParseAccountError},
+        StringAmount, UiFeeCalculator,
+    },
+    bincode::deserialize,
+    bv::BitVec,
+    solana_sdk::{
+        clock::{Clock, Epoch, Slot, UnixTimestamp},
+        epoch_schedule::EpochSchedule,
+        pubkey::Pubkey,
+        rent::Rent,
+        slot_hashes::SlotHashes,
+        slot_history::{self, SlotHistory},
+        stake_history::{StakeHistory, StakeHistoryEntry},
+        sysvar::{self, rewards::Rewards},
+    },
 };
 
 pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, ParseAccountError> {
@@ -218,10 +220,12 @@ pub struct UiStakeHistoryEntry {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     #[allow(deprecated)]
     use solana_sdk::sysvar::recent_blockhashes::IterItem;
-    use solana_sdk::{account::create_account_for_test, fee_calculator::FeeCalculator, hash::Hash};
+    use {
+        super::*,
+        solana_sdk::{account::create_account_for_test, fee_calculator::FeeCalculator, hash::Hash},
+    };
 
     #[test]
     fn test_parse_sysvars() {
@@ -254,12 +258,8 @@ mod test {
                 SysvarAccountType::Fees(UiFees::default()),
             );
 
-            let fee_calculator = FeeCalculator {
-                lamports_per_signature: 10,
-            };
-            let recent_blockhashes: RecentBlockhashes = vec![IterItem(0, &hash, &fee_calculator)]
-                .into_iter()
-                .collect();
+            let recent_blockhashes: RecentBlockhashes =
+                vec![IterItem(0, &hash, 10)].into_iter().collect();
             let recent_blockhashes_sysvar = create_account_for_test(&recent_blockhashes);
             assert_eq!(
                 parse_sysvar(
@@ -269,7 +269,7 @@ mod test {
                 .unwrap(),
                 SysvarAccountType::RecentBlockhashes(vec![UiRecentBlockhashesEntry {
                     blockhash: hash.to_string(),
-                    fee_calculator: fee_calculator.into(),
+                    fee_calculator: FeeCalculator::new(10).into(),
                 }]),
             );
         }

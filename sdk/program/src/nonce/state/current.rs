@@ -1,14 +1,42 @@
-use super::Versions;
-use crate::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey};
-use serde_derive::{Deserialize, Serialize};
+use {
+    super::Versions,
+    crate::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey},
+    serde_derive::{Deserialize, Serialize},
+};
 
+/// Initialized data of a durable transaction nonce account.
+///
+/// This is stored within [`State`] for initialized nonce accounts.
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Data {
+    /// Address of the account that signs transactions using the nonce account.
     pub authority: Pubkey,
+    /// A valid previous blockhash.
     pub blockhash: Hash,
+    /// The fee calculator associated with the blockhash.
     pub fee_calculator: FeeCalculator,
 }
 
+impl Data {
+    /// Create new durable transaction nonce data.
+    pub fn new(authority: Pubkey, blockhash: Hash, lamports_per_signature: u64) -> Self {
+        Data {
+            authority,
+            blockhash,
+            fee_calculator: FeeCalculator::new(lamports_per_signature),
+        }
+    }
+
+    /// Get the cost per signature for the next transaction to use this nonce.
+    pub fn get_lamports_per_signature(&self) -> u64 {
+        self.fee_calculator.lamports_per_signature
+    }
+}
+
+/// The state of a durable transaction nonce account.
+///
+/// When created in memory with [`State::default`] or when deserialized from an
+/// uninitialized account, a nonce account will be [`State::Uninitialized`].
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum State {
     Uninitialized,
@@ -22,6 +50,16 @@ impl Default for State {
 }
 
 impl State {
+    /// Create new durable transaction nonce state.
+    pub fn new_initialized(
+        authority: &Pubkey,
+        blockhash: &Hash,
+        lamports_per_signature: u64,
+    ) -> Self {
+        Self::Initialized(Data::new(*authority, *blockhash, lamports_per_signature))
+    }
+
+    /// Get the serialized size of the nonce state.
     pub fn size() -> usize {
         let data = Versions::new_current(State::Initialized(Data::default()));
         bincode::serialized_size(&data).unwrap() as usize

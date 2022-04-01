@@ -1,9 +1,8 @@
-use solana_sdk::genesis_config::{DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE};
 use {
     bzip2::bufread::BzDecoder,
     log::*,
     rand::{thread_rng, Rng},
-    solana_sdk::genesis_config::GenesisConfig,
+    solana_sdk::genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
     std::{
         collections::HashMap,
         fs::{self, File},
@@ -346,7 +345,7 @@ fn all_digits(v: &str) -> bool {
         return false;
     }
     for x in v.chars() {
-        if !x.is_numeric() {
+        if !x.is_digit(10) {
             return false;
         }
     }
@@ -357,7 +356,7 @@ fn like_storage(v: &str) -> bool {
     let mut periods = 0;
     let mut saw_numbers = false;
     for x in v.chars() {
-        if !x.is_numeric() {
+        if !x.is_digit(10) {
             if x == '.' {
                 if periods > 0 || !saw_numbers {
                     return false;
@@ -468,15 +467,20 @@ fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool 
         (["rocksdb"], Directory) => true,
         (["rocksdb", _], GNUSparse) => true,
         (["rocksdb", _], Regular) => true,
+        (["rocksdb_fifo"], Directory) => true,
+        (["rocksdb_fifo", _], GNUSparse) => true,
+        (["rocksdb_fifo", _], Regular) => true,
         _ => false,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use assert_matches::assert_matches;
-    use tar::{Builder, Header};
+    use {
+        super::*,
+        assert_matches::assert_matches,
+        tar::{Builder, Header},
+    };
 
     #[test]
     fn test_archive_is_valid_entry() {
@@ -519,6 +523,10 @@ mod tests {
         ));
         assert!(!is_valid_snapshot_archive_entry(
             &["snapshots", "0x"],
+            tar::EntryType::Directory
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["snapshots", "①"],
             tar::EntryType::Directory
         ));
         assert!(!is_valid_snapshot_archive_entry(
@@ -567,6 +575,10 @@ mod tests {
             &["accounts", "232323"],
             tar::EntryType::Regular
         ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "৬.¾"],
+            tar::EntryType::Regular
+        ));
     }
 
     #[test]
@@ -591,6 +603,18 @@ mod tests {
             &["rocksdb", "foo"],
             tar::EntryType::GNUSparse,
         ));
+        assert!(is_valid_genesis_archive_entry(
+            &["rocksdb_fifo"],
+            tar::EntryType::Directory
+        ));
+        assert!(is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo"],
+            tar::EntryType::Regular
+        ));
+        assert!(is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo"],
+            tar::EntryType::GNUSparse,
+        ));
 
         assert!(!is_valid_genesis_archive_entry(
             &["aaaa"],
@@ -622,6 +646,30 @@ mod tests {
         ));
         assert!(!is_valid_genesis_archive_entry(
             &["rocksdb", "foo", "bar"],
+            tar::EntryType::GNUSparse
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo"],
+            tar::EntryType::GNUSparse,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo"],
+            tar::EntryType::Directory,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo", "bar"],
+            tar::EntryType::Directory,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo", "bar"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb_fifo", "foo", "bar"],
             tar::EntryType::GNUSparse
         ));
     }

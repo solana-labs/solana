@@ -4,33 +4,39 @@
 //!
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
-use crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable};
-use log::*;
-use solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction};
-use std::collections::HashMap;
+use {
+    crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
+    log::*,
+    solana_sdk::{
+        instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
+        system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
+    },
+};
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
-#[derive(Debug, Clone)]
-pub enum CostModelError {
-    /// transaction that would fail sanitize, cost model is not able to process
-    /// such transaction.
-    InvalidTransaction,
-
-    /// would exceed block max limit
-    WouldExceedBlockMaxLimit,
-
-    /// would exceed account max limit
-    WouldExceedAccountMaxLimit,
-}
-
-#[derive(AbiExample, Default, Debug)]
+// costs are stored in number of 'compute unit's
+#[derive(Debug)]
 pub struct TransactionCost {
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
     pub execution_cost: u64,
+    pub account_data_size: u64,
+}
+
+impl Default for TransactionCost {
+    fn default() -> Self {
+        Self {
+            writable_accounts: Vec::with_capacity(MAX_WRITABLE_ACCOUNTS),
+            signature_cost: 0u64,
+            write_lock_cost: 0u64,
+            data_bytes_cost: 0u64,
+            execution_cost: 0u64,
+            account_data_size: 0u64,
+        }
+    }
 }
 
 impl TransactionCost {
@@ -54,38 +60,16 @@ impl TransactionCost {
     }
 }
 
-#[derive(AbiExample, Debug)]
+#[derive(Debug, Default)]
 pub struct CostModel {
-    account_cost_limit: u64,
-    block_cost_limit: u64,
     instruction_execution_cost_table: ExecuteCostTable,
-
-    // reusable variables
-    transaction_cost: TransactionCost,
-}
-
-impl Default for CostModel {
-    fn default() -> Self {
-        CostModel::new(MAX_WRITABLE_ACCOUNT_UNITS, MAX_BLOCK_UNITS)
-    }
 }
 
 impl CostModel {
-    pub fn new(chain_max: u64, block_max: u64) -> Self {
+    pub fn new() -> Self {
         Self {
-            account_cost_limit: chain_max,
-            block_cost_limit: block_max,
             instruction_execution_cost_table: ExecuteCostTable::default(),
-            transaction_cost: TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS),
         }
-    }
-
-    pub fn get_account_cost_limit(&self) -> u64 {
-        self.account_cost_limit
-    }
-
-    pub fn get_block_cost_limit(&self) -> u64 {
-        self.block_cost_limit
     }
 
     pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {
@@ -94,64 +78,40 @@ impl CostModel {
             .map(|(key, cost)| (key, cost))
             .chain(BUILT_IN_INSTRUCTION_COSTS.iter())
             .for_each(|(program_id, cost)| {
-                match self
-                    .instruction_execution_cost_table
-                    .upsert(program_id, *cost)
-                {
-                    Some(c) => {
-                        debug!(
-                            "initiating cost table, instruction {:?} has cost {}",
-                            program_id, c
-                        );
-                    }
-                    None => {
-                        debug!(
-                            "initiating cost table, failed for instruction {:?}",
-                            program_id
-                        );
-                    }
-                }
+                self.upsert_instruction_cost(program_id, *cost);
             });
-        debug!(
-            "restored cost model instruction cost table from blockstore, current values: {:?}",
-            self.get_instruction_cost_table()
-        );
     }
 
-    pub fn calculate_cost(
-        &mut self,
-        transaction: &SanitizedTransaction,
-        demote_program_write_locks: bool,
-    ) -> &TransactionCost {
-        self.transaction_cost.reset();
+    pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
+        let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
 
-        self.transaction_cost.signature_cost = self.get_signature_cost(transaction);
-        self.get_write_lock_cost(transaction, demote_program_write_locks);
-        self.transaction_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
-        self.transaction_cost.execution_cost = self.get_transaction_cost(transaction);
+        tx_cost.signature_cost = self.get_signature_cost(transaction);
+        self.get_write_lock_cost(&mut tx_cost, transaction);
+        tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
+        tx_cost.execution_cost = self.get_transaction_cost(transaction);
+        tx_cost.account_data_size = self.calculate_account_data_size(transaction);
 
-        debug!(
-            "transaction {:?} has cost {:?}",
-            transaction, self.transaction_cost
-        );
-        &self.transaction_cost
+        debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
+        tx_cost
     }
 
-    pub fn upsert_instruction_cost(
-        &mut self,
-        program_key: &Pubkey,
-        cost: u64,
-    ) -> Result<u64, &'static str> {
+    pub fn upsert_instruction_cost(&mut self, program_key: &Pubkey, cost: u64) {
         self.instruction_execution_cost_table
             .upsert(program_key, cost);
-        match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => Ok(*cost),
-            None => Err("failed to upsert to ExecuteCostTable"),
-        }
     }
 
-    pub fn get_instruction_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        self.instruction_execution_cost_table.get_cost_table()
+    pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
+        match self.instruction_execution_cost_table.get_cost(program_key) {
+            Some(cost) => *cost,
+            None => {
+                let default_value = self.instruction_execution_cost_table.get_default_units();
+                debug!(
+                    "Program {:?} does not have aggregated cost, using default value {}",
+                    program_key, default_value
+                );
+                default_value
+            }
+        }
     }
 
     fn get_signature_cost(&self, transaction: &SanitizedTransaction) -> u64 {
@@ -159,19 +119,23 @@ impl CostModel {
     }
 
     fn get_write_lock_cost(
-        &mut self,
+        &self,
+        tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
-        demote_program_write_locks: bool,
     ) {
         let message = transaction.message();
-        message.account_keys_iter().enumerate().for_each(|(i, k)| {
-            let is_writable = message.is_writable(i, demote_program_write_locks);
+        message
+            .account_keys()
+            .iter()
+            .enumerate()
+            .for_each(|(i, k)| {
+                let is_writable = message.is_writable(i);
 
-            if is_writable {
-                self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.write_lock_cost += WRITE_LOCK_UNITS;
-            }
-        });
+                if is_writable {
+                    tx_cost.writable_accounts.push(*k);
+                    tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
+                }
+            });
     }
 
     fn get_data_bytes_cost(&self, transaction: &SanitizedTransaction) -> u64 {
@@ -200,43 +164,83 @@ impl CostModel {
         cost
     }
 
-    fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
-        match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => *cost,
-            None => {
-                let default_value = self.instruction_execution_cost_table.get_mode();
-                debug!(
-                    "Program key {:?} does not have assigned cost, using mode {}",
-                    program_key, default_value
+    fn calculate_account_data_size_on_deserialized_system_instruction(
+        instruction: SystemInstruction,
+    ) -> u64 {
+        match instruction {
+            SystemInstruction::CreateAccount {
+                lamports: _lamports,
+                space,
+                owner: _owner,
+            } => space,
+            SystemInstruction::CreateAccountWithSeed {
+                base: _base,
+                seed: _seed,
+                lamports: _lamports,
+                space,
+                owner: _owner,
+            } => space,
+            SystemInstruction::Allocate { space } => space,
+            SystemInstruction::AllocateWithSeed {
+                base: _base,
+                seed: _seed,
+                space,
+                owner: _owner,
+            } => space,
+            _ => 0,
+        }
+    }
+
+    fn calculate_account_data_size_on_instruction(
+        program_id: &Pubkey,
+        instruction: &CompiledInstruction,
+    ) -> u64 {
+        if program_id == &system_program::id() {
+            if let Ok(instruction) = limited_deserialize(&instruction.data) {
+                return Self::calculate_account_data_size_on_deserialized_system_instruction(
+                    instruction,
                 );
-                default_value
             }
         }
+        0
+    }
+
+    /// eventually, potentially determine account data size of all writable accounts
+    /// at the moment, calculate account data size of account creation
+    fn calculate_account_data_size(&self, transaction: &SanitizedTransaction) -> u64 {
+        transaction
+            .message()
+            .program_instructions_iter()
+            .map(|(program_id, instruction)| {
+                Self::calculate_account_data_size_on_instruction(program_id, instruction)
+            })
+            .sum()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        bank::Bank,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    };
-    use solana_sdk::{
-        bpf_loader,
-        hash::Hash,
-        instruction::CompiledInstruction,
-        message::Message,
-        signature::{Keypair, Signer},
-        system_instruction::{self},
-        system_program, system_transaction,
-        transaction::Transaction,
-    };
-    use std::{
-        convert::{TryFrom, TryInto},
-        str::FromStr,
-        sync::{Arc, RwLock},
-        thread::{self, JoinHandle},
+    use {
+        super::*,
+        crate::{
+            bank::Bank,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        solana_sdk::{
+            bpf_loader,
+            hash::Hash,
+            instruction::CompiledInstruction,
+            message::Message,
+            signature::{Keypair, Signer},
+            system_instruction::{self},
+            system_program, system_transaction,
+            transaction::Transaction,
+        },
+        std::{
+            str::FromStr,
+            sync::{Arc, RwLock},
+            thread::{self, JoinHandle},
+        },
     };
 
     fn test_setup() -> (Keypair, Hash) {
@@ -256,20 +260,65 @@ mod tests {
         let mut testee = CostModel::default();
 
         let known_key = Pubkey::from_str("known11111111111111111111111111111111111111").unwrap();
-        testee.upsert_instruction_cost(&known_key, 100).unwrap();
+        testee.upsert_instruction_cost(&known_key, 100);
         // find cost for known programs
         assert_eq!(100, testee.find_instruction_cost(&known_key));
 
-        testee
-            .upsert_instruction_cost(&bpf_loader::id(), 1999)
-            .unwrap();
+        testee.upsert_instruction_cost(&bpf_loader::id(), 1999);
         assert_eq!(1999, testee.find_instruction_cost(&bpf_loader::id()));
 
         // unknown program is assigned with default cost
         assert_eq!(
-            testee.instruction_execution_cost_table.get_mode(),
+            testee.instruction_execution_cost_table.get_default_units(),
             testee.find_instruction_cost(
                 &Pubkey::from_str("unknown111111111111111111111111111111111111").unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn test_cost_model_data_len_cost() {
+        let lamports = 0;
+        let owner = Pubkey::default();
+        let seed = String::default();
+        let space = 100;
+        let base = Pubkey::default();
+        for instruction in [
+            SystemInstruction::CreateAccount {
+                lamports,
+                space,
+                owner,
+            },
+            SystemInstruction::CreateAccountWithSeed {
+                base,
+                seed: seed.clone(),
+                lamports,
+                space,
+                owner,
+            },
+            SystemInstruction::Allocate { space },
+            SystemInstruction::AllocateWithSeed {
+                base,
+                seed,
+                space,
+                owner,
+            },
+        ] {
+            assert_eq!(
+                space,
+                CostModel::calculate_account_data_size_on_deserialized_system_instruction(
+                    instruction
+                )
+            );
+        }
+        assert_eq!(
+            0,
+            CostModel::calculate_account_data_size_on_deserialized_system_instruction(
+                SystemInstruction::TransferWithSeed {
+                    lamports,
+                    from_seed: String::default(),
+                    from_owner: Pubkey::default(),
+                }
             )
         );
     }
@@ -279,10 +328,9 @@ mod tests {
         let (mint_keypair, start_hash) = test_setup();
 
         let keypair = Keypair::new();
-        let simple_transaction: SanitizedTransaction =
-            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash)
-                .try_into()
-                .unwrap();
+        let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash),
+        );
         debug!(
             "system_transaction simple_transaction {:?}",
             simple_transaction
@@ -292,9 +340,7 @@ mod tests {
         let expected_cost = 8;
 
         let mut testee = CostModel::default();
-        testee
-            .upsert_instruction_cost(&system_program::id(), expected_cost)
-            .unwrap();
+        testee.upsert_instruction_cost(&system_program::id(), expected_cost);
         assert_eq!(
             expected_cost,
             testee.get_transaction_cost(&simple_transaction)
@@ -310,9 +356,11 @@ mod tests {
         let instructions =
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
-        let tx: SanitizedTransaction = Transaction::new(&[&mint_keypair], message, start_hash)
-            .try_into()
-            .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+            &[&mint_keypair],
+            message,
+            start_hash,
+        ));
         debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
@@ -320,9 +368,7 @@ mod tests {
         let expected_cost = program_cost * 2;
 
         let mut testee = CostModel::default();
-        testee
-            .upsert_instruction_cost(&system_program::id(), program_cost)
-            .unwrap();
+        testee.upsert_instruction_cost(&system_program::id(), program_cost);
         assert_eq!(expected_cost, testee.get_transaction_cost(&tx));
     }
 
@@ -339,22 +385,22 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 1]),
             CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
-        let tx: SanitizedTransaction = Transaction::new_with_compiled_instructions(
-            &[&mint_keypair],
-            &[key1, key2],
-            start_hash,
-            vec![prog1, prog2],
-            instructions,
-        )
-        .try_into()
-        .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(
+            Transaction::new_with_compiled_instructions(
+                &[&mint_keypair],
+                &[key1, key2],
+                start_hash,
+                vec![prog1, prog2],
+                instructions,
+            ),
+        );
         debug!("many random transaction {:?}", tx);
 
         let testee = CostModel::default();
         let result = testee.get_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
-        let expected_cost = testee.instruction_execution_cost_table.get_mode() * 2;
+        let expected_cost = testee.instruction_execution_cost_table.get_default_units() * 2;
         assert_eq!(expected_cost, result);
     }
 
@@ -371,18 +417,18 @@ mod tests {
             CompiledInstruction::new(4, &(), vec![0, 2]),
             CompiledInstruction::new(5, &(), vec![1, 3]),
         ];
-        let tx: SanitizedTransaction = Transaction::new_with_compiled_instructions(
-            &[&signer1, &signer2],
-            &[key1, key2],
-            Hash::new_unique(),
-            vec![prog1, prog2],
-            instructions,
-        )
-        .try_into()
-        .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(
+            Transaction::new_with_compiled_instructions(
+                &[&signer1, &signer2],
+                &[key1, key2],
+                Hash::new_unique(),
+                vec![prog1, prog2],
+                instructions,
+            ),
+        );
 
-        let mut cost_model = CostModel::default();
-        let tx_cost = cost_model.calculate_cost(&tx, /*demote_program_write_locks=*/ true);
+        let cost_model = CostModel::default();
+        let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(2 + 2, tx_cost.writable_accounts.len());
         assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
         assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
@@ -398,33 +444,35 @@ mod tests {
         let mut cost_model = CostModel::default();
         // Using default cost for unknown instruction
         assert_eq!(
-            cost_model.instruction_execution_cost_table.get_mode(),
+            cost_model
+                .instruction_execution_cost_table
+                .get_default_units(),
             cost_model.find_instruction_cost(&key1)
         );
 
         // insert instruction cost to table
-        assert!(cost_model.upsert_instruction_cost(&key1, cost1).is_ok());
+        cost_model.upsert_instruction_cost(&key1, cost1);
 
-        // now it is known insturction with known cost
+        // now it is known instruction with known cost
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
     }
 
     #[test]
     fn test_cost_model_calculate_cost() {
         let (mint_keypair, start_hash) = test_setup();
-        let tx: SanitizedTransaction =
-            system_transaction::transfer(&mint_keypair, &Keypair::new().pubkey(), 2, start_hash)
-                .try_into()
-                .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &Keypair::new().pubkey(),
+            2,
+            start_hash,
+        ));
 
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
-        cost_model
-            .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
-            .unwrap();
-        let tx_cost = cost_model.calculate_cost(&tx, /*demote_program_write_locks=*/ true);
+        cost_model.upsert_instruction_cost(&system_program::id(), expected_execution_cost);
+        let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
@@ -440,11 +488,11 @@ mod tests {
         let mut cost_model = CostModel::default();
 
         // insert instruction cost to table
-        assert!(cost_model.upsert_instruction_cost(&key1, cost1).is_ok());
+        cost_model.upsert_instruction_cost(&key1, cost1);
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
 
         // update instruction cost
-        assert!(cost_model.upsert_instruction_cost(&key1, cost2).is_ok());
+        cost_model.upsert_instruction_cost(&key1, cost2);
         assert_eq!(updated_cost, cost_model.find_instruction_cost(&key1));
     }
 
@@ -460,16 +508,15 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 1]),
             CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
-        let tx = Arc::new(
-            SanitizedTransaction::try_from(Transaction::new_with_compiled_instructions(
+        let tx = Arc::new(SanitizedTransaction::from_transaction_for_tests(
+            Transaction::new_with_compiled_instructions(
                 &[&mint_keypair],
                 &[key1, key2],
                 start_hash,
                 vec![prog1, prog2],
                 instructions,
-            ))
-            .unwrap(),
-        );
+            ),
+        ));
 
         let number_threads = 10;
         let expected_account_cost = WRITE_LOCK_UNITS * 3;
@@ -487,14 +534,13 @@ mod tests {
                 if i == 5 {
                     thread::spawn(move || {
                         let mut cost_model = cost_model.write().unwrap();
-                        assert!(cost_model.upsert_instruction_cost(&prog1, cost1).is_ok());
-                        assert!(cost_model.upsert_instruction_cost(&prog2, cost2).is_ok());
+                        cost_model.upsert_instruction_cost(&prog1, cost1);
+                        cost_model.upsert_instruction_cost(&prog2, cost2);
                     })
                 } else {
                     thread::spawn(move || {
-                        let mut cost_model = cost_model.write().unwrap();
-                        let tx_cost = cost_model
-                            .calculate_cost(&tx, /*demote_program_write_locks=*/ true);
+                        let cost_model = cost_model.write().unwrap();
+                        let tx_cost = cost_model.calculate_cost(&tx);
                         assert_eq!(3, tx_cost.writable_accounts.len());
                         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
                     })

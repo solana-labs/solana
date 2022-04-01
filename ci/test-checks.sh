@@ -57,32 +57,20 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
     exit "$check_status"
   fi
 
-  # Ensure nightly and --benches
+   # Ensure nightly and --benches
   _ scripts/cargo-for-all-lock-files.sh nightly check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
 
-_ ci/order-crates-for-publishing.py
+ _ ci/order-crates-for-publishing.py
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
-_ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
+ _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
 
-_ "$cargo" stable fmt --all -- --check
+_ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check
 
-_ ci/do-audit.sh
-
-{
-  cd programs/bpf
-  for project in rust/*/ ; do
-    echo "+++ do_bpf_checks $project"
-    (
-      cd "$project"
-      _ "$cargo" nightly clippy -- --deny=warnings --allow=clippy::missing_safety_doc
-      _ "$cargo" stable fmt -- --check
-    )
-  done
-}
+ _ ci/do-audit.sh
 
 echo --- ok

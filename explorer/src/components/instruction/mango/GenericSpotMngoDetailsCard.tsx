@@ -35,7 +35,7 @@ export function GenericSpotMngoDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={"Mango: " + title}
+      title={"Mango Program: " + title}
       innerCards={innerCards}
       childIndex={childIndex}
     >
@@ -49,7 +49,7 @@ export function GenericSpotMngoDetailsCard(props: {
       {mangoSpotMarketConfig !== undefined && (
         <tr>
           <td>Spot market</td>
-          <td className="text-lg-right">{mangoSpotMarketConfig.name}</td>
+          <td className="text-lg-end">{mangoSpotMarketConfig.name}</td>
         </tr>
       )}
 

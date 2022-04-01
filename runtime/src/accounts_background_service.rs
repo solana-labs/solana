@@ -2,30 +2,32 @@
 //
 // This can be expensive since we have to walk the append vecs being cleaned up.
 
-use crate::{
-    bank::{Bank, BankSlotDelta, DropCallback},
-    bank_forks::BankForks,
-    snapshot_config::SnapshotConfig,
-    snapshot_package::{AccountsPackageSender, SnapshotType},
-    snapshot_utils::{self, SnapshotError},
-};
-use crossbeam_channel::{Receiver, SendError, Sender};
-use log::*;
-use rand::{thread_rng, Rng};
-use solana_measure::measure::Measure;
-use solana_sdk::{
-    clock::{BankId, Slot},
-    hash::Hash,
-};
-use std::{
-    boxed::Box,
-    fmt::{Debug, Formatter},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+use {
+    crate::{
+        bank::{Bank, BankSlotDelta, DropCallback},
+        bank_forks::BankForks,
+        snapshot_config::SnapshotConfig,
+        snapshot_package::{AccountsPackageSender, SnapshotType},
+        snapshot_utils::{self, SnapshotError},
     },
-    thread::{self, sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    crossbeam_channel::{Receiver, SendError, Sender},
+    log::*,
+    rand::{thread_rng, Rng},
+    solana_measure::measure::Measure,
+    solana_sdk::{
+        clock::{BankId, Slot},
+        hash::Hash,
+    },
+    std::{
+        boxed::Box,
+        fmt::{Debug, Formatter},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 const INTERVAL_MS: u64 = 100;
@@ -92,7 +94,6 @@ impl SnapshotRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
@@ -109,7 +110,7 @@ impl SnapshotRequestHandler {
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
                     // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
-                    snapshot_root_bank.update_accounts_hash_with_index_option(true, false, None)
+                    snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
                 } else {
                     Hash::default()
                 };
@@ -143,11 +144,12 @@ impl SnapshotRequestHandler {
                 }
                 flush_accounts_cache_time.stop();
 
+                let use_index_hash_calculation = false;
                 let mut hash_time = Measure::start("hash_time");
                 let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
                     use_index_hash_calculation,
                     test_hash_calculation,
-                    Some(snapshot_root_bank.epoch_schedule().slots_per_epoch),
+                    false,
                 );
                 let hash_for_testing = if test_hash_calculation {
                     assert_eq!(previous_hash, this_hash);
@@ -318,7 +320,6 @@ impl AbsRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
@@ -328,7 +329,6 @@ impl AbsRequestHandler {
                 snapshot_request_handler.handle_snapshot_requests(
                     accounts_db_caching_enabled,
                     test_hash_calculation,
-                    use_index_hash_calculation,
                     non_snapshot_time_us,
                     last_full_snapshot_slot,
                 )
@@ -360,7 +360,6 @@ impl AccountsBackgroundService {
         request_handler: AbsRequestHandler,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
-        use_index_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         info!("AccountsBackgroundService active");
@@ -419,7 +418,6 @@ impl AccountsBackgroundService {
                         .handle_snapshot_requests(
                             accounts_db_caching_enabled,
                             test_hash_calculation,
-                            use_index_hash_calculation,
                             non_snapshot_time,
                             &mut last_full_snapshot_slot,
                         );
@@ -519,10 +517,12 @@ impl AccountsBackgroundService {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::genesis_utils::create_genesis_config;
-    use crossbeam_channel::unbounded;
-    use solana_sdk::{account::AccountSharedData, pubkey::Pubkey};
+    use {
+        super::*,
+        crate::genesis_utils::create_genesis_config,
+        crossbeam_channel::unbounded,
+        solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
+    };
 
     #[test]
     fn test_accounts_background_service_remove_dead_slots() {

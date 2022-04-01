@@ -3,14 +3,16 @@ import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {expect} from 'chai';
 
+import {Connection} from '../src/connection';
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
-import {Transaction} from '../src/transaction';
+import {Transaction, TransactionInstruction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
 import invariant from '../src/util/assert';
 import {toBuffer} from '../src/util/to-buffer';
+import {helpers} from './mocks/rpc-http';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -110,6 +112,28 @@ describe('Transaction', () => {
       expect(message.header.numReadonlySignedAccounts).to.eq(0);
       expect(message.header.numReadonlyUnsignedAccounts).to.eq(1);
     });
+  });
+
+  it('getEstimatedFee', async () => {
+    const connection = new Connection('https://api.testnet.solana.com');
+    const accountFrom = Keypair.generate();
+    const accountTo = Keypair.generate();
+
+    const {blockhash} = await helpers.latestBlockhash({connection});
+
+    const transaction = new Transaction({
+      feePayer: accountFrom.publicKey,
+      recentBlockhash: blockhash,
+    }).add(
+      SystemProgram.transfer({
+        fromPubkey: accountFrom.publicKey,
+        toPubkey: accountTo.publicKey,
+        lamports: 10,
+      }),
+    );
+
+    const fee = await transaction.getEstimatedFee(connection);
+    expect(fee).to.eq(5000);
   });
 
   it('partialSign', () => {
@@ -504,5 +528,87 @@ describe('Transaction', () => {
     const signature = nacl.sign.detached(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
+  });
+
+  it('can serialize, deserialize, and reserialize with a partial signer', () => {
+    const signer = Keypair.generate();
+    const acc0Writable = Keypair.generate();
+    const acc1Writable = Keypair.generate();
+    const acc2Writable = Keypair.generate();
+    const t0 = new Transaction({
+      recentBlockhash: 'HZaTsZuhN1aaz9WuuimCFMyH7wJ5xiyMUHFCnZSMyguH',
+      feePayer: signer.publicKey,
+    });
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: signer.publicKey,
+            isWritable: true,
+            isSigner: true,
+          },
+          {
+            pubkey: acc0Writable.publicKey,
+            isWritable: true,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: acc1Writable.publicKey,
+            isWritable: false,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: acc2Writable.publicKey,
+            isWritable: true,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: signer.publicKey,
+            isWritable: true,
+            isSigner: true,
+          },
+          {
+            pubkey: acc0Writable.publicKey,
+            isWritable: false,
+            isSigner: false,
+          },
+          {
+            pubkey: acc2Writable.publicKey,
+            isWritable: false,
+            isSigner: false,
+          },
+          {
+            pubkey: acc1Writable.publicKey,
+            isWritable: true,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.partialSign(signer);
+    const t1 = Transaction.from(t0.serialize());
+    t1.serialize();
   });
 });

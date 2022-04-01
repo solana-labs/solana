@@ -1,4 +1,4 @@
-//! @brief An Upgradeable Solana BPF loader.
+//! An Upgradeable Solana BPF loader.
 //!
 //! The upgradeable BPF loader is responsible for deploying, upgrading, and
 //! executing BPF programs.  The upgradeable loader allows a program's authority
@@ -8,13 +8,15 @@
 //! upgradeable programs which still have a functioning authority.  For more
 //! information refer to `loader_upgradeable_instruction.rs`
 
-use crate::{
-    instruction::{AccountMeta, Instruction, InstructionError},
-    loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-    pubkey::Pubkey,
-    system_instruction, sysvar,
+use {
+    crate::{
+        instruction::{AccountMeta, Instruction, InstructionError},
+        loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+        pubkey::Pubkey,
+        system_instruction, sysvar,
+    },
+    bincode::serialized_size,
 };
-use bincode::serialized_size;
 
 crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
 
@@ -261,7 +263,7 @@ pub fn close_any(
         AccountMeta::new(*recipient_address, false),
     ];
     if let Some(authority_address) = authority_address {
-        metas.push(AccountMeta::new(*authority_address, true));
+        metas.push(AccountMeta::new_readonly(*authority_address, true));
     }
     if let Some(program_address) = program_address {
         metas.push(AccountMeta::new(*program_address, false));

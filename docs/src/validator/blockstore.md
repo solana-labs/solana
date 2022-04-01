@@ -52,13 +52,13 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
      the ledger to find possible fork points.
 
    - `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
-   - `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted\(n\) be the statement that "the slot\(n\).is_rooted is true". Then:
+   - `is_connected` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_connected for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_connected\(n\) be the statement that "the slot\(n\).is_connected is true". Then:
 
-     is_rooted\(0\) is_rooted\(n+1\) iff \(is_rooted\(n\) and slot\(n\).is_full\(\)
+     is_connected\(0\) is_connected\(n+1\) iff \(is_connected\(n\) and slot\(n\).is_full\(\)
 
 3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks \(`num_blocks`\) for that new slot \(this information is encoded in the shred\). We then know that this new slot chains to slot `x - num_blocks`.
 4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
-5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
+5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_connected is flipped from false to true for any `n`.
 
 ## Blockstore APIs
 

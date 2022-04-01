@@ -1,38 +1,45 @@
-use crate::{
-    accounts_index_storage::AccountsIndexStorage,
-    ancestors::Ancestors,
-    bucket_map_holder::{Age, BucketMapHolder},
-    contains::Contains,
-    in_mem_accounts_index::InMemAccountsIndex,
-    inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-    pubkey_bins::PubkeyBinCalculator16,
-    secondary_index::*,
-};
-use bv::BitVec;
-use log::*;
-use ouroboros::self_referencing;
-use rand::thread_rng;
-use rand::Rng;
-use solana_measure::measure::Measure;
-use solana_sdk::{
-    clock::{BankId, Slot},
-    pubkey::{Pubkey, PUBKEY_BYTES},
-};
-use std::{
-    collections::{btree_map::BTreeMap, HashSet},
-    fmt::Debug,
-    ops::{
-        Bound,
-        Bound::{Excluded, Included, Unbounded},
-        Range, RangeBounds,
+use {
+    crate::{
+        accounts_index_storage::{AccountsIndexStorage, Startup},
+        ancestors::Ancestors,
+        bucket_map_holder::{Age, BucketMapHolder},
+        contains::Contains,
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
+        inline_spl_token::{self, GenericTokenAccount},
+        inline_spl_token_2022,
+        pubkey_bins::PubkeyBinCalculator24,
+        rolling_bit_field::RollingBitField,
+        secondary_index::*,
     },
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
-        Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    log::*,
+    ouroboros::self_referencing,
+    rand::{thread_rng, Rng},
+    rayon::{
+        iter::{IntoParallelIterator, ParallelIterator},
+        ThreadPool,
     },
+    solana_measure::measure::Measure,
+    solana_sdk::{
+        account::ReadableAccount,
+        clock::{BankId, Slot},
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::{btree_map::BTreeMap, HashSet},
+        fmt::Debug,
+        ops::{
+            Bound,
+            Bound::{Excluded, Included, Unbounded},
+            Range, RangeBounds,
+        },
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+            Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+        },
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
@@ -43,8 +50,10 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: Some(1),
+    index_limit_mb: None,
     ages_to_stay_in_cache: None,
+    scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
@@ -52,6 +61,8 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     drives: None,
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
+    scan_results_limit_bytes: None,
+    started_from_validator: false,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -59,11 +70,52 @@ pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 pub type AccountMap<V> = Arc<InMemAccountsIndex<V>>;
 
+#[derive(Debug, Default)]
+pub struct ScanConfig {
+    /// checked by the scan. When true, abort scan.
+    pub abort: Option<Arc<AtomicBool>>,
+
+    /// true to allow return of all matching items and allow them to be unsorted.
+    /// This is more efficient.
+    pub collect_all_unsorted: bool,
+}
+
+impl ScanConfig {
+    pub fn new(collect_all_unsorted: bool) -> Self {
+        Self {
+            collect_all_unsorted,
+            ..ScanConfig::default()
+        }
+    }
+
+    /// mark the scan as aborted
+    pub fn abort(&self) {
+        if let Some(abort) = self.abort.as_ref() {
+            abort.store(true, Ordering::Relaxed)
+        }
+    }
+
+    /// use existing 'abort' if available, otherwise allocate one
+    pub fn recreate_with_abort(&self) -> Self {
+        ScanConfig {
+            abort: Some(self.abort.as_ref().map(Arc::clone).unwrap_or_default()),
+            collect_all_unsorted: self.collect_all_unsorted,
+        }
+    }
+
+    /// true if scan should abort
+    pub fn is_aborted(&self) -> bool {
+        if let Some(abort) = self.abort.as_ref() {
+            abort.load(Ordering::Relaxed)
+        } else {
+            false
+        }
+    }
+}
+
 pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached:
-    'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default + Sync + Send
-{
+pub trait IsCached {
     fn is_cached(&self) -> bool;
 }
 
@@ -76,6 +128,8 @@ pub trait IndexValue:
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, bank_id: BankId },
+    #[error("scan aborted: {0}")]
+    Aborted(String),
 }
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
@@ -110,6 +164,9 @@ pub struct AccountsIndexConfig {
     pub drives: Option<Vec<PathBuf>>,
     pub index_limit_mb: Option<usize>,
     pub ages_to_stay_in_cache: Option<Age>,
+    pub scan_results_limit_bytes: Option<usize>,
+    /// true if the accounts index is being created as a result of being started as a validator (as opposed to test, etc.)
+    pub started_from_validator: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -134,8 +191,12 @@ impl AccountSecondaryIndexes {
 }
 
 #[derive(Debug, Default)]
+/// data per entry in in-mem accounts index
+/// used to keep track of consistency with disk index
 pub struct AccountMapEntryMeta {
+    /// true if entry in in-mem idx has changes and needs to be written to disk
     pub dirty: AtomicBool,
+    /// 'age' at which this entry should be purged from the cache (implements lru)
     pub age: AtomicU8,
 }
 
@@ -146,12 +207,26 @@ impl AccountMapEntryMeta {
             age: AtomicU8::new(storage.future_age_to_flush()),
         }
     }
+    pub fn new_clean<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
+        AccountMapEntryMeta {
+            dirty: AtomicBool::new(false),
+            age: AtomicU8::new(storage.future_age_to_flush()),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
+/// one entry in the in-mem accounts index
+/// Represents the value for an account key in the in-memory accounts index
 pub struct AccountMapEntryInner<T> {
+    /// number of alive slots that contain >= 1 instances of account data for this pubkey
+    /// where alive represents a slot that has not yet been removed by clean via AccountsDB::clean_stored_dead_slots() for containing no up to date account information
     ref_count: AtomicU64,
+    /// list of slots in which this pubkey was updated
+    /// Note that 'clean' removes outdated entries (ie. older roots) from this slot_list
+    /// purge_slot() also removes non-rooted slots from this list
     pub slot_list: RwLock<SlotList<T>>,
+    /// synchronization metadata for in-memory state since last flush to disk accounts index
     pub meta: AccountMapEntryMeta,
 }
 
@@ -193,18 +268,28 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn age(&self) -> Age {
-        self.meta.age.load(Ordering::Relaxed)
+        self.meta.age.load(Ordering::Acquire)
     }
 
     pub fn set_age(&self, value: Age) {
-        self.meta.age.store(value, Ordering::Relaxed)
+        self.meta.age.store(value, Ordering::Release)
+    }
+
+    /// set age to 'next_age' if 'self.age' is 'expected_age'
+    pub fn try_exchange_age(&self, next_age: Age, expected_age: Age) {
+        let _ = self.meta.age.compare_exchange(
+            expected_age,
+            next_age,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        );
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: IndexValue> {
+pub enum AccountIndexGetResult<T: IndexValue> {
+    /// (index entry, index in slot list)
     Found(ReadAccountMapEntry<T>, usize),
-    NotFoundOnFork,
-    Missing(AccountMapsReadLock<'a, T>),
+    NotFound,
 }
 
 #[self_referencing]
@@ -247,19 +332,29 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 }
 
-pub struct PreAllocatedAccountMapEntry<T: IndexValue> {
-    entry: AccountMapEntry<T>,
+/// can be used to pre-allocate structures for insertion into accounts index outside of lock
+pub enum PreAllocatedAccountMapEntry<T: IndexValue> {
+    Entry(AccountMapEntry<T>),
+    Raw((Slot, T)),
 }
 
-impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for AccountMapEntry<T> {
-    fn from(source: PreAllocatedAccountMapEntry<T>) -> AccountMapEntry<T> {
-        source.entry
+impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
+    fn is_zero_lamport(&self) -> bool {
+        match self {
+            PreAllocatedAccountMapEntry::Entry(entry) => {
+                entry.slot_list.read().unwrap()[0].1.is_zero_lamport()
+            }
+            PreAllocatedAccountMapEntry::Raw(raw) => raw.1.is_zero_lamport(),
+        }
     }
 }
 
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
     fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
-        source.entry.slot_list.write().unwrap().remove(0)
+        match source {
+            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.write().unwrap().remove(0),
+            PreAllocatedAccountMapEntry::Raw(raw) => raw,
+        }
     }
 }
 
@@ -272,277 +367,45 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         slot: Slot,
         account_info: T,
         storage: &Arc<BucketMapHolder<T>>,
+        store_raw: bool,
     ) -> PreAllocatedAccountMapEntry<T> {
-        Self::new_internal(slot, account_info, AccountMapEntryMeta::new_dirty(storage))
+        if store_raw {
+            Self::Raw((slot, account_info))
+        } else {
+            Self::Entry(Self::allocate(slot, account_info, storage))
+        }
     }
 
-    fn new_internal(
+    fn allocate(
         slot: Slot,
         account_info: T,
-        meta: AccountMapEntryMeta,
-    ) -> PreAllocatedAccountMapEntry<T> {
+        storage: &Arc<BucketMapHolder<T>>,
+    ) -> AccountMapEntry<T> {
         let ref_count = if account_info.is_cached() { 0 } else { 1 };
-        PreAllocatedAccountMapEntry {
-            entry: Arc::new(AccountMapEntryInner::new(
-                vec![(slot, account_info)],
-                ref_count,
-                meta,
-            )),
+        let meta = AccountMapEntryMeta::new_dirty(storage);
+        Arc::new(AccountMapEntryInner::new(
+            vec![(slot, account_info)],
+            ref_count,
+            meta,
+        ))
+    }
+
+    pub fn into_account_map_entry(self, storage: &Arc<BucketMapHolder<T>>) -> AccountMapEntry<T> {
+        match self {
+            Self::Entry(entry) => entry,
+            Self::Raw((slot, account_info)) => Self::allocate(slot, account_info, storage),
         }
-    }
-}
-
-#[derive(Debug, Default, AbiExample, Clone)]
-pub struct RollingBitField {
-    max_width: u64,
-    min: u64,
-    max: u64, // exclusive
-    bits: BitVec,
-    count: usize,
-    // These are items that are true and lower than min.
-    // They would cause us to exceed max_width if we stored them in our bit field.
-    // We only expect these items in conditions where there is some other bug in the system
-    //  or in testing when large ranges are created.
-    excess: HashSet<u64>,
-}
-
-impl PartialEq<RollingBitField> for RollingBitField {
-    fn eq(&self, other: &Self) -> bool {
-        // 2 instances could have different internal data for the same values,
-        // so we have to compare data.
-        self.len() == other.len() && {
-            for item in self.get_all() {
-                if !other.contains(&item) {
-                    return false;
-                }
-            }
-            true
-        }
-    }
-}
-
-// functionally similar to a hashset
-// Relies on there being a sliding window of key values. The key values continue to increase.
-// Old key values are removed from the lesser values and do not accumulate.
-impl RollingBitField {
-    pub fn new(max_width: u64) -> Self {
-        assert!(max_width > 0);
-        assert!(max_width.is_power_of_two()); // power of 2 to make dividing a shift
-        let bits = BitVec::new_fill(false, max_width);
-        Self {
-            max_width,
-            bits,
-            count: 0,
-            min: 0,
-            max: 0,
-            excess: HashSet::new(),
-        }
-    }
-
-    // find the array index
-    fn get_address(&self, key: &u64) -> u64 {
-        key % self.max_width
-    }
-
-    pub fn range_width(&self) -> u64 {
-        // note that max isn't updated on remove, so it can be above the current max
-        self.max - self.min
-    }
-
-    pub fn min(&self) -> Option<u64> {
-        if self.is_empty() {
-            None
-        } else if self.excess.is_empty() {
-            Some(self.min)
-        } else {
-            let mut min = if self.all_items_in_excess() {
-                u64::MAX
-            } else {
-                self.min
-            };
-            for item in &self.excess {
-                min = std::cmp::min(min, *item);
-            }
-            Some(min)
-        }
-    }
-
-    pub fn insert(&mut self, key: u64) {
-        let mut bits_empty = self.count == 0 || self.all_items_in_excess();
-        let update_bits = if bits_empty {
-            true // nothing in bits, so in range
-        } else if key < self.min {
-            // bits not empty and this insert is before min, so add to excess
-            if self.excess.insert(key) {
-                self.count += 1;
-            }
-            false
-        } else if key < self.max {
-            true // fits current bit field range
-        } else {
-            // key is >= max
-            let new_max = key + 1;
-            loop {
-                let new_width = new_max.saturating_sub(self.min);
-                if new_width <= self.max_width {
-                    // this key will fit the max range
-                    break;
-                }
-
-                // move the min item from bits to excess and then purge from min to make room for this new max
-                let inserted = self.excess.insert(self.min);
-                assert!(inserted);
-
-                let key = self.min;
-                let address = self.get_address(&key);
-                self.bits.set(address, false);
-                self.purge(&key);
-
-                if self.all_items_in_excess() {
-                    // if we moved the last existing item to excess, then we are ready to insert the new item in the bits
-                    bits_empty = true;
-                    break;
-                }
-            }
-
-            true // moved things to excess if necessary, so update bits with the new entry
-        };
-
-        if update_bits {
-            let address = self.get_address(&key);
-            let value = self.bits.get(address);
-            if !value {
-                self.bits.set(address, true);
-                if bits_empty {
-                    self.min = key;
-                    self.max = key + 1;
-                } else {
-                    self.min = std::cmp::min(self.min, key);
-                    self.max = std::cmp::max(self.max, key + 1);
-                    assert!(
-                        self.min + self.max_width >= self.max,
-                        "min: {}, max: {}, max_width: {}",
-                        self.min,
-                        self.max,
-                        self.max_width
-                    );
-                }
-                self.count += 1;
-            }
-        }
-    }
-
-    pub fn remove(&mut self, key: &u64) -> bool {
-        if key >= &self.min {
-            // if asked to remove something bigger than max, then no-op
-            if key < &self.max {
-                let address = self.get_address(key);
-                let get = self.bits.get(address);
-                if get {
-                    self.count -= 1;
-                    self.bits.set(address, false);
-                    self.purge(key);
-                }
-                get
-            } else {
-                false
-            }
-        } else {
-            // asked to remove something < min. would be in excess if it exists
-            let remove = self.excess.remove(key);
-            if remove {
-                self.count -= 1;
-            }
-            remove
-        }
-    }
-
-    fn all_items_in_excess(&self) -> bool {
-        self.excess.len() == self.count
-    }
-
-    // after removing 'key' where 'key' = min, make min the correct new min value
-    fn purge(&mut self, key: &u64) {
-        if self.count > 0 && !self.all_items_in_excess() {
-            if key == &self.min {
-                let start = self.min + 1; // min just got removed
-                for key in start..self.max {
-                    if self.contains_assume_in_range(&key) {
-                        self.min = key;
-                        break;
-                    }
-                }
-            }
-        } else {
-            // The idea is that there are no items in the bitfield anymore.
-            // But, there MAY be items in excess. The model works such that items < min go into excess.
-            // So, after purging all items from bitfield, we hold max to be what it previously was, but set min to max.
-            // Thus, if we lookup >= max, answer is always false without having to look in excess.
-            // If we changed max here to 0, we would lose the ability to know the range of items in excess (if any).
-            // So, now, with min updated = max:
-            // If we lookup < max, then we first check min.
-            // If >= min, then we look in bitfield.
-            // Otherwise, we look in excess since the request is < min.
-            // So, resetting min like this after a remove results in the correct behavior for the model.
-            // Later, if we insert and there are 0 items total (excess + bitfield), then we reset min/max to reflect the new item only.
-            self.min = self.max;
-        }
-    }
-
-    fn contains_assume_in_range(&self, key: &u64) -> bool {
-        // the result may be aliased. Caller is responsible for determining key is in range.
-        let address = self.get_address(key);
-        self.bits.get(address)
-    }
-
-    // This is the 99% use case.
-    // This needs be fast for the most common case of asking for key >= min.
-    pub fn contains(&self, key: &u64) -> bool {
-        if key < &self.max {
-            if key >= &self.min {
-                // in the bitfield range
-                self.contains_assume_in_range(key)
-            } else {
-                self.excess.contains(key)
-            }
-        } else {
-            false
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.count
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn clear(&mut self) {
-        let mut n = Self::new(self.max_width);
-        std::mem::swap(&mut n, self);
-    }
-
-    pub fn max(&self) -> u64 {
-        self.max
-    }
-
-    pub fn get_all(&self) -> Vec<u64> {
-        let mut all = Vec::with_capacity(self.count);
-        self.excess.iter().for_each(|slot| all.push(*slot));
-        for key in self.min..self.max {
-            if self.contains_assume_in_range(&key) {
-                all.push(key);
-            }
-        }
-        all
     }
 }
 
 #[derive(Debug)]
 pub struct RootsTracker {
-    roots: RollingBitField,
-    max_root: Slot,
+    /// current set of roots active in approx. the current epoch
+    pub(crate) roots: RollingBitField,
+    /// Set of roots approx. within the current epoch that are roots now or were roots at one point in time.
+    /// A root could remain here if all entries in the append vec at that root are cleaned/shrunk and there are no
+    ///  more entries that slot. 'roots' will no longer contain such roots.
+    pub(crate) roots_original: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -560,7 +423,7 @@ impl RootsTracker {
     pub fn new(max_width: u64) -> Self {
         Self {
             roots: RollingBitField::new(max_width),
-            max_root: 0,
+            roots_original: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
@@ -585,7 +448,7 @@ pub struct AccountsIndexRootsStats {
 
 pub struct AccountsIndexIterator<'a, T: IndexValue> {
     account_maps: &'a LockMapTypeSlice<T>,
-    bin_calculator: &'a PubkeyBinCalculator16,
+    bin_calculator: &'a PubkeyBinCalculator24,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
@@ -601,7 +464,7 @@ impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        let mut result = map.items(&Some(&range));
+        let mut result = map.items(&range);
         if !collect_all_unsorted {
             result.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         }
@@ -675,21 +538,22 @@ impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
         }
     }
 
-    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool, thread_pool: &ThreadPool)
     where
-        R: RangeBounds<Pubkey> + Debug,
+        R: RangeBounds<Pubkey> + Debug + Sync,
     {
         // forward this hold request ONLY to the bins which contain keys in the specified range
         let (start_bin, bin_range) = self.bin_start_and_range();
-        self.account_maps
-            .iter()
-            .skip(start_bin)
-            .take(bin_range)
-            .for_each(|map| {
+        // the idea is this range shouldn't be more than a few buckets, but the process of loading from disk buckets is very slow
+        // so, parallelize the bucket loads
+        thread_pool.install(|| {
+            (0..bin_range).into_par_iter().for_each(|idx| {
+                let map = &self.account_maps[idx + start_bin];
                 map.read()
                     .unwrap()
                     .hold_range_in_memory(range, start_holding);
             });
+        });
     }
 }
 
@@ -755,11 +619,11 @@ impl ScanSlotTracker {
 #[derive(Debug)]
 pub struct AccountsIndex<T: IndexValue> {
     pub account_maps: LockMapType<T>,
-    pub bin_calculator: PubkeyBinCalculator16,
+    pub bin_calculator: PubkeyBinCalculator24,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
-    roots_tracker: RwLock<RootsTracker>,
+    pub(crate) roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
     // Each scan has some latest slot `S` that is the tip of the fork the scan
     // is iterating over. The unique id of that slot `S` is recorded here (note we don't use
@@ -774,6 +638,9 @@ pub struct AccountsIndex<T: IndexValue> {
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
 
     storage: AccountsIndexStorage<T>,
+
+    /// when a scan's accumulated data exceeds this limit, abort the scan
+    pub scan_results_limit_bytes: Option<usize>,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -782,6 +649,9 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
+        let scan_results_limit_bytes = config
+            .as_ref()
+            .and_then(|config| config.scan_results_limit_bytes);
         let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config);
         Self {
             account_maps,
@@ -799,6 +669,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
             storage,
+            scan_results_limit_bytes,
         }
     }
 
@@ -806,7 +677,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         config: Option<AccountsIndexConfig>,
     ) -> (
         LockMapType<T>,
-        PubkeyBinCalculator16,
+        PubkeyBinCalculator24,
         AccountsIndexStorage<T>,
     ) {
         let bins = config
@@ -814,7 +685,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
         // create bin_calculator early to verify # bins is reasonable
-        let bin_calculator = PubkeyBinCalculator16::new(bins);
+        let bin_calculator = PubkeyBinCalculator24::new(bins);
         let storage = AccountsIndexStorage::new(bins, &config);
         let account_maps = (0..bins)
             .into_iter()
@@ -830,6 +701,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         AccountsIndexIterator::new(self, range, collect_all_unsorted)
     }
 
+    /// is the accounts index using disk as a backing store
+    pub fn is_disk_index_enabled(&self) -> bool {
+        self.storage.storage.is_disk_index_enabled()
+    }
+
     fn do_checked_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,
@@ -837,7 +713,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         scan_bank_id: BankId,
         func: F,
         scan_type: ScanTypes<R>,
-        collect_all_unsorted: bool,
+        config: &ScanConfig,
     ) -> Result<(), ScanError>
     where
         F: FnMut(&Pubkey, (&T, Slot)),
@@ -866,10 +742,10 @@ impl<T: IndexValue> AccountsIndex<T> {
             // the `ongoing_scan_roots` lock is held,
             // make sure inverse doesn't happen to avoid
             // deadlock
-            let max_root = self.max_root();
-            *w_ongoing_scan_roots.entry(max_root).or_default() += 1;
+            let max_root_inclusive = self.max_root_inclusive();
+            *w_ongoing_scan_roots.entry(max_root_inclusive).or_default() += 1;
 
-            max_root
+            max_root_inclusive
         };
 
         // First we show that for any bank `B` that is a descendant of
@@ -990,14 +866,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         match scan_type {
             ScanTypes::Unindexed(range) => {
                 // Pass "" not to log metrics, so RPC doesn't get spammy
-                self.do_scan_accounts(
-                    metric_name,
-                    ancestors,
-                    func,
-                    range,
-                    Some(max_root),
-                    collect_all_unsorted,
-                );
+                self.do_scan_accounts(metric_name, ancestors, func, range, Some(max_root), config);
             }
             ScanTypes::Indexed(IndexKey::ProgramId(program_id)) => {
                 self.do_scan_secondary_index(
@@ -1006,6 +875,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                     &self.program_id_index,
                     &program_id,
                     Some(max_root),
+                    config,
                 );
             }
             ScanTypes::Indexed(IndexKey::SplTokenMint(mint_key)) => {
@@ -1015,6 +885,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                     &self.spl_token_mint_index,
                     &mint_key,
                     Some(max_root),
+                    config,
                 );
             }
             ScanTypes::Indexed(IndexKey::SplTokenOwner(owner_key)) => {
@@ -1024,6 +895,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                     &self.spl_token_owner_index,
                     &owner_key,
                     Some(max_root),
+                    config,
                 );
             }
         }
@@ -1061,19 +933,12 @@ impl<T: IndexValue> AccountsIndex<T> {
         ancestors: &Ancestors,
         func: F,
         range: Option<R>,
-        collect_all_unsorted: bool,
+        config: &ScanConfig,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        self.do_scan_accounts(
-            metric_name,
-            ancestors,
-            func,
-            range,
-            None,
-            collect_all_unsorted,
-        );
+        self.do_scan_accounts(metric_name, ancestors, func, range, None, config);
     }
 
     // Scan accounts and return latest version of each account that is either:
@@ -1086,7 +951,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         mut func: F,
         range: Option<R>,
         max_root: Option<Slot>,
-        collect_all_unsorted: bool,
+        config: &ScanConfig,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey> + std::fmt::Debug,
@@ -1100,7 +965,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let mut read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
         let mut iterator_timer = Measure::start("iterator_elapsed");
-        for pubkey_list in self.iter(range.as_ref(), collect_all_unsorted) {
+        for pubkey_list in self.iter(range.as_ref(), config.collect_all_unsorted) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
             for (pubkey, list) in pubkey_list {
@@ -1117,6 +982,9 @@ impl<T: IndexValue> AccountsIndex<T> {
                     func(&pubkey, (&list_r[index].1, list_r[index].0));
                     load_account_timer.stop();
                     load_account_elapsed += load_account_timer.as_us();
+                }
+                if config.is_aborted() {
+                    return;
                 }
             }
             iterator_timer = Measure::start("iterator_elapsed");
@@ -1146,6 +1014,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key: &Pubkey,
         max_root: Option<Slot>,
+        config: &ScanConfig,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
@@ -1155,10 +1024,11 @@ impl<T: IndexValue> AccountsIndex<T> {
             if let AccountIndexGetResult::Found(list_r, index) =
                 self.get(&pubkey, Some(ancestors), max_root)
             {
-                func(
-                    &pubkey,
-                    (&list_r.slot_list()[index].1, list_r.slot_list()[index].0),
-                );
+                let entry = &list_r.slot_list()[index];
+                func(&pubkey, (&entry.1, entry.0));
+            }
+            if config.is_aborted() {
+                break;
             }
         }
     }
@@ -1212,11 +1082,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         ancestors: &Ancestors,
         scan_bank_id: BankId,
         func: F,
+        config: &ScanConfig,
     ) -> Result<(), ScanError>
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        let collect_all_unsorted = false;
         // Pass "" not to log metrics, so RPC doesn't get spammy
         self.do_checked_scan_accounts(
             "",
@@ -1224,7 +1094,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             scan_bank_id,
             func,
             ScanTypes::Unindexed(None::<Range<Pubkey>>),
-            collect_all_unsorted,
+            config,
         )
     }
 
@@ -1233,7 +1103,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         metric_name: &'static str,
         ancestors: &Ancestors,
         func: F,
-        collect_all_unsorted: bool,
+        config: &ScanConfig,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
@@ -1242,7 +1112,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             ancestors,
             func,
             None::<Range<Pubkey>>,
-            collect_all_unsorted,
+            config,
         );
     }
 
@@ -1252,20 +1122,14 @@ impl<T: IndexValue> AccountsIndex<T> {
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
-        collect_all_unsorted: bool,
+        config: &ScanConfig,
         func: F,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         // Only the rent logic should be calling this, which doesn't need the safety checks
-        self.do_unchecked_scan_accounts(
-            metric_name,
-            ancestors,
-            func,
-            Some(range),
-            collect_all_unsorted,
-        );
+        self.do_unchecked_scan_accounts(metric_name, ancestors, func, Some(range), config);
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
@@ -1275,12 +1139,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         scan_bank_id: BankId,
         index_key: IndexKey,
         func: F,
+        config: &ScanConfig,
     ) -> Result<(), ScanError>
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        let collect_all_unsorted = false;
-
         // Pass "" not to log metrics, so RPC doesn't get spammy
         self.do_checked_scan_accounts(
             "",
@@ -1288,7 +1151,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             scan_bank_id,
             func,
             ScanTypes::<Range<Pubkey>>::Indexed(index_key),
-            collect_all_unsorted,
+            config,
         )
     }
 
@@ -1388,16 +1251,63 @@ impl<T: IndexValue> AccountsIndex<T> {
         rv.map(|index| slice.len() - 1 - index)
     }
 
-    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool, thread_pool: &ThreadPool)
     where
-        R: RangeBounds<Pubkey> + Debug,
+        R: RangeBounds<Pubkey> + Debug + Sync,
     {
         let iter = self.iter(Some(range), true);
-        iter.hold_range_in_memory(range, start_holding);
+        iter.hold_range_in_memory(range, start_holding, thread_pool);
     }
 
-    pub fn set_startup(&self, value: bool) {
-        self.storage.storage.set_startup(value);
+    pub fn set_startup(&self, value: Startup) {
+        self.storage.set_startup(value);
+    }
+
+    pub fn get_startup_remaining_items_to_flush_estimate(&self) -> usize {
+        self.storage.get_startup_remaining_items_to_flush_estimate()
+    }
+
+    /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`
+    ///   call `callback`
+    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
+    where
+        // return true if accounts index entry should be put in in_mem cache
+        // params:
+        //  exists: false if not in index at all
+        //  slot list found at slot at most max_root or empty slot list
+        //  index in slot list where best slot was found or None if nothing found by root criteria
+        //  pubkey looked up
+        //  refcount of entry in index
+        F: FnMut(bool, &SlotList<T>, Option<usize>, &Pubkey, RefCount) -> bool,
+    {
+        let empty_slot_list = vec![];
+        let mut lock = None;
+        let mut last_bin = self.bins(); // too big, won't match
+        pubkeys.iter().for_each(|pubkey| {
+            let bin = self.bin_calculator.bin_from_pubkey(pubkey);
+            if bin != last_bin {
+                // cannot re-use lock since next pubkey is in a different bin than previous one
+                lock = Some(self.account_maps[bin].read().unwrap());
+                last_bin = bin;
+            }
+            lock.as_ref().unwrap().get_internal(pubkey, |entry| {
+                let cache = match entry {
+                    Some(locked_entry) => {
+                        let slot_list = &locked_entry.slot_list.read().unwrap();
+                        let found_index = self.latest_slot(None, slot_list, max_root);
+                        callback(
+                            true,
+                            slot_list,
+                            found_index,
+                            pubkey,
+                            locked_entry.ref_count(),
+                        )
+                    }
+                    None => callback(false, &empty_slot_list, None, pubkey, RefCount::MAX),
+                };
+                (cache, ())
+            });
+        });
     }
 
     /// Get an account
@@ -1407,7 +1317,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
-    ) -> AccountIndexGetResult<'_, T> {
+    ) -> AccountIndexGetResult<T> {
         let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
             .unwrap();
@@ -1422,10 +1332,10 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
                     Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
-                    None => AccountIndexGetResult::NotFoundOnFork,
+                    None => AccountIndexGetResult::NotFound,
                 }
             }
-            None => AccountIndexGetResult::Missing(read_lock),
+            None => AccountIndexGetResult::NotFound,
         }
     }
 
@@ -1449,16 +1359,45 @@ impl<T: IndexValue> AccountsIndex<T> {
         max_root
     }
 
-    pub(crate) fn update_secondary_indexes(
+    fn update_spl_token_secondary_indexes<G: GenericTokenAccount>(
         &self,
+        token_id: &Pubkey,
         pubkey: &Pubkey,
         account_owner: &Pubkey,
         account_data: &[u8],
         account_indexes: &AccountSecondaryIndexes,
     ) {
+        if *account_owner == *token_id {
+            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
+                if let Some(owner_key) = G::unpack_account_owner(account_data) {
+                    if account_indexes.include_key(owner_key) {
+                        self.spl_token_owner_index.insert(owner_key, pubkey);
+                    }
+                }
+            }
+
+            if account_indexes.contains(&AccountIndex::SplTokenMint) {
+                if let Some(mint_key) = G::unpack_account_mint(account_data) {
+                    if account_indexes.include_key(mint_key) {
+                        self.spl_token_mint_index.insert(mint_key, pubkey);
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn update_secondary_indexes(
+        &self,
+        pubkey: &Pubkey,
+        account: &impl ReadableAccount,
+        account_indexes: &AccountSecondaryIndexes,
+    ) {
         if account_indexes.is_empty() {
             return;
         }
+
+        let account_owner = account.owner();
+        let account_data = account.data();
 
         if account_indexes.contains(&AccountIndex::ProgramId)
             && account_indexes.include_key(account_owner)
@@ -1478,29 +1417,21 @@ impl<T: IndexValue> AccountsIndex<T> {
         // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
-        if *account_owner == inline_spl_token_v2_0::id()
-            && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
-        {
-            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                let owner_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&owner_key) {
-                    self.spl_token_owner_index.insert(&owner_key, pubkey);
-                }
-            }
 
-            if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                let mint_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&mint_key) {
-                    self.spl_token_mint_index.insert(&mint_key, pubkey);
-                }
-            }
-        }
+        self.update_spl_token_secondary_indexes::<inline_spl_token::Account>(
+            &inline_spl_token::id(),
+            pubkey,
+            account_owner,
+            account_data,
+            account_indexes,
+        );
+        self.update_spl_token_secondary_indexes::<inline_spl_token_2022::Account>(
+            &inline_spl_token_2022::id(),
+            pubkey,
+            account_owner,
+            account_data,
+            account_indexes,
+        );
     }
 
     fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<T> {
@@ -1539,6 +1470,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // offset bin 0 in the 'binned' array by a random amount.
         // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins.
         let random_offset = thread_rng().gen_range(0, bins);
+        let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
             .into_iter()
             .map(|mut pubkey_bin| {
@@ -1559,8 +1491,12 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                let info =
-                    PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
+                let info = PreAllocatedAccountMapEntry::new(
+                    slot,
+                    account_info,
+                    &self.storage.storage,
+                    use_disk,
+                );
                 binned[binned_index].1.push((pubkey, info));
                 result
             })
@@ -1570,28 +1506,14 @@ impl<T: IndexValue> AccountsIndex<T> {
         let insertion_time = AtomicU64::new(0);
 
         binned.into_iter().for_each(|(pubkey_bin, items)| {
-            let mut _reclaims = SlotList::new();
-
-            // big enough so not likely to re-allocate, small enough to not over-allocate by too much
-            // this assumes 10% of keys are duplicates. This vector will be flattened below.
             let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
             items.into_iter().for_each(|(pubkey, new_item)| {
-                let already_exists =
-                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item);
-                if let Some((account_entry, account_info, pubkey)) = already_exists {
-                    let is_zero_lamport = account_info.is_zero_lamport();
-                    InMemAccountsIndex::lock_and_update_slot_list(
-                        &account_entry,
-                        (slot, account_info),
-                        &mut _reclaims,
-                        false,
-                    );
-
-                    if !is_zero_lamport {
-                        // zero lamports were already added to dirty_pubkeys above
-                        dirty_pubkeys.push(pubkey);
-                    }
+                if let InsertNewEntryResults::ExistedNewEntryNonZeroLamports =
+                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item)
+                {
+                    // zero lamports were already added to dirty_pubkeys above
+                    dirty_pubkeys.push(pubkey);
                 }
             });
             insert_time.stop();
@@ -1601,20 +1523,22 @@ impl<T: IndexValue> AccountsIndex<T> {
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
 
-    // Updates the given pubkey at the given slot with the new account information.
-    // Returns true if the pubkey was newly inserted into the index, otherwise, if the
-    // pubkey updates an existing entry in the index, returns false.
+    /// Updates the given pubkey at the given slot with the new account information.
+    /// on return, the index's previous account info may be returned in 'reclaims' depending on 'previous_slot_entry_was_cached'
     pub fn upsert(
         &self,
-        slot: Slot,
+        new_slot: Slot,
+        old_slot: Slot,
         pubkey: &Pubkey,
-        account_owner: &Pubkey,
-        account_data: &[u8],
+        account: &impl ReadableAccount,
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
+        // vast majority of updates are to item already in accounts index, so store as raw to avoid unnecessary allocations
+        let store_raw = true;
+
         // We don't atomically update both primary index and secondary index together.
         // This certainly creates a small time window with inconsistent state across the two indexes.
         // However, this is acceptable because:
@@ -1626,20 +1550,30 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  - The secondary index is never consulted as primary source of truth for gets/stores.
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
-        let new_item = PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
+        let new_item = PreAllocatedAccountMapEntry::new(
+            new_slot,
+            account_info,
+            &self.storage.storage,
+            store_raw,
+        );
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         {
             let r_account_maps = map.read().unwrap();
-            r_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
+            r_account_maps.upsert(
+                pubkey,
+                new_item,
+                Some(old_slot),
+                reclaims,
+                previous_slot_entry_was_cached,
+            );
         }
-        self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
+        self.update_secondary_indexes(pubkey, account, account_indexes);
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.unref();
-        }
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+        map.read().unwrap().unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
@@ -1677,7 +1611,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let roots_tracker = &self.roots_tracker.read().unwrap();
         let newest_root_in_slot_list =
             Self::get_newest_root_in_slot_list(&roots_tracker.roots, slot_list, max_clean_root);
-        let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root);
+        let max_clean_root = max_clean_root.unwrap_or_else(|| roots_tracker.roots.max_inclusive());
 
         slot_list.retain(|(slot, value)| {
             let should_purge =
@@ -1752,14 +1686,15 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
+        assert!(slot >= w_roots_tracker.roots.max_inclusive());
+        // 'slot' is a root, so it is both 'root' and 'original'
         w_roots_tracker.roots.insert(slot);
+        w_roots_tracker.roots_original.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
         }
-        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
-        assert!(slot >= w_roots_tracker.max_root);
-        w_roots_tracker.max_root = slot;
     }
 
     pub fn add_uncleaned_roots<I>(&self, roots: I)
@@ -1770,12 +1705,58 @@ impl<T: IndexValue> AccountsIndex<T> {
         w_roots_tracker.uncleaned_roots.extend(roots);
     }
 
-    pub fn max_root(&self) -> Slot {
-        self.roots_tracker.read().unwrap().max_root
+    pub fn max_root_inclusive(&self) -> Slot {
+        self.roots_tracker.read().unwrap().roots.max_inclusive()
+    }
+
+    /// return the lowest original root >= slot, including roots_original and ancestors
+    pub fn get_next_original_root(
+        &self,
+        slot: Slot,
+        ancestors: Option<&Ancestors>,
+    ) -> Option<Slot> {
+        {
+            let roots_tracker = self.roots_tracker.read().unwrap();
+            for root in slot..roots_tracker.roots_original.max_exclusive() {
+                if roots_tracker.roots_original.contains(&root) {
+                    return Some(root);
+                }
+            }
+        }
+        // ancestors are higher than roots, so look for roots first
+        if let Some(ancestors) = ancestors {
+            let min = std::cmp::max(slot, ancestors.min_slot());
+            for root in min..=ancestors.max_slot() {
+                if ancestors.contains_key(&root) {
+                    return Some(root);
+                }
+            }
+        }
+        None
+    }
+
+    /// roots are inserted into 'roots_original' and 'roots' as a new root is made.
+    /// roots are removed form 'roots' as all entries in the append vec become outdated.
+    /// This function exists to clean older entries from 'roots_original'.
+    /// all roots < 'oldest_slot_to_keep' are removed from 'roots_original'.
+    pub fn remove_old_original_roots(&self, oldest_slot_to_keep: Slot, keep: &HashSet<Slot>) {
+        let w_roots_tracker = self.roots_tracker.read().unwrap();
+        let mut roots = w_roots_tracker
+            .roots_original
+            .get_all_less_than(oldest_slot_to_keep);
+        roots.retain(|root| !keep.contains(root));
+        drop(w_roots_tracker);
+        if !roots.is_empty() {
+            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+            roots.into_iter().for_each(|root| {
+                w_roots_tracker.roots_original.remove(&root);
+            });
+        }
     }
 
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
+    /// return true if slot was a root
     pub fn clean_dead_slot(&self, slot: Slot, stats: &mut AccountsIndexRootsStats) -> bool {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
@@ -1866,6 +1847,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.roots_tracker.write().unwrap().roots.clear()
     }
 
+    pub fn clone_uncleaned_roots(&self) -> HashSet<Slot> {
+        self.roots_tracker.read().unwrap().uncleaned_roots.clone()
+    }
+
     pub fn uncleaned_roots_len(&self) -> usize {
         self.roots_tracker.read().unwrap().uncleaned_roots.len()
     }
@@ -1886,9 +1871,16 @@ impl<T: IndexValue> AccountsIndex<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::ops::RangeInclusive;
+    use {
+        super::*,
+        crate::inline_spl_token::*,
+        solana_sdk::{
+            account::{AccountSharedData, WritableAccount},
+            pubkey::PUBKEY_BYTES,
+            signature::{Keypair, Signer},
+        },
+        std::ops::RangeInclusive,
+    };
 
     pub enum SecondaryIndexTypes<'a> {
         RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
@@ -1913,7 +1905,7 @@ pub mod tests {
         }
     }
 
-    impl<'a, T: IndexValue> AccountIndexGetResult<'a, T> {
+    impl<T: IndexValue> AccountIndexGetResult<T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
@@ -1966,653 +1958,162 @@ pub mod tests {
     impl<T: IndexValue> Clone for PreAllocatedAccountMapEntry<T> {
         fn clone(&self) -> Self {
             // clone the AccountMapEntryInner into a new Arc
-            let (slot, info) = self.entry.slot_list.read().unwrap()[0];
-            let meta = AccountMapEntryMeta {
-                dirty: AtomicBool::new(self.entry.dirty()),
-                age: AtomicU8::new(self.entry.age()),
-            };
-            PreAllocatedAccountMapEntry::new_internal(slot, info, meta)
+            match self {
+                PreAllocatedAccountMapEntry::Entry(entry) => {
+                    let (slot, account_info) = entry.slot_list.read().unwrap()[0];
+                    let meta = AccountMapEntryMeta {
+                        dirty: AtomicBool::new(entry.dirty()),
+                        age: AtomicU8::new(entry.age()),
+                    };
+                    PreAllocatedAccountMapEntry::Entry(Arc::new(AccountMapEntryInner::new(
+                        vec![(slot, account_info)],
+                        entry.ref_count(),
+                        meta,
+                    )))
+                }
+                PreAllocatedAccountMapEntry::Raw(raw) => PreAllocatedAccountMapEntry::Raw(*raw),
+            }
+        }
+    }
+
+    impl<T: IndexValue> AccountsIndex<T> {
+        /// provides the ability to refactor this function on the api without bloody changes
+        pub fn get_for_tests(
+            &self,
+            pubkey: &Pubkey,
+            ancestors: Option<&Ancestors>,
+            max_root: Option<Slot>,
+        ) -> AccountIndexGetResult<T> {
+            self.get(pubkey, ancestors, max_root)
         }
     }
 
     #[test]
-    fn test_bitfield_delete_non_excess() {
-        solana_logger::setup();
-        let len = 16;
-        let mut bitfield = RollingBitField::new(len);
-        assert_eq!(bitfield.min(), None);
+    fn test_get_next_original_root() {
+        let ancestors = None;
+        let index = AccountsIndex::<bool>::default_for_tests();
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), None);
+        }
+        // roots are now [1]. 0 and 1 both return 1
+        index.add_root(1, true);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        assert_eq!(index.get_next_original_root(2, ancestors), None); // no roots after 1, so asking for root >= 2 is None
 
-        bitfield.insert(0);
-        assert_eq!(bitfield.min(), Some(0));
-        let too_big = len + 1;
-        bitfield.insert(too_big);
-        assert!(bitfield.contains(&0));
-        assert!(bitfield.contains(&too_big));
-        assert_eq!(bitfield.len(), 2);
-        assert_eq!(bitfield.excess.len(), 1);
-        assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.min(), Some(0));
-        assert_eq!(bitfield.max, too_big + 1);
-
-        // delete the thing that is NOT in excess
-        bitfield.remove(&too_big);
-        assert_eq!(bitfield.min, too_big + 1);
-        assert_eq!(bitfield.max, too_big + 1);
-        let too_big_times_2 = too_big * 2;
-        bitfield.insert(too_big_times_2);
-        assert!(bitfield.contains(&0));
-        assert!(bitfield.contains(&too_big_times_2));
-        assert_eq!(bitfield.len(), 2);
-        assert_eq!(bitfield.excess.len(), 1);
-        assert_eq!(bitfield.min(), bitfield.excess.iter().min().copied());
-        assert_eq!(bitfield.min, too_big_times_2);
-        assert_eq!(bitfield.max, too_big_times_2 + 1);
-
-        bitfield.remove(&0);
-        bitfield.remove(&too_big_times_2);
-        assert!(bitfield.is_empty());
-        let other = 5;
-        bitfield.insert(other);
-        assert!(bitfield.contains(&other));
-        assert!(bitfield.excess.is_empty());
-        assert_eq!(bitfield.min, other);
-        assert_eq!(bitfield.max, other + 1);
+        // roots are now [1, 3]. 0 and 1 both return 1. 2 and 3 both return 3
+        index.add_root(3, true);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        for slot in 2..4 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(3));
+        }
+        assert_eq!(index.get_next_original_root(4, ancestors), None); // no roots after 3, so asking for root >= 4 is None
     }
 
     #[test]
-    fn test_bitfield_insert_excess() {
-        solana_logger::setup();
-        let len = 16;
-        let mut bitfield = RollingBitField::new(len);
+    fn test_get_next_original_root_ancestors() {
+        let orig_ancestors = Ancestors::default();
+        let ancestors = Some(&orig_ancestors);
+        let index = AccountsIndex::<bool>::default_for_tests();
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), None);
+        }
+        // ancestors are now [1]. 0 and 1 both return 1
+        let orig_ancestors = Ancestors::from(vec![1]);
+        let ancestors = Some(&orig_ancestors);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        assert_eq!(index.get_next_original_root(2, ancestors), None); // no roots after 1, so asking for root >= 2 is None
 
-        bitfield.insert(0);
-        let too_big = len + 1;
-        bitfield.insert(too_big);
-        assert!(bitfield.contains(&0));
-        assert!(bitfield.contains(&too_big));
-        assert_eq!(bitfield.len(), 2);
-        assert_eq!(bitfield.excess.len(), 1);
-        assert!(bitfield.excess.contains(&0));
-        assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.max, too_big + 1);
-
-        // delete the thing that IS in excess
-        // this does NOT affect min/max
-        bitfield.remove(&0);
-        assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.max, too_big + 1);
-        // re-add to excess
-        bitfield.insert(0);
-        assert!(bitfield.contains(&0));
-        assert!(bitfield.contains(&too_big));
-        assert_eq!(bitfield.len(), 2);
-        assert_eq!(bitfield.excess.len(), 1);
-        assert_eq!(bitfield.min, too_big);
-        assert_eq!(bitfield.max, too_big + 1);
+        // ancestors are now [1, 3]. 0 and 1 both return 1. 2 and 3 both return 3
+        let orig_ancestors = Ancestors::from(vec![1, 3]);
+        let ancestors = Some(&orig_ancestors);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
+        }
+        for slot in 2..4 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(3));
+        }
+        assert_eq!(index.get_next_original_root(4, ancestors), None); // no roots after 3, so asking for root >= 4 is None
     }
 
     #[test]
-    fn test_bitfield_permutations() {
-        solana_logger::setup();
-        let mut bitfield = RollingBitField::new(2097152);
-        let mut hash = HashSet::new();
-
-        let min = 101_000;
-        let width = 400_000;
-        let dead = 19;
-
-        let mut slot = min;
-        while hash.len() < width {
-            slot += 1;
-            if slot % dead == 0 {
-                continue;
-            }
-            hash.insert(slot);
-            bitfield.insert(slot);
+    fn test_get_next_original_root_roots_and_ancestors() {
+        let orig_ancestors = Ancestors::default();
+        let ancestors = Some(&orig_ancestors);
+        let index = AccountsIndex::<bool>::default_for_tests();
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), None);
         }
-        compare(&hash, &bitfield);
-
-        let max = slot + 1;
-
-        let mut time = Measure::start("");
-        let mut count = 0;
-        for slot in (min - 10)..max + 100 {
-            if hash.contains(&slot) {
-                count += 1;
-            }
+        // roots are now [1]. 0 and 1 both return 1
+        index.add_root(1, true);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
         }
-        time.stop();
+        assert_eq!(index.get_next_original_root(2, ancestors), None); // no roots after 1, so asking for root >= 2 is None
 
-        let mut time2 = Measure::start("");
-        let mut count2 = 0;
-        for slot in (min - 10)..max + 100 {
-            if bitfield.contains(&slot) {
-                count2 += 1;
-            }
+        // roots are now [1] and ancestors are now [3]. 0 and 1 both return 1. 2 and 3 both return 3
+        let orig_ancestors = Ancestors::from(vec![3]);
+        let ancestors = Some(&orig_ancestors);
+        for slot in 0..2 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(1));
         }
-        time2.stop();
-        info!(
-            "{}ms, {}ms, {} ratio",
-            time.as_ms(),
-            time2.as_ms(),
-            time.as_ns() / time2.as_ns()
+        for slot in 2..4 {
+            assert_eq!(index.get_next_original_root(slot, ancestors), Some(3));
+        }
+        assert_eq!(index.get_next_original_root(4, ancestors), None); // no roots after 3, so asking for root >= 4 is None
+    }
+
+    #[test]
+    fn test_remove_old_original_roots() {
+        let index = AccountsIndex::<bool>::default_for_tests();
+        index.add_root(1, true);
+        index.add_root(2, true);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1, 2]
         );
-        assert_eq!(count, count2);
-    }
+        let empty_hash_set = HashSet::default();
+        index.remove_old_original_roots(2, &empty_hash_set);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![2]
+        );
+        index.remove_old_original_roots(3, &empty_hash_set);
+        assert!(
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .roots_original
+                .is_empty(),
+            "{:?}",
+            index.roots_tracker.read().unwrap().roots_original.get_all()
+        );
 
-    #[test]
-    #[should_panic(expected = "assertion failed: max_width.is_power_of_two()")]
-    fn test_bitfield_power_2() {
-        let _ = RollingBitField::new(3);
-    }
-
-    #[test]
-    #[should_panic(expected = "assertion failed: max_width > 0")]
-    fn test_bitfield_0() {
-        let _ = RollingBitField::new(0);
-    }
-
-    fn setup_empty(width: u64) -> RollingBitFieldTester {
-        let bitfield = RollingBitField::new(width);
-        let hash_set = HashSet::new();
-        RollingBitFieldTester { bitfield, hash_set }
-    }
-
-    struct RollingBitFieldTester {
-        pub bitfield: RollingBitField,
-        pub hash_set: HashSet<u64>,
-    }
-
-    impl RollingBitFieldTester {
-        fn insert(&mut self, slot: u64) {
-            self.bitfield.insert(slot);
-            self.hash_set.insert(slot);
-            assert!(self.bitfield.contains(&slot));
-            compare(&self.hash_set, &self.bitfield);
-        }
-        fn remove(&mut self, slot: &u64) -> bool {
-            let result = self.bitfield.remove(slot);
-            assert_eq!(result, self.hash_set.remove(slot));
-            assert!(!self.bitfield.contains(slot));
-            self.compare();
-            result
-        }
-        fn compare(&self) {
-            compare(&self.hash_set, &self.bitfield);
-        }
-    }
-
-    fn setup_wide(width: u64, start: u64) -> RollingBitFieldTester {
-        let mut tester = setup_empty(width);
-
-        tester.compare();
-        tester.insert(start);
-        tester.insert(start + 1);
-        tester
-    }
-
-    #[test]
-    fn test_bitfield_insert_wide() {
-        solana_logger::setup();
-        let width = 16;
-        let start = 0;
-        let mut tester = setup_wide(width, start);
-
-        let slot = start + width;
-        let all = tester.bitfield.get_all();
-        // higher than max range by 1
-        tester.insert(slot);
-        let bitfield = tester.bitfield;
-        for slot in all {
-            assert!(bitfield.contains(&slot));
-        }
-        assert_eq!(bitfield.excess.len(), 1);
-        assert_eq!(bitfield.count, 3);
-    }
-
-    #[test]
-    fn test_bitfield_insert_wide_before() {
-        solana_logger::setup();
-        let width = 16;
-        let start = 100;
-        let mut bitfield = setup_wide(width, start).bitfield;
-
-        let slot = start + 1 - width;
-        // assert here - would make min too low, causing too wide of a range
-        bitfield.insert(slot);
-        assert_eq!(1, bitfield.excess.len());
-        assert_eq!(3, bitfield.count);
-        assert!(bitfield.contains(&slot));
-    }
-
-    #[test]
-    fn test_bitfield_insert_wide_before_ok() {
-        solana_logger::setup();
-        let width = 16;
-        let start = 100;
-        let mut bitfield = setup_wide(width, start).bitfield;
-
-        let slot = start + 2 - width; // this item would make our width exactly equal to what is allowed, but it is also inserting prior to min
-        bitfield.insert(slot);
-        assert_eq!(1, bitfield.excess.len());
-        assert!(bitfield.contains(&slot));
-        assert_eq!(3, bitfield.count);
-    }
-
-    #[test]
-    fn test_bitfield_contains_wide_no_assert() {
-        {
-            let width = 16;
-            let start = 0;
-            let bitfield = setup_wide(width, start).bitfield;
-
-            let mut slot = width;
-            assert!(!bitfield.contains(&slot));
-            slot += 1;
-            assert!(!bitfield.contains(&slot));
-        }
-        {
-            let width = 16;
-            let start = 100;
-            let bitfield = setup_wide(width, start).bitfield;
-
-            // too large
-            let mut slot = width;
-            assert!(!bitfield.contains(&slot));
-            slot += 1;
-            assert!(!bitfield.contains(&slot));
-            // too small, before min
-            slot = 0;
-            assert!(!bitfield.contains(&slot));
-        }
-    }
-
-    #[test]
-    fn test_bitfield_remove_wide() {
-        let width = 16;
-        let start = 0;
-        let mut tester = setup_wide(width, start);
-        let slot = width;
-        assert!(!tester.remove(&slot));
-    }
-
-    #[test]
-    fn test_bitfield_excess2() {
-        solana_logger::setup();
-        let width = 16;
-        let mut tester = setup_empty(width);
-        let slot = 100;
-        // insert 1st slot
-        tester.insert(slot);
-        assert!(tester.bitfield.excess.is_empty());
-
-        // insert a slot before the previous one. this is 'excess' since we don't use this pattern in normal operation
-        let slot2 = slot - 1;
-        tester.insert(slot2);
-        assert_eq!(tester.bitfield.excess.len(), 1);
-
-        // remove the 1st slot. we will be left with only excess
-        tester.remove(&slot);
-        assert!(tester.bitfield.contains(&slot2));
-        assert_eq!(tester.bitfield.excess.len(), 1);
-
-        // re-insert at valid range, making sure we don't insert into excess
-        tester.insert(slot);
-        assert_eq!(tester.bitfield.excess.len(), 1);
-
-        // remove the excess slot.
-        tester.remove(&slot2);
-        assert!(tester.bitfield.contains(&slot));
-        assert!(tester.bitfield.excess.is_empty());
-
-        // re-insert the excess slot
-        tester.insert(slot2);
-        assert_eq!(tester.bitfield.excess.len(), 1);
-    }
-
-    #[test]
-    fn test_bitfield_excess() {
-        solana_logger::setup();
-        // start at slot 0 or a separate, higher slot
-        for width in [16, 4194304].iter() {
-            let width = *width;
-            let mut tester = setup_empty(width);
-            for start in [0, width * 5].iter().cloned() {
-                // recreate means create empty bitfield with each iteration, otherwise re-use
-                for recreate in [false, true].iter().cloned() {
-                    let max = start + 3;
-                    // first root to add
-                    for slot in start..max {
-                        // subsequent roots to add
-                        for slot2 in (slot + 1)..max {
-                            // reverse_slots = 1 means add slots in reverse order (max to min). This causes us to add second and later slots to excess.
-                            for reverse_slots in [false, true].iter().cloned() {
-                                let maybe_reverse = |slot| {
-                                    if reverse_slots {
-                                        max - slot
-                                    } else {
-                                        slot
-                                    }
-                                };
-                                if recreate {
-                                    let recreated = setup_empty(width);
-                                    tester = recreated;
-                                }
-
-                                // insert
-                                for slot in slot..=slot2 {
-                                    let slot_use = maybe_reverse(slot);
-                                    tester.insert(slot_use);
-                                    debug!(
-                                    "slot: {}, bitfield: {:?}, reverse: {}, len: {}, excess: {:?}",
-                                    slot_use,
-                                    tester.bitfield,
-                                    reverse_slots,
-                                    tester.bitfield.len(),
-                                    tester.bitfield.excess
-                                );
-                                    assert!(
-                                        (reverse_slots && tester.bitfield.len() > 1)
-                                            ^ tester.bitfield.excess.is_empty()
-                                    );
-                                }
-                                if start > width * 2 {
-                                    assert!(!tester.bitfield.contains(&(start - width * 2)));
-                                }
-                                assert!(!tester.bitfield.contains(&(start + width * 2)));
-                                let len = (slot2 - slot + 1) as usize;
-                                assert_eq!(tester.bitfield.len(), len);
-                                assert_eq!(tester.bitfield.count, len);
-
-                                // remove
-                                for slot in slot..=slot2 {
-                                    let slot_use = maybe_reverse(slot);
-                                    assert!(tester.remove(&slot_use));
-                                    assert!(
-                                        (reverse_slots && !tester.bitfield.is_empty())
-                                            ^ tester.bitfield.excess.is_empty()
-                                    );
-                                }
-                                assert!(tester.bitfield.is_empty());
-                                assert_eq!(tester.bitfield.count, 0);
-                                if start > width * 2 {
-                                    assert!(!tester.bitfield.contains(&(start - width * 2)));
-                                }
-                                assert!(!tester.bitfield.contains(&(start + width * 2)));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_bitfield_remove_wide_before() {
-        let width = 16;
-        let start = 100;
-        let mut tester = setup_wide(width, start);
-        let slot = start + 1 - width;
-        assert!(!tester.remove(&slot));
-    }
-
-    fn compare_internal(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
-        assert_eq!(hashset.len(), bitfield.len());
-        assert_eq!(hashset.is_empty(), bitfield.is_empty());
-        if !bitfield.is_empty() {
-            let mut min = Slot::MAX;
-            let mut overall_min = Slot::MAX;
-            let mut max = Slot::MIN;
-            for item in bitfield.get_all() {
-                assert!(hashset.contains(&item));
-                if !bitfield.excess.contains(&item) {
-                    min = std::cmp::min(min, item);
-                    max = std::cmp::max(max, item);
-                }
-                overall_min = std::cmp::min(overall_min, item);
-            }
-            assert_eq!(bitfield.min(), Some(overall_min));
-            assert_eq!(bitfield.get_all().len(), hashset.len());
-            // range isn't tracked for excess items
-            if bitfield.excess.len() != bitfield.len() {
-                let width = if bitfield.is_empty() {
-                    0
-                } else {
-                    max + 1 - min
-                };
-                assert!(
-                    bitfield.range_width() >= width,
-                    "hashset: {:?}, bitfield: {:?}, bitfield.range_width: {}, width: {}",
-                    hashset,
-                    bitfield.get_all(),
-                    bitfield.range_width(),
-                    width,
-                );
-            }
-        } else {
-            assert_eq!(bitfield.min(), None);
-        }
-    }
-
-    fn compare(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
-        compare_internal(hashset, bitfield);
-        let clone = bitfield.clone();
-        compare_internal(hashset, &clone);
-        assert!(clone.eq(bitfield));
-        assert_eq!(clone, *bitfield);
-    }
-
-    #[test]
-    fn test_bitfield_functionality() {
-        solana_logger::setup();
-
-        // bitfield sizes are powers of 2, cycle through values of 1, 2, 4, .. 2^9
-        for power in 0..10 {
-            let max_bitfield_width = 2u64.pow(power) as u64;
-            let width_iteration_max = if max_bitfield_width > 1 {
-                // add up to 2 items so we can test out multiple items
-                3
-            } else {
-                // 0 or 1 items is all we can fit with a width of 1 item
-                2
-            };
-            for width in 0..width_iteration_max {
-                let mut tester = setup_empty(max_bitfield_width);
-
-                let min = 101_000;
-                let dead = 19;
-
-                let mut slot = min;
-                while tester.hash_set.len() < width {
-                    slot += 1;
-                    if max_bitfield_width > 2 && slot % dead == 0 {
-                        // with max_bitfield_width of 1 and 2, there is no room for dead slots
-                        continue;
-                    }
-                    tester.insert(slot);
-                }
-                let max = slot + 1;
-
-                for slot in (min - 10)..max + 100 {
-                    assert_eq!(
-                        tester.bitfield.contains(&slot),
-                        tester.hash_set.contains(&slot)
-                    );
-                }
-
-                if width > 0 {
-                    assert!(tester.remove(&slot));
-                    assert!(!tester.remove(&slot));
-                }
-
-                let all = tester.bitfield.get_all();
-
-                // remove the rest, including a call that removes slot again
-                for item in all.iter() {
-                    assert!(tester.remove(item));
-                    assert!(!tester.remove(item));
-                }
-
-                let min = max + ((width * 2) as u64) + 3;
-                let slot = min; // several widths past previous min
-                let max = slot + 1;
-                tester.insert(slot);
-
-                for slot in (min - 10)..max + 100 {
-                    assert_eq!(
-                        tester.bitfield.contains(&slot),
-                        tester.hash_set.contains(&slot)
-                    );
-                }
-            }
-        }
-    }
-
-    fn bitfield_insert_and_test(bitfield: &mut RollingBitField, slot: Slot) {
-        let len = bitfield.len();
-        let old_all = bitfield.get_all();
-        let (new_min, new_max) = if bitfield.is_empty() {
-            (slot, slot + 1)
-        } else {
-            (
-                std::cmp::min(bitfield.min, slot),
-                std::cmp::max(bitfield.max, slot + 1),
-            )
-        };
-        bitfield.insert(slot);
-        assert_eq!(bitfield.min, new_min);
-        assert_eq!(bitfield.max, new_max);
-        assert_eq!(bitfield.len(), len + 1);
-        assert!(!bitfield.is_empty());
-        assert!(bitfield.contains(&slot));
-        // verify aliasing is what we expect
-        assert!(bitfield.contains_assume_in_range(&(slot + bitfield.max_width)));
-        let get_all = bitfield.get_all();
-        old_all
-            .into_iter()
-            .for_each(|slot| assert!(get_all.contains(&slot)));
-        assert!(get_all.contains(&slot));
-        assert!(get_all.len() == len + 1);
-    }
-
-    #[test]
-    fn test_bitfield_clear() {
-        let mut bitfield = RollingBitField::new(4);
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        bitfield_insert_and_test(&mut bitfield, 0);
-        bitfield.clear();
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        assert!(bitfield.get_all().is_empty());
-        bitfield_insert_and_test(&mut bitfield, 1);
-        bitfield.clear();
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        assert!(bitfield.get_all().is_empty());
-        bitfield_insert_and_test(&mut bitfield, 4);
-    }
-
-    #[test]
-    fn test_bitfield_wrapping() {
-        let mut bitfield = RollingBitField::new(4);
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        bitfield_insert_and_test(&mut bitfield, 0);
-        assert_eq!(bitfield.get_all(), vec![0]);
-        bitfield_insert_and_test(&mut bitfield, 2);
-        assert_eq!(bitfield.get_all(), vec![0, 2]);
-        bitfield_insert_and_test(&mut bitfield, 3);
-        bitfield.insert(3); // redundant insert
-        assert_eq!(bitfield.get_all(), vec![0, 2, 3]);
-        assert!(bitfield.remove(&0));
-        assert!(!bitfield.remove(&0));
-        assert_eq!(bitfield.min, 2);
-        assert_eq!(bitfield.max, 4);
-        assert_eq!(bitfield.len(), 2);
-        assert!(!bitfield.remove(&0)); // redundant remove
-        assert_eq!(bitfield.len(), 2);
-        assert_eq!(bitfield.get_all(), vec![2, 3]);
-        bitfield.insert(4); // wrapped around value - same bit as '0'
-        assert_eq!(bitfield.min, 2);
-        assert_eq!(bitfield.max, 5);
-        assert_eq!(bitfield.len(), 3);
-        assert_eq!(bitfield.get_all(), vec![2, 3, 4]);
-        assert!(bitfield.remove(&2));
-        assert_eq!(bitfield.min, 3);
-        assert_eq!(bitfield.max, 5);
-        assert_eq!(bitfield.len(), 2);
-        assert_eq!(bitfield.get_all(), vec![3, 4]);
-        assert!(bitfield.remove(&3));
-        assert_eq!(bitfield.min, 4);
-        assert_eq!(bitfield.max, 5);
-        assert_eq!(bitfield.len(), 1);
-        assert_eq!(bitfield.get_all(), vec![4]);
-        assert!(bitfield.remove(&4));
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        assert!(bitfield.get_all().is_empty());
-        bitfield_insert_and_test(&mut bitfield, 8);
-        assert!(bitfield.remove(&8));
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        assert!(bitfield.get_all().is_empty());
-        bitfield_insert_and_test(&mut bitfield, 9);
-        assert!(bitfield.remove(&9));
-        assert_eq!(bitfield.len(), 0);
-        assert!(bitfield.is_empty());
-        assert!(bitfield.get_all().is_empty());
-    }
-
-    #[test]
-    fn test_bitfield_smaller() {
-        // smaller bitfield, fewer entries, including 0
-        solana_logger::setup();
-
-        for width in 0..34 {
-            let mut bitfield = RollingBitField::new(4096);
-            let mut hash_set = HashSet::new();
-
-            let min = 1_010_000;
-            let dead = 19;
-
-            let mut slot = min;
-            while hash_set.len() < width {
-                slot += 1;
-                if slot % dead == 0 {
-                    continue;
-                }
-                hash_set.insert(slot);
-                bitfield.insert(slot);
-            }
-
-            let max = slot + 1;
-
-            let mut time = Measure::start("");
-            let mut count = 0;
-            for slot in (min - 10)..max + 100 {
-                if hash_set.contains(&slot) {
-                    count += 1;
-                }
-            }
-            time.stop();
-
-            let mut time2 = Measure::start("");
-            let mut count2 = 0;
-            for slot in (min - 10)..max + 100 {
-                if bitfield.contains(&slot) {
-                    count2 += 1;
-                }
-            }
-            time2.stop();
-            info!(
-                "{}, {}, {}",
-                time.as_ms(),
-                time2.as_ms(),
-                time.as_ns() / time2.as_ns()
-            );
-            assert_eq!(count, count2);
-        }
+        // now use 'keep'
+        let index = AccountsIndex::<bool>::default_for_tests();
+        index.add_root(1, true);
+        index.add_root(2, true);
+        let hash_set_1 = vec![1].into_iter().collect();
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1, 2]
+        );
+        index.remove_old_original_roots(2, &hash_set_1);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1, 2]
+        );
+        index.remove_old_original_roots(3, &hash_set_1);
+        assert_eq!(
+            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            vec![1]
+        );
     }
 
     const COLLECT_ALL_UNSORTED_FALSE: bool = false;
@@ -2622,15 +2123,16 @@ pub mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        let key = &key.pubkey();
+        assert!(index.get_for_tests(key, Some(&ancestors), None).is_none());
+        assert!(index.get_for_tests(key, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 0);
     }
@@ -2689,9 +2191,9 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -2700,15 +2202,17 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 0);
     }
@@ -2739,25 +2243,29 @@ pub mod tests {
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(pubkey, Some(&ancestors), None).is_none());
-        assert!(index.get(pubkey, None, None).is_none());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(pubkey, Some(&ancestors), None).is_some());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_some());
         assert_eq!(index.ref_count_from_storage(pubkey), 1);
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 1);
 
@@ -2768,57 +2276,96 @@ pub mod tests {
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(pubkey, Some(&ancestors), None).is_none());
-        assert!(index.get(pubkey, None, None).is_none());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(pubkey, Some(&ancestors), None).is_some());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_some());
         assert_eq!(index.ref_count_from_storage(pubkey), 0); // cached, so 0
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 1);
     }
 
+    fn get_pre_allocated<T: IndexValue>(
+        slot: Slot,
+        account_info: T,
+        storage: &Arc<BucketMapHolder<T>>,
+        store_raw: bool,
+        to_raw_first: bool,
+    ) -> PreAllocatedAccountMapEntry<T> {
+        let entry = PreAllocatedAccountMapEntry::new(slot, account_info, storage, store_raw);
+
+        if to_raw_first {
+            // convert to raw
+            let (slot2, account_info2) = entry.into();
+            // recreate using extracted raw
+            PreAllocatedAccountMapEntry::new(slot2, account_info2, storage, store_raw)
+        } else {
+            entry
+        }
+    }
+
     #[test]
     fn test_new_entry() {
-        let slot = 0;
-        // account_info type that IS cached
-        let account_info = AccountInfoTest::default();
-        let index = AccountsIndex::default_for_tests();
+        for store_raw in [false, true] {
+            for to_raw_first in [false, true] {
+                let slot = 0;
+                // account_info type that IS cached
+                let account_info = AccountInfoTest::default();
+                let index = AccountsIndex::default_for_tests();
 
-        let new_entry: AccountMapEntry<_> =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage).into();
-        assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
-        assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
-        assert_eq!(
-            new_entry.slot_list.read().unwrap().to_vec(),
-            vec![(slot, account_info)]
-        );
+                let new_entry = get_pre_allocated(
+                    slot,
+                    account_info,
+                    &index.storage.storage,
+                    store_raw,
+                    to_raw_first,
+                )
+                .into_account_map_entry(&index.storage.storage);
+                assert_eq!(new_entry.ref_count(), 0);
+                assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
+                assert_eq!(
+                    new_entry.slot_list.read().unwrap().to_vec(),
+                    vec![(slot, account_info)]
+                );
 
-        // account_info type that is NOT cached
-        let account_info = true;
-        let index = AccountsIndex::default_for_tests();
+                // account_info type that is NOT cached
+                let account_info = true;
+                let index = AccountsIndex::default_for_tests();
 
-        let new_entry: AccountMapEntry<_> =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage).into();
-        assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
-        assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
-        assert_eq!(
-            new_entry.slot_list.read().unwrap().to_vec(),
-            vec![(slot, account_info)]
-        );
+                let new_entry = get_pre_allocated(
+                    slot,
+                    account_info,
+                    &index.storage.storage,
+                    store_raw,
+                    to_raw_first,
+                )
+                .into_account_map_entry(&index.storage.storage);
+                assert_eq!(new_entry.ref_count(), 1);
+                assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
+                assert_eq!(
+                    new_entry.slot_list.read().unwrap().to_vec(),
+                    vec![(slot, account_info)]
+                );
+            }
+        }
     }
 
     #[test]
@@ -2856,9 +2403,9 @@ pub mod tests {
             // insert first entry for pubkey. This will use new_entry_after_update and not call update.
             index.upsert(
                 slot0,
+                slot0,
                 &key,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 account_infos[0],
                 &mut gc,
@@ -2876,9 +2423,13 @@ pub mod tests {
             assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
             let expected = vec![(slot0, account_infos[0])];
             assert_eq!(entry.slot_list().to_vec(), expected);
-            let new_entry: AccountMapEntry<_> =
-                PreAllocatedAccountMapEntry::new(slot0, account_infos[0], &index.storage.storage)
-                    .into();
+            let new_entry: AccountMapEntry<_> = PreAllocatedAccountMapEntry::new(
+                slot0,
+                account_infos[0],
+                &index.storage.storage,
+                false,
+            )
+            .into_account_map_entry(&index.storage.storage);
             assert_eq!(
                 entry.slot_list().to_vec(),
                 new_entry.slot_list.read().unwrap().to_vec(),
@@ -2889,9 +2440,9 @@ pub mod tests {
         if upsert {
             index.upsert(
                 slot1,
+                slot1,
                 &key,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 account_infos[1],
                 &mut gc,
@@ -2924,8 +2475,12 @@ pub mod tests {
                 vec![(slot0, account_infos[0]), (slot1, account_infos[1])]
             );
 
-            let new_entry =
-                PreAllocatedAccountMapEntry::new(slot1, account_infos[1], &index.storage.storage);
+            let new_entry = PreAllocatedAccountMapEntry::new(
+                slot1,
+                account_infos[1],
+                &index.storage.storage,
+                false,
+            );
             assert_eq!(entry.slot_list()[1], new_entry.into());
         }
     }
@@ -2949,40 +2504,45 @@ pub mod tests {
         let account_info = true;
 
         let new_entry =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage);
-        assert_eq!(0, account_maps_len_expensive(&index));
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false);
+        assert_eq!(0, account_maps_stats_len(&index));
         assert_eq!((slot, account_info), new_entry.clone().into());
 
-        assert_eq!(0, account_maps_len_expensive(&index));
+        assert_eq!(0, account_maps_stats_len(&index));
         let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
         w_account_maps.upsert(
             &key.pubkey(),
             new_entry,
+            None,
             &mut SlotList::default(),
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         drop(w_account_maps);
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_some());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_some());
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 1);
     }
@@ -2994,9 +2554,9 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3005,14 +2565,16 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
             "",
             &ancestors,
             |_pubkey, _index| num += 1,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 0);
     }
@@ -3024,9 +2586,9 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3035,7 +2597,9 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
 
         let mut num = 0;
@@ -3049,7 +2613,7 @@ pub mod tests {
                 };
                 num += 1
             },
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 1);
         assert!(found_key);
@@ -3063,9 +2627,9 @@ pub mod tests {
             let new_pubkey = solana_sdk::pubkey::new_rand();
             index.upsert(
                 root_slot,
+                root_slot,
                 &new_pubkey,
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
@@ -3080,9 +2644,9 @@ pub mod tests {
             pubkeys.push(Pubkey::default());
             index.upsert(
                 root_slot,
+                root_slot,
                 &Pubkey::default(),
-                &Pubkey::default(),
-                &[],
+                &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
@@ -3122,7 +2686,7 @@ pub mod tests {
             "",
             &ancestors,
             pubkey_range,
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
             |pubkey, _index| {
                 scanned_keys.insert(*pubkey);
             },
@@ -3201,7 +2765,7 @@ pub mod tests {
             |pubkey, _index| {
                 scanned_keys.insert(*pubkey);
             },
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(scanned_keys.len(), num_pubkeys);
     }
@@ -3223,9 +2787,9 @@ pub mod tests {
         let mut gc = vec![];
         index.upsert(
             0,
+            0,
             &solana_sdk::pubkey::new_rand(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3249,9 +2813,9 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3260,7 +2824,7 @@ pub mod tests {
         assert!(gc.is_empty());
 
         index.add_root(0, false);
-        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
     }
 
@@ -3364,32 +2928,36 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, false));
     }
 
@@ -3402,9 +2970,9 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3413,19 +2981,23 @@ pub mod tests {
         assert!(gc.is_empty());
         index.upsert(
             1,
+            1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (1, false));
     }
 
@@ -3436,9 +3008,9 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3447,9 +3019,9 @@ pub mod tests {
         assert!(gc.is_empty());
         index.upsert(
             1,
+            1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
@@ -3457,9 +3029,9 @@ pub mod tests {
         );
         index.upsert(
             2,
+            2,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3467,9 +3039,9 @@ pub mod tests {
         );
         index.upsert(
             3,
+            3,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3480,9 +3052,9 @@ pub mod tests {
         index.add_root(3, false);
         index.upsert(
             4,
+            4,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
@@ -3492,7 +3064,7 @@ pub mod tests {
         // Updating index should not purge older roots, only purges
         // previous updates within the same slot
         assert_eq!(gc, vec![]);
-        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (3, true));
 
         let mut num = 0;
@@ -3507,18 +3079,14 @@ pub mod tests {
                 };
                 num += 1
             },
-            COLLECT_ALL_UNSORTED_FALSE,
+            &ScanConfig::default(),
         );
         assert_eq!(num, 1);
         assert!(found_key);
     }
 
-    fn account_maps_len_expensive<T: IndexValue>(index: &AccountsIndex<T>) -> usize {
-        index
-            .account_maps
-            .iter()
-            .map(|bin_map| bin_map.read().unwrap().len())
-            .sum()
+    fn account_maps_stats_len<T: IndexValue>(index: &AccountsIndex<T>) -> usize {
+        index.storage.storage.stats.total_count()
     }
 
     #[test]
@@ -3526,30 +3094,30 @@ pub mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default_for_tests();
         let mut gc = Vec::new();
-        assert_eq!(0, account_maps_len_expensive(&index));
+        assert_eq!(0, account_maps_stats_len(&index));
         index.upsert(
             1,
+            1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             12,
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
 
         index.upsert(
             1,
+            1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             10,
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
 
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![], false));
@@ -3558,18 +3126,18 @@ pub mod tests {
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![(1, 10)], true));
 
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
         index.upsert(
             1,
+            1,
             &key.pubkey(),
-            &Pubkey::default(),
-            &[],
+            &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             9,
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
     }
 
     #[test]
@@ -3629,17 +3197,23 @@ pub mod tests {
         let index_key = Pubkey::new_unique();
         let account_key = Pubkey::new_unique();
 
-        let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        let mut account_data = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Insert slots into secondary index
         for slot in &slots {
             index.upsert(
                 *slot,
+                *slot,
                 &account_key,
                 // Make sure these accounts are added to secondary index
-                &inline_spl_token_v2_0::id(),
-                &account_data,
+                &AccountSharedData::create(
+                    0,
+                    account_data.to_vec(),
+                    inline_spl_token::id(),
+                    false,
+                    0,
+                ),
                 secondary_indexes,
                 true,
                 &mut vec![],
@@ -3792,9 +3366,10 @@ pub mod tests {
         );
     }
 
-    fn run_test_secondary_indexes<
+    fn run_test_spl_token_secondary_indexes<
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     >(
+        token_id: &Pubkey,
         index: &AccountsIndex<bool>,
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
@@ -3804,15 +3379,15 @@ pub mod tests {
         let mut secondary_indexes = secondary_indexes.clone();
         let account_key = Pubkey::new_unique();
         let index_key = Pubkey::new_unique();
-        let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        let mut account_data = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Wrong program id
         index.upsert(
             0,
+            0,
             &account_key,
-            &Pubkey::default(),
-            &account_data,
+            &AccountSharedData::create(0, account_data.to_vec(), Pubkey::default(), false, 0),
             &secondary_indexes,
             true,
             &mut vec![],
@@ -3824,9 +3399,9 @@ pub mod tests {
         // Wrong account data size
         index.upsert(
             0,
+            0,
             &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data[1..],
+            &AccountSharedData::create(0, account_data[1..].to_vec(), *token_id, false, 0),
             &secondary_indexes,
             true,
             &mut vec![],
@@ -3841,8 +3416,7 @@ pub mod tests {
         for _ in 0..2 {
             index.update_secondary_indexes(
                 &account_key,
-                &inline_spl_token_v2_0::id(),
-                &account_data,
+                &AccountSharedData::create(0, account_data.to_vec(), *token_id, false, 0),
                 &secondary_indexes,
             );
             check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
@@ -3860,8 +3434,7 @@ pub mod tests {
         secondary_index.reverse_index.clear();
         index.update_secondary_indexes(
             &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data,
+            &AccountSharedData::create(0, account_data.to_vec(), *token_id, false, 0),
             &secondary_indexes,
         );
         assert!(!secondary_index.index.is_empty());
@@ -3877,8 +3450,7 @@ pub mod tests {
         secondary_index.reverse_index.clear();
         index.update_secondary_indexes(
             &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data,
+            &AccountSharedData::create(0, account_data.to_vec(), *token_id, false, 0),
             &secondary_indexes,
         );
         assert!(!secondary_index.index.is_empty());
@@ -3899,31 +3471,38 @@ pub mod tests {
     fn test_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_spl_token_secondary_indexes(
+                &token_id,
+                &index,
+                &index.spl_token_mint_index,
+                key_start,
+                key_end,
+                &secondary_indexes,
+            );
+        }
     }
 
     #[test]
     fn test_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_spl_token_secondary_indexes(
+                &token_id,
+                &index,
+                &index.spl_token_owner_index,
+                key_start,
+                key_end,
+                &secondary_indexes,
+            );
+        }
     }
 
     fn run_test_secondary_indexes_same_slot_and_forks<
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     >(
+        token_id: &Pubkey,
         index: &AccountsIndex<bool>,
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key_start: usize,
@@ -3934,19 +3513,19 @@ pub mod tests {
         let secondary_key1 = Pubkey::new_unique();
         let secondary_key2 = Pubkey::new_unique();
         let slot = 1;
-        let mut account_data1 = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        let mut account_data1 = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data1[index_key_start..index_key_end]
             .clone_from_slice(&(secondary_key1.to_bytes()));
-        let mut account_data2 = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        let mut account_data2 = vec![0; inline_spl_token::Account::get_packed_len()];
         account_data2[index_key_start..index_key_end]
             .clone_from_slice(&(secondary_key2.to_bytes()));
 
         // First write one mint index
         index.upsert(
             slot,
+            slot,
             &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data1,
+            &AccountSharedData::create(0, account_data1.to_vec(), *token_id, false, 0),
             secondary_indexes,
             true,
             &mut vec![],
@@ -3956,9 +3535,9 @@ pub mod tests {
         // Now write a different mint index for the same account
         index.upsert(
             slot,
+            slot,
             &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data2,
+            &AccountSharedData::create(0, account_data2.to_vec(), *token_id, false, 0),
             secondary_indexes,
             true,
             &mut vec![],
@@ -3976,9 +3555,9 @@ pub mod tests {
         let later_slot = slot + 1;
         index.upsert(
             later_slot,
+            later_slot,
             &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data1,
+            &AccountSharedData::create(0, account_data1.to_vec(), *token_id, false, 0),
             secondary_indexes,
             true,
             &mut vec![],
@@ -4013,26 +3592,32 @@ pub mod tests {
     fn test_dashmap_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes_same_slot_and_forks(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &account_index,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_secondary_indexes_same_slot_and_forks(
+                &token_id,
+                &index,
+                &index.spl_token_mint_index,
+                key_start,
+                key_end,
+                &account_index,
+            );
+        }
     }
 
     #[test]
     fn test_rwlock_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default_for_tests();
-        run_test_secondary_indexes_same_slot_and_forks(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &account_index,
-        );
+        for token_id in [inline_spl_token::id(), inline_spl_token_2022::id()] {
+            run_test_secondary_indexes_same_slot_and_forks(
+                &token_id,
+                &index,
+                &index.spl_token_owner_index,
+                key_start,
+                key_end,
+                &account_index,
+            );
+        }
     }
 
     impl IndexValue for bool {}
@@ -4175,5 +3760,30 @@ pub mod tests {
         let mut config = AccountsIndexConfig::default();
         config.bins = Some(3);
         AccountsIndex::<bool>::new(Some(config));
+    }
+
+    #[test]
+    fn test_scan_config() {
+        for collect_all_unsorted in [false, true] {
+            let config = ScanConfig::new(collect_all_unsorted);
+            assert_eq!(config.collect_all_unsorted, collect_all_unsorted);
+            assert!(config.abort.is_none()); // not allocated
+            assert!(!config.is_aborted());
+            config.abort(); // has no effect
+            assert!(!config.is_aborted());
+        }
+
+        let config = ScanConfig::default();
+        assert!(!config.collect_all_unsorted);
+        assert!(config.abort.is_none());
+
+        let config = config.recreate_with_abort();
+        assert!(config.abort.is_some());
+        assert!(!config.is_aborted());
+        config.abort();
+        assert!(config.is_aborted());
+
+        let config = config.recreate_with_abort();
+        assert!(config.is_aborted());
     }
 }

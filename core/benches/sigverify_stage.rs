@@ -1,39 +1,43 @@
 #![feature(test)]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate solana_core;
 extern crate test;
 
-use crossbeam_channel::unbounded;
-use log::*;
-use rand::{thread_rng, Rng};
-use solana_core::sigverify::TransactionSigVerifier;
-use solana_core::sigverify_stage::SigVerifyStage;
-use solana_perf::packet::to_packets_chunked;
-use solana_perf::test_tx::test_tx;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::system_transaction;
-use solana_sdk::timing::duration_as_ms;
-use std::sync::mpsc::channel;
-use std::time::{Duration, Instant};
-use test::Bencher;
+use {
+    crossbeam_channel::unbounded,
+    log::*,
+    rand::{thread_rng, Rng},
+    solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
+    solana_perf::{
+        packet::{to_packet_batches, PacketBatch},
+        test_tx::test_tx,
+    },
+    solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, Signer},
+        system_transaction,
+        timing::duration_as_ms,
+    },
+    std::time::{Duration, Instant},
+    test::Bencher,
+};
 
-#[bench]
-fn bench_packet_discard(bencher: &mut Bencher) {
+fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     solana_logger::setup();
     let len = 30 * 1000;
     let chunk_size = 1024;
     let tx = test_tx();
-    let mut batches = to_packets_chunked(&vec![tx; len], chunk_size);
+    let mut batches = to_packet_batches(&vec![tx; len], chunk_size);
 
     let mut total = 0;
 
-    let ips: Vec<_> = (0..10_000)
+    let ips: Vec<_> = (0..num_ips)
         .into_iter()
         .map(|_| {
             let mut addr = [0u16; 8];
             thread_rng().fill(&mut addr);
-            addr
+            std::net::IpAddr::from(addr)
         })
         .collect();
 
@@ -48,29 +52,72 @@ fn bench_packet_discard(bencher: &mut Bencher) {
 
     bencher.iter(move || {
         SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for p in batch.packets.iter_mut() {
-                p.meta.discard = false;
+                if !p.meta.discard() {
+                    num_packets += 1;
+                }
+                p.meta.set_discard(false);
             }
         }
+        assert_eq!(num_packets, 10_000);
     });
 }
 
 #[bench]
-fn bench_sigverify_stage(bencher: &mut Bencher) {
-    solana_logger::setup();
-    let (packet_s, packet_r) = channel();
-    let (verified_s, verified_r) = unbounded();
-    let verifier = TransactionSigVerifier::default();
-    let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
+fn bench_packet_discard_many_senders(bencher: &mut Bencher) {
+    run_bench_packet_discard(1000, bencher);
+}
 
-    let now = Instant::now();
+#[bench]
+fn bench_packet_discard_single_sender(bencher: &mut Bencher) {
+    run_bench_packet_discard(1, bencher);
+}
+
+#[bench]
+fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
+    const SIZE: usize = 30 * 1000;
+    const CHUNK_SIZE: usize = 1024;
+    fn new_rand_addr<R: Rng>(rng: &mut R) -> std::net::IpAddr {
+        let mut addr = [0u16; 8];
+        rng.fill(&mut addr);
+        std::net::IpAddr::from(addr)
+    }
+    let mut rng = thread_rng();
+    let mut batches = to_packet_batches(&vec![test_tx(); SIZE], CHUNK_SIZE);
+    let spam_addr = new_rand_addr(&mut rng);
+    for batch in batches.iter_mut() {
+        for packet in batch.packets.iter_mut() {
+            // One spam address, ~1000 unique addresses.
+            packet.meta.addr = if rng.gen_ratio(1, 30) {
+                new_rand_addr(&mut rng)
+            } else {
+                spam_addr
+            }
+        }
+    }
+    bencher.iter(move || {
+        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        let mut num_packets = 0;
+        for batch in batches.iter_mut() {
+            for packet in batch.packets.iter_mut() {
+                if !packet.meta.discard() {
+                    num_packets += 1;
+                }
+                packet.meta.set_discard(false);
+            }
+        }
+        assert_eq!(num_packets, 10_000);
+    });
+}
+
+fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
     let len = 4096;
-    let use_same_tx = true;
     let chunk_size = 1024;
-    let mut batches = if use_same_tx {
+    if use_same_tx {
         let tx = test_tx();
-        to_packets_chunked(&vec![tx; len], chunk_size)
+        to_packet_batches(&vec![tx; len], chunk_size)
     } else {
         let from_keypair = Keypair::new();
         let to_keypair = Keypair::new();
@@ -85,20 +132,34 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                 )
             })
             .collect();
-        to_packets_chunked(&txs, chunk_size)
-    };
+        to_packet_batches(&txs, chunk_size)
+    }
+}
 
-    trace!(
-        "starting... generation took: {} ms batches: {}",
-        duration_as_ms(&now.elapsed()),
-        batches.len()
-    );
+#[bench]
+fn bench_sigverify_stage(bencher: &mut Bencher) {
+    solana_logger::setup();
+    trace!("start");
+    let (packet_s, packet_r) = unbounded();
+    let (verified_s, verified_r) = unbounded();
+    let verifier = TransactionSigVerifier::default();
+    let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
+
+    let use_same_tx = true;
     bencher.iter(move || {
+        let now = Instant::now();
+        let mut batches = gen_batches(use_same_tx);
+        trace!(
+            "starting... generation took: {} ms batches: {}",
+            duration_as_ms(&now.elapsed()),
+            batches.len()
+        );
+
         let mut sent_len = 0;
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
                 sent_len += batch.packets.len();
-                packet_s.send(batch).unwrap();
+                packet_s.send(vec![batch]).unwrap();
             }
         }
         let mut received = 0;
@@ -109,7 +170,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                     received += v.packets.len();
                     batches.push(v);
                 }
-                if received >= sent_len {
+                if use_same_tx || received >= sent_len {
                     break;
                 }
             }

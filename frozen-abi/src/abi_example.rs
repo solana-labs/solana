@@ -1,9 +1,10 @@
-use crate::abi_digester::{AbiDigester, DigestError, DigestResult};
-
-use log::*;
-
-use serde::Serialize;
-use std::any::type_name;
+use {
+    crate::abi_digester::{AbiDigester, DigestError, DigestResult},
+    lazy_static::lazy_static,
+    log::*,
+    serde::Serialize,
+    std::any::type_name,
+};
 
 pub trait AbiExample: Sized {
     fn example() -> Self;
@@ -371,6 +372,21 @@ impl<
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
+impl<
+        T: Clone + std::cmp::Eq + std::hash::Hash + AbiExample,
+        S: Clone + AbiExample,
+        H: std::hash::BuildHasher + Default,
+    > AbiExample for im::HashMap<T, S, H>
+{
+    fn example() -> Self {
+        info!("AbiExample for (HashMap<T, S, H>): {}", type_name::<Self>());
+        let mut map = im::HashMap::default();
+        map.insert(T::example(), S::example());
+        map
+    }
+}
+
 impl<T: std::cmp::Ord + AbiExample, S: AbiExample> AbiExample for BTreeMap<T, S> {
     fn example() -> Self {
         info!("AbiExample for (BTreeMap<T, S>): {}", type_name::<Self>());
@@ -384,6 +400,25 @@ impl<T: AbiExample> AbiExample for Vec<T> {
     fn example() -> Self {
         info!("AbiExample for (Vec<T>): {}", type_name::<Self>());
         vec![T::example()]
+    }
+}
+
+lazy_static! {
+    /// we need &Vec<u8>, so we need something with a static lifetime
+    static ref VEC_U8: Vec<u8> = vec![u8::default()];
+}
+
+impl AbiExample for &Vec<u8> {
+    fn example() -> Self {
+        info!("AbiExample for (&Vec<u8>): {}", type_name::<Self>());
+        &*VEC_U8
+    }
+}
+
+impl AbiExample for &[u8] {
+    fn example() -> Self {
+        info!("AbiExample for (&[u8]): {}", type_name::<Self>());
+        &VEC_U8[..]
     }
 }
 

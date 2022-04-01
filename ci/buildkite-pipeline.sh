@@ -102,6 +102,8 @@ command_step() {
     command: "$2"
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
+    agents:
+      - "queue=solana"
 EOF
 }
 
@@ -137,7 +139,7 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage.sh \
       ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
+    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 50
     wait_step
   else
     annotate --style info --context test-coverage \
@@ -145,7 +147,7 @@ all_test_steps() {
   fi
 
   # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
+  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
   wait_step
 
   # BPF test suite
@@ -168,7 +170,7 @@ all_test_steps() {
     timeout_in_minutes: 20
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
-      - "queue=default"
+      - "queue=solana"
 EOF
   else
     annotate --style info \
@@ -221,11 +223,53 @@ EOF
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
     timeout_in_minutes: 30
+    agents:
+      - "queue=solana"
 EOF
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
   fi
+
+  # Downstream Anchor projects backwards compatibility
+  if affects \
+             .rs$ \
+             Cargo.lock$ \
+             Cargo.toml$ \
+             ^ci/rust-version.sh \
+             ^ci/test-stable-perf.sh \
+             ^ci/test-stable.sh \
+             ^ci/test-local-cluster.sh \
+             ^core/build.rs \
+             ^fetch-perf-libs.sh \
+             ^programs/ \
+             ^sdk/ \
+             ^scripts/build-downstream-anchor-projects.sh \
+      ; then
+    cat >> "$output_file" <<"EOF"
+  - command: "scripts/build-downstream-anchor-projects.sh"
+    name: "downstream-anchor-projects"
+    timeout_in_minutes: 10
+    agents:
+      - "queue=solana"
+EOF
+  else
+    annotate --style info \
+      "downstream-anchor-projects skipped as no relevant files were modified"
+  fi
+
+  # Wasm support
+  if affects \
+             ^ci/test-wasm.sh \
+             ^ci/test-stable.sh \
+             ^sdk/ \
+      ; then
+    command_step wasm ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-wasm.sh" 20
+  else
+    annotate --style info \
+      "wasm skipped as no relevant files were modified"
+  fi
+
   # Benches...
   if affects \
              .rs$ \
@@ -243,7 +287,15 @@ EOF
 
   command_step "local-cluster" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    45
+    40
+
+  command_step "local-cluster-flakey" \
+    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
+    10
+
+  command_step "local-cluster-slow" \
+    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow.sh" \
+    40
 }
 
 pull_or_push_steps() {

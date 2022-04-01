@@ -15,7 +15,7 @@ use {
     crate::{
         cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
         contact_info::ContactInfo,
-        crds::{Crds, Cursor},
+        crds::{Crds, Cursor, GossipRoute},
         crds_gossip::{get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
@@ -26,7 +26,7 @@ use {
     itertools::Itertools,
     lru::LruCache,
     rand::{seq::SliceRandom, Rng},
-    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp},
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -169,8 +169,9 @@ impl CrdsGossipPush {
                 .filter(|(_, stake)| *stake > 0)
                 .collect();
             let weights: Vec<_> = peers.iter().map(|(_, stake)| *stake).collect();
-            WeightedShuffle::new(&mut rng, &weights)
+            WeightedShuffle::new(&weights)
                 .unwrap()
+                .shuffle(&mut rng)
                 .map(move |i| peers[i])
         };
         let mut keep = HashSet::new();
@@ -240,7 +241,7 @@ impl CrdsGossipPush {
             .map(|value| {
                 let value = value?;
                 let origin = value.pubkey();
-                match crds.insert(value, now) {
+                match crds.insert(value, now, GossipRoute::PushMessage) {
                     Ok(()) => Ok(origin),
                     Err(_) => {
                         self.num_old.fetch_add(1, Ordering::Relaxed);
@@ -369,7 +370,7 @@ impl CrdsGossipPush {
             return;
         }
         let num_bloom_items = MIN_NUM_BLOOM_ITEMS.max(network_size);
-        let shuffle = WeightedShuffle::new(&mut rng, &weights).unwrap();
+        let shuffle = WeightedShuffle::new(&weights).unwrap().shuffle(&mut rng);
         let mut active_set = self.active_set.write().unwrap();
         let need = Self::compute_need(self.num_active, active_set.len(), ratio);
         for peer in shuffle.map(|i| peers[i]) {
@@ -665,7 +666,10 @@ mod test {
             0,
         )));
 
-        assert_eq!(crds.insert(value1.clone(), now), Ok(()));
+        assert_eq!(
+            crds.insert(value1.clone(), now, GossipRoute::LocalMessage),
+            Ok(())
+        );
         let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
@@ -686,7 +690,12 @@ mod test {
         )));
         assert!(active_set.get(&value2.label().pubkey()).is_none());
         drop(active_set);
-        assert_eq!(crds.write().unwrap().insert(value2.clone(), now), Ok(()));
+        assert_eq!(
+            crds.write()
+                .unwrap()
+                .insert(value2.clone(), now, GossipRoute::LocalMessage),
+            Ok(())
+        );
         for _ in 0..30 {
             push.refresh_push_active_set(
                 &crds,
@@ -711,7 +720,12 @@ mod test {
             let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(
                 ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0),
             ));
-            assert_eq!(crds.write().unwrap().insert(value2.clone(), now), Ok(()));
+            assert_eq!(
+                crds.write()
+                    .unwrap()
+                    .insert(value2.clone(), now, GossipRoute::LocalMessage),
+                Ok(())
+            );
         }
         push.refresh_push_active_set(
             &crds,
@@ -738,7 +752,8 @@ mod test {
                 time,
             )));
             let id = peer.label().pubkey();
-            crds.insert(peer.clone(), time).unwrap();
+            crds.insert(peer.clone(), time, GossipRoute::LocalMessage)
+                .unwrap();
             stakes.insert(id, i * 100);
             push.last_pushed_to.write().unwrap().put(id, time);
         }
@@ -791,10 +806,14 @@ mod test {
             ..ContactInfo::default()
         }));
 
-        crds.insert(me.clone(), now).unwrap();
-        crds.insert(spy.clone(), now).unwrap();
-        crds.insert(node_123.clone(), now).unwrap();
-        crds.insert(node_456, now).unwrap();
+        crds.insert(me.clone(), now, GossipRoute::LocalMessage)
+            .unwrap();
+        crds.insert(spy.clone(), now, GossipRoute::LocalMessage)
+            .unwrap();
+        crds.insert(node_123.clone(), now, GossipRoute::LocalMessage)
+            .unwrap();
+        crds.insert(node_456, now, GossipRoute::LocalMessage)
+            .unwrap();
         let crds = RwLock::new(crds);
 
         // shred version 123 should ignore nodes with versions 0 and 456
@@ -845,8 +864,10 @@ mod test {
             ..ContactInfo::default()
         }));
 
-        crds.insert(me.clone(), 0).unwrap();
-        crds.insert(node_123.clone(), now).unwrap();
+        crds.insert(me.clone(), 0, GossipRoute::LocalMessage)
+            .unwrap();
+        crds.insert(node_123.clone(), now, GossipRoute::LocalMessage)
+            .unwrap();
         let crds = RwLock::new(crds);
 
         // Unknown pubkey in gossip_validators -- will push to nobody
@@ -898,7 +919,10 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        assert_eq!(crds.insert(peer.clone(), now), Ok(()));
+        assert_eq!(
+            crds.insert(peer.clone(), now, GossipRoute::LocalMessage),
+            Ok(())
+        );
         let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
@@ -940,8 +964,14 @@ mod test {
             })
             .collect();
         let origin: Vec<_> = peers.iter().map(|node| node.pubkey()).collect();
-        assert_eq!(crds.insert(peers[0].clone(), now), Ok(()));
-        assert_eq!(crds.insert(peers[1].clone(), now), Ok(()));
+        assert_eq!(
+            crds.insert(peers[0].clone(), now, GossipRoute::LocalMessage),
+            Ok(())
+        );
+        assert_eq!(
+            crds.insert(peers[1].clone(), now, GossipRoute::LocalMessage),
+            Ok(())
+        );
         let crds = RwLock::new(crds);
         assert_eq!(
             push.process_push_message(&crds, &Pubkey::default(), vec![peers[2].clone()], now),
@@ -977,7 +1007,10 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        assert_eq!(crds.insert(peer.clone(), 0), Ok(()));
+        assert_eq!(
+            crds.insert(peer.clone(), 0, GossipRoute::LocalMessage),
+            Ok(())
+        );
         let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
@@ -1015,7 +1048,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        assert_eq!(crds.insert(peer, 0), Ok(()));
+        assert_eq!(crds.insert(peer, 0, GossipRoute::LocalMessage), Ok(()));
         let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,

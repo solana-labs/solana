@@ -1,6 +1,11 @@
 import * as BufferLayout from '@solana/buffer-layout';
 
-import {encodeData, decodeData, InstructionType} from './instruction';
+import {
+  encodeData,
+  decodeData,
+  InstructionType,
+  IInstructionInputData,
+} from './instruction';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {SystemProgram} from './system-program';
@@ -40,6 +45,11 @@ export class Authorized {
   }
 }
 
+type AuthorizedRaw = Readonly<{
+  staker: Uint8Array;
+  withdrawer: Uint8Array;
+}>;
+
 /**
  * Stake account lockup info
  */
@@ -65,6 +75,12 @@ export class Lockup {
    */
   static default: Lockup = new Lockup(0, 0, PublicKey.default);
 }
+
+type LockupRaw = Readonly<{
+  custodian: Uint8Array;
+  epoch: number;
+  unixTimestamp: number;
+}>;
 
 /**
  * Create stake account transaction params
@@ -144,6 +160,18 @@ export type SplitStakeParams = {
   stakePubkey: PublicKey;
   authorizedPubkey: PublicKey;
   splitStakePubkey: PublicKey;
+  lamports: number;
+};
+
+/**
+ * Split with seed transaction params
+ */
+export type SplitStakeWithSeedParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  splitStakePubkey: PublicKey;
+  basePubkey: PublicKey;
+  seed: string;
   lamports: number;
 };
 
@@ -417,25 +445,63 @@ export class StakeInstruction {
  * An enumeration of valid StakeInstructionType's
  */
 export type StakeInstructionType =
-  | 'AuthorizeWithSeed'
+  // FIXME
+  // It would be preferable for this type to be `keyof StakeInstructionInputData`
+  // but Typedoc does not transpile `keyof` expressions.
+  // See https://github.com/TypeStrong/typedoc/issues/1894
   | 'Authorize'
+  | 'AuthorizeWithSeed'
   | 'Deactivate'
   | 'Delegate'
   | 'Initialize'
+  | 'Merge'
   | 'Split'
-  | 'Withdraw'
-  | 'Merge';
+  | 'Withdraw';
+
+type StakeInstructionInputData = {
+  Authorize: IInstructionInputData &
+    Readonly<{
+      newAuthorized: Uint8Array;
+      stakeAuthorizationType: number;
+    }>;
+  AuthorizeWithSeed: IInstructionInputData &
+    Readonly<{
+      authorityOwner: Uint8Array;
+      authoritySeed: string;
+      instruction: number;
+      newAuthorized: Uint8Array;
+      stakeAuthorizationType: number;
+    }>;
+  Deactivate: IInstructionInputData;
+  Delegate: IInstructionInputData;
+  Initialize: IInstructionInputData &
+    Readonly<{
+      authorized: AuthorizedRaw;
+      lockup: LockupRaw;
+    }>;
+  Merge: IInstructionInputData;
+  Split: IInstructionInputData &
+    Readonly<{
+      lamports: number;
+    }>;
+  Withdraw: IInstructionInputData &
+    Readonly<{
+      lamports: number;
+    }>;
+};
 
 /**
  * An enumeration of valid stake InstructionType's
  * @internal
  */
-export const STAKE_INSTRUCTION_LAYOUTS: {
-  [type in StakeInstructionType]: InstructionType;
-} = Object.freeze({
+export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze<{
+  [Instruction in StakeInstructionType]: InstructionType<
+    StakeInstructionInputData[Instruction]
+  >;
+}>({
   Initialize: {
     index: 0,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<StakeInstructionInputData['Initialize']>([
       BufferLayout.u32('instruction'),
       Layout.authorized(),
       Layout.lockup(),
@@ -443,7 +509,7 @@ export const STAKE_INSTRUCTION_LAYOUTS: {
   },
   Authorize: {
     index: 1,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<StakeInstructionInputData['Authorize']>([
       BufferLayout.u32('instruction'),
       Layout.publicKey('newAuthorized'),
       BufferLayout.u32('stakeAuthorizationType'),
@@ -451,39 +517,47 @@ export const STAKE_INSTRUCTION_LAYOUTS: {
   },
   Delegate: {
     index: 2,
-    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+    layout: BufferLayout.struct<StakeInstructionInputData['Delegate']>([
+      BufferLayout.u32('instruction'),
+    ]),
   },
   Split: {
     index: 3,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<StakeInstructionInputData['Split']>([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),
   },
   Withdraw: {
     index: 4,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<StakeInstructionInputData['Withdraw']>([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),
   },
   Deactivate: {
     index: 5,
-    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+    layout: BufferLayout.struct<StakeInstructionInputData['Deactivate']>([
+      BufferLayout.u32('instruction'),
+    ]),
   },
   Merge: {
     index: 7,
-    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+    layout: BufferLayout.struct<StakeInstructionInputData['Merge']>([
+      BufferLayout.u32('instruction'),
+    ]),
   },
   AuthorizeWithSeed: {
     index: 8,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('newAuthorized'),
-      BufferLayout.u32('stakeAuthorizationType'),
-      Layout.rustString('authoritySeed'),
-      Layout.publicKey('authorityOwner'),
-    ]),
+    layout: BufferLayout.struct<StakeInstructionInputData['AuthorizeWithSeed']>(
+      [
+        BufferLayout.u32('instruction'),
+        Layout.publicKey('newAuthorized'),
+        BufferLayout.u32('stakeAuthorizationType'),
+        Layout.rustString('authoritySeed'),
+        Layout.publicKey('authorityOwner'),
+      ],
+    ),
   },
 });
 
@@ -706,25 +780,13 @@ export class StakeProgram {
   }
 
   /**
-   * Generate a Transaction that splits Stake tokens into another stake account
+   * @internal
    */
-  static split(params: SplitStakeParams): Transaction {
+  static splitInstruction(params: SplitStakeParams): TransactionInstruction {
     const {stakePubkey, authorizedPubkey, splitStakePubkey, lamports} = params;
-
-    const transaction = new Transaction();
-    transaction.add(
-      SystemProgram.createAccount({
-        fromPubkey: authorizedPubkey,
-        newAccountPubkey: splitStakePubkey,
-        lamports: 0,
-        space: this.space,
-        programId: this.programId,
-      }),
-    );
     const type = STAKE_INSTRUCTION_LAYOUTS.Split;
     const data = encodeData(type, {lamports});
-
-    return transaction.add({
+    return new TransactionInstruction({
       keys: [
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: splitStakePubkey, isSigner: false, isWritable: true},
@@ -733,6 +795,56 @@ export class StakeProgram {
       programId: this.programId,
       data,
     });
+  }
+
+  /**
+   * Generate a Transaction that splits Stake tokens into another stake account
+   */
+  static split(params: SplitStakeParams): Transaction {
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.createAccount({
+        fromPubkey: params.authorizedPubkey,
+        newAccountPubkey: params.splitStakePubkey,
+        lamports: 0,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
+    return transaction.add(this.splitInstruction(params));
+  }
+
+  /**
+   * Generate a Transaction that splits Stake tokens into another account
+   * derived from a base public key and seed
+   */
+  static splitWithSeed(params: SplitStakeWithSeedParams): Transaction {
+    const {
+      stakePubkey,
+      authorizedPubkey,
+      splitStakePubkey,
+      basePubkey,
+      seed,
+      lamports,
+    } = params;
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.allocate({
+        accountPubkey: splitStakePubkey,
+        basePubkey,
+        seed,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
+    return transaction.add(
+      this.splitInstruction({
+        stakePubkey,
+        authorizedPubkey,
+        splitStakePubkey,
+        lamports,
+      }),
+    );
   }
 
   /**

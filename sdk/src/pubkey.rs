@@ -24,7 +24,7 @@ pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn st
 
 #[cfg(feature = "full")]
 pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Error>> {
-    let f = std::fs::File::open(infile.to_string())?;
+    let f = std::fs::File::open(infile)?;
     let printable: String = serde_json::from_reader(f)?;
 
     use std::str::FromStr;
@@ -33,8 +33,7 @@ pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Erro
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::fs::remove_file;
+    use {super::*, std::fs::remove_file};
 
     #[test]
     fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {

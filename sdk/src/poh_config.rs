@@ -1,5 +1,7 @@
-use crate::{clock::DEFAULT_TICKS_PER_SECOND, unchecked_div_by_const};
-use std::time::Duration;
+use {
+    crate::{clock::DEFAULT_TICKS_PER_SECOND, unchecked_div_by_const},
+    std::time::Duration,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
 pub struct PohConfig {

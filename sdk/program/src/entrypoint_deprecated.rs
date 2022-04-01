@@ -1,18 +1,19 @@
 #![allow(clippy::integer_arithmetic)]
-//! @brief Solana Rust-based BPF program entry point supported by the original
+//! Solana Rust-based BPF program entry point supported by the original
 //!  and now deprecated BPFLoader.  For more information see
 //!  './bpf_loader_deprecated.rs'
 
 extern crate alloc;
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
-use alloc::vec::Vec;
-use std::{
-    cell::RefCell,
-    mem::size_of,
-    rc::Rc,
-    // Hide Result from bindgen gets confused about generics in non-generic type declarations
-    result::Result as ResultGeneric,
-    slice::{from_raw_parts, from_raw_parts_mut},
+use {
+    crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
+    alloc::vec::Vec,
+    std::{
+        cell::RefCell,
+        mem::size_of,
+        rc::Rc,
+        result::Result as ResultGeneric,
+        slice::{from_raw_parts, from_raw_parts_mut},
+    },
 };
 
 pub type ProgramResult = ResultGeneric<(), ProgramError>;

@@ -1,6 +1,8 @@
-use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
-use log::*;
-use solana_runtime::append_vec::AppendVec;
+use {
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg},
+    log::*,
+    solana_runtime::append_vec::AppendVec,
+};
 
 fn main() {
     solana_logger::setup_with_default("solana=info");

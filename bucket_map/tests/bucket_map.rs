@@ -1,8 +1,10 @@
-use rayon::prelude::*;
-use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
-use solana_measure::measure::Measure;
-use solana_sdk::pubkey::Pubkey;
-use std::path::PathBuf;
+use {
+    rayon::prelude::*,
+    solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
+    solana_measure::measure::Measure,
+    solana_sdk::pubkey::Pubkey,
+    std::path::PathBuf,
+};
 #[test]
 #[ignore]
 fn bucket_map_test_mt() {

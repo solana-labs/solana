@@ -1,11 +1,13 @@
-use crate::cli::CliError;
-use solana_client::{
-    client_error::{ClientError, Result as ClientResult},
-    rpc_client::RpcClient,
-};
-use solana_sdk::{
-    commitment_config::CommitmentConfig, message::Message, native_token::lamports_to_sol,
-    pubkey::Pubkey,
+use {
+    crate::cli::CliError,
+    solana_client::{
+        client_error::{ClientError, Result as ClientResult},
+        rpc_client::RpcClient,
+    },
+    solana_sdk::{
+        commitment_config::CommitmentConfig, message::Message, native_token::lamports_to_sol,
+        pubkey::Pubkey,
+    },
 };
 
 pub fn check_account_for_fee(
@@ -65,7 +67,7 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     messages: &[&Message],
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
-    let fee = get_fee_for_message(rpc_client, messages)?;
+    let fee = get_fee_for_messages(rpc_client, messages)?;
     if !check_account_for_balance_with_commitment(
         rpc_client,
         account_pubkey,
@@ -90,7 +92,10 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     Ok(())
 }
 
-pub fn get_fee_for_message(rpc_client: &RpcClient, messages: &[&Message]) -> Result<u64, CliError> {
+pub fn get_fee_for_messages(
+    rpc_client: &RpcClient,
+    messages: &[&Message],
+) -> Result<u64, CliError> {
     Ok(messages
         .iter()
         .map(|message| rpc_client.get_fee_for_message(message))
@@ -143,14 +148,16 @@ pub fn check_unique_pubkeys(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::json;
-    use solana_client::{
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext},
+    use {
+        super::*,
+        serde_json::json,
+        solana_client::{
+            rpc_request::RpcRequest,
+            rpc_response::{Response, RpcResponseContext},
+        },
+        solana_sdk::system_instruction,
+        std::collections::HashMap,
     };
-    use solana_sdk::system_instruction;
-    use std::collections::HashMap;
 
     #[test]
     fn test_check_account_for_fees() {
@@ -235,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_fee_for_message() {
+    fn test_get_fee_for_messages() {
         let check_fee_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(1),
@@ -245,14 +252,14 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
 
         // No messages, no fee.
-        assert_eq!(get_fee_for_message(&rpc_client, &[]).unwrap(), 0);
+        assert_eq!(get_fee_for_messages(&rpc_client, &[]).unwrap(), 0);
 
         // One message w/ one signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message0 = Message::new(&[ix0], Some(&pubkey0));
-        assert_eq!(get_fee_for_message(&rpc_client, &[&message0]).unwrap(), 1);
+        assert_eq!(get_fee_for_messages(&rpc_client, &[&message0]).unwrap(), 1);
 
         // No signatures, no fee.
         let check_fee_response = json!(Response {
@@ -264,7 +271,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         let message = Message::default();
         assert_eq!(
-            get_fee_for_message(&rpc_client, &[&message, &message]).unwrap(),
+            get_fee_for_messages(&rpc_client, &[&message, &message]).unwrap(),
             0
         );
     }

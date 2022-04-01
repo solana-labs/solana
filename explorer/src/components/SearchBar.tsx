@@ -5,11 +5,10 @@ import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
 import {
   LOADER_IDS,
-  PROGRAM_NAME_BY_ID,
+  PROGRAM_INFO_BY_ID,
   SPECIAL_IDS,
   SYSVAR_IDS,
   LoaderName,
-  programLabel,
 } from "utils/tx";
 import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
@@ -21,7 +20,7 @@ export function SearchBar() {
   const history = useHistory();
   const location = useLocation();
   const { tokenRegistry } = useTokenRegistry();
-  const { cluster, epochInfo } = useCluster();
+  const { cluster, clusterInfo } = useCluster();
 
   const onChange = (
     { pathname }: ValueType<any, false>,
@@ -43,12 +42,13 @@ export function SearchBar() {
       <div className="row align-items-center">
         <div className="col">
           <Select
+            autoFocus
             ref={(ref) => (selectRef.current = ref)}
             options={buildOptions(
               search,
               cluster,
               tokenRegistry,
-              epochInfo?.epoch
+              clusterInfo?.epochInfo.epoch
             )}
             noOptionsMessage={() => "No Results"}
             placeholder="Search for blocks, accounts, transactions, programs, and tokens"
@@ -73,10 +73,9 @@ export function SearchBar() {
 }
 
 function buildProgramOptions(search: string, cluster: Cluster) {
-  const matchedPrograms = Object.entries(PROGRAM_NAME_BY_ID).filter(
-    ([address]) => {
-      const name = programLabel(address, cluster);
-      if (!name) return false;
+  const matchedPrograms = Object.entries(PROGRAM_INFO_BY_ID).filter(
+    ([address, { name, deployments }]) => {
+      if (!deployments.includes(cluster)) return false;
       return (
         name.toLowerCase().includes(search.toLowerCase()) ||
         address.includes(search)
@@ -87,10 +86,10 @@ function buildProgramOptions(search: string, cluster: Cluster) {
   if (matchedPrograms.length > 0) {
     return {
       label: "Programs",
-      options: matchedPrograms.map(([id, name]) => ({
+      options: matchedPrograms.map(([address, { name }]) => ({
         label: name,
-        value: [name, id],
-        pathname: "/address/" + id,
+        value: [name, address],
+        pathname: "/address/" + address,
       })),
     };
   }

@@ -1,4 +1,4 @@
-//! An [`RpcSender`] used for unit testing [`RpcClient`](crate::rpc_client::RpcClient).
+//! A nonblocking [`RpcSender`] used for unit testing [`RpcClient`](crate::rpc_client::RpcClient).
 
 use {
     crate::{
@@ -15,6 +15,7 @@ use {
         },
         rpc_sender::*,
     },
+    async_trait::async_trait,
     serde_json::{json, Number, Value},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_sdk::{
@@ -27,21 +28,19 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         sysvar::epoch_schedule::EpochSchedule,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, Transaction, TransactionError, TransactionVersion},
     },
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedConfirmedTransaction, EncodedTransaction,
-        EncodedTransactionWithStatusMeta, Rewards, TransactionConfirmationStatus,
-        TransactionStatus, UiCompiledInstruction, UiMessage, UiRawMessage, UiTransaction,
-        UiTransactionEncoding, UiTransactionStatusMeta,
+        EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
+        EncodedTransactionWithStatusMeta, Rewards, TransactionBinaryEncoding,
+        TransactionConfirmationStatus, TransactionStatus, UiCompiledInstruction, UiMessage,
+        UiRawMessage, UiTransaction, UiTransactionStatusMeta,
     },
     solana_version::Version,
     std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::RwLock},
 };
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
-pub const SIGNATURE: &str =
-    "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
 pub type Mocks = HashMap<RpcRequest, Value>;
 pub struct MockSender {
@@ -75,24 +74,29 @@ pub struct MockSender {
 ///    from [`RpcRequest`] to a JSON [`Value`] response, Any entries in this map
 ///    override the default behavior for the given request.
 impl MockSender {
-    pub fn new(url: String) -> Self {
+    pub fn new<U: ToString>(url: U) -> Self {
         Self::new_with_mocks(url, Mocks::default())
     }
 
-    pub fn new_with_mocks(url: String, mocks: Mocks) -> Self {
+    pub fn new_with_mocks<U: ToString>(url: U, mocks: Mocks) -> Self {
         Self {
-            url,
+            url: url.to_string(),
             mocks: RwLock::new(mocks),
         }
     }
 }
 
+#[async_trait]
 impl RpcSender for MockSender {
     fn get_transport_stats(&self) -> RpcTransportStats {
         RpcTransportStats::default()
     }
 
-    fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
+    async fn send(
+        &self,
+        request: RpcRequest,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(&request) {
             return Ok(value);
         }
@@ -185,9 +189,10 @@ impl RpcSender for MockSender {
                     value: statuses,
                 })?
             }
-            "getTransaction" => serde_json::to_value(EncodedConfirmedTransaction {
+            "getTransaction" => serde_json::to_value(EncodedConfirmedTransactionWithStatusMeta {
                 slot: 2,
                 transaction: EncodedTransactionWithStatusMeta {
+                    version: Some(TransactionVersion::LEGACY),
                     transaction: EncodedTransaction::Json(
                         UiTransaction {
                             signatures: vec!["3AsdoALgZFuq2oUVWrDYhg2pNeaLJKPLf8hU2mQ6U8qJxeJ6hsrPVpMn9ma39DtfYCrDQSvngWRP8NnTpEhezJpE".to_string()],
@@ -209,6 +214,7 @@ impl RpcSender for MockSender {
                                         accounts: vec![0, 1],
                                         data: "3Bxs49DitAvXtoDR".to_string(),
                                     }],
+                                    address_table_lookups: None,
                                 })
                         }),
                     meta: Some(UiTransactionStatusMeta {
@@ -222,6 +228,8 @@ impl RpcSender for MockSender {
                             pre_token_balances: None,
                             post_token_balances: None,
                             rewards: None,
+                            loaded_addresses: None,
+                            return_data: None,
                         }),
                 },
                 block_time: Some(1628633791),
@@ -333,6 +341,7 @@ impl RpcSender for MockSender {
                     logs: None,
                     accounts: None,
                     units_consumed: None,
+                    return_data: None,
                 },
             })?,
             "getMinimumBalanceForRentExemption" => json![20],
@@ -347,7 +356,7 @@ impl RpcSender for MockSender {
                 context: RpcResponseContext { slot: 1 },
                 value: RpcBlockhash {
                     blockhash: PUBKEY.to_string(),
-                    last_valid_block_height: 0,
+                    last_valid_block_height: 1234,
                 },
             })?,
             "getFeeForMessage" => serde_json::to_value(Response {
@@ -374,9 +383,10 @@ impl RpcSender for MockSender {
                                  pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
                                  hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
                             .to_string(),
-                        UiTransactionEncoding::Base58,
+                        TransactionBinaryEncoding::Base58,
                     ),
                     meta: None,
+                    version: Some(TransactionVersion::LEGACY),
                 }],
                 rewards: Rewards::new(),
                 block_time: None,
@@ -386,7 +396,7 @@ impl RpcSender for MockSender {
             "getBlocksWithLimit" => serde_json::to_value(vec![1, 2, 3])?,
             "getSignaturesForAddress" => {
                 serde_json::to_value(vec![RpcConfirmedTransactionStatusWithSignature {
-                    signature: SIGNATURE.to_string(),
+                    signature: crate::mock_sender_for_cli::SIGNATURE.to_string(),
                     slot: 123,
                     err: None,
                     memo: None,
@@ -435,7 +445,7 @@ impl RpcSender for MockSender {
                 value: vec![Value::Null, Value::Null]
             })?,
             "getProgramAccounts" => {
-                let pubkey = Pubkey::from_str(&PUBKEY.to_string()).unwrap();
+                let pubkey = Pubkey::from_str(PUBKEY).unwrap();
                 let account = Account {
                     lamports: 1_000_000,
                     data: vec![],

@@ -7,6 +7,7 @@ import {
   Account,
   ProgramData,
   TokenProgramData,
+  useMintAccountInfo,
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
@@ -37,6 +38,9 @@ import { TokenInstructionsCard } from "components/account/history/TokenInstructi
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
+import { DomainsCard } from "components/account/DomainsCard";
+import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
+import { SecurityCard } from "components/account/SecurityCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -105,6 +109,13 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       path: "/stake-history",
     },
   ],
+  "bpf-upgradeable-loader": [
+    {
+      slug: "security",
+      title: "Security",
+      path: "/security",
+    },
+  ],
 };
 
 const TOKEN_TABS_HIDDEN = [
@@ -158,16 +169,21 @@ export function AccountHeader({
 }) {
   const { tokenRegistry } = useTokenRegistry();
   const tokenDetails = tokenRegistry.get(address);
+  const mintInfo = useMintAccountInfo(address);
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
-  const isNFT = isToken && data.nftData;
 
-  if (isNFT) {
-    return <NFTHeader nftData={data.nftData!} address={address} />;
+  if (isMetaplexNFT(data, mintInfo)) {
+    return (
+      <NFTHeader
+        nftData={(data as TokenProgramData).nftData!}
+        address={address}
+      />
+    );
   }
 
-  if (tokenDetails || isToken) {
+  if (tokenDetails && isToken) {
     return (
       <div className="row align-items-end">
         <div className="col-auto">
@@ -188,7 +204,7 @@ export function AccountHeader({
           </div>
         </div>
 
-        <div className="col mb-3 ml-n3 ml-md-n2">
+        <div className="col mb-3 ms-n3 ms-md-n2">
           <h6 className="header-pretitle">Token</h6>
           <h2 className="header-title">
             {tokenDetails?.name || "Unknown Token"}
@@ -310,7 +326,9 @@ export type MoreTabs =
   | "transfers"
   | "instructions"
   | "rewards"
-  | "metadata";
+  | "metadata"
+  | "domains"
+  | "security";
 
 function MoreSection({
   account,
@@ -379,6 +397,10 @@ function MoreSection({
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
+      {tab === "domains" && <DomainsCard pubkey={pubkey} />}
+      {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
+        <SecurityCard data={data} />
+      )}
     </>
   );
 }
@@ -425,6 +447,11 @@ function getTabs(data?: ProgramData): Tab[] {
       slug: "tokens",
       title: "Tokens",
       path: "/tokens",
+    });
+    tabs.push({
+      slug: "domains",
+      title: "Domains",
+      path: "/domains",
     });
   }
 

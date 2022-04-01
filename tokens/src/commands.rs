@@ -1,51 +1,56 @@
-use crate::{
-    args::{BalancesArgs, DistributeTokensArgs, SenderStakeArgs, StakeArgs, TransactionLogArgs},
-    db::{self, TransactionInfo},
-    spl_token::*,
-    token_display::Token,
-};
-use chrono::prelude::*;
-use console::style;
-use csv::{ReaderBuilder, Trim};
-use indexmap::IndexMap;
-use indicatif::{ProgressBar, ProgressStyle};
-use pickledb::PickleDb;
-use serde::{Deserialize, Serialize};
-use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, real_number_string, spl_token_v2_0_pubkey,
-};
-use solana_client::{
-    client_error::{ClientError, Result as ClientResult},
-    rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-};
-use solana_sdk::{
-    clock::Slot,
-    commitment_config::CommitmentConfig,
-    instruction::Instruction,
-    message::Message,
-    native_token::{lamports_to_sol, sol_to_lamports},
-    signature::{unique_signers, Signature, Signer},
-    stake::{
-        instruction::{self as stake_instruction, LockupArgs},
-        state::{Authorized, Lockup, StakeAuthorize},
+use {
+    crate::{
+        args::{
+            BalancesArgs, DistributeTokensArgs, SenderStakeArgs, StakeArgs, TransactionLogArgs,
+        },
+        db::{self, TransactionInfo},
+        spl_token::*,
+        token_display::Token,
     },
-    system_instruction,
-    transaction::Transaction,
-};
-use solana_transaction_status::TransactionStatus;
-use spl_associated_token_account_v1_0::get_associated_token_address;
-use spl_token_v2_0::solana_program::program_error::ProgramError;
-use std::{
-    cmp::{self},
-    io,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    chrono::prelude::*,
+    console::style,
+    csv::{ReaderBuilder, Trim},
+    indexmap::IndexMap,
+    indicatif::{ProgressBar, ProgressStyle},
+    pickledb::PickleDb,
+    serde::{Deserialize, Serialize},
+    solana_account_decoder::parse_token::{
+        pubkey_from_spl_token, real_number_string, spl_token_pubkey,
     },
-    thread::sleep,
-    time::Duration,
+    solana_client::{
+        client_error::{ClientError, Result as ClientResult},
+        rpc_client::RpcClient,
+        rpc_config::RpcSendTransactionConfig,
+        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    },
+    solana_sdk::{
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
+        commitment_config::CommitmentConfig,
+        hash::Hash,
+        instruction::Instruction,
+        message::Message,
+        native_token::{lamports_to_sol, sol_to_lamports},
+        signature::{unique_signers, Signature, Signer},
+        stake::{
+            instruction::{self as stake_instruction, LockupArgs},
+            state::{Authorized, Lockup, StakeAuthorize},
+        },
+        system_instruction,
+        transaction::Transaction,
+    },
+    solana_transaction_status::TransactionStatus,
+    spl_associated_token_account::get_associated_token_address,
+    spl_token::solana_program::program_error::ProgramError,
+    std::{
+        cmp::{self},
+        io,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::sleep,
+        time::{Duration, Instant},
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -309,12 +314,11 @@ fn build_messages(
             let wallet_address = allocation.recipient.parse().unwrap();
             let associated_token_address = get_associated_token_address(
                 &wallet_address,
-                &spl_token_v2_0_pubkey(&spl_token_args.mint),
+                &spl_token_pubkey(&spl_token_args.mint),
             );
             let do_create_associated_token_account = client
-                .get_multiple_accounts(&[pubkey_from_spl_token_v2_0(&associated_token_address)])?
-                [0]
-            .is_none();
+                .get_multiple_accounts(&[pubkey_from_spl_token(&associated_token_address)])?[0]
+                .is_none();
             if do_create_associated_token_account {
                 *created_accounts += 1;
             }
@@ -340,7 +344,11 @@ fn build_messages(
             do_create_associated_token_account,
         );
         let fee_payer_pubkey = args.fee_payer.pubkey();
-        let message = Message::new(&instructions, Some(&fee_payer_pubkey));
+        let message = Message::new_with_blockhash(
+            &instructions,
+            Some(&fee_payer_pubkey),
+            &Hash::default(), // populated by a real blockhash for balance check and submission
+        );
         messages.push(message);
         stake_extras.push((new_stake_account_keypair, lockup_date));
     }
@@ -722,6 +730,25 @@ fn log_transaction_confirmations(
     Ok(())
 }
 
+pub fn get_fees_for_messages(messages: &[Message], client: &RpcClient) -> Result<u64, Error> {
+    // This is an arbitrary value to get regular blockhash updates for balance checks without
+    // hitting the RPC node with too many requests
+    const BLOCKHASH_REFRESH_MILLIS: u64 = DEFAULT_MS_PER_SLOT * 32;
+
+    let mut latest_blockhash = client.get_latest_blockhash()?;
+    let mut now = Instant::now();
+    let mut fees = 0;
+    for mut message in messages.iter().cloned() {
+        if now.elapsed() > Duration::from_millis(BLOCKHASH_REFRESH_MILLIS) {
+            latest_blockhash = client.get_latest_blockhash()?;
+            now = Instant::now();
+        }
+        message.recent_blockhash = latest_blockhash;
+        fees += client.get_fee_for_message(&message)?;
+    }
+    Ok(fees)
+}
+
 fn check_payer_balances(
     messages: &[Message],
     allocations: &[Allocation],
@@ -729,14 +756,7 @@ fn check_payer_balances(
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     let mut undistributed_tokens: u64 = allocations.iter().map(|x| x.amount).sum();
-
-    let fees = messages
-        .iter()
-        .map(|message| client.get_fee_for_message(message))
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .iter()
-        .sum();
+    let fees = get_fees_for_messages(messages, client)?;
 
     let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
         let total_unlocked_sol = allocations.len() as u64 * stake_args.unlocked_sol;
@@ -857,9 +877,11 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
     Ok(())
 }
 
-use crate::db::check_output_file;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair};
-use tempfile::{tempdir, NamedTempFile};
+use {
+    crate::db::check_output_file,
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    tempfile::{tempdir, NamedTempFile},
+};
 pub fn test_process_distribute_tokens_with_client(
     client: &RpcClient,
     sender_keypair: Keypair,
@@ -1199,24 +1221,27 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_core::test_validator::TestValidator;
-    use solana_sdk::{
-        instruction::AccountMeta,
-        signature::{read_keypair_file, write_keypair_file, Signer},
-        stake::instruction::StakeInstruction,
+    use {
+        super::*,
+        solana_sdk::{
+            instruction::AccountMeta,
+            signature::{read_keypair_file, write_keypair_file, Signer},
+            stake::instruction::StakeInstruction,
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        solana_test_validator::TestValidator,
+        solana_transaction_status::TransactionConfirmationStatus,
     };
-    use solana_streamer::socket::SocketAddrSpace;
-    use solana_transaction_status::TransactionConfirmationStatus;
 
-    fn one_signer_message() -> Message {
-        Message::new(
+    fn one_signer_message(client: &RpcClient) -> Message {
+        Message::new_with_blockhash(
             &[Instruction::new_with_bytes(
                 Pubkey::new_unique(),
                 &[],
                 vec![AccountMeta::new(Pubkey::default(), true)],
             )],
             None,
+            &client.get_latest_blockhash().unwrap(),
         )
     }
 
@@ -1542,7 +1567,7 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey.to_string())
+        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
     }
 
     fn initialize_check_payer_balances_inputs(
@@ -1573,13 +1598,10 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_single_payer() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
-
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
@@ -1588,6 +1610,11 @@ mod tests {
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let allocation_amount = 1000.0;
 
@@ -1598,7 +1625,7 @@ mod tests {
             &sender_keypair_file,
             None,
         );
-        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args).unwrap();
 
         // Unfunded payer
         let unfunded_payer = Keypair::new();
@@ -1612,7 +1639,7 @@ mod tests {
             .into();
 
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
@@ -1651,7 +1678,7 @@ mod tests {
             .unwrap()
             .into();
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
@@ -1666,18 +1693,21 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1705,7 +1735,7 @@ mod tests {
             &sender_keypair_file,
             None,
         );
-        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args).unwrap();
 
         // Unfunded sender
         let unfunded_payer = Keypair::new();
@@ -1717,7 +1747,7 @@ mod tests {
         args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
 
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
@@ -1733,7 +1763,7 @@ mod tests {
             .into();
 
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
@@ -1790,17 +1820,20 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_single_payer() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1821,7 +1854,7 @@ mod tests {
             &sender_keypair_file,
             Some(stake_args),
         );
-        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args).unwrap();
 
         // Underfunded stake-account
         let expensive_allocation_amount = 5000.0;
@@ -1831,7 +1864,7 @@ mod tests {
             lockup_date: "".to_string(),
         }];
         let err_result = check_payer_balances(
-            &[one_signer_message()],
+            &[one_signer_message(&client)],
             &expensive_allocations,
             &client,
             &args,
@@ -1859,7 +1892,7 @@ mod tests {
             .into();
 
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
@@ -1898,7 +1931,7 @@ mod tests {
             .unwrap()
             .into();
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
@@ -1913,18 +1946,21 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
-        let fees = 10_000;
-        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(
             alice.pubkey(),
-            fees,
+            10_000,
             None,
             SocketAddrSpace::Unspecified,
         );
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+
+        let fees = client
+            .get_fee_for_message(&one_signer_message(&client))
+            .unwrap();
+        let fees_in_sol = lamports_to_sol(fees);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1959,7 +1995,7 @@ mod tests {
             &sender_keypair_file,
             Some(stake_args),
         );
-        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args).unwrap();
 
         // Unfunded sender
         let unfunded_payer = Keypair::new();
@@ -1971,7 +2007,7 @@ mod tests {
         args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
 
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
@@ -1987,7 +2023,7 @@ mod tests {
             .into();
 
         let err_result =
-            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+            check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());

@@ -91,11 +91,7 @@ mod test {
                 &validator_vote_keypairs1,
                 &validator_vote_keypairs2,
             ];
-            let GenesisConfigInfo {
-                genesis_config,
-                mint_keypair: _,
-                voting_keypair: _,
-            } = create_genesis_config_with_vote_accounts(
+            let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
                 1_000_000_000,
                 &validator_keypairs,
                 vec![10_000; 3],

@@ -1,10 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
-pub use solana_core::test_validator;
-pub use solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
+pub use solana_test_validator as test_validator;
 use {
     console::style,
     fd_lock::{RwLock, RwLockWriteGuard},
     indicatif::{ProgressDrawTarget, ProgressStyle},
+    solana_net_utils::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
     std::{
         borrow::Cow,
         env,
@@ -55,11 +55,12 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             #[cfg(unix)]
             {
                 use log::info;
-                let signals = signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1])
-                    .unwrap_or_else(|err| {
-                        eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
-                        exit(1);
-                    });
+                let mut signals =
+                    signal_hook::iterator::Signals::new(&[signal_hook::consts::SIGUSR1])
+                        .unwrap_or_else(|err| {
+                            eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
+                            exit(1);
+                        });
 
                 solana_logger::setup_with_default(filter);
                 redirect_stderr(&logfile);
@@ -105,9 +106,12 @@ pub fn port_range_validator(port_range: String) -> Result<(), String> {
     }
 }
 
+pub fn format_name_value(name: &str, value: &str) -> String {
+    format!("{} {}", style(name).bold(), value)
+}
 /// Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
-    println!("{} {}", style(name).bold(), value);
+    println!("{}", format_name_value(name, value));
 }
 
 /// Creates a new process bar for processing that will take an unknown amount of time
@@ -136,6 +140,10 @@ impl ProgressBar {
         } else {
             println!("{}", msg);
         }
+    }
+
+    pub fn println<I: AsRef<str>>(&self, msg: I) {
+        self.progress_bar.println(msg);
     }
 
     pub fn abandon_with_message<T: Into<Cow<'static, str>> + Display>(&self, msg: T) {

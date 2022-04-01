@@ -1,12 +1,15 @@
-//! @brief Invokes an instruction and returns an error, the instruction invoked
+//! Invokes an instruction and returns an error, the instruction invoked
 //! uses the instruction data provided and all the accounts
 
 use solana_program::{
-    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, instruction::AccountMeta,
-    instruction::Instruction, program::invoke, pubkey::Pubkey,
+    account_info::AccountInfo,
+    entrypoint::ProgramResult,
+    instruction::{AccountMeta, Instruction},
+    program::invoke,
+    pubkey::Pubkey,
 };
 
-entrypoint!(process_instruction);
+solana_program::entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
@@ -14,7 +17,6 @@ fn process_instruction(
     instruction_data: &[u8],
 ) -> ProgramResult {
     let to_call = accounts[0].key;
-    let infos = accounts;
     let instruction = Instruction {
         accounts: accounts[1..]
             .iter()
@@ -27,5 +29,7 @@ fn process_instruction(
         data: instruction_data.to_owned(),
         program_id: *to_call,
     };
-    invoke(&instruction, infos)
+    // program id account is not required for invocations if the
+    // program id is not one of the instruction account metas.
+    invoke(&instruction, &accounts[1..])
 }

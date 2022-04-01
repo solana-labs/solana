@@ -7,10 +7,8 @@
 // Table of contents
 //
 // 1. Buttons
-// 2. Forms
-// 3. Input groups
-// 4. Quill
-// 5. Select2
+// 2. Dropzone
+// 3. Quill
 //
 
 
@@ -33,28 +31,19 @@
 }
 
 
-// Forms
+// Dropzone
 
-.form-control {
-  border-color: $input-bg;
-}
-
-
-// Input groups
-
-.input-group .input-group-text {
-  border-color: $input-bg;
+.dz-message {
+  border-color: $black-dark;
 }
 
 
 // Quill
 
 .ql-toolbar {
-  border-color: $input-bg;
+  border-bottom-color: $black-dark;
 }
 
 .ql-editor {
-  border-left-color: $input-bg;
-  border-right-color: $input-bg;
-  border-bottom-color: $input-bg;
+  border-top-color: $black-dark;
 }

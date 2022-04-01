@@ -19,9 +19,9 @@ of the account.
 - To change the [validator identity](#validator-identity), use
   [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
 - To change the [vote authority](#vote-authority), use
-  [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
+  [vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked).
 - To change the [authorized withdrawer](#authorized-withdrawer), use
-  [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
+  [vote-authorize-withdrawer-checked](../cli/usage.md#solana-vote-authorize-withdrawer-checked).
 - To change the [commission](#commission), use
   [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
@@ -84,10 +84,10 @@ different accounts.
 The vote authority can be set when the vote account is created. If it is not
 provided, the default behavior is to assign it the same as the validator identity.
 The vote authority can be changed later with the
-[vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter) command.
+[vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked) command.
 
 The vote authority can be changed at most once per epoch. If the authority is
-changed with [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter),
+changed with [vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked),
 this will not take effect until the beginning of the next epoch.
 To support a smooth transition of the vote signing,
 `solana-validator` allows the `--authorized-voter` argument to be specified
@@ -117,7 +117,7 @@ not be set to a keypair that is the same as either the validator identity
 keypair or the vote authority keypair.
 
 The authorized withdrawer can be changed later with the
-[vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
+[vote-authorize-withdrawer-checked](../cli/usage.md#solana-vote-authorize-withdrawer-checked)
 command.
 
 ### Commission
@@ -154,6 +154,11 @@ creating an account with `--commission 10` will set a 10% commission.
 
 Rotating the vote account authority keys require special handling when dealing
 with a live validator.
+
+Note that vote account key rotation has no effect on the stake accounts that
+have been delegate to the vote account. For example it is possible to use key
+rotation to transfer all authority of a vote account from one entity to another
+without any impact to staking rewards.
 
 ### Vote Account Validator Identity
 
@@ -198,7 +203,7 @@ migration.
 3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. It may be validator's
    identity account (the default) or some other keypair. The following steps
    assume that `~/validator-keypair.json` is that keypair.
-4. Run `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
+4. Run `solana vote-authorize-voter-checked ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
    The new vote authority is scheduled to become active starting at the next epoch.
 5. `solana-validator` now needs to be restarted with the old and new vote
    authority keypairs, so that it can smoothly transition at the next epoch. Add
@@ -209,7 +214,25 @@ migration.
 
 ### Vote Account Authorized Withdrawer
 
-No special handling is required. Use the `solana vote-authorize-withdrawer` command as needed.
+No special handling or timing considerations are required.
+Use the `solana vote-authorize-withdrawer-checked` command as needed.
+
+### Consider Durable Nonces for a Trustless Transfer of the Authorized Voter or Withdrawer
+
+If the Authorized Voter or Withdrawer is to be transferred to another entity
+then a two-stage signing process using a [Durable Nonce](../offline-signing/durable-nonce) is recommended.
+
+1. Entity B creates a durable nonce using `solana create-nonce-account`
+2. Entity B then runs a `solana vote-authorize-voter-checked` or `solana vote-authorize-withdrawer-checked` command, including:
+  - the `--sign-only` argument
+  - the `--nonce`, `--nonce-authority`, and `--blockhash` arguments to specify the nonce particulars
+  - the address of the Entity A's existing authority, and the keypair for Entity B's new authority
+3. When the `solana vote-authorize-...-checked` command successfully executes, it will output transaction signatures that Entity B must share with Entity A
+4. Entity A then runs a similar `solana vote-authorize-voter-checked` or `solana vote-authorize-withdrawer-checked` command with the following changes:
+  - the `--sign-only` argument is removed, and replaced with a `--signer` argument for each of the signatures provided by Entity B
+  - the address of Entity A's existing authority is replaced with the corresponding keypair, and the the keypair for Entity B's new authority is replaced with the correponding address
+
+On success the authority is now changed without Entity A or B having to reveal keypairs to the other even though both entities signed the transaction.
 
 ## Close a Vote Account
 

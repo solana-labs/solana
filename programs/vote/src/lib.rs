@@ -2,7 +2,9 @@
 #![allow(clippy::integer_arithmetic)]
 
 pub mod authorized_voters;
+pub mod vote_error;
 pub mod vote_instruction;
+pub mod vote_processor;
 pub mod vote_state;
 pub mod vote_transaction;
 

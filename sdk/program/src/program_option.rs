@@ -1,4 +1,4 @@
-//! A C representation of Rust's `std::option::Option` used accross the FFI
+//! A C representation of Rust's `std::option::Option` used across the FFI
 //! boundary for Solana program interfaces
 //!
 //! This implementation mostly matches `std::option` except iterators since the iteration

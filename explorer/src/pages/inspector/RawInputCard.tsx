@@ -139,14 +139,14 @@ export function RawInput({
           rows={rows}
           onInput={onInput}
           ref={rawTransactionInput}
-          className="form-control form-control-flush form-control-auto text-monospace"
+          className="form-control form-control-flush form-control-auto font-monospace"
           placeholder={placeholder}
         ></textarea>
         <div className="row align-items-center">
           <div className="col d-flex align-items-center">
             {error && (
               <>
-                <span className="text-warning small mr-2">
+                <span className="text-warning small me-2">
                   <i className="fe fe-alert-circle"></i>
                 </span>
 

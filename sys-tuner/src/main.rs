@@ -36,8 +36,7 @@ fn tune_poh_service_priority(uid: u32) {
         None
     }
 
-    use std::process::Command;
-    use std::str::from_utf8;
+    use std::{process::Command, str::from_utf8};
 
     if let Some(pid) = find_pid("solana-validato", "/proc", uid, |dir| {
         let mut path = dir.path();
@@ -68,8 +67,7 @@ fn tune_poh_service_priority(uid: u32) {
 
 #[cfg(target_os = "linux")]
 fn tune_kernel_udp_buffers_and_vmmap() {
-    use sysctl::CtlValue::String;
-    use sysctl::Sysctl;
+    use sysctl::{CtlValue::String, Sysctl};
     fn sysctl_write(name: &str, value: &str) {
         if let Ok(ctl) = sysctl::Ctl::new(name) {
             info!("Old {} value {:?}", name, ctl.value());

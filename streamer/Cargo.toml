@@ -1,26 +1,36 @@
 [package]
 name = "solana-streamer"
-version = "1.9.0"
+version = "1.11.0"
 description = "Solana Streamer"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-streamer"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-itertools = "0.10.1"
+crossbeam-channel = "0.5"
+futures-util = "0.3.21"
+histogram = "0.6.9"
+itertools = "0.10.3"
+libc = "0.2.120"
 log = "0.4.14"
-solana-metrics = { path = "../metrics", version = "=1.9.0" }
-solana-sdk = { path = "../sdk", version = "=1.9.0" }
+nix = "0.23.1"
+pem = "1.0.2"
+pkcs8 = { version = "0.8.0", features = ["alloc"] }
+quinn = "0.8.1"
+rand = "0.7.0"
+rcgen = "0.9.2"
+rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
+solana-metrics = { path = "../metrics", version = "=1.11.0" }
+solana-perf = { path = "../perf", version = "=1.11.0" }
+solana-sdk = { path = "../sdk", version = "=1.11.0" }
 thiserror = "1.0"
-solana-logger = { path = "../logger", version = "=1.9.0" }
-libc = "0.2.103"
-nix = "0.23.0"
-solana-perf = { path = "../perf", version = "=1.9.0" }
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
+solana-logger = { path = "../logger", version = "=1.11.0" }
 
 [lib]
 crate-type = ["lib"]

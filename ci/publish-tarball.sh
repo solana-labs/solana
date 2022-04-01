@@ -39,7 +39,11 @@ fi
 
 case "$CI_OS_NAME" in
 osx)
-  TARGET=x86_64-apple-darwin
+  _cputype="$(uname -m)"
+  if [[ $_cputype = arm64 ]]; then
+    _cputype=aarch64
+  fi
+  TARGET=${_cputype}-apple-darwin
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu
@@ -146,7 +150,7 @@ elif [[ -n $BUILDKITE ]]; then
   cat > release.solana.com-install <<EOF
 SOLANA_RELEASE=$CHANNEL_OR_TAG
 SOLANA_INSTALL_INIT_ARGS=$CHANNEL_OR_TAG
-SOLANA_DOWNLOAD_ROOT=http://release.solana.com
+SOLANA_DOWNLOAD_ROOT=https://release.solana.com
 EOF
   cat install/solana-install-init.sh >> release.solana.com-install
 

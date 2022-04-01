@@ -3,26 +3,50 @@
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use log::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use serde::Serialize;
-use solana_sdk::{
-    account::ReadableAccount,
-    decode_error::DecodeError,
-    entrypoint_native::ProgramEntrypoint,
-    instruction::InstructionError,
-    keyed_account::keyed_account_at_index,
-    native_loader,
-    process_instruction::{InvokeContext, LoaderEntrypoint},
+use {
+    crate::invoke_context::InvokeContext,
+    log::*,
+    num_derive::{FromPrimitive, ToPrimitive},
+    serde::Serialize,
+    solana_sdk::{
+        account::ReadableAccount,
+        decode_error::DecodeError,
+        instruction::InstructionError,
+        keyed_account::{keyed_account_at_index, KeyedAccount},
+        native_loader,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::HashMap,
+        env,
+        path::{Path, PathBuf},
+        str,
+        sync::RwLock,
+    },
+    thiserror::Error,
 };
-use std::{
-    collections::HashMap,
-    env,
-    path::{Path, PathBuf},
-    str,
-    sync::RwLock,
-};
-use thiserror::Error;
+
+/// Prototype of a native loader entry point
+///
+/// program_id: Program ID of the currently executing program
+/// keyed_accounts: Accounts passed as part of the instruction
+/// instruction_data: Instruction data
+/// invoke_context: Invocation context
+pub type LoaderEntrypoint = unsafe extern "C" fn(
+    program_id: &Pubkey,
+    invoke_context: &InvokeContext,
+) -> Result<(), InstructionError>;
+
+// Prototype of a native program entry point
+///
+/// program_id: Program ID of the currently executing program
+/// keyed_accounts: Accounts passed as part of the instruction
+/// instruction_data: Instruction data
+pub type ProgramEntrypoint = unsafe extern "C" fn(
+    program_id: &Pubkey,
+    keyed_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+) -> Result<(), InstructionError>;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum NativeLoaderError {
@@ -100,7 +124,11 @@ impl NativeLoader {
     fn library_open(path: &Path) -> Result<Library, libloading::Error> {
         unsafe {
             // Linux tls bug can cause crash on dlclose(), workaround by never unloading
-            Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+            #[cfg(target_os = "android")]
+            let flags = libc::RTLD_NOW;
+            #[cfg(not(target_os = "android"))]
+            let flags = libc::RTLD_NODELETE | libc::RTLD_NOW;
+            Library::open(Some(path), flags)
         }
     }
 
@@ -137,11 +165,12 @@ impl NativeLoader {
     pub fn process_instruction(
         &self,
         first_instruction_account: usize,
-        instruction_data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let (program_id, name_vec) = {
-            let program_id = invoke_context.get_caller()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let program_id = instruction_context.get_program_key(transaction_context)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             if native_loader::id() != *program_id {
@@ -175,10 +204,13 @@ impl NativeLoader {
         trace!("Call native {:?}", name);
         #[allow(deprecated)]
         invoke_context.remove_first_keyed_account()?;
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let instruction_data = instruction_context.get_instruction_data();
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
-            unsafe { entrypoint(&program_id, instruction_data, invoke_context) }
+            unsafe { entrypoint(&program_id, invoke_context) }
         } else {
             let entrypoint =
                 Self::get_entrypoint::<ProgramEntrypoint>(name, &self.program_symbol_cache)?;

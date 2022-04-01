@@ -32,7 +32,7 @@ export function InstructionDetails({
               e.preventDefault();
               setExpanded(!expanded);
             }}
-            className={`c-pointer fe mr-2 ${
+            className={`c-pointer fe me-2 ${
               expanded ? "fe-minus-square" : "fe-plus-square"
             }`}
           ></span>

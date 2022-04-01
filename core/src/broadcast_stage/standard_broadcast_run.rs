@@ -119,17 +119,16 @@ impl StandardBroadcastRun {
                 None => (0, 0),
             },
         };
-        let (data_shreds, next_shred_index) =
-            Shredder::new(slot, parent_slot, reference_tick, self.shred_version)
-                .unwrap()
-                .entries_to_data_shreds(
-                    keypair,
-                    entries,
-                    is_slot_end,
-                    next_shred_index,
-                    fec_set_offset,
-                    process_stats,
-                );
+        let data_shreds = Shredder::new(slot, parent_slot, reference_tick, self.shred_version)
+            .unwrap()
+            .entries_to_data_shreds(
+                keypair,
+                entries,
+                is_slot_end,
+                next_shred_index,
+                fec_set_offset,
+                process_stats,
+            );
         let mut data_shreds_buffer = match &mut self.unfinished_slot {
             Some(state) => {
                 assert_eq!(state.slot, slot);
@@ -138,8 +137,17 @@ impl StandardBroadcastRun {
             None => Vec::default(),
         };
         data_shreds_buffer.extend(data_shreds.clone());
+        let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
+            Some(index) => index + 1,
+            None => next_shred_index,
+        };
+        let next_code_index = match &self.unfinished_slot {
+            Some(state) => state.next_code_index,
+            None => 0,
+        };
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
+            next_code_index,
             slot,
             parent: parent_slot,
             data_shreds_buffer,
@@ -158,8 +166,8 @@ impl StandardBroadcastRun {
         receive_results: ReceiveResults,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let (bsend, brecv) = channel();
-        let (ssend, srecv) = channel();
+        let (bsend, brecv) = unbounded();
+        let (ssend, srecv) = unbounded();
         self.process_receive_results(keypair, blockstore, &ssend, &bsend, receive_results)?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
@@ -446,23 +454,40 @@ fn make_coding_shreds(
     is_slot_end: bool,
     stats: &mut ProcessShredsStats,
 ) -> Vec<Shred> {
-    let data_shreds = match unfinished_slot {
-        None => Vec::default(),
-        Some(unfinished_slot) => {
-            let size = unfinished_slot.data_shreds_buffer.len();
-            // Consume a multiple of 32, unless this is the slot end.
-            let offset = if is_slot_end {
-                0
-            } else {
-                size % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize
-            };
-            unfinished_slot
-                .data_shreds_buffer
-                .drain(0..size - offset)
-                .collect()
-        }
+    let unfinished_slot = match unfinished_slot {
+        None => return Vec::default(),
+        Some(state) => state,
     };
-    Shredder::data_shreds_to_coding_shreds(keypair, &data_shreds, is_slot_end, stats).unwrap()
+    let data_shreds: Vec<_> = {
+        let size = unfinished_slot.data_shreds_buffer.len();
+        // Consume a multiple of 32, unless this is the slot end.
+        let offset = if is_slot_end {
+            0
+        } else {
+            size % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize
+        };
+        unfinished_slot
+            .data_shreds_buffer
+            .drain(0..size - offset)
+            .collect()
+    };
+    let shreds = Shredder::data_shreds_to_coding_shreds(
+        keypair,
+        &data_shreds,
+        is_slot_end,
+        unfinished_slot.next_code_index,
+        stats,
+    )
+    .unwrap();
+    if let Some(index) = shreds
+        .iter()
+        .filter(|shred| shred.is_code())
+        .map(Shred::index)
+        .max()
+    {
+        unfinished_slot.next_code_index = unfinished_slot.next_code_index.max(index + 1);
+    }
+    shreds
 }
 
 impl BroadcastRun for StandardBroadcastRun {
@@ -508,22 +533,22 @@ impl BroadcastRun for StandardBroadcastRun {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_entry::entry::create_ticks;
-    use solana_gossip::cluster_info::{ClusterInfo, Node};
-    use solana_ledger::genesis_utils::create_genesis_config;
-    use solana_ledger::{
-        blockstore::Blockstore, get_tmp_ledger_path, shred::max_ticks_per_n_shreds,
+    use {
+        super::*,
+        solana_entry::entry::create_ticks,
+        solana_gossip::cluster_info::{ClusterInfo, Node},
+        solana_ledger::{
+            blockstore::Blockstore, genesis_utils::create_genesis_config, get_tmp_ledger_path,
+            shred::max_ticks_per_n_shreds,
+        },
+        solana_runtime::bank::Bank,
+        solana_sdk::{
+            genesis_config::GenesisConfig,
+            signature::{Keypair, Signer},
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        std::{ops::Deref, sync::Arc, time::Duration},
     };
-    use solana_runtime::bank::Bank;
-    use solana_sdk::{
-        genesis_config::GenesisConfig,
-        signature::{Keypair, Signer},
-    };
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::ops::Deref;
-    use std::sync::Arc;
-    use std::time::Duration;
 
     #[allow(clippy::type_complexity)]
     fn setup(
@@ -579,6 +604,7 @@ mod test {
         let parent = 0;
         run.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
+            next_code_index: 17,
             slot,
             parent,
             data_shreds_buffer: Vec::default(),
@@ -596,7 +622,7 @@ mod test {
             .expect("Expected a shred that signals an interrupt");
 
         // Validate the shred
-        assert_eq!(shred.parent(), parent);
+        assert_eq!(shred.parent().unwrap(), parent);
         assert_eq!(shred.slot(), slot);
         assert_eq!(shred.index(), next_shred_index);
         assert!(shred.is_data());
@@ -737,8 +763,8 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =
             setup(num_shreds_per_slot);
-        let (bsend, brecv) = channel();
-        let (ssend, _srecv) = channel();
+        let (bsend, brecv) = unbounded();
+        let (ssend, _srecv) = unbounded();
         let mut last_tick_height = 0;
         let mut standard_broadcast_run = StandardBroadcastRun::new(0);
         let mut process_ticks = |num_ticks| {

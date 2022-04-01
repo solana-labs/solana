@@ -8,7 +8,7 @@ Confirm the IP address and **identity pubkey** of your validator is visible in
 the gossip network by running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana gossip
 ```
 
 ## Check Your Balance
