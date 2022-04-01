@@ -24,11 +24,13 @@ export function useAnchorProgram(
 ): Program | null {
     const key = `${programAddress}-${url}`;
     const cacheEntry = cachedAnchorProgramPromises[key];
+    console.log("key", key, cacheEntry);
     const [anchorProgram, setAnchorProgram] = useState<Program<Idl> | null>(
-        () => cacheEntry?._type === 'result' ? cacheEntry.result : null
+        cacheEntry?._type === 'result' ? cacheEntry.result : null
     );
 
     if (cacheEntry === undefined) {
+        console.log("bad!", key);
         const promise = Program.at(programAddress, new Provider(new Connection(url), new NodeWallet(Keypair.generate()), {}))
             .then((program) => {
                 cachedAnchorProgramPromises[key] = { _type: 'result', result: program };
@@ -46,11 +48,13 @@ export function useAnchorProgram(
         };
         throw promise;
     } else if (cacheEntry._type === 'promise') {
+        console.log("hit!", key);
         cacheEntry.promise.then((result) => {
             setAnchorProgram(result);
         })
         throw cacheEntry.promise;
     }
+    console.log("returning anchorProgram for", key, anchorProgram, cacheEntry);
     return anchorProgram;
 }
 

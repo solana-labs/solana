@@ -29,7 +29,7 @@ export function ProgramLogsCardBody({
         }
         const programLogs: InstructionLogs | undefined = logs[index];
 
-        return (<ProgramInstructionLog index={index} programId={programId} programLogs={programLogs} cluster={cluster} />);
+        return (<ProgramInstructionLog key={index} index={index} programId={programId} programLogs={programLogs} cluster={cluster} />);
       })}
     </TableCardBody>
   );

@@ -234,6 +234,9 @@ function DetailsSections({
   const { url } = useCluster();
   const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
   const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
+  // console.log("AnchorProgram", anchorProgram);
+  console.log("accountAnchorProgram", accountAnchorProgram);
+  console.log("owner", info?.data?.details?.owner.toString() ?? undefined);
 
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
