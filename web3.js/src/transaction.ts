@@ -266,7 +266,7 @@ export class Transaction {
    */
   compileMessage(): Message {
     if (this._message) {
-      if (JSON.stringify(this) !== JSON.stringify(this._json)) {
+      if (JSON.stringify(this.toJSON()) !== JSON.stringify(this._json)) {
         throw new Error(
           'Transaction mutated after being populated from Message',
         );
