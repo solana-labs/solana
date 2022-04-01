@@ -174,8 +174,8 @@ pub struct Blockstore {
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
-    pub new_shreds_signals: Mutex<Vec<Sender<bool>>>,
-    pub completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
+    new_shreds_signals: Mutex<Vec<Sender<bool>>>,
+    completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
@@ -1069,6 +1069,14 @@ impl Blockstore {
 
     pub fn add_completed_slots_signal(&self, s: CompletedSlotsSender) {
         self.completed_slots_senders.lock().unwrap().push(s);
+    }
+
+    pub fn get_new_shred_signals_len(&self) -> usize {
+        self.new_shreds_signals.lock().unwrap().len()
+    }
+
+    pub fn get_new_shred_signal(&self, index: usize) -> Option<Sender<bool>> {
+        self.new_shreds_signals.lock().unwrap().get(index).cloned()
     }
 
     pub fn drop_signal(&self) {
