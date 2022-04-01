@@ -1,7 +1,6 @@
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 
-pub mod alloc;
 pub mod allocator_bump;
 pub mod deprecated;
 pub mod serialization;
@@ -234,7 +233,6 @@ pub fn create_vm<'a, 'b>(
     program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut InvokeContext<'b>,
-    orig_data_lens: &'a [usize],
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
@@ -251,7 +249,7 @@ pub fn create_vm<'a, 'b>(
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), parameter_bytes)?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_data_lens)?;
+    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap)?;
     Ok(vm)
 }
 
@@ -1145,6 +1143,7 @@ impl Executor for BpfExecutor {
         let (mut parameter_bytes, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context)?;
         serialize_time.stop();
+        invoke_context.set_orig_account_lengths(account_lengths)?;
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
@@ -1152,7 +1151,6 @@ impl Executor for BpfExecutor {
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
                 invoke_context,
-                &account_lengths,
             ) {
                 Ok(info) => info,
                 Err(e) => {
@@ -1234,7 +1232,7 @@ impl Executor for BpfExecutor {
                     .transaction_context
                     .get_current_instruction_context()?,
                 parameter_bytes.as_slice(),
-                &account_lengths,
+                invoke_context.get_orig_account_lengths()?,
                 invoke_context
                     .feature_set
                     .is_active(&do_support_realloc::id()),
@@ -1341,9 +1339,18 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let input = &mut [0x00];
+
+        let config = Config::default();
+        let syscall_registry = SyscallRegistry::default();
         let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
-        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint", false)
-            .unwrap();
+        solana_rbpf::elf::register_bpf_function(
+            &config,
+            &mut bpf_functions,
+            &syscall_registry,
+            0,
+            "entrypoint",
+        )
+        .unwrap();
         let program = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
             program,
             None,

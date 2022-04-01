@@ -245,13 +245,11 @@ fn run_program(name: &str) -> u64 {
                 .unwrap();
             let mut parameter_bytes = parameter_bytes.clone();
             {
-                let mut vm = create_vm(
-                    &executable,
-                    parameter_bytes.as_slice_mut(),
-                    invoke_context,
-                    &account_lengths,
-                )
-                .unwrap();
+                invoke_context
+                    .set_orig_account_lengths(account_lengths.clone())
+                    .unwrap();
+                let mut vm =
+                    create_vm(&executable, parameter_bytes.as_slice_mut(), invoke_context).unwrap();
                 let result = if i == 0 {
                     vm.execute_program_interpreted(&mut instruction_meter)
                 } else {
@@ -1418,7 +1416,7 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_c")]
     {
         programs.extend_from_slice(&[
-            ("alloc", 1237),
+            ("alloc", 11502),
             ("bpf_to_bpf", 313),
             ("multiple_static", 208),
             ("noop", 5),
