@@ -409,6 +409,11 @@ describe('Transaction', () => {
     expect(transaction.instructions).to.have.length(1);
     expect(transaction.signatures).to.have.length(2);
     expect(transaction.recentBlockhash).to.eq(recentBlockhash);
+
+    transaction.feePayer = new PublicKey(6);
+    expect(() => transaction.compileMessage()).to.throw(
+      'Transaction mutated after being populated from Message',
+    );
   });
 
   it('serialize unsigned transaction', () => {
