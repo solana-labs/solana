@@ -3523,50 +3523,78 @@ mod tests {
     /// more information.)
     #[test]
     fn test_delegate_minimum_stake_delegation() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&stake_address)
+        };
+        let vote_address = solana_sdk::pubkey::new_rand();
+        let vote_account =
+            vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: vote_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_config::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
         for (stake_delegation, expected_result) in [
             (MINIMUM_STAKE_DELEGATION, Ok(())),
             (MINIMUM_STAKE_DELEGATION - 1, Ok(())),
         ] {
-            let rent = Rent::default();
-            let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-            let stake_pubkey = Pubkey::new_unique();
-            let signers = HashSet::from([stake_pubkey]);
-            let meta = Meta {
-                rent_exempt_reserve,
-                ..Meta::auto(&stake_pubkey)
-            };
-
             for stake_state in &[
                 StakeState::Initialized(meta),
-                StakeState::Stake(meta, just_stake(stake_delegation)),
+                just_stake(meta, stake_delegation),
             ] {
-                let stake_account = AccountSharedData::new_ref_data_with_space(
+                let stake_account = AccountSharedData::new_data_with_space(
                     stake_delegation + rent_exempt_reserve,
                     stake_state,
                     std::mem::size_of::<StakeState>(),
                     &id(),
                 )
                 .unwrap();
-                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-                let vote_pubkey = Pubkey::new_unique();
-                let vote_account = RefCell::new(vote_state::create_account(
-                    &vote_pubkey,
-                    &Pubkey::new_unique(),
-                    0,
-                    100,
-                ));
-                let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
-
-                assert_eq!(
-                    expected_result,
-                    stake_keyed_account.delegate(
-                        &vote_keyed_account,
-                        &Clock::default(),
-                        &StakeHistory::default(),
-                        &Config::default(),
-                        &signers,
-                    ),
+                process_instruction(
+                    &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                    vec![
+                        (stake_address, stake_account),
+                        (vote_address, vote_account.clone()),
+                        (
+                            sysvar::clock::id(),
+                            account::create_account_shared_data_for_test(&Clock::default()),
+                        ),
+                        (
+                            sysvar::stake_history::id(),
+                            account::create_account_shared_data_for_test(&StakeHistory::default()),
+                        ),
+                        (
+                            stake_config::id(),
+                            config::create_account(0, &stake_config::Config::default()),
+                        ),
+                    ],
+                    instruction_accounts.clone(),
+                    expected_result.clone(),
                 );
             }
         }
