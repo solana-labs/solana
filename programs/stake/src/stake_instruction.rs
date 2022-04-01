@@ -3922,6 +3922,41 @@ mod tests {
     /// - Assert 2: withdrawing so remaining stake is less-than the minimum is not OK
     #[test]
     fn test_withdraw_minimum_stake_delegation() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&stake_address)
+        };
+        let recipient_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: recipient_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
         let starting_stake_delegation = MINIMUM_STAKE_DELEGATION;
         for (ending_stake_delegation, expected_result) in [
             (MINIMUM_STAKE_DELEGATION, Ok(())),
@@ -3930,45 +3965,47 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            let rent = Rent::default();
-            let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-            let stake_pubkey = Pubkey::new_unique();
-            let meta = Meta {
-                rent_exempt_reserve,
-                ..Meta::auto(&stake_pubkey)
-            };
-
             for stake_state in &[
                 StakeState::Initialized(meta),
-                StakeState::Stake(meta, just_stake(starting_stake_delegation)),
+                just_stake(meta, starting_stake_delegation),
             ] {
                 let rewards_balance = 123;
-                let stake_account = AccountSharedData::new_ref_data_with_space(
+                let stake_account = AccountSharedData::new_data_with_space(
                     starting_stake_delegation + rent_exempt_reserve + rewards_balance,
                     stake_state,
                     std::mem::size_of::<StakeState>(),
                     &id(),
                 )
                 .unwrap();
-                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-                let to_pubkey = Pubkey::new_unique();
-                let to_account =
-                    AccountSharedData::new_ref(rent_exempt_reserve, 0, &system_program::id());
-                let to_keyed_account = KeyedAccount::new(&to_pubkey, false, &to_account);
-
                 let withdraw_amount =
                     (starting_stake_delegation + rewards_balance) - ending_stake_delegation;
-                assert_eq!(
-                    expected_result,
-                    stake_keyed_account.withdraw(
-                        withdraw_amount,
-                        &to_keyed_account,
-                        &Clock::default(),
-                        &StakeHistory::default(),
-                        &stake_keyed_account,
-                        None,
-                    ),
+                process_instruction(
+                    &serialize(&StakeInstruction::Withdraw(withdraw_amount)).unwrap(),
+                    vec![
+                        (stake_address, stake_account),
+                        (
+                            recipient_address,
+                            AccountSharedData::new(rent_exempt_reserve, 0, &system_program::id()),
+                        ),
+                        (
+                            sysvar::clock::id(),
+                            account::create_account_shared_data_for_test(&Clock::default()),
+                        ),
+                        (
+                            sysvar::rent::id(),
+                            account::create_account_shared_data_for_test(&Rent::free()),
+                        ),
+                        (
+                            sysvar::stake_history::id(),
+                            account::create_account_shared_data_for_test(&StakeHistory::default()),
+                        ),
+                        (
+                            stake_config::id(),
+                            config::create_account(0, &stake_config::Config::default()),
+                        ),
+                    ],
+                    instruction_accounts.clone(),
+                    expected_result.clone(),
                 );
             }
         }
