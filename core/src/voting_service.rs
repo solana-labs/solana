@@ -1,7 +1,10 @@
 use {
     crate::tower_storage::{SavedTowerVersions, TowerStorage},
     crossbeam_channel::Receiver,
+<<<<<<< HEAD
     solana_client::connection_cache,
+=======
+>>>>>>> df4d92f9c (Revert voting service to use UDP instead of QUIC (#24032))
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
@@ -87,6 +90,7 @@ impl VotingService {
         } else {
             crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder)
         };
+<<<<<<< HEAD
 
         let mut measure = Measure::start("vote_tx_send-ms");
         let target_address = target_address.unwrap_or_else(|| cluster_info.my_contact_info().tpu);
@@ -94,6 +98,9 @@ impl VotingService {
         let _ = connection_cache::send_wire_transaction(&wire_vote_tx, &target_address);
         measure.stop();
         inc_new_counter_info!("vote_tx_send-ms", measure.as_ms() as usize);
+=======
+        let _ = cluster_info.send_transaction(vote_op.tx(), target_address);
+>>>>>>> df4d92f9c (Revert voting service to use UDP instead of QUIC (#24032))
 
         match vote_op {
             VoteOp::PushVote {
