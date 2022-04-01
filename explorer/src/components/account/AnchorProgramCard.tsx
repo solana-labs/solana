@@ -18,6 +18,7 @@ export function AnchorProgramCard({ program }: { program: Program }) {
           <ReactJson
             src={program.idl}
             theme={"solarized"}
+            collapsed={1}
             style={{ padding: 25 }}
           />
         </div>
