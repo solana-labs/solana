@@ -34,7 +34,6 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _first_instruction_account: usize,
-    _data: &[u8],
     _invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())

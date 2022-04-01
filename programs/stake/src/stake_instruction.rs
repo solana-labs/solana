@@ -25,11 +25,11 @@ use {
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+    let data = instruction_context.get_instruction_data();
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);

@@ -94,13 +94,13 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     _first_instruction_account: usize,
-    input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
     let indices_in_instruction = instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts();
 
@@ -167,7 +167,7 @@ pub fn builtin_process_instruction(
         .collect::<Result<Vec<AccountInfo>, InstructionError>>()?;
 
     // Execute the program
-    process_instruction(program_id, &account_infos, input).map_err(|err| {
+    process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
         let err = u64::from(err);
         stable_log::program_failure(&log_collector, program_id, &err.into());
         err
@@ -197,12 +197,10 @@ macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
             |first_instruction_account: usize,
-             input: &[u8],
              invoke_context: &mut solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,
-                    input,
                     invoke_context,
                 )
             },

@@ -190,12 +190,12 @@ mod tests {
 
         fn mock_system_process_instruction(
             _first_instruction_account: usize,
-            data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
-            if let Ok(instruction) = bincode::deserialize(data) {
+            let instruction_data = instruction_context.get_instruction_data();
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
                     MockSystemInstruction::TransferLamports { lamports } => {
@@ -389,14 +389,14 @@ mod tests {
 
         fn mock_system_process_instruction(
             _first_instruction_account: usize,
-            data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
+            let instruction_data = instruction_context.get_instruction_data();
             let mut to_account =
                 instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
-            if let Ok(instruction) = bincode::deserialize(data) {
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
                         let from_account = instruction_context
@@ -599,7 +599,6 @@ mod tests {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
             _first_instruction_account: usize,
-            _data: &[u8],
             _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))
