@@ -512,7 +512,12 @@ impl OldestSlot {
 }
 
 #[derive(Debug)]
-struct Rocks(rocksdb::DB, ActualAccessType, OldestSlot);
+struct Rocks(
+    rocksdb::DB,
+    ActualAccessType,
+    OldestSlot,
+    LedgerColumnOptions,
+);
 
 impl Rocks {
     fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
@@ -533,6 +538,7 @@ impl Rocks {
         let oldest_slot = OldestSlot::default();
         let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot);
         let cf_names = Self::columns();
+        let column_options = options.column_options.clone();
 
         // Open the database
         let db = match access_type {
@@ -540,10 +546,11 @@ impl Rocks {
                 DB::open_cf_descriptors(&db_options, path, cf_descriptors)?,
                 ActualAccessType::Primary,
                 oldest_slot,
+                column_options,
             ),
             AccessType::TryPrimaryThenSecondary => {
                 match DB::open_cf_descriptors(&db_options, path, cf_descriptors) {
-                    Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot),
+                    Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot, column_options),
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
 
@@ -560,6 +567,7 @@ impl Rocks {
                             )?,
                             ActualAccessType::Secondary,
                             oldest_slot,
+                            column_options,
                         )
                     }
                 }
@@ -734,8 +742,19 @@ impl Rocks {
     }
 
     fn write(&self, batch: RWriteBatch) -> Result<()> {
-        self.0.write(batch)?;
-        Ok(())
+        let is_perf_context_enabled = maybe_collect_perf_context();
+        let result = self.0.write(batch);
+        if is_perf_context_enabled {
+            report_write_perf_context(rocksdb_metric_header!(
+                "blockstore_rocksdb_write_perf,op=write_batch",
+                "write_batch",
+                self.3
+            ));
+        }
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
     }
 
     fn is_primary_access(&self) -> bool {
