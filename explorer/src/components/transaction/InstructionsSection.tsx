@@ -174,6 +174,7 @@ function InstructionCard({
 }) {
   const key = `${index}-${childIndex}`;
   const anchorProgram = useAnchorProgram(ix.programId.toString(), url);
+
   if ("parsed" in ix) {
     const props = {
       tx,
@@ -232,7 +233,7 @@ function InstructionCard({
   } else if (anchorProgram) {
     return (
       <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
-        <AnchorDetailsCard key={key} program={anchorProgram} {...props} />
+        <AnchorDetailsCard key={key} anchorProgram={anchorProgram} {...props} />
       </ErrorBoundary>
     );
   } else if (isMangoInstruction(transactionIx)) {

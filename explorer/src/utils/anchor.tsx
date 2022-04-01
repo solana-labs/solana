@@ -54,7 +54,6 @@ function AnchorAccountName({
   let url = clusterUrl(cluster, DEFAULT_CUSTOM_URL);
   const account = useAnchorAccount(accountPubkey.toString(), programId.toString(), url);
   if (!account) throw new Error("Unable to decode anchor account for pubkey");
-  console.log("Account:", account.layout);
 
   return <>{camelToUnderscore(account.layout)}</>
 }

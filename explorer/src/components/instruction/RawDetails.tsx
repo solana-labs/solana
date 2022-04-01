@@ -2,24 +2,8 @@ import React from "react";
 import { TransactionInstruction } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { HexData } from "components/common/HexData";
-import { capitalizeFirstLetter, getAnchorAccountsFromInstruction } from "utils/anchor";
-import { useCluster } from "providers/cluster";
-import { useAnchorProgram } from "providers/anchor";
 
-export function RawDetails({ ix }: { ix: TransactionInstruction }) {
-  const { url } = useCluster();
-  const program = useAnchorProgram(ix.programId.toString(), url);
-
-  let ixAccounts: {
-    name: string;
-    isMut: boolean;
-    isSigner: boolean;
-    pda?: Object;
-  }[] | null = null;
-  if (program) {
-    ixAccounts = getAnchorAccountsFromInstruction(ix, program);
-  }
-
+export function RawDetails({ ix }: { ix: TransactionInstruction  }) {
   return (
     <>
       {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => {
@@ -27,7 +11,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
           <tr key={keyIndex}>
             <td>
               <div className="me-2 d-md-inline">
-                {ixAccounts && keyIndex < ixAccounts.length ? `${capitalizeFirstLetter(ixAccounts[keyIndex].name)}` : `Account #${keyIndex+1}`}
+                Account #{keyIndex+1}
               </div>
               {isWritable && (
                 <span className="badge bg-info-soft me-1">Writable</span>
