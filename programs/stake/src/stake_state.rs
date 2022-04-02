@@ -14,7 +14,9 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::{State, StateMut},
         clock::{Clock, Epoch},
-        feature_set::{stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar},
+        feature_set::{
+            stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
+        },
         instruction::{checked_add, InstructionError},
         keyed_account::KeyedAccount,
         pubkey::Pubkey,
@@ -23,7 +25,6 @@ use {
             config::Config,
             instruction::{LockupArgs, StakeError},
             program::id,
-            MINIMUM_STAKE_DELEGATION,
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
@@ -370,6 +371,7 @@ pub trait StakeAccount {
         authorized: &Authorized,
         lockup: &Lockup,
         rent: &Rent,
+        feature_set: &FeatureSet,
     ) -> Result<(), InstructionError>;
     fn authorize(
         &self,
@@ -429,6 +431,7 @@ pub trait StakeAccount {
         stake_history: &StakeHistory,
         withdraw_authority: &KeyedAccount,
         custodian: Option<&KeyedAccount>,
+        feature_set: &FeatureSet,
     ) -> Result<(), InstructionError>;
 }
 
@@ -438,13 +441,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         authorized: &Authorized,
         lockup: &Lockup,
         rent: &Rent,
+        feature_set: &FeatureSet,
     ) -> Result<(), InstructionError> {
         if self.data_len()? != std::mem::size_of::<StakeState>() {
             return Err(InstructionError::InvalidAccountData);
         }
         if let StakeState::Uninitialized = self.state()? {
             let rent_exempt_reserve = rent.minimum_balance(self.data_len()?);
-            let minimum_balance = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+            let minimum_delegation = crate::get_minimum_delegation(feature_set);
+            let minimum_balance = rent_exempt_reserve + minimum_delegation;
 
             if self.lamports()? >= minimum_balance {
                 self.set_state(&StakeState::Initialized(Meta {
@@ -760,6 +765,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         withdraw_authority: &KeyedAccount,
         custodian: Option<&KeyedAccount>,
+        feature_set: &FeatureSet,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::new();
         let withdraw_authority_pubkey = withdraw_authority
@@ -788,7 +794,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 meta.authorized
                     .check(&signers, StakeAuthorize::Withdrawer)?;
                 // stake accounts must have a balance >= rent_exempt_reserve + minimum_stake_delegation
-                let reserve = checked_add(meta.rent_exempt_reserve, MINIMUM_STAKE_DELEGATION)?;
+                let reserve = checked_add(
+                    meta.rent_exempt_reserve,
+                    crate::get_minimum_delegation(feature_set),
+                )?;
 
                 (meta.lockup, reserve, false)
             }
@@ -887,9 +896,10 @@ fn validate_split_amount(
     // EITHER at least the minimum balance, OR zero (in this case the source
     // account is transferring all lamports to new destination account, and the source
     // account will be closed)
+    let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
     let source_minimum_balance = source_meta
         .rent_exempt_reserve
-        .saturating_add(MINIMUM_STAKE_DELEGATION);
+        .saturating_add(minimum_delegation);
     let source_remaining_balance = source_lamports.saturating_sub(lamports);
     if source_remaining_balance == 0 {
         // full amount is a withdrawal
@@ -920,7 +930,7 @@ fn validate_split_amount(
         )
     };
     let destination_minimum_balance =
-        destination_rent_exempt_reserve.saturating_add(MINIMUM_STAKE_DELEGATION);
+        destination_rent_exempt_reserve.saturating_add(minimum_delegation);
     let destination_balance_deficit =
         destination_minimum_balance.saturating_sub(destination_lamports);
     if lamports < destination_balance_deficit {
@@ -928,7 +938,7 @@ fn validate_split_amount(
     }
 
     // If the source account is already staked, the destination will end up staked as well.  Verify
-    // the destination account's delegation amount is at least MINIMUM_STAKE_DELEGATION.
+    // the destination account's delegation amount is at least the minimum delegation.
     //
     // The *delegation* requirements are different than the *balance* requirements.  If the
     // destination account is prefunded with a balance of `rent exempt reserve + minimum stake
@@ -937,7 +947,7 @@ fn validate_split_amount(
     // account, the split amount must be at least the minimum stake delegation.  So if the minimum
     // stake delegation was 10 lamports, then a split amount of 1 lamport would not meet the
     // *delegation* requirements.
-    if source_stake.is_some() && lamports < MINIMUM_STAKE_DELEGATION {
+    if source_stake.is_some() && lamports < minimum_delegation {
         return Err(InstructionError::InsufficientFunds);
     }
 
@@ -2525,8 +2535,9 @@ mod tests {
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
+        let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_account = AccountSharedData::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
@@ -2554,7 +2565,7 @@ mod tests {
                 &invoke_context,
                 stake_lamports / 2,
                 &split_stake_keyed_account,
-                &HashSet::default() // no signers
+                &HashSet::default(), // no signers
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -2677,8 +2688,9 @@ mod tests {
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
+        let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_account = AccountSharedData::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Stake(
@@ -2723,7 +2735,8 @@ mod tests {
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let minimum_balance = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let minimum_balance = rent_exempt_reserve + minimum_delegation;
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = minimum_balance * 2;
@@ -2767,7 +2780,7 @@ mod tests {
                     &invoke_context,
                     rent_exempt_reserve,
                     &split_stake_keyed_account,
-                    &signers
+                    &signers,
                 ),
                 Err(InstructionError::InsufficientFunds)
             );
@@ -2778,7 +2791,7 @@ mod tests {
                     &invoke_context,
                     stake_lamports - rent_exempt_reserve,
                     &split_stake_keyed_account,
-                    &signers
+                    &signers,
                 ),
                 Err(InstructionError::InsufficientFunds)
             );
@@ -2793,7 +2806,7 @@ mod tests {
                     &invoke_context,
                     stake_lamports - minimum_balance,
                     &split_stake_keyed_account,
-                    &signers
+                    &signers,
                 ),
                 Ok(())
             );
@@ -2832,7 +2845,8 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = (rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -2851,8 +2865,8 @@ mod tests {
             0,
             rent_exempt_reserve - 1,
             rent_exempt_reserve,
-            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
-            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+            rent_exempt_reserve + minimum_delegation - 1,
+            rent_exempt_reserve + minimum_delegation,
         ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -2952,7 +2966,8 @@ mod tests {
         let source_larger_rent_exempt_reserve =
             rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
         let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = (source_larger_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION) * 2;
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let stake_lamports = (source_larger_rent_exempt_reserve + minimum_delegation) * 2;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -2975,8 +2990,8 @@ mod tests {
             0,
             split_rent_exempt_reserve - 1,
             split_rent_exempt_reserve,
-            split_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
-            split_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+            split_rent_exempt_reserve + minimum_delegation - 1,
+            split_rent_exempt_reserve + minimum_delegation,
         ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -3154,7 +3169,8 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let stake_lamports = rent_exempt_reserve + minimum_delegation;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3247,7 +3263,8 @@ mod tests {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let stake_lamports = rent_exempt_reserve + minimum_delegation;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3266,8 +3283,8 @@ mod tests {
             0,
             rent_exempt_reserve - 1,
             rent_exempt_reserve,
-            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION - 1,
-            rent_exempt_reserve + MINIMUM_STAKE_DELEGATION,
+            rent_exempt_reserve + minimum_delegation - 1,
+            rent_exempt_reserve + minimum_delegation,
         ];
         for initial_balance in split_lamport_balances {
             let split_stake_account = AccountSharedData::new_ref_data_with_space(
@@ -3336,7 +3353,8 @@ mod tests {
         let source_rent_exempt_reserve =
             rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
         let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let stake_lamports = source_rent_exempt_reserve + MINIMUM_STAKE_DELEGATION;
+        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let stake_lamports = source_rent_exempt_reserve + minimum_delegation;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
