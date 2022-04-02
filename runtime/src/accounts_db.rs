@@ -5529,8 +5529,8 @@ impl AccountsDb {
 
             let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
 
-            // now that calculate_accounts_hash_without_index is complete, we can remove old roots
-            self.remove_old_roots(slot);
+            // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
+            self.remove_old_historical_roots(slot, &HashSet::default());
 
             result
         } else {
@@ -5771,15 +5771,15 @@ impl AccountsDb {
         }
     }
 
-    /// get rid of old original_roots
-    fn remove_old_roots(&self, slot: Slot) {
+    /// get rid of old historical roots
+    /// except keep those in 'keep'
+    fn remove_old_historical_roots(&self, current_max_root_inclusive: Slot, keep: &HashSet<Slot>) {
         // epoch_schedule::DEFAULT_SLOTS_PER_EPOCH is a sufficient approximation for now
         let width = solana_sdk::epoch_schedule::DEFAULT_SLOTS_PER_EPOCH * 11 / 10; // a buffer
-        if slot > width {
-            let min_root = slot - width;
-            let valid_slots = HashSet::default();
+        if current_max_root_inclusive > width {
+            let min_root = current_max_root_inclusive - width;
             self.accounts_index
-                .remove_old_original_roots(min_root, &valid_slots);
+                .remove_old_historical_roots(min_root, keep);
         }
     }
 

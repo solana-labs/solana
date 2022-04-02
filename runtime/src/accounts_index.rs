@@ -1751,7 +1751,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     /// roots are removed form 'roots' as all entries in the append vec become outdated.
     /// This function exists to clean older entries from 'roots_original'.
     /// all roots < 'oldest_slot_to_keep' are removed from 'roots_original'.
-    pub fn remove_old_original_roots(&self, oldest_slot_to_keep: Slot, keep: &HashSet<Slot>) {
+    pub fn remove_old_historical_roots(&self, oldest_slot_to_keep: Slot, keep: &HashSet<Slot>) {
         let w_roots_tracker = self.roots_tracker.read().unwrap();
         let mut roots = w_roots_tracker
             .roots_original
@@ -2081,7 +2081,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_remove_old_original_roots() {
+    fn test_remove_old_historical_roots() {
         let index = AccountsIndex::<bool>::default_for_tests();
         index.add_root(1, true);
         index.add_root(2, true);
@@ -2090,12 +2090,12 @@ pub mod tests {
             vec![1, 2]
         );
         let empty_hash_set = HashSet::default();
-        index.remove_old_original_roots(2, &empty_hash_set);
+        index.remove_old_historical_roots(2, &empty_hash_set);
         assert_eq!(
             index.roots_tracker.read().unwrap().roots_original.get_all(),
             vec![2]
         );
-        index.remove_old_original_roots(3, &empty_hash_set);
+        index.remove_old_historical_roots(3, &empty_hash_set);
         assert!(
             index
                 .roots_tracker
@@ -2116,12 +2116,12 @@ pub mod tests {
             index.roots_tracker.read().unwrap().roots_original.get_all(),
             vec![1, 2]
         );
-        index.remove_old_original_roots(2, &hash_set_1);
+        index.remove_old_historical_roots(2, &hash_set_1);
         assert_eq!(
             index.roots_tracker.read().unwrap().roots_original.get_all(),
             vec![1, 2]
         );
-        index.remove_old_original_roots(3, &hash_set_1);
+        index.remove_old_historical_roots(3, &hash_set_1);
         assert_eq!(
             index.roots_tracker.read().unwrap().roots_original.get_all(),
             vec![1]
