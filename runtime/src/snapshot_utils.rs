@@ -18,7 +18,7 @@ use {
             SnapshotType,
         },
     },
-    bincode::{config::Options, serialize_into},
+    bincode::{config::Options, deserialize_from, serialize_into},
     bzip2::bufread::BzDecoder,
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
@@ -592,7 +592,7 @@ where
 fn check_deserialize_file_consumed<P>(
     file_size: u64,
     file_path: P,
-    file_stream: &mut BufReader<File>,
+    mut file_stream: &mut BufReader<File>,
 ) -> Result<()>
 where
     P: AsRef<Path>,
@@ -600,12 +600,19 @@ where
     let consumed_size = file_stream.stream_position()?;
 
     if consumed_size != file_size {
-        let error_message =
-            format!(
+        // 1.10 adds 2 new fields to the end
+        deserialize_from::<_, Vec<Slot>>(&mut file_stream)?;
+        deserialize_from::<_, Vec<(Slot, Hash)>>(&mut file_stream)?;
+
+        let consumed_size = file_stream.stream_position()?;
+
+        if consumed_size != file_size {
+            let error_message = format!(
             "invalid snapshot data file: {} has {} bytes, however consumed {} bytes to deserialize",
             file_path.as_ref().display(), file_size, consumed_size
         );
-        return Err(get_io_error(&error_message));
+            return Err(get_io_error(&error_message));
+        }
     }
 
     Ok(())
@@ -1883,7 +1890,7 @@ mod tests {
         super::*,
         crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
         assert_matches::assert_matches,
-        bincode::{deserialize_from, serialize_into},
+        bincode::serialize_into,
         solana_sdk::{
             genesis_config::create_genesis_config,
             signature::{Keypair, Signer},
