@@ -20,8 +20,10 @@ use crate::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
+    signer::Signer,
     signers::Signers,
-    transaction,
+    system_instruction,
+    transaction::{self, Transaction, VersionedTransaction},
     transport::Result,
 };
 
@@ -173,9 +175,32 @@ pub trait SyncClient {
 
 pub trait AsyncClient {
     /// Send a signed transaction, but don't wait to see if the server accepted it.
-    fn async_send_transaction(&self, transaction: transaction::Transaction) -> Result<Signature>;
+    fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature> {
+        self.async_send_versioned_transaction(transaction.into())
+    }
 
-    fn async_send_batch(&self, transactions: Vec<transaction::Transaction>) -> Result<()>;
+    /// Send a batch of signed transactions without confirmation.
+    fn async_send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
+        let transactions = transactions.into_iter().map(Into::into).collect();
+        self.async_send_versioned_transaction_batch(transactions)
+    }
+
+    /// Send a signed versioned transaction, but don't wait to see if the server accepted it.
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> Result<Signature>;
+
+    /// Send a batch of signed versioned transactions without confirmation.
+    fn async_send_versioned_transaction_batch(
+        &self,
+        transactions: Vec<VersionedTransaction>,
+    ) -> Result<()> {
+        for t in transactions {
+            self.async_send_versioned_transaction(t)?;
+        }
+        Ok(())
+    }
 
     /// Create a transaction from the given message, and send it to the
     /// server, but don't wait for to see if the server accepted it.
@@ -184,7 +209,10 @@ pub trait AsyncClient {
         keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
-    ) -> Result<Signature>;
+    ) -> Result<Signature> {
+        let transaction = Transaction::new(keypairs, message, recent_blockhash);
+        self.async_send_transaction(transaction)
+    }
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, but don't wait for a reply.
@@ -193,7 +221,10 @@ pub trait AsyncClient {
         keypair: &Keypair,
         instruction: Instruction,
         recent_blockhash: Hash,
-    ) -> Result<Signature>;
+    ) -> Result<Signature> {
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
+        self.async_send_message(&[keypair], message, recent_blockhash)
+    }
 
     /// Attempt to transfer lamports from `keypair` to `pubkey`, but don't wait to confirm.
     fn async_transfer(
@@ -202,5 +233,9 @@ pub trait AsyncClient {
         keypair: &Keypair,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
-    ) -> Result<Signature>;
+    ) -> Result<Signature> {
+        let transfer_instruction =
+            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
+        self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
+    }
 }
