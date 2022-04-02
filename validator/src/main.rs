@@ -434,6 +434,9 @@ pub fn main() {
     let default_rpc_send_transaction_retry_ms = default_send_transaction_service_config
         .retry_rate_ms
         .to_string();
+    let default_rpc_send_transaction_batch_ms = default_send_transaction_service_config
+        .batch_send_rate_ms
+        .to_string();
     let default_rpc_send_transaction_leader_forward_count = default_send_transaction_service_config
         .leader_forward_count
         .to_string();
@@ -1349,6 +1352,15 @@ pub fn main() {
                 .validator(is_parsable::<u64>)
                 .default_value(&default_rpc_send_transaction_retry_ms)
                 .help("The rate at which transactions sent via rpc service are retried."),
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_batch_ms")
+                .long("rpc-send-batch-ms")
+                .value_name("MILLISECS")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .default_value(&default_rpc_send_transaction_batch_ms)
+                .help("The rate at which transactions sent via rpc service are sent in batch."),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_leader_forward_count")
@@ -2433,6 +2445,7 @@ pub fn main() {
             ),
             use_quic: tpu_use_quic,
             do_batch: tpu_do_batch,
+            batch_send_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),

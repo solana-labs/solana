@@ -23,10 +23,16 @@ use {
 const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
 
 /// Maximum batch size for sending transaction in batch
+/// When this size is reached, send out the transactions.
 const MAX_TRANSACTION_BATCH_SIZE: usize = 100;
 
 /// Default retry interval
 const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
+
+/// Default maximum batch waiting time in ms. If this time is reached,
+/// whatever transaction cached will be sent.
+const DEFAULT_BATCH_SEND_RATE_MS: u64 = 200;
+
 /// Default number of leaders to forward transactions to
 const DEFAULT_LEADER_FORWARD_COUNT: u64 = 2;
 /// Default max number of time the service will retry broadcast
@@ -87,6 +93,8 @@ pub struct Config {
     pub use_quic: bool,
     /// Controls if to send transactions in batch
     pub do_batch: bool,
+    /// Controls the how frequently send the batches
+    pub batch_send_rate_ms: u64,
 }
 
 impl Default for Config {
@@ -98,6 +106,7 @@ impl Default for Config {
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             use_quic: DEFAULT_TPU_USE_QUIC,
             do_batch: DEFAULT_TPU_DO_BATCH,
+            batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
         }
     }
 }
@@ -156,9 +165,17 @@ impl SendTransactionService {
         Builder::new()
             .name("send-tx-sv2".to_string())
             .spawn(move || loop {
-                match receiver.recv_timeout(Duration::from_millis(1000.min(config.retry_rate_ms))) {
+                let mut do_batch = false;
+                let recv_timeout_ms = config.retry_rate_ms.min(config.batch_send_rate_ms);
+                match receiver.recv_timeout(Duration::from_millis(1000.min(recv_timeout_ms))) {
                     Err(RecvTimeoutError::Disconnected) => break,
-                    Err(RecvTimeoutError::Timeout) => {}
+                    Err(RecvTimeoutError::Timeout) => {
+                        if config.do_batch && !transactions.is_empty() {
+                            // Timed out waiting for batch
+                            inc_new_counter_info!("send_transaction_service-batch-time-out-tx", 1);
+                            do_batch = true;
+                        }
+                    }
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
                         let mut transactions_len = transactions.len();
@@ -168,48 +185,42 @@ impl SendTransactionService {
                                 entry.or_insert(transaction_info);
                                 transactions_len += 1;
 
-                                if transactions_len < MAX_TRANSACTION_BATCH_SIZE {
+                                if transactions_len < MAX_TRANSACTION_BATCH_SIZE
+                                    && last_status_check.elapsed().as_millis()
+                                        < config.batch_send_rate_ms
+                                {
+                                    // Not enough transactions in the batch and not long enough time has passed since the last batch
                                     continue;
                                 }
                                 // reached batch limit
-                                let (root_bank, working_bank) = {
-                                    let bank_forks = bank_forks.read().unwrap();
-                                    (
-                                        bank_forks.root_bank().clone(),
-                                        bank_forks.working_bank().clone(),
-                                    )
-                                };
-
-                                Self::process_transactions(
-                                    &working_bank,
-                                    &root_bank,
-                                    &tpu_address,
-                                    &mut transactions,
-                                    &leader_info,
-                                    &config,
-                                );
-                                continue;
-                            }
-                            let addresses = leader_info.as_ref().map(|leader_info| {
-                                leader_info.get_leader_tpus(config.leader_forward_count)
-                            });
-                            let addresses = addresses
-                                .map(|address_list| {
-                                    if address_list.is_empty() {
-                                        vec![&tpu_address]
-                                    } else {
-                                        address_list
-                                    }
-                                })
-                                .unwrap_or_else(|| vec![&tpu_address]);
-                            for address in addresses {
-                                Self::send_transaction(address, &transaction_info.wire_transaction);
-                            }
-                            if transactions_len < MAX_TRANSACTION_QUEUE_SIZE {
-                                inc_new_counter_info!("send_transaction_service-insert-tx", 1);
-                                entry.or_insert(transaction_info);
+                                inc_new_counter_info!("send_transaction_service-batch-tx", 1);
+                                do_batch = true;
                             } else {
-                                datapoint_warn!("send_transaction_service-queue-overflow");
+                                // non-batched send
+                                let addresses = leader_info.as_ref().map(|leader_info| {
+                                    leader_info.get_leader_tpus(config.leader_forward_count)
+                                });
+                                let addresses = addresses
+                                    .map(|address_list| {
+                                        if address_list.is_empty() {
+                                            vec![&tpu_address]
+                                        } else {
+                                            address_list
+                                        }
+                                    })
+                                    .unwrap_or_else(|| vec![&tpu_address]);
+                                for address in addresses {
+                                    Self::send_transaction(
+                                        address,
+                                        &transaction_info.wire_transaction,
+                                    );
+                                }
+                                if transactions_len < MAX_TRANSACTION_QUEUE_SIZE {
+                                    inc_new_counter_info!("send_transaction_service-insert-tx", 1);
+                                    entry.or_insert(transaction_info);
+                                } else {
+                                    datapoint_warn!("send_transaction_service-queue-overflow");
+                                }
                             }
                         } else {
                             inc_new_counter_info!("send_transaction_service-recv-duplicate", 1);
@@ -217,7 +228,9 @@ impl SendTransactionService {
                     }
                 }
 
-                if last_status_check.elapsed().as_millis() as u64 >= config.retry_rate_ms {
+                if last_status_check.elapsed().as_millis() as u64 >= config.retry_rate_ms
+                    || do_batch
+                {
                     if !transactions.is_empty() {
                         datapoint_info!(
                             "send_transaction_service-queue-size",
