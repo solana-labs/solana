@@ -63,10 +63,13 @@ export function AnchorAccountCard({ account, program }: { account: Account, prog
             </thead>
             <tbody className="list">
               {decodedAnchorAccountData &&
-                Object.keys(decodedAnchorAccountData).map((key) => {
-                  // @ts-ignore
-                  return renderAccountRow(key, decodedAnchorAccountData[key]);
-                })}
+                Object.keys(decodedAnchorAccountData).map((key) => (
+                  <AccountRow
+                    objectKey={key}
+                    // @ts-ignore
+                    value={decodedAnchorAccountData[key]}
+                  />
+                ))}
             </tbody>
           </table>
         </div>
@@ -83,19 +86,20 @@ export function AnchorAccountCard({ account, program }: { account: Account, prog
   );
 }
 
-const renderAccountRow = (key: string, value: any) => {
-  let displayValue = value.toString();
-  if (value.constructor.name === "PublicKey") {
+function AccountRow({objectKey, value}: {objectKey: string, value: any}) {
+  const key = objectKey;
+  let displayValue: JSX.Element | null = null;
+  if (value && value.constructor && value.constructor.name === "PublicKey") {
     displayValue = <Address pubkey={value} link />;
-  } else if (displayValue === {}.toString()) {
+  } else if (value && typeof value === "object") {
     if (Object.keys(value).length === 1) {
-      displayValue = Object.keys(value)[0];
+      displayValue = <>{Object.keys(value)[0]}</>;
     } else {
-      displayValue = JSON.stringify(value);
+      displayValue = <>{JSON.stringify(value)}</>;
     }
   }
   return (
-    <tr key={key}>
+    <tr>
       <td className="w-1 text-monospace">{camelToUnderscore(key)}</td>
       <td className="text-monospace">{displayValue}</td>
     </tr>
