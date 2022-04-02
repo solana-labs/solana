@@ -8,10 +8,12 @@ export function ProgramLogsCardBody({
   message,
   logs,
   cluster,
+  url,
 }: {
   message: Message | ParsedMessage;
   logs: InstructionLogs[];
   cluster: Cluster;
+  url: string;
 }) {
   return (
     <TableCardBody>
@@ -41,7 +43,11 @@ export function ProgramLogsCardBody({
                 <span className={`badge bg-${badgeColor}-soft me-2`}>
                   #{index + 1}
                 </span>
-                <ProgramName programId={programId} cluster={cluster} />{" "}
+                <ProgramName
+                  programId={programId}
+                  cluster={cluster}
+                  url={url}
+                />{" "}
                 Instruction
               </div>
               {programLogs && (

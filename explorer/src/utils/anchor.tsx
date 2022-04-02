@@ -1,10 +1,9 @@
 import React from "react";
-import { clusterUrl, Cluster, DEFAULT_CUSTOM_URL } from "providers/cluster";
+import { Cluster } from "providers/cluster";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program } from "@project-serum/anchor";
-import { useAnchorAccount, useAnchorProgram } from "providers/anchor";
+import { useAnchorProgram } from "providers/anchor";
 import { programLabel } from "utils/tx";
-import { ErrorBoundary } from "@sentry/react";
 
 function snakeToPascal(string: string) {
   return string
@@ -28,12 +27,11 @@ export function capitalizeFirstLetter(input: string) {
 
 function AnchorProgramName({
   programId,
-  cluster,
+  url,
 }: {
   programId: PublicKey;
-  cluster: Cluster;
+  url: string;
 }) {
-  let url = clusterUrl(cluster, DEFAULT_CUSTOM_URL);
   const program = useAnchorProgram(programId.toString(), url);
   const programName = getProgramName(program);
   return <>{programName}</>;
@@ -42,60 +40,18 @@ function AnchorProgramName({
 export function ProgramName({
   programId,
   cluster,
+  url,
 }: {
   programId: PublicKey;
   cluster: Cluster;
+  url: string;
 }) {
   const defaultProgramName =
     programLabel(programId.toBase58(), cluster) || "Unknown Program";
 
   return (
     <React.Suspense fallback={defaultProgramName}>
-      <AnchorProgramName programId={programId} cluster={cluster} />
-    </React.Suspense>
-  );
-}
-
-function AnchorAccountName({
-  accountPubkey,
-  programId,
-  cluster,
-}: {
-  accountPubkey: PublicKey;
-  programId: PublicKey;
-  cluster: Cluster;
-}) {
-  let url = clusterUrl(cluster, DEFAULT_CUSTOM_URL);
-  const account = useAnchorAccount(
-    accountPubkey.toString(),
-    programId.toString(),
-    url
-  );
-  if (!account) throw new Error("Unable to decode anchor account for pubkey");
-
-  return <>{camelToUnderscore(account.layout)}</>;
-}
-
-export function AccountName({
-  accountPubkey,
-  programId,
-  cluster,
-  defaultAccountName,
-}: {
-  accountPubkey: PublicKey;
-  programId: PublicKey;
-  cluster: Cluster;
-  defaultAccountName: string;
-}) {
-  return (
-    <React.Suspense fallback={<>{defaultAccountName}</>}>
-      <ErrorBoundary fallback={<>{defaultAccountName}</>}>
-        <AnchorAccountName
-          programId={programId}
-          cluster={cluster}
-          accountPubkey={accountPubkey}
-        />
-      </ErrorBoundary>
+      <AnchorProgramName programId={programId} url={url} />
     </React.Suspense>
   );
 }
@@ -144,9 +100,4 @@ export function getAnchorAccountsFromInstruction(
     }[];
   }
   return null;
-}
-
-function camelToUnderscore(key: string) {
-  var result = key.replace(/([A-Z])/g, " $1");
-  return result.split(" ").join("_").toLowerCase();
 }
