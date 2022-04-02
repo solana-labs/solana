@@ -146,6 +146,31 @@ the subject lines of the git commits contained in the PR. It's especially
 generous (and not expected) to rebase or reword commits such that each change
 matches the logical flow in your PR description.
 
+### The PR / Issue Labels
+Labels make it easier to manage and track PRs / issues.  Below some common labels
+that we use in Solana.  For the complete list of labels, please refer to the
+[label page](https://github.com/solana-labs/solana/issues/labels):
+
+* "feature-gate": when you add a new feature gate or modify the behavior of
+an existing feature gate, please add the "feature-gate" label to your PR.
+New feature gates should also always have a corresponding tracking issue
+(go to "New Issue" -> "Feature Gate Tracker [Get Started](https://github.com/solana-labs/solana/issues/new?assignees=&labels=feature-gate&template=1-feature-gate.yml&title=Feature+Gate%3A+)")
+and should be updated each time the feature is activated on a cluster.
+
+* "automerge": When a PR is labelled with "automerge", the PR will be
+automically merged once CI passes.  In general, this label should only
+be used for small hot-fix (fewer than 100 lines) or automatic generated
+PRs.  If you're uncertain, it's usually the case that the PR is not
+qualified as "automerge".
+
+* "good first issue": If you happen to find an issue that is non-urgent and
+self-contained with moderate scope, you might want to consider attaching
+"good first issue" to it as it might be a good practice for newcomers.
+
+* "rust": this pull request updates Rust code.
+
+* "javascript": this pull request updates Javascript code.
+
 ### When will my PR be reviewed?
 
 PRs are typically reviewed and merged in under 7 days. If your PR has been open
