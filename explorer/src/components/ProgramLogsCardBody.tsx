@@ -41,7 +41,8 @@ export function ProgramLogsCardBody({
                 <span className={`badge bg-${badgeColor}-soft me-2`}>
                   #{index + 1}
                 </span>
-                <ProgramName programId={programId} cluster={cluster} /> Instruction
+                <ProgramName programId={programId} cluster={cluster} />{" "}
+                Instruction
               </div>
               {programLogs && (
                 <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">
@@ -57,7 +58,8 @@ export function ProgramLogsCardBody({
               )}
             </td>
           </tr>
-      )})}
+        );
+      })}
     </TableCardBody>
   );
 }
