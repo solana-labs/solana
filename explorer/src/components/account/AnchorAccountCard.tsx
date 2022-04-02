@@ -6,6 +6,8 @@ import { Program, BorshAccountsCoder } from "@project-serum/anchor";
 import { capitalizeFirstLetter } from "utils/anchor";
 import { ErrorCard } from "components/common/ErrorCard";
 
+import ReactJson from "react-json-view";
+
 export function AnchorAccountCard({ account, program }: { account: Account, program: Program }) {
   if (!account.details || !account.details.rawData) {
     return <ErrorCard text={"This account is parsed as an SPL-native account"} />;
@@ -86,17 +88,27 @@ export function AnchorAccountCard({ account, program }: { account: Account, prog
   );
 }
 
-function AccountRow({objectKey, value}: {objectKey: string, value: any}) {
+function AccountRow({ objectKey, value }: { objectKey: string; value: any }) {
   const key = objectKey;
-  let displayValue: JSX.Element | null = null;
+  console.log(key, value);
+  let displayValue: JSX.Element;
   if (value && value.constructor && value.constructor.name === "PublicKey") {
     displayValue = <Address pubkey={value} link />;
-  } else if (value && typeof value === "object") {
-    if (Object.keys(value).length === 1) {
-      displayValue = <>{Object.keys(value)[0]}</>;
-    } else {
-      displayValue = <>{JSON.stringify(value)}</>;
-    }
+  } else if (value && value.constructor && value.constructor.name === "BN") {
+    displayValue = <>{value.toNumber()}</>;
+  } else if (value && typeof value !== "object") {
+    displayValue = <>{String(value)}</>;
+  } else if (value) {
+    const displayObject = createDisplayObject(value);
+    displayValue = (
+      <ReactJson
+        src={JSON.parse(JSON.stringify(displayObject))}
+        collapsed={1}
+        theme="solarized"
+      />
+    );
+  } else {
+    displayValue = <>null</>;
   }
   return (
     <tr>
@@ -104,7 +116,7 @@ function AccountRow({objectKey, value}: {objectKey: string, value: any}) {
       <td className="text-monospace">{displayValue}</td>
     </tr>
   );
-};
+}
 
 function equal(buf1: Buffer, buf2: Buffer) {
   if (buf1.byteLength !== buf2.byteLength) return false;
@@ -119,4 +131,43 @@ function equal(buf1: Buffer, buf2: Buffer) {
 function camelToUnderscore(key: string) {
   var result = key.replace(/([A-Z])/g, " $1");
   return result.split(" ").join("_").toLowerCase();
+}
+
+function createDisplayObject(object: Object): Object {
+  if (!Array.isArray(object)) {
+    if (
+      object &&
+      object.constructor &&
+      object.constructor.name === "PublicKey"
+    ) {
+      return object.toString();
+    } else if (
+      object &&
+      object.constructor &&
+      object.constructor.name === "BN"
+    ) {
+      // @ts-ignore
+      return object.toNumber();
+    } else if (object && typeof object !== "object") {
+      return object;
+    } else {
+      const parsedObject: typeof object = {};
+      Object.keys(object).map((key) => {
+        // @ts-ignore
+        let value = object[key];
+        if (value && typeof value === "object") {
+          value = createDisplayObject(value);
+        }
+        // @ts-ignore
+        parsedObject[key] = value;
+        return null;
+      });
+      return parsedObject;
+    }
+  }
+  return object.map((innerObject) =>
+    typeof innerObject === "object"
+      ? createDisplayObject(innerObject)
+      : innerObject
+  );
 }

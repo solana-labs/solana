@@ -3,12 +3,13 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
+import { Idl, Program, BorshInstructionCoder } from "@project-serum/anchor";
 import {
-  Idl,
-  Program,
-  BorshInstructionCoder
-} from "@project-serum/anchor";
-import { getAnchorNameForInstruction, getProgramName, capitalizeFirstLetter, getAnchorAccountsFromInstruction } from "utils/anchor";
+  getAnchorNameForInstruction,
+  getProgramName,
+  capitalizeFirstLetter,
+  getAnchorAccountsFromInstruction,
+} from "utils/anchor";
 import { HexData } from "components/common/HexData";
 import { Address } from "components/common/Address";
 import ReactJson from "react-json-view";
