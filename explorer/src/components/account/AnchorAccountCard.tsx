@@ -108,7 +108,7 @@ function AccountRow({ objectKey, value }: { objectKey: string; value: any }) {
   if (value && value.constructor && value.constructor.name === "PublicKey") {
     displayValue = <Address pubkey={value} link />;
   } else if (value && value.constructor && value.constructor.name === "BN") {
-    displayValue = <>{value.toNumber()}</>;
+    displayValue = <>{value.toString()}</>;
   } else if (value && typeof value !== "object") {
     displayValue = <>{String(value)}</>;
   } else if (value) {
