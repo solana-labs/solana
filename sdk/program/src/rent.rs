@@ -9,7 +9,7 @@ pub struct Rent {
     pub lamports_per_byte_year: u64,
 
     /// exemption threshold, in years
-    pub exemption_threshold: f64,
+    pub exemption_threshold: u64,
 
     // What portion of collected rent are to be destroyed, percentage-wise
     pub burn_percent: u8,
@@ -23,7 +23,7 @@ pub struct Rent {
 pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 1_000_000_000 / 100 * 365 / (1024 * 1024);
 
 /// default amount of time (in years) the balance has to include rent for
-pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
+pub const DEFAULT_EXEMPTION_THRESHOLD: u64 = 2;
 
 /// default percentage of rent to burn (Valid values are 0 to 100)
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
@@ -88,7 +88,7 @@ impl Rent {
 
     pub fn with_slots_per_epoch(slots_per_epoch: u64) -> Self {
         let ratio = slots_per_epoch as f64 / DEFAULT_SLOTS_PER_EPOCH as f64;
-        let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD as f64 * ratio;
+        let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD as u64 * ratio;
         let lamports_per_byte_year = (DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64 / ratio) as u64;
         Self {
             lamports_per_byte_year,
@@ -152,7 +152,7 @@ mod tests {
 
         let custom_rent = Rent {
             lamports_per_byte_year: 5,
-            exemption_threshold: 2.5,
+            exemption_threshold: 2,
             ..Rent::default()
         };
 
