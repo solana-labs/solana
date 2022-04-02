@@ -66,7 +66,10 @@ export type SerializeConfig = {
   verifySignatures?: boolean;
 };
 
-interface TransactionInstructionJSON {
+/**
+ * @internal
+ */
+export interface TransactionInstructionJSON {
   keys: {
     pubkey: string;
     isSigner: boolean;
@@ -104,6 +107,9 @@ export class TransactionInstruction {
     }
   }
 
+  /**
+   * @internal
+   */
   toJSON(): TransactionInstructionJSON {
     return {
       keys: this.keys.map(({pubkey, isSigner, isWritable}) => ({
@@ -150,7 +156,10 @@ export type NonceInformation = {
   nonceInstruction: TransactionInstruction;
 };
 
-interface TransactionJSON {
+/**
+ * @internal
+ */
+export interface TransactionJSON {
   recentBlockhash: string | null;
   feePayer: string | null;
   nonceInfo: {
@@ -219,6 +228,9 @@ export class Transaction {
     opts && Object.assign(this, opts);
   }
 
+  /**
+   * @internal
+   */
   toJSON(): TransactionJSON {
     return {
       recentBlockhash: this.recentBlockhash || null,
