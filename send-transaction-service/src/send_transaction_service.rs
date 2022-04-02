@@ -8,7 +8,10 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature},
     std::{
-        collections::hash_map::{Entry, HashMap},
+        collections::{
+            hash_map::{Entry, HashMap},
+            HashSet,
+        },
         net::SocketAddr,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
@@ -145,7 +148,6 @@ impl SendTransactionService {
         let mut last_status_check = Instant::now();
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
-        let tpu_do_batch = false;
 
         if let Some(leader_info) = leader_info.as_mut() {
             leader_info.refresh_recent_peers();
@@ -162,7 +164,7 @@ impl SendTransactionService {
                         let mut transactions_len = transactions.len();
                         let entry = transactions.entry(transaction_info.signature);
                         if let Entry::Vacant(_) = entry {
-                            if tpu_do_batch {
+                            if config.do_batch {
                                 entry.or_insert(transaction_info);
                                 transactions_len += 1;
 
@@ -178,7 +180,7 @@ impl SendTransactionService {
                                     )
                                 };
 
-                                Self::batch_process_transactions(
+                                Self::process_transactions(
                                     &working_bank,
                                     &root_bank,
                                     &tpu_address,
@@ -251,114 +253,6 @@ impl SendTransactionService {
     }
 
     /// Process transactions in batch.
-    fn batch_process_transactions<T: TpuInfo>(
-        working_bank: &Arc<Bank>,
-        root_bank: &Arc<Bank>,
-        tpu_address: &SocketAddr,
-        transactions: &mut HashMap<Signature, TransactionInfo>,
-        leader_info: &Option<T>,
-        config: &Config,
-    ) -> ProcessTransactionsResult {
-        let mut result = ProcessTransactionsResult::default();
-
-        transactions.retain(|signature, mut transaction_info| {
-            if transaction_info.durable_nonce_info.is_some() {
-                inc_new_counter_info!("send_transaction_service-nonced", 1);
-            }
-            if root_bank.has_signature(signature) {
-                info!("Transaction is rooted: {}", signature);
-                result.rooted += 1;
-                inc_new_counter_info!("send_transaction_service-rooted", 1);
-                return false;
-            }
-            if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
-                let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
-                if !nonce_account::verify_nonce_account(&nonce_account, &durable_nonce)
-                    && working_bank.get_signature_status_slot(signature).is_none()
-                {
-                    info!("Dropping expired durable-nonce transaction: {}", signature);
-                    result.expired += 1;
-                    inc_new_counter_info!("send_transaction_service-expired", 1);
-                    return false;
-                }
-            }
-            if transaction_info.last_valid_block_height < root_bank.block_height() {
-                info!("Dropping expired transaction: {}", signature);
-                result.expired += 1;
-                inc_new_counter_info!("send_transaction_service-expired", 1);
-                return false;
-            }
-
-            let max_retries = transaction_info
-                .max_retries
-                .or(config.default_max_retries)
-                .map(|max_retries| max_retries.min(config.service_max_retries));
-
-            if let Some(max_retries) = max_retries {
-                if transaction_info.retries >= max_retries {
-                    info!("Dropping transaction due to max retries: {}", signature);
-                    result.max_retries_elapsed += 1;
-                    inc_new_counter_info!("send_transaction_service-max_retries", 1);
-                    return false;
-                }
-            }
-
-            match working_bank.get_signature_status_slot(signature) {
-                None => {
-                    // Transaction is unknown to the working bank, it might have been
-                    // dropped or landed in another fork.  Re-send it
-                    info!("Retrying transaction: {}", signature);
-                    result.retried += 1;
-                    transaction_info.retries += 1;
-                    inc_new_counter_info!("send_transaction_service-retry", 1);
-
-                    true
-                }
-                Some((_slot, status)) => {
-                    if status.is_err() {
-                        info!("Dropping failed transaction: {}", signature);
-                        result.failed += 1;
-                        inc_new_counter_info!("send_transaction_service-failed", 1);
-                        false
-                    } else {
-                        result.retained += 1;
-                        true
-                    }
-                }
-            }
-        });
-
-        let addresses = leader_info
-            .as_ref()
-            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
-        let addresses = addresses
-            .map(|address_list| {
-                if address_list.is_empty() {
-                    vec![tpu_address]
-                } else {
-                    address_list
-                }
-            })
-            .unwrap_or_else(|| vec![tpu_address]);
-
-        let wire_transacions = transactions
-            .values()
-            .map(|transaction_info| &transaction_info.wire_transaction as &[u8])
-            .collect::<Vec<&[u8]>>();
-
-        for address in &addresses {
-            if let Err(err) =
-                connection_cache::send_wire_transaction_batch(&wire_transacions, address)
-            {
-                warn!(
-                    "Failed to send transactions in batch to {}: {:?}",
-                    tpu_address, err
-                );
-            }
-        }
-        result
-    }
-
     fn process_transactions<T: TpuInfo>(
         working_bank: &Arc<Bank>,
         root_bank: &Arc<Bank>,
@@ -369,6 +263,8 @@ impl SendTransactionService {
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
 
+        let mut batched_transactions = HashSet::new();
+
         transactions.retain(|signature, mut transaction_info| {
             if transaction_info.durable_nonce_info.is_some() {
                 inc_new_counter_info!("send_transaction_service-nonced", 1);
@@ -419,6 +315,11 @@ impl SendTransactionService {
                     result.retried += 1;
                     transaction_info.retries += 1;
                     inc_new_counter_info!("send_transaction_service-retry", 1);
+                    if config.do_batch {
+                        batched_transactions.insert(signature.clone());
+                        return true;
+                    }
+
                     let addresses = leader_info.as_ref().map(|leader_info| {
                         leader_info.get_leader_tpus(config.leader_forward_count)
                     });
@@ -450,6 +351,40 @@ impl SendTransactionService {
             }
         });
 
+        if !config.do_batch {
+            return result;
+        }
+
+        // Processing the transactions in batch
+        let addresses = leader_info
+            .as_ref()
+            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
+        let addresses = addresses
+            .map(|address_list| {
+                if address_list.is_empty() {
+                    vec![tpu_address]
+                } else {
+                    address_list
+                }
+            })
+            .unwrap_or_else(|| vec![tpu_address]);
+
+        let wire_transacions = transactions
+            .iter()
+            .filter(|(signature, _)| batched_transactions.contains(signature))
+            .map(|(_, transaction_info)| &transaction_info.wire_transaction as &[u8])
+            .collect::<Vec<&[u8]>>();
+
+        for address in &addresses {
+            if let Err(err) =
+                connection_cache::send_wire_transaction_batch(&wire_transacions, address)
+            {
+                warn!(
+                    "Failed to send transactions in batch to {}: {:?}",
+                    tpu_address, err
+                );
+            }
+        }
         result
     }
 
