@@ -1174,6 +1174,12 @@ pub fn main() {
                 .help("Use QUIC to send transactions."),
         )
         .arg(
+            Arg::with_name("tpu_do_batch")
+                .long("tpu-do-batch")
+                .takes_value(false)
+                .help("When this is set to true, the system will send transactions in batches."),
+        )
+        .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
@@ -2144,6 +2150,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
+    let tpu_do_batch = matches.is_present("tpu_do_batch");
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
@@ -2425,6 +2432,7 @@ pub fn main() {
                 usize
             ),
             use_quic: tpu_use_quic,
+            do_batch: tpu_do_batch,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),

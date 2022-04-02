@@ -18,6 +18,10 @@ use {
 
 /// Maximum size of the transaction queue
 const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
+
+/// Maximum batch size for sending transaction in batch
+const MAX_TRANSACTION_BATCH_SIZE: usize = 100;
+
 /// Default retry interval
 const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
 /// Default number of leaders to forward transactions to
@@ -68,6 +72,7 @@ struct ProcessTransactionsResult {
 }
 
 pub const DEFAULT_TPU_USE_QUIC: bool = false;
+pub const DEFAULT_TPU_DO_BATCH: bool = false;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -75,7 +80,10 @@ pub struct Config {
     pub leader_forward_count: u64,
     pub default_max_retries: Option<usize>,
     pub service_max_retries: usize,
+    /// Controls if to use Quic protocol to send transactions
     pub use_quic: bool,
+    /// Controls if to send transactions in batch
+    pub do_batch: bool,
 }
 
 impl Default for Config {
@@ -86,6 +94,7 @@ impl Default for Config {
             default_max_retries: None,
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             use_quic: DEFAULT_TPU_USE_QUIC,
+            do_batch: DEFAULT_TPU_DO_BATCH,
         }
     }
 }
@@ -136,6 +145,7 @@ impl SendTransactionService {
         let mut last_status_check = Instant::now();
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
+        let tpu_do_batch = false;
 
         if let Some(leader_info) = leader_info.as_mut() {
             leader_info.refresh_recent_peers();
@@ -149,9 +159,35 @@ impl SendTransactionService {
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
-                        let transactions_len = transactions.len();
+                        let mut transactions_len = transactions.len();
                         let entry = transactions.entry(transaction_info.signature);
                         if let Entry::Vacant(_) = entry {
+                            if tpu_do_batch {
+                                entry.or_insert(transaction_info);
+                                transactions_len += 1;
+
+                                if transactions_len < MAX_TRANSACTION_BATCH_SIZE {
+                                    continue;
+                                }
+                                // reached batch limit
+                                let (root_bank, working_bank) = {
+                                    let bank_forks = bank_forks.read().unwrap();
+                                    (
+                                        bank_forks.root_bank().clone(),
+                                        bank_forks.working_bank().clone(),
+                                    )
+                                };
+
+                                Self::batch_process_transactions(
+                                    &working_bank,
+                                    &root_bank,
+                                    &tpu_address,
+                                    &mut transactions,
+                                    &leader_info,
+                                    &config,
+                                );
+                                continue;
+                            }
                             let addresses = leader_info.as_ref().map(|leader_info| {
                                 leader_info.get_leader_tpus(config.leader_forward_count)
                             });
@@ -212,6 +248,115 @@ impl SendTransactionService {
                 }
             })
             .unwrap()
+    }
+
+    /// Process transactions in batch.
+    fn batch_process_transactions<T: TpuInfo>(
+        working_bank: &Arc<Bank>,
+        root_bank: &Arc<Bank>,
+        tpu_address: &SocketAddr,
+        transactions: &mut HashMap<Signature, TransactionInfo>,
+        leader_info: &Option<T>,
+        config: &Config,
+    ) -> ProcessTransactionsResult {
+        let mut result = ProcessTransactionsResult::default();
+
+        transactions.retain(|signature, mut transaction_info| {
+            if transaction_info.durable_nonce_info.is_some() {
+                inc_new_counter_info!("send_transaction_service-nonced", 1);
+            }
+            if root_bank.has_signature(signature) {
+                info!("Transaction is rooted: {}", signature);
+                result.rooted += 1;
+                inc_new_counter_info!("send_transaction_service-rooted", 1);
+                return false;
+            }
+            if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
+                let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
+                if !nonce_account::verify_nonce_account(&nonce_account, &durable_nonce)
+                    && working_bank.get_signature_status_slot(signature).is_none()
+                {
+                    info!("Dropping expired durable-nonce transaction: {}", signature);
+                    result.expired += 1;
+                    inc_new_counter_info!("send_transaction_service-expired", 1);
+                    return false;
+                }
+            }
+            if transaction_info.last_valid_block_height < root_bank.block_height() {
+                info!("Dropping expired transaction: {}", signature);
+                result.expired += 1;
+                inc_new_counter_info!("send_transaction_service-expired", 1);
+                return false;
+            }
+
+            let max_retries = transaction_info
+                .max_retries
+                .or(config.default_max_retries)
+                .map(|max_retries| max_retries.min(config.service_max_retries));
+
+            if let Some(max_retries) = max_retries {
+                if transaction_info.retries >= max_retries {
+                    info!("Dropping transaction due to max retries: {}", signature);
+                    result.max_retries_elapsed += 1;
+                    inc_new_counter_info!("send_transaction_service-max_retries", 1);
+                    return false;
+                }
+            }
+
+            match working_bank.get_signature_status_slot(signature) {
+                None => {
+                    // Transaction is unknown to the working bank, it might have been
+                    // dropped or landed in another fork.  Re-send it
+                    info!("Retrying transaction: {}", signature);
+                    result.retried += 1;
+                    transaction_info.retries += 1;
+                    inc_new_counter_info!("send_transaction_service-retry", 1);
+
+                    true
+                }
+                Some((_slot, status)) => {
+                    if status.is_err() {
+                        info!("Dropping failed transaction: {}", signature);
+                        result.failed += 1;
+                        inc_new_counter_info!("send_transaction_service-failed", 1);
+                        false
+                    } else {
+                        result.retained += 1;
+                        true
+                    }
+                }
+            }
+        });
+
+        let addresses = leader_info
+            .as_ref()
+            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
+        let addresses = addresses
+            .map(|address_list| {
+                if address_list.is_empty() {
+                    vec![tpu_address]
+                } else {
+                    address_list
+                }
+            })
+            .unwrap_or_else(|| vec![tpu_address]);
+
+        let wire_transacions = transactions
+            .values()
+            .map(|transaction_info| &transaction_info.wire_transaction as &[u8])
+            .collect::<Vec<&[u8]>>();
+
+        for address in &addresses {
+            if let Err(err) =
+                connection_cache::send_wire_transaction_batch(&wire_transacions, address)
+            {
+                warn!(
+                    "Failed to send transactions in batch to {}: {:?}",
+                    tpu_address, err
+                );
+            }
+        }
+        result
     }
 
     fn process_transactions<T: TpuInfo>(
