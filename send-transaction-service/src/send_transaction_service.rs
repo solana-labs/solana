@@ -24,7 +24,7 @@ const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but m
 
 /// Maximum batch size for sending transaction in batch
 /// When this size is reached, send out the transactions.
-const MAX_TRANSACTION_BATCH_SIZE: usize = 100;
+const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 100;
 
 /// Default retry interval
 const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
@@ -49,6 +49,8 @@ pub struct TransactionInfo {
     pub durable_nonce_info: Option<(Pubkey, Hash)>,
     pub max_retries: Option<usize>,
     retries: usize,
+    /// Last time when the transaction is sent
+    last_sent_time: Option<Instant>,
 }
 
 impl TransactionInfo {
@@ -66,6 +68,7 @@ impl TransactionInfo {
             durable_nonce_info,
             max_retries,
             retries: 0,
+            last_sent_time: None,
         }
     }
 }
@@ -93,6 +96,8 @@ pub struct Config {
     pub use_quic: bool,
     /// Controls if to send transactions in batch
     pub do_batch: bool,
+    /// The batch size for sending transaction in batch
+    pub batch_size: usize,
     /// Controls the how frequently send the batches
     pub batch_send_rate_ms: u64,
 }
@@ -106,6 +111,7 @@ impl Default for Config {
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             use_quic: DEFAULT_TPU_USE_QUIC,
             do_batch: DEFAULT_TPU_DO_BATCH,
+            batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
         }
     }
@@ -171,7 +177,7 @@ impl SendTransactionService {
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {
                         if config.do_batch && !transactions.is_empty() {
-                            // Timed out waiting for batch
+                            // Timed out waiting for batch and there is something in the batch
                             inc_new_counter_info!("send_transaction_service-batch-time-out-tx", 1);
                             do_batch = true;
                         }
@@ -185,9 +191,9 @@ impl SendTransactionService {
                                 entry.or_insert(transaction_info);
                                 transactions_len += 1;
 
-                                if transactions_len < MAX_TRANSACTION_BATCH_SIZE
+                                if transactions_len < config.batch_size
                                     && last_status_check.elapsed().as_millis()
-                                        < config.batch_send_rate_ms
+                                        < config.batch_send_rate_ms as u128
                                 {
                                     // Not enough transactions in the batch and not long enough time has passed since the last batch
                                     continue;
@@ -327,9 +333,20 @@ impl SendTransactionService {
                     info!("Retrying transaction: {}", signature);
                     result.retried += 1;
                     transaction_info.retries += 1;
+
                     inc_new_counter_info!("send_transaction_service-retry", 1);
                     if config.do_batch {
-                        batched_transactions.insert(signature.clone());
+                        if transaction_info.last_sent_time.is_none()
+                            || transaction_info
+                                .last_sent_time
+                                .unwrap()
+                                .elapsed()
+                                .as_millis()
+                                > config.retry_rate_ms as u128
+                        {
+                            batched_transactions.insert(signature.clone());
+                            transaction_info.last_sent_time = Some(Instant::now());
+                        }
                         return true;
                     }
 
@@ -348,6 +365,7 @@ impl SendTransactionService {
                     for address in addresses {
                         Self::send_transaction(address, &transaction_info.wire_transaction);
                     }
+                    transaction_info.last_sent_time = Some(Instant::now());
                     true
                 }
                 Some((_slot, status)) => {

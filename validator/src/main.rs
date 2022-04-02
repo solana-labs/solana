@@ -443,6 +443,9 @@ pub fn main() {
     let default_rpc_send_transaction_service_max_retries = default_send_transaction_service_config
         .service_max_retries
         .to_string();
+    let default_rpc_send_transaction_batch_size = default_send_transaction_service_config
+        .batch_size
+        .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
     let default_accountsdb_repl_threads = num_cpus::get().to_string();
     let default_maximum_full_snapshot_archives_to_retain =
@@ -1387,6 +1390,15 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .default_value(&default_rpc_send_transaction_service_max_retries)
                 .help("The maximum number of transaction broadcast retries, regardless of requested value."),
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_batch_size")
+                .long("rpc-send-service-batch-size")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_send_transaction_batch_size)
+                .help("The size of transactions to be sent in batch."),
         )
         .arg(
             Arg::with_name("rpc_scan_and_fix_roots")
@@ -2446,6 +2458,7 @@ pub fn main() {
             use_quic: tpu_use_quic,
             do_batch: tpu_do_batch,
             batch_send_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64),
+            batch_size: value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
