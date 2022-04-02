@@ -13,6 +13,7 @@ import {Message} from '../src/message';
 import invariant from '../src/util/assert';
 import {toBuffer} from '../src/util/to-buffer';
 import {helpers} from './mocks/rpc-http';
+import {url} from './url';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -114,27 +115,29 @@ describe('Transaction', () => {
     });
   });
 
-  it('getEstimatedFee', async () => {
-    const connection = new Connection('https://api.testnet.solana.com');
-    const accountFrom = Keypair.generate();
-    const accountTo = Keypair.generate();
+  if (process.env.TEST_LIVE) {
+    it('getEstimatedFee', async () => {
+      const connection = new Connection(url);
+      const accountFrom = Keypair.generate();
+      const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.latestBlockhash({connection});
+      const {blockhash} = await helpers.latestBlockhash({connection});
 
-    const transaction = new Transaction({
-      feePayer: accountFrom.publicKey,
-      recentBlockhash: blockhash,
-    }).add(
-      SystemProgram.transfer({
-        fromPubkey: accountFrom.publicKey,
-        toPubkey: accountTo.publicKey,
-        lamports: 10,
-      }),
-    );
+      const transaction = new Transaction({
+        feePayer: accountFrom.publicKey,
+        recentBlockhash: blockhash,
+      }).add(
+        SystemProgram.transfer({
+          fromPubkey: accountFrom.publicKey,
+          toPubkey: accountTo.publicKey,
+          lamports: 10,
+        }),
+      );
 
-    const fee = await transaction.getEstimatedFee(connection);
-    expect(fee).to.eq(5000);
-  }).timeout(60 * 1000);
+      const fee = await transaction.getEstimatedFee(connection);
+      expect(fee).to.eq(5000);
+    });
+  }
 
   it('partialSign', () => {
     const account1 = Keypair.generate();
@@ -457,6 +460,18 @@ describe('Transaction', () => {
     transaction.recentBlockhash = new PublicKey(100).toString();
     const compiledMessage3 = transaction.compileMessage();
     expect(compiledMessage3).not.to.eql(message);
+  });
+
+  it('constructs a transaction with last valid block height', () => {
+    const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
+    const lastValidBlockHeight = 1234;
+
+    const transaction = new Transaction({
+      recentBlockhash,
+      lastValidBlockHeight,
+    });
+    expect(transaction.recentBlockhash).to.eq(recentBlockhash);
+    expect(transaction.lastValidBlockHeight).to.eq(lastValidBlockHeight);
   });
 
   it('serialize unsigned transaction', () => {
