@@ -18,6 +18,7 @@ export function AnchorProgramCard({ program }: { program: Program }) {
             src={program.idl}
             theme={"solarized"}
             style={{ padding: 25 }}
+            collapsed={1}
           />
         </div>
       </div>
