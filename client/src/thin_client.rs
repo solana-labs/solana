@@ -595,46 +595,20 @@ impl SyncClient for ThinClient {
 }
 
 impl AsyncClient for ThinClient {
-    fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
-        let transaction = VersionedTransaction::from(transaction);
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> TransportResult<Signature> {
         serialize_and_send_transaction(&transaction, self.tpu_addr())?;
         Ok(transaction.signatures[0])
     }
 
-    fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
-        let batch: Vec<VersionedTransaction> = transactions.into_iter().map(Into::into).collect();
+    fn async_send_versioned_transaction_batch(
+        &self,
+        batch: Vec<VersionedTransaction>,
+    ) -> TransportResult<()> {
         par_serialize_and_send_transaction_batch(&batch[..], self.tpu_addr())?;
         Ok(())
-    }
-
-    fn async_send_message<T: Signers>(
-        &self,
-        keypairs: &T,
-        message: Message,
-        recent_blockhash: Hash,
-    ) -> TransportResult<Signature> {
-        let transaction = Transaction::new(keypairs, message, recent_blockhash);
-        self.async_send_transaction(transaction)
-    }
-    fn async_send_instruction(
-        &self,
-        keypair: &Keypair,
-        instruction: Instruction,
-        recent_blockhash: Hash,
-    ) -> TransportResult<Signature> {
-        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
-        self.async_send_message(&[keypair], message, recent_blockhash)
-    }
-    fn async_transfer(
-        &self,
-        lamports: u64,
-        keypair: &Keypair,
-        pubkey: &Pubkey,
-        recent_blockhash: Hash,
-    ) -> TransportResult<Signature> {
-        let transfer_instruction =
-            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
     }
 }
 

@@ -339,6 +339,10 @@ pub mod stake_split_uses_rent_sysvar {
     solana_sdk::declare_id!("FQnc7U4koHqWgRvFaBJjZnV8VPg6L6wWK33yJeDp4yvV");
 }
 
+pub mod add_get_minimum_delegation_instruction_to_stake_program {
+    solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -418,6 +422,7 @@ lazy_static! {
         (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
         (check_slice_translation_size::id(), "check size when translating slices"),
         (stake_split_uses_rent_sysvar::id(), "stake split instruction uses rent sysvar"),
+        (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
