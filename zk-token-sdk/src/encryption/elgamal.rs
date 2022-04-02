@@ -123,10 +123,10 @@ impl ElGamal {
     /// message, use `DiscreteLog::decode`.
     #[cfg(not(target_arch = "bpf"))]
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
-        DiscreteLog {
-            generator: *G,
-            target: &ciphertext.commitment.0 - &(&secret.0 * &ciphertext.handle.0),
-        }
+        DiscreteLog::new(
+            *G,
+            &ciphertext.commitment.0 - &(&secret.0 * &ciphertext.handle.0),
+        )
     }
 
     /// On input a secret key and a ciphertext, the function returns the decrypted message
@@ -584,13 +584,21 @@ mod tests {
         let amount: u32 = 57;
         let ciphertext = ElGamal::encrypt(&public, amount);
 
-        let expected_instance = DiscreteLog {
-            generator: *G,
-            target: Scalar::from(amount) * &(*G),
-        };
+        let expected_instance = DiscreteLog::new(*G, Scalar::from(amount) * &(*G));
 
         assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ciphertext));
         assert_eq!(57_u64, secret.decrypt_u32(&ciphertext).unwrap());
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_correctness_multithreaded() {
+        let ElGamalKeypair { public, secret } = ElGamalKeypair::new_rand();
+        let amount: u32 = 57;
+        let ciphertext = ElGamal::encrypt(&public, amount);
+
+        let mut instance = ElGamal::decrypt(&secret, &ciphertext);
+        instance.num_threads(4).unwrap();
+        assert_eq!(57_u64, instance.decode_u32().unwrap());
     }
 
     #[test]
@@ -619,10 +627,7 @@ mod tests {
             handle: handle_1,
         };
 
-        let expected_instance = DiscreteLog {
-            generator: *G,
-            target: Scalar::from(amount) * (*G),
-        };
+        let expected_instance = DiscreteLog::new(*G, Scalar::from(amount) * &(*G));
 
         assert_eq!(expected_instance, secret_0.decrypt(&ciphertext_0));
         assert_eq!(expected_instance, secret_1.decrypt(&ciphertext_1));
