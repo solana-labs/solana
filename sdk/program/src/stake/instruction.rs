@@ -222,6 +222,15 @@ pub enum StakeInstruction {
     ///   1. `[SIGNER]` Lockup authority or withdraw authority
     ///   2. Optional: `[SIGNER]` New lockup authority
     SetLockupChecked(LockupCheckedArgs),
+
+    /// Get the minimum stake delegation, in lamports
+    ///
+    /// # Account references
+    ///   None
+    ///
+    /// The minimum delegation will be returned via the transaction context's returndata.
+    /// Use `get_return_data()` to retrieve the result.
+    GetMinimumDelegation,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -675,6 +684,14 @@ pub fn set_lockup_checked(
         id(),
         &StakeInstruction::SetLockupChecked(lockup_checked),
         account_metas,
+    )
+}
+
+pub fn get_minimum_delegation() -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::GetMinimumDelegation,
+        Vec::default(),
     )
 }
 

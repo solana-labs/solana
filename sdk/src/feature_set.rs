@@ -335,6 +335,10 @@ pub mod spl_associated_token_account_v1_1_0 {
     solana_sdk::declare_id!("FaTa17gVKoqbh38HcfiQonPsAaQViyDCCSg71AubYZw8");
 }
 
+pub mod add_get_minimum_delegation_instruction_to_stake_program {
+    solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -413,6 +417,7 @@ lazy_static! {
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
+        (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
