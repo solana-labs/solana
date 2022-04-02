@@ -101,53 +101,52 @@ export function InstructionsSection({ signature }: SignatureProps) {
         <div className="header">
           <div className="header-body">
             <h3 className="mb-0">
-              {transaction.message.instructions.length > 1 ? "Instructions" : "Instruction"}
+              {transaction.message.instructions.length > 1
+                ? "Instructions"
+                : "Instruction"}
             </h3>
           </div>
         </div>
       </div>
       <React.Suspense fallback={<LoadingCard message="Loading Instructions" />}>
-        {
-          transaction.message.instructions.map(
-            (instruction, index) => {
-              let innerCards: JSX.Element[] = [];
+        {transaction.message.instructions.map((instruction, index) => {
+          let innerCards: JSX.Element[] = [];
 
-              if (index in innerInstructions) {
-                innerInstructions[index].forEach((ix, childIndex) => {
-                  if (typeof ix.programId === "string") {
-                    ix.programId = new PublicKey(ix.programId);
-                  }
-
-                  let res = (
-                    <InstructionCard
-                      key={`${index}-${childIndex}`}
-                      index={index}
-                      ix={ix}
-                      result={result}
-                      signature={signature}
-                      tx={transaction}
-                      childIndex={childIndex}
-                      url={url}
-                    />
-                  );
-                  innerCards.push(res);
-                });
+          if (index in innerInstructions) {
+            innerInstructions[index].forEach((ix, childIndex) => {
+              if (typeof ix.programId === "string") {
+                ix.programId = new PublicKey(ix.programId);
               }
 
-              return (
+              let res = (
                 <InstructionCard
-                  key={`${index}`}
+                  key={`${index}-${childIndex}`}
                   index={index}
-                  ix={instruction}
+                  ix={ix}
                   result={result}
                   signature={signature}
                   tx={transaction}
-                  innerCards={innerCards}
+                  childIndex={childIndex}
                   url={url}
                 />
               );
-            })
-        }
+              innerCards.push(res);
+            });
+          }
+
+          return (
+            <InstructionCard
+              key={`${index}`}
+              index={index}
+              ix={instruction}
+              result={result}
+              signature={signature}
+              tx={transaction}
+              innerCards={innerCards}
+              url={url}
+            />
+          );
+        })}
       </React.Suspense>
     </>
   );

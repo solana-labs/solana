@@ -43,7 +43,7 @@ import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import { SecurityCard } from "components/account/SecurityCard";
 import { AnchorAccountCard } from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
-import { Program } from '@project-serum/anchor';
+import { Program } from "@project-serum/anchor";
 import { useAnchorProgram } from "providers/anchor";
 
 const IDENTICON_WIDTH = 64;
@@ -139,7 +139,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
 
   try {
     pubkey = new PublicKey(address);
-  } catch (err) { }
+  } catch (err) {}
 
   // Fetch account on load
   React.useEffect(() => {
@@ -158,7 +158,9 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <React.Suspense fallback={<LoadingCard message="Loading account details" />}>
+        <React.Suspense
+          fallback={<LoadingCard message="Loading account details" />}
+        >
           <DetailsSections pubkey={pubkey} tab={tab} info={info} />
         </React.Suspense>
       )}
@@ -239,7 +241,10 @@ function DetailsSections({
 }) {
   const { url } = useCluster();
   const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
-  const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
+  const accountAnchorProgram = useAnchorProgram(
+    info?.data?.details?.owner.toString() ?? "",
+    url
+  );
 
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
@@ -257,7 +262,11 @@ function DetailsSections({
 
   const account = info.data;
   const data = account?.details?.data;
-  const tabs = getTabs(data, anchorProgram ?? undefined, accountAnchorProgram ?? undefined);
+  const tabs = getTabs(
+    data,
+    anchorProgram ?? undefined,
+    accountAnchorProgram ?? undefined
+  );
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -275,8 +284,16 @@ function DetailsSections({
         </div>
       )}
       {<InfoSection account={account} />}
-      <React.Suspense fallback={<LoadingCard message="Loading account sections" />}>
-        <MoreSection account={account} tab={moreTab} tabs={tabs} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} />
+      <React.Suspense
+        fallback={<LoadingCard message="Loading account sections" />}
+      >
+        <MoreSection
+          account={account}
+          tab={moreTab}
+          tabs={tabs}
+          anchorProgram={anchorProgram}
+          accountAnchorProgram={accountAnchorProgram}
+        />
       </React.Suspense>
     </>
   );
@@ -357,7 +374,6 @@ function MoreSection({
   anchorProgram: Program | null;
   accountAnchorProgram: Program | null;
 }) {
-
   const pubkey = account.pubkey;
   const address = account.pubkey.toBase58();
   const data = account?.details?.data;
@@ -421,17 +437,20 @@ function MoreSection({
       {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
         <SecurityCard data={data} />
       )}
-      {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
-      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />}
+      {tab === "anchor-program" && anchorProgram && (
+        <AnchorProgramCard program={anchorProgram} />
+      )}
+      {tab === "anchor-account" && accountAnchorProgram && (
+        <AnchorAccountCard account={account} program={accountAnchorProgram} />
+      )}
     </>
   );
 }
 
-
 function getTabs(
   data?: ProgramData,
   anchorProgram?: Program,
-  accountAnchorProgram?: Program,
+  accountAnchorProgram?: Program
 ): Tab[] {
   const tabs: Tab[] = [
     {

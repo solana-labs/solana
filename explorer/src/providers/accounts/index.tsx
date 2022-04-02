@@ -76,10 +76,10 @@ export type ConfigProgramData = {
   parsed: ConfigAccount;
 };
 
-export type RawAccountData =  {
-  program: "raw",
-  parsed: Buffer
-}
+export type RawAccountData = {
+  program: "raw";
+  parsed: Buffer;
+};
 
 export type ProgramData =
   | UpgradeableLoaderAccountData
@@ -94,7 +94,7 @@ export interface Details {
   executable: boolean;
   owner: PublicKey;
   space: number;
-  data?: ProgramData; 
+  data?: ProgramData;
   rawData?: Buffer;
 }
 
@@ -288,12 +288,12 @@ async function fetchAccountInfo(
         } catch (error) {
           reportError(error, { url, address: pubkey.toBase58() });
         }
-      } 
+      }
 
       // If we cannot parse account layout as native spl account
       // then keep raw data for other components to decode
       let rawData: Buffer | undefined;
-      if (!data && !('parsed' in result.data)) {
+      if (!data && !("parsed" in result.data)) {
         rawData = result.data;
       }
 
