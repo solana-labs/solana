@@ -245,7 +245,7 @@ impl<'a> TypeContext<'a> for Context {
             .roots_tracker
             .read()
             .unwrap()
-            .roots
+            .alive_roots
             .get_all();
         let prior_roots_with_hash = Vec::<(Slot, Hash)>::default();
 

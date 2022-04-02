@@ -400,11 +400,11 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
 
 #[derive(Debug)]
 pub struct RootsTracker {
-    /// current set of roots active in approx. the current epoch
-    pub(crate) roots: RollingBitField,
+    /// current set of roots alive in approx. the current epoch
+    pub(crate) alive_roots: RollingBitField,
     /// Set of roots approx. within the current epoch that are roots now or were roots at one point in time.
     /// A root could remain here if all entries in the append vec at that root are cleaned/shrunk and there are no
-    ///  more entries that slot. 'roots' will no longer contain such roots.
+    ///  more entries that slot. 'alive_roots' will no longer contain such roots.
     pub(crate) roots_original: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
@@ -422,15 +422,15 @@ impl Default for RootsTracker {
 impl RootsTracker {
     pub fn new(max_width: u64) -> Self {
         Self {
-            roots: RollingBitField::new(max_width),
+            alive_roots: RollingBitField::new(max_width),
             roots_original: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
     }
 
-    pub fn min_root(&self) -> Option<Slot> {
-        self.roots.min()
+    pub fn min_alive_root(&self) -> Option<Slot> {
+        self.alive_roots.min()
     }
 }
 
@@ -1157,7 +1157,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     pub fn get_rooted_entries(&self, slice: SlotSlice<T>, max: Option<Slot>) -> SlotList<T> {
         let max = max.unwrap_or(Slot::MAX);
-        let lock = &self.roots_tracker.read().unwrap().roots;
+        let lock = &self.roots_tracker.read().unwrap().alive_roots;
         slice
             .iter()
             .filter(|(slot, _)| *slot <= max && lock.contains(slot))
@@ -1240,7 +1240,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                     Some(inner) => inner,
                     None => self.roots_tracker.read().unwrap(),
                 };
-                if lock.roots.contains(slot) {
+                if lock.alive_roots.contains(slot) {
                     rv = Some(i);
                     current_max = *slot;
                 }
@@ -1341,7 +1341,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
     fn get_newest_root_in_slot_list(
-        roots: &RollingBitField,
+        alive_roots: &RollingBitField,
         slice: SlotSlice<T>,
         max_allowed_root: Option<Slot>,
     ) -> Slot {
@@ -1352,7 +1352,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                     continue;
                 }
             }
-            if *f > max_root && roots.contains(f) {
+            if *f > max_root && alive_roots.contains(f) {
                 max_root = *f;
             }
         }
@@ -1609,9 +1609,13 @@ impl<T: IndexValue> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
     ) {
         let roots_tracker = &self.roots_tracker.read().unwrap();
-        let newest_root_in_slot_list =
-            Self::get_newest_root_in_slot_list(&roots_tracker.roots, slot_list, max_clean_root);
-        let max_clean_root = max_clean_root.unwrap_or_else(|| roots_tracker.roots.max_inclusive());
+        let newest_root_in_slot_list = Self::get_newest_root_in_slot_list(
+            &roots_tracker.alive_roots,
+            slot_list,
+            max_clean_root,
+        );
+        let max_clean_root =
+            max_clean_root.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive());
 
         slot_list.retain(|(slot, value)| {
             let should_purge =
@@ -1671,7 +1675,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let roots_tracker = self.roots_tracker.read().unwrap();
         slots
             .filter_map(|s| {
-                if roots_tracker.roots.contains(s) {
+                if roots_tracker.alive_roots.contains(s) {
                     Some(*s)
                 } else {
                     None
@@ -1680,16 +1684,20 @@ impl<T: IndexValue> AccountsIndex<T> {
             .collect()
     }
 
-    pub fn is_root(&self, slot: Slot) -> bool {
-        self.roots_tracker.read().unwrap().roots.contains(&slot)
+    pub fn is_alive_root(&self, slot: Slot) -> bool {
+        self.roots_tracker
+            .read()
+            .unwrap()
+            .alive_roots
+            .contains(&slot)
     }
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
-        assert!(slot >= w_roots_tracker.roots.max_inclusive());
+        assert!(slot >= w_roots_tracker.alive_roots.max_inclusive());
         // 'slot' is a root, so it is both 'root' and 'original'
-        w_roots_tracker.roots.insert(slot);
+        w_roots_tracker.alive_roots.insert(slot);
         w_roots_tracker.roots_original.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
@@ -1706,7 +1714,11 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn max_root_inclusive(&self) -> Slot {
-        self.roots_tracker.read().unwrap().roots.max_inclusive()
+        self.roots_tracker
+            .read()
+            .unwrap()
+            .alive_roots
+            .max_inclusive()
     }
 
     /// return the lowest original root >= slot, including roots_original and ancestors
@@ -1762,7 +1774,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
         let removed_from_previous_uncleaned_roots =
             w_roots_tracker.previous_uncleaned_roots.remove(&slot);
-        if !w_roots_tracker.roots.remove(&slot) {
+        if !w_roots_tracker.alive_roots.remove(&slot) {
             if removed_from_unclean_roots {
                 error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
                 inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);
@@ -1780,16 +1792,16 @@ impl<T: IndexValue> AccountsIndex<T> {
             }
             false
         } else {
-            stats.roots_len = w_roots_tracker.roots.len();
+            stats.roots_len = w_roots_tracker.alive_roots.len();
             stats.uncleaned_roots_len = w_roots_tracker.uncleaned_roots.len();
             stats.previous_uncleaned_roots_len = w_roots_tracker.previous_uncleaned_roots.len();
-            stats.roots_range = w_roots_tracker.roots.range_width();
+            stats.roots_range = w_roots_tracker.alive_roots.range_width();
             true
         }
     }
 
-    pub fn min_root(&self) -> Option<Slot> {
-        self.roots_tracker.read().unwrap().min_root()
+    pub fn min_alive_root(&self) -> Option<Slot> {
+        self.roots_tracker.read().unwrap().min_alive_root()
     }
 
     pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
@@ -1833,18 +1845,18 @@ impl<T: IndexValue> AccountsIndex<T> {
             .contains(&slot)
     }
 
-    pub fn num_roots(&self) -> usize {
-        self.roots_tracker.read().unwrap().roots.len()
+    pub fn num_alive_roots(&self) -> usize {
+        self.roots_tracker.read().unwrap().alive_roots.len()
     }
 
-    pub fn all_roots(&self) -> Vec<Slot> {
+    pub fn all_alive_roots(&self) -> Vec<Slot> {
         let tracker = self.roots_tracker.read().unwrap();
-        tracker.roots.get_all()
+        tracker.alive_roots.get_all()
     }
 
     #[cfg(test)]
     pub fn clear_roots(&self) {
-        self.roots_tracker.write().unwrap().roots.clear()
+        self.roots_tracker.write().unwrap().alive_roots.clear()
     }
 
     pub fn clone_uncleaned_roots(&self) -> HashSet<Slot> {
@@ -1862,7 +1874,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub fn purge_roots(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
         self.slot_list_mut(pubkey, |slot_list| {
             let reclaims = self.get_rooted_entries(slot_list, None);
-            slot_list.retain(|(slot, _)| !self.is_root(*slot));
+            slot_list.retain(|(slot, _)| !self.is_alive_root(*slot));
             (reclaims, slot_list.is_empty())
         })
         .unwrap()
@@ -2799,11 +2811,11 @@ pub mod tests {
     }
 
     #[test]
-    fn test_is_root() {
+    fn test_is_alive_root() {
         let index = AccountsIndex::<bool>::default_for_tests();
-        assert!(!index.is_root(0));
+        assert!(!index.is_alive_root(0));
         index.add_root(0, false);
-        assert!(index.is_root(0));
+        assert!(index.is_alive_root(0));
     }
 
     #[test]
@@ -2834,8 +2846,8 @@ pub mod tests {
         index.add_root(0, false);
         index.add_root(1, false);
         index.clean_dead_slot(0, &mut AccountsIndexRootsStats::default());
-        assert!(index.is_root(1));
-        assert!(!index.is_root(0));
+        assert!(index.is_alive_root(1));
+        assert!(!index.is_alive_root(0));
     }
 
     #[test]
@@ -2845,8 +2857,8 @@ pub mod tests {
         index.add_root(0, false);
         index.add_root(1, false);
         index.clean_dead_slot(1, &mut AccountsIndexRootsStats::default());
-        assert!(!index.is_root(1));
-        assert!(index.is_root(0));
+        assert!(!index.is_alive_root(1));
+        assert!(index.is_alive_root(0));
     }
 
     #[test]
@@ -2867,7 +2879,7 @@ pub mod tests {
                 .len()
         );
         index.reset_uncleaned_roots(None);
-        assert_eq!(2, index.roots_tracker.read().unwrap().roots.len());
+        assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
             2,
@@ -2881,7 +2893,7 @@ pub mod tests {
 
         index.add_root(2, false);
         index.add_root(3, false);
-        assert_eq!(4, index.roots_tracker.read().unwrap().roots.len());
+        assert_eq!(4, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
             2,
@@ -2894,7 +2906,7 @@ pub mod tests {
         );
 
         index.clean_dead_slot(1, &mut AccountsIndexRootsStats::default());
-        assert_eq!(3, index.roots_tracker.read().unwrap().roots.len());
+        assert_eq!(3, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
             1,
@@ -2907,7 +2919,7 @@ pub mod tests {
         );
 
         index.clean_dead_slot(2, &mut AccountsIndexRootsStats::default());
-        assert_eq!(2, index.roots_tracker.read().unwrap().roots.len());
+        assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(1, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
             1,
