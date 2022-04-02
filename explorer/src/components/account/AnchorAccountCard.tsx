@@ -80,7 +80,8 @@ export function AnchorAccountCard({
               {decodedAnchorAccountData &&
                 Object.keys(decodedAnchorAccountData).map((key) => (
                   <AccountRow
-                    objectKey={key}
+                    key={key}
+                    valueName={key}
                     // @ts-ignore
                     value={decodedAnchorAccountData[key]}
                   />
@@ -101,9 +102,7 @@ export function AnchorAccountCard({
   );
 }
 
-function AccountRow({ objectKey, value }: { objectKey: string; value: any }) {
-  const key = objectKey;
-  console.log(key, value);
+function AccountRow({ valueName, value }: { valueName: string; value: any }) {
   let displayValue: JSX.Element;
   if (value && value.constructor && value.constructor.name === "PublicKey") {
     displayValue = <Address pubkey={value} link />;
@@ -125,7 +124,7 @@ function AccountRow({ objectKey, value }: { objectKey: string; value: any }) {
   }
   return (
     <tr>
-      <td className="w-1 text-monospace">{camelToUnderscore(key)}</td>
+      <td className="w-1 text-monospace">{camelToUnderscore(valueName)}</td>
       <td className="text-monospace">{displayValue}</td>
     </tr>
   );
