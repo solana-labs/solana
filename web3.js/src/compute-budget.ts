@@ -29,7 +29,9 @@ export class ComputeBudgetInstruction {
     const typeIndex = instructionTypeLayout.decode(instruction.data);
 
     let type: ComputeBudgetInstructionType | undefined;
-    for (const [ixType, layout] of Object.entries(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS)) {
+    for (const [ixType, layout] of Object.entries(
+      COMPUTE_BUDGET_INSTRUCTION_LAYOUTS,
+    )) {
       if (layout.index == typeIndex) {
         type = ixType as ComputeBudgetInstructionType;
         break;
@@ -37,7 +39,9 @@ export class ComputeBudgetInstruction {
     }
 
     if (!type) {
-      throw new Error('Instruction type incorrect; not a ComputeBudgetInstruction');
+      throw new Error(
+        'Instruction type incorrect; not a ComputeBudgetInstruction',
+      );
     }
 
     return type;
@@ -50,11 +54,11 @@ export class ComputeBudgetInstruction {
     instruction: TransactionInstruction,
   ): RequestUnitsParams {
     this.checkProgramId(instruction.programId);
-    const { units, additionalFee } = decodeData(
+    const {units, additionalFee} = decodeData(
       COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestUnits,
       instruction.data,
-    ); 
-    return { units, additionalFee };
+    );
+    return {units, additionalFee};
   }
 
   /**
@@ -64,11 +68,11 @@ export class ComputeBudgetInstruction {
     instruction: TransactionInstruction,
   ): RequestHeapFrameParams {
     this.checkProgramId(instruction.programId);
-    const { bytes } = decodeData(
+    const {bytes} = decodeData(
       COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestHeapFrame,
       instruction.data,
     );
-    return { bytes };
+    return {bytes};
   }
 
   /**
@@ -76,7 +80,9 @@ export class ComputeBudgetInstruction {
    */
   static checkProgramId(programId: PublicKey) {
     if (!programId.equals(ComputeBudget.programId)) {
-      throw new Error('invalid instruction; programId is not ComputeBudgetProgram');
+      throw new Error(
+        'invalid instruction; programId is not ComputeBudgetProgram',
+      );
     }
   }
 }
@@ -89,14 +95,11 @@ export type ComputeBudgetInstructionType =
   // It would be preferable for this type to be `keyof ComputeBudgetInstructionInputData`
   // but Typedoc does not transpile `keyof` expressions.
   // See https://github.com/TypeStrong/typedoc/issues/1894
-  | 'RequestUnits'
-  | 'RequestHeapFrame';
+  'RequestUnits' | 'RequestHeapFrame';
 
 type ComputeBudgetInstructionInputData = {
-  RequestUnits: IInstructionInputData & 
-    Readonly<RequestUnitsParams>;
-  RequestHeapFrame: IInstructionInputData &
-    Readonly<RequestHeapFrameParams>;
+  RequestUnits: IInstructionInputData & Readonly<RequestUnitsParams>;
+  RequestHeapFrame: IInstructionInputData & Readonly<RequestHeapFrameParams>;
 };
 
 /**
@@ -107,7 +110,7 @@ export interface RequestUnitsParams {
   units: number;
 
   /** Additional fee to pay */
-  additionalFee: number; 
+  additionalFee: number;
 }
 
 /**
@@ -116,7 +119,7 @@ export interface RequestUnitsParams {
 export type RequestHeapFrameParams = {
   /** Requested transaction-wide program heap size in bytes. Must be multiple of 1024. Applies to each program, including CPIs. */
   bytes: number;
-}
+};
 
 /**
  * An enumeration of valid ComputeBudget InstructionType's
@@ -129,7 +132,9 @@ export const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze<{
 }>({
   RequestUnits: {
     index: 0,
-    layout: BufferLayout.struct<ComputeBudgetInstructionInputData['RequestUnits']>([
+    layout: BufferLayout.struct<
+      ComputeBudgetInstructionInputData['RequestUnits']
+    >([
       BufferLayout.u8('instruction'),
       BufferLayout.u32('units'),
       BufferLayout.u32('additionalFee'),
@@ -137,13 +142,11 @@ export const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze<{
   },
   RequestHeapFrame: {
     index: 1,
-    layout: BufferLayout.struct<ComputeBudgetInstructionInputData['RequestHeapFrame']>([
-      BufferLayout.u8('instruction'),
-      BufferLayout.u32('bytes'),
-    ]),
+    layout: BufferLayout.struct<
+      ComputeBudgetInstructionInputData['RequestHeapFrame']
+    >([BufferLayout.u8('instruction'), BufferLayout.u32('bytes')]),
   },
 });
-
 
 /**
  * Factory class for transaction instructions to interact with the Compute Budget program
@@ -171,7 +174,9 @@ export class ComputeBudget {
     });
   }
 
-  static requestHeapFrame(params: RequestHeapFrameParams): TransactionInstruction {
+  static requestHeapFrame(
+    params: RequestHeapFrameParams,
+  ): TransactionInstruction {
     const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestHeapFrame;
     const data = encodeData(type, params);
     return new TransactionInstruction({

@@ -48,17 +48,26 @@ describe.skip('ComputeBudget', () => {
   });
 
   it('ComputeBudgetInstruction', async () => {
-    const requestUnits = ComputeBudget.requestUnits({ units: 150000, additionalFee: 0 });
-    const requestHeapFrame = ComputeBudget.requestHeapFrame({ bytes: 33 * 1024 });
+    const requestUnits = ComputeBudget.requestUnits({
+      units: 150000,
+      additionalFee: 0,
+    });
+    const requestHeapFrame = ComputeBudget.requestHeapFrame({bytes: 33 * 1024});
 
     const requestUnitsTransaction = new Transaction().add(requestUnits);
     expect(requestUnitsTransaction.instructions).to.have.length(1);
-    const requestUnitsTransactionType = ComputeBudgetInstruction.decodeInstructionType(requestUnitsTransaction.instructions[0]);
+    const requestUnitsTransactionType =
+      ComputeBudgetInstruction.decodeInstructionType(
+        requestUnitsTransaction.instructions[0],
+      );
     expect(requestUnitsTransactionType).to.eq('RequestUnits');
 
     const requestHeapFrameTransaction = new Transaction().add(requestHeapFrame);
     expect(requestHeapFrameTransaction.instructions).to.have.length(1);
-    const requestHeapFrameTransactionType = ComputeBudgetInstruction.decodeInstructionType(requestHeapFrameTransaction.instructions[0]);
+    const requestHeapFrameTransactionType =
+      ComputeBudgetInstruction.decodeInstructionType(
+        requestHeapFrameTransaction.instructions[0],
+      );
     expect(requestHeapFrameTransactionType).to.eq('RequestHeapFrame');
   });
 
@@ -76,7 +85,9 @@ describe.skip('ComputeBudget', () => {
         amount: STARTING_AMOUNT,
       });
 
-      expect(await connection.getBalance(baseAccount.publicKey)).to.eq(STARTING_AMOUNT);
+      expect(await connection.getBalance(baseAccount.publicKey)).to.eq(
+        STARTING_AMOUNT,
+      );
 
       const seed = 'hi there';
       const programId = Keypair.generate().publicKey;
@@ -100,22 +111,26 @@ describe.skip('ComputeBudget', () => {
         space,
         programId,
       };
-      
+
       const createAccountFeeTooHighTransaction = new Transaction().add(
-        ComputeBudget.requestUnits({ units: 2, additionalFee: 2 * FEE_AMOUNT }),
+        ComputeBudget.requestUnits({units: 2, additionalFee: 2 * FEE_AMOUNT}),
         SystemProgram.createAccountWithSeed(createAccountWithSeedParams),
       );
-      await expect(sendAndConfirmTransaction(
-        connection,
-        createAccountFeeTooHighTransaction,
-        [baseAccount],
-        {preflightCommitment: 'confirmed'},
-      )).to.be.rejected;
+      await expect(
+        sendAndConfirmTransaction(
+          connection,
+          createAccountFeeTooHighTransaction,
+          [baseAccount],
+          {preflightCommitment: 'confirmed'},
+        ),
+      ).to.be.rejected;
 
-      expect(await connection.getBalance(baseAccount.publicKey)).to.eq(STARTING_AMOUNT);
+      expect(await connection.getBalance(baseAccount.publicKey)).to.eq(
+        STARTING_AMOUNT,
+      );
 
       const createAccountFeeTransaction = new Transaction().add(
-        ComputeBudget.requestUnits({ units: 2, additionalFee: FEE_AMOUNT }),
+        ComputeBudget.requestUnits({units: 2, additionalFee: FEE_AMOUNT}),
         SystemProgram.createAccountWithSeed(createAccountWithSeedParams),
       );
       await sendAndConfirmTransaction(
@@ -124,18 +139,22 @@ describe.skip('ComputeBudget', () => {
         [baseAccount],
         {preflightCommitment: 'confirmed'},
       );
-      expect(await connection.getBalance(baseAccount.publicKey)).to.be.at.most(STARTING_AMOUNT - FEE_AMOUNT - minimumAmount);
+      expect(await connection.getBalance(baseAccount.publicKey)).to.be.at.most(
+        STARTING_AMOUNT - FEE_AMOUNT - minimumAmount,
+      );
 
       async function expectRequestHeapFailure(bytes: number) {
         const requestHeapFrameTransaction = new Transaction().add(
-          ComputeBudget.requestHeapFrame({ bytes }),
+          ComputeBudget.requestHeapFrame({bytes}),
         );
-        await expect(sendAndConfirmTransaction(
-          connection,
-          requestHeapFrameTransaction,
-          [baseAccount],
-          {preflightCommitment: 'confirmed'},
-        )).to.be.rejected;  
+        await expect(
+          sendAndConfirmTransaction(
+            connection,
+            requestHeapFrameTransaction,
+            [baseAccount],
+            {preflightCommitment: 'confirmed'},
+          ),
+        ).to.be.rejected;
       }
       const NOT_MULTIPLE_OF_1024 = 33 * 1024 + 1;
       const BELOW_MIN = 1024;
@@ -146,7 +165,7 @@ describe.skip('ComputeBudget', () => {
 
       const VALID_BYTES = 33 * 1024;
       const requestHeapFrameTransaction = new Transaction().add(
-        ComputeBudget.requestHeapFrame({ bytes: VALID_BYTES}),
+        ComputeBudget.requestHeapFrame({bytes: VALID_BYTES}),
       );
       await sendAndConfirmTransaction(
         connection,
@@ -155,6 +174,5 @@ describe.skip('ComputeBudget', () => {
         {preflightCommitment: 'confirmed'},
       );
     }).timeout(10 * 1000);
-
   }
 });
