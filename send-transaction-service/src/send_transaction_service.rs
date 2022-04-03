@@ -344,7 +344,7 @@ impl SendTransactionService {
                                 .as_millis()
                                 > config.retry_rate_ms as u128
                         {
-                            batched_transactions.insert(signature.clone());
+                            batched_transactions.insert(*signature);
                             transaction_info.last_sent_time = Some(Instant::now());
                         }
                         return true;
