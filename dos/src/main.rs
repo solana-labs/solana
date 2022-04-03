@@ -28,10 +28,10 @@
 //!
 #![allow(clippy::integer_arithmetic)]
 
+use itertools::Itertools;
 use {
     log::*,
     rand::{thread_rng, Rng},
-    solana_bench_tps::bench::generate_keypairs,
     solana_client::rpc_client::RpcClient,
     solana_core::serve_repair::RepairProtocol,
     solana_dos::cli::*,
@@ -71,7 +71,6 @@ struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
     transaction_params: TransactionParams,
-    cached_transaction: Option<Transaction>,
 }
 
 impl TransactionGenerator {
@@ -80,20 +79,15 @@ impl TransactionGenerator {
             blockhash: Hash::default(),
             last_generated: (Instant::now() - Duration::from_secs(100)),
             transaction_params,
-            cached_transaction: None,
         }
     }
 
     fn generate(
         &mut self,
         payer: Option<&Keypair>,
-        kpvals: Option<Vec<Keypair>>, // provided for valid signatures
+        kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
         rpc_client: &Option<RpcClient>,
     ) -> Transaction {
-        if !self.transaction_params.unique_transactions && self.cached_transaction.is_some() {
-            return self.cached_transaction.as_ref().unwrap().clone();
-        }
-
         // generate a new blockhash every 1sec
         if self.transaction_params.valid_blockhash
             && self.last_generated.elapsed().as_millis() > 1000
@@ -113,7 +107,7 @@ impl TransactionGenerator {
         // transaction with payer, in this case signatures are valid and num_signatures is irrelevant
         // random payer will cause error "attempt to debit an account but found no record of a prior credit"
         // if payer is correct, it will trigger error with not enough signatures
-        let transaction = if let Some(payer) = payer {
+        if let Some(payer) = payer {
             let instruction = Instruction::new_with_bincode(
                 program_ids[0],
                 &transfer_instruction,
@@ -138,8 +132,7 @@ impl TransactionGenerator {
                 vec![0, 1],
             )];
 
-            let kpvals = kpvals.unwrap();
-            let keypairs: Vec<&Keypair> = kpvals.iter().collect();
+            let keypairs = kpvals.unwrap();
             Transaction::new_with_compiled_instructions(
                 &keypairs,
                 &[],
@@ -166,14 +159,7 @@ impl TransactionGenerator {
             );
             tx.signatures = vec![Signature::new_unique(); self.transaction_params.num_signatures];
             tx
-        };
-
-        // if we need to generate only one transaction, we cache it to reuse later
-        if !self.transaction_params.unique_transactions {
-            self.cached_transaction = Some(transaction.clone());
         }
-
-        transaction
     }
 }
 
@@ -257,6 +243,7 @@ fn run_dos_rpc_mode(
             }
         }
         count += 1;
+        total_count += 1;
         if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
             info!(
                 "count: {}, errors: {}, tps: {}",
@@ -265,13 +252,20 @@ fn run_dos_rpc_mode(
                 compute_tps(count)
             );
             last_log = Instant::now();
-            total_count = total_count.saturating_add(count);
             count = 0;
         }
         if iterations != 0 && total_count >= iterations {
             break;
         }
     }
+}
+
+fn apply_permutation<'a, T>(indexes: Vec<&usize>, items: &'a Vec<T>) -> Vec<&'a T> {
+    let mut res = Vec::with_capacity(indexes.len());
+    for i in indexes {
+        res.push(&items[*i]);
+    }
+    res
 }
 
 fn run_dos_transactions(
@@ -293,15 +287,40 @@ fn run_dos_transactions(
     let mut error_count = 0;
     let mut generation_elapsed: u64 = 0;
     let mut send_elapsed: u64 = 0;
+
+    let start = Instant::now();
+
+    // Generate n=1000 unique keypairs, which are used to create
+    // chunks of keypairs.
+    // The number of chunck is described by binomial coefficient
+    // and hence 1000 seems to be a reasonable choice
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    if valid_signatures {
+        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+    }
+    let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+    let mut it = indexes.iter().permutations(num_signatures);
+    info!(
+        "Keypairs generation took {} micros",
+        start.elapsed().as_micros()
+    );
+
     loop {
-        let kpvals: Option<Vec<Keypair>> = if valid_signatures {
-            Some((0..num_signatures).map(|_| Keypair::new()).collect())
+        let generation_start = Instant::now();
+        let chunk_keypairs = if valid_signatures {
+            let permut = it.next();
+            if permut.is_none() {
+                keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                info!("Regenerate keypairs");
+                continue;
+            }
+            let permut = permut.unwrap();
+            Some(apply_permutation(permut, &keypairs_flat))
         } else {
             None
         };
 
-        let generation_start = Instant::now();
-        let tx = transaction_generator.generate(payer, kpvals, &rpc_client);
+        let tx = transaction_generator.generate(payer, chunk_keypairs, &rpc_client);
         generation_elapsed =
             generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
 
@@ -314,16 +333,16 @@ fn run_dos_transactions(
             error_count += 1;
         }
         count += 1;
+        total_count += 1;
         if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
             info!("count: {}, errors: {}", count, error_count);
             info!(
                 "Generation avg time (micros): {}, sending avg time(micros): {}, tps: {}",
                 generation_elapsed as f64 / (count as f64),
                 send_elapsed as f64 / (count as f64),
-                compute_tps(count)
+                compute_tps(count),
             );
             last_log = Instant::now();
-            total_count = total_count.saturating_add(count);
             count = 0;
 
             generation_elapsed = 0;
@@ -350,7 +369,6 @@ fn run_dos(
     } else if params.data_type == DataType::Transaction
         && params.transaction_params.unique_transactions
     {
-        // Generation of unique transactions is time consuming and might be parallelized
         run_dos_transactions(
             rpc_client,
             target,
@@ -410,6 +428,7 @@ fn run_dos(
                 error_count += 1;
             }
             count += 1;
+            total_count += 1;
             if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
                 info!(
                     "count: {}, errors: {}, tps: {}",
@@ -418,7 +437,6 @@ fn run_dos(
                     compute_tps(count)
                 );
                 last_log = Instant::now();
-                total_count = total_count.saturating_add(count);
                 count = 0;
             }
             if iterations != 0 && total_count >= iterations {
@@ -725,6 +743,7 @@ pub mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_dos_random() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -740,7 +759,7 @@ pub mod test {
         // will be discarded on sigverify stage
         run_dos(
             &nodes_slice,
-            10000,
+            100000,
             None,
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
@@ -755,6 +774,7 @@ pub mod test {
         );
     }
     #[test]
+    #[ignore]
     fn test_dos_unique() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -771,7 +791,7 @@ pub mod test {
         run_dos(
             &nodes_slice,
             100000,
-            None, //Some(&cluster.funding_keypair), // TODO temporary use it as must
+            None,
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
@@ -781,7 +801,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 2,
+                    num_signatures: 4,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
