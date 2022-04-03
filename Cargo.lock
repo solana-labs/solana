@@ -4769,10 +4769,10 @@ version = "1.11.0"
 dependencies = [
  "bincode",
  "clap 3.1.6",
+ "itertools 0.10.3",
  "log",
  "rand 0.7.3",
  "serde",
- "solana-bench-tps",
  "solana-client",
  "solana-core",
  "solana-gossip",
