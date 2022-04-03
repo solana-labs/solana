@@ -405,7 +405,7 @@ pub struct RootsTracker {
     /// Set of roots approx. within the current epoch that are roots now or were roots at one point in time.
     /// A root could remain here if all entries in the append vec at that root are cleaned/shrunk and there are no
     ///  more entries that slot. 'alive_roots' will no longer contain such roots.
-    pub(crate) roots_original: RollingBitField,
+    pub(crate) historical_roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -423,7 +423,7 @@ impl RootsTracker {
     pub fn new(max_width: u64) -> Self {
         Self {
             alive_roots: RollingBitField::new(max_width),
-            roots_original: RollingBitField::new(max_width),
+            historical_roots: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
@@ -1698,7 +1698,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         assert!(slot >= w_roots_tracker.alive_roots.max_inclusive());
         // 'slot' is a root, so it is both 'root' and 'original'
         w_roots_tracker.alive_roots.insert(slot);
-        w_roots_tracker.roots_original.insert(slot);
+        w_roots_tracker.historical_roots.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
@@ -1721,7 +1721,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             .max_inclusive()
     }
 
-    /// return the lowest original root >= slot, including roots_original and ancestors
+    /// return the lowest original root >= slot, including historical_roots and ancestors
     pub fn get_next_original_root(
         &self,
         slot: Slot,
@@ -1729,8 +1729,8 @@ impl<T: IndexValue> AccountsIndex<T> {
     ) -> Option<Slot> {
         {
             let roots_tracker = self.roots_tracker.read().unwrap();
-            for root in slot..roots_tracker.roots_original.max_exclusive() {
-                if roots_tracker.roots_original.contains(&root) {
+            for root in slot..roots_tracker.historical_roots.max_exclusive() {
+                if roots_tracker.historical_roots.contains(&root) {
                     return Some(root);
                 }
             }
@@ -1747,21 +1747,21 @@ impl<T: IndexValue> AccountsIndex<T> {
         None
     }
 
-    /// roots are inserted into 'roots_original' and 'roots' as a new root is made.
+    /// roots are inserted into 'historical_roots' and 'roots' as a new root is made.
     /// roots are removed form 'roots' as all entries in the append vec become outdated.
-    /// This function exists to clean older entries from 'roots_original'.
-    /// all roots < 'oldest_slot_to_keep' are removed from 'roots_original'.
+    /// This function exists to clean older entries from 'historical_roots'.
+    /// all roots < 'oldest_slot_to_keep' are removed from 'historical_roots'.
     pub fn remove_old_historical_roots(&self, oldest_slot_to_keep: Slot, keep: &HashSet<Slot>) {
         let w_roots_tracker = self.roots_tracker.read().unwrap();
         let mut roots = w_roots_tracker
-            .roots_original
+            .historical_roots
             .get_all_less_than(oldest_slot_to_keep);
         roots.retain(|root| !keep.contains(root));
         drop(w_roots_tracker);
         if !roots.is_empty() {
             let mut w_roots_tracker = self.roots_tracker.write().unwrap();
             roots.into_iter().for_each(|root| {
-                w_roots_tracker.roots_original.remove(&root);
+                w_roots_tracker.historical_roots.remove(&root);
             });
         }
     }
@@ -2086,13 +2086,23 @@ pub mod tests {
         index.add_root(1, true);
         index.add_root(2, true);
         assert_eq!(
-            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .historical_roots
+                .get_all(),
             vec![1, 2]
         );
         let empty_hash_set = HashSet::default();
         index.remove_old_historical_roots(2, &empty_hash_set);
         assert_eq!(
-            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .historical_roots
+                .get_all(),
             vec![2]
         );
         index.remove_old_historical_roots(3, &empty_hash_set);
@@ -2101,10 +2111,15 @@ pub mod tests {
                 .roots_tracker
                 .read()
                 .unwrap()
-                .roots_original
+                .historical_roots
                 .is_empty(),
             "{:?}",
-            index.roots_tracker.read().unwrap().roots_original.get_all()
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .historical_roots
+                .get_all()
         );
 
         // now use 'keep'
@@ -2113,17 +2128,32 @@ pub mod tests {
         index.add_root(2, true);
         let hash_set_1 = vec![1].into_iter().collect();
         assert_eq!(
-            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .historical_roots
+                .get_all(),
             vec![1, 2]
         );
         index.remove_old_historical_roots(2, &hash_set_1);
         assert_eq!(
-            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .historical_roots
+                .get_all(),
             vec![1, 2]
         );
         index.remove_old_historical_roots(3, &hash_set_1);
         assert_eq!(
-            index.roots_tracker.read().unwrap().roots_original.get_all(),
+            index
+                .roots_tracker
+                .read()
+                .unwrap()
+                .historical_roots
+                .get_all(),
             vec![1]
         );
     }
