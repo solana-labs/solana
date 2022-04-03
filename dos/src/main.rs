@@ -30,7 +30,7 @@
 
 use itertools::Itertools;
 use {
-    crossbeam_channel::{unbounded, Receiver, Sender},
+    crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     log::*,
     rand::{thread_rng, Rng},
     solana_client::rpc_client::RpcClient,
@@ -187,41 +187,54 @@ fn create_sender_thread(
 ) -> thread::JoinHandle<()> {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let target = target.clone();
+    let timer_receiver = tick(Duration::from_millis(REPORT_EACH_MILLIS as u64));
+
     thread::spawn(move || {
-        let mut count = 0;
+        let mut count: usize = 0;
+        let mut total_count: usize = 0;
         let mut error_count = 0;
-        let mut send_elapsed: u64 = 0;
         let start_total = Instant::now();
         loop {
-            match tx_receiver.recv() {
-                Ok(TransactionMsg::Transaction(tx)) => {
-                    let start_send = Instant::now();
-                    let data = bincode::serialize(&tx).unwrap();
-                    let res = socket.send_to(&data, target);
-                    if res.is_err() {
-                        error_count += 1;
-                    }
+            select! {
+                recv(tx_receiver) -> msg => {
+                    match msg {
+                        Ok(TransactionMsg::Transaction(tx)) => {
+                            let data = bincode::serialize(&tx).unwrap();
+                            let res = socket.send_to(&data, target);
+                            if res.is_err() {
+                                error_count += 1;
+                            }
 
-                    count += 1;
-                    send_elapsed += start_send.elapsed().as_micros() as u64;
-                }
-                Ok(TransactionMsg::Exit) => {
-                    info!("Worker is done");
-                    n_alive_threads -= 1;
-                    if n_alive_threads == 0 {
-                        let t = start_total.elapsed().as_micros() as f64;
-                        info!("Stopping sender. Count: {}, errors count: {}, total time: {}s, tps: {}, avg send time: {}",
-                            count,
-                            error_count,
-                            t / 1e6,
-                            ((count as f64)*1e6) / t,
-                            send_elapsed/count
-                        );
+                            count += 1;
+                            total_count += 1;
+                        }
+                        Ok(TransactionMsg::Exit) => {
+                            info!("Worker is done");
+                            n_alive_threads -= 1;
+                            if n_alive_threads == 0 {
+                                let t = start_total.elapsed().as_micros() as f64;
+                                info!("Stopping sender. Count: {}, errors count: {}, total time: {}s, tps: {}",
+                                    total_count,
+                                    error_count,
+                                    t / 1e6,
+                                    ((count as f64)*1e6) / t,
+                                );
 
-                        break;
+                                break;
+                            }
+                        }
+                        _ => panic!("Sender panics"),
                     }
+                },
+                recv(timer_receiver) -> _ => {
+                    let t = start_total.elapsed().as_micros() as f64;
+                    info!("Count: {}, tps: {}, time: {}",
+                        count,
+                        compute_tps(count),
+                        t / 1e6,
+                    );
+                    count = 0;
                 }
-                _ => panic!("Sender panics"),
             }
         }
     })
@@ -884,7 +897,6 @@ pub mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_dos_unique() {
         solana_logger::setup();
         let num_nodes = 1;
