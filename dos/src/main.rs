@@ -30,6 +30,7 @@
 
 use itertools::Itertools;
 use {
+    crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
     rand::{thread_rng, Rng},
     solana_client::rpc_client::RpcClient,
@@ -51,6 +52,8 @@ use {
         net::{SocketAddr, UdpSocket},
         process::exit,
         str::FromStr,
+        sync::Arc,
+        thread,
         time::{Duration, Instant},
     },
 };
@@ -67,6 +70,7 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     contact
 }
 
+#[derive(Clone)]
 struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
@@ -86,13 +90,13 @@ impl TransactionGenerator {
         &mut self,
         payer: Option<&Keypair>,
         kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
-        rpc_client: &Option<RpcClient>,
+        rpc_client: &Arc<RpcClient>,
     ) -> Transaction {
         // generate a new blockhash every 1sec
         if self.transaction_params.valid_blockhash
             && self.last_generated.elapsed().as_millis() > 1000
         {
-            self.blockhash = rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap();
+            self.blockhash = rpc_client.as_ref().get_latest_blockhash().unwrap();
             self.last_generated = Instant::now();
         }
 
@@ -161,6 +165,151 @@ impl TransactionGenerator {
             tx
         }
     }
+}
+
+// Multithreading-related functions
+//
+// The most computationally expensive work is signing new
+// transactions. So we generate them in n threads.
+// Sending transactions is at least x8 times cheaper operation
+// so we use only one thread for that for now:
+//
+// |TxGenerator|{n} -> |Tx channel|{1} -> |Sender|{1}
+enum TransactionMsg {
+    Transaction(Transaction),
+    Exit,
+}
+
+fn create_sender_thread(
+    tx_receiver: Receiver<TransactionMsg>,
+    mut n_alive_threads: usize,
+    target: &SocketAddr,
+) -> thread::JoinHandle<()> {
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let target = target.clone();
+    thread::spawn(move || {
+        let mut count = 0;
+        let mut error_count = 0;
+        let mut send_elapsed: u64 = 0;
+        let start_total = Instant::now();
+        loop {
+            match tx_receiver.recv() {
+                Ok(TransactionMsg::Transaction(tx)) => {
+                    let start_send = Instant::now();
+                    let data = bincode::serialize(&tx).unwrap();
+                    let res = socket.send_to(&data, target);
+                    if res.is_err() {
+                        error_count += 1;
+                    }
+
+                    count += 1;
+                    send_elapsed += start_send.elapsed().as_micros() as u64;
+                }
+                Ok(TransactionMsg::Exit) => {
+                    info!("Worker is done");
+                    n_alive_threads -= 1;
+                    if n_alive_threads == 0 {
+                        let t = start_total.elapsed().as_micros() as f64;
+                        info!("Stopping sender. Count: {}, errors count: {}, total time: {}s, tps: {}, avg send time: {}",
+                            count,
+                            error_count,
+                            t / 1e6,
+                            ((count as f64)*1e6) / t,
+                            send_elapsed/count
+                        );
+
+                        break;
+                    }
+                }
+                _ => panic!("Sender panics"),
+            }
+        }
+    })
+}
+
+// Keypair is not clonable, but we need to clone it to pass to threads
+fn clone_payer(payer: &Option<&Keypair>) -> Option<Keypair> {
+    if payer.is_none() {
+        None
+    } else {
+        let bytes = payer.unwrap().to_bytes();
+        match Keypair::from_bytes(&bytes) {
+            Ok(kp) => Some(kp),
+            Err(_) => None,
+        }
+    }
+}
+
+fn create_generator_thread(
+    tx_sender: &Sender<TransactionMsg>,
+    max_iter_per_thread: usize,
+    transaction_generator: &mut TransactionGenerator,
+    payer: &Option<&Keypair>,
+    rpc_client: &Arc<RpcClient>,
+) -> thread::JoinHandle<()> {
+    let tx_sender = tx_sender.clone();
+    let mut transaction_generator = transaction_generator.clone();
+    let rpc_client = rpc_client.clone(); // TODO remove later, use thread for blockhashes
+    let payer = payer.clone();
+
+    let num_signatures = transaction_generator.transaction_params.num_signatures;
+    let valid_signatures = transaction_generator.transaction_params.valid_signatures;
+
+    let payer = clone_payer(&payer);
+
+    // Generate n=1000 unique keypairs, which are used to create
+    // chunks of keypairs.
+    // The number of chunks is described by binomial coefficient
+    // and hence 1000 seems to be a reasonable choice
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    if valid_signatures {
+        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+    }
+
+    thread::spawn(move || {
+        let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+        let mut it = indexes.iter().permutations(num_signatures);
+        let mut cnt = 0;
+        let mut generation_elapsed: u64 = 0;
+        loop {
+            let generation_start = Instant::now();
+            let chunk_keypairs = if valid_signatures {
+                let permut = it.next();
+                if permut.is_none() {
+                    keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                    info!("Regenerate keypairs");
+                    continue;
+                }
+                let permut = permut.unwrap();
+                Some(apply_permutation(permut, &keypairs_flat))
+            } else {
+                None
+            };
+
+            // TODO clean up later
+            let payer = if payer.is_none() {
+                None
+            } else {
+                Some(payer.as_ref().unwrap())
+            };
+            let tx = transaction_generator.generate(payer, chunk_keypairs, &rpc_client);
+            generation_elapsed =
+                generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
+
+            let _ = tx_sender.send(TransactionMsg::Transaction(tx));
+            cnt += 1;
+            if max_iter_per_thread != 0 && cnt >= max_iter_per_thread {
+                let _ = tx_sender.send(TransactionMsg::Exit);
+                break;
+            }
+        }
+        info!(
+            "Finished thread. count = {}, avg generation time = {}, tps = {}",
+            cnt,
+            generation_elapsed / 1_000,
+            (cnt as f64) / (generation_elapsed as f64) * 1e6
+        );
+    })
 }
 
 fn get_target_and_client(
@@ -275,83 +424,42 @@ fn run_dos_transactions(
     payer: Option<&Keypair>,
     transaction_params: TransactionParams,
 ) {
+    let rpc_client = Arc::new(rpc_client.unwrap());
+    let payer = Arc::new(payer);
     info!("{:?}", transaction_params);
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let num_signatures = transaction_params.num_signatures;
-    let valid_signatures = transaction_params.valid_signatures;
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
 
-    let mut last_log = Instant::now();
-    let mut total_count: usize = 0;
-    let mut count: usize = 0;
-    let mut error_count = 0;
-    let mut generation_elapsed: u64 = 0;
-    let mut send_elapsed: u64 = 0;
+    let (tx_sender, tx_receiver) = unbounded();
 
-    let start = Instant::now();
+    let num_gen_threads: usize = 8;
 
-    // Generate n=1000 unique keypairs, which are used to create
-    // chunks of keypairs.
-    // The number of chunck is described by binomial coefficient
-    // and hence 1000 seems to be a reasonable choice
-    let mut keypairs_flat: Vec<Keypair> = Vec::new();
-    if valid_signatures {
-        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target);
+
+    let max_iter_per_thread = iterations / num_gen_threads;
+
+    let rpc_client = Arc::new(rpc_client);
+    let tx_generator_threads: Vec<_> = (0..num_gen_threads)
+        .into_iter()
+        .map(|_| {
+            create_generator_thread(
+                &tx_sender,
+                max_iter_per_thread,
+                &mut transaction_generator,
+                &payer,
+                &rpc_client,
+            )
+        })
+        .collect();
+
+    if let Err(err) = sender_thread.join() {
+        println!("join() failed with: {:?}", err);
     }
-    let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-    let mut it = indexes.iter().permutations(num_signatures);
-    info!(
-        "Keypairs generation took {} micros",
-        start.elapsed().as_micros()
-    );
-
-    loop {
-        let generation_start = Instant::now();
-        let chunk_keypairs = if valid_signatures {
-            let permut = it.next();
-            if permut.is_none() {
-                keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                info!("Regenerate keypairs");
-                continue;
-            }
-            let permut = permut.unwrap();
-            Some(apply_permutation(permut, &keypairs_flat))
-        } else {
-            None
-        };
-
-        let tx = transaction_generator.generate(payer, chunk_keypairs, &rpc_client);
-        generation_elapsed =
-            generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
-
-        let send_start = Instant::now();
-        let data = bincode::serialize(&tx).unwrap();
-        let res = socket.send_to(&data, target);
-        send_elapsed = send_elapsed.saturating_add(send_start.elapsed().as_micros() as u64);
-
-        if res.is_err() {
-            error_count += 1;
-        }
-        count += 1;
-        total_count += 1;
-        if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
-            info!("count: {}, errors: {}", count, error_count);
-            info!(
-                "Generation avg time (micros): {}, sending avg time(micros): {}, tps: {}",
-                generation_elapsed as f64 / (count as f64),
-                send_elapsed as f64 / (count as f64),
-                compute_tps(count),
-            );
-            last_log = Instant::now();
-            count = 0;
-
-            generation_elapsed = 0;
-            send_elapsed = 0;
-        }
-        if iterations != 0 && total_count >= iterations {
-            break;
+    for t_generator in tx_generator_threads {
+        if let Err(err) = t_generator.join() {
+            println!("join() failed with: {:?}", err);
         }
     }
+    println!("This is the end");
 }
 
 fn run_dos(
@@ -407,6 +515,7 @@ fn run_dos(
                 info!("{:?}", tp);
 
                 let mut transaction_generator = TransactionGenerator::new(tp);
+                let rpc_client = Arc::new(rpc_client.unwrap());
                 let tx = transaction_generator.generate(payer, None, &rpc_client);
                 info!("{:?}", tx);
                 bincode::serialize(&tx).unwrap()
@@ -773,6 +882,7 @@ pub mod test {
             },
         );
     }
+
     #[test]
     #[ignore]
     fn test_dos_unique() {
@@ -801,7 +911,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 4,
+                    num_signatures: 2,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
