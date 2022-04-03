@@ -164,6 +164,10 @@ impl SendTransactionService {
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
 
+        info!(
+            "Starting send-transaction-service thread with config {:?}",
+            config
+        );
         if let Some(leader_info) = leader_info.as_mut() {
             leader_info.refresh_recent_peers();
         }
