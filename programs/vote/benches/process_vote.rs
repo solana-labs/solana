@@ -111,12 +111,10 @@ fn bench_process_vote_instruction(
         invoke_context
             .push(&instruction_accounts, &[0], &instruction_data)
             .unwrap();
-        assert!(solana_vote_program::vote_processor::process_instruction(
-            1,
-            &instruction_data,
-            &mut invoke_context
-        )
-        .is_ok());
+        assert!(
+            solana_vote_program::vote_processor::process_instruction(1, &mut invoke_context)
+                .is_ok()
+        );
         invoke_context.pop().unwrap();
     });
 }

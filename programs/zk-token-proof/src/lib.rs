@@ -8,11 +8,13 @@ use {
     std::result::Result,
 };
 
-fn verify<T: Pod + Verifiable>(
-    input: &[u8],
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
-    let proof = ProofInstruction::decode_data::<T>(input).ok_or_else(|| {
+fn verify<T: Pod + Verifiable>(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
+    let instruction = ProofInstruction::decode_data::<T>(instruction_data);
+
+    let proof = instruction.ok_or_else(|| {
         ic_msg!(invoke_context, "invalid proof data");
         InstructionError::InvalidInstructionData
     })?;
@@ -25,7 +27,6 @@ fn verify<T: Pod + Verifiable>(
 
 pub fn process_instruction(
     _first_instruction_account: usize,
-    input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {
@@ -40,26 +41,31 @@ pub fn process_instruction(
         compute_meter.borrow_mut().consume(100_000)?;
     }
 
-    match ProofInstruction::decode_type(input).ok_or(InstructionError::InvalidInstructionData)? {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
+    let instruction = ProofInstruction::decode_type(instruction_data);
+
+    match instruction.ok_or(InstructionError::InvalidInstructionData)? {
         ProofInstruction::VerifyCloseAccount => {
             ic_msg!(invoke_context, "VerifyCloseAccount");
-            verify::<CloseAccountData>(input, invoke_context)
+            verify::<CloseAccountData>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
             ic_msg!(invoke_context, "VerifyWithdraw");
-            verify::<WithdrawData>(input, invoke_context)
+            verify::<WithdrawData>(invoke_context)
         }
         ProofInstruction::VerifyWithdrawWithheldTokens => {
             ic_msg!(invoke_context, "VerifyWithdraw");
-            verify::<WithdrawData>(input, invoke_context)
+            verify::<WithdrawData>(invoke_context)
         }
         ProofInstruction::VerifyTransfer => {
             ic_msg!(invoke_context, "VerifyTransfer");
-            verify::<TransferData>(input, invoke_context)
+            verify::<TransferData>(invoke_context)
         }
         ProofInstruction::VerifyTransferWithFee => {
             ic_msg!(invoke_context, "VerifyTransferWithFee");
-            verify::<TransferWithFeeData>(input, invoke_context)
+            verify::<TransferWithFeeData>(invoke_context)
         }
     }
 }

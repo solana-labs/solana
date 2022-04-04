@@ -95,7 +95,7 @@ solana-validator ... \
 ```
 
 Note that once running your validator *will terminate* if it's not able to write
-its tower into etcd before submitting a vote transactioin, so it's essential
+its tower into etcd before submitting a vote transaction, so it's essential
 that your etcd endpoint remain accessible at all times.
 
 ### Secondary Validator

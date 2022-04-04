@@ -3,7 +3,7 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     bincode::deserialize,
-    serde_json::{json, Map},
+    serde_json::{json, Map, Value},
     solana_sdk::{
         instruction::CompiledInstruction, message::AccountKeys,
         stake::instruction::StakeInstruction,
@@ -269,6 +269,10 @@ pub fn parse_stake(
                 }),
             })
         }
+        StakeInstruction::GetMinimumDelegation => Ok(ParsedInstructionEnum {
+            instruction_type: "getMinimumDelegation".to_string(),
+            info: Value::default(),
+        }),
     }
 }
 

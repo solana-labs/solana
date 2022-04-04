@@ -265,13 +265,13 @@ fn transfer_with_seed(
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let instruction_data = instruction_context.get_instruction_data();
     let instruction = limited_deserialize(instruction_data)?;
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", instruction);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -1737,15 +1737,9 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: usize,
-             instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(
-                    first_instruction_account,
-                    instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         );
     }
@@ -2105,15 +2099,9 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: usize,
-             instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(
-                    first_instruction_account,
-                    instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         );
     }

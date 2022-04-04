@@ -34,7 +34,7 @@ use {
 };
 
 pub type ProcessInstructionWithContext =
-    fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
+    fn(usize, &mut InvokeContext) -> Result<(), InstructionError>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -45,11 +45,8 @@ pub struct BuiltinProgram {
 impl std::fmt::Debug for BuiltinProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // These are just type aliases for work around of Debug-ing above pointers
-        type ErasedProcessInstructionWithContext = fn(
-            usize,
-            &'static [u8],
-            &'static mut InvokeContext<'static>,
-        ) -> Result<(), InstructionError>;
+        type ErasedProcessInstructionWithContext =
+            fn(usize, &'static mut InvokeContext<'static>) -> Result<(), InstructionError>;
 
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
@@ -62,11 +59,10 @@ impl std::fmt::Debug for BuiltinProgram {
 /// Program executor
 pub trait Executor: Debug + Send + Sync {
     /// Execute the program
-    fn execute<'a, 'b>(
+    fn execute(
         &self,
         first_instruction_account: usize,
-        instruction_data: &[u8],
-        invoke_context: &'a mut InvokeContext<'b>,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError>;
 }
 
@@ -893,7 +889,7 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                let execution_result = self.process_executable_chain(instruction_data);
+                let execution_result = self.process_executable_chain();
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
                 process_executable_chain_time.stop();
@@ -933,10 +929,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Calls the instruction's program entrypoint method
-    fn process_executable_chain(
-        &mut self,
-        instruction_data: &[u8],
-    ) -> Result<(), InstructionError> {
+    fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let borrowed_root_account = instruction_context
             .try_borrow_account(self.transaction_context, 0)
@@ -950,7 +943,6 @@ impl<'a> InvokeContext<'a> {
                     // Call the builtin program
                     return (entry.process_instruction)(
                         1, // root_id to be skipped
-                        instruction_data,
                         self,
                     );
                 }
@@ -959,7 +951,7 @@ impl<'a> InvokeContext<'a> {
                 drop(borrowed_root_account);
                 let native_loader = NativeLoader::default();
                 // Call the program via the native loader
-                return native_loader.process_instruction(0, instruction_data, self);
+                return native_loader.process_instruction(0, self);
             }
         } else {
             for entry in self.builtin_programs {
@@ -968,7 +960,6 @@ impl<'a> InvokeContext<'a> {
                     // Call the program via a builtin loader
                     return (entry.process_instruction)(
                         0, // no root_id was provided
-                        instruction_data,
                         self,
                     );
                 }
@@ -1161,7 +1152,7 @@ pub fn mock_process_instruction(
             &program_indices,
             instruction_data,
         )
-        .and_then(|_| process_instruction(1, instruction_data, &mut invoke_context));
+        .and_then(|_| process_instruction(1, &mut invoke_context));
     invoke_context.pop().unwrap();
     assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
@@ -1272,7 +1263,6 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _first_instruction_account: usize,
-            _data: &[u8],
             _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
@@ -1280,8 +1270,7 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _first_instruction_account: usize,
-            _data: &[u8],
-            _context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
@@ -1301,11 +1290,11 @@ mod tests {
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
         _first_instruction_account: usize,
-        data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
+        let instruction_data = instruction_context.get_instruction_data();
         let program_id = instruction_context.get_program_key(transaction_context)?;
         assert_eq!(
             program_id,
@@ -1322,7 +1311,7 @@ mod tests {
                 .get_key()
         );
 
-        if let Ok(instruction) = bincode::deserialize(data) {
+        if let Ok(instruction) = bincode::deserialize(instruction_data) {
             match instruction {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),

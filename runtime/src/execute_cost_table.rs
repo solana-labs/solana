@@ -9,9 +9,10 @@ use {
 };
 
 // prune is rather expensive op, free up bulk space in each operation
-// would be more efficient. PRUNE_RATIO defines the after prune table
-// size will be original_size * PRUNE_RATIO.
-const PRUNE_RATIO: f64 = 0.75;
+// would be more efficient. PRUNE_RATIO defines that after prune, table
+// size will be original_size * PRUNE_RATIO. The value is defined in
+// scale of 100.
+const PRUNE_RATIO: usize = 75;
 // with 50_000 TPS as norm, weights occurrences '100' per microsec
 const OCCURRENCES_WEIGHT: i64 = 100;
 
@@ -85,8 +86,12 @@ impl ExecuteCostTable {
     pub fn upsert(&mut self, key: &Pubkey, value: u64) {
         let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
-        if current_size == self.capacity && need_to_add {
-            self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
+        if current_size >= self.capacity && need_to_add {
+            let prune_to_size = current_size
+                .checked_mul(PRUNE_RATIO)
+                .and_then(|v| v.checked_div(100))
+                .unwrap_or(self.capacity);
+            self.prune_to(&prune_to_size);
         }
 
         let program_cost = self.table.entry(*key).or_insert(value);
