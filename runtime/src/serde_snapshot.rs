@@ -429,8 +429,8 @@ where
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
-        _snapshot_historical_roots,
-        _snapshot_historical_roots_with_hash,
+        snapshot_historical_roots,
+        snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
 
     let snapshot_storages = snapshot_storages.into_iter().collect::<Vec<_>>();
@@ -440,6 +440,12 @@ where
         std::fs::create_dir_all(path)
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
+
+    reconstruct_historical_roots(
+        &accounts_db,
+        snapshot_historical_roots,
+        snapshot_historical_roots_with_hash,
+    );
 
     // Remap the deserialized AppendVec paths to point to correct local paths
     let num_collisions = AtomicUsize::new(0);
@@ -575,4 +581,26 @@ where
         Arc::try_unwrap(accounts_db).unwrap(),
         ReconstructedAccountsDbInfo { accounts_data_len },
     ))
+}
+
+/// populate 'historical_roots' from 'snapshot_historical_roots' and 'snapshot_historical_roots_with_hash'
+fn reconstruct_historical_roots(
+    accounts_db: &AccountsDb,
+    mut snapshot_historical_roots: Vec<Slot>,
+    snapshot_historical_roots_with_hash: Vec<(Slot, Hash)>,
+) {
+    // inflate 'historical_roots'
+    // inserting into 'historical_roots' needs to be in order
+    // combine the slots into 1 vec, then sort
+    // dups are ok
+    snapshot_historical_roots.extend(
+        snapshot_historical_roots_with_hash
+            .into_iter()
+            .map(|(root, _)| root),
+    );
+    snapshot_historical_roots.sort_unstable();
+    let mut roots_tracker = accounts_db.accounts_index.roots_tracker.write().unwrap();
+    snapshot_historical_roots.into_iter().for_each(|root| {
+        roots_tracker.historical_roots.insert(root);
+    });
 }

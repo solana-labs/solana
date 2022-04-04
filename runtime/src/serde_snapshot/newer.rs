@@ -238,14 +238,13 @@ impl<'a> TypeContext<'a> for Context {
             .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
             .clone();
 
-        // for now, historical_roots is the same as 'roots' and is redundant with the storages we persist in the snapshot
         let historical_roots = serializable_db
             .accounts_db
             .accounts_index
             .roots_tracker
             .read()
             .unwrap()
-            .alive_roots
+            .historical_roots
             .get_all();
         let historical_roots_with_hash = Vec::<(Slot, Hash)>::default();
 
