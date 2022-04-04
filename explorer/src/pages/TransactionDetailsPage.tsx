@@ -229,7 +229,7 @@ function StatusCard({
       </div>
 
       <TableCardBody>
-        {clusterName != "Mainnet Beta" && (
+        {clusterName !== "Mainnet Beta" && (
           <tr>
             <td>WARNING:</td>
             <td className="text-lg-end alert-danger alert-scam">
