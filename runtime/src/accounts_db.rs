@@ -6876,8 +6876,8 @@ impl AccountsDb {
         let epoch = epoch_schedule.get_epoch(max_root_inclusive);
 
         info!(
-            "adding {} filler accounts",
-            self.filler_accounts_config.count
+            "adding {} filler accounts with size {}",
+            self.filler_accounts_config.count, self.filler_accounts_config.size,
         );
         // break this up to force the accounts out of memory after each pass
         let passes = 100;

@@ -125,12 +125,12 @@ pub fn load_bank_forks(
             accounts_update_notifier,
         )
     } else {
-        if process_options
+        let maybe_filler_accounts = process_options
             .accounts_db_config
             .as_ref()
-            .map(|config| config.filler_accounts_config.count > 0)
-            .unwrap()
-        {
+            .map(|config| config.filler_accounts_config.count > 0);
+
+        if let Some(true) = maybe_filler_accounts {
             panic!("filler accounts specified, but not loading from snapshot");
         }
 

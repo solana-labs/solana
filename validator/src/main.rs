@@ -1600,6 +1600,7 @@ pub fn main() {
             .value_name("COUNT")
             .validator(is_parsable::<usize>)
             .takes_value(true)
+            .default_value("0")
             .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
          .arg(Arg::with_name("accounts_filler_size")
             .long("accounts-filler-size")
@@ -1607,6 +1608,7 @@ pub fn main() {
             .validator(is_parsable::<usize>)
             .takes_value(true)
             .default_value("0")
+            .requires("accounts_filler_count")
             .help("Size per filler account in bytes."))
          .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
