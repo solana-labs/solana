@@ -11,10 +11,12 @@ use {
     itertools::Itertools,
     lazy_static::lazy_static,
     log::*,
-    quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
+    quinn::{
+        ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
+    },
     quinn_proto::ConnectionStats,
     solana_sdk::{
-        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
+        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET},
         transport::Result as TransportResult,
     },
     std::{
@@ -148,7 +150,12 @@ impl QuicClient {
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
 
-        endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
+        let mut config = ClientConfig::new(Arc::new(crypto));
+        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+        transport_config.max_idle_timeout(Some(timeout));
+
+        endpoint.set_default_client_config(config);
 
         Self {
             endpoint,

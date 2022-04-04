@@ -23,7 +23,7 @@ use {
 static MAX_CONNECTIONS: usize = 1024;
 
 #[derive(Clone)]
-enum Connection {
+pub enum Connection {
     Udp(Arc<UdpTpuConnection>),
     Quic(Arc<QuicTpuConnection>),
 }
@@ -150,7 +150,7 @@ pub fn set_use_quic(use_quic: bool) {
 
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
+pub fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
     if map

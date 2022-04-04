@@ -8,7 +8,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
-        quic::QUIC_MAX_CONCURRENT_STREAMS,
+        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
         signature::Keypair,
         timing,
     },
@@ -55,7 +55,7 @@ fn configure_server(
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
     config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
-    let timeout = IdleTimeout::from(VarInt::from_u32(60_000));
+    let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
     config.max_idle_timeout(Some(timeout));
 
     // disable bidi & datagrams
@@ -519,7 +519,7 @@ mod test {
         let mut config = ClientConfig::new(Arc::new(crypto));
 
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
-        let timeout = IdleTimeout::from(VarInt::from_u32(60_000));
+        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(10_000)));
 
@@ -579,7 +579,7 @@ mod test {
                 received += 1;
                 info!("got {}", received);
             }
-            if received > total {
+            if received >= total {
                 break;
             }
         }

@@ -25,6 +25,7 @@ use {
         sigverify_stage::SigVerifyStage,
         tower_storage::TowerStorage,
         voting_service::VotingService,
+        warm_quic_cache_service::WarmQuicCacheService,
     },
     crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
@@ -78,6 +79,7 @@ pub struct Tvu {
     accounts_hash_verifier: AccountsHashVerifier,
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
+    warm_quic_cache_service: WarmQuicCacheService,
     drop_bank_service: DropBankService,
     transaction_cost_metrics_service: TransactionCostMetricsService,
 }
@@ -283,6 +285,9 @@ impl Tvu {
             bank_forks.clone(),
         );
 
+        let warm_quic_cache_service =
+            WarmQuicCacheService::new(cluster_info.clone(), poh_recorder.clone(), exit.clone());
+
         let (cost_update_sender, cost_update_receiver) = unbounded();
         let cost_update_service =
             CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
@@ -356,6 +361,7 @@ impl Tvu {
             accounts_hash_verifier,
             cost_update_service,
             voting_service,
+            warm_quic_cache_service,
             drop_bank_service,
             transaction_cost_metrics_service,
         }
@@ -390,6 +396,7 @@ impl Tvu {
         self.accounts_hash_verifier.join()?;
         self.cost_update_service.join()?;
         self.voting_service.join()?;
+        self.warm_quic_cache_service.join()?;
         self.drop_bank_service.join()?;
         self.transaction_cost_metrics_service.join()?;
         Ok(())
