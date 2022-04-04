@@ -4223,46 +4223,42 @@ mod tests {
 
     #[test]
     fn test_split_source_uninitialized() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let split_stake_account = AccountSharedData::new_ref_data_with_space(
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
-        let split_stake_keyed_account =
-            KeyedAccount::new(&split_stake_pubkey, false, &split_stake_account);
-
-        // no signers should fail
-        assert_eq!(
-            stake_keyed_account.split(
-                &invoke_context,
-                stake_lamports / 2,
-                &split_stake_keyed_account,
-                &HashSet::default(), // no signers
-            ),
-            Err(InstructionError::MissingRequiredSignature)
-        );
-
-        let signers = HashSet::from([stake_pubkey]);
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account),
+            (split_to_address, split_to_account),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
 
         // splitting an uninitialized account where the destination is the same as the source
         {
@@ -4272,52 +4268,49 @@ mod tests {
             // - when split amount is non-zero and less than the full balance
             //
             // and splitting should fail when the split amount is greater than the balance
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    stake_lamports,
-                    &stake_keyed_account,
-                    &signers
-                ),
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
                 Ok(()),
             );
-            assert_eq!(
-                stake_keyed_account.split(&invoke_context, 0, &stake_keyed_account, &signers),
+            process_instruction(
+                &serialize(&StakeInstruction::Split(0)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
                 Ok(()),
             );
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    stake_lamports / 2,
-                    &stake_keyed_account,
-                    &signers
-                ),
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
                 Ok(()),
             );
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    stake_lamports + 1,
-                    &stake_keyed_account,
-                    &signers
-                ),
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
                 Err(InstructionError::InsufficientFunds),
             );
         }
 
         // this should work
-        assert_eq!(
-            stake_keyed_account.split(
-                &invoke_context,
-                stake_lamports / 2,
-                &split_stake_keyed_account,
-                &signers
-            ),
-            Ok(())
+        instruction_accounts[1].pubkey = split_to_address;
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
         );
-        assert_eq!(
-            stake_keyed_account.account.borrow().lamports(),
-            split_stake_keyed_account.account.borrow().lamports()
+        assert_eq!(accounts[0].lamports(), accounts[1].lamports());
+
+        // no signers should fail
+        instruction_accounts[0].is_signer = false;
+        process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::MissingRequiredSignature),
         );
     }
 
