@@ -216,16 +216,7 @@ function isValidLink(value: string) {
 function Contact({ type, information }: { type: string; information: string }) {
   switch (type) {
     case "discord":
-      return (
-        <a
-          rel="noopener noreferrer"
-          target="_blank"
-          href={`https://discordapp.com/users/${information}`}
-        >
-          Discord: {information}
-          <span className="fe fe-external-link ms-2"></span>
-        </a>
-      );
+      return <>Discord: {information}</>;
     case "email":
       return (
         <a
