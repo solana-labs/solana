@@ -107,6 +107,10 @@ pub enum GeyserPluginError {
     /// Any custom error defined by the plugin.
     #[error("Plugin-defined custom error. Error message: ({0})")]
     Custom(Box<dyn error::Error + Send + Sync>),
+
+    /// Error when updating the transaction.
+    #[error("Error updating transaction. Error message: ({msg})")]
+    TransactionUpdateError { msg: String },
 }
 
 /// The current status of a slot
