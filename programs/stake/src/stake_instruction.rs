@@ -4316,44 +4316,49 @@ mod tests {
 
     #[test]
     fn test_split_split_not_uninitialized() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(Meta::auto(&stake_pubkey), just_stake(stake_lamports)),
+            &just_stake(Meta::auto(&stake_address), stake_lamports),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-        let signers = vec![stake_pubkey].into_iter().collect();
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
 
-        for split_stake_state in &[
+        for split_to_state in &[
             StakeState::Initialized(Meta::default()),
             StakeState::Stake(Meta::default(), Stake::default()),
             StakeState::RewardsPool,
         ] {
-            let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-            let split_stake_account = AccountSharedData::new_ref_data_with_space(
+            let split_to_account = AccountSharedData::new_data_with_space(
                 0,
-                split_stake_state,
+                split_to_state,
                 std::mem::size_of::<StakeState>(),
                 &id(),
             )
-            .expect("split_stake_account");
-
-            let split_stake_keyed_account =
-                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    stake_lamports / 2,
-                    &split_stake_keyed_account,
-                    &signers
-                ),
-                Err(InstructionError::InvalidAccountData)
+            .unwrap();
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                vec![
+                    (stake_address, stake_account.clone()),
+                    (split_to_address, split_to_account),
+                ],
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
             );
         }
     }
