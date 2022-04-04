@@ -42,7 +42,7 @@ import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTok
 import { MangoDetailsCard } from "components/instruction/MangoDetails";
 import { isPythInstruction } from "components/instruction/pyth/types";
 import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
-import { AnchorDetailsCard } from "../instruction/AnchorProgramDetails";
+import AnchorDetailsCard from "../instruction/AnchorDetailsCard";
 import { isMangoInstruction } from "../instruction/mango/types";
 import { useAnchorProgram } from "providers/anchor";
 import { LoadingCard } from "components/common/LoadingCard";

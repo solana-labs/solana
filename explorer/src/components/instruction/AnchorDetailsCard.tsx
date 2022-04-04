@@ -11,7 +11,7 @@ import { HexData } from "components/common/HexData";
 import { Address } from "components/common/Address";
 import ReactJson from "react-json-view";
 
-export function AnchorDetailsCard(props: {
+export default function AnchorDetailsCard(props: {
   key: string;
   ix: TransactionInstruction;
   index: number;
@@ -89,7 +89,7 @@ function RawAnchorDetails({
         {decodedIxData ? (
           <td className="metadata-json-viewer m-4">
             <ReactJson
-              src={JSON.parse(JSON.stringify(decodedIxData))}
+              src={decodedIxData}
               theme="solarized"
             />
           </td>
