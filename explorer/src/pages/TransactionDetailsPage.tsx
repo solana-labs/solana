@@ -60,7 +60,6 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
       signature = raw;
     }
   } catch (err) {}
-
   const status = useTransactionStatus(signature);
   const [zeroConfirmationRetries, setZeroConfirmationRetries] =
     React.useState(0);
@@ -119,7 +118,11 @@ function StatusCard({
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
-  const { clusterInfo, status: clusterStatus } = useCluster();
+  const {
+    clusterInfo,
+    status: clusterStatus,
+    name: clusterName,
+  } = useCluster();
 
   // Fetch transaction on load
   React.useEffect(() => {
@@ -226,6 +229,15 @@ function StatusCard({
       </div>
 
       <TableCardBody>
+        {clusterName != "Mainnet Beta" && (
+          <tr>
+            <td>WARNING:</td>
+            <td className="text-lg-end alert-danger alert-scam">
+              You are on the {clusterName} cluster. Transactions and SOL
+              transfered here are NOT REAL.
+            </td>
+          </tr>
+        )}
         <tr>
           <td>Signature</td>
           <td className="text-lg-end">
