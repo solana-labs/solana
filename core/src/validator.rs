@@ -337,6 +337,7 @@ pub struct Validator {
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
+    pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
 }
@@ -656,7 +657,7 @@ impl Validator {
             bank.ticks_per_slot(),
             &id,
             &blockstore,
-            blockstore.new_shreds_signals.first().cloned(),
+            blockstore.get_new_shred_signal(0),
             &leader_schedule_cache,
             &poh_config,
             Some(poh_timing_point_sender),
@@ -856,7 +857,7 @@ impl Validator {
             record_receiver,
         );
         assert_eq!(
-            blockstore.new_shreds_signals.len(),
+            blockstore.get_new_shred_signals_len(),
             1,
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
@@ -994,6 +995,7 @@ impl Validator {
             validator_exit: config.validator_exit.clone(),
             cluster_info,
             bank_forks,
+            blockstore: blockstore.clone(),
             accountsdb_repl_service,
             geyser_plugin_service,
         }
@@ -1002,6 +1004,9 @@ impl Validator {
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&mut self) {
         self.validator_exit.write().unwrap().exit();
+
+        // drop all signals in blockstore
+        self.blockstore.drop_signal();
     }
 
     pub fn close(mut self) {
