@@ -28,8 +28,8 @@
 //!
 #![allow(clippy::integer_arithmetic)]
 
-use itertools::Itertools;
 use {
+    itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
     solana_client::rpc_client::RpcClient,
@@ -260,7 +260,7 @@ fn run_dos_rpc_mode(
     }
 }
 
-fn apply_permutation<'a, T>(indexes: Vec<&usize>, items: &'a Vec<T>) -> Vec<&'a T> {
+fn apply_permutation<'a, T>(indexes: Vec<&usize>, items: &'a [T]) -> Vec<&'a T> {
     let mut res = Vec::with_capacity(indexes.len());
     for i in indexes {
         res.push(&items[*i]);
@@ -315,7 +315,7 @@ fn run_dos_transactions(
                 continue;
             }
             let permut = permut.unwrap();
-            Some(apply_permutation(permut, &keypairs_flat))
+            Some(apply_permutation(permut, keypairs_flat.as_slice()))
         } else {
             None
         };
