@@ -4422,19 +4422,34 @@ mod tests {
 
     #[test]
     fn test_split_with_rent() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let minimum_balance = rent_exempt_reserve + minimum_delegation;
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = minimum_balance * 2;
-        let signers = vec![stake_pubkey].into_iter().collect();
-
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
         let meta = Meta {
-            authorized: Authorized::auto(&stake_pubkey),
+            authorized: Authorized::auto(&stake_address),
             rent_exempt_reserve,
             ..Meta::default()
         };
@@ -4442,70 +4457,56 @@ mod tests {
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
             StakeState::Initialized(meta),
-            StakeState::Stake(meta, just_stake(stake_lamports - rent_exempt_reserve)),
+            just_stake(meta, stake_lamports - rent_exempt_reserve),
         ] {
-            let stake_account = AccountSharedData::new_ref_data_with_space(
+            let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
                 std::mem::size_of::<StakeState>(),
                 &id(),
             )
-            .expect("stake_account");
-
-            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-            let split_stake_account = AccountSharedData::new_ref_data_with_space(
-                0,
-                &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
-                &id(),
-            )
-            .expect("stake_account");
-
-            let split_stake_keyed_account =
-                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+            .unwrap();
+            let mut transaction_accounts = vec![
+                (stake_address, stake_account),
+                (split_to_address, split_to_account.clone()),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
 
             // not enough to make a non-zero stake account
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    rent_exempt_reserve,
-                    &split_stake_keyed_account,
-                    &signers,
-                ),
-                Err(InstructionError::InsufficientFunds)
+            process_instruction(
+                &serialize(&StakeInstruction::Split(rent_exempt_reserve)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
             );
 
             // doesn't leave enough for initial stake to be non-zero
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
+            process_instruction(
+                &serialize(&StakeInstruction::Split(
                     stake_lamports - rent_exempt_reserve,
-                    &split_stake_keyed_account,
-                    &signers,
-                ),
-                Err(InstructionError::InsufficientFunds)
+                ))
+                .unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
             );
 
             // split account already has way enough lamports
-            split_stake_keyed_account
-                .account
-                .borrow_mut()
-                .set_lamports(minimum_balance);
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    stake_lamports - minimum_balance,
-                    &split_stake_keyed_account,
-                    &signers,
-                ),
-                Ok(())
+            transaction_accounts[1].1.set_lamports(minimum_balance);
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports - minimum_balance)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
             );
 
             // verify no stake leakage in the case of a stake
             if let StakeState::Stake(meta, stake) = state {
                 assert_eq!(
-                    split_stake_keyed_account.state(),
+                    accounts[1].state(),
                     Ok(StakeState::Stake(
                         *meta,
                         Stake {
@@ -4517,14 +4518,8 @@ mod tests {
                         }
                     ))
                 );
-                assert_eq!(
-                    stake_keyed_account.account.borrow().lamports(),
-                    minimum_balance,
-                );
-                assert_eq!(
-                    split_stake_keyed_account.account.borrow().lamports(),
-                    stake_lamports,
-                );
+                assert_eq!(accounts[0].lamports(), minimum_balance,);
+                assert_eq!(accounts[1].lamports(), stake_lamports,);
             }
         }
     }
