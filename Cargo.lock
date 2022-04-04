@@ -4549,6 +4549,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-clap-utils-v3"
+version = "1.11.0"
+dependencies = [
+ "chrono",
+ "clap 3.1.6",
+ "rpassword",
+ "solana-perf",
+ "solana-remote-wallet",
+ "solana-sdk",
+ "tempfile",
+ "thiserror",
+ "tiny-bip39",
+ "uriparse",
+ "url 2.2.2",
+]
+
+[[package]]
 name = "solana-cli"
 version = "1.11.0"
 dependencies = [
