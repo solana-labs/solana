@@ -114,10 +114,6 @@ export function InstructionsSection({ signature }: SignatureProps) {
 
           if (index in innerInstructions) {
             innerInstructions[index].forEach((ix, childIndex) => {
-              if (typeof ix.programId === "string") {
-                ix.programId = new PublicKey(ix.programId);
-              }
-
               let res = (
                 <InstructionCard
                   key={`${index}-${childIndex}`}
