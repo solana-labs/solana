@@ -174,8 +174,8 @@ pub struct Blockstore {
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
-    pub new_shreds_signals: Vec<Sender<bool>>,
-    pub completed_slots_senders: Vec<CompletedSlotsSender>,
+    new_shreds_signals: Mutex<Vec<Sender<bool>>>,
+    completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
@@ -444,8 +444,8 @@ impl Blockstore {
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
-            new_shreds_signals: vec![],
-            completed_slots_senders: vec![],
+            new_shreds_signals: Mutex::default(),
+            completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
@@ -463,13 +463,13 @@ impl Blockstore {
         ledger_path: &Path,
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
-        let mut blockstore = Self::open_with_options(ledger_path, options)?;
+        let blockstore = Self::open_with_options(ledger_path, options)?;
         let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
-        blockstore.new_shreds_signals = vec![ledger_signal_sender];
-        blockstore.completed_slots_senders = vec![completed_slots_sender];
+        blockstore.add_new_shred_signal(ledger_signal_sender);
+        blockstore.add_completed_slots_signal(completed_slots_sender);
 
         Ok(BlockstoreSignals {
             blockstore,
@@ -1027,7 +1027,7 @@ impl Blockstore {
         let mut start = Measure::start("Commit Working Sets");
         let (should_signal, newly_completed_slots) = commit_slot_meta_working_set(
             &slot_meta_working_set,
-            &self.completed_slots_senders,
+            &self.completed_slots_senders.lock().unwrap(),
             &mut write_batch,
         )?;
 
@@ -1049,8 +1049,8 @@ impl Blockstore {
         metrics.write_batch_elapsed += start.as_us();
 
         send_signals(
-            &self.new_shreds_signals,
-            &self.completed_slots_senders,
+            &self.new_shreds_signals.lock().unwrap(),
+            &self.completed_slots_senders.lock().unwrap(),
             should_signal,
             newly_completed_slots,
         );
@@ -1061,6 +1061,27 @@ impl Blockstore {
         metrics.index_meta_time += index_meta_time;
 
         Ok((newly_completed_data_sets, inserted_indices))
+    }
+
+    pub fn add_new_shred_signal(&self, s: Sender<bool>) {
+        self.new_shreds_signals.lock().unwrap().push(s);
+    }
+
+    pub fn add_completed_slots_signal(&self, s: CompletedSlotsSender) {
+        self.completed_slots_senders.lock().unwrap().push(s);
+    }
+
+    pub fn get_new_shred_signals_len(&self) -> usize {
+        self.new_shreds_signals.lock().unwrap().len()
+    }
+
+    pub fn get_new_shred_signal(&self, index: usize) -> Option<Sender<bool>> {
+        self.new_shreds_signals.lock().unwrap().get(index).cloned()
+    }
+
+    pub fn drop_signal(&self) {
+        self.new_shreds_signals.lock().unwrap().clear();
+        self.completed_slots_senders.lock().unwrap().clear();
     }
 
     /// Range-delete all entries which prefix matches the specified `slot` and
