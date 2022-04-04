@@ -5,6 +5,8 @@ import { Address } from "components/common/Address";
 import { Program, BorshAccountsCoder } from "@project-serum/anchor";
 import { capitalizeFirstLetter } from "utils/anchor";
 import { ErrorCard } from "components/common/ErrorCard";
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 
 import ReactJson from "react-json-view";
 
@@ -137,19 +139,10 @@ function camelToUnderscore(key: string) {
 
 function createDisplayObject(object: Object): Object {
   if (!Array.isArray(object)) {
-    if (
-      object &&
-      object.constructor &&
-      object.constructor.name === "PublicKey"
-    ) {
+    if (object instanceof PublicKey) {
       return object.toString();
-    } else if (
-      object &&
-      object.constructor &&
-      object.constructor.name === "BN"
-    ) {
-      // @ts-ignore
-      return object.toNumber();
+    } else if (object instanceof BN) {
+      return object.toString();
     } else if (object && typeof object !== "object") {
       return object;
     } else {
