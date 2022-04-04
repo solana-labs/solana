@@ -4,6 +4,7 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program } from "@project-serum/anchor";
 import { useAnchorProgram } from "providers/anchor";
 import { programLabel } from "utils/tx";
+import { ErrorBoundary } from "@sentry/react";
 
 function snakeToPascal(string: string) {
   return string
@@ -33,6 +34,9 @@ function AnchorProgramName({
   url: string;
 }) {
   const program = useAnchorProgram(programId.toString(), url);
+  if (!program) {
+    throw new Error("No anchor program name found for given programId");
+  }
   const programName = getProgramName(program);
   return <>{programName}</>;
 }
@@ -51,7 +55,9 @@ export function ProgramName({
 
   return (
     <React.Suspense fallback={defaultProgramName}>
-      <AnchorProgramName programId={programId} url={url} />
+      <ErrorBoundary fallback={<>{defaultProgramName}</>}>
+        <AnchorProgramName programId={programId} url={url} />
+      </ErrorBoundary>
     </React.Suspense>
   );
 }
@@ -76,11 +82,11 @@ export function getAnchorAccountsFromInstruction(
   program: Program
 ):
   | {
-      name: string;
-      isMut: boolean;
-      isSigner: boolean;
-      pda?: Object;
-    }[]
+    name: string;
+    isMut: boolean;
+    isSigner: boolean;
+    pda?: Object;
+  }[]
   | null {
   if (decodedIx) {
     // get ix accounts
