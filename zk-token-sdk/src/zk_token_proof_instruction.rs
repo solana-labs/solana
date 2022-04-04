@@ -73,11 +73,7 @@ impl ProofInstruction {
     }
 
     pub fn decode_type(input: &[u8]) -> Option<Self> {
-        if input.is_empty() {
-            None
-        } else {
-            FromPrimitive::from_u8(input[0])
-        }
+        input.get(0).map(FromPrimitive::from_u8)
     }
 
     pub fn decode_data<T: Pod>(input: &[u8]) -> Option<&T> {
