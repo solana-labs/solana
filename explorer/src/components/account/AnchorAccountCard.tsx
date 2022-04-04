@@ -114,14 +114,14 @@ export function AnchorAccountCard({ account }: { account: Account }) {
 
 function AccountRow({ valueName, value }: { valueName: string; value: any }) {
   let displayValue: JSX.Element;
-  if (value && value.constructor && value.constructor.name === "PublicKey") {
+  if (value instanceof PublicKey) {
     displayValue = <Address pubkey={value} link />;
-  } else if (value && value.constructor && value.constructor.name === "BN") {
+  } else if (value instanceof BN) {
     displayValue = <>{value.toString()}</>;
-  } else if (value && typeof value !== "object") {
+  } else if (!(value instanceof Object)) {
     displayValue = <>{String(value)}</>;
   } else if (value) {
-    const displayObject = createDisplayObject(value);
+    const displayObject = stringifyPubkeyAndBigNums(value);
     displayValue = (
       <ReactJson
         src={JSON.parse(JSON.stringify(displayObject))}
@@ -145,21 +145,21 @@ function camelToUnderscore(key: string) {
   return result.split(" ").join("_").toLowerCase();
 }
 
-function createDisplayObject(object: Object): Object {
+function stringifyPubkeyAndBigNums(object: Object): Object {
   if (!Array.isArray(object)) {
     if (object instanceof PublicKey) {
       return object.toString();
     } else if (object instanceof BN) {
       return object.toString();
-    } else if (object && typeof object !== "object") {
+    } else if (!(object instanceof Object)) {
       return object;
     } else {
-      const parsedObject: typeof object = {};
+      const parsedObject = {};
       Object.keys(object).map((key) => {
         // @ts-ignore
         let value = object[key];
-        if (value && typeof value === "object") {
-          value = createDisplayObject(value);
+        if (value instanceof Object) {
+          value = stringifyPubkeyAndBigNums(value);
         }
         // @ts-ignore
         parsedObject[key] = value;
@@ -169,8 +169,8 @@ function createDisplayObject(object: Object): Object {
     }
   }
   return object.map((innerObject) =>
-    typeof innerObject === "object"
-      ? createDisplayObject(innerObject)
+    innerObject instanceof Object
+      ? stringifyPubkeyAndBigNums(innerObject)
       : innerObject
   );
 }
