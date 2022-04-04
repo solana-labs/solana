@@ -4777,32 +4777,41 @@ mod tests {
 
     #[test]
     fn test_split_from_smaller_sized_account() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let source_smaller_rent_exempt_reserve =
             rent.minimum_balance(std::mem::size_of::<StakeState>());
         let split_rent_exempt_reserve =
             rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
-
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let signers = vec![stake_pubkey].into_iter().collect();
-
+        let stake_lamports = split_rent_exempt_reserve + 1;
+        let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
-            authorized: Authorized::auto(&stake_pubkey),
+            authorized: Authorized::auto(&stake_address),
             rent_exempt_reserve: source_smaller_rent_exempt_reserve,
             ..Meta::default()
         };
+        let state = just_stake(meta, stake_lamports - source_smaller_rent_exempt_reserve);
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &state,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
 
-        let stake_lamports = split_rent_exempt_reserve + 1;
         let split_amount = stake_lamports - (source_smaller_rent_exempt_reserve + 1); // Enough so that split stake is > 0
-
-        let state = StakeState::Stake(
-            meta,
-            just_stake(stake_lamports - source_smaller_rent_exempt_reserve),
-        );
-
         let split_lamport_balances = vec![
             0,
             1,
@@ -4810,43 +4819,37 @@ mod tests {
             split_rent_exempt_reserve + 1,
         ];
         for initial_balance in split_lamport_balances {
-            let split_stake_account = AccountSharedData::new_ref_data_with_space(
+            let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
                 &StakeState::Uninitialized,
                 std::mem::size_of::<StakeState>() + 100,
                 &id(),
             )
-            .expect("stake_account");
-
-            let split_stake_keyed_account =
-                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
-
-            let stake_account = AccountSharedData::new_ref_data_with_space(
-                stake_lamports,
-                &state,
-                std::mem::size_of::<StakeState>(),
-                &id(),
-            )
-            .expect("stake_account");
-            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account.clone()),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
 
             // should always return error when splitting to larger account
-            let split_result = stake_keyed_account.split(
-                &invoke_context,
-                split_amount,
-                &split_stake_keyed_account,
-                &signers,
+            process_instruction(
+                &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
             );
-            assert_eq!(split_result, Err(InstructionError::InvalidAccountData));
 
             // Splitting 100% of source should not make a difference
-            let split_result = stake_keyed_account.split(
-                &invoke_context,
-                stake_lamports,
-                &split_stake_keyed_account,
-                &signers,
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
             );
-            assert_eq!(split_result, Err(InstructionError::InvalidAccountData));
         }
     }
 
