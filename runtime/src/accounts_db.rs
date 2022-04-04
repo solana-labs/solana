@@ -496,9 +496,11 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey) -> Hash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                AccountsDb::hash_stored_account(slot, stored_account_meta)
-            }
+            LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
+                slot,
+                stored_account_meta,
+                &stored_account_meta.meta.pubkey,
+            ),
             LoadedAccount::Cached(cached_account) => {
                 AccountsDb::hash_account(slot, &cached_account.account, pubkey)
             }
@@ -4398,18 +4400,6 @@ impl AccountsDb {
         for (remove_slot, _) in remove_slots {
             assert!(currently_contended_slots.remove(remove_slot));
         }
-    }
-
-    pub fn hash_stored_account(slot: Slot, account: &StoredAccountMeta) -> Hash {
-        Self::hash_account_data(
-            slot,
-            account.account_meta.lamports,
-            &account.account_meta.owner,
-            account.account_meta.executable,
-            account.account_meta.rent_epoch,
-            account.data,
-            &account.meta.pubkey,
-        )
     }
 
     pub fn hash_account<T: ReadableAccount>(slot: Slot, account: &T, pubkey: &Pubkey) -> Hash {
@@ -9942,7 +9932,7 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE trick to detect most of account's field
+        // This test uses some UNSAFE tricks to detect most of account's field
         // addition and deletion without changing the hash code
 
         const ACCOUNT_DATA_LEN: usize = 3;
@@ -9986,7 +9976,7 @@ pub mod tests {
         };
 
         assert_eq!(
-            AccountsDb::hash_stored_account(slot, &stored_account),
+            AccountsDb::hash_account(slot, &stored_account, &stored_account.meta.pubkey),
             expected_account_hash,
             "StoredAccountMeta's data layout might be changed; update hashing if needed."
         );
