@@ -265,10 +265,10 @@ impl PohRecorder {
             match signal.try_send(true) {
                 Ok(_) => {}
                 Err(TrySendError::Full(_)) => {
-                    warn!("replay wake up signal channel is full.")
+                    trace!("replay wake up signal channel is full.")
                 }
                 Err(TrySendError::Disconnected(_)) => {
-                    warn!("replay wake up signal channel is disconnected.")
+                    trace!("replay wake up signal channel is disconnected.")
                 }
             }
         }
