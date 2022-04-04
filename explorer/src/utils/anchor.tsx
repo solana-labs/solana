@@ -82,11 +82,11 @@ export function getAnchorAccountsFromInstruction(
   program: Program
 ):
   | {
-    name: string;
-    isMut: boolean;
-    isSigner: boolean;
-    pda?: Object;
-  }[]
+      name: string;
+      isMut: boolean;
+      isSigner: boolean;
+      pda?: Object;
+    }[]
   | null {
   if (decodedIx) {
     // get ix accounts
