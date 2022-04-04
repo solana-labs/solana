@@ -1,14 +1,13 @@
-import { useState } from "react";
 import { Idl, Program, Provider } from "@project-serum/anchor";
 import { Connection, Keypair } from "@solana/web3.js";
 import { NodeWallet } from "@metaplex/js";
 
-/// Promises to fetch and decode anchor programs
-let cachedAnchorProgramPromises: {
-  [key: string]:
-    | { _type: "promise"; promise: Promise<Program<Idl> | null> }
-    | { _type: "result"; result: Program<Idl> | null };
-} = {};
+const cachedAnchorProgramPromises: Record<
+  string,
+  | void
+  | { __type: "promise"; promise: Promise<Program<Idl> | null> }
+  | { __type: "result"; result: Program<Idl> | null }
+> = {};
 
 export function useAnchorProgram(
   programAddress: string,
@@ -16,9 +15,6 @@ export function useAnchorProgram(
 ): Program | null {
   const key = `${programAddress}-${url}`;
   const cacheEntry = cachedAnchorProgramPromises[key];
-  const [anchorProgram, setAnchorProgram] = useState<Program<Idl> | null>(() =>
-    cacheEntry?._type === "result" ? cacheEntry.result : null
-  );
 
   if (cacheEntry === undefined) {
     const promise = Program.at(
@@ -26,31 +22,25 @@ export function useAnchorProgram(
       new Provider(new Connection(url), new NodeWallet(Keypair.generate()), {})
     )
       .then((program) => {
-        cachedAnchorProgramPromises[key] = { _type: "result", result: program };
-        setAnchorProgram(program);
+        cachedAnchorProgramPromises[key] = {
+          __type: "result",
+          result: program,
+        };
         return program;
       })
       .catch((_) => {
-        cachedAnchorProgramPromises[key] = { _type: "result", result: null };
-        setAnchorProgram(null);
+        cachedAnchorProgramPromises[key] = { __type: "result", result: null };
         return null;
       });
     cachedAnchorProgramPromises[key] = {
-      _type: "promise",
+      __type: "promise",
       promise,
     };
     throw promise;
-  } else if (cacheEntry._type === "promise") {
-    cacheEntry.promise.then((result) => {
-      setAnchorProgram(result);
-    });
+  } else if (cacheEntry.__type === "promise") {
     throw cacheEntry.promise;
   }
-
-  if (cacheEntry?._type === "result") {
-    return cacheEntry.result;
-  }
-  return anchorProgram;
+  return cacheEntry.result;
 }
 
 export type AnchorAccount = {

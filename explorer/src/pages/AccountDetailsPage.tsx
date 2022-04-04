@@ -252,7 +252,9 @@ function DetailsSections({
   }
 
   const account = info.data;
-  const tabComponents = getTabs(pubkey, account).concat(getAnchorTabs(pubkey, account));
+  const tabComponents = getTabs(pubkey, account).concat(
+    getAnchorTabs(pubkey, account)
+  );
 
   let moreTab: MoreTabs = "history";
   if (
