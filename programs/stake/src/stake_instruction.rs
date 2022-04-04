@@ -4365,48 +4365,58 @@ mod tests {
 
     #[test]
     fn test_split_more_than_staked() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
-        let stake_account = AccountSharedData::new_ref_data_with_space(
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(
+            &just_stake(
                 Meta {
                     rent_exempt_reserve,
-                    ..Meta::auto(&stake_pubkey)
+                    ..Meta::auto(&stake_address)
                 },
-                just_stake(stake_lamports / 2 - 1),
+                stake_lamports / 2 - 1,
             ),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let split_stake_account = AccountSharedData::new_ref_data_with_space(
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-
-        let signers = vec![stake_pubkey].into_iter().collect();
-        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-        let split_stake_keyed_account =
-            KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
-        assert_eq!(
-            stake_keyed_account.split(
-                &invoke_context,
-                stake_lamports / 2,
-                &split_stake_keyed_account,
-                &signers
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account),
+            (split_to_address, split_to_account),
+            (
+                sysvar::rent::id(),
+                account::create_account_shared_data_for_test(&rent),
             ),
-            Err(StakeError::InsufficientStake.into())
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(StakeError::InsufficientStake.into()),
         );
     }
 
