@@ -8,7 +8,14 @@ use {
         pubkey::Pubkey,
         sysvar::epoch_schedule::EpochSchedule,
     },
-    std::{borrow::Borrow, convert::TryInto, sync::Mutex},
+    std::{
+        borrow::Borrow,
+        convert::TryInto,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Mutex,
+        },
+    },
 };
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -57,6 +64,10 @@ pub struct HashStats {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub storage_size_quartiles: StorageSizeQuartileStats,
+    /// # rehashes that took place and were necessary
+    pub rehash_required: AtomicUsize,
+    /// # rehashes that took place and were UNnecessary
+    pub rehash_unnecessary: AtomicUsize,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
@@ -151,6 +162,16 @@ impl HashStats {
                 i64
             ),
             ("total", total_time_us as i64, i64),
+            (
+                "rehashed_rewrites",
+                self.rehash_required.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehashed_rewrites_unnecessary",
+                self.rehash_unnecessary.load(Ordering::Relaxed) as i64,
+                i64
+            ),
         );
     }
 }
