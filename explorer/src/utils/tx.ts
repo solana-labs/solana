@@ -50,6 +50,8 @@ export enum PROGRAM_NAMES {
   ACUMEN = "Acumen Program",
   BONFIDA_POOL = "Bonfida Pool Program",
   BREAK_SOLANA = "Break Solana Program",
+  CHAINLINK_ORACLE = "Chainlink OCR2 Oracle Program",
+  CHAINLINK_STORE = "Chainlink Store Program",
   MANGO_GOVERNANCE = "Mango Governance Program",
   MANGO_ICO = "Mango ICO Program",
   MANGO_1 = "Mango Program v1",
@@ -60,6 +62,7 @@ export enum PROGRAM_NAMES {
   METAPLEX = "Metaplex Program",
   NFT_AUCTION = "NFT Auction Program",
   NFT_CANDY_MACHINE = "NFT Candy Machine Program",
+  NFT_CANDY_MACHINE_V2 = "NFT Candy Machine Program V2",
   ORCA_SWAP_1 = "Orca Swap Program v1",
   ORCA_SWAP_2 = "Orca Swap Program v2",
   ORCA_AQUAFARM = "Orca Aquafarm Program",
@@ -197,6 +200,14 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.BREAK_SOLANA,
     deployments: LIVE_CLUSTERS,
   },
+  cjg3oHmg9uuPsP8D6g29NWvhySJkdYdAo9D25PRbKXJ: {
+    name: PROGRAM_NAMES.CHAINLINK_ORACLE,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
+  HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny: {
+    name: PROGRAM_NAMES.CHAINLINK_STORE,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
   GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J: {
     name: PROGRAM_NAMES.MANGO_GOVERNANCE,
     deployments: [Cluster.MainnetBeta],
@@ -235,6 +246,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   cndyAnrLdpjq1Ssp1z8xxDsB8dxe7u4HL5Nxi2K5WXZ: {
     name: PROGRAM_NAMES.NFT_CANDY_MACHINE,
+    deployments: LIVE_CLUSTERS,
+  },
+  cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ: {
+    name: PROGRAM_NAMES.NFT_CANDY_MACHINE_V2,
     deployments: LIVE_CLUSTERS,
   },
   DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1: {

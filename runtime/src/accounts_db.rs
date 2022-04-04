@@ -2950,8 +2950,8 @@ impl AccountsDb {
         self.storage.all_slots()
     }
 
-    fn all_root_slots_in_index(&self) -> Vec<Slot> {
-        self.accounts_index.all_roots()
+    fn all_alive_roots_in_index(&self) -> Vec<Slot> {
+        self.accounts_index.all_alive_roots()
     }
 
     /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
@@ -4296,7 +4296,7 @@ impl AccountsDb {
             // Also note roots are never removed via `remove_unrooted_slot()`, so
             // it's safe to filter them out here as they won't need deletion from
             // self.accounts_index.removed_bank_ids in `purge_slots_from_cache_and_store()`.
-            .filter(|slot| !self.accounts_index.is_root(**slot));
+            .filter(|slot| !self.accounts_index.is_alive_root(**slot));
         safety_checks_elapsed.stop();
         self.external_purge_slots_stats
             .safety_checks_elapsed
@@ -5437,7 +5437,7 @@ impl AccountsDb {
                         if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
                             if valid_slot
                                 || ancestors.contains_key(&slot)
-                                || self.accounts_index.is_root(slot)
+                                || self.accounts_index.is_alive_root(slot)
                             {
                                 let keys = slot_cache.get_all_pubkeys();
                                 for key in keys {
@@ -5510,7 +5510,7 @@ impl AccountsDb {
             collect_time.stop();
 
             let mut sort_time = Measure::start("sort_storages");
-            let min_root = self.accounts_index.min_root();
+            let min_root = self.accounts_index.min_alive_root();
             let storages = SortedStorages::new_with_slots(
                 combined_maps.iter().zip(slots.into_iter()),
                 min_root,
@@ -5529,8 +5529,8 @@ impl AccountsDb {
 
             let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
 
-            // now that calculate_accounts_hash_without_index is complete, we can remove old roots
-            self.remove_old_roots(slot);
+            // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
+            self.remove_old_historical_roots(slot, &HashSet::default());
 
             result
         } else {
@@ -5771,15 +5771,15 @@ impl AccountsDb {
         }
     }
 
-    /// get rid of old original_roots
-    fn remove_old_roots(&self, slot: Slot) {
+    /// get rid of old historical roots
+    /// except keep those in 'keep'
+    fn remove_old_historical_roots(&self, current_max_root_inclusive: Slot, keep: &HashSet<Slot>) {
         // epoch_schedule::DEFAULT_SLOTS_PER_EPOCH is a sufficient approximation for now
         let width = solana_sdk::epoch_schedule::DEFAULT_SLOTS_PER_EPOCH * 11 / 10; // a buffer
-        if slot > width {
-            let min_root = slot - width;
-            let valid_slots = HashSet::default();
+        if current_max_root_inclusive > width {
+            let min_root = current_max_root_inclusive - width;
             self.accounts_index
-                .remove_old_original_roots(min_root, &valid_slots);
+                .remove_old_historical_roots(min_root, keep);
         }
     }
 
@@ -6630,7 +6630,7 @@ impl AccountsDb {
                             if *slot <= snapshot_slot
                                 && snapshot_base_slot
                                     .map_or(true, |snapshot_base_slot| *slot > snapshot_base_slot)
-                                && (self.accounts_index.is_root(*slot)
+                                && (self.accounts_index.is_alive_root(*slot)
                                     || ancestors
                                         .map(|ancestors| ancestors.contains_key(slot))
                                         .unwrap_or_default())
@@ -7274,10 +7274,10 @@ impl AccountsDb {
     }
 
     fn print_index(&self, label: &str) {
-        let mut roots: Vec<_> = self.accounts_index.all_roots();
+        let mut alive_roots: Vec<_> = self.accounts_index.all_alive_roots();
         #[allow(clippy::stable_sort_primitive)]
-        roots.sort();
-        info!("{}: accounts_index roots: {:?}", label, roots,);
+        alive_roots.sort();
+        info!("{}: accounts_index alive_roots: {:?}", label, alive_roots,);
         let full_pubkey_range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
 
         self.accounts_index.account_maps.iter().for_each(|map| {
@@ -7449,7 +7449,7 @@ impl AccountsDb {
         let mut shrunken_account_total = 0;
         let mut shrunk_slot_count = 0;
         let start = Instant::now();
-        let num_roots = self.accounts_index.num_roots();
+        let num_roots = self.accounts_index.num_alive_roots();
         loop {
             if let Some(slot) = self.do_next_shrink_slot_v1(candidates) {
                 shrunken_account_total += self.do_shrink_stale_slot_v1(slot);
@@ -7480,7 +7480,7 @@ impl AccountsDb {
         if next.is_some() {
             next
         } else {
-            let mut new_all_slots = self.all_root_slots_in_index();
+            let mut new_all_slots = self.all_alive_roots_in_index();
             let next = new_all_slots.pop();
             // refresh candidates for later calls!
             **candidates = new_all_slots;

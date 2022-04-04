@@ -104,8 +104,8 @@ impl<T> SnapshotAccountsDbFields<T> {
                 incremental_snapshot_version,
                 incremental_snapshot_slot,
                 incremental_snapshot_bank_hash_info,
-                incremental_snapshot_prior_roots,
-                incremental_snapshot_prior_roots_with_hash,
+                incremental_snapshot_historical_roots,
+                incremental_snapshot_historical_roots_with_hash,
             )) => {
                 let full_snapshot_storages = self.full_snapshot_accounts_db_fields.0;
                 let full_snapshot_slot = self.full_snapshot_accounts_db_fields.2;
@@ -128,8 +128,8 @@ impl<T> SnapshotAccountsDbFields<T> {
                     incremental_snapshot_version,
                     incremental_snapshot_slot,
                     incremental_snapshot_bank_hash_info,
-                    incremental_snapshot_prior_roots,
-                    incremental_snapshot_prior_roots_with_hash,
+                    incremental_snapshot_historical_roots,
+                    incremental_snapshot_historical_roots_with_hash,
                 ))
             }
         }
@@ -429,8 +429,8 @@ where
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
-        _snapshot_prior_roots,
-        _snapshot_prior_roots_with_hash,
+        _snapshot_historical_roots,
+        _snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
 
     let snapshot_storages = snapshot_storages.into_iter().collect::<Vec<_>>();

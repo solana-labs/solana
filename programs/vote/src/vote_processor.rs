@@ -18,11 +18,11 @@ use {
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+    let data = instruction_context.get_instruction_data();
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
@@ -236,15 +236,9 @@ mod tests {
             instruction_accounts,
             None,
             expected_result,
-            |first_instruction_account: usize,
-             instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
-                super::process_instruction(
-                    first_instruction_account,
-                    instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         )
     }
