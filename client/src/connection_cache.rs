@@ -127,34 +127,3 @@ pub fn par_serialize_and_send_transaction_batch(
         Connection::Quic(conn) => conn.par_serialize_and_send_transaction_batch(transactions),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use {
-        crate::{
-            connection_cache::{get_connection, Connection, CONNECTION_MAP, MAX_CONNECTIONS},
-            tpu_connection::TpuConnection,
-        },
-        rand::{Rng, SeedableRng},
-        rand_chacha::ChaChaRng,
-        std::net::{IpAddr, SocketAddr},
-    };
-
-    fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
-        let a = rng.gen_range(1, 255);
-        let b = rng.gen_range(1, 255);
-        let c = rng.gen_range(1, 255);
-        let d = rng.gen_range(1, 255);
-
-        let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
-
-        addr_str.parse().expect("Invalid address")
-    }
-
-    fn ip(conn: Connection) -> IpAddr {
-        match conn {
-            Connection::Udp(conn) => conn.tpu_addr().ip(),
-            Connection::Quic(conn) => conn.tpu_addr().ip(),
-        }
-    }
-    
