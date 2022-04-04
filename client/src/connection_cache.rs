@@ -3,7 +3,9 @@ use {
         quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
+    log::*,
     lru::LruCache,
+    solana_metrics::inc_new_counter_info,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{transaction::VersionedTransaction, transport::TransportError},
     std::{
@@ -54,8 +56,12 @@ fn get_connection(addr: &SocketAddr) -> Connection {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
     match map.map.get(addr) {
-        Some(connection) => connection.clone(),
+        Some(connection) => {
+            inc_new_counter_info!("get_connection-cache-hits", 1);
+            connection.clone()
+        }
         None => {
+            inc_new_counter_info!("get_connection-cache-misses", 1);
             let (_, send_socket) = solana_net_utils::bind_in_range(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                 VALIDATOR_PORT_RANGE,
