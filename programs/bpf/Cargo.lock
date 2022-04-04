@@ -1637,6 +1637,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
+dependencies = [
+ "hashbrown",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3368,6 +3377,7 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log",
+ "lru",
  "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",

@@ -571,13 +571,13 @@ pub(crate) fn submit_gossip_stats(
         .pull
         .votes
         .into_iter()
-        .map(|(slot, num_votes)| (*slot, *num_votes))
+        .map(|(slot, num_votes)| (slot, num_votes))
         .chain(
             crds_stats
                 .push
                 .votes
                 .into_iter()
-                .map(|(slot, num_votes)| (*slot, *num_votes)),
+                .map(|(slot, num_votes)| (slot, num_votes)),
         )
         .into_grouping_map()
         .aggregate(|acc, _slot, num_votes| Some(acc.unwrap_or_default() + num_votes));
