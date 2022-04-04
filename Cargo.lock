@@ -2384,9 +2384,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb87f3080f6d1d69e8c564c0fcfde1d7aa8cc451ce40cae89479111f03bc0eb"
+checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
 dependencies = [
  "hashbrown",
 ]
@@ -4622,6 +4622,7 @@ dependencies = [
  "jsonrpc-http-server",
  "lazy_static",
  "log",
+ "lru",
  "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
