@@ -1,6 +1,6 @@
 [package]
 name = "solana-client"
-version = "1.10.6"
+version = "1.10.7"
 description = "Solana Client"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -35,16 +35,16 @@ semver = "1.0.6"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 serde_json = "1.0.79"
-solana-account-decoder = { path = "../account-decoder", version = "=1.10.6" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.6" }
-solana-faucet = { path = "../faucet", version = "=1.10.6" }
-solana-measure = { path = "../measure", version = "=1.10.6" }
-solana-net-utils = { path = "../net-utils", version = "=1.10.6" }
-solana-sdk = { path = "../sdk", version = "=1.10.6" }
-solana-streamer = { path = "../streamer", version = "=1.10.6" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.10.6" }
-solana-version = { path = "../version", version = "=1.10.6" }
-solana-vote-program = { path = "../programs/vote", version = "=1.10.6" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.10.7" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.7" }
+solana-faucet = { path = "../faucet", version = "=1.10.7" }
+solana-measure = { path = "../measure", version = "=1.10.7" }
+solana-net-utils = { path = "../net-utils", version = "=1.10.7" }
+solana-sdk = { path = "../sdk", version = "=1.10.7" }
+solana-streamer = { path = "../streamer", version = "=1.10.7" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.10.7" }
+solana-version = { path = "../version", version = "=1.10.7" }
+solana-vote-program = { path = "../programs/vote", version = "=1.10.7" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.8"
@@ -55,7 +55,7 @@ url = "2.2.2"
 [dev-dependencies]
 assert_matches = "1.5.0"
 jsonrpc-http-server = "18.0.0"
-solana-logger = { path = "../logger", version = "=1.10.6" }
+solana-logger = { path = "../logger", version = "=1.10.7" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
