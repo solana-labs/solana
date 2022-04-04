@@ -12,13 +12,12 @@ import ReactJson from "react-json-view";
 import { useCluster } from "providers/cluster";
 import { useAnchorProgram } from "providers/anchor";
 
-export function AnchorAccountCard({
-  account,
-}: {
-  account: Account;
-}) {
+export function AnchorAccountCard({ account }: { account: Account }) {
   const { url } = useCluster();
-  const program = useAnchorProgram(account.details?.owner.toString() ?? "", url);
+  const program = useAnchorProgram(
+    account.details?.owner.toString() ?? "",
+    url
+  );
 
   if (!program) {
     return (

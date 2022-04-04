@@ -252,7 +252,7 @@ function DetailsSections({
   }
 
   const account = info.data;
-  const tabComponents = getTabs(pubkey, account);
+  const tabComponents = getTabs(pubkey, account).concat(getAnchorTabs(pubkey, account));
 
   let moreTab: MoreTabs = "history";
   if (
@@ -414,11 +414,7 @@ function MoreSection({
         <SecurityCard data={data} />
       )}
       {tab === "anchor-program" && <AnchorProgramCard programId={pubkey} />}
-      {tab === "anchor-account" && (
-        <AnchorAccountCard
-          account={account}
-        />
-      )}
+      {tab === "anchor-account" && <AnchorAccountCard account={account} />}
     </>
   );
 }
@@ -475,7 +471,7 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
     });
   }
 
-  const tabComponents = tabs.map((tab) => {
+  return tabs.map((tab) => {
     return {
       tab,
       component: (
@@ -491,7 +487,10 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
       ),
     };
   });
+}
 
+function getAnchorTabs(pubkey: PublicKey, account: Account) {
+  const tabComponents = [];
   const anchorProgramTab: Tab = {
     slug: "anchor-program",
     title: "Anchor Program IDL",
@@ -503,7 +502,7 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
       <AnchorProgramLink
         key={anchorProgramTab.slug}
         tab={anchorProgramTab}
-        address={address}
+        address={pubkey.toString()}
         pubkey={pubkey}
       />
     ),
@@ -520,7 +519,7 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
       <AnchorAccountLink
         key={anchorAccountTab.slug}
         tab={anchorAccountTab}
-        address={address}
+        address={pubkey.toString()}
         programId={account.details?.owner}
       />
     ),
