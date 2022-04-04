@@ -4855,70 +4855,76 @@ mod tests {
 
     #[test]
     fn test_split_100_percent_of_source() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
-
-        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let signers = vec![stake_pubkey].into_iter().collect();
-
+        let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
-            authorized: Authorized::auto(&stake_pubkey),
+            authorized: Authorized::auto(&stake_address),
             rent_exempt_reserve,
             ..Meta::default()
         };
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
 
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
             StakeState::Initialized(meta),
-            StakeState::Stake(meta, just_stake(stake_lamports - rent_exempt_reserve)),
+            just_stake(meta, stake_lamports - rent_exempt_reserve),
         ] {
-            let split_stake_account = AccountSharedData::new_ref_data_with_space(
-                0,
-                &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
-                &id(),
-            )
-            .expect("stake_account");
-
-            let split_stake_keyed_account =
-                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
-
-            let stake_account = AccountSharedData::new_ref_data_with_space(
+            let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
-                state,
+                &state,
                 std::mem::size_of::<StakeState>(),
                 &id(),
             )
-            .expect("stake_account");
-            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account),
+                (split_to_address, split_to_account.clone()),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
 
             // split 100% over to dest
-            assert_eq!(
-                stake_keyed_account.split(
-                    &invoke_context,
-                    stake_lamports,
-                    &split_stake_keyed_account,
-                    &signers
-                ),
-                Ok(())
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
             );
 
             // no lamport leakage
             assert_eq!(
-                stake_keyed_account.account.borrow().lamports()
-                    + split_stake_keyed_account.account.borrow().lamports(),
+                accounts[0].lamports() + accounts[1].lamports(),
                 stake_lamports
             );
 
             match state {
                 StakeState::Initialized(_) => {
-                    assert_eq!(Ok(*state), split_stake_keyed_account.state());
-                    assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
+                    assert_eq!(Ok(*state), accounts[1].state());
+                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
                 }
                 StakeState::Stake(meta, stake) => {
                     assert_eq!(
@@ -4932,18 +4938,12 @@ mod tests {
                                 ..*stake
                             }
                         )),
-                        split_stake_keyed_account.state()
+                        accounts[1].state()
                     );
-                    assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
+                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
                 }
                 _ => unreachable!(),
             }
-
-            // reset
-            stake_keyed_account
-                .account
-                .borrow_mut()
-                .set_lamports(stake_lamports);
         }
     }
 
