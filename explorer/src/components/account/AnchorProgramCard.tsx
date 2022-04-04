@@ -1,7 +1,16 @@
-import { Program } from "@project-serum/anchor";
+import { PublicKey } from "@solana/web3.js";
+import { useAnchorProgram } from "providers/anchor";
+import { useCluster } from "providers/cluster";
 import ReactJson from "react-json-view";
 
-export function AnchorProgramCard({ program }: { program: Program }) {
+export function AnchorProgramCard({ programId }: { programId: PublicKey }) {
+  const { url } = useCluster();
+  const program = useAnchorProgram(programId.toString(), url);
+
+  if (!program) {
+    return null;
+  }
+
   return (
     <>
       <div className="card">

@@ -88,10 +88,7 @@ function RawAnchorDetails({
         </td>
         {decodedIxData ? (
           <td className="metadata-json-viewer m-4">
-            <ReactJson
-              src={decodedIxData}
-              theme="solarized"
-            />
+            <ReactJson src={decodedIxData} theme="solarized" />
           </td>
         ) : (
           <td className="text-lg-end">

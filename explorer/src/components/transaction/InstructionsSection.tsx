@@ -5,7 +5,6 @@ import {
   ParsedInstruction,
   ParsedTransaction,
   PartiallyDecodedInstruction,
-  PublicKey,
   SignatureResult,
   TransactionSignature,
 } from "@solana/web3.js";

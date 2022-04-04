@@ -2,21 +2,30 @@ import React from "react";
 
 import { Account } from "providers/accounts";
 import { Address } from "components/common/Address";
-import { Program, BorshAccountsCoder } from "@project-serum/anchor";
+import { BorshAccountsCoder } from "@project-serum/anchor";
 import { capitalizeFirstLetter } from "utils/anchor";
 import { ErrorCard } from "components/common/ErrorCard";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 import ReactJson from "react-json-view";
+import { useCluster } from "providers/cluster";
+import { useAnchorProgram } from "providers/anchor";
 
 export function AnchorAccountCard({
   account,
-  program,
 }: {
   account: Account;
-  program: Program;
 }) {
+  const { url } = useCluster();
+  const program = useAnchorProgram(account.details?.owner.toString() ?? "", url);
+
+  if (!program) {
+    return (
+      <ErrorCard text={"Could not decode anchor program for this address"} />
+    );
+  }
+
   if (!account.details || !account.details.rawData) {
     return (
       <ErrorCard text={"This account is parsed as an SPL-native account"} />
