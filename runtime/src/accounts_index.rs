@@ -400,11 +400,16 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
 
 #[derive(Debug)]
 pub struct RootsTracker {
-    /// current set of roots alive in approx. the current epoch
+    /// Current roots where appendvecs or write cache has account data.
+    /// Constructed during load from snapshots.
+    /// Updated every time we add a new root or clean/shrink an append vec into irrelevancy.
+    /// Range is approximately the last N slots where N is # slots per epoch.
     pub(crate) alive_roots: RollingBitField,
-    /// Set of roots approx. within the current epoch that are roots now or were roots at one point in time.
+    /// Set of roots that are roots now or were roots at one point in time.
+    /// Range is approximately the last N slots where N is # slots per epoch.
     /// A root could remain here if all entries in the append vec at that root are cleaned/shrunk and there are no
-    ///  more entries that slot. 'alive_roots' will no longer contain such roots.
+    /// more entries for that slot. 'alive_roots' will no longer contain such roots.
+    /// This is a superset of 'alive_roots'
     pub(crate) historical_roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
