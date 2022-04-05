@@ -2663,6 +2663,38 @@ export class Connection {
     return res.result;
   }
 
+  getProgramAccountArgs = (
+    programId: PublicKey,
+    configOrCommitment?: GetProgramAccountsConfig | Commitment,
+  ) => {
+    const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
+  
+    let commitment;
+    let encoding;
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+      } else {
+        commitment = configOrCommitment.commitment;
+        encoding = configOrCommitment.encoding;
+  
+        if (configOrCommitment.dataSlice) {
+          extra.dataSlice = configOrCommitment.dataSlice;
+        }
+        if (configOrCommitment.filters) {
+          extra.filters = configOrCommitment.filters;
+        }
+      }
+    }
+  
+    return this._buildArgs(
+      [programId.toBase58()],
+      commitment,
+      encoding || 'base64',
+      extra,
+    );
+  };
+
   /**
    * Fetch all the accounts owned by the specified program id
    *
@@ -2672,32 +2704,7 @@ export class Connection {
     programId: PublicKey,
     configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
-    const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
-
-    let commitment;
-    let encoding;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding;
-
-        if (configOrCommitment.dataSlice) {
-          extra.dataSlice = configOrCommitment.dataSlice;
-        }
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
-    const args = this._buildArgs(
-      [programId.toBase58()],
-      commitment,
-      encoding || 'base64',
-      extra,
-    );
+    const args = this.getProgramAccountArgs(programId, configOrCommitment);
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(unsafeRes, jsonRpcResult(array(KeyedAccountInfoResult)));
     if ('error' in res) {
