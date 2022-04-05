@@ -1918,9 +1918,10 @@ pub fn package_and_archive_full_snapshot(
         Some(SnapshotType::FullSnapshot),
     )?;
 
-    crate::serde_snapshot::reserialize_bank(
+    crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
+        &bank.get_accounts_hash(),
     );
 
     let snapshot_package = SnapshotPackage::from(accounts_package);
@@ -1964,9 +1965,10 @@ pub fn package_and_archive_incremental_snapshot(
         )),
     )?;
 
-    crate::serde_snapshot::reserialize_bank(
+    crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
+        &bank.get_accounts_hash(),
     );
 
     let snapshot_package = SnapshotPackage::from(accounts_package);
