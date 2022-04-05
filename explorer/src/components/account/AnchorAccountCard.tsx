@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import { Account } from "providers/accounts";
 import { Address } from "components/common/Address";
@@ -19,49 +19,37 @@ export function AnchorAccountCard({ account }: { account: Account }) {
     url
   );
 
-  if (!program) {
-    return (
-      <ErrorCard text="Could not decode anchor program for this address" />
-    );
-  }
+  const { foundAccountLayoutName, decodedAnchorAccountData } = useMemo(() => {
+    let foundAccountLayoutName: string | undefined;
+    let decodedAnchorAccountData: { [key: string]: any } | undefined;
+    if (program && account.details && account.details.rawData) {
+      const accountBuffer = account.details.rawData;
+      const discriminator = accountBuffer.slice(0, 8);
 
-  if (!account.details || !account.details.rawData) {
-    return (
-      <ErrorCard text="This account is parsed as an SPL-native account" />
-    );
-  }
-  const accountBuffer = account.details.rawData;
+      // Iterate all the structs, see if any of the name-hashes match
+      Object.keys(program.account).forEach((accountType) => {
+        const layoutName = capitalizeFirstLetter(accountType);
+        const discriminatorToCheck =
+          BorshAccountsCoder.accountDiscriminator(layoutName);
 
-  const discriminator = accountBuffer.slice(0, 8) ?? undefined;
-  if (!discriminator) {
-    return <ErrorCard text="Failed to find anchor account discriminator" />;
-  }
-
-  let foundAccountLayoutName: string | undefined;
-  let decodedAnchorAccountData: Object | undefined;
-  if (program) {
-    // Iterate all the structs, see if any of the name-hashes match
-    Object.keys(program.account).forEach((accountType) => {
-      const layoutName = capitalizeFirstLetter(accountType);
-      const discriminatorToCheck =
-        BorshAccountsCoder.accountDiscriminator(layoutName);
-
-      if (discriminatorToCheck.equals(discriminator)) {
-        foundAccountLayoutName = layoutName;
-        const accountDecoder = program.account[accountType];
-        decodedAnchorAccountData = accountDecoder.coder.accounts.decode(
-          layoutName,
-          accountBuffer
-        );
-      }
-    });
-  }
+        if (discriminatorToCheck.equals(discriminator)) {
+          foundAccountLayoutName = layoutName;
+          const accountDecoder = program.account[accountType];
+          decodedAnchorAccountData = accountDecoder.coder.accounts.decode(
+            layoutName,
+            accountBuffer
+          );
+        }
+      });
+    }
+    return { foundAccountLayoutName, decodedAnchorAccountData };
+  }, [program, account.details]);
 
   if (!foundAccountLayoutName || !decodedAnchorAccountData) {
     return (
       <ErrorCard
         text=
-          "Failed to find matching anchor account type for account discriminator"
+        "Failed to decode account data according to its public anchor interface"
       />
     );
   }
@@ -91,7 +79,6 @@ export function AnchorAccountCard({ account }: { account: Account }) {
                   <AccountRow
                     key={key}
                     valueName={key}
-                    // @ts-ignore
                     value={decodedAnchorAccountData[key]}
                   />
                 ))}
@@ -101,7 +88,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
         <div className="card-footer">
           <div className="text-muted text-center">
             {decodedAnchorAccountData &&
-            Object.keys(decodedAnchorAccountData).length > 0
+              Object.keys(decodedAnchorAccountData).length > 0
               ? `Decoded ${Object.keys(decodedAnchorAccountData).length} Items`
               : "No decoded data"}
           </div>
