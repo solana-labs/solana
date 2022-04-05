@@ -26,7 +26,7 @@ use {
         tower_storage::TowerStorage,
         voting_service::VotingService,
     },
-    crossbeam_channel::{unbounded, Receiver},
+    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -62,6 +62,7 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
+        time::Duration,
     },
 };
 
@@ -361,6 +362,22 @@ impl Tvu {
     }
 
     pub fn join(self) -> thread::Result<()> {
+        // spawn a new thread to wait for tvu close
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            self.do_join();
+            sender.send(()).unwrap();
+        });
+
+        // timeout of 10s for closing tvu
+        let timeout = Duration::from_secs(10);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            error!("timeout for closing tvu");
+        }
+        Ok(())
+    }
+
+    fn do_join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
