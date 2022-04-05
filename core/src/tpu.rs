@@ -38,6 +38,9 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
+/// Timeout interval when joining threads during TPU close
+pub const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
+
 // allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
 
@@ -217,7 +220,7 @@ impl Tpu {
         });
 
         // timeout of 10s for closing tpu
-        let timeout = Duration::from_secs(10);
+        let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             error!("timeout for closing tvu");
         }

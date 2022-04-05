@@ -66,6 +66,9 @@ use {
     },
 };
 
+/// Timeout interval when joining threads during TVU close
+pub const TVU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
+
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
     sigverify_stage: SigVerifyStage,
@@ -370,7 +373,7 @@ impl Tvu {
         });
 
         // timeout of 10s for closing tvu
-        let timeout = Duration::from_secs(10);
+        let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             error!("timeout for closing tvu");
         }
