@@ -71,6 +71,7 @@ type RpcBatchRequest = (requests: RpcParams[]) => any;
  * @internal
  */
 export type RpcParams = {
+  id?: string;
   methodName: string;
   args: Array<any>;
 };
@@ -922,7 +923,7 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
       if (requests.length === 0) resolve([]);
 
       const batch = requests.map((params: RpcParams) => {
-        return client.request(params.methodName, params.args);
+        return client.request(params.methodName, params.args, params?.id);
       });
 
       client.request(batch, (err: any, response: any) => {
