@@ -5472,49 +5472,78 @@ mod tests {
 
     #[test]
     fn test_merge_invalid_account_data() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let authorized_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let merge_from_address = solana_sdk::pubkey::new_rand();
+        let authorized_address = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
-        let signers = vec![authorized_pubkey].into_iter().collect();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: merge_from_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authorized_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
 
         for state in &[
             StakeState::Uninitialized,
             StakeState::RewardsPool,
-            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
-            StakeState::Stake(Meta::auto(&authorized_pubkey), just_stake(stake_lamports)),
+            StakeState::Initialized(Meta::auto(&authorized_address)),
+            just_stake(Meta::auto(&authorized_address), stake_lamports),
         ] {
-            for source_state in &[StakeState::Uninitialized, StakeState::RewardsPool] {
-                let stake_account = AccountSharedData::new_ref_data_with_space(
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            for merge_from_state in &[StakeState::Uninitialized, StakeState::RewardsPool] {
+                let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
-                    state,
+                    merge_from_state,
                     std::mem::size_of::<StakeState>(),
                     &id(),
                 )
-                .expect("stake_account");
-                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-                let source_stake_account = AccountSharedData::new_ref_data_with_space(
-                    stake_lamports,
-                    source_state,
-                    std::mem::size_of::<StakeState>(),
-                    &id(),
-                )
-                .expect("source_stake_account");
-                let source_stake_keyed_account =
-                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
-
-                assert_eq!(
-                    stake_keyed_account.merge(
-                        &invoke_context,
-                        &source_stake_keyed_account,
-                        &Clock::default(),
-                        &StakeHistory::default(),
-                        &signers,
+                .unwrap();
+                let transaction_accounts = vec![
+                    (stake_address, stake_account.clone()),
+                    (merge_from_address, merge_from_account),
+                    (authorized_address, AccountSharedData::default()),
+                    (
+                        sysvar::clock::id(),
+                        account::create_account_shared_data_for_test(&Clock::default()),
                     ),
-                    Err(InstructionError::InvalidAccountData)
+                    (
+                        sysvar::stake_history::id(),
+                        account::create_account_shared_data_for_test(&StakeHistory::default()),
+                    ),
+                ];
+
+                process_instruction(
+                    &serialize(&StakeInstruction::Merge).unwrap(),
+                    transaction_accounts,
+                    instruction_accounts.clone(),
+                    Err(InstructionError::InvalidAccountData),
                 );
             }
         }
