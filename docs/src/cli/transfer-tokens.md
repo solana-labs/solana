@@ -31,7 +31,9 @@ solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 ```
 
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
-public key/wallet address.
+public key/wallet address. 
+
+Note: there is a limit of 2 tokens per request and a cap of 24 tokens per address per day.
 
 #### Check your balance
 
