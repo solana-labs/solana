@@ -40,7 +40,8 @@ use {
     },
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
+            SnapshotRequestHandler,
         },
         accounts_db::AccountShrinkThreshold,
         bank_forks::BankForks,
@@ -57,7 +58,6 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
-        boxed::Box,
         collections::HashSet,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
@@ -147,6 +147,7 @@ impl Tvu {
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
+        pruned_banks_receiver: DroppedSlotsReceiver,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -245,23 +246,6 @@ impl Tvu {
                 )
             }
         };
-
-        let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
-
-        // Before replay starts, set the callbacks in each of the banks in BankForks
-        // Note after this callback is created, only the AccountsBackgroundService should be calling
-        // AccountsDb::purge_slot() to clean up dropped banks.
-        let callback = bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .rc
-            .accounts
-            .accounts_db
-            .create_drop_bank_callback(pruned_banks_sender);
-        for bank in bank_forks.read().unwrap().banks().values() {
-            bank.set_callback(Some(Box::new(callback.clone())));
-        }
 
         let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
 
@@ -462,6 +446,7 @@ pub mod tests {
         let tower = Tower::default();
         let accounts_package_channel = unbounded();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -511,6 +496,7 @@ pub mod tests {
             None,
             None,
             None,
+            pruned_banks_receiver,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
