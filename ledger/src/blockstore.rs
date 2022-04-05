@@ -90,6 +90,7 @@ thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::ne
                     .build()
                     .unwrap()));
 
+pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
@@ -464,7 +465,7 @@ impl Blockstore {
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
         let blockstore = Self::open_with_options(ledger_path, options)?;
-        let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
+        let (ledger_signal_sender, ledger_signal_receiver) = bounded(MAX_REPLAY_WAKE_UP_SIGNALS);
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
@@ -3427,7 +3428,15 @@ fn send_signals(
 ) {
     if should_signal {
         for signal in new_shreds_signals {
-            let _ = signal.try_send(true);
+            match signal.try_send(true) {
+                Ok(_) => {}
+                Err(TrySendError::Full(_)) => {
+                    trace!("replay wake up signal channel is full.")
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    trace!("replay wake up signal channel is disconnected.")
+                }
+            }
         }
     }
 
