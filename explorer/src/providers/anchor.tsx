@@ -5,7 +5,7 @@ import { NodeWallet } from "@metaplex/js";
 const cachedAnchorProgramPromises: Record<
   string,
   | void
-  | { __type: "promise"; promise: Promise<Program<Idl> | null> }
+  | { __type: "promise"; promise: Promise<void> }
   | { __type: "result"; result: Program<Idl> | null }
 > = {};
 
@@ -26,11 +26,9 @@ export function useAnchorProgram(
           __type: "result",
           result: program,
         };
-        return program;
       })
       .catch((_) => {
         cachedAnchorProgramPromises[key] = { __type: "result", result: null };
-        return null;
       });
     cachedAnchorProgramPromises[key] = {
       __type: "promise",

@@ -21,20 +21,20 @@ export function AnchorAccountCard({ account }: { account: Account }) {
 
   if (!program) {
     return (
-      <ErrorCard text={"Could not decode anchor program for this address"} />
+      <ErrorCard text="Could not decode anchor program for this address" />
     );
   }
 
   if (!account.details || !account.details.rawData) {
     return (
-      <ErrorCard text={"This account is parsed as an SPL-native account"} />
+      <ErrorCard text="This account is parsed as an SPL-native account" />
     );
   }
   const accountBuffer = account.details.rawData;
 
   const discriminator = accountBuffer.slice(0, 8) ?? undefined;
   if (!discriminator) {
-    return <ErrorCard text={"Failed to find anchor account discriminator"} />;
+    return <ErrorCard text="Failed to find anchor account discriminator" />;
   }
 
   let foundAccountLayoutName: string | undefined;
@@ -60,9 +60,8 @@ export function AnchorAccountCard({ account }: { account: Account }) {
   if (!foundAccountLayoutName || !decodedAnchorAccountData) {
     return (
       <ErrorCard
-        text={
+        text=
           "Failed to find matching anchor account type for account discriminator"
-        }
       />
     );
   }
@@ -154,14 +153,12 @@ function stringifyPubkeyAndBigNums(object: Object): Object {
     } else if (!(object instanceof Object)) {
       return object;
     } else {
-      const parsedObject = {};
+      const parsedObject: { [key: string]: Object } = {};
       Object.keys(object).map((key) => {
-        // @ts-ignore
-        let value = object[key];
+        let value = (object as { [key: string]: any })[key];
         if (value instanceof Object) {
           value = stringifyPubkeyAndBigNums(value);
         }
-        // @ts-ignore
         parsedObject[key] = value;
         return null;
       });
