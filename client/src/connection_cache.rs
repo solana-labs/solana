@@ -73,7 +73,7 @@ fn get_connection(addr: &SocketAddr) -> Connection {
                 Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
             };
 
-            map.map.put(addr.clone(), connection.clone());
+            map.map.put(*addr, connection.clone());
             connection
         }
     }
