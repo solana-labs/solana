@@ -5306,19 +5306,15 @@ mod tests {
 
     #[test]
     fn test_merge_self_fails() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let stake_address = Pubkey::new_unique();
-        let authority_pubkey = Pubkey::new_unique();
-        let signers = HashSet::from_iter(vec![authority_pubkey]);
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let authorized_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_amount = 4242424242;
         let stake_lamports = rent_exempt_reserve + stake_amount;
-
         let meta = Meta {
             rent_exempt_reserve,
-            ..Meta::auto(&authority_pubkey)
+            ..Meta::auto(&authorized_address)
         };
         let stake = Stake {
             delegation: Delegation {
@@ -5328,23 +5324,57 @@ mod tests {
             },
             ..Stake::default()
         };
-        let stake_account = AccountSharedData::new_ref_data_with_space(
+        let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Stake(meta, stake),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-        let stake_keyed_account = KeyedAccount::new(&stake_address, true, &stake_account);
-
-        assert_eq!(
-            stake_keyed_account.merge(
-                &invoke_context,
-                &stake_keyed_account,
-                &Clock::default(),
-                &StakeHistory::default(),
-                &signers,
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account),
+            (authorized_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
             ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authorized_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        process_instruction(
+            &serialize(&StakeInstruction::Merge).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
             Err(InstructionError::InvalidArgument),
         );
     }
