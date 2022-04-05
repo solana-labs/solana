@@ -507,9 +507,8 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
   tabComponents.push({
     tab: anchorProgramTab,
     component: (
-      <React.Suspense fallback={<></>}>
+      <React.Suspense key={anchorProgramTab.slug} fallback={<></>}>
         <AnchorProgramLink
-          key={anchorProgramTab.slug}
           tab={anchorProgramTab}
           address={pubkey.toString()}
           pubkey={pubkey}
@@ -526,9 +525,8 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
   tabComponents.push({
     tab: anchorAccountTab,
     component: (
-      <React.Suspense fallback={<></>}>
+      <React.Suspense key={anchorAccountTab.slug} fallback={<></>}>
         <AnchorAccountLink
-          key={anchorAccountTab.slug}
           tab={anchorAccountTab}
           address={pubkey.toString()}
           programId={account.details?.owner}
