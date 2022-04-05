@@ -101,7 +101,7 @@ impl SnapshotRequestHandler {
         self.snapshot_request_receiver
             .try_iter()
             .last()
-            .filter(|snapshot_request| {
+            .filter(|_snapshot_request| {
                 self.no_serve_snapshots
                 } )
             .map(|snapshot_request| {

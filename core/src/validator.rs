@@ -870,7 +870,7 @@ impl Validator {
         let rpc_completed_slots_service =
             RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
 
-        let no_serve_snapshots = Arc::new(bool::new(config.no_serve_snapshots));
+        let no_serve_snapshots = config.no_serve_snapshots;
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
