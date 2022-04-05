@@ -70,6 +70,13 @@ pub struct TransactionParams {
         help = "Payer's keypair file to fund transactions [Optional]"
     )]
     pub payer_filename: Option<String>,
+
+    #[clap(
+        long,
+        default_value = "2",
+        help = "Number of threads generating transactions"
+    )]
+    pub num_gen_threads: usize,
 }
 
 #[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]

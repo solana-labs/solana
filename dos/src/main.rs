@@ -440,11 +440,10 @@ fn run_dos_transactions(
     let rpc_client = Arc::new(rpc_client.unwrap());
     let payer = Arc::new(payer);
     info!("{:?}", transaction_params);
+    let num_gen_threads = transaction_params.num_gen_threads;
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
 
     let (tx_sender, tx_receiver) = unbounded();
-
-    let num_gen_threads: usize = 8;
 
     let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target);
 
@@ -725,6 +724,7 @@ pub mod test {
                     valid_signatures: false,
                     unique_transactions: false,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -750,6 +750,7 @@ pub mod test {
                     valid_signatures: false,
                     unique_transactions: true,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -776,6 +777,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -800,6 +802,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -824,6 +827,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -859,6 +863,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -912,7 +917,7 @@ pub mod test {
         // will fail with error processing Instruction 0: missing required signature for instruction
         run_dos(
             &nodes_slice,
-            100000,
+            10000,
             None,
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
@@ -928,6 +933,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     payer_filename: None,
+                    num_gen_threads: 1,
                 },
             },
         );
