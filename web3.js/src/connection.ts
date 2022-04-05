@@ -2668,7 +2668,7 @@ export class Connection {
     configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ) => {
     const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
-  
+
     let commitment;
     let encoding;
     if (configOrCommitment) {
@@ -2677,7 +2677,7 @@ export class Connection {
       } else {
         commitment = configOrCommitment.commitment;
         encoding = configOrCommitment.encoding;
-  
+
         if (configOrCommitment.dataSlice) {
           extra.dataSlice = configOrCommitment.dataSlice;
         }
@@ -2686,7 +2686,7 @@ export class Connection {
         }
       }
     }
-  
+
     return this._buildArgs(
       [programId.toBase58()],
       commitment,
