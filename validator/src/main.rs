@@ -1547,6 +1547,12 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("no_serve_snapshots")
+                .long("no-serve-snapshots")
+                .help("Inhibit serving on snapshots. \
+                      This option is for use during snapshot format transitions. "),
+        )
+        .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
                 .long("accounts-db-cache-limit-mb")
                 .value_name("MEGABYTES")
@@ -2451,6 +2457,7 @@ pub fn main() {
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
+        no_serve_snapshots: matches.is_present("no_serve_snapshots"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
