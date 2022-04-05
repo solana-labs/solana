@@ -528,6 +528,7 @@ impl RetransmitStage {
 
 #[cfg(test)]
 mod tests {
+<<<<<<< HEAD
     use {
         super::*,
         solana_gossip::contact_info::ContactInfo,
@@ -617,6 +618,9 @@ mod tests {
         assert_eq!(packet_batch.packets.len(), 1);
         assert!(!packet_batch.packets[0].meta.repair());
     }
+=======
+    use super::*;
+>>>>>>> 228257149 (removes outdated and flaky test_skip_repair from retransmit-stage (#24121))
 
     #[test]
     fn test_already_received() {
