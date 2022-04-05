@@ -33,7 +33,13 @@ solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
 public key/wallet address. 
 
-Note: there is a limit of 2 tokens per request and a cap of 24 tokens per address per day.
+A response with the signature of the transaction will be returned. If the balance
+of the address does not change by the expected amount, run the following command
+for more information on what potentially went wrong:
+
+```bash
+solana confirm -v <TRANSACTION_SIGNATURE>
+```
 
 #### Check your balance
 
