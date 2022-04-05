@@ -2,12 +2,14 @@
 use {
     crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError},
     itertools::Itertools,
+    rand::SeedableRng,
+    rand_chacha::ChaChaRng,
     rayon::{iter::ParallelIterator, prelude::*},
     serial_test::serial,
     solana_gossip::{
         cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
-        weighted_shuffle::weighted_shuffle,
+        weighted_shuffle::WeightedShuffle,
     },
     solana_sdk::{pubkey::Pubkey, signer::keypair::Keypair},
     solana_streamer::socket::SocketAddrSpace,
@@ -95,11 +97,13 @@ fn shuffle_peers_and_index(
 }
 
 fn stake_weighted_shuffle(stakes_and_index: &[(u64, usize)], seed: [u8; 32]) -> Vec<(u64, usize)> {
-    let stake_weights = stakes_and_index.iter().map(|(w, _)| *w);
-
-    let shuffle = weighted_shuffle(stake_weights, seed);
-
-    shuffle.iter().map(|x| stakes_and_index[*x]).collect()
+    let mut rng = ChaChaRng::from_seed(seed);
+    let stake_weights: Vec<_> = stakes_and_index.iter().map(|(w, _)| *w).collect();
+    let shuffle = WeightedShuffle::new("stake_weighted_shuffle", &stake_weights);
+    shuffle
+        .shuffle(&mut rng)
+        .map(|i| stakes_and_index[i])
+        .collect()
 }
 
 fn retransmit(
