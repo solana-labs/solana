@@ -365,7 +365,7 @@ impl Tvu {
         // spawn a new thread to wait for tvu close
         let (sender, receiver) = bounded(0);
         let _ = thread::spawn(move || {
-            self.do_join();
+            let _ = self.do_join();
             sender.send(()).unwrap();
         });
 
