@@ -128,14 +128,14 @@ const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
-    filler_accounts_config: FillerAccountsConfig { count: 0, size: 0 },
+    filler_accounts_config: FillerAccountsConfig::const_default(),
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
-    filler_accounts_config: FillerAccountsConfig { count: 0, size: 0 },
+    filler_accounts_config: FillerAccountsConfig::const_default(),
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
 };
@@ -148,12 +148,24 @@ pub struct AccountsAddRootTiming {
     pub store_us: u64,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct FillerAccountsConfig {
     /// Number of filler accounts
     pub count: usize,
     /// Data size per account, in bytes
     pub size: usize,
+}
+
+impl FillerAccountsConfig {
+    pub const fn const_default() -> Self {
+        Self { count: 0, size: 0 }
+    }
+}
+
+impl Default for FillerAccountsConfig {
+    fn default() -> Self {
+        Self::const_default()
+    }
 }
 
 #[derive(Debug, Default, Clone)]
