@@ -54,9 +54,7 @@ fn get_connection(addr: &SocketAddr) -> Connection {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
     match map.map.get(addr) {
-        Some(connection) => {
-            connection.clone()
-        }
+        Some(connection) => connection.clone(),
         None => {
             let (_, send_socket) = solana_net_utils::bind_in_range(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
