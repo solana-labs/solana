@@ -16,7 +16,11 @@ use {
         },
         sorted_storages::SortedStorages,
     },
-    solana_sdk::{clock::{Slot, SLOT_MS}, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{
+        clock::{Slot, SLOT_MS},
+        hash::Hash,
+        pubkey::Pubkey,
+    },
     std::{
         collections::{HashMap, HashSet},
         sync::{
