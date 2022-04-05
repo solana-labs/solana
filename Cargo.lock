@@ -4549,7 +4549,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-clap-utils-v3"
+name = "solana-clap-v3-utils"
 version = "1.11.0"
 dependencies = [
  "chrono",
