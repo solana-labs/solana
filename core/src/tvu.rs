@@ -373,7 +373,7 @@ impl Tvu {
         });
 
         // timeout of 10s for closing tvu
-        let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
+        let timeout = Duration::from_secs(TVU_THREADS_JOIN_TIMEOUT_SECONDS);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             error!("timeout for closing tvu");
         }
