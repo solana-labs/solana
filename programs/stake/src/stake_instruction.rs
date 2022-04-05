@@ -359,8 +359,8 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            system_program,
-            sysvar::{self, stake_history::StakeHistory},
+            stake_history::{StakeHistory, StakeHistoryEntry},
+            system_program, sysvar,
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
         std::{collections::HashSet, str::FromStr},
@@ -5620,23 +5620,19 @@ mod tests {
 
     #[test]
     fn test_merge_active_stake() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let merge_from_address = solana_sdk::pubkey::new_rand();
+        let authorized_address = solana_sdk::pubkey::new_rand();
         let base_lamports = 4242424242;
-        let stake_address = Pubkey::new_unique();
-        let source_address = Pubkey::new_unique();
-        let authority_pubkey = Pubkey::new_unique();
-        let signers = HashSet::from_iter(vec![authority_pubkey]);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_amount = base_lamports;
         let stake_lamports = rent_exempt_reserve + stake_amount;
-        let source_amount = base_lamports;
-        let source_lamports = rent_exempt_reserve + source_amount;
-
+        let merge_from_amount = base_lamports;
+        let merge_from_lamports = rent_exempt_reserve + merge_from_amount;
         let meta = Meta {
             rent_exempt_reserve,
-            ..Meta::auto(&authority_pubkey)
+            ..Meta::auto(&authorized_address)
         };
         let mut stake = Stake {
             delegation: Delegation {
@@ -5646,37 +5642,31 @@ mod tests {
             },
             ..Stake::default()
         };
-        let stake_account = AccountSharedData::new_ref_data_with_space(
+        let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Stake(meta, stake),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");
-        let stake_keyed_account = KeyedAccount::new(&stake_address, true, &stake_account);
-
-        let source_activation_epoch = 2;
-        let mut source_stake = Stake {
+        .unwrap();
+        let merge_from_activation_epoch = 2;
+        let mut merge_from_stake = Stake {
             delegation: Delegation {
-                stake: source_amount,
-                activation_epoch: source_activation_epoch,
+                stake: merge_from_amount,
+                activation_epoch: merge_from_activation_epoch,
                 ..stake.delegation
             },
             ..stake
         };
-        let source_account = AccountSharedData::new_ref_data_with_space(
-            source_lamports,
-            &StakeState::Stake(meta, source_stake),
+        let merge_from_account = AccountSharedData::new_data_with_space(
+            merge_from_lamports,
+            &StakeState::Stake(meta, merge_from_stake),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("source_account");
-        let source_keyed_account = KeyedAccount::new(&source_address, true, &source_account);
-
+        .unwrap();
         let mut clock = Clock::default();
         let mut stake_history = StakeHistory::default();
-
-        clock.epoch = 0;
         let mut effective = base_lamports;
         let mut activating = stake_amount;
         let mut deactivating = 0;
@@ -5688,60 +5678,84 @@ mod tests {
                 deactivating,
             },
         );
+        let mut transaction_accounts = vec![
+            (stake_address, stake_account),
+            (merge_from_address, merge_from_account),
+            (authorized_address, AccountSharedData::default()),
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            ),
+            (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&stake_history),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: merge_from_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authorized_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
 
         fn try_merge(
-            invoke_context: &InvokeContext,
-            stake_account: &KeyedAccount,
-            source_account: &KeyedAccount,
-            clock: &Clock,
-            stake_history: &StakeHistory,
-            signers: &HashSet<Pubkey>,
-        ) -> Result<(), InstructionError> {
-            let test_stake_account = stake_account.account.clone();
-            let test_stake_keyed =
-                KeyedAccount::new(stake_account.unsigned_key(), true, &test_stake_account);
-            let test_source_account = source_account.account.clone();
-            let test_source_keyed =
-                KeyedAccount::new(source_account.unsigned_key(), true, &test_source_account);
-
-            let result = test_stake_keyed.merge(
-                invoke_context,
-                &test_source_keyed,
-                clock,
-                stake_history,
-                signers,
-            );
-            if result.is_ok() {
-                assert_eq!(test_source_keyed.state(), Ok(StakeState::Uninitialized));
+            transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+            mut instruction_accounts: Vec<AccountMeta>,
+            expected_result: Result<(), InstructionError>,
+        ) {
+            for iteration in 0..2 {
+                if iteration == 1 {
+                    instruction_accounts.swap(0, 1);
+                }
+                let accounts = process_instruction_with_sysvar_cache(
+                    &serialize(&StakeInstruction::Merge).unwrap(),
+                    transaction_accounts.clone(),
+                    instruction_accounts.clone(),
+                    None,
+                    expected_result.clone(),
+                );
+                if expected_result.is_ok() {
+                    assert_eq!(
+                        accounts[1 - iteration].state(),
+                        Ok(StakeState::Uninitialized)
+                    );
+                }
             }
-            result
         }
 
         // stake activation epoch, source initialized succeeds
-        assert!(try_merge(
-            &invoke_context,
-            &stake_keyed_account,
-            &source_keyed_account,
-            &clock,
-            &stake_history,
-            &signers
-        )
-        .is_ok());
-        assert!(try_merge(
-            &invoke_context,
-            &source_keyed_account,
-            &stake_keyed_account,
-            &clock,
-            &stake_history,
-            &signers
-        )
-        .is_ok());
+        try_merge(
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
 
         // both activating fails
         loop {
             clock.epoch += 1;
-            if clock.epoch == source_activation_epoch {
-                activating += source_amount;
+            if clock.epoch == merge_from_activation_epoch {
+                activating += merge_from_amount;
             }
             let delta =
                 activating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
@@ -5755,49 +5769,35 @@ mod tests {
                     deactivating,
                 },
             );
+            transaction_accounts[3] = (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            );
+            transaction_accounts[4] = (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&stake_history),
+            );
             if stake_amount == stake.stake(clock.epoch, Some(&stake_history))
-                && source_amount == source_stake.stake(clock.epoch, Some(&stake_history))
+                && merge_from_amount == merge_from_stake.stake(clock.epoch, Some(&stake_history))
             {
                 break;
             }
-            assert_eq!(
-                try_merge(
-                    &invoke_context,
-                    &stake_keyed_account,
-                    &source_keyed_account,
-                    &clock,
-                    &stake_history,
-                    &signers
-                )
-                .unwrap_err(),
-                InstructionError::from(StakeError::MergeTransientStake),
-            );
-            assert_eq!(
-                try_merge(
-                    &invoke_context,
-                    &source_keyed_account,
-                    &stake_keyed_account,
-                    &clock,
-                    &stake_history,
-                    &signers
-                )
-                .unwrap_err(),
-                InstructionError::from(StakeError::MergeTransientStake),
+            try_merge(
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::from(StakeError::MergeTransientStake)),
             );
         }
+
         // Both fully activated works
-        assert!(try_merge(
-            &invoke_context,
-            &stake_keyed_account,
-            &source_keyed_account,
-            &clock,
-            &stake_history,
-            &signers
-        )
-        .is_ok());
+        try_merge(
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
 
         // deactivate setup for deactivation
-        let source_deactivation_epoch = clock.epoch + 1;
+        let merge_from_deactivation_epoch = clock.epoch + 1;
         let stake_deactivation_epoch = clock.epoch + 2;
 
         // active/deactivating and deactivating/inactive mismatches fail
@@ -5816,21 +5816,23 @@ mod tests {
                     },
                     ..stake
                 };
-                stake_keyed_account
+                transaction_accounts[0]
+                    .1
                     .set_state(&StakeState::Stake(meta, stake))
                     .unwrap();
             }
-            if clock.epoch == source_deactivation_epoch {
-                deactivating += source_amount;
-                source_stake = Stake {
+            if clock.epoch == merge_from_deactivation_epoch {
+                deactivating += merge_from_amount;
+                merge_from_stake = Stake {
                     delegation: Delegation {
-                        deactivation_epoch: source_deactivation_epoch,
-                        ..source_stake.delegation
+                        deactivation_epoch: merge_from_deactivation_epoch,
+                        ..merge_from_stake.delegation
                     },
-                    ..source_stake
+                    ..merge_from_stake
                 };
-                source_keyed_account
-                    .set_state(&StakeState::Stake(meta, source_stake))
+                transaction_accounts[1]
+                    .1
+                    .set_state(&StakeState::Stake(meta, merge_from_stake))
                     .unwrap();
             }
             stake_history.add(
@@ -5841,46 +5843,27 @@ mod tests {
                     deactivating,
                 },
             );
+            transaction_accounts[3] = (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&clock),
+            );
+            transaction_accounts[4] = (
+                sysvar::stake_history::id(),
+                account::create_account_shared_data_for_test(&stake_history),
+            );
             if 0 == stake.stake(clock.epoch, Some(&stake_history))
-                && 0 == source_stake.stake(clock.epoch, Some(&stake_history))
+                && 0 == merge_from_stake.stake(clock.epoch, Some(&stake_history))
             {
                 break;
             }
-            assert_eq!(
-                try_merge(
-                    &invoke_context,
-                    &stake_keyed_account,
-                    &source_keyed_account,
-                    &clock,
-                    &stake_history,
-                    &signers
-                )
-                .unwrap_err(),
-                InstructionError::from(StakeError::MergeTransientStake),
-            );
-            assert_eq!(
-                try_merge(
-                    &invoke_context,
-                    &source_keyed_account,
-                    &stake_keyed_account,
-                    &clock,
-                    &stake_history,
-                    &signers
-                )
-                .unwrap_err(),
-                InstructionError::from(StakeError::MergeTransientStake),
+            try_merge(
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::from(StakeError::MergeTransientStake)),
             );
         }
 
         // Both fully deactivated works
-        assert!(try_merge(
-            &invoke_context,
-            &stake_keyed_account,
-            &source_keyed_account,
-            &clock,
-            &stake_history,
-            &signers
-        )
-        .is_ok());
+        try_merge(transaction_accounts, instruction_accounts, Ok(()));
     }
 }
