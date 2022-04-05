@@ -5179,91 +5179,112 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let authorized_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let merge_from_address = solana_sdk::pubkey::new_rand();
+        let authorized_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta::auto(&authorized_address);
         let stake_lamports = 42;
-
-        let signers = vec![authorized_pubkey].into_iter().collect();
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: merge_from_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: sysvar::stake_history::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: authorized_address,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
 
         for state in &[
-            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
-            StakeState::Stake(Meta::auto(&authorized_pubkey), just_stake(stake_lamports)),
+            StakeState::Initialized(meta),
+            just_stake(meta, stake_lamports),
         ] {
-            for source_state in &[
-                StakeState::Initialized(Meta::auto(&authorized_pubkey)),
-                StakeState::Stake(Meta::auto(&authorized_pubkey), just_stake(stake_lamports)),
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            for merge_from_state in &[
+                StakeState::Initialized(meta),
+                just_stake(meta, stake_lamports),
             ] {
-                let stake_account = AccountSharedData::new_ref_data_with_space(
+                let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
-                    state,
+                    merge_from_state,
                     std::mem::size_of::<StakeState>(),
                     &id(),
                 )
-                .expect("stake_account");
-                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-
-                let source_stake_account = AccountSharedData::new_ref_data_with_space(
-                    stake_lamports,
-                    source_state,
-                    std::mem::size_of::<StakeState>(),
-                    &id(),
-                )
-                .expect("source_stake_account");
-                let source_stake_keyed_account =
-                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+                .unwrap();
+                let transaction_accounts = vec![
+                    (stake_address, stake_account.clone()),
+                    (merge_from_address, merge_from_account),
+                    (authorized_address, AccountSharedData::default()),
+                    (
+                        sysvar::clock::id(),
+                        account::create_account_shared_data_for_test(&Clock::default()),
+                    ),
+                    (
+                        sysvar::stake_history::id(),
+                        account::create_account_shared_data_for_test(&StakeHistory::default()),
+                    ),
+                ];
 
                 // Authorized staker signature required...
-                assert_eq!(
-                    stake_keyed_account.merge(
-                        &invoke_context,
-                        &source_stake_keyed_account,
-                        &Clock::default(),
-                        &StakeHistory::default(),
-                        &HashSet::new(),
-                    ),
-                    Err(InstructionError::MissingRequiredSignature)
+                instruction_accounts[4].is_signer = false;
+                process_instruction(
+                    &serialize(&StakeInstruction::Merge).unwrap(),
+                    transaction_accounts.clone(),
+                    instruction_accounts.clone(),
+                    Err(InstructionError::MissingRequiredSignature),
                 );
+                instruction_accounts[4].is_signer = true;
 
-                assert_eq!(
-                    stake_keyed_account.merge(
-                        &invoke_context,
-                        &source_stake_keyed_account,
-                        &Clock::default(),
-                        &StakeHistory::default(),
-                        &signers,
-                    ),
-                    Ok(())
+                let accounts = process_instruction(
+                    &serialize(&StakeInstruction::Merge).unwrap(),
+                    transaction_accounts,
+                    instruction_accounts.clone(),
+                    Ok(()),
                 );
 
                 // check lamports
-                assert_eq!(
-                    stake_keyed_account.account.borrow().lamports(),
-                    stake_lamports * 2
-                );
-                assert_eq!(source_stake_keyed_account.account.borrow().lamports(), 0);
+                assert_eq!(accounts[0].lamports(), stake_lamports * 2);
+                assert_eq!(accounts[1].lamports(), 0);
 
                 // check state
                 match state {
                     StakeState::Initialized(meta) => {
-                        assert_eq!(
-                            stake_keyed_account.state(),
-                            Ok(StakeState::Initialized(*meta)),
-                        );
+                        assert_eq!(accounts[0].state(), Ok(StakeState::Initialized(*meta)),);
                     }
                     StakeState::Stake(meta, stake) => {
                         let expected_stake = stake.delegation.stake
-                            + source_state
+                            + merge_from_state
                                 .stake()
                                 .map(|stake| stake.delegation.stake)
                                 .unwrap_or_else(|| {
                                     stake_lamports
-                                        - source_state.meta().unwrap().rent_exempt_reserve
+                                        - merge_from_state.meta().unwrap().rent_exempt_reserve
                                 });
                         assert_eq!(
-                            stake_keyed_account.state(),
+                            accounts[0].state(),
                             Ok(StakeState::Stake(
                                 *meta,
                                 Stake {
@@ -5278,10 +5299,7 @@ mod tests {
                     }
                     _ => unreachable!(),
                 }
-                assert_eq!(
-                    source_stake_keyed_account.state(),
-                    Ok(StakeState::Uninitialized)
-                );
+                assert_eq!(accounts[1].state(), Ok(StakeState::Uninitialized));
             }
         }
     }
