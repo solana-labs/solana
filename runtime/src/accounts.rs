@@ -57,6 +57,7 @@ use {
             Arc, Mutex,
         },
     },
+    thiserror::Error,
 };
 
 #[derive(Debug, Default, AbiExample)]
@@ -111,6 +112,9 @@ pub struct Accounts {
     /// set of read-only and writable accounts which are currently
     /// being processed by banking/replay threads
     pub(crate) account_locks: Mutex<AccountLocks>,
+
+    /// If true, all operations that modify the database (store and hash) will fail
+    immutable: bool,
 }
 
 // for the load instructions
@@ -131,11 +135,19 @@ pub enum AccountAddressFilter {
     Include, // only include addresses matching the filter
 }
 
+#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum AccountsError {
+    #[error("Attempted to write to accounts db from immutable Accounts")]
+    InvalidWriteToImmutable,
+}
+pub type AccountsResult<T> = std::result::Result<T, AccountsError>;
+
 impl Accounts {
     pub fn default_for_tests() -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::default_for_tests()),
             account_locks: Mutex::default(),
+            immutable: false,
         }
     }
 
@@ -195,6 +207,7 @@ impl Accounts {
                 accounts_update_notifier,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
+            immutable: false,
         }
     }
 
@@ -202,15 +215,16 @@ impl Accounts {
         parent: &Accounts,
         slot: Slot,
         parent_slot: Slot,
-        simulation_bank: bool,
+        immutable: bool,
     ) -> Self {
         let accounts_db = parent.accounts_db.clone();
-        if !simulation_bank {
+        if !immutable {
             accounts_db.set_hash(slot, parent_slot);
         }
         Self {
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
+            immutable,
         }
     }
 
@@ -218,6 +232,7 @@ impl Accounts {
         Self {
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(AccountLocks::default()),
+            immutable: false,
         }
     }
 
@@ -780,22 +795,27 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
-    ) -> u64 {
-        let use_index = false;
-        let is_startup = false; // there may be conditions where this is called at startup.
-        self.accounts_db
-            .update_accounts_hash_with_index_option(
-                use_index,
-                debug_verify,
-                slot,
-                ancestors,
-                None,
-                can_cached_slot_be_unflushed,
-                epoch_schedule,
-                rent_collector,
-                is_startup,
-            )
-            .1
+    ) -> AccountsResult<u64> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            let use_index = false;
+            let is_startup = false; // there may be conditions where this is called at startup.
+            Ok(self
+                .accounts_db
+                .update_accounts_hash_with_index_option(
+                    use_index,
+                    debug_verify,
+                    slot,
+                    ancestors,
+                    None,
+                    can_cached_slot_be_unflushed,
+                    epoch_schedule,
+                    rent_collector,
+                    is_startup,
+                )
+                .1)
+        }
     }
 
     /// Only called from startup or test code.
@@ -1012,12 +1032,32 @@ impl Accounts {
     /// Slow because lock is held for 1 operation instead of many.
     /// WARNING: This noncached version is only to be used for tests/benchmarking
     /// as bypassing the cache in general is not supported
-    pub fn store_slow_uncached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
+    pub fn store_slow_uncached(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+    ) -> AccountsResult<()> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
+            Ok(())
+        }
     }
 
-    pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_cached(slot, &[(pubkey, account)]);
+    pub fn store_slow_cached(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+    ) -> AccountsResult<()> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            self.accounts_db.store_cached(slot, &[(pubkey, account)]);
+            Ok(())
+        }
     }
 
     fn lock_account(
@@ -1066,19 +1106,23 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_at(&self, slot: Slot) -> Hash {
-        self.bank_hash_info_at(slot).hash
+    pub fn bank_hash_at(&self, slot: Slot) -> AccountsResult<Hash> {
+        Ok(self.bank_hash_info_at(slot)?.hash)
     }
 
-    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
-        let delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
-        let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
-        let mut hash_info = bank_hashes
-            .get(&slot)
-            .expect("No bank hash was found for this bank, that should not be possible")
-            .clone();
-        hash_info.hash = delta_hash;
-        hash_info
+    pub fn bank_hash_info_at(&self, slot: Slot) -> AccountsResult<BankHashInfo> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            let delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
+            let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
+            let mut hash_info = bank_hashes
+                .get(&slot)
+                .expect("No bank hash was found for this bank, that should not be possible")
+                .clone();
+            hash_info.hash = delta_hash;
+            Ok(hash_info)
+        }
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
@@ -1174,29 +1218,43 @@ impl Accounts {
         blockhash: &Hash,
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
-    ) {
-        let accounts_to_store = self.collect_accounts_to_store(
-            txs,
-            res,
-            loaded,
-            rent_collector,
-            blockhash,
-            lamports_per_signature,
-            leave_nonce_on_success,
-        );
-        self.accounts_db.store_cached(slot, &accounts_to_store);
+    ) -> AccountsResult<()> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            let accounts_to_store = self.collect_accounts_to_store(
+                txs,
+                res,
+                loaded,
+                rent_collector,
+                blockhash,
+                lamports_per_signature,
+                leave_nonce_on_success,
+            );
+            self.accounts_db.store_cached(slot, &accounts_to_store);
+            Ok(())
+        }
     }
 
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) -> AccountsResult<()> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
+            Ok(())
+        }
     }
 
     /// Add a slot to root.  Root slots cannot be purged
-    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
-        self.accounts_db.add_root(slot)
+    pub fn add_root(&self, slot: Slot) -> AccountsResult<AccountsAddRootTiming> {
+        if self.immutable {
+            Err(AccountsError::InvalidWriteToImmutable)
+        } else {
+            Ok(self.accounts_db.add_root(slot))
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1356,7 +1414,9 @@ pub mod test_utils {
             let pubkey = solana_sdk::pubkey::new_rand();
             let account =
                 AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, &pubkey, &account);
+            accounts
+                .store_slow_uncached(slot, &pubkey, &account)
+                .unwrap();
             pubkeys.push(pubkey);
         }
     }
@@ -1367,7 +1427,9 @@ pub mod test_utils {
         for pubkey in pubkeys {
             let amount = thread_rng().gen_range(0, 10);
             let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, pubkey, &account);
+            accounts
+                .store_slow_uncached(slot, pubkey, &account)
+                .unwrap();
         }
     }
 }
@@ -1447,7 +1509,7 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
-            accounts.store_slow_uncached(0, &ka.0, &ka.1);
+            accounts.store_slow_uncached(0, &ka.0, &ka.1).unwrap();
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -2043,7 +2105,9 @@ mod tests {
 
         let invalid_table_key = Pubkey::new_unique();
         let invalid_table_account = AccountSharedData::default();
-        accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
+        accounts
+            .store_slow_uncached(0, &invalid_table_key, &invalid_table_account)
+            .unwrap();
 
         let address_table_lookup = MessageAddressTableLookup {
             account_key: invalid_table_key,
@@ -2075,7 +2139,9 @@ mod tests {
         let invalid_table_key = Pubkey::new_unique();
         let invalid_table_account =
             AccountSharedData::new(1, 0, &solana_address_lookup_table_program::id());
-        accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
+        accounts
+            .store_slow_uncached(0, &invalid_table_key, &invalid_table_account)
+            .unwrap();
 
         let address_table_lookup = MessageAddressTableLookup {
             account_key: invalid_table_key,
@@ -2119,7 +2185,9 @@ mod tests {
                 0,
             )
         };
-        accounts.store_slow_uncached(0, &table_key, &table_account);
+        accounts
+            .store_slow_uncached(0, &table_key, &table_account)
+            .unwrap();
 
         let address_table_lookup = MessageAddressTableLookup {
             account_key: table_key,
@@ -2153,13 +2221,19 @@ mod tests {
         // Load accounts owned by various programs into AccountsDb
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let account0 = AccountSharedData::new(1, 0, &Pubkey::new(&[2; 32]));
-        accounts.store_slow_uncached(0, &pubkey0, &account0);
+        accounts
+            .store_slow_uncached(0, &pubkey0, &account0)
+            .unwrap();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = AccountSharedData::new(1, 0, &Pubkey::new(&[2; 32]));
-        accounts.store_slow_uncached(0, &pubkey1, &account1);
+        accounts
+            .store_slow_uncached(0, &pubkey1, &account1)
+            .unwrap();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = AccountSharedData::new(1, 0, &Pubkey::new(&[3; 32]));
-        accounts.store_slow_uncached(0, &pubkey2, &account2);
+        accounts
+            .store_slow_uncached(0, &pubkey2, &account2)
+            .unwrap();
 
         let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[2; 32])));
         assert_eq!(loaded.len(), 2);
@@ -2420,7 +2494,9 @@ mod tests {
         let keypair = Keypair::new();
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+        accounts
+            .store_slow_uncached(0, &keypair.pubkey(), &account)
+            .unwrap();
 
         assert_eq!(
             accounts.load_executable_accounts(
@@ -2444,7 +2520,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_at(1);
+        accounts.bank_hash_at(1).unwrap();
     }
 
     #[test]
@@ -2569,10 +2645,18 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts
+            .store_slow_uncached(0, &keypair0.pubkey(), &account0)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair1.pubkey(), &account1)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair2.pubkey(), &account2)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair3.pubkey(), &account3)
+            .unwrap();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2679,9 +2763,15 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts
+            .store_slow_uncached(0, &keypair0.pubkey(), &account0)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair1.pubkey(), &account1)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair2.pubkey(), &account2)
+            .unwrap();
 
         let accounts_arc = Arc::new(accounts);
 
@@ -2765,10 +2855,18 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts
+            .store_slow_uncached(0, &keypair0.pubkey(), &account0)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair1.pubkey(), &account1)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair2.pubkey(), &account2)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair3.pubkey(), &account3)
+            .unwrap();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2828,10 +2926,18 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts
+            .store_slow_uncached(0, &keypair0.pubkey(), &account0)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair1.pubkey(), &account1)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair2.pubkey(), &account2)
+            .unwrap();
+        accounts
+            .store_slow_uncached(0, &keypair3.pubkey(), &account3)
+            .unwrap();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -3044,10 +3150,12 @@ mod tests {
             let pubkey = solana_sdk::pubkey::new_rand();
             let account =
                 AccountSharedData::new((i + 1) as u64, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(i, &pubkey, &account);
-            accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
+            accounts.store_slow_uncached(i, &pubkey, &account).unwrap();
+            accounts
+                .store_slow_uncached(i, &old_pubkey, &zero_account)
+                .unwrap();
             old_pubkey = pubkey;
-            accounts.add_root(i);
+            accounts.add_root(i).unwrap();
             if i % 1_000 == 0 {
                 info!("  store {}", i);
             }
@@ -3574,13 +3682,19 @@ mod tests {
 
         let pubkey0 = Pubkey::new_unique();
         let account0 = AccountSharedData::new(42, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey0, &account0);
+        accounts
+            .store_slow_uncached(0, &pubkey0, &account0)
+            .unwrap();
         let pubkey1 = Pubkey::new_unique();
         let account1 = AccountSharedData::new(42, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey1, &account1);
+        accounts
+            .store_slow_uncached(0, &pubkey1, &account1)
+            .unwrap();
         let pubkey2 = Pubkey::new_unique();
         let account2 = AccountSharedData::new(41, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey2, &account2);
+        accounts
+            .store_slow_uncached(0, &pubkey2, &account2)
+            .unwrap();
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
@@ -3805,5 +3919,69 @@ mod tests {
                 &sum, &account, &None
             ));
         }
+    }
+
+    #[test]
+    fn test_immutable_accounts_errors() {
+        let parent_accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        let accounts = Accounts::new_from_parent(&parent_accounts, 0, 0, true);
+        assert_eq!(
+            accounts.calculate_capitalization(
+                &Ancestors::default(),
+                Slot::default(),
+                false,
+                false,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
+            ),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
+        assert_eq!(
+            accounts.store_slow_uncached(
+                Slot::default(),
+                &Pubkey::default(),
+                &AccountSharedData::default()
+            ),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
+        assert_eq!(
+            accounts.store_slow_cached(
+                Slot::default(),
+                &Pubkey::default(),
+                &AccountSharedData::default()
+            ),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
+        assert_eq!(
+            accounts.bank_hash_info_at(Slot::default()),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
+        assert_eq!(
+            accounts.store_cached(
+                Slot::default(),
+                &[],
+                &[],
+                &mut [],
+                &RentCollector::default(),
+                &Hash::default(),
+                0,
+                false,
+            ),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
+        assert_eq!(
+            accounts.purge_slot(Slot::default(), BankId::default(), false),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
+        assert_eq!(
+            accounts.add_root(Slot::default()),
+            Err(AccountsError::InvalidWriteToImmutable)
+        );
     }
 }

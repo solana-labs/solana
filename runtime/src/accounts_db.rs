@@ -143,6 +143,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
+#[derive(Debug, PartialEq)]
 pub struct AccountsAddRootTiming {
     pub index_us: u64,
     pub cache_us: u64,

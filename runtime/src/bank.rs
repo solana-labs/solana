@@ -1585,7 +1585,7 @@ impl Bank {
                     &parent.rc.accounts,
                     slot,
                     parent.slot(),
-                    simulation_bank,
+                    simulation_bank, // simulation banks require immutable Accounts
                 )),
                 parent: RwLock::new(Some(parent.clone())),
                 slot,
@@ -1782,7 +1782,11 @@ impl Bank {
                     );
 
                     let (_, apply_feature_activations_time) = Measure::this(
-                        |_| new.apply_feature_activations(false, false),
+                        |_| {
+                            if !simulation_bank {
+                                new.apply_feature_activations(false, false)
+                            }
+                        },
                         (),
                         "apply_feature_activation",
                     );
@@ -1808,12 +1812,14 @@ impl Bank {
                     // After saving a snapshot of stakes, apply stake rewards and commission
                     let (_, update_rewards_with_thread_pool_time) = Measure::this(
                         |_| {
-                            new.update_rewards_with_thread_pool(
-                                parent_epoch,
-                                reward_calc_tracer,
-                                &thread_pool,
-                                &metrics,
-                            )
+                            if !simulation_bank {
+                                new.update_rewards_with_thread_pool(
+                                    parent_epoch,
+                                    reward_calc_tracer,
+                                    &thread_pool,
+                                    &metrics,
+                                )
+                            }
                         },
                         (),
                         "update_rewards_with_thread_pool",
@@ -3189,7 +3195,7 @@ impl Bank {
         let mut squash_accounts_time = Measure::start("squash_accounts_time");
         for slot in roots.iter().rev() {
             // root forks cannot be purged
-            let add_root_timing = self.rc.accounts.add_root(*slot);
+            let add_root_timing = self.rc.accounts.add_root(*slot).unwrap();
             total_index_us += add_root_timing.index_us;
             total_cache_us += add_root_timing.cache_us;
             total_store_us += add_root_timing.store_us;
@@ -4614,16 +4620,19 @@ impl Bank {
 
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
         let mut write_time = Measure::start("write_time");
-        self.rc.accounts.store_cached(
-            self.slot(),
-            sanitized_txs,
-            &execution_results,
-            loaded_txs,
-            &self.rent_collector,
-            &blockhash,
-            lamports_per_signature,
-            self.leave_nonce_on_success(),
-        );
+        self.rc
+            .accounts
+            .store_cached(
+                self.slot(),
+                sanitized_txs,
+                &execution_results,
+                loaded_txs,
+                &self.rent_collector,
+                &blockhash,
+                lamports_per_signature,
+                self.leave_nonce_on_success(),
+            )
+            .unwrap();
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
@@ -5583,7 +5592,8 @@ impl Bank {
         assert!(!self.freeze_started());
         self.rc
             .accounts
-            .store_slow_cached(self.slot(), pubkey, account);
+            .store_slow_cached(self.slot(), pubkey, account)
+            .unwrap();
 
         self.stakes_cache.check_and_store(pubkey, account);
     }
@@ -5962,7 +5972,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot());
+        let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot()).unwrap();
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
 
@@ -6075,14 +6085,17 @@ impl Bank {
 
     pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
         let can_cached_slot_be_unflushed = true; // implied yes
-        self.rc.accounts.calculate_capitalization(
-            &self.ancestors,
-            self.slot(),
-            can_cached_slot_be_unflushed,
-            debug_verify,
-            self.epoch_schedule(),
-            &self.rent_collector,
-        )
+        self.rc
+            .accounts
+            .calculate_capitalization(
+                &self.ancestors,
+                self.slot(),
+                can_cached_slot_be_unflushed,
+                debug_verify,
+                self.epoch_schedule(),
+                &self.rent_collector,
+            )
+            .unwrap()
     }
 
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
@@ -6910,7 +6923,8 @@ impl Drop for Bank {
             // Default case for tests
             self.rc
                 .accounts
-                .purge_slot(self.slot(), self.bank_id(), false);
+                .purge_slot(self.slot(), self.bank_id(), false)
+                .unwrap();
         }
     }
 }

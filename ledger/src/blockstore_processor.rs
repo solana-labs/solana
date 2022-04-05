@@ -1298,11 +1298,11 @@ fn load_frozen_forks(
                     for (pruned_slot, pruned_bank_id) in pruned_banks_receiver.try_iter() {
                         // Simulate this purge being from the AccountsBackgroundService
                         let is_from_abs = true;
-                        new_root_bank.rc.accounts.purge_slot(
-                            pruned_slot,
-                            pruned_bank_id,
-                            is_from_abs,
-                        );
+                        new_root_bank
+                            .rc
+                            .accounts
+                            .purge_slot(pruned_slot, pruned_bank_id, is_from_abs)
+                            .unwrap();
                     }
 
                     // Must be called after `squash()`, so that AccountsDb knows what

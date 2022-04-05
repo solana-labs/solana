@@ -184,10 +184,12 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account =
             AccountSharedData::new((i + 1) as u64, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(i, &pubkey, &account);
-        accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
+        accounts.store_slow_uncached(i, &pubkey, &account).unwrap();
+        accounts
+            .store_slow_uncached(i, &old_pubkey, &zero_account)
+            .unwrap();
         old_pubkey = pubkey;
-        accounts.add_root(i);
+        accounts.add_root(i).unwrap();
     }
     bencher.iter(|| {
         accounts.accounts_db.clean_accounts(None, false, None);
@@ -214,13 +216,15 @@ fn store_accounts_with_possible_contention<F: 'static>(
     ));
     let num_keys = 1000;
     let slot = 0;
-    accounts.add_root(slot);
+    accounts.add_root(slot).unwrap();
     let pubkeys: Arc<Vec<_>> = Arc::new(
         (0..num_keys)
             .map(|_| {
                 let pubkey = solana_sdk::pubkey::new_rand();
                 let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
-                accounts.store_slow_uncached(slot, &pubkey, &account);
+                accounts
+                    .store_slow_uncached(slot, &pubkey, &account)
+                    .unwrap();
                 pubkey
             })
             .collect(),
@@ -246,7 +250,9 @@ fn store_accounts_with_possible_contention<F: 'static>(
             // Write to a different slot than the one being read from. Because
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
-            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), account);
+            accounts
+                .store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), account)
+                .unwrap();
         }
     })
 }
@@ -409,7 +415,7 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         let lamports = rng.gen();
         let pubkey = Pubkey::new_unique();
         let account = AccountSharedData::new(lamports, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey, &account);
+        accounts.store_slow_uncached(0, &pubkey, &account).unwrap();
     }
     let ancestors = Ancestors::from(vec![0]);
     let bank_id = 0;
