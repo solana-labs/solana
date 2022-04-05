@@ -2261,8 +2261,8 @@ pub fn main() {
             .map(|mb| mb * MB);
 
     let filler_accounts_config = FillerAccountsConfig {
-        count: value_t!(matches, "accounts_filler_count", usize).unwrap(),
-        size: value_t!(matches, "accounts_filler_size", usize).unwrap(),
+        count: value_t_or_exit!(matches, "accounts_filler_count", usize),
+        size: value_t_or_exit!(matches, "accounts_filler_size", usize),
     };
 
     let mut accounts_db_config = AccountsDbConfig {
