@@ -65,6 +65,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
+        rent::Rent,
         timing::AtomicInterval,
     },
     std::{
@@ -6879,7 +6880,7 @@ impl AccountsDb {
     /// The filler accounts are added to each slot in the snapshot after index generation.
     /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
     /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
-    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule) {
+    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule, rent: &Rent) {
         if self.filler_accounts_config.count == 0 {
             return;
         }
@@ -6904,8 +6905,9 @@ impl AccountsDb {
         let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
         let hash = Hash::from_str(string).unwrap();
         let owner = Pubkey::from_str(string).unwrap();
-        let lamports = 100_000_000;
         let space = self.filler_accounts_config.size;
+        let rent_exempt_reserve = rent.minimum_balance(space);
+        let lamports = rent_exempt_reserve;
         let account = AccountSharedData::new(lamports, space, &owner);
         let added = AtomicUsize::default();
         for pass in 0..=passes {
