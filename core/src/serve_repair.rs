@@ -17,7 +17,7 @@ use {
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
         contact_info::ContactInfo,
-        weighted_shuffle::{weighted_best, weighted_shuffle},
+        weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::{
         ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
@@ -525,16 +525,17 @@ impl ServeRepair {
         if repair_peers.is_empty() {
             return Err(ClusterInfoError::NoPeers.into());
         }
-        let weights = cluster_slots.compute_weights_exclude_nonfrozen(slot, &repair_peers);
-        let mut sampled_validators = weighted_shuffle(
-            weights.into_iter().map(|(stake, _i)| stake),
-            solana_sdk::pubkey::new_rand().to_bytes(),
-        );
-        sampled_validators.truncate(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE);
-        Ok(sampled_validators
+        let (weights, index): (Vec<_>, Vec<_>) = cluster_slots
+            .compute_weights_exclude_nonfrozen(slot, &repair_peers)
             .into_iter()
+            .unzip();
+        let peers = WeightedShuffle::new("repair_request_ancestor_hashes", &weights)
+            .shuffle(&mut rand::thread_rng())
+            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
+            .map(|i| index[i])
             .map(|i| (repair_peers[i].id, repair_peers[i].serve_repair))
-            .collect())
+            .collect();
+        Ok(peers)
     }
 
     pub fn repair_request_duplicate_compute_best_peer(
@@ -547,8 +548,12 @@ impl ServeRepair {
         if repair_peers.is_empty() {
             return Err(ClusterInfoError::NoPeers.into());
         }
-        let weights = cluster_slots.compute_weights_exclude_nonfrozen(slot, &repair_peers);
-        let n = weighted_best(&weights, solana_sdk::pubkey::new_rand().to_bytes());
+        let (weights, index): (Vec<_>, Vec<_>) = cluster_slots
+            .compute_weights_exclude_nonfrozen(slot, &repair_peers)
+            .into_iter()
+            .unzip();
+        let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
+        let n = index[k];
         Ok((repair_peers[n].id, repair_peers[n].serve_repair))
     }
 
