@@ -52,6 +52,7 @@
 use {
     crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
     bincode::config::Options,
+    generic_array::{typenum::U192, GenericArray},
     num_derive::FromPrimitive,
     num_traits::FromPrimitive,
     rayon::{prelude::*, ThreadPool},
@@ -106,7 +107,8 @@ pub type Nonce = u32;
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
+//pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
+pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83 + 32 + 192;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
 pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
@@ -197,6 +199,42 @@ impl<'de> Deserialize<'de> for ShredType {
     }
 }
 
+/*
+#[wasm_bindgen]
+#[derive(
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    BorshSchema,
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    AbiExample,
+)]
+#[repr(transparent)]
+pub struct Hash(pub(crate) [u8; HASH_BYTES]);
+
+#[repr(transparent)]
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+)]
+pub struct Signature(GenericArray<u8, U64>);
+*/
+
+#[repr(transparent)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct MerkleRootHash(pub [u8; 32]);
+
+#[repr(transparent)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct MerkelProofBytes(pub GenericArray<u8, U192>);
+
 /// A common header that is present in data and code shred headers
 #[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct ShredCommonHeader {
@@ -206,6 +244,8 @@ pub struct ShredCommonHeader {
     pub index: u32,
     pub version: u16,
     pub fec_set_index: u32,
+    pub merkle_root: MerkleRootHash,
+    pub merkle_proof: MerkelProofBytes,
 }
 
 /// The data shred header has parent offset and flags

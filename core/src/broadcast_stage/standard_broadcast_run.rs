@@ -280,8 +280,6 @@ impl StandardBroadcastRun {
         // Send data shreds
         let data_shreds = Arc::new(data_shreds);
         debug_assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
-        socket_sender.send((data_shreds.clone(), batch_info.clone()))?;
-        blockstore_sender.send((data_shreds, batch_info.clone()))?;
 
         // Create and send coding shreds
         let coding_shreds = make_coding_shreds(
@@ -294,6 +292,15 @@ impl StandardBroadcastRun {
         debug_assert!(coding_shreds
             .iter()
             .all(|shred| shred.slot() == bank.slot()));
+
+        // TODO create hashes from all packets
+        // create merkle tree
+        // get merkle root
+        // sign merkle root
+
+        socket_sender.send((data_shreds.clone(), batch_info.clone()))?;
+        blockstore_sender.send((data_shreds, batch_info.clone()))?;
+
         socket_sender.send((coding_shreds.clone(), batch_info.clone()))?;
         blockstore_sender.send((coding_shreds, batch_info))?;
 
