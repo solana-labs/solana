@@ -47,10 +47,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
 
   if (!foundAccountLayoutName || !decodedAnchorAccountData) {
     return (
-      <ErrorCard
-        text=
-        "Failed to decode account data according to its public anchor interface"
-      />
+      <ErrorCard text="Failed to decode account data according to its public anchor interface" />
     );
   }
 
@@ -88,7 +85,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
         <div className="card-footer">
           <div className="text-muted text-center">
             {decodedAnchorAccountData &&
-              Object.keys(decodedAnchorAccountData).length > 0
+            Object.keys(decodedAnchorAccountData).length > 0
               ? `Decoded ${Object.keys(decodedAnchorAccountData).length} Items`
               : "No decoded data"}
           </div>

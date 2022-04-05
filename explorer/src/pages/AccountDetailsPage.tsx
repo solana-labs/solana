@@ -156,11 +156,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <React.Suspense
-          fallback={<LoadingCard message="Loading account details" />}
-        >
-          <DetailsSections pubkey={pubkey} tab={tab} info={info} />
-        </React.Suspense>
+        <DetailsSections pubkey={pubkey} tab={tab} info={info} />
       )}
     </div>
   );
@@ -276,15 +272,11 @@ function DetailsSections({
         </div>
       )}
       {<InfoSection account={account} />}
-      <React.Suspense
-        fallback={<LoadingCard message="Loading account sections" />}
-      >
-        <MoreSection
-          account={account}
-          tab={moreTab}
-          tabs={tabComponents.map(({ component }) => component)}
-        />
-      </React.Suspense>
+      <MoreSection
+        account={account}
+        tab={moreTab}
+        tabs={tabComponents.map(({ component }) => component)}
+      />
     </>
   );
 }
@@ -415,8 +407,22 @@ function MoreSection({
       {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
         <SecurityCard data={data} />
       )}
-      {tab === "anchor-program" && <AnchorProgramCard programId={pubkey} />}
-      {tab === "anchor-account" && <AnchorAccountCard account={account} />}
+      {tab === "anchor-program" && (
+        <React.Suspense
+          fallback={<LoadingCard message="Loading anchor program IDL" />}
+        >
+          <AnchorProgramCard programId={pubkey} />
+        </React.Suspense>
+      )}
+      {tab === "anchor-account" && (
+        <React.Suspense
+          fallback={
+            <LoadingCard message="Decoding account data using anchor interface" />
+          }
+        >
+          <AnchorAccountCard account={account} />
+        </React.Suspense>
+      )}
     </>
   );
 }
@@ -501,12 +507,14 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
   tabComponents.push({
     tab: anchorProgramTab,
     component: (
-      <AnchorProgramLink
-        key={anchorProgramTab.slug}
-        tab={anchorProgramTab}
-        address={pubkey.toString()}
-        pubkey={pubkey}
-      />
+      <React.Suspense fallback={<></>}>
+        <AnchorProgramLink
+          key={anchorProgramTab.slug}
+          tab={anchorProgramTab}
+          address={pubkey.toString()}
+          pubkey={pubkey}
+        />
+      </React.Suspense>
     ),
   });
 
@@ -518,12 +526,14 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
   tabComponents.push({
     tab: anchorAccountTab,
     component: (
-      <AnchorAccountLink
-        key={anchorAccountTab.slug}
-        tab={anchorAccountTab}
-        address={pubkey.toString()}
-        programId={account.details?.owner}
-      />
+      <React.Suspense fallback={<></>}>
+        <AnchorAccountLink
+          key={anchorAccountTab.slug}
+          tab={anchorAccountTab}
+          address={pubkey.toString()}
+          programId={account.details?.owner}
+        />
+      </React.Suspense>
     ),
   });
 
