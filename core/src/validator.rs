@@ -67,6 +67,7 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
+        accounts_background_service::DroppedSlotsReceiver,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -503,6 +504,7 @@ impl Validator {
             },
             blockstore_process_options,
             blockstore_root_scan,
+            pruned_banks_receiver,
         ) = load_blockstore(
             config,
             ledger_path,
@@ -522,6 +524,7 @@ impl Validator {
             config.snapshot_config.as_ref(),
             accounts_package_channel.0.clone(),
             blockstore_root_scan,
+            pruned_banks_receiver.clone(),
         );
         let last_full_snapshot_slot =
             last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
@@ -927,6 +930,7 @@ impl Validator {
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
+            pruned_banks_receiver,
         );
 
         let tpu = Tpu::new(
@@ -1261,6 +1265,7 @@ fn load_blockstore(
     TransactionHistoryServices,
     blockstore_processor::ProcessOptions,
     BlockstoreRootScan,
+    DroppedSlotsReceiver,
 ) {
     info!("loading ledger from {:?}...", ledger_path);
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
@@ -1339,19 +1344,23 @@ fn load_blockstore(
             TransactionHistoryServices::default()
         };
 
-    let (mut bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
-        bank_forks_utils::load_bank_forks(
-            &genesis_config,
-            &blockstore,
-            config.account_paths.clone(),
-            config.account_shrink_paths.clone(),
-            config.snapshot_config.as_ref(),
-            &process_options,
-            transaction_history_services
-                .cache_block_meta_sender
-                .as_ref(),
-            accounts_update_notifier,
-        );
+    let (
+        mut bank_forks,
+        mut leader_schedule_cache,
+        starting_snapshot_hashes,
+        pruned_banks_receiver,
+    ) = bank_forks_utils::load_bank_forks(
+        &genesis_config,
+        &blockstore,
+        config.account_paths.clone(),
+        config.account_shrink_paths.clone(),
+        config.snapshot_config.as_ref(),
+        &process_options,
+        transaction_history_services
+            .cache_block_meta_sender
+            .as_ref(),
+        accounts_update_notifier,
+    );
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
@@ -1373,9 +1382,11 @@ fn load_blockstore(
         transaction_history_services,
         process_options,
         blockstore_root_scan,
+        pruned_banks_receiver,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_blockstore(
     blockstore: &Blockstore,
     bank_forks: &mut BankForks,
@@ -1386,6 +1397,7 @@ fn process_blockstore(
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
     blockstore_root_scan: BlockstoreRootScan,
+    pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> Option<Slot> {
     let last_full_snapshot_slot = blockstore_processor::process_blockstore_from_root(
         blockstore,
@@ -1396,6 +1408,7 @@ fn process_blockstore(
         cache_block_meta_sender,
         snapshot_config,
         accounts_package_sender,
+        pruned_banks_receiver,
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
