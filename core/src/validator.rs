@@ -928,7 +928,7 @@ impl Validator {
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-            &no_serve_snapshots,
+            no_serve_snapshots,
         );
 
         let tpu = Tpu::new(
@@ -1322,7 +1322,6 @@ fn load_blockstore(
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
-        no_serve_snapshots: config.no_serve_snapshots,
         ..blockstore_processor::ProcessOptions::default()
     };
 

@@ -55,6 +55,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         warp_slot: config.warp_slot,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
+        no_serve_snapshots: config.no_serve_snapshots,
         tpu_coalesce_ms: config.tpu_coalesce_ms,
         validator_exit: Arc::new(RwLock::new(Exit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
