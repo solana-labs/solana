@@ -211,7 +211,7 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
@@ -234,6 +234,8 @@ fn bank_forks_from_snapshot(
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
+
+    deserialized_bank.set_compute_budget(process_options.compute_budget);
 
     let full_snapshot_hash = FullSnapshotHash {
         hash: (

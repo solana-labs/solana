@@ -16,6 +16,7 @@ use {
         blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions, create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
@@ -111,6 +112,7 @@ pub struct TestValidatorGenesis {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+    max_compute_units: Option<u64>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -138,6 +140,7 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
+            max_compute_units: Option::<u64>::default(),
         }
     }
 }
@@ -232,6 +235,11 @@ impl TestValidatorGenesis {
 
     pub fn bind_ip_addr(&mut self, bind_ip_addr: IpAddr) -> &mut Self {
         self.node_config.bind_ip_addr = bind_ip_addr;
+        self
+    }
+
+    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
+        self.max_compute_units = Some(max_compute_units);
         self
     }
 
@@ -696,6 +704,10 @@ impl TestValidator {
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
+            compute_budget: config.max_compute_units.map(|max_units| ComputeBudget {
+                max_units,
+                ..ComputeBudget::default()
+            }),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

@@ -14,7 +14,10 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
-    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
+    solana_program_runtime::{
+        compute_budget::ComputeBudget,
+        timings::{ExecuteTimingType, ExecuteTimings},
+    },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_background_service::DroppedSlotsReceiver,
@@ -561,6 +564,7 @@ pub struct ProcessOptions {
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
+    pub compute_budget: Option<ComputeBudget>,
 }
 
 pub fn test_process_blockstore(
@@ -603,7 +607,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> BankForks {
     // Setup bank for slot 0
-    let bank0 = Bank::new_with_paths(
+    let mut bank0 = Bank::new_with_paths(
         genesis_config,
         account_paths,
         opts.debug_keys.clone(),
@@ -615,6 +619,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
     );
+    bank0.set_compute_budget(opts.compute_budget);
     let bank_forks = BankForks::new(bank0);
 
     info!("processing ledger for slot 0...");
