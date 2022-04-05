@@ -4220,4 +4220,960 @@ mod tests {
             Ok(()),
         );
     }
+
+    #[test]
+    fn test_split_source_uninitialized() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account),
+            (split_to_address, split_to_account),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // splitting an uninitialized account where the destination is the same as the source
+        {
+            // splitting should work when...
+            // - when split amount is the full balance
+            // - when split amount is zero
+            // - when split amount is non-zero and less than the full balance
+            //
+            // and splitting should fail when the split amount is greater than the balance
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            process_instruction(
+                &serialize(&StakeInstruction::Split(0)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+        }
+
+        // this should work
+        instruction_accounts[1].pubkey = split_to_address;
+        let accounts = process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+        assert_eq!(accounts[0].lamports(), accounts[1].lamports());
+
+        // no signers should fail
+        instruction_accounts[0].is_signer = false;
+        process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::MissingRequiredSignature),
+        );
+    }
+
+    #[test]
+    fn test_split_split_not_uninitialized() {
+        let stake_lamports = 42;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &just_stake(Meta::auto(&stake_address), stake_lamports),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        for split_to_state in &[
+            StakeState::Initialized(Meta::default()),
+            StakeState::Stake(Meta::default(), Stake::default()),
+            StakeState::RewardsPool,
+        ] {
+            let split_to_account = AccountSharedData::new_data_with_space(
+                0,
+                split_to_state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                vec![
+                    (stake_address, stake_account.clone()),
+                    (split_to_address, split_to_account),
+                ],
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
+            );
+        }
+    }
+
+    #[test]
+    fn test_split_more_than_staked() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &just_stake(
+                Meta {
+                    rent_exempt_reserve,
+                    ..Meta::auto(&stake_address)
+                },
+                stake_lamports / 2 - 1,
+            ),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let transaction_accounts = vec![
+            (stake_address, stake_account),
+            (split_to_address, split_to_account),
+            (
+                sysvar::rent::id(),
+                account::create_account_shared_data_for_test(&rent),
+            ),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        process_instruction(
+            &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(StakeError::InsufficientStake.into()),
+        );
+    }
+
+    #[test]
+    fn test_split_with_rent() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_balance = rent_exempt_reserve + minimum_delegation;
+        let stake_lamports = minimum_balance * 2;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+
+        // test splitting both an Initialized stake and a Staked stake
+        for state in &[
+            StakeState::Initialized(meta),
+            just_stake(meta, stake_lamports - rent_exempt_reserve),
+        ] {
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let mut transaction_accounts = vec![
+                (stake_address, stake_account),
+                (split_to_address, split_to_account.clone()),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+
+            // not enough to make a non-zero stake account
+            process_instruction(
+                &serialize(&StakeInstruction::Split(rent_exempt_reserve)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+
+            // doesn't leave enough for initial stake to be non-zero
+            process_instruction(
+                &serialize(&StakeInstruction::Split(
+                    stake_lamports - rent_exempt_reserve,
+                ))
+                .unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+
+            // split account already has way enough lamports
+            transaction_accounts[1].1.set_lamports(minimum_balance);
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports - minimum_balance)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+
+            // verify no stake leakage in the case of a stake
+            if let StakeState::Stake(meta, stake) = state {
+                assert_eq!(
+                    accounts[1].state(),
+                    Ok(StakeState::Stake(
+                        *meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: stake_lamports - minimum_balance,
+                                ..stake.delegation
+                            },
+                            ..*stake
+                        }
+                    ))
+                );
+                assert_eq!(accounts[0].lamports(), minimum_balance,);
+                assert_eq!(accounts[1].lamports(), stake_lamports,);
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_to_account_with_rent_exempt_reserve() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let state = just_stake(meta, stake_lamports - rent_exempt_reserve);
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &state,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
+        // rent_exempt_reserve, and more than rent_exempt_reserve. The empty case is not covered in
+        // test_split, since that test uses a Meta with rent_exempt_reserve = 0
+        let split_lamport_balances = vec![
+            0,
+            rent_exempt_reserve - 1,
+            rent_exempt_reserve,
+            rent_exempt_reserve + minimum_delegation - 1,
+            rent_exempt_reserve + minimum_delegation,
+        ];
+        for initial_balance in split_lamport_balances {
+            let split_to_account = AccountSharedData::new_data_with_space(
+                initial_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account.clone()),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+
+            // split more than available fails
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+
+            // should work
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            // no lamport leakage
+            assert_eq!(
+                accounts[0].lamports() + accounts[1].lamports(),
+                stake_lamports + initial_balance,
+            );
+
+            if let StakeState::Stake(meta, stake) = state {
+                let expected_stake =
+                    stake_lamports / 2 - (rent_exempt_reserve.saturating_sub(initial_balance));
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: stake_lamports / 2
+                                    - (rent_exempt_reserve.saturating_sub(initial_balance)),
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    accounts[1].state(),
+                );
+                assert_eq!(
+                    accounts[1].lamports(),
+                    expected_stake
+                        + rent_exempt_reserve
+                        + initial_balance.saturating_sub(rent_exempt_reserve),
+                );
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: stake_lamports / 2 - rent_exempt_reserve,
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    accounts[0].state(),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_from_larger_sized_account() {
+        let rent = Rent::default();
+        let source_larger_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = (source_larger_rent_exempt_reserve + minimum_delegation) * 2;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve: source_larger_rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let state = just_stake(meta, stake_lamports - source_larger_rent_exempt_reserve);
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &state,
+            std::mem::size_of::<StakeState>() + 100,
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
+        // rent_exempt_reserve, and more than rent_exempt_reserve. The empty case is not covered in
+        // test_split, since that test uses a Meta with rent_exempt_reserve = 0
+        let split_lamport_balances = vec![
+            0,
+            split_rent_exempt_reserve - 1,
+            split_rent_exempt_reserve,
+            split_rent_exempt_reserve + minimum_delegation - 1,
+            split_rent_exempt_reserve + minimum_delegation,
+        ];
+        for initial_balance in split_lamport_balances {
+            let split_to_account = AccountSharedData::new_data_with_space(
+                initial_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account.clone()),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+
+            // split more than available fails
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+
+            // should work
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            // no lamport leakage
+            assert_eq!(
+                accounts[0].lamports() + accounts[1].lamports(),
+                stake_lamports + initial_balance
+            );
+
+            if let StakeState::Stake(meta, stake) = state {
+                let expected_split_meta = Meta {
+                    authorized: Authorized::auto(&stake_address),
+                    rent_exempt_reserve: split_rent_exempt_reserve,
+                    ..Meta::default()
+                };
+                let expected_stake = stake_lamports / 2
+                    - (split_rent_exempt_reserve.saturating_sub(initial_balance));
+
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        expected_split_meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: expected_stake,
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    accounts[1].state()
+                );
+                assert_eq!(
+                    accounts[1].lamports(),
+                    expected_stake
+                        + split_rent_exempt_reserve
+                        + initial_balance.saturating_sub(split_rent_exempt_reserve)
+                );
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: stake_lamports / 2 - source_larger_rent_exempt_reserve,
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    accounts[0].state()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_from_smaller_sized_account() {
+        let rent = Rent::default();
+        let source_smaller_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let split_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let stake_lamports = split_rent_exempt_reserve + 1;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve: source_smaller_rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let state = just_stake(meta, stake_lamports - source_smaller_rent_exempt_reserve);
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &state,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        let split_amount = stake_lamports - (source_smaller_rent_exempt_reserve + 1); // Enough so that split stake is > 0
+        let split_lamport_balances = vec![
+            0,
+            1,
+            split_rent_exempt_reserve,
+            split_rent_exempt_reserve + 1,
+        ];
+        for initial_balance in split_lamport_balances {
+            let split_to_account = AccountSharedData::new_data_with_space(
+                initial_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>() + 100,
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account.clone()),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+
+            // should always return error when splitting to larger account
+            process_instruction(
+                &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
+            );
+
+            // Splitting 100% of source should not make a difference
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
+            );
+        }
+    }
+
+    #[test]
+    fn test_split_100_percent_of_source() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = rent_exempt_reserve + minimum_delegation;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let split_to_account = AccountSharedData::new_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // test splitting both an Initialized stake and a Staked stake
+        for state in &[
+            StakeState::Initialized(meta),
+            just_stake(meta, stake_lamports - rent_exempt_reserve),
+        ] {
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account),
+                (split_to_address, split_to_account.clone()),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+
+            // split 100% over to dest
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+
+            // no lamport leakage
+            assert_eq!(
+                accounts[0].lamports() + accounts[1].lamports(),
+                stake_lamports
+            );
+
+            match state {
+                StakeState::Initialized(_) => {
+                    assert_eq!(Ok(*state), accounts[1].state());
+                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                }
+                StakeState::Stake(meta, stake) => {
+                    assert_eq!(
+                        Ok(StakeState::Stake(
+                            *meta,
+                            Stake {
+                                delegation: Delegation {
+                                    stake: stake_lamports - rent_exempt_reserve,
+                                    ..stake.delegation
+                                },
+                                ..*stake
+                            }
+                        )),
+                        accounts[1].state()
+                    );
+                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_100_percent_of_source_to_account_with_lamports() {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = rent_exempt_reserve + minimum_delegation;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let state = just_stake(meta, stake_lamports - rent_exempt_reserve);
+        let stake_account = AccountSharedData::new_data_with_space(
+            stake_lamports,
+            &state,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
+        // rent_exempt_reserve, and more than rent_exempt_reserve. Technically, the empty case is
+        // covered in test_split_100_percent_of_source, but included here as well for readability
+        let split_lamport_balances = vec![
+            0,
+            rent_exempt_reserve - 1,
+            rent_exempt_reserve,
+            rent_exempt_reserve + minimum_delegation - 1,
+            rent_exempt_reserve + minimum_delegation,
+        ];
+        for initial_balance in split_lamport_balances {
+            let split_to_account = AccountSharedData::new_data_with_space(
+                initial_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account.clone()),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+
+            // split 100% over to dest
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+
+            // no lamport leakage
+            assert_eq!(
+                accounts[0].lamports() + accounts[1].lamports(),
+                stake_lamports + initial_balance
+            );
+
+            if let StakeState::Stake(meta, stake) = state {
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: stake_lamports - rent_exempt_reserve,
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    accounts[1].state()
+                );
+                assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_rent_exemptness() {
+        let rent = Rent::default();
+        let source_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = source_rent_exempt_reserve + minimum_delegation;
+        let stake_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_address),
+            rent_exempt_reserve: source_rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let split_to_address = solana_sdk::pubkey::new_rand();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: stake_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: split_to_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+
+        for state in &[
+            StakeState::Initialized(meta),
+            just_stake(meta, stake_lamports - source_rent_exempt_reserve),
+        ] {
+            // Test that splitting to a larger account fails
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let split_to_account = AccountSharedData::new_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>() + 10000,
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+            process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Err(InstructionError::InvalidAccountData),
+            );
+
+            // Test that splitting from a larger account to a smaller one works.
+            // Split amount should not matter, assuming other fund criteria are met
+            let stake_account = AccountSharedData::new_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>() + 100,
+                &id(),
+            )
+            .unwrap();
+            let split_to_account = AccountSharedData::new_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .unwrap();
+            let transaction_accounts = vec![
+                (stake_address, stake_account),
+                (split_to_address, split_to_account),
+                (
+                    sysvar::rent::id(),
+                    account::create_account_shared_data_for_test(&rent),
+                ),
+            ];
+            let accounts = process_instruction(
+                &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
+                transaction_accounts,
+                instruction_accounts.clone(),
+                Ok(()),
+            );
+            assert_eq!(accounts[1].lamports(), stake_lamports);
+
+            let expected_split_meta = Meta {
+                authorized: Authorized::auto(&stake_address),
+                rent_exempt_reserve: split_rent_exempt_reserve,
+                ..Meta::default()
+            };
+            match state {
+                StakeState::Initialized(_) => {
+                    assert_eq!(
+                        Ok(StakeState::Initialized(expected_split_meta)),
+                        accounts[1].state()
+                    );
+                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                }
+                StakeState::Stake(_meta, stake) => {
+                    // Expected stake should reflect original stake amount so that extra lamports
+                    // from the rent_exempt_reserve inequality do not magically activate
+                    let expected_stake = stake_lamports - source_rent_exempt_reserve;
+
+                    assert_eq!(
+                        Ok(StakeState::Stake(
+                            expected_split_meta,
+                            Stake {
+                                delegation: Delegation {
+                                    stake: expected_stake,
+                                    ..stake.delegation
+                                },
+                                ..*stake
+                            }
+                        )),
+                        accounts[1].state()
+                    );
+                    assert_eq!(
+                        accounts[1].lamports(),
+                        expected_stake + source_rent_exempt_reserve,
+                    );
+                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 }

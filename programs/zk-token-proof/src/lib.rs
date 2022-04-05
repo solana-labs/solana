@@ -56,7 +56,7 @@ pub fn process_instruction(
             verify::<WithdrawData>(invoke_context)
         }
         ProofInstruction::VerifyWithdrawWithheldTokens => {
-            ic_msg!(invoke_context, "VerifyWithdraw");
+            ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
             verify::<WithdrawData>(invoke_context)
         }
         ProofInstruction::VerifyTransfer => {

@@ -6753,10 +6753,7 @@ impl Drop for Bank {
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
-            // Default case
-            // 1. Tests
-            // 2. At startup when replaying blockstore and there's no
-            // AccountsBackgroundService to perform cleanups yet.
+            // Default case for tests
             self.rc
                 .accounts
                 .purge_slot(self.slot(), self.bank_id(), false);

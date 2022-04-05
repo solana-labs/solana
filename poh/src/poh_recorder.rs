@@ -13,7 +13,7 @@
 pub use solana_sdk::clock::Slot;
 use {
     crate::poh_service::PohService,
-    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
     log::*,
     solana_entry::{entry::Entry, poh::Poh},
     solana_ledger::{
@@ -262,7 +262,15 @@ impl PohRecorder {
         }
 
         if let Some(ref signal) = self.clear_bank_signal {
-            let _ = signal.try_send(true);
+            match signal.try_send(true) {
+                Ok(_) => {}
+                Err(TrySendError::Full(_)) => {
+                    trace!("replay wake up signal channel is full.")
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    trace!("replay wake up signal channel is disconnected.")
+                }
+            }
         }
     }
 

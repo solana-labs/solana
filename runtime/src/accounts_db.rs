@@ -4402,6 +4402,23 @@ impl AccountsDb {
         }
     }
 
+    pub fn hash_account_with_rent_epoch<T: ReadableAccount>(
+        slot: Slot,
+        account: &T,
+        pubkey: &Pubkey,
+        rent_epoch: Epoch,
+    ) -> Hash {
+        Self::hash_account_data(
+            slot,
+            account.lamports(),
+            account.owner(),
+            account.executable(),
+            rent_epoch,
+            account.data(),
+            pubkey,
+        )
+    }
+
     pub fn hash_account<T: ReadableAccount>(slot: Slot, account: &T, pubkey: &Pubkey) -> Hash {
         Self::hash_account_data(
             slot,
@@ -13740,6 +13757,21 @@ pub mod tests {
                 max_clean_root: None,
                 should_contain: false,
             });
+        }
+    }
+
+    #[test]
+    fn test_hash_account_with_rent_epoch() {
+        let owner = solana_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let slot = 9;
+        let mut account = AccountSharedData::new(2, 1, &owner);
+        for rent in 0..3 {
+            account.set_rent_epoch(rent);
+            assert_eq!(
+                AccountsDb::hash_account(slot, &account, &pubkey),
+                AccountsDb::hash_account_with_rent_epoch(slot, &account, &pubkey, rent)
+            );
         }
     }
 }
