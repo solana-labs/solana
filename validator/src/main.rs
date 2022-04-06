@@ -2357,10 +2357,10 @@ pub fn main() {
     let batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
     let batch_send_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
 
-    if batch_send_rate_ms < retry_rate_ms || batch_send_rate_ms < 1 {
+    if batch_send_rate_ms > retry_rate_ms || batch_send_rate_ms < 1 {
         eprintln!(
             "The specified rpc-send-batch-ms ({}) is invalid, it must be between 1 and the value of rpc-send-retry-ms ({})",
-            retry_rate_ms, batch_send_rate_ms
+            batch_send_rate_ms, retry_rate_ms, 
         );
         exit(1);
     }
