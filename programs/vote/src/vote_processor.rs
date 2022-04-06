@@ -8,11 +8,8 @@ use {
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
-        instruction::InstructionError,
-        keyed_account::{keyed_account_at_index, KeyedAccount},
+        feature_set, instruction::InstructionError, keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
-        sysvar::rent::Rent,
     },
 };
 
@@ -37,7 +34,9 @@ pub fn process_instruction(
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            verify_rent_exemption(me, &rent)?;
+            if !rent.is_exempt(me.lamports()?, me.data_len()?) {
+                return Err(InstructionError::InsufficientFunds);
+            }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             vote_state::initialize_account(me, &vote_init, &signers, &clock)
@@ -159,17 +158,6 @@ pub fn process_instruction(
     }
 }
 
-fn verify_rent_exemption(
-    keyed_account: &KeyedAccount,
-    rent: &Rent,
-) -> Result<(), InstructionError> {
-    if !rent.is_exempt(keyed_account.lamports()?, keyed_account.data_len()?) {
-        Err(InstructionError::InsufficientFunds)
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use {
@@ -195,7 +183,7 @@ mod tests {
             hash::Hash,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
-            sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
+            sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes},
         },
         std::{collections::HashSet, str::FromStr},
     };
