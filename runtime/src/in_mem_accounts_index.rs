@@ -185,25 +185,33 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         pubkey: &K,
         callback: impl for<'a> FnOnce(Option<&'a AccountMapEntry<T>>) -> RT,
     ) -> RT {
-        let m = Measure::start("get");
-        let map = self.map().read().unwrap();
-        let result = map.get(pubkey);
+        let mut found = true;
+        let mut m = Measure::start("get");
+        let result = {
+            let map = self.map().read().unwrap();
+            let result = map.get(pubkey);
+            m.stop();
+
+            callback(if let Some(entry) = result {
+                entry.set_age(self.storage.future_age_to_flush());
+                Some(entry)
+            } else {
+                drop(map);
+                found = false;
+                None
+            })
+        };
+
         let stats = self.stats();
-        let (count, time) = if result.is_some() {
+        let (count, time) = if found {
             (&stats.gets_from_mem, &stats.get_mem_us)
         } else {
             (&stats.gets_missing, &stats.get_missing_us)
         };
-        Self::update_time_stat(time, m);
+        Self::update_stat(time, m.as_us());
         Self::update_stat(count, 1);
 
-        callback(if let Some(entry) = result {
-            entry.set_age(self.storage.future_age_to_flush());
-            Some(entry)
-        } else {
-            drop(map);
-            None
-        })
+        result
     }
 
     /// lookup 'pubkey' in index (in mem or on disk)
@@ -352,6 +360,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
+        let mut updated_in_mem = true;
         // try to get it just from memory first using only a read lock
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
@@ -362,7 +371,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
-                Self::update_stat(&self.stats().updates_in_mem, 1);
+                // age is incremented by caller
             } else {
                 let mut m = Measure::start("entry");
                 let mut map = self.map().write().unwrap();
@@ -380,10 +389,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             previous_slot_entry_was_cached,
                         );
                         current.set_age(self.storage.future_age_to_flush());
-                        Self::update_stat(&self.stats().updates_in_mem, 1);
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
+                        updated_in_mem = false;
 
                         // desired to be this for filler accounts: self.storage.get_startup();
                         // but, this has proven to be far too slow at high account counts
@@ -430,7 +439,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 drop(map);
                 self.update_entry_stats(m, found);
             };
-        })
+        });
+        if updated_in_mem {
+            Self::update_stat(&self.stats().updates_in_mem, 1);
+        }
     }
 
     fn update_entry_stats(&self, stopped_measure: Measure, found: bool) {
