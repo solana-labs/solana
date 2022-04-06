@@ -1069,8 +1069,6 @@ pub struct AccountsDb {
     #[cfg(test)]
     load_limit: AtomicU64,
 
-    is_bank_drop_callback_enabled: AtomicBool,
-
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
     /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     /// can safely clear the set of unrooted slots `slots`.
@@ -1627,7 +1625,6 @@ impl AccountsDb {
             load_delay: u64::default(),
             #[cfg(test)]
             load_limit: AtomicU64::default(),
-            is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
@@ -4013,18 +4010,13 @@ impl AccountsDb {
         &self,
         pruned_banks_sender: DroppedSlotsSender,
     ) -> SendDroppedBankCallback {
-        self.is_bank_drop_callback_enabled
-            .store(true, Ordering::SeqCst);
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
     /// comment below for more explanation.
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
-            panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
-        }
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId) {
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
         // we know that there are no longer any ongoing scans on this bank, because scans require
         // and hold a reference to the bank at the tip of the fork they're scanning. Hence it's
@@ -12140,7 +12132,7 @@ pub mod tests {
 
         // Simulate dropping the bank, which finally removes the slot from the cache
         let bank_id = 1;
-        db.purge_slot(1, bank_id, false);
+        db.purge_slot(1, bank_id);
         assert!(db
             .do_load(
                 &scan_ancestors,
@@ -13568,8 +13560,7 @@ pub mod tests {
             .is_some());
 
         // Simulate purge_slot() all from AccountsBackgroundService
-        let is_from_abs = true;
-        accounts.purge_slot(slot0, 0, is_from_abs);
+        accounts.purge_slot(slot0, 0);
 
         // Now clean should clean up the remaining key
         accounts.clean_accounts(None, false, None);

@@ -1374,7 +1374,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
-            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
@@ -6754,9 +6754,7 @@ impl Drop for Bank {
             drop_callback.callback(self);
         } else {
             // Default case for tests
-            self.rc
-                .accounts
-                .purge_slot(self.slot(), self.bank_id(), false);
+            self.rc.accounts.purge_slot(self.slot(), self.bank_id());
         }
     }
 }
@@ -14719,9 +14717,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts(false, false, None);
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        let is_abs_service = true;
-                        abs_request_handler
-                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
+                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(

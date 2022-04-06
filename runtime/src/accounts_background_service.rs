@@ -335,14 +335,11 @@ impl AbsRequestHandler {
             })
     }
 
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn handle_pruned_banks(&self, bank: &Bank, is_from_abs: bool) -> usize {
+    pub fn handle_pruned_banks(&self, bank: &Bank) -> usize {
         let mut count = 0;
         for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc
-                .accounts
-                .purge_slot(pruned_slot, pruned_bank_id, is_from_abs);
+            bank.rc.accounts.purge_slot(pruned_slot, pruned_bank_id);
         }
 
         count
@@ -489,7 +486,7 @@ impl AccountsBackgroundService {
         total_remove_slots_time: &mut u64,
     ) {
         let mut remove_slots_time = Measure::start("remove_slots_time");
-        *removed_slots_count += request_handler.handle_pruned_banks(bank, true);
+        *removed_slots_count += request_handler.handle_pruned_banks(bank);
         remove_slots_time.stop();
         *total_remove_slots_time += remove_slots_time.as_us();
 
