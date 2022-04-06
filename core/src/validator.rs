@@ -50,10 +50,6 @@ use {
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
     },
-    solana_replica_lib::{
-        accountsdb_repl_server::{AccountsDbReplService, AccountsDbReplServiceConfig},
-        accountsdb_repl_server_factory,
-    },
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -122,7 +118,6 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
@@ -184,7 +179,6 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            accountsdb_repl_service_config: None,
             geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
@@ -339,7 +333,6 @@ pub struct Validator {
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub blockstore: Arc<Blockstore>,
-    accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
 }
 
@@ -673,7 +666,6 @@ impl Validator {
             pubsub_service,
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
-            accountsdb_repl_service,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
             if ContactInfo::is_valid_address(&node.info.rpc, &socket_addr_space) {
                 assert!(ContactInfo::is_valid_address(
@@ -686,13 +678,6 @@ impl Validator {
                     &socket_addr_space
                 ));
             }
-
-            let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
-                let (bank_notification_sender, bank_notification_receiver) = unbounded();
-                bank_notification_senders.push(bank_notification_sender);
-                accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
-                    accountsdb_repl_service_config.clone(), bank_notification_receiver, bank_forks.clone())
-            });
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             let confirmed_bank_subscribers = if !bank_notification_senders.is_empty() {
@@ -746,10 +731,9 @@ impl Validator {
                     confirmed_bank_subscribers,
                 )),
                 Some(bank_notification_sender),
-                accountsdb_repl_service,
             )
         } else {
-            (None, None, None, None, None)
+            (None, None, None, None)
         };
 
         if config.dev_halt_at_slot.is_some() {
@@ -999,7 +983,6 @@ impl Validator {
             cluster_info,
             bank_forks,
             blockstore: blockstore.clone(),
-            accountsdb_repl_service,
             geyser_plugin_service,
         }
     }
@@ -1117,12 +1100,6 @@ impl Validator {
             .expect("completed_data_sets_service");
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
-        }
-
-        if let Some(accountsdb_repl_service) = self.accountsdb_repl_service {
-            accountsdb_repl_service
-                .join()
-                .expect("accountsdb_repl_service");
         }
 
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {

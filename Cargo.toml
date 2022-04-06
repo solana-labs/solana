@@ -59,8 +59,6 @@ members = [
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",
-    "replica-lib",
-    "replica-node",
     "rpc",
     "rpc-test",
     "runtime",
