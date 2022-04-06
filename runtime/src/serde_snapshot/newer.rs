@@ -176,6 +176,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl<'a> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableVersionedBank<'a> {}
 
+#[derive(PartialEq)]
 pub(super) struct Context {}
 
 impl<'a> TypeContext<'a> for Context {

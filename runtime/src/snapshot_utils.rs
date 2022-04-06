@@ -1573,15 +1573,18 @@ fn get_io_error(error: &str) -> SnapshotError {
     SnapshotError::Io(IoError::new(ErrorKind::Other, error))
 }
 
+/// slot is Some(slot) if the serialized bank was 'reserialized' into a non-deterministic format
 pub fn verify_snapshot_archive<P, Q, R>(
     snapshot_archive: P,
     snapshots_to_verify: Q,
     storages_to_verify: R,
     archive_format: ArchiveFormat,
+    slot: Option<Slot>,
 ) where
     P: AsRef<Path>,
-    Q: AsRef<Path>,
+    Q: AsRef<Path> + Clone + std::fmt::Debug,
     R: AsRef<Path>,
+    PathBuf: From<Q>,
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
@@ -1596,6 +1599,25 @@ pub fn verify_snapshot_archive<P, Q, R>(
 
     // Check snapshots are the same
     let unpacked_snapshots = unpack_dir.join("snapshots");
+    if let Some(slot) = slot {
+        // file contents may be different, but deserialized structs should be equal
+        let mut p1 = PathBuf::from(snapshots_to_verify.clone());
+        p1 = p1.join(slot.to_string());
+        p1 = p1.join(slot.to_string());
+        let mut p2 = unpacked_snapshots.clone();
+        p2 = p2.join(slot.to_string());
+        p2 = p2.join(slot.to_string());
+
+        assert!(crate::serde_snapshot::compare_two_serialized_banks(
+            SerdeStyle::Newer,
+            p1.clone(),
+            p2.clone()
+        )
+        .unwrap());
+        std::fs::remove_file(p1).unwrap();
+        std::fs::remove_file(p2).unwrap();
+    }
+
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
     // Check the account entries are the same
