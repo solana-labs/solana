@@ -780,6 +780,7 @@ pub trait ColumnMetrics {
         column_options: &Arc<LedgerColumnOptions>,
     );
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str;
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str;
 }
 
 pub trait ColumnName {
@@ -884,6 +885,13 @@ impl ColumnMetrics for columns::TransactionStatus {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "transaction_status",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
@@ -943,6 +951,13 @@ impl ColumnMetrics for columns::AddressSignatures {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "address_signatures",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::AddressSignatures {
     const NAME: &'static str = ADDRESS_SIGNATURES_CF;
@@ -988,6 +1003,13 @@ impl ColumnMetrics for columns::TransactionMemos {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "transaction_memos",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "transaction_memos",
             column_options
         )
@@ -1041,6 +1063,13 @@ impl ColumnMetrics for columns::TransactionStatusIndex {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "transaction_status_index",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::TransactionStatusIndex {
     const NAME: &'static str = TRANSACTION_STATUS_INDEX_CF;
@@ -1061,6 +1090,13 @@ impl ColumnMetrics for columns::Rewards {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "rewards",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "rewards",
             column_options
         )
@@ -1092,6 +1128,13 @@ impl ColumnMetrics for columns::Blocktime {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "blocktime",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::Blocktime {
     const NAME: &'static str = BLOCKTIME_CF;
@@ -1115,6 +1158,13 @@ impl ColumnMetrics for columns::PerfSamples {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "perf_samples",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "perf_samples",
             column_options
         )
@@ -1146,6 +1196,13 @@ impl ColumnMetrics for columns::BlockHeight {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "block_height",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::BlockHeight {
     const NAME: &'static str = BLOCK_HEIGHT_CF;
@@ -1168,6 +1225,13 @@ impl ColumnMetrics for columns::ProgramCosts {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "program_costs",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "program_costs",
             column_options
         )
@@ -1245,6 +1309,13 @@ impl ColumnMetrics for columns::ShredCode {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "shred_code",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::ShredCode {
     const NAME: &'static str = CODE_SHRED_CF;
@@ -1293,6 +1364,13 @@ impl ColumnMetrics for columns::ShredData {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "shred_data",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::ShredData {
     const NAME: &'static str = DATA_SHRED_CF;
@@ -1313,6 +1391,13 @@ impl ColumnMetrics for columns::Index {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "index",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "index",
             column_options
         )
@@ -1344,6 +1429,13 @@ impl ColumnMetrics for columns::DeadSlots {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "dead_slots",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::DeadSlots {
     const NAME: &'static str = DEAD_SLOTS_CF;
@@ -1367,6 +1459,13 @@ impl ColumnMetrics for columns::DuplicateSlots {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "duplicate_slots",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "duplicate_slots",
             column_options
         )
@@ -1398,6 +1497,13 @@ impl ColumnMetrics for columns::Orphans {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "orphans",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::Orphans {
     const NAME: &'static str = ORPHANS_CF;
@@ -1421,6 +1527,13 @@ impl ColumnMetrics for columns::BankHash {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "bank_hash",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "bank_hash",
             column_options
         )
@@ -1452,6 +1565,13 @@ impl ColumnMetrics for columns::Root {
             column_options
         )
     }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
+            "root",
+            column_options
+        )
+    }
 }
 impl ColumnName for columns::Root {
     const NAME: &'static str = ROOT_CF;
@@ -1475,6 +1595,13 @@ impl ColumnMetrics for columns::SlotMeta {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "slot_meta",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "slot_meta",
             column_options
         )
@@ -1527,6 +1654,13 @@ impl ColumnMetrics for columns::ErasureMeta {
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
+            "erasure_meta",
+            column_options
+        )
+    }
+    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
+        rocksdb_metric_header!(
+            "blockstore_rocksdb_write_perf,op=put",
             "erasure_meta",
             column_options
         )
@@ -2149,9 +2283,74 @@ mod rocks_metrics_utils {
             );
         });
     }
+    /// Reports the collected PerfContext and disables the PerfContext after
+    /// reporting.
+    pub fn report_write_perf_context(metric_header: &'static str) {
+        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
+            set_perf_stats(PerfStatsLevel::Disable);
+            let perf_context = perf_context_cell.borrow();
+            datapoint_info!(
+                metric_header,
+                // total nanos spent on writing to WAL
+                (
+                    "write_wal_nanos",
+                    perf_context.metric(PerfMetric::WriteWalTime) as i64,
+                    i64
+                ),
+                // total nanos spent on writing to mem tables
+                (
+                    "write_memtable_nanos",
+                    perf_context.metric(PerfMetric::WriteMemtableTime) as i64,
+                    i64
+                ),
+                // total nanos spent on delaying or throttling write
+                (
+                    "write_delay_nanos",
+                    perf_context.metric(PerfMetric::WriteDelayTime) as i64,
+                    i64
+                ),
+                // total nanos spent on writing a record, excluding the above four things
+                (
+                    "write_pre_and_post_process_nanos",
+                    perf_context.metric(PerfMetric::WritePreAndPostProcessTime) as i64,
+                    i64
+                ),
+                // time spent on acquiring DB mutex.
+                (
+                    "db_mutex_lock_nanos",
+                    perf_context.metric(PerfMetric::DbMutexLockNanos) as i64,
+                    i64
+                ),
+                // Time spent on waiting with a condition variable created with DB mutex.
+                (
+                    "db_condition_wait_nanos",
+                    perf_context.metric(PerfMetric::DbConditionWaitNanos) as i64,
+                    i64
+                ),
+                // Time spent on merge operator.
+                (
+                    "merge_operator_nanos_nanos",
+                    perf_context.metric(PerfMetric::MergeOperatorTimeNanos) as i64,
+                    i64
+                ),
+                // Time spent waiting on key locks in transaction lock manager.
+                (
+                    "key_lock_wait_nanos",
+                    perf_context.metric(PerfMetric::KeyLockWaitTime) as i64,
+                    i64
+                ),
+                // number of times acquiring a lock was blocked by another transaction.
+                (
+                    "key_lock_wait_count",
+                    perf_context.metric(PerfMetric::KeyLockWaitCount) as i64,
+                    i64
+                ),
+            );
+        });
+    }
 }
 use crate::blockstore_db::rocks_metrics_utils::{
-    maybe_collect_perf_context, report_read_perf_context,
+    maybe_collect_perf_context, report_read_perf_context, report_write_perf_context,
 };
 
 impl<C> LedgerColumn<C>
@@ -2174,10 +2373,17 @@ where
     }
 
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
+        let is_perf_context_enabled = maybe_collect_perf_context();
         let serialized_value = serialize(value)?;
 
-        self.backend
-            .put_cf(self.handle(), &C::key(key), &serialized_value)
+        let result = self
+            .backend
+            .put_cf(self.handle(), &C::key(key), &serialized_value);
+
+        if is_perf_context_enabled {
+            report_write_perf_context(C::rocksdb_put_perf_metric_header(&self.column_options));
+        }
+        result
     }
 
     pub fn delete(&self, key: C::Index) -> Result<()> {
