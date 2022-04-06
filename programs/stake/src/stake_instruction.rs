@@ -5866,4 +5866,24 @@ mod tests {
         // Both fully deactivated works
         try_merge(transaction_accounts, instruction_accounts, Ok(()));
     }
+
+    #[test]
+    fn test_stake_get_minimum_delegation() {
+        let stake_address = Pubkey::new_unique();
+        let stake_account = create_default_stake_account();
+        let instruction_data = serialize(&StakeInstruction::GetMinimumDelegation).unwrap();
+        let transaction_accounts = vec![(stake_address, stake_account)];
+        let instruction_accounts = vec![AccountMeta {
+            pubkey: stake_address,
+            is_signer: false,
+            is_writable: false,
+        }];
+
+        process_instruction(
+            &instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+        );
+    }
 }
