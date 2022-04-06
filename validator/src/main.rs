@@ -2378,7 +2378,9 @@ pub fn main() {
         eprintln!(
             "Either the specified rpc-send-batch-size ({}) or rpc-send-batch-ms ({}) is invalid, \
             'rpc-send-batch-size * 1000 / rpc-send-batch-ms' must be smaller than ({}) .",
-            batch_size, batch_send_rate_ms, send_transaction_service::MAX_TPS
+            batch_size,
+            batch_send_rate_ms,
+            send_transaction_service::MAX_TPS
         );
         exit(1);
     }

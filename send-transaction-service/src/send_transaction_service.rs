@@ -325,14 +325,14 @@ impl SendTransactionService {
                         if transaction_info.last_sent_time.is_some() {
                             // Transaction sent before is unknown to the working bank, it might have been
                             // dropped or landed in another fork.  Re-send it
-    
+
                             info!("Retrying transaction: {}", signature);
                             result.retried += 1;
                             transaction_info.retries += 1;
-    
+
                             inc_new_counter_info!("send_transaction_service-retry", 1);
                         }
-    
+
                         batched_transactions.insert(*signature);
                         transaction_info.last_sent_time = Some(Instant::now());
                     }
