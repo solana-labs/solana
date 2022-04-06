@@ -2360,8 +2360,7 @@ pub fn main() {
     if batch_send_rate_ms > retry_rate_ms || batch_send_rate_ms < 1 {
         eprintln!(
             "The specified rpc-send-batch-ms ({}) is invalid, it must be between 1 and the value of rpc-send-retry-ms ({})",
-            batch_send_rate_ms, retry_rate_ms, 
-        );
+            batch_send_rate_ms, retry_rate_ms);
         exit(1);
     }
 
