@@ -388,7 +388,8 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let client = create_client(self.entry_point_info.client_facing_addr());
+        let (rpc, tpu) = self.entry_point_info.client_facing_addr();
+        let client = create_client(rpc, tpu);
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -472,7 +473,8 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let client = create_client(self.entry_point_info.client_facing_addr());
+        let (rpc, tpu) = self.entry_point_info.client_facing_addr();
+        let client = create_client(rpc, tpu);
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -694,9 +696,10 @@ impl Cluster for LocalCluster {
     }
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
-        self.validators
-            .get(pubkey)
-            .map(|f| create_client(f.info.contact_info.client_facing_addr()))
+        self.validators.get(pubkey).map(|f| {
+            let (rpc, tpu) = f.info.contact_info.client_facing_addr();
+            create_client(rpc, tpu)
+        })
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {
