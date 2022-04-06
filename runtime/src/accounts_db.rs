@@ -78,7 +78,7 @@ use {
         path::{Path, PathBuf},
         str::FromStr,
         sync::{
-            atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
+            atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
             Arc, Condvar, Mutex, MutexGuard, RwLock,
         },
         thread::{sleep, Builder},
@@ -7543,6 +7543,7 @@ pub mod tests {
         std::{
             iter::FromIterator,
             str::FromStr,
+            sync::atomic::AtomicBool,
             thread::{self, Builder, JoinHandle},
         },
     };
