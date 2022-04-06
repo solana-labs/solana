@@ -4,8 +4,10 @@
 
 use {
     crate::{
+        accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
+        rent_collector::RentCollector,
         snapshot_config::SnapshotConfig,
         snapshot_package::{PendingAccountsPackage, SnapshotType},
         snapshot_utils::{self, SnapshotError},
@@ -17,6 +19,7 @@ use {
     solana_sdk::{
         clock::{BankId, Slot},
         hash::Hash,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         boxed::Box,
@@ -109,7 +112,7 @@ impl SnapshotRequestHandler {
 
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
-                    // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
+                    // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
                     snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
                 } else {
                     Hash::default()
@@ -144,20 +147,27 @@ impl SnapshotRequestHandler {
                 }
                 flush_accounts_cache_time.stop();
 
-                let use_index_hash_calculation = false;
-                let mut hash_time = Measure::start("hash_time");
-                let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
-                    use_index_hash_calculation,
-                    test_hash_calculation,
-                    false,
-                );
                 let hash_for_testing = if test_hash_calculation {
+                    let use_index_hash_calculation = false;
+                    let check_hash = false;
+
+                    let (this_hash, _cap) = snapshot_root_bank.accounts().accounts_db.calculate_accounts_hash_helper(
+                        use_index_hash_calculation,
+                        snapshot_root_bank.slot(),
+                        &CalcAccountsHashConfig {
+                            use_bg_thread_pool: true,
+                            check_hash,
+                            ancestors: None,
+                            use_write_cache: false,
+                            epoch_schedule: &EpochSchedule::default(),
+                            rent_collector: &RentCollector::default(),
+                        },
+                    ).unwrap();
                     assert_eq!(previous_hash, this_hash);
-                    Some(snapshot_root_bank.get_accounts_hash())
+                    Some(this_hash)
                 } else {
                     None
                 };
-                hash_time.stop();
 
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
@@ -234,7 +244,6 @@ impl SnapshotRequestHandler {
 
                 datapoint_info!(
                     "handle_snapshot_requests-timing",
-                    ("hash_time", hash_time.as_us(), i64),
                     (
                         "flush_accounts_cache_time",
                         flush_accounts_cache_time.as_us(),

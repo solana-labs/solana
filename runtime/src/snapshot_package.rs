@@ -37,7 +37,6 @@ pub struct AccountsPackage {
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub snapshot_storages: SnapshotStorages,
-    pub accounts_hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_archives_dir: PathBuf,
@@ -104,7 +103,6 @@ impl AccountsPackage {
             slot_deltas,
             snapshot_links,
             snapshot_storages,
-            accounts_hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
             snapshot_archives_dir: snapshot_archives_dir.as_ref().to_path_buf(),
@@ -129,8 +127,8 @@ pub struct SnapshotPackage {
     pub snapshot_type: SnapshotType,
 }
 
-impl From<AccountsPackage> for SnapshotPackage {
-    fn from(accounts_package: AccountsPackage) -> Self {
+impl SnapshotPackage {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: Hash) -> Self {
         assert!(
             accounts_package.snapshot_type.is_some(),
             "Cannot make a SnapshotPackage from an AccountsPackage when SnapshotType is None!"
@@ -141,7 +139,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 accounts_package.snapshot_archives_dir,
                 accounts_package.slot,
-                &accounts_package.accounts_hash,
+                &accounts_hash,
                 accounts_package.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
@@ -161,7 +159,7 @@ impl From<AccountsPackage> for SnapshotPackage {
                     accounts_package.snapshot_archives_dir,
                     incremental_snapshot_base_slot,
                     accounts_package.slot,
-                    &accounts_package.accounts_hash,
+                    &accounts_hash,
                     accounts_package.archive_format,
                 )
             }
@@ -171,7 +169,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,
                 slot: accounts_package.slot,
-                hash: accounts_package.accounts_hash,
+                hash: accounts_hash,
                 archive_format: accounts_package.archive_format,
             },
             block_height: accounts_package.block_height,

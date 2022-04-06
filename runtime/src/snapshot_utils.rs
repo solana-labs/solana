@@ -1845,6 +1845,7 @@ pub fn bank_to_full_snapshot_archive(
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
+        bank.get_accounts_hash(),
     )
 }
 
@@ -1890,10 +1891,12 @@ pub fn bank_to_incremental_snapshot_archive(
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
+        bank.get_accounts_hash(),
     )
 }
 
 /// Helper function to hold shared code to package, process, and archive full snapshots
+#[allow(clippy::too_many_arguments)]
 pub fn package_and_archive_full_snapshot(
     bank: &Bank,
     bank_snapshot_info: &BankSnapshotInfo,
@@ -1904,6 +1907,7 @@ pub fn package_and_archive_full_snapshot(
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
+    accounts_hash: Hash,
 ) -> Result<FullSnapshotArchiveInfo> {
     let accounts_package = AccountsPackage::new(
         bank,
@@ -1924,7 +1928,7 @@ pub fn package_and_archive_full_snapshot(
         &bank.get_accounts_hash(),
     );
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -1949,6 +1953,7 @@ pub fn package_and_archive_incremental_snapshot(
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
+    accounts_hash: Hash,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
     let accounts_package = AccountsPackage::new(
         bank,
@@ -1971,7 +1976,7 @@ pub fn package_and_archive_incremental_snapshot(
         &bank.get_accounts_hash(),
     );
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -3443,7 +3448,6 @@ mod tests {
                 slot_deltas: Vec::default(),
                 snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: SnapshotStorages::default(),
-                accounts_hash: Hash::default(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_archives_dir: PathBuf::default(),
