@@ -365,94 +365,23 @@ fn calculate_stake_rewards(
     Some((staker_rewards, voter_rewards, credits_observed))
 }
 
-pub trait StakeAccount {
-    fn initialize(
-        &self,
-        authorized: &Authorized,
-        lockup: &Lockup,
-        rent: &Rent,
-        feature_set: &FeatureSet,
-    ) -> Result<(), InstructionError>;
-    fn authorize(
-        &self,
-        signers: &HashSet<Pubkey>,
-        new_authority: &Pubkey,
-        stake_authorize: StakeAuthorize,
-        require_custodian_for_locked_stake_authorize: bool,
-        clock: &Clock,
-        custodian: Option<&Pubkey>,
-    ) -> Result<(), InstructionError>;
-    fn authorize_with_seed(
-        &self,
-        authority_base: &KeyedAccount,
-        authority_seed: &str,
-        authority_owner: &Pubkey,
-        new_authority: &Pubkey,
-        stake_authorize: StakeAuthorize,
-        require_custodian_for_locked_stake_authorize: bool,
-        clock: &Clock,
-        custodian: Option<&Pubkey>,
-    ) -> Result<(), InstructionError>;
-    fn delegate(
-        &self,
-        vote_account: &KeyedAccount,
-        clock: &Clock,
-        stake_history: &StakeHistory,
-        config: &Config,
-        signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
-    fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError>;
-    fn set_lockup(
-        &self,
-        lockup: &LockupArgs,
-        signers: &HashSet<Pubkey>,
-        clock: &Clock,
-    ) -> Result<(), InstructionError>;
-    fn split(
-        &self,
-        invoke_context: &InvokeContext,
-        lamports: u64,
-        split_stake: &KeyedAccount,
-        signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
-    fn merge(
-        &self,
-        invoke_context: &InvokeContext,
-        source_stake: &KeyedAccount,
-        clock: &Clock,
-        stake_history: &StakeHistory,
-        signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
-    fn withdraw(
-        &self,
-        lamports: u64,
-        to: &KeyedAccount,
-        clock: &Clock,
-        stake_history: &StakeHistory,
-        withdraw_authority: &KeyedAccount,
-        custodian: Option<&KeyedAccount>,
-        feature_set: &FeatureSet,
-    ) -> Result<(), InstructionError>;
-}
-
-impl<'a> StakeAccount for KeyedAccount<'a> {
-    fn initialize(
-        &self,
+    pub fn initialize(
+        stake_account: &KeyedAccount,
         authorized: &Authorized,
         lockup: &Lockup,
         rent: &Rent,
         feature_set: &FeatureSet,
     ) -> Result<(), InstructionError> {
-        if self.data_len()? != std::mem::size_of::<StakeState>() {
+        if stake_account.data_len()? != std::mem::size_of::<StakeState>() {
             return Err(InstructionError::InvalidAccountData);
         }
-        if let StakeState::Uninitialized = self.state()? {
-            let rent_exempt_reserve = rent.minimum_balance(self.data_len()?);
+        if let StakeState::Uninitialized = stake_account.state()? {
+            let rent_exempt_reserve = rent.minimum_balance(stake_account.data_len()?);
             let minimum_delegation = crate::get_minimum_delegation(feature_set);
             let minimum_balance = rent_exempt_reserve + minimum_delegation;
 
-            if self.lamports()? >= minimum_balance {
-                self.set_state(&StakeState::Initialized(Meta {
+            if stake_account.lamports()? >= minimum_balance {
+                stake_account.set_state(&StakeState::Initialized(Meta {
                     rent_exempt_reserve,
                     authorized: *authorized,
                     lockup: *lockup,
@@ -468,8 +397,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     /// Authorize the given pubkey to manage stake (deactivate, withdraw). This may be called
     /// multiple times, but will implicitly withdraw authorization from the previously authorized
     /// staker. The default staker is the owner of the stake account's pubkey.
-    fn authorize(
-        &self,
+    pub fn authorize(
+        stake_account: &KeyedAccount,
         signers: &HashSet<Pubkey>,
         new_authority: &Pubkey,
         stake_authorize: StakeAuthorize,
@@ -477,7 +406,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         clock: &Clock,
         custodian: Option<&Pubkey>,
     ) -> Result<(), InstructionError> {
-        match self.state()? {
+        match stake_account.state()? {
             StakeState::Stake(mut meta, stake) => {
                 meta.authorized.authorize(
                     signers,
@@ -489,7 +418,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         None
                     },
                 )?;
-                self.set_state(&StakeState::Stake(meta, stake))
+                stake_account.set_state(&StakeState::Stake(meta, stake))
             }
             StakeState::Initialized(mut meta) => {
                 meta.authorized.authorize(
@@ -502,13 +431,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         None
                     },
                 )?;
-                self.set_state(&StakeState::Initialized(meta))
+                stake_account.set_state(&StakeState::Initialized(meta))
             }
             _ => Err(InstructionError::InvalidAccountData),
         }
     }
-    fn authorize_with_seed(
-        &self,
+
+    pub fn authorize_with_seed(
+        stake_account: &KeyedAccount,
         authority_base: &KeyedAccount,
         authority_seed: &str,
         authority_owner: &Pubkey,
@@ -526,7 +456,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 authority_owner,
             )?);
         }
-        self.authorize(
+        authorize(
+            stake_account,
             &signers,
             new_authority,
             stake_authorize,
@@ -535,8 +466,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             custodian,
         )
     }
-    fn delegate(
-        &self,
+
+    pub fn delegate(
+        stake_account: &KeyedAccount,
         vote_account: &KeyedAccount,
         clock: &Clock,
         stake_history: &StakeHistory,
@@ -547,11 +479,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        match self.state()? {
+        match stake_account.state()? {
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let ValidatedDelegatedInfo { stake_amount } =
-                    validate_delegated_amount(self, &meta)?;
+                    validate_delegated_amount(stake_account, &meta)?;
                 let stake = new_stake(
                     stake_amount,
                     vote_account.unsigned_key(),
@@ -559,12 +491,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     clock.epoch,
                     config,
                 );
-                self.set_state(&StakeState::Stake(meta, stake))
+                stake_account.set_state(&StakeState::Stake(meta, stake))
             }
             StakeState::Stake(meta, mut stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let ValidatedDelegatedInfo { stake_amount } =
-                    validate_delegated_amount(self, &meta)?;
+                    validate_delegated_amount(stake_account, &meta)?;
                 redelegate(
                     &mut stake,
                     stake_amount,
@@ -574,42 +506,44 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     stake_history,
                     config,
                 )?;
-                self.set_state(&StakeState::Stake(meta, stake))
+                stake_account.set_state(&StakeState::Stake(meta, stake))
             }
             _ => Err(InstructionError::InvalidAccountData),
         }
     }
-    fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError> {
-        if let StakeState::Stake(meta, mut stake) = self.state()? {
+
+    pub fn deactivate(stake_account: &KeyedAccount, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError> {
+        if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             stake.deactivate(clock.epoch)?;
 
-            self.set_state(&StakeState::Stake(meta, stake))
+            stake_account.set_state(&StakeState::Stake(meta, stake))
         } else {
             Err(InstructionError::InvalidAccountData)
         }
     }
-    fn set_lockup(
-        &self,
+
+    pub fn set_lockup(
+        stake_account: &KeyedAccount,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
         clock: &Clock,
     ) -> Result<(), InstructionError> {
-        match self.state()? {
+        match stake_account.state()? {
             StakeState::Initialized(mut meta) => {
                 meta.set_lockup(lockup, signers, clock)?;
-                self.set_state(&StakeState::Initialized(meta))
+                stake_account.set_state(&StakeState::Initialized(meta))
             }
             StakeState::Stake(mut meta, stake) => {
                 meta.set_lockup(lockup, signers, clock)?;
-                self.set_state(&StakeState::Stake(meta, stake))
+                stake_account.set_state(&StakeState::Stake(meta, stake))
             }
             _ => Err(InstructionError::InvalidAccountData),
         }
     }
 
-    fn split(
-        &self,
+    pub fn split(
+        stake_account: &KeyedAccount,
         invoke_context: &InvokeContext,
         lamports: u64,
         split: &KeyedAccount,
@@ -624,16 +558,16 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if !matches!(split.state()?, StakeState::Uninitialized) {
             return Err(InstructionError::InvalidAccountData);
         }
-        if lamports > self.lamports()? {
+        if lamports > stake_account.lamports()? {
             return Err(InstructionError::InsufficientFunds);
         }
 
-        match self.state()? {
+        match stake_account.state()? {
             StakeState::Stake(meta, mut stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let validated_split_info = validate_split_amount(
                     invoke_context,
-                    self,
+                    stake_account,
                     split,
                     lamports,
                     &meta,
@@ -677,20 +611,20 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 split_meta.rent_exempt_reserve =
                     validated_split_info.destination_rent_exempt_reserve;
 
-                self.set_state(&StakeState::Stake(meta, stake))?;
+                stake_account.set_state(&StakeState::Stake(meta, stake))?;
                 split.set_state(&StakeState::Stake(split_meta, split_stake))?;
             }
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let validated_split_info =
-                    validate_split_amount(invoke_context, self, split, lamports, &meta, None)?;
+                    validate_split_amount(invoke_context, stake_account, split, lamports, &meta, None)?;
                 let mut split_meta = meta;
                 split_meta.rent_exempt_reserve =
                     validated_split_info.destination_rent_exempt_reserve;
                 split.set_state(&StakeState::Initialized(split_meta))?;
             }
             StakeState::Uninitialized => {
-                if !signers.contains(self.unsigned_key()) {
+                if !signers.contains(stake_account.unsigned_key()) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
             }
@@ -698,19 +632,19 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
 
         // Deinitialize state upon zero balance
-        if lamports == self.lamports()? {
-            self.set_state(&StakeState::Uninitialized)?;
+        if lamports == stake_account.lamports()? {
+            stake_account.set_state(&StakeState::Uninitialized)?;
         }
 
         split
             .try_account_ref_mut()?
             .checked_add_lamports(lamports)?;
-        self.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
+        stake_account.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
         Ok(())
     }
 
-    fn merge(
-        &self,
+    pub fn merge(
+        stake_account: &KeyedAccount,
         invoke_context: &InvokeContext,
         source_account: &KeyedAccount,
         clock: &Clock,
@@ -721,14 +655,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if source_account.owner()? != id() {
             return Err(InstructionError::IncorrectProgramId);
         }
-        // Close the self-reference loophole
-        if source_account.unsigned_key() == self.unsigned_key() {
+        // Close the stake_account-reference loophole
+        if source_account.unsigned_key() == stake_account.unsigned_key() {
             return Err(InstructionError::InvalidArgument);
         }
 
         ic_msg!(invoke_context, "Checking if destination stake is mergeable");
         let stake_merge_kind =
-            MergeKind::get_if_mergeable(invoke_context, self, clock, stake_history)?;
+            MergeKind::get_if_mergeable(invoke_context, stake_account, clock, stake_history)?;
         let meta = stake_merge_kind.meta();
 
         // Authorized staker is allowed to split/merge accounts
@@ -742,7 +676,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if let Some(merged_state) =
             stake_merge_kind.merge(invoke_context, source_merge_kind, clock)?
         {
-            self.set_state(&merged_state)?;
+            stake_account.set_state(&merged_state)?;
         }
 
         // Source is about to be drained, deinitialize its state
@@ -753,12 +687,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         source_account
             .try_account_ref_mut()?
             .checked_sub_lamports(lamports)?;
-        self.try_account_ref_mut()?.checked_add_lamports(lamports)?;
+        stake_account.try_account_ref_mut()?.checked_add_lamports(lamports)?;
         Ok(())
     }
 
-    fn withdraw(
-        &self,
+    pub fn withdraw(
+        stake_account: &KeyedAccount,
         lamports: u64,
         to: &KeyedAccount,
         clock: &Clock,
@@ -773,7 +707,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             .ok_or(InstructionError::MissingRequiredSignature)?;
         signers.insert(*withdraw_authority_pubkey);
 
-        let (lockup, reserve, is_staked) = match self.state()? {
+        let (lockup, reserve, is_staked) = match stake_account.state()? {
             StakeState::Stake(meta, stake) => {
                 meta.authorized
                     .check(&signers, StakeAuthorize::Withdrawer)?;
@@ -802,7 +736,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 (meta.lockup, reserve, false)
             }
             StakeState::Uninitialized => {
-                if !signers.contains(self.unsigned_key()) {
+                if !signers.contains(stake_account.unsigned_key()) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
                 (Lockup::default(), 0, false) // no lockup, no restrictions
@@ -820,28 +754,27 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         let lamports_and_reserve = checked_add(lamports, reserve)?;
         // if the stake is active, we mustn't allow the account to go away
         if is_staked // line coverage for branch coverage
-            && lamports_and_reserve > self.lamports()?
+            && lamports_and_reserve > stake_account.lamports()?
         {
             return Err(InstructionError::InsufficientFunds);
         }
 
-        if lamports != self.lamports()? // not a full withdrawal
-            && lamports_and_reserve > self.lamports()?
+        if lamports != stake_account.lamports()? // not a full withdrawal
+            && lamports_and_reserve > stake_account.lamports()?
         {
             assert!(!is_staked);
             return Err(InstructionError::InsufficientFunds);
         }
 
         // Deinitialize state upon zero balance
-        if lamports == self.lamports()? {
-            self.set_state(&StakeState::Uninitialized)?;
+        if lamports == stake_account.lamports()? {
+            stake_account.set_state(&StakeState::Uninitialized)?;
         }
 
-        self.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
+        stake_account.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
         to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
         Ok(())
     }
-}
 
 /// After calling `validate_delegated_amount()`, this struct contains calculated values that are used
 /// by the caller.

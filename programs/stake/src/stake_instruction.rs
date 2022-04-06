@@ -1,10 +1,11 @@
-#[deprecated(
-    since = "1.8.0",
-    note = "Please use `solana_sdk::stake::instruction` or `solana_program::stake::instruction` instead"
-)]
-pub use solana_sdk::stake::instruction::*;
 use {
-    crate::{config, stake_state::StakeAccount},
+    crate::{
+        config,
+        stake_state::{
+            authorize, authorize_with_seed, deactivate, delegate, initialize, merge, set_lockup,
+            split, withdraw,
+        },
+    },
     log::*,
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
@@ -15,7 +16,7 @@ use {
         keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
         stake::{
-            instruction::StakeInstruction,
+            instruction::{LockupArgs, StakeInstruction},
             program::id,
             state::{Authorized, Lockup},
         },
@@ -44,7 +45,7 @@ pub fn process_instruction(
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            me.initialize(&authorized, &lockup, &rent, &invoke_context.feature_set)
+            initialize(me, &authorized, &lockup, &rent, &invoke_context.feature_set)
         }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             instruction_context.check_number_of_instruction_accounts(3)?;
@@ -62,7 +63,8 @@ pub fn process_instruction(
                         .ok()
                         .map(|ka| ka.unsigned_key());
 
-                me.authorize(
+                authorize(
+                    me,
                     &signers,
                     &authorized_pubkey,
                     stake_authorize,
@@ -71,7 +73,8 @@ pub fn process_instruction(
                     custodian,
                 )
             } else {
-                me.authorize(
+                authorize(
+                    me,
                     &signers,
                     &authorized_pubkey,
                     stake_authorize,
@@ -97,7 +100,8 @@ pub fn process_instruction(
                         .ok()
                         .map(|ka| ka.unsigned_key());
 
-                me.authorize_with_seed(
+                authorize_with_seed(
+                    me,
                     authority_base,
                     &args.authority_seed,
                     &args.authority_owner,
@@ -108,7 +112,8 @@ pub fn process_instruction(
                     custodian,
                 )
             } else {
-                me.authorize_with_seed(
+                authorize_with_seed(
+                    me,
                     authority_base,
                     &args.authority_seed,
                     &args.authority_owner,
@@ -138,13 +143,13 @@ pub fn process_instruction(
             }
             let config = config::from(&*config_account.try_account_ref()?)
                 .ok_or(InstructionError::InvalidArgument)?;
-            me.delegate(vote, &clock, &stake_history, &config, &signers)
+            delegate(me, vote, &clock, &stake_history, &config, &signers)
         }
         StakeInstruction::Split(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let split_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            me.split(invoke_context, lamports, split_stake, &signers)
+            split(me, invoke_context, lamports, split_stake, &signers)
         }
         StakeInstruction::Merge => {
             instruction_context.check_number_of_instruction_accounts(2)?;
@@ -157,7 +162,8 @@ pub fn process_instruction(
                 instruction_context,
                 3,
             )?;
-            me.merge(
+            merge(
+                me,
                 invoke_context,
                 source_stake,
                 &clock,
@@ -176,7 +182,8 @@ pub fn process_instruction(
                 3,
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
-            me.withdraw(
+            withdraw(
+                me,
                 lamports,
                 to,
                 &clock,
@@ -189,11 +196,11 @@ pub fn process_instruction(
         StakeInstruction::Deactivate => {
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-            me.deactivate(&clock, &signers)
+            deactivate(me, &clock, &signers)
         }
         StakeInstruction::SetLockup(lockup) => {
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            me.set_lockup(&lockup, &signers, &clock)
+            set_lockup(me, &lockup, &signers, &clock)
         }
         StakeInstruction::InitializeChecked => {
             if invoke_context
@@ -214,7 +221,8 @@ pub fn process_instruction(
 
                 let rent =
                     get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-                me.initialize(
+                initialize(
+                    me,
                     &authorized,
                     &Lockup::default(),
                     &rent,
@@ -243,7 +251,8 @@ pub fn process_instruction(
                         .ok()
                         .map(|ka| ka.unsigned_key());
 
-                me.authorize(
+                authorize(
+                    me,
                     &signers,
                     authorized_pubkey,
                     stake_authorize,
@@ -275,7 +284,8 @@ pub fn process_instruction(
                         .ok()
                         .map(|ka| ka.unsigned_key());
 
-                me.authorize_with_seed(
+                authorize_with_seed(
+                    me,
                     authority_base,
                     &args.authority_seed,
                     &args.authority_owner,
@@ -312,7 +322,7 @@ pub fn process_instruction(
                     custodian,
                 };
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                me.set_lockup(&lockup, &signers, &clock)
+                set_lockup(me, &lockup, &signers, &clock)
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
@@ -356,7 +366,11 @@ mod tests {
             rent::Rent,
             stake::{
                 config as stake_config,
-                instruction::{self, LockupArgs},
+                instruction::{
+                    self, authorize_checked, authorize_checked_with_seed, initialize_checked,
+                    set_lockup_checked, AuthorizeCheckedWithSeedArgs, AuthorizeWithSeedArgs,
+                    LockupArgs, StakeError,
+                },
                 state::{Authorized, Lockup, StakeAuthorize},
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
