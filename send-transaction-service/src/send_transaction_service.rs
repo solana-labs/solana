@@ -376,9 +376,9 @@ impl SendTransactionService {
             .collect::<Vec<&[u8]>>();
 
         for address in &addresses {
-            if let Err(err) =
-                connection_cache::send_wire_transaction_batch(&wire_transacions, address)
-            {
+            let send_result =
+                connection_cache::send_wire_transaction_batch(&wire_transacions, address);
+            if let Err(err) = send_result {
                 warn!(
                     "Failed to send transactions in batch to {}: {:?}",
                     tpu_address, err
