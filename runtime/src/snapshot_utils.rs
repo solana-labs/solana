@@ -1582,9 +1582,8 @@ pub fn verify_snapshot_archive<P, Q, R>(
     slot: Option<Slot>,
 ) where
     P: AsRef<Path>,
-    Q: AsRef<Path> + Clone + std::fmt::Debug,
+    Q: AsRef<Path>,
     R: AsRef<Path>,
-    PathBuf: From<Q>,
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
