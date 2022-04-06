@@ -101,10 +101,6 @@ pub mod dedupe_config_program_signers {
     solana_sdk::declare_id!("8kEuAshXLsgkUEdcFVLqrjCGGHVWFW99ZZpxvAzzMtBp");
 }
 
-pub mod deterministic_shred_seed_enabled {
-    solana_sdk::declare_id!("FjSRMpFe7mofQ3WrEMT7Smjk2sME1XdAoRxcv55V6M44");
-}
-
 pub mod verify_tx_signatures_len {
     solana_sdk::declare_id!("EVW9B5xD9FFK7vw1SBARwMA4s5eRo5eKJdKpsBikzKBz");
 }
@@ -213,10 +209,6 @@ pub mod remove_native_loader {
 
 pub mod send_to_tpu_vote_port {
     solana_sdk::declare_id!("C5fh68nJ7uyKAuYZg2x9sEQ5YrVf3dkW6oojNBSc3Jvo");
-}
-
-pub mod turbine_peers_shuffle {
-    solana_sdk::declare_id!("4VvpgRD6UsHvkXwpuQhtR5NG1G4esMaExeWuSEpsYRUa");
 }
 
 pub mod requestable_heap_size {
@@ -351,7 +343,6 @@ lazy_static! {
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
-        (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
         (verify_tx_signatures_len::id(), "prohibit extra transaction signatures"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
@@ -379,7 +370,6 @@ lazy_static! {
         (optimize_epoch_boundary_updates::id(), "optimize epoch boundary updates"),
         (remove_native_loader::id(), "remove support for the native loader"),
         (send_to_tpu_vote_port::id(), "send votes to the tpu vote port"),
-        (turbine_peers_shuffle::id(), "turbine peers shuffle patch"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
