@@ -482,11 +482,11 @@ pub fn spawn_server(
 
 #[cfg(test)]
 mod test {
-    use solana_sdk::quic::QUIC_KEEP_ALIVE_MS;
     use {
         super::*,
         crossbeam_channel::unbounded,
         quinn::{ClientConfig, NewConnection},
+        solana_sdk::quic::QUIC_KEEP_ALIVE_MS,
         std::{net::SocketAddr, time::Instant},
     };
 
