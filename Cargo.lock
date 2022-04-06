@@ -4745,7 +4745,6 @@ dependencies = [
  "solana-poh",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
- "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
@@ -5531,52 +5530,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-replica-lib"
-version = "1.11.0"
-dependencies = [
- "crossbeam-channel",
- "futures-util",
- "log",
- "prost",
- "solana-rpc",
- "solana-runtime",
- "solana-sdk",
- "tokio",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
-name = "solana-replica-node"
-version = "1.11.0"
-dependencies = [
- "clap 2.33.3",
- "crossbeam-channel",
- "log",
- "rand 0.7.3",
- "serial_test",
- "solana-clap-utils",
- "solana-core",
- "solana-download-utils",
- "solana-genesis-utils",
- "solana-gossip",
- "solana-ledger",
- "solana-local-cluster",
- "solana-logger 1.11.0",
- "solana-net-utils",
- "solana-replica-lib",
- "solana-rpc",
- "solana-runtime",
- "solana-sdk",
- "solana-send-transaction-service",
- "solana-streamer",
- "solana-validator",
- "solana-version",
- "tempfile",
- "tonic-build",
-]
-
-[[package]]
 name = "solana-rpc"
 version = "1.11.0"
 dependencies = [
@@ -6082,7 +6035,6 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
- "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
