@@ -314,14 +314,13 @@ impl SendTransactionService {
 
             match working_bank.get_signature_status_slot(signature) {
                 None => {
-                    if transaction_info.last_sent_time.is_none()
-                        || transaction_info
-                            .last_sent_time
-                            .unwrap()
-                            .elapsed()
-                            .as_millis()
-                            > config.retry_rate_ms as u128
-                    {
+                    let now = Instant::now(); // reuse in assignment below
+                    let retry_rate = Duration::from_millis(config.retry_rate_ms): // move outside retain iteration
+                    let need_send = transaction_info
+                        .last_sent_time
+                        .map(|last| now.duration_since(last) >= retry_rate)
+                        .unwrap_or(true);
+                    if need_send {
                         if transaction_info.last_sent_time.is_some() {
                             // Transaction sent before is unknown to the working bank, it might have been
                             // dropped or landed in another fork.  Re-send it
