@@ -553,7 +553,7 @@ mod tests {
             saved_snapshots_dir.path(),
             saved_accounts_dir.path(),
             ArchiveFormat::TarBzip2,
-            Some(saved_slot),
+            snapshot_utils::VerifyBank::NonDeterministic(saved_slot),
         );
     }
 

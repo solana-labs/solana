@@ -1573,13 +1573,22 @@ fn get_io_error(error: &str) -> SnapshotError {
     SnapshotError::Io(IoError::new(ErrorKind::Other, error))
 }
 
-/// slot is Some(slot) if the serialized bank was 'reserialized' into a non-deterministic format
+#[derive(Debug, Copy, Clone)]
+/// allow tests to specify what happened to the serialized format
+pub enum VerifyBank {
+    /// the bank's serialized format is expected to be identical to what we are comparing against
+    Deterministic,
+    /// the serialized bank was 'reserialized' into a non-deterministic format at the specified slot
+    /// so, deserialize both files and compare deserialized results
+    NonDeterministic(Slot),
+}
+
 pub fn verify_snapshot_archive<P, Q, R>(
     snapshot_archive: P,
     snapshots_to_verify: Q,
     storages_to_verify: R,
     archive_format: ArchiveFormat,
-    slot: Option<Slot>,
+    verify_bank: VerifyBank,
 ) where
     P: AsRef<Path>,
     Q: AsRef<Path>,
@@ -1598,7 +1607,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 
     // Check snapshots are the same
     let unpacked_snapshots = unpack_dir.join("snapshots");
-    if let Some(slot) = slot {
+    if let VerifyBank::NonDeterministic(slot) = verify_bank {
         // file contents may be different, but deserialized structs should be equal
         let slot = slot.to_string();
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
