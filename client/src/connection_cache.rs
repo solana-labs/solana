@@ -3,10 +3,10 @@ use {
         quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
+    lru::LruCache,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{transaction::VersionedTransaction, transport::TransportError},
     std::{
-        collections::{hash_map::Entry, BTreeMap, HashMap},
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
     },
@@ -22,26 +22,14 @@ enum Connection {
 }
 
 struct ConnMap {
-    // Keeps track of the connection associated with an addr and the last time it was used
-    map: HashMap<SocketAddr, (Connection, u64)>,
-    // Helps to find the least recently used connection. The search and inserts are O(log(n))
-    // but since we're bounding the size of the collections, this should be constant
-    // (and hopefully negligible) time. In theory, we can do this in constant time
-    // with a queue implemented as a doubly-linked list (and all the
-    // HashMap entries holding a "pointer" to the corresponding linked-list node),
-    // so we can push, pop and bump a used connection back to the end of the queue in O(1) time, but
-    // that seems non-"Rust-y" and low bang/buck. This is still pretty terrible though...
-    last_used_times: BTreeMap<u64, SocketAddr>,
-    ticks: u64,
+    map: LruCache<SocketAddr, Connection>,
     use_quic: bool,
 }
 
 impl ConnMap {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
-            last_used_times: BTreeMap::new(),
-            ticks: 0,
+            map: LruCache::new(MAX_CONNECTIONS),
             use_quic: false,
         }
     }
@@ -60,54 +48,29 @@ pub fn set_use_quic(use_quic: bool) {
     map.set_use_quic(use_quic);
 }
 
-#[allow(dead_code)]
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
 fn get_connection(addr: &SocketAddr) -> Connection {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
-    let ticks = map.ticks;
-    let use_quic = map.use_quic;
-    let (conn, target_ticks) = match map.map.entry(*addr) {
-        Entry::Occupied(mut entry) => {
-            let mut pair = entry.get_mut();
-            let old_ticks = pair.1;
-            pair.1 = ticks;
-            (pair.0.clone(), old_ticks)
-        }
-        Entry::Vacant(entry) => {
+
+    match map.map.get(addr) {
+        Some(connection) => connection.clone(),
+        None => {
             let (_, send_socket) = solana_net_utils::bind_in_range(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                 VALIDATOR_PORT_RANGE,
             )
             .unwrap();
-            let conn = if use_quic {
+            let connection = if map.use_quic {
                 Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
             } else {
                 Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
             };
 
-            entry.insert((conn.clone(), ticks));
-            (conn, ticks)
+            map.map.put(*addr, connection.clone());
+            connection
         }
-    };
-
-    let num_connections = map.map.len();
-    if num_connections > MAX_CONNECTIONS {
-        let (old_ticks, target_addr) = {
-            let (old_ticks, target_addr) = map.last_used_times.iter().next().unwrap();
-            (*old_ticks, *target_addr)
-        };
-        map.map.remove(&target_addr);
-        map.last_used_times.remove(&old_ticks);
     }
-
-    if target_ticks != ticks {
-        map.last_used_times.remove(&target_ticks);
-    }
-    map.last_used_times.insert(ticks, *addr);
-
-    map.ticks += 1;
-    conn
 }
 
 // TODO: see https://github.com/solana-labs/solana/issues/23851
@@ -220,11 +183,11 @@ mod tests {
         {
             let map = (*CONNECTION_MAP).lock().unwrap();
             addrs.iter().for_each(|a| {
-                let conn = map.map.get(a).expect("Address not found");
-                assert!(a.ip() == ip(conn.0.clone()));
+                let conn = map.map.peek(a).expect("Address not found");
+                assert!(a.ip() == ip(conn.clone()));
             });
 
-            assert!(map.map.get(&first_addr).is_none());
+            assert!(map.map.peek(&first_addr).is_none());
         }
 
         // Test that get_connection updates which connection is next up for eviction
@@ -237,7 +200,7 @@ mod tests {
         get_connection(&get_addr(&mut rng));
 
         let map = (*CONNECTION_MAP).lock().unwrap();
-        assert!(map.map.get(&addrs[0]).is_some());
-        assert!(map.map.get(&addrs[1]).is_none());
+        assert!(map.map.peek(&addrs[0]).is_some());
+        assert!(map.map.peek(&addrs[1]).is_none());
     }
 }
