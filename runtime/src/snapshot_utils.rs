@@ -1609,8 +1609,8 @@ pub fn verify_snapshot_archive<P, Q, R>(
 
         assert!(crate::serde_snapshot::compare_two_serialized_banks(
             SerdeStyle::Newer,
-            p1.clone(),
-            p2.clone()
+            &p1,
+            &p2
         )
         .unwrap());
         std::fs::remove_file(p1).unwrap();
