@@ -1,18 +1,19 @@
-import React from "react";
 import { Message, ParsedMessage } from "@solana/web3.js";
 import { Cluster } from "providers/cluster";
 import { TableCardBody } from "components/common/TableCardBody";
-import { programLabel } from "utils/tx";
 import { InstructionLogs } from "utils/program-logs";
+import { ProgramName } from "utils/anchor";
 
 export function ProgramLogsCardBody({
   message,
   logs,
   cluster,
+  url,
 }: {
   message: Message | ParsedMessage;
   logs: InstructionLogs[];
   cluster: Cluster;
+  url: string;
 }) {
   return (
     <TableCardBody>
@@ -28,9 +29,6 @@ export function ProgramLogsCardBody({
         } else {
           programId = ix.programId;
         }
-
-        const programName =
-          programLabel(programId.toBase58(), cluster) || "Unknown Program";
         const programLogs: InstructionLogs | undefined = logs[index];
 
         let badgeColor = "white";
@@ -45,7 +43,12 @@ export function ProgramLogsCardBody({
                 <span className={`badge bg-${badgeColor}-soft me-2`}>
                   #{index + 1}
                 </span>
-                {programName} Instruction
+                <ProgramName
+                  programId={programId}
+                  cluster={cluster}
+                  url={url}
+                />{" "}
+                Instruction
               </div>
               {programLogs && (
                 <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">
