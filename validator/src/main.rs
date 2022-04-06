@@ -1180,12 +1180,6 @@ pub fn main() {
                 .help("Use QUIC to send transactions."),
         )
         .arg(
-            Arg::with_name("tpu_do_batch")
-                .long("tpu-do-batch")
-                .takes_value(false)
-                .help("When this is set to true, the system will send transactions in batches."),
-        )
-        .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
@@ -1360,6 +1354,7 @@ pub fn main() {
             Arg::with_name("rpc_send_transaction_batch_ms")
                 .long("rpc-send-batch-ms")
                 .value_name("MILLISECS")
+                .hidden(true)
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
                 .default_value(&default_rpc_send_transaction_batch_ms)
@@ -1393,8 +1388,9 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("rpc_send_transaction_batch_size")
-                .long("rpc-send-service-batch-size")
+                .long("rpc-send-batch-size")
                 .value_name("NUMBER")
+                .hidden(true)
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
                 .default_value(&default_rpc_send_transaction_batch_size)
@@ -2174,7 +2170,6 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
-    let tpu_do_batch = matches.is_present("tpu_do_batch");
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
@@ -2358,6 +2353,36 @@ pub fn main() {
     if matches.is_present("no_accounts_db_index_hashing") {
         info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
     }
+    let retry_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64);
+    let batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
+    let batch_send_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
+
+    if batch_send_rate_ms < retry_rate_ms || batch_send_rate_ms < 1 {
+        eprintln!(
+            "The specified rpc-send-batch-ms ({}) is invalid, it must be between 1 and the value of rpc-send-retry-ms ({})",
+            retry_rate_ms, batch_send_rate_ms
+        );
+        exit(1);
+    }
+
+    if batch_size <= 0 {
+        eprintln!(
+            "The specified rpc-send-batch-size ({}) is invalid, it must be a positive number.",
+            batch_size
+        );
+        exit(1);
+    }
+
+    let tps = batch_size as u64 * 1000 / batch_send_rate_ms;
+    if tps > send_transaction_service::MAX_TPS {
+        eprintln!(
+            "Either the specified rpc-send-batch-size ({}) or rpc-send-batch-ms ({}) is invalid, \
+            'rpc-send-batch-size * 1000 / rpc-send-batch-ms' must be smaller than ({}) .",
+            batch_size, batch_send_rate_ms, send_transaction_service::MAX_TPS
+        );
+        exit(1);
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2438,7 +2463,7 @@ pub fn main() {
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
-            retry_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
+            retry_rate_ms,
             leader_forward_count: value_t_or_exit!(
                 matches,
                 "rpc_send_transaction_leader_forward_count",
@@ -2456,9 +2481,8 @@ pub fn main() {
                 usize
             ),
             use_quic: tpu_use_quic,
-            do_batch: tpu_do_batch,
-            batch_send_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64),
-            batch_size: value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize),
+            batch_send_rate_ms,
+            batch_size,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),

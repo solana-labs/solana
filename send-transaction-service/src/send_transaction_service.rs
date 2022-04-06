@@ -22,21 +22,24 @@ use {
 /// Maximum size of the transaction queue
 const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
 
-/// Maximum batch size for sending transaction in batch
-/// When this size is reached, send out the transactions.
-const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 100;
-
 /// Default retry interval
 const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
-
-/// Default maximum batch waiting time in ms. If this time is reached,
-/// whatever transaction cached will be sent.
-const DEFAULT_BATCH_SEND_RATE_MS: u64 = 200;
 
 /// Default number of leaders to forward transactions to
 const DEFAULT_LEADER_FORWARD_COUNT: u64 = 2;
 /// Default max number of time the service will retry broadcast
 const DEFAULT_SERVICE_MAX_RETRIES: usize = usize::MAX;
+
+/// Default batch size for sending transaction in batch
+/// When this size is reached, send out the transactions.
+const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 1;
+
+/// Maximum transactions per second
+pub const MAX_TPS: u64 = 1_000;
+
+/// Default maximum batch waiting time in ms. If this time is reached,
+/// whatever transaction cached will be sent.
+const DEFAULT_BATCH_SEND_RATE_MS: u64 = 1;
 
 pub struct SendTransactionService {
     thread: JoinHandle<()>,
@@ -84,7 +87,6 @@ struct ProcessTransactionsResult {
 }
 
 pub const DEFAULT_TPU_USE_QUIC: bool = false;
-pub const DEFAULT_TPU_DO_BATCH: bool = false;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -94,8 +96,6 @@ pub struct Config {
     pub service_max_retries: usize,
     /// Controls if to use Quic protocol to send transactions
     pub use_quic: bool,
-    /// Controls if to send transactions in batch
-    pub do_batch: bool,
     /// The batch size for sending transaction in batch
     pub batch_size: usize,
     /// Controls the how frequently send the batches
@@ -110,7 +110,6 @@ impl Default for Config {
             default_max_retries: None,
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             use_quic: DEFAULT_TPU_USE_QUIC,
-            do_batch: DEFAULT_TPU_DO_BATCH,
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
         }
@@ -180,8 +179,8 @@ impl SendTransactionService {
                 match receiver.recv_timeout(Duration::from_millis(1000.min(recv_timeout_ms))) {
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {
-                        if config.do_batch && !transactions.is_empty() {
-                            // Timed out waiting for batch and there is something in the batch
+                        if !transactions.is_empty() {
+                            // Timed out waiting for the full batch and there is something in the batch
                             inc_new_counter_info!("send_transaction_service-batch-time-out-tx", 1);
                             do_batch = true;
                         }
@@ -191,7 +190,16 @@ impl SendTransactionService {
                         let mut transactions_len = transactions.len();
                         let entry = transactions.entry(transaction_info.signature);
                         if let Entry::Vacant(_) = entry {
-                            if config.do_batch {
+                            if transactions_len >= MAX_TRANSACTION_QUEUE_SIZE {
+                                // queue is already full, no more queueing for retry, just send this txn out.
+                                datapoint_warn!("send_transaction_service-queue-overflow");
+                                Self::send_single_transaction(
+                                    &tpu_address,
+                                    &leader_info,
+                                    &config,
+                                    &transaction_info,
+                                );
+                            } else {
                                 entry.or_insert(transaction_info);
                                 transactions_len += 1;
 
@@ -205,32 +213,6 @@ impl SendTransactionService {
                                 // reached batch limit
                                 inc_new_counter_info!("send_transaction_service-batch-tx", 1);
                                 do_batch = true;
-                            } else {
-                                // non-batched send
-                                let addresses = leader_info.as_ref().map(|leader_info| {
-                                    leader_info.get_leader_tpus(config.leader_forward_count)
-                                });
-                                let addresses = addresses
-                                    .map(|address_list| {
-                                        if address_list.is_empty() {
-                                            vec![&tpu_address]
-                                        } else {
-                                            address_list
-                                        }
-                                    })
-                                    .unwrap_or_else(|| vec![&tpu_address]);
-                                for address in addresses {
-                                    Self::send_transaction(
-                                        address,
-                                        &transaction_info.wire_transaction,
-                                    );
-                                }
-                                if transactions_len < MAX_TRANSACTION_QUEUE_SIZE {
-                                    inc_new_counter_info!("send_transaction_service-insert-tx", 1);
-                                    entry.or_insert(transaction_info);
-                                } else {
-                                    datapoint_warn!("send_transaction_service-queue-overflow");
-                                }
                             }
                         } else {
                             inc_new_counter_info!("send_transaction_service-recv-duplicate", 1);
@@ -332,44 +314,28 @@ impl SendTransactionService {
 
             match working_bank.get_signature_status_slot(signature) {
                 None => {
-                    // Transaction is unknown to the working bank, it might have been
-                    // dropped or landed in another fork.  Re-send it
-                    info!("Retrying transaction: {}", signature);
-                    result.retried += 1;
-                    transaction_info.retries += 1;
-
-                    inc_new_counter_info!("send_transaction_service-retry", 1);
-                    if config.do_batch {
-                        if transaction_info.last_sent_time.is_none()
-                            || transaction_info
-                                .last_sent_time
-                                .unwrap()
-                                .elapsed()
-                                .as_millis()
-                                > config.retry_rate_ms as u128
-                        {
-                            batched_transactions.insert(*signature);
-                            transaction_info.last_sent_time = Some(Instant::now());
+                    if transaction_info.last_sent_time.is_none()
+                        || transaction_info
+                            .last_sent_time
+                            .unwrap()
+                            .elapsed()
+                            .as_millis()
+                            > config.retry_rate_ms as u128
+                    {
+                        if transaction_info.last_sent_time.is_some() {
+                            // Transaction sent before is unknown to the working bank, it might have been
+                            // dropped or landed in another fork.  Re-send it
+    
+                            info!("Retrying transaction: {}", signature);
+                            result.retried += 1;
+                            transaction_info.retries += 1;
+    
+                            inc_new_counter_info!("send_transaction_service-retry", 1);
                         }
-                        return true;
+    
+                        batched_transactions.insert(*signature);
+                        transaction_info.last_sent_time = Some(Instant::now());
                     }
-
-                    let addresses = leader_info.as_ref().map(|leader_info| {
-                        leader_info.get_leader_tpus(config.leader_forward_count)
-                    });
-                    let addresses = addresses
-                        .map(|address_list| {
-                            if address_list.is_empty() {
-                                vec![tpu_address]
-                            } else {
-                                address_list
-                            }
-                        })
-                        .unwrap_or_else(|| vec![tpu_address]);
-                    for address in addresses {
-                        Self::send_transaction(address, &transaction_info.wire_transaction);
-                    }
-                    transaction_info.last_sent_time = Some(Instant::now());
                     true
                 }
                 Some((_slot, status)) => {
@@ -386,7 +352,7 @@ impl SendTransactionService {
             }
         });
 
-        if !config.do_batch {
+        if batched_transactions.is_empty() {
             return result;
         }
 
@@ -421,6 +387,30 @@ impl SendTransactionService {
             }
         }
         result
+    }
+
+    fn send_single_transaction<T: TpuInfo + std::marker::Send + 'static>(
+        tpu_address: &SocketAddr,
+        leader_info: &Option<T>,
+        config: &Config,
+        transaction_info: &TransactionInfo,
+    ) {
+        // non-batched send
+        let addresses = leader_info
+            .as_ref()
+            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
+        let addresses = addresses
+            .map(|address_list| {
+                if address_list.is_empty() {
+                    vec![tpu_address]
+                } else {
+                    address_list
+                }
+            })
+            .unwrap_or_else(|| vec![&tpu_address]);
+        for address in addresses {
+            Self::send_transaction(address, &transaction_info.wire_transaction);
+        }
     }
 
     fn send_transaction(tpu_address: &SocketAddr, wire_transaction: &[u8]) {
