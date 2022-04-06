@@ -14,8 +14,7 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_package::{
-            AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
-            SnapshotType,
+            AccountsPackage, PendingAccountsPackage, SnapshotPackage, SnapshotType,
         },
     },
     bincode::{config::Options, serialize_into},
@@ -178,9 +177,6 @@ pub enum SnapshotError {
 
     #[error("Unpack error: {0}")]
     UnpackError(#[from] UnpackError),
-
-    #[error("accounts package send error")]
-    AccountsPackageSendError(#[from] AccountsPackageSendError),
 
     #[error("source({1}) - I/O error: {0}")]
     IoWithSource(std::io::Error, &'static str),
@@ -1638,7 +1634,7 @@ where
 pub fn snapshot_bank(
     root_bank: &Bank,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
-    accounts_package_sender: &AccountsPackageSender,
+    pending_accounts_package: &PendingAccountsPackage,
     bank_snapshots_dir: impl AsRef<Path>,
     snapshot_archives_dir: impl AsRef<Path>,
     snapshot_version: SnapshotVersion,
@@ -1672,7 +1668,23 @@ pub fn snapshot_bank(
     )
     .expect("failed to hard link bank snapshot into a tmpdir");
 
-    accounts_package_sender.send(accounts_package)?;
+    if can_submit_accounts_package(&accounts_package, pending_accounts_package) {
+        let old_accounts_package = pending_accounts_package
+            .lock()
+            .unwrap()
+            .replace(accounts_package);
+        if let Some(old_accounts_package) = old_accounts_package {
+            debug!(
+                "The pending AccountsPackage has been overwritten: \
+                \nNew AccountsPackage slot: {}, snapshot type: {:?} \
+                \nOld AccountsPackage slot: {}, snapshot type: {:?}",
+                root_bank.slot(),
+                snapshot_type,
+                old_accounts_package.slot,
+                old_accounts_package.snapshot_type,
+            );
+        }
+    }
 
     Ok(())
 }
@@ -1875,6 +1887,37 @@ pub fn should_take_incremental_snapshot(
 ) -> bool {
     block_height % incremental_snapshot_archive_interval_slots == 0
         && last_full_snapshot_slot.is_some()
+}
+
+/// Decide if an accounts package can be submitted to the PendingAccountsPackage
+///
+/// This is based on the values for `snapshot_type` in both the `accounts_package` and the
+/// `pending_accounts_package`:
+/// - if the new AccountsPackage is for a full snapshot, always submit
+/// - if the new AccountsPackage is for an incremental snapshot, submit as long as there isn't a
+///   pending full snapshot
+/// - otherwise, only submit the new AccountsPackage as long as there's not a pending package
+///   destined for a snapshot archive
+fn can_submit_accounts_package(
+    accounts_package: &AccountsPackage,
+    pending_accounts_package: &PendingAccountsPackage,
+) -> bool {
+    match accounts_package.snapshot_type {
+        Some(SnapshotType::FullSnapshot) => true,
+        Some(SnapshotType::IncrementalSnapshot(_)) => pending_accounts_package
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|old_accounts_package| old_accounts_package.snapshot_type)
+            .map(|old_snapshot_type| !old_snapshot_type.is_full_snapshot())
+            .unwrap_or(true),
+        None => pending_accounts_package
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|old_accounts_package| old_accounts_package.snapshot_type.is_none())
+            .unwrap_or(true),
+    }
 }
 
 #[cfg(test)]
@@ -3262,5 +3305,85 @@ mod tests {
                 .is_none(),
             "Ensure Account1 has not been brought back from the dead"
         );
+    }
+
+    /// All the permutations of `snapshot_type` for the new-and-old accounts packages:
+    ///
+    ///  new      | old      |
+    ///  snapshot | snapshot |
+    ///  type     | type     | result
+    /// ----------+----------+--------
+    ///   FSS     |  FSS     |  true
+    ///   FSS     |  ISS     |  true
+    ///   FSS     |  None    |  true
+    ///   ISS     |  FSS     |  false
+    ///   ISS     |  ISS     |  true
+    ///   ISS     |  None    |  true
+    ///   None    |  FSS     |  false
+    ///   None    |  ISS     |  false
+    ///   None    |  None    |  true
+    #[test]
+    fn test_can_submit_accounts_package() {
+        /// helper function to create an AccountsPackage that's good enough for this test
+        fn new_accounts_package_with(snapshot_type: Option<SnapshotType>) -> AccountsPackage {
+            AccountsPackage {
+                slot: Slot::default(),
+                block_height: Slot::default(),
+                slot_deltas: Vec::default(),
+                snapshot_links: TempDir::new().unwrap(),
+                snapshot_storages: SnapshotStorages::default(),
+                accounts_hash: Hash::default(),
+                archive_format: ArchiveFormat::Tar,
+                snapshot_version: SnapshotVersion::default(),
+                snapshot_archives_dir: PathBuf::default(),
+                expected_capitalization: u64::default(),
+                accounts_hash_for_testing: None,
+                cluster_type: solana_sdk::genesis_config::ClusterType::Development,
+                snapshot_type,
+                accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
+                epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
+                rent_collector: crate::rent_collector::RentCollector::default(),
+            }
+        }
+
+        let pending_accounts_package = PendingAccountsPackage::default();
+        for (new_snapshot_type, old_snapshot_type, expected_result) in [
+            (
+                Some(SnapshotType::FullSnapshot),
+                Some(SnapshotType::FullSnapshot),
+                true,
+            ),
+            (
+                Some(SnapshotType::FullSnapshot),
+                Some(SnapshotType::IncrementalSnapshot(0)),
+                true,
+            ),
+            (Some(SnapshotType::FullSnapshot), None, true),
+            (
+                Some(SnapshotType::IncrementalSnapshot(0)),
+                Some(SnapshotType::FullSnapshot),
+                false,
+            ),
+            (
+                Some(SnapshotType::IncrementalSnapshot(0)),
+                Some(SnapshotType::IncrementalSnapshot(0)),
+                true,
+            ),
+            (Some(SnapshotType::IncrementalSnapshot(0)), None, true),
+            (None, Some(SnapshotType::FullSnapshot), false),
+            (None, Some(SnapshotType::IncrementalSnapshot(0)), false),
+            (None, None, true),
+        ] {
+            let new_accounts_package = new_accounts_package_with(new_snapshot_type);
+            let old_accounts_package = new_accounts_package_with(old_snapshot_type);
+            pending_accounts_package
+                .lock()
+                .unwrap()
+                .replace(old_accounts_package);
+
+            let actual_result =
+                can_submit_accounts_package(&new_accounts_package, &pending_accounts_package);
+            assert_eq!(expected_result, actual_result);
+        }
     }
 }

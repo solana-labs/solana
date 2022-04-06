@@ -5,19 +5,22 @@
 // set and halt the node if a mismatch is detected.
 
 use {
-    crossbeam_channel::RecvTimeoutError,
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure::Measure,
     solana_runtime::{
         accounts_hash::{CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, AccountsPackageReceiver, PendingSnapshotPackage, SnapshotPackage,
+            AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
             SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{
+        clock::{Slot, SLOT_MS},
+        hash::Hash,
+        pubkey::Pubkey,
+    },
     std::{
         collections::{HashMap, HashSet},
         sync::{
@@ -35,7 +38,7 @@ pub struct AccountsHashVerifier {
 
 impl AccountsHashVerifier {
     pub fn new(
-        accounts_package_receiver: AccountsPackageReceiver,
+        pending_accounts_package: PendingAccountsPackage,
         pending_snapshot_package: Option<PendingSnapshotPackage>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
@@ -55,23 +58,24 @@ impl AccountsHashVerifier {
                         break;
                     }
 
-                    match accounts_package_receiver.recv_timeout(Duration::from_secs(1)) {
-                        Ok(accounts_package) => {
-                            Self::process_accounts_package(
-                                accounts_package,
-                                &cluster_info,
-                                known_validators.as_ref(),
-                                halt_on_known_validators_accounts_hash_mismatch,
-                                pending_snapshot_package.as_ref(),
-                                &mut hashes,
-                                &exit,
-                                fault_injection_rate_slots,
-                                snapshot_config.as_ref(),
-                            );
-                        }
-                        Err(RecvTimeoutError::Disconnected) => break,
-                        Err(RecvTimeoutError::Timeout) => (),
+                    let accounts_package = pending_accounts_package.lock().unwrap().take();
+                    if accounts_package.is_none() {
+                        std::thread::sleep(Duration::from_millis(SLOT_MS));
+                        continue;
                     }
+                    let accounts_package = accounts_package.unwrap();
+
+                    Self::process_accounts_package(
+                        accounts_package,
+                        &cluster_info,
+                        known_validators.as_ref(),
+                        halt_on_known_validators_accounts_hash_mismatch,
+                        pending_snapshot_package.as_ref(),
+                        &mut hashes,
+                        &exit,
+                        fault_injection_rate_slots,
+                        snapshot_config.as_ref(),
+                    );
                 }
             })
             .unwrap();

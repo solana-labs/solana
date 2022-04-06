@@ -4,7 +4,7 @@ use {
         blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
-    crossbeam_channel::{unbounded, Sender},
+    crossbeam_channel::Sender,
     itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
@@ -31,7 +31,7 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{AccountsPackageSender, SnapshotType},
+        snapshot_package::{PendingAccountsPackage, SnapshotType},
         snapshot_utils,
         transaction_batch::TransactionBatch,
         transaction_cost_metrics_sender::TransactionCostMetricsSender,
@@ -579,7 +579,6 @@ pub fn test_process_blockstore(
             None,
             None,
         );
-    let (accounts_package_sender, _) = unbounded();
     process_blockstore_from_root(
         blockstore,
         &mut bank_forks,
@@ -588,7 +587,7 @@ pub fn test_process_blockstore(
         None,
         None,
         None,
-        accounts_package_sender,
+        PendingAccountsPackage::default(),
         pruned_banks_receiver,
     )
     .unwrap();
@@ -639,7 +638,7 @@ pub fn process_blockstore_from_root(
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
+    pending_accounts_package: PendingAccountsPackage,
     pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> result::Result<Option<Slot>, BlockstoreProcessorError> {
     if let Some(num_threads) = opts.override_num_threads {
@@ -697,7 +696,7 @@ pub fn process_blockstore_from_root(
             transaction_status_sender,
             cache_block_meta_sender,
             snapshot_config,
-            accounts_package_sender,
+            pending_accounts_package,
             &mut timing,
             &mut last_full_snapshot_slot,
             pruned_banks_receiver,
@@ -1119,7 +1118,7 @@ fn load_frozen_forks(
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
+    pending_accounts_package: PendingAccountsPackage,
     timing: &mut ExecuteTimings,
     last_full_snapshot_slot: &mut Option<Slot>,
     pruned_banks_receiver: DroppedSlotsReceiver,
@@ -1273,7 +1272,7 @@ fn load_frozen_forks(
                         snapshot_utils::snapshot_bank(
                             new_root_bank,
                             new_root_bank.src.slot_deltas(&new_root_bank.src.roots()),
-                            &accounts_package_sender,
+                            &pending_accounts_package,
                             &snapshot_config.bank_snapshots_dir,
                             &snapshot_config.snapshot_archives_dir,
                             snapshot_config.snapshot_version,
@@ -3163,8 +3162,7 @@ pub mod tests {
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank1);
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (accounts_package_sender, _) = unbounded();
-        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
+        let (_pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
         process_blockstore_from_root(
             &blockstore,
             &mut bank_forks,
@@ -3173,7 +3171,7 @@ pub mod tests {
             None,
             None,
             None,
-            accounts_package_sender,
+            PendingAccountsPackage::default(),
             pruned_banks_receiver,
         )
         .unwrap();
@@ -3272,10 +3270,10 @@ pub mod tests {
             ..SnapshotConfig::default()
         };
 
-        let (accounts_package_sender, accounts_package_receiver) = unbounded();
+        let pending_accounts_package = PendingAccountsPackage::default();
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
 
-        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
+        let (_pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
         process_blockstore_from_root(
             &blockstore,
             &mut bank_forks,
@@ -3284,23 +3282,26 @@ pub mod tests {
             None,
             None,
             Some(&snapshot_config),
-            accounts_package_sender.clone(),
+            Arc::clone(&pending_accounts_package),
             pruned_banks_receiver,
         )
         .unwrap();
 
-        // The `drop()` is necessary here in order to call `.iter()` on the channel below
-        drop(accounts_package_sender);
-
-        // Ensure all the AccountsPackages were created and sent to the AccountsPackageReceiver
-        let received_accounts_package_slots = accounts_package_receiver
-            .iter()
-            .map(|accounts_package| accounts_package.slot)
-            .collect::<Vec<_>>();
-        let expected_slots = (slot_start_processing..=LAST_SLOT)
+        // Ensure the last AccountsPackage was created and is pending
+        let received_accounts_package_slot = pending_accounts_package
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap()
+            .slot;
+        let expected_accounts_package_slot = (slot_start_processing..=LAST_SLOT)
             .filter(|slot| slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0)
-            .collect::<Vec<_>>();
-        assert_eq!(received_accounts_package_slots, expected_slots);
+            .max()
+            .unwrap();
+        assert_eq!(
+            received_accounts_package_slot,
+            expected_accounts_package_slot
+        );
 
         // Ensure all the bank snapshots were created
         let bank_snapshots = snapshot_utils::get_bank_snapshots(&bank_snapshots_tempdir);
@@ -3309,6 +3310,9 @@ pub mod tests {
             .map(|bank_snapshot| bank_snapshot.slot)
             .collect::<Vec<_>>();
         bank_snapshot_slots.sort_unstable();
+        let expected_slots = (slot_start_processing..=LAST_SLOT)
+            .filter(|slot| slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0)
+            .collect::<Vec<_>>();
         assert_eq!(bank_snapshot_slots, expected_slots);
     }
 
@@ -3615,7 +3619,7 @@ pub mod tests {
             })
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
         let _ =
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
         let successes: BTreeSet<Pubkey> = replay_vote_receiver

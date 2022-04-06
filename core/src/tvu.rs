@@ -48,9 +48,7 @@ use {
         commitment::BlockCommitmentCache,
         cost_model::CostModel,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{
-            AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage,
-        },
+        snapshot_package::{PendingAccountsPackage, PendingSnapshotPackage},
         transaction_cost_metrics_sender::{
             TransactionCostMetricsSender, TransactionCostMetricsService,
         },
@@ -143,7 +141,7 @@ impl Tvu {
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
         cost_model: &Arc<RwLock<CostModel>>,
-        accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
+        pending_accounts_package: PendingAccountsPackage,
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
@@ -220,9 +218,8 @@ impl Tvu {
                 (Some(snapshot_config), Some(pending_snapshot_package))
             })
             .unwrap_or((None, None));
-        let (accounts_package_sender, accounts_package_receiver) = accounts_package_channel;
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            accounts_package_receiver,
+            Arc::clone(&pending_accounts_package),
             pending_snapshot_package,
             exit,
             cluster_info,
@@ -241,7 +238,7 @@ impl Tvu {
                     Some(SnapshotRequestHandler {
                         snapshot_config,
                         snapshot_request_receiver,
-                        accounts_package_sender,
+                        pending_accounts_package,
                     }),
                 )
             }
@@ -444,7 +441,6 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
-        let accounts_package_channel = unbounded();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let tvu = Tvu::new(
@@ -492,7 +488,7 @@ pub mod tests {
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
-            accounts_package_channel,
+            PendingAccountsPackage::default(),
             None,
             None,
             None,

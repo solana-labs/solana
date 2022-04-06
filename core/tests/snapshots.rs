@@ -69,7 +69,8 @@ mod tests {
             snapshot_archive_info::FullSnapshotArchiveInfo,
             snapshot_config::SnapshotConfig,
             snapshot_package::{
-                AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
+                AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
+                SnapshotType,
             },
             snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
             status_cache::MAX_CACHE_ENTRIES,
@@ -247,12 +248,11 @@ mod tests {
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (s, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, _r) = unbounded();
         let request_sender = AbsRequestSender::new(Some(s));
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
-            accounts_package_sender,
+            pending_accounts_package: PendingAccountsPackage::default(),
         };
         for slot in 1..=last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
@@ -366,8 +366,8 @@ mod tests {
             .unwrap();
 
         // Set up snapshotting channels
-        let (sender, receiver) = unbounded();
-        let (fake_sender, _fake_receiver) = unbounded();
+        let real_pending_accounts_package = PendingAccountsPackage::default();
+        let fake_pending_accounts_package = PendingAccountsPackage::default();
 
         // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
         // and the snapshot purging logic will run on every snapshot taken. This means the three
@@ -394,21 +394,21 @@ mod tests {
             bank.squash();
             let accounts_hash = bank.update_accounts_hash();
 
-            let package_sender = {
+            let pending_accounts_package = {
                 if slot == saved_slot as u64 {
-                    // Only send one package on the real sender so that the packaging service
-                    // doesn't take forever to run the packaging logic on all MAX_CACHE_ENTRIES
-                    // later
-                    &sender
+                    // Only send one package on the real pending_accounts_package so that the
+                    // packaging service doesn't take forever to run the packaging logic on all
+                    // MAX_CACHE_ENTRIES later
+                    &real_pending_accounts_package
                 } else {
-                    &fake_sender
+                    &fake_pending_accounts_package
                 }
             };
 
             snapshot_utils::snapshot_bank(
                 &bank,
                 vec![],
-                package_sender,
+                pending_accounts_package,
                 bank_snapshots_dir,
                 snapshot_archives_dir,
                 snapshot_config.snapshot_version,
@@ -506,15 +506,16 @@ mod tests {
         let _package_receiver = std::thread::Builder::new()
             .name("package-receiver".to_string())
             .spawn(move || {
-                while let Ok(mut accounts_package) = receiver.recv() {
-                    // Only package the latest
-                    while let Ok(new_accounts_package) = receiver.try_recv() {
-                        accounts_package = new_accounts_package;
-                    }
-
-                    let snapshot_package = SnapshotPackage::from(accounts_package);
-                    *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
-                }
+                let accounts_package = real_pending_accounts_package
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap();
+                let snapshot_package = SnapshotPackage::from(accounts_package);
+                pending_snapshot_package
+                    .lock()
+                    .unwrap()
+                    .replace(snapshot_package);
 
                 // Wait until the package is consumed by SnapshotPackagerService
                 while pending_snapshot_package.lock().unwrap().is_some() {
@@ -525,10 +526,6 @@ mod tests {
                 exit.store(true, Ordering::Relaxed);
             })
             .unwrap();
-
-        // Close the channel so that the package receiver will exit after reading all the
-        // packages off the channel
-        drop(sender);
 
         // Wait for service to finish
         snapshot_packager_service
@@ -669,12 +666,11 @@ mod tests {
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, _accounts_package_receiver) = unbounded();
         let request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
-            accounts_package_sender,
+            pending_accounts_package: PendingAccountsPackage::default(),
         };
 
         let mut last_full_snapshot_slot = None;
@@ -892,7 +888,7 @@ mod tests {
 
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, accounts_package_receiver) = unbounded();
+        let pending_accounts_package = PendingAccountsPackage::default();
         let pending_snapshot_package = PendingSnapshotPackage::default();
 
         let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
@@ -912,7 +908,7 @@ mod tests {
         let snapshot_request_handler = Some(SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
-            accounts_package_sender,
+            pending_accounts_package: Arc::clone(&pending_accounts_package),
         });
         let abs_request_handler = AbsRequestHandler {
             snapshot_request_handler,
@@ -930,7 +926,7 @@ mod tests {
         );
 
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            accounts_package_receiver,
+            pending_accounts_package,
             Some(pending_snapshot_package),
             &exit,
             &cluster_info,
