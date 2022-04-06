@@ -482,6 +482,7 @@ pub fn spawn_server(
 
 #[cfg(test)]
 mod test {
+    use solana_sdk::quic::QUIC_KEEP_ALIVE_MS;
     use {
         super::*,
         crossbeam_channel::unbounded,
@@ -521,7 +522,7 @@ mod test {
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
-        transport_config.keep_alive_interval(Some(Duration::from_millis(10_000)));
+        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
         config
     }
