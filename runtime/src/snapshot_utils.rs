@@ -1582,9 +1582,8 @@ pub fn verify_snapshot_archive<P, Q, R>(
     slot: Option<Slot>,
 ) where
     P: AsRef<Path>,
-    Q: AsRef<Path> + Clone,
+    Q: AsRef<Path>,
     R: AsRef<Path>,
-    PathBuf: From<Q>,
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
@@ -1602,9 +1601,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
     if let Some(slot) = slot {
         // file contents may be different, but deserialized structs should be equal
         let slot = slot.to_string();
-        let p1 = PathBuf::from(snapshots_to_verify.clone())
-            .join(&slot)
-            .join(&slot);
+        let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
 
         assert!(crate::serde_snapshot::compare_two_serialized_banks(&p1, &p2).unwrap());
