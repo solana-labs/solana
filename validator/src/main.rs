@@ -104,6 +104,7 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+const MILLIS_PER_SECOND: u64 = 1000;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -1359,7 +1360,6 @@ pub fn main() {
                 .value_name("MILLISECS")
                 .hidden(true)
                 .takes_value(true)
-                .validator(is_parsable::<u64>)
                 .validator(|s| is_within_range(s, 1, MAX_BATCH_SEND_RATE_MS))
                 .default_value(&default_rpc_send_transaction_batch_ms)
                 .help("The rate at which transactions sent via rpc service are sent in batch."),
@@ -1396,7 +1396,6 @@ pub fn main() {
                 .value_name("NUMBER")
                 .hidden(true)
                 .takes_value(true)
-                .validator(is_parsable::<usize>)
                 .validator(|s| is_within_range(s, 1, MAX_TRANSACTION_BATCH_SIZE))
                 .default_value(&default_rpc_send_transaction_batch_size)
                 .help("The size of transactions to be sent in batch."),
@@ -2370,7 +2369,7 @@ pub fn main() {
         exit(1);
     }
 
-    let tps = batch_size as u64 * 1000 / batch_send_rate_ms;
+    let tps = batch_size as u64 * MILLIS_PER_SECOND / batch_send_rate_ms;
     if tps > send_transaction_service::MAX_TPS {
         eprintln!(
             "Either the specified rpc-send-batch-size ({}) or rpc-send-batch-ms ({}) is invalid, \

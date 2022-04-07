@@ -339,7 +339,7 @@ impl SendTransactionService {
                         }
 
                         batched_transactions.insert(*signature);
-                        transaction_info.last_sent_time = Some(Instant::now());
+                        transaction_info.last_sent_time = Some(now);
                     }
                     true
                 }
@@ -364,7 +364,7 @@ impl SendTransactionService {
             let wire_transacions = transactions
                 .iter()
                 .filter(|(signature, _)| batched_transactions.contains(signature))
-                .map(|(_, transaction_info)| &transaction_info.wire_transaction as &[u8])
+                .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
                 .collect::<Vec<&[u8]>>();
 
             for address in &addresses {
