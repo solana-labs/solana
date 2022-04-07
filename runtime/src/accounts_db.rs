@@ -4015,7 +4015,6 @@ impl AccountsDb {
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
     /// comment below for more explanation.
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId) {
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
         // we know that there are no longer any ongoing scans on this bank, because scans require
