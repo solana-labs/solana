@@ -5,20 +5,18 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
-    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        account_utils::State,
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
-        keyed_account::{keyed_account_at_index, KeyedAccount},
         pubkey::Pubkey,
         rent::Rent,
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
+        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
     std::{
         cmp::Ordering,
@@ -1166,15 +1164,16 @@ impl VoteState {
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
 pub fn authorize<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &mut BorrowedAccount,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     match vote_authorize {
         VoteAuthorize::Voter => {
@@ -1212,12 +1211,13 @@ pub fn authorize<S: std::hash::BuildHasher>(
 
 /// Update the node_pubkey, requires signature of the authorized voter
 pub fn update_validator_identity<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &mut BorrowedAccount,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -1232,12 +1232,13 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
 /// Update the vote account's commission
 pub fn update_commission<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &mut BorrowedAccount,
     commission: u8,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     // current authorized withdrawer must say "yay"
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -1260,7 +1261,8 @@ fn verify_authorized_signer<S: std::hash::BuildHasher>(
 
 /// Withdraw funds from the vote account
 pub fn withdraw<S: std::hash::BuildHasher>(
-    invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
     vote_account_index: usize,
     lamports: u64,
     to_account_index: usize,
@@ -1268,15 +1270,16 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     rent_sysvar: Option<&Rent>,
     clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let vote_account = keyed_account_at_index(keyed_accounts, vote_account_index)?;
-    let vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+    let mut vote_account =
+        instruction_context.try_borrow_account(transaction_context, vote_account_index)?;
+    let vote_state: VoteState = vote_account
+        .get_state::<VoteStateVersions>()?
+        .convert_to_current();
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
     let remaining_balance = vote_account
-        .lamports()?
+        .get_lamports()
         .checked_sub(lamports)
         .ok_or(InstructionError::InsufficientFunds)?;
 
@@ -1299,20 +1302,17 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
         }
     } else if let Some(rent_sysvar) = rent_sysvar {
-        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.data_len()?);
+        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.get_data().len());
         if remaining_balance < min_rent_exempt_balance {
             return Err(InstructionError::InsufficientFunds);
         }
     }
 
-    vote_account
-        .try_account_ref_mut()?
-        .checked_sub_lamports(lamports)?;
+    vote_account.checked_sub_lamports(lamports)?;
     drop(vote_account);
-    let to_account = keyed_account_at_index(keyed_accounts, to_account_index)?;
-    to_account
-        .try_account_ref_mut()?
-        .checked_add_lamports(lamports)?;
+    let mut to_account =
+        instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    to_account.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -1320,15 +1320,15 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &mut BorrowedAccount,
     vote_init: &VoteInit,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    if vote_account.data_len()? != VoteState::size_of() {
+    if vote_account.get_data().len() != VoteState::size_of() {
         return Err(InstructionError::InvalidAccountData);
     }
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    let versioned = vote_account.get_state::<VoteStateVersions>()?;
 
     if !versioned.is_uninitialized() {
         return Err(InstructionError::AccountAlreadyInitialized);
@@ -1343,11 +1343,11 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
 }
 
 fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &BorrowedAccount,
     clock: &Clock,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<VoteState, InstructionError> {
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    let versioned = vote_account.get_state::<VoteStateVersions>()?;
 
     if versioned.is_uninitialized() {
         return Err(InstructionError::UninitializedAccount);
@@ -1361,7 +1361,7 @@ fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &mut BorrowedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
     vote: &Vote,
@@ -1382,7 +1382,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote_state_update<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &mut BorrowedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
     mut vote_state_update: VoteStateUpdate,
