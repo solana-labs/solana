@@ -39,7 +39,7 @@ use {
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 /// Timeout interval when joining threads during TPU close
-pub const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
+const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
 // allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
