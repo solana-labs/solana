@@ -241,7 +241,7 @@ fn test_bank_serialize_style(
             f.write_all(&buf).unwrap();
         }
         assert!(reserialize_bank_with_new_accounts_hash(
-            &temp_dir.path(),
+            temp_dir.path(),
             slot,
             &accounts_hash
         ));
