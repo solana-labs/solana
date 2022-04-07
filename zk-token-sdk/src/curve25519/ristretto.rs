@@ -130,14 +130,14 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_RISTRETTO},
+        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CurveId},
     };
 
     pub fn validate_ristretto(point: &PodRistrettoPoint) -> Option<bool> {
         let mut validate_result = 0u8;
         let result = unsafe {
             sol_curve_validate_point(
-                CURVE25519_RISTRETTO,
+                CurveId::Curve25519Ristretto as u64,
                 &point.0 as *const u8,
                 &mut validate_result,
             )

@@ -129,14 +129,14 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_EDWARDS},
+        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CurveId},
     };
 
     pub fn validate_edwards(point: &PodEdwardsPoint) -> Option<bool> {
         let mut validate_result = 0u8;
         let result = unsafe {
             sol_curve_validate_point(
-                CURVE25519_EDWARDS,
+                CurveId::Curve25519Edwards as u64,
                 &point.0 as *const u8,
                 &mut validate_result,
             )

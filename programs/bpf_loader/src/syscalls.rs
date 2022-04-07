@@ -2149,10 +2149,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        use solana_zk_token_sdk::curve25519::{
-            curve_syscall_traits::{CURVE25519_EDWARDS, CURVE25519_RISTRETTO},
-            edwards::{validate_edwards, PodEdwardsPoint},
-            ristretto::{validate_ristretto, PodRistrettoPoint},
+        use {
+            num_traits::FromPrimitive,
+            solana_zk_token_sdk::curve25519::{
+                curve_syscall_traits::CurveId,
+                edwards::{validate_edwards, PodEdwardsPoint},
+                ristretto::{validate_ristretto, PodRistrettoPoint},
+            },
         };
 
         let invoke_context = question_mark!(
@@ -2162,65 +2165,71 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCurveValidatePoint<'a, 'b> {
             result
         );
 
-        match curve_id {
-            CURVE25519_EDWARDS => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_edwards_validate_point_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+        if let Some(curve_id) = FromPrimitive::from_u64(curve_id) {
+            match curve_id {
+                CurveId::Curve25519Edwards => {
+                    let cost = invoke_context
+                        .get_compute_budget()
+                        .curve25519_edwards_validate_point_cost;
+                    question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-                let point = question_mark!(
-                    translate_type::<PodEdwardsPoint>(
-                        memory_mapping,
-                        left_addr,
-                        self.check_aligned
-                    ),
-                    result
-                );
-
-                if let Some(validate_result) = validate_edwards(point) {
-                    *question_mark!(
-                        translate_type_mut::<bool>(memory_mapping, result_addr, self.check_aligned),
+                    let point = question_mark!(
+                        translate_type::<PodEdwardsPoint>(
+                            memory_mapping,
+                            left_addr,
+                            self.check_aligned
+                        ),
                         result
-                    ) = validate_result;
-                    *result = Ok(0);
+                    );
+
+                    if let Some(validate_result) = validate_edwards(point) {
+                        *question_mark!(
+                            translate_type_mut::<bool>(
+                                memory_mapping,
+                                result_addr,
+                                self.check_aligned
+                            ),
+                            result
+                        ) = validate_result;
+                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
+                    }
                 }
-                {
-                    *result = Ok(1);
-                }
-            }
 
-            CURVE25519_RISTRETTO => {
-                let cost = invoke_context
-                    .get_compute_budget()
-                    .curve25519_ristretto_validate_point_cost;
-                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+                CurveId::Curve25519Ristretto => {
+                    let cost = invoke_context
+                        .get_compute_budget()
+                        .curve25519_ristretto_validate_point_cost;
+                    question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-                let point = question_mark!(
-                    translate_type::<PodRistrettoPoint>(
-                        memory_mapping,
-                        left_addr,
-                        self.check_aligned
-                    ),
-                    result
-                );
-
-                if let Some(validate_result) = validate_ristretto(point) {
-                    *question_mark!(
-                        translate_type_mut::<bool>(memory_mapping, result_addr, self.check_aligned),
+                    let point = question_mark!(
+                        translate_type::<PodRistrettoPoint>(
+                            memory_mapping,
+                            left_addr,
+                            self.check_aligned
+                        ),
                         result
-                    ) = validate_result;
-                    *result = Ok(0);
-                }
-                {
-                    *result = Ok(1);
-                }
-            }
+                    );
 
-            _ => {
-                *result = Ok(1);
-            }
-        };
+                    if let Some(validate_result) = validate_ristretto(point) {
+                        *question_mark!(
+                            translate_type_mut::<bool>(
+                                memory_mapping,
+                                result_addr,
+                                self.check_aligned
+                            ),
+                            result
+                        ) = validate_result;
+                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
+                    }
+                }
+            };
+        } else {
+            *result = Ok(1);
+        }
     }
 }
 
