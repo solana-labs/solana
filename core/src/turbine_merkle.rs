@@ -1,27 +1,14 @@
-use {
-    rand::{Rng, SeedableRng},
-    sha2::{Digest, Sha256},
-};
-
-//type TurbineMerkleHash = [u8; 1];
+use sha2::{Digest, Sha256};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleHash(pub [u8; 1]);
+pub struct TurbineMerkleHash(pub [u8; 10]);
 
-pub type TurbineMerkleProof = Vec<TurbineMerkleHash>;
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurbineMerkleProof(pub Vec<TurbineMerkleHash>);
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleTree {
     tree: Vec<TurbineMerkleHash>,
-    nleaves: usize,
-}
-
-impl TurbineMerkleTree {
-    pub fn new(_leaf_count: usize) -> Self {
-        Self {
-            tree: Vec::with_capacity(16 * 2 - 1),
-            nleaves: 16,
-        }
-    }
 }
 
 impl TurbineMerkleHash {
@@ -38,95 +25,113 @@ impl TurbineMerkleHash {
     }
 }
 
-fn qhash(bufs: &[&[u8]]) -> TurbineMerkleHash {
-    let mut hasher = Sha256::new();
-    for b in bufs {
-        hasher.update(b);
-    }
-    let h = hasher.finalize();
-    //let mut ret = [0u8; 1];
-    let mut ret = TurbineMerkleHash::default();
-    let len = ret.0.len();
-    ret.0[..].copy_from_slice(&h.as_slice()[0..len]);
-    ret
-}
-
-// leaves padded to power of 2
-fn gen_tree(leaves: &Vec<TurbineMerkleHash>) -> Vec<TurbineMerkleHash> {
-    let tree_size = leaves.len() * 2 - 1;
-    let mut tree = Vec::with_capacity(tree_size);
-
-    println!("--- gen tree ---");
-
-    for i in 0..leaves.len() {
-        //tree[i] = leaves[i];
-        tree.push(leaves[i]);
-    }
-
-    let mut base = 0;
-    let mut level_leaves = leaves.len();
-    while level_leaves > 1 {
-        for i in (0..level_leaves).step_by(2) {
-            let hash = qhash(&[&tree[base + i].0, &tree[base + i + 1].0]);
-            //tree[base+i/2] = hash;
-            println!("push({:?})", &hash);
-            tree.push(hash);
+impl TurbineMerkleProof {
+    fn compute_root(&self, leaf_hash: &TurbineMerkleHash, leaf_index: usize) -> TurbineMerkleHash {
+        let mut hash = leaf_hash.clone();
+        let mut idx = leaf_index;
+        for i in 0..self.0.len() {
+            hash = if idx % 2 == 0 {
+                TurbineMerkleHash::hash(&[&hash.0, &self.0[i].0])
+            } else {
+                TurbineMerkleHash::hash(&[&self.0[i].0, &hash.0])
+            };
+            idx /= 2;
         }
-        println!("");
-        base += level_leaves;
-        level_leaves /= 2;
+        hash
     }
 
-    tree
+    pub fn verify(
+        &self,
+        root_hash: &TurbineMerkleHash,
+        leaf_hash: &TurbineMerkleHash,
+        leaf_index: usize,
+    ) -> bool {
+        &self.compute_root(leaf_hash, leaf_index) == root_hash
+    }
 }
 
-fn gen_proof(tree: &Vec<TurbineMerkleHash>, nleaves: usize, idx: usize) -> TurbineMerkleProof {
-    let mut proof = Vec::new();
-    let mut level_leaves = nleaves;
-    let mut i = idx;
-    let mut base = 0;
-    while level_leaves > 1 {
-        if i % 2 == 0 {
-            proof.push(tree[base + i + 1]);
-        } else {
-            proof.push(tree[base + i - 1]);
+impl TurbineMerkleTree {
+    pub fn new_from_leaves(leaves: &Vec<TurbineMerkleHash>) -> Self {
+        // TODO assert leaves.len() is a power of 2
+
+        let tree_size = leaves.len() * 2 - 1;
+        let mut tree = Vec::with_capacity(tree_size);
+
+        for i in 0..leaves.len() {
+            tree.push(leaves[i]);
         }
-        base += level_leaves;
-        i /= 2;
-        level_leaves /= 2;
-    }
-    proof
-}
 
-fn check_proof(
-    proof: &TurbineMerkleProof,
-    root: &TurbineMerkleHash,
-    start: &TurbineMerkleHash,
-    idx: usize,
-) -> bool {
-    println!("--- proving {:?} for {:?} --- ", start, root);
-    let mut hash = start.clone();
-    let mut j = idx;
-    for i in 0..proof.len() {
-        hash = if j % 2 == 0 {
-            qhash(&[&hash.0, &proof[i].0])
-        } else {
-            qhash(&[&proof[i].0, &hash.0])
-        };
-        println!("{:?}", &hash);
-        j /= 2;
+        let mut base = 0;
+        let mut level_leaves = leaves.len();
+        while level_leaves > 1 {
+            for i in (0..level_leaves).step_by(2) {
+                let hash = TurbineMerkleHash::hash(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                tree.push(hash);
+            }
+            base += level_leaves;
+            level_leaves /= 2;
+        }
+
+        Self { tree: tree }
     }
-    &hash == root
+
+    pub fn new_from_bufs(bufs: &Vec<&[u8]>) -> Self {
+        // TODO assert bufs.len() is power of 2 or pad to power of 2
+        let leaves: Vec<_> = bufs
+            .iter()
+            .map(|b| TurbineMerkleHash::hash(&[&b]))
+            .collect();
+        Self::new_from_leaves(&leaves)
+    }
+
+    pub fn leaf_count(&self) -> usize {
+        (self.tree.len() + 1) / 2
+    }
+
+    pub fn root(&self) -> TurbineMerkleHash {
+        self.tree[self.tree.len() - 1]
+    }
+
+    pub fn node(&self, index: usize) -> TurbineMerkleHash {
+        self.tree[index]
+    }
+
+    pub fn prove(&self, leaf_index: usize) -> TurbineMerkleProof {
+        let mut proof = Vec::new();
+        let mut level_leaves = self.leaf_count();
+        let mut i = leaf_index;
+        let mut base = 0;
+        while level_leaves > 1 {
+            if i % 2 == 0 {
+                proof.push(self.tree[base + i + 1]);
+            } else {
+                proof.push(self.tree[base + i - 1]);
+            }
+            base += level_leaves;
+            i /= 2;
+            level_leaves /= 2;
+        }
+        TurbineMerkleProof { 0: proof }
+    }
+
+    fn _print(&self) {
+        let mut base = 0;
+        let mut level_nodes = self.leaf_count();
+        while level_nodes > 0 {
+            println!("{:?}", &self.tree[base..base + level_nodes]);
+            base += level_nodes;
+            level_nodes /= 2;
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn create_random_packets() -> Vec<Vec<u8>> {
-        let rng = rand::thread_rng();
+    fn create_random_packets(npackets: usize) -> Vec<Vec<u8>> {
         let mut packets = Vec::default();
-        for i in 0..16 {
+        for _i in 0..npackets {
             let buf: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
             packets.push(buf);
         }
@@ -135,29 +140,17 @@ mod tests {
 
     #[test]
     fn test_merkle() {
-        let packets = create_random_packets();
-        let leaves: Vec<TurbineMerkleHash> = packets.iter().map(|p| qhash(&[&p])).collect();
-        let tree = gen_tree(&leaves);
+        let packets = create_random_packets(16);
+        let leaves: Vec<TurbineMerkleHash> = packets
+            .iter()
+            .map(|p| TurbineMerkleHash::hash(&[&p]))
+            .collect();
 
-        let mut base = 0;
-        let mut nleaves = 16;
-        while nleaves > 0 {
-            println!("{:?}", &tree[base..base + nleaves]);
-            base += nleaves;
-            nleaves /= 2;
-        }
+        let tree = TurbineMerkleTree::new_from_leaves(&leaves);
+        let root = tree.root();
+        let proof5 = tree.prove(5);
 
-        println!("tree: {:?}", &tree);
-
-        let root = tree[tree.len() - 1];
-        println!("root: {:?}", &root);
-
-        let proof5 = gen_proof(&tree, 16, 5);
-        println!("proof5: {:?}", &proof5);
-
-        let res = check_proof(&proof5, &root, &leaves[5], 5);
-        println!("res: {}", res);
-
-        assert!(res);
+        assert!(proof5.verify(&root, &leaves[5], 5));
+        assert!(proof5.verify(&root, &tree.node(5), 5));
     }
 }
