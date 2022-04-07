@@ -48,7 +48,6 @@ pub fn process_instruction(
             initialize(me, &authorized, &lockup, &rent, &invoke_context.feature_set)
         }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            instruction_context.check_number_of_instruction_accounts(3)?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
@@ -56,8 +55,7 @@ pub fn process_instruction(
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                let _current_authority =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+                instruction_context.check_number_of_instruction_accounts(3)?;
                 let custodian =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 3)
                         .ok()
