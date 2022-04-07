@@ -237,7 +237,7 @@ fn test_bank_serialize_style(
         pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
         std::fs::create_dir(&slot_dir).unwrap();
         {
-            let mut f = std::fs::File::create(pre_path.clone()).unwrap();
+            let mut f = std::fs::File::create(&pre_path).unwrap();
             f.write_all(&buf).unwrap();
         }
         assert!(reserialize_bank_with_new_accounts_hash(
