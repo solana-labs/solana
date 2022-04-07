@@ -145,6 +145,10 @@ impl AccountsHashVerifier {
             assert_eq!(expected_hash, hash);
         };
         measure_hash.stop();
+        solana_runtime::serde_snapshot::reserialize_bank(
+            accounts_package.snapshot_links.path(),
+            accounts_package.slot,
+        );
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
