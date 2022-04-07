@@ -151,6 +151,33 @@ impl QosService {
         (select_results, num_included)
     }
 
+<<<<<<< HEAD
+=======
+    pub fn commit_transaction_cost(
+        &self,
+        bank: &Arc<Bank>,
+        transaction: &SanitizedTransaction,
+        actual_units: Option<u64>,
+    ) {
+        bank.write_cost_tracker()
+            .unwrap()
+            .commit_transaction(transaction, actual_units);
+    }
+
+    pub fn cancel_transaction_cost(&self, bank: &Arc<Bank>, transaction: &SanitizedTransaction) {
+        bank.write_cost_tracker()
+            .unwrap()
+            .cancel_transaction(transaction);
+    }
+
+    // metrics are reported by bank slot
+    pub fn report_metrics(&self, bank: Arc<Bank>) {
+        self.report_sender
+            .send(QosMetrics::BlockBatchUpdate { bank })
+            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
+    }
+
+>>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
     pub fn accumulate_estimated_transaction_costs(
         &self,
         cost_details: &BatchedTransactionCostDetails,
