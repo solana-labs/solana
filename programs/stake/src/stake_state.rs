@@ -664,16 +664,26 @@ pub fn merge(
     }
 
     ic_msg!(invoke_context, "Checking if destination stake is mergeable");
-    let stake_merge_kind =
-        MergeKind::get_if_mergeable(invoke_context, stake_account, clock, stake_history)?;
+    let stake_merge_kind = MergeKind::get_if_mergeable(
+        invoke_context,
+        &stake_account.state()?,
+        stake_account.lamports()?,
+        clock,
+        stake_history,
+    )?;
     let meta = stake_merge_kind.meta();
 
     // Authorized staker is allowed to split/merge accounts
     meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
     ic_msg!(invoke_context, "Checking if source stake is mergeable");
-    let source_merge_kind =
-        MergeKind::get_if_mergeable(invoke_context, source_account, clock, stake_history)?;
+    let source_merge_kind = MergeKind::get_if_mergeable(
+        invoke_context,
+        &source_account.state()?,
+        source_account.lamports()?,
+        clock,
+        stake_history,
+    )?;
 
     ic_msg!(invoke_context, "Merging stake accounts");
     if let Some(merged_state) = stake_merge_kind.merge(invoke_context, source_merge_kind, clock)? {
@@ -921,11 +931,12 @@ impl MergeKind {
 
     fn get_if_mergeable(
         invoke_context: &InvokeContext,
-        stake_keyed_account: &KeyedAccount,
+        stake_state: &StakeState,
+        stake_lamports: u64,
         clock: &Clock,
         stake_history: &StakeHistory,
     ) -> Result<Self, InstructionError> {
-        match stake_keyed_account.state()? {
+        match stake_state {
             StakeState::Stake(meta, stake) => {
                 // stake must not be in a transient state. Transient here meaning
                 // activating or deactivating with non-zero effective stake.
@@ -934,9 +945,9 @@ impl MergeKind {
                     .stake_activating_and_deactivating(clock.epoch, Some(stake_history));
 
                 match (status.effective, status.activating, status.deactivating) {
-                    (0, 0, 0) => Ok(Self::Inactive(meta, stake_keyed_account.lamports()?)),
-                    (0, _, _) => Ok(Self::ActivationEpoch(meta, stake)),
-                    (_, 0, 0) => Ok(Self::FullyActive(meta, stake)),
+                    (0, 0, 0) => Ok(Self::Inactive(*meta, stake_lamports)),
+                    (0, _, _) => Ok(Self::ActivationEpoch(*meta, *stake)),
+                    (_, 0, 0) => Ok(Self::FullyActive(*meta, *stake)),
                     _ => {
                         let err = StakeError::MergeTransientStake;
                         ic_msg!(invoke_context, "{}", err);
@@ -944,9 +955,7 @@ impl MergeKind {
                     }
                 }
             }
-            StakeState::Initialized(meta) => {
-                Ok(Self::Inactive(meta, stake_keyed_account.lamports()?))
-            }
+            StakeState::Initialized(meta) => Ok(Self::Inactive(*meta, stake_lamports)),
             _ => Err(InstructionError::InvalidAccountData),
         }
     }
@@ -2830,14 +2839,13 @@ mod tests {
             rent_exempt_reserve,
             ..Meta::auto(&authority_pubkey)
         };
-        let stake_account = AccountSharedData::new_ref_data_with_space(
+        let mut stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
         .expect("stake_account");
-        let stake_keyed_account = KeyedAccount::new(&authority_pubkey, true, &stake_account);
         let mut clock = Clock::default();
         let mut stake_history = StakeHistory::default();
 
@@ -2845,7 +2853,8 @@ mod tests {
         assert_eq!(
             MergeKind::get_if_mergeable(
                 &invoke_context,
-                &stake_keyed_account,
+                &stake_account.state().unwrap(),
+                stake_account.lamports(),
                 &clock,
                 &stake_history
             )
@@ -2854,13 +2863,12 @@ mod tests {
         );
 
         // RewardsPool state fails
-        stake_keyed_account
-            .set_state(&StakeState::RewardsPool)
-            .unwrap();
+        stake_account.set_state(&StakeState::RewardsPool).unwrap();
         assert_eq!(
             MergeKind::get_if_mergeable(
                 &invoke_context,
-                &stake_keyed_account,
+                &stake_account.state().unwrap(),
+                stake_account.lamports(),
                 &clock,
                 &stake_history
             )
@@ -2869,13 +2877,14 @@ mod tests {
         );
 
         // Initialized state succeeds
-        stake_keyed_account
+        stake_account
             .set_state(&StakeState::Initialized(meta))
             .unwrap();
         assert_eq!(
             MergeKind::get_if_mergeable(
                 &invoke_context,
-                &stake_keyed_account,
+                &stake_account.state().unwrap(),
+                stake_account.lamports(),
                 &clock,
                 &stake_history
             )
@@ -2916,14 +2925,15 @@ mod tests {
             },
             ..Stake::default()
         };
-        stake_keyed_account
+        stake_account
             .set_state(&StakeState::Stake(meta, stake))
             .unwrap();
         // activation_epoch succeeds
         assert_eq!(
             MergeKind::get_if_mergeable(
                 &invoke_context,
-                &stake_keyed_account,
+                &stake_account.state().unwrap(),
+                stake_account.lamports(),
                 &clock,
                 &stake_history
             )
@@ -2952,7 +2962,8 @@ mod tests {
             assert_eq!(
                 MergeKind::get_if_mergeable(
                     &invoke_context,
-                    &stake_keyed_account,
+                    &stake_account.state().unwrap(),
+                    stake_account.lamports(),
                     &clock,
                     &stake_history
                 )
@@ -2975,7 +2986,8 @@ mod tests {
             assert_eq!(
                 MergeKind::get_if_mergeable(
                     &invoke_context,
-                    &stake_keyed_account,
+                    &stake_account.state().unwrap(),
+                    stake_account.lamports(),
                     &clock,
                     &stake_history
                 )
@@ -2998,7 +3010,8 @@ mod tests {
         assert_eq!(
             MergeKind::get_if_mergeable(
                 &invoke_context,
-                &stake_keyed_account,
+                &stake_account.state().unwrap(),
+                stake_account.lamports(),
                 &clock,
                 &stake_history
             )
@@ -3027,7 +3040,8 @@ mod tests {
             assert_eq!(
                 MergeKind::get_if_mergeable(
                     &invoke_context,
-                    &stake_keyed_account,
+                    &stake_account.state().unwrap(),
+                    stake_account.lamports(),
                     &clock,
                     &stake_history
                 )
@@ -3040,7 +3054,8 @@ mod tests {
         assert_eq!(
             MergeKind::get_if_mergeable(
                 &invoke_context,
-                &stake_keyed_account,
+                &stake_account.state().unwrap(),
+                stake_account.lamports(),
                 &clock,
                 &stake_history
             )
