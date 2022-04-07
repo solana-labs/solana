@@ -63,7 +63,7 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq)]
 struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
@@ -137,7 +137,7 @@ impl<T> SnapshotAccountsDbFields<T> {
     }
 }
 
-trait TypeContext<'a> {
+trait TypeContext<'a>: PartialEq {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
@@ -187,6 +187,23 @@ where
         .with_fixint_encoding()
         .allow_trailing_bytes()
         .deserialize_from::<R, T>(reader)
+}
+
+/// used by tests to compare contents of serialized bank fields
+/// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+pub(crate) fn compare_two_serialized_banks(
+    path1: impl AsRef<Path>,
+    path2: impl AsRef<Path>,
+) -> std::result::Result<bool, Error> {
+    use std::fs::File;
+    let file1 = File::open(path1)?;
+    let mut stream1 = BufReader::new(file1);
+    let file2 = File::open(path2)?;
+    let mut stream2 = BufReader::new(file2);
+
+    let fields1 = newer::Context::deserialize_bank_fields(&mut stream1)?;
+    let fields2 = newer::Context::deserialize_bank_fields(&mut stream2)?;
+    Ok(fields1 == fields2)
 }
 
 #[allow(clippy::too_many_arguments)]
