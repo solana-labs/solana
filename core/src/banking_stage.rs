@@ -1381,8 +1381,7 @@ impl BankingStage {
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
         let mut lock_time = Measure::start("lock_time");
-        let batch =
-            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.into_iter());
+        let batch = bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter());
         lock_time.stop();
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
@@ -1397,20 +1396,28 @@ impl BankingStage {
                 gossip_vote_sender,
             );
 
+        let mut unlock_time = Measure::start("unlock_time");
+        // Once the accounts are new transactions can enter the pipeline to process them
+        drop(batch);
+        unlock_time.stop();
+
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
             ref execute_and_commit_timings,
             ..
         } = execute_and_commit_transactions_output;
 
+        Self::commit_or_cancel_transaction_cost(
+            txs.iter(),
+            transactions_qos_results.iter(),
+            retryable_transaction_indexes,
+            qos_service,
+            bank,
+        );
+
         retryable_transaction_indexes
             .iter_mut()
             .for_each(|x| *x += chunk_offset);
-
-        let mut unlock_time = Measure::start("unlock_time");
-        // Once the accounts are new transactions can enter the pipeline to process them
-        drop(batch);
-        unlock_time.stop();
 
         let (cu, us) =
             Self::accumulate_execute_units_and_time(&execute_and_commit_timings.execute_timings);
@@ -1433,6 +1440,30 @@ impl BankingStage {
             cost_model_us: cost_model_time.as_us(),
             execute_and_commit_transactions_output,
         }
+    }
+
+    /// To commit transaction cost to cost_tracker if it was executed successfully;
+    /// Otherwise cancel it from being committed, therefore prevents cost_tracker
+    /// being inflated with unsuccessfully executed transactions.
+    fn commit_or_cancel_transaction_cost<'a>(
+        transactions: impl Iterator<Item = &'a SanitizedTransaction>,
+        transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
+        retryable_transaction_indexes: &[usize],
+        qos_service: &QosService,
+        bank: &Arc<Bank>,
+    ) {
+        transactions
+            .zip(transaction_results)
+            .enumerate()
+            .for_each(|(index, (tx, result))| {
+                if result.is_ok() && retryable_transaction_indexes.contains(&index) {
+                    qos_service.cancel_transaction_cost(bank, tx);
+                } else {
+                    // TODO the 3rd param is for transaction's actual units. Will have
+                    // to plumb it in next; For now, it simply commit estimated units.
+                    qos_service.commit_transaction_cost(bank, tx, None);
+                }
+            });
     }
 
     // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
