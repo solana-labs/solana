@@ -157,6 +157,14 @@ use {
     },
 };
 
+#[derive(Debug, Default)]
+struct RewardsMetrics {
+    load_vote_and_stake_accounts_us: AtomicU64,
+    calculate_points_us: AtomicU64,
+    store_stake_accounts_us: AtomicU64,
+    store_vote_accounts_us: AtomicU64,
+}
+
 mod address_lookup_table;
 mod builtin_programs;
 mod sysvar_cache;
@@ -1763,6 +1771,7 @@ impl Bank {
                         "update_epoch_stakes",
                     );
 
+                    let metrics = RewardsMetrics::default();
                     // After saving a snapshot of stakes, apply stake rewards and commission
                     let (_, update_rewards_with_thread_pool_time) = Measure::this(
                         |_| {
@@ -1770,6 +1779,7 @@ impl Bank {
                                 parent_epoch,
                                 reward_calc_tracer,
                                 &thread_pool,
+                                &metrics,
                             )
                         },
                         (),
@@ -1796,6 +1806,26 @@ impl Bank {
                         (
                             "update_rewards_with_thread_pool_us",
                             update_rewards_with_thread_pool_time.as_us(),
+                            i64
+                        ),
+                        (
+                            "load_vote_and_stake_accounts_us",
+                            metrics.load_vote_and_stake_accounts_us.load(Relaxed),
+                            i64
+                        ),
+                        (
+                            "calculate_points_us",
+                            metrics.calculate_points_us.load(Relaxed),
+                            i64
+                        ),
+                        (
+                            "store_stake_accounts_us",
+                            metrics.store_stake_accounts_us.load(Relaxed),
+                            i64
+                        ),
+                        (
+                            "store_vote_accounts_us",
+                            metrics.store_vote_accounts_us.load(Relaxed),
                             i64
                         ),
                     );
@@ -2454,6 +2484,7 @@ impl Bank {
         prev_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
+        metrics: &RewardsMetrics,
     ) {
         let slot_in_year = self.slot_in_year_for_inflation();
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
@@ -2478,6 +2509,7 @@ impl Bank {
             reward_calc_tracer,
             self.stake_program_advance_activating_credits_observed(),
             thread_pool,
+            metrics,
         );
 
         if !self
@@ -2666,9 +2698,11 @@ impl Bank {
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         fix_activating_credits_observed: bool,
         thread_pool: &ThreadPool,
+        metrics: &RewardsMetrics,
     ) -> f64 {
         let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_with_stake_delegations_map = {
+            let mut m = Measure::start("load_vote_and_stake_accounts_us");
             let LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
                 invalid_stake_keys,
@@ -2677,6 +2711,10 @@ impl Bank {
                 thread_pool,
                 reward_calc_tracer.as_ref(),
             );
+            m.stop();
+            metrics
+                .load_vote_and_stake_accounts_us
+                .fetch_add(m.as_us(), Relaxed);
 
             let evict_invalid_stakes_cache_entries = self
                 .feature_set
@@ -2690,6 +2728,7 @@ impl Bank {
             vote_with_stake_delegations_map
         };
 
+        let mut m = Measure::start("calculate_points");
         let points: u128 = thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
@@ -2714,6 +2753,8 @@ impl Bank {
                 })
                 .sum()
         });
+        m.stop();
+        metrics.calculate_points_us.fetch_add(m.as_us(), Relaxed);
 
         if points == 0 {
             return 0.0;
@@ -2740,6 +2781,7 @@ impl Bank {
             },
         );
 
+        let mut m = Measure::start("redeem_rewards");
         let mut stake_rewards = thread_pool.install(|| {
             stake_delegation_iterator
                 .filter_map(
@@ -2804,7 +2846,12 @@ impl Bank {
                 )
                 .collect()
         });
+        m.stop();
+        metrics
+            .store_stake_accounts_us
+            .fetch_add(m.as_us(), Relaxed);
 
+        let mut m = Measure::start("store_vote_accounts");
         let mut vote_rewards = vote_account_rewards
             .into_iter()
             .filter_map(
@@ -2834,6 +2881,9 @@ impl Bank {
                 },
             )
             .collect();
+
+        m.stop();
+        metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
 
         {
             let mut rewards = self.rewards.write().unwrap();
