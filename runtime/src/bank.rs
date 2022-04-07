@@ -6754,7 +6754,10 @@ impl Drop for Bank {
             drop_callback.callback(self);
         } else {
             // Default case for tests
-            self.rc.accounts.accounts_db.purge_slot(self.slot(), self.bank_id());
+            self.rc
+                .accounts
+                .accounts_db
+                .purge_slot(self.slot(), self.bank_id());
         }
     }
 }

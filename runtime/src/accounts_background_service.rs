@@ -339,7 +339,10 @@ impl AbsRequestHandler {
         let mut count = 0;
         for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc.accounts.accounts_db.purge_slot(pruned_slot, pruned_bank_id);
+            bank.rc
+                .accounts
+                .accounts_db
+                .purge_slot(pruned_slot, pruned_bank_id);
         }
 
         count
