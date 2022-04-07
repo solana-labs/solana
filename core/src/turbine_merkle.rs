@@ -1,7 +1,9 @@
 use sha2::{Digest, Sha256};
 
+pub const TURBINE_MERKLE_HASH_BYTES: usize = 10;
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleHash(pub [u8; 10]);
+pub struct TurbineMerkleHash(pub [u8; TURBINE_MERKLE_HASH_BYTES]);
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleProof(pub Vec<TurbineMerkleHash>);
@@ -14,13 +16,10 @@ pub struct TurbineMerkleTree {
 impl TurbineMerkleHash {
     pub fn hash(bufs: &[&[u8]]) -> TurbineMerkleHash {
         let mut hasher = Sha256::new();
-        for b in bufs {
-            hasher.update(b);
-        }
+        bufs.iter().for_each(|b| hasher.update(b));
         let h = hasher.finalize();
         let mut ret = TurbineMerkleHash::default();
-        let len = ret.0.len();
-        ret.0[..].copy_from_slice(&h.as_slice()[0..len]);
+        ret.0[..].copy_from_slice(&h.as_slice()[0..TURBINE_MERKLE_HASH_BYTES]);
         ret
     }
 }
@@ -53,7 +52,6 @@ impl TurbineMerkleProof {
 impl TurbineMerkleTree {
     pub fn new_from_leaves(leaves: &Vec<TurbineMerkleHash>) -> Self {
         // TODO assert leaves.len() is a power of 2
-
         let tree_size = leaves.len() * 2 - 1;
         let mut tree = Vec::with_capacity(tree_size);
 
@@ -72,7 +70,7 @@ impl TurbineMerkleTree {
             level_leaves /= 2;
         }
 
-        Self { tree: tree }
+        Self { tree }
     }
 
     pub fn new_from_bufs(bufs: &Vec<&[u8]>) -> Self {
