@@ -5880,4 +5880,36 @@ mod tests {
         // Both fully deactivated works
         try_merge(transaction_accounts, instruction_accounts, Ok(()));
     }
+
+    #[test]
+    fn test_stake_get_minimum_delegation() {
+        let stake_address = Pubkey::new_unique();
+        let stake_account = create_default_stake_account();
+        let instruction_data = serialize(&StakeInstruction::GetMinimumDelegation).unwrap();
+        let transaction_accounts = vec![(stake_address, stake_account)];
+        let instruction_accounts = vec![AccountMeta {
+            pubkey: stake_address,
+            is_signer: false,
+            is_writable: false,
+        }];
+
+        mock_process_instruction(
+            &id(),
+            Vec::new(),
+            &instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            None,
+            Ok(()),
+            |first_instruction_account, invoke_context| {
+                super::process_instruction(first_instruction_account, invoke_context)?;
+                let expected_minimum_delegation =
+                    crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
+                let actual_minimum_delegation =
+                    invoke_context.transaction_context.get_return_data().1;
+                assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+                Ok(())
+            },
+        );
+    }
 }
