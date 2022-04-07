@@ -264,7 +264,7 @@ pub mod test {
         );
         assert_eq!(
             repairs,
-            [ShredRepairType::Shred(0, 3), ShredRepairType::Shred(1, 3)]
+            [ShredRepairType::Shred(0, 6), ShredRepairType::Shred(1, 6)]
         );
     }
 

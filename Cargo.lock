@@ -4727,6 +4727,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serial_test",
+ "sha2 0.10.2",
  "solana-address-lookup-table-program",
  "solana-bloom",
  "solana-client",
