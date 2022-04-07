@@ -1876,7 +1876,7 @@ mod tests {
             sender.send(()).unwrap();
         });
 
-        // timeout of 30s for shutting down the validators
+        // exit can deadlock. put an upper-bound on how long we wait for it
         let timeout = Duration::from_secs(30);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             panic!("timeout for closing validator");
