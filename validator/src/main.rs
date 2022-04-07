@@ -67,7 +67,9 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
-    solana_send_transaction_service::send_transaction_service,
+    solana_send_transaction_service::send_transaction_service::{
+        self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
+    },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
         admin_rpc_service, bootstrap, dashboard::Dashboard, ledger_lockfile, lock_ledger,
@@ -1358,7 +1360,7 @@ pub fn main() {
                 .hidden(true)
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
-                .validator(|s| is_within_range(s, 1, usize::MAX))
+                .validator(|s| is_within_range(s, 1, MAX_BATCH_SEND_RATE_MS))
                 .default_value(&default_rpc_send_transaction_batch_ms)
                 .help("The rate at which transactions sent via rpc service are sent in batch."),
         )
@@ -1395,7 +1397,7 @@ pub fn main() {
                 .hidden(true)
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .validator(|s| is_within_range(s, 1, usize::MAX))
+                .validator(|s| is_within_range(s, 1, MAX_TRANSACTION_BATCH_SIZE))
                 .default_value(&default_rpc_send_transaction_batch_size)
                 .help("The size of transactions to be sent in batch."),
         )

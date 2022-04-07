@@ -34,12 +34,18 @@ const DEFAULT_SERVICE_MAX_RETRIES: usize = usize::MAX;
 /// When this size is reached, send out the transactions.
 const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 1;
 
+// The maximum transaction batch size
+pub const MAX_TRANSACTION_BATCH_SIZE: usize = 10_000;
+
 /// Maximum transactions per second
 pub const MAX_TPS: u64 = 1_000;
 
 /// Default maximum batch waiting time in ms. If this time is reached,
 /// whatever transaction cached will be sent.
 const DEFAULT_BATCH_SEND_RATE_MS: u64 = 1;
+
+// The maximum transaction batch send rate in MS
+pub const MAX_BATCH_SEND_RATE_MS: usize = 100_000;
 
 pub struct SendTransactionService {
     thread: JoinHandle<()>,
