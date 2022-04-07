@@ -347,7 +347,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 
     let mut found = false;
     {
-        let file = std::fs::File::open(bank_pre.clone());
+        let file = std::fs::File::open(&bank_pre);
         // some tests don't create the file
         if let Ok(file) = file {
             found = true;
