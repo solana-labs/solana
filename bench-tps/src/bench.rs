@@ -829,6 +829,22 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
 
     info!("Creating {} keypairs...", keypair_count);
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
+    fund_keypairs(client, funding_key, &keypairs, extra, lamports_per_account)?;
+
+    // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
+    keypairs.truncate(keypair_count);
+
+    Ok(keypairs)
+}
+
+pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    funding_key: &Keypair,
+    keypairs: &[Keypair],
+    extra: u64,
+    lamports_per_account: u64,
+) -> Result<()> {
+    let rent = client.get_minimum_balance_for_rent_exemption(0)?;
     info!("Get lamports...");
 
     // Sample the first keypair, to prevent lamport loss on repeated solana-bench-tps executions
@@ -836,7 +852,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
     let first_keypair_balance = client.get_balance(&first_key).unwrap_or(0);
 
     // Sample the last keypair, to check if funding was already completed
-    let last_key = keypairs[keypair_count - 1].pubkey();
+    let last_key = keypairs[keypairs.len() - 1].pubkey();
     let last_keypair_balance = client.get_balance(&last_key).unwrap_or(0);
 
     // Repeated runs will eat up keypair balances from transaction fees. In order to quickly
@@ -887,17 +903,13 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
         fund_keys(
             client,
             funding_key,
-            &keypairs,
+            keypairs,
             total,
             max_fee,
             lamports_per_account,
         );
     }
-
-    // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
-    keypairs.truncate(keypair_count);
-
-    Ok(keypairs)
+    Ok(())
 }
 
 #[cfg(test)]
