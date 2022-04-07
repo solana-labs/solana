@@ -219,7 +219,7 @@ impl Tpu {
             sender.send(()).unwrap();
         });
 
-        // timeout of 10s for closing tpu
+        // exit can deadlock. put an upper-bound on how long we wait for it
         let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             error!("timeout for closing tvu");
