@@ -101,7 +101,6 @@ pub fn process_instruction(
         }
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let rent_sysvar = if invoke_context
                 .feature_set
                 .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
@@ -120,10 +119,12 @@ pub fn process_instruction(
                 None
             };
 
+            drop(me);
             vote_state::withdraw(
-                me,
+                invoke_context,
+                first_instruction_account,
                 lamports,
-                to,
+                first_instruction_account + 1,
                 &signers,
                 rent_sysvar.as_deref(),
                 clock_if_feature_active.as_deref(),

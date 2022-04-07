@@ -5,6 +5,7 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::State,
@@ -13,7 +14,7 @@ use {
         feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
-        keyed_account::KeyedAccount,
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         pubkey::Pubkey,
         rent::Rent,
         slot_hashes::SlotHash,
@@ -1259,13 +1260,16 @@ fn verify_authorized_signer<S: std::hash::BuildHasher>(
 
 /// Withdraw funds from the vote account
 pub fn withdraw<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    vote_account_index: usize,
     lamports: u64,
-    to_account: &KeyedAccount,
+    to_account_index: usize,
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: Option<&Rent>,
     clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let vote_account = keyed_account_at_index(keyed_accounts, vote_account_index)?;
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
@@ -1304,6 +1308,8 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     vote_account
         .try_account_ref_mut()?
         .checked_sub_lamports(lamports)?;
+    drop(vote_account);
+    let to_account = keyed_account_at_index(keyed_accounts, to_account_index)?;
     to_account
         .try_account_ref_mut()?
         .checked_add_lamports(lamports)?;
