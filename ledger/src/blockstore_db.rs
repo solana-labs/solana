@@ -2399,7 +2399,13 @@ where
         &self,
         key: C::Index,
     ) -> Result<Option<C::Type>> {
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
+        let is_perf_context_enabled = maybe_collect_perf_context();
+        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        if is_perf_context_enabled {
+            report_read_perf_context(C::rocksdb_get_perf_metric_header(&self.column_options));
+        }
+
+        if let Some(serialized_value) = result? {
             let value = match C::Type::decode(&serialized_value[..]) {
                 Ok(value) => value,
                 Err(_) => deserialize::<T>(&serialized_value)?.into(),
@@ -2411,7 +2417,13 @@ where
     }
 
     pub fn get_protobuf(&self, key: C::Index) -> Result<Option<C::Type>> {
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
+        let is_perf_context_enabled = maybe_collect_perf_context();
+        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        if is_perf_context_enabled {
+            report_read_perf_context(C::rocksdb_get_perf_metric_header(&self.column_options));
+        }
+
+        if let Some(serialized_value) = result? {
             Ok(Some(C::Type::decode(&serialized_value[..])?))
         } else {
             Ok(None)
@@ -2421,7 +2433,14 @@ where
     pub fn put_protobuf(&self, key: C::Index, value: &C::Type) -> Result<()> {
         let mut buf = Vec::with_capacity(value.encoded_len());
         value.encode(&mut buf)?;
-        self.backend.put_cf(self.handle(), &C::key(key), &buf)
+
+        let is_perf_context_enabled = maybe_collect_perf_context();
+        let result = self.backend.put_cf(self.handle(), &C::key(key), &buf);
+        if is_perf_context_enabled {
+            report_write_perf_context(C::rocksdb_put_perf_metric_header(&self.column_options));
+        }
+
+        result
     }
 }
 
