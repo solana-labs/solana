@@ -170,6 +170,23 @@ impl QosService {
         (select_results, num_included)
     }
 
+    pub fn commit_transaction_cost(
+        &self,
+        bank: &Arc<Bank>,
+        transaction: &SanitizedTransaction,
+        actual_units: Option<u64>,
+    ) {
+        bank.write_cost_tracker()
+            .unwrap()
+            .commit_transaction(transaction, actual_units);
+    }
+
+    pub fn cancel_transaction_cost(&self, bank: &Arc<Bank>, transaction: &SanitizedTransaction) {
+        bank.write_cost_tracker()
+            .unwrap()
+            .cancel_transaction(transaction);
+    }
+
     // metrics are reported by bank slot
     pub fn report_metrics(&self, bank: Arc<Bank>) {
         self.report_sender
