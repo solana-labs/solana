@@ -244,6 +244,7 @@ fn get_rpc_peers(
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     blacklist_timeout: &Instant,
     retry_reason: &mut Option<String>,
+    bootstrap_config: &RpcBootstrapConfig,
 ) -> Option<Vec<ContactInfo>> {
     let shred_version = validator_config
         .expected_shred_version
@@ -272,11 +273,18 @@ fn get_rpc_peers(
             .unwrap_or_default()
     );
 
-    let rpc_peers = cluster_info
+    let mut rpc_peers = cluster_info
         .all_rpc_peers()
         .into_iter()
         .filter(|contact_info| contact_info.shred_version == shred_version)
         .collect::<Vec<_>>();
+
+    if bootstrap_config.only_known_rpc {
+        rpc_peers.retain(|rpc_peer| {
+            is_known_validator(&rpc_peer.id, &validator_config.known_validators)
+        });
+    }
+
     let rpc_peers_total = rpc_peers.len();
 
     // Filter out blacklisted nodes
@@ -675,6 +683,7 @@ mod without_incremental_snapshots {
                 blacklisted_rpc_nodes,
                 &blacklist_timeout,
                 &mut retry_reason,
+                bootstrap_config,
             );
             if rpc_peers.is_none() {
                 continue;
@@ -692,11 +701,6 @@ mod without_incremental_snapshots {
                 let mut eligible_rpc_peers = vec![];
 
                 for rpc_peer in rpc_peers.iter() {
-                    if bootstrap_config.only_known_rpc
-                        && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
-                    {
-                        continue;
-                    }
                     cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |snapshot_hashes| {
                         for snapshot_hash in snapshot_hashes {
                             if let Some(ref known_snapshot_hashes) = known_snapshot_hashes {
@@ -1019,6 +1023,7 @@ mod with_incremental_snapshots {
                 blacklisted_rpc_nodes,
                 &blacklist_timeout,
                 &mut retry_reason,
+                bootstrap_config,
             );
             if rpc_peers.is_none() {
                 continue;
@@ -1039,12 +1044,8 @@ mod with_incremental_snapshots {
                 }
             }
 
-            let peer_snapshot_hashes = get_peer_snapshot_hashes(
-                cluster_info,
-                validator_config,
-                bootstrap_config,
-                &rpc_peers,
-            );
+            let peer_snapshot_hashes =
+                get_peer_snapshot_hashes(cluster_info, validator_config, &rpc_peers);
 
             if peer_snapshot_hashes.is_empty() {
                 match newer_cluster_snapshot_timeout {
@@ -1095,18 +1096,12 @@ mod with_incremental_snapshots {
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
-        bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
         let known_snapshot_hashes =
             get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
 
-        let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(
-            cluster_info,
-            validator_config,
-            bootstrap_config,
-            rpc_peers,
-        );
+        let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers);
         retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
             &known_snapshot_hashes,
             &mut peer_snapshot_hashes,
@@ -1292,19 +1287,10 @@ mod with_incremental_snapshots {
     /// hash, or a combo full (i.e. base) snapshot hash and incremental snapshot hash.
     fn get_eligible_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
-        validator_config: &ValidatorConfig,
-        bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
         let mut peer_snapshot_hashes = Vec::new();
         for rpc_peer in rpc_peers {
-            if bootstrap_config.only_known_rpc
-                && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
-            {
-                // We were told to ignore unknown peers
-                continue;
-            }
-
             let mut highest_snapshot_hash =
                 get_highest_incremental_snapshot_hash_for_peer(cluster_info, &rpc_peer.id);
 
