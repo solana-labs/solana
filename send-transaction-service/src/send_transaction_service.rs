@@ -389,7 +389,7 @@ impl SendTransactionService {
         let addresses = leader_info
             .as_ref()
             .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
-        let addresses = addresses
+        addresses
             .map(|address_list| {
                 if address_list.is_empty() {
                     vec![tpu_address]
@@ -397,8 +397,7 @@ impl SendTransactionService {
                     address_list
                 }
             })
-            .unwrap_or_else(|| vec![&tpu_address]);
-        addresses
+            .unwrap_or_else(|| vec![tpu_address])
     }
 
     fn send_single_transaction<T: TpuInfo + std::marker::Send + 'static>(
