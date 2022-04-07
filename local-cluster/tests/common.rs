@@ -11,7 +11,7 @@ use {
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
-        blockstore::{Blockstore, PurgeType},
+        blockstore::{Blockstore, PurgeRanges, PurgeType},
         blockstore_db::{AccessType, BlockstoreOptions},
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
@@ -86,7 +86,10 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
 
 pub fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
     blockstore.purge_from_next_slots(start_slot, start_slot + slot_count);
-    blockstore.purge_slots(start_slot, start_slot + slot_count, PurgeType::Exact);
+    blockstore.purge_slots(
+        PurgeRanges::all_columns(start_slot, start_slot + slot_count),
+        PurgeType::Exact,
+    );
 }
 
 // Fetches the last vote in the tower, blocking until it has also appeared in blockstore.

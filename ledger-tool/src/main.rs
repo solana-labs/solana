@@ -22,7 +22,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
-        blockstore::{create_new_ledger, Blockstore, PurgeType},
+        blockstore::{create_new_ledger, Blockstore, PurgeRanges, PurgeType},
         blockstore_db::{
             self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Database,
             LedgerColumnOptions,
@@ -3167,7 +3167,10 @@ fn main() {
                 let purge_from_blockstore = |start_slot, end_slot| {
                     blockstore.purge_from_next_slots(start_slot, end_slot);
                     if no_compaction {
-                        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+                        blockstore.purge_slots(
+                            PurgeRanges::all_columns(start_slot, end_slot),
+                            PurgeType::Exact,
+                        );
                     } else {
                         blockstore.purge_and_compact_slots(start_slot, end_slot);
                     }

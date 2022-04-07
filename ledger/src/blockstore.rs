@@ -71,7 +71,7 @@ use {
 pub mod blockstore_purge;
 pub use {
     crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
-    blockstore_purge::PurgeType,
+    blockstore_purge::{PurgeRanges, PurgeType},
     rocksdb::properties as RocksProperties,
 };
 
@@ -584,6 +584,23 @@ impl Blockstore {
                 slot,
                 deserialize(&slot_meta_bytes).unwrap_or_else(|e| {
                     panic!("Could not deserialize SlotMeta for slot {}: {:?}", slot, e)
+                }),
+            )
+        }))
+    }
+
+    pub fn slot_index_iterator(
+        &self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = (Slot, Index)> + '_> {
+        let index_iter = self
+            .db
+            .iter::<cf::Index>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+        Ok(index_iter.map(|(slot, index_bytes)| {
+            (
+                slot,
+                deserialize(&index_bytes).unwrap_or_else(|e| {
+                    panic!("Could not deserialize Index for slot {}: {:?}", slot, e)
                 }),
             )
         }))
@@ -8536,7 +8553,7 @@ pub mod tests {
         (data_shreds, coding_shreds, Arc::new(leader_schedule_cache))
     }
 
-    fn verify_index_integrity(blockstore: &Blockstore, slot: u64) {
+    pub(crate) fn verify_index_integrity(blockstore: &Blockstore, slot: u64) {
         let shred_index = blockstore.get_index(slot).unwrap().unwrap();
 
         let data_iter = blockstore.slot_data_iterator(slot, 0).unwrap();

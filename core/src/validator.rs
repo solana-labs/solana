@@ -36,9 +36,7 @@ use {
     },
     solana_ledger::{
         bank_forks_utils,
-        blockstore::{
-            Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
-        },
+        blockstore::{Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver},
         blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
@@ -1526,16 +1524,12 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
         }
 
         let end_slot = last_slot.unwrap();
-        info!("Purging slots {} to {}", start_slot, end_slot);
+        info!(
+            "Purging and compacting slots {} to {}",
+            start_slot, end_slot
+        );
         blockstore.purge_from_next_slots(start_slot, end_slot);
-        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-        info!("Purging done, compacting db..");
-        if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
-            warn!(
-                "Error from compacting storage from {} to {}: {:?}",
-                start_slot, end_slot, e
-            );
-        }
+        blockstore.purge_and_compact_slots(start_slot, end_slot);
         info!("done");
     }
     drop(blockstore);

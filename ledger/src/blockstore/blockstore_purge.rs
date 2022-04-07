@@ -1,11 +1,5 @@
 use {super::*, solana_sdk::message::AccountKeys, std::time::Instant};
 
-#[derive(Default)]
-pub struct PurgeStats {
-    delete_range: u64,
-    write_batch: u64,
-}
-
 #[derive(Clone, Copy)]
 /// Controls how `blockstore::purge_slots` purges the data.
 pub enum PurgeType {
@@ -18,6 +12,30 @@ pub enum PurgeType {
     /// The fastest purge mode that relies on the slot-id based TTL
     /// compaction filter to do the cleanup.
     CompactionFilter,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PurgeRanges {
+    /// A potential range of slots to purge all slot-based data
+    pub all_cfs_purge_range: Option<(Slot, Slot)>,
+    /// A potential range of slots to purge just coding shreds
+    pub coding_cfs_purge_range: Option<(Slot, Slot)>,
+}
+
+impl PurgeRanges {
+    pub fn all_columns(from_slot: Slot, to_slot: Slot) -> Self {
+        Self {
+            all_cfs_purge_range: Some((from_slot, to_slot)),
+            coding_cfs_purge_range: None,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct PurgeStats {
+    delete_range: u64,
+    delete_range_coding: u64,
+    write_batch: u64,
 }
 
 impl Blockstore {
@@ -36,16 +54,26 @@ impl Blockstore {
     /// while the non-slot-id based column families, `cf::TransactionStatus`,
     /// `AddressSignature`, and `cf::TransactionStatusIndex`, are cleaned-up
     /// based on the `purge_type` setting.
-    pub fn purge_slots(&self, from_slot: Slot, to_slot: Slot, purge_type: PurgeType) {
+    pub fn purge_slots(&self, purge_ranges: PurgeRanges, purge_type: PurgeType) {
         let mut purge_stats = PurgeStats::default();
-        let purge_result =
-            self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut purge_stats);
+        let purge_result = self.run_purge_with_stats(purge_ranges, purge_type, &mut purge_stats);
+
+        let (from_slot, to_slot) = purge_ranges.all_cfs_purge_range.unwrap_or((0, 0));
+        let (from_slot_coding, to_slot_coding) =
+            purge_ranges.coding_cfs_purge_range.unwrap_or((0, 0));
 
         datapoint_info!(
             "blockstore-purge",
             ("from_slot", from_slot as i64, i64),
             ("to_slot", to_slot as i64, i64),
             ("delete_range_us", purge_stats.delete_range as i64, i64),
+            ("from_slot_coding", from_slot_coding as i64, i64),
+            ("to_slot_coding", to_slot_coding as i64, i64),
+            (
+                "delete_range_coding_us",
+                purge_stats.delete_range_coding as i64,
+                i64
+            ),
             ("write_batch_us", purge_stats.write_batch as i64, i64)
         );
         if let Err(e) = purge_result {
@@ -70,11 +98,14 @@ impl Blockstore {
     }
 
     pub fn purge_and_compact_slots(&self, from_slot: Slot, to_slot: Slot) {
-        self.purge_slots(from_slot, to_slot, PurgeType::Exact);
+        self.purge_slots(
+            PurgeRanges::all_columns(from_slot, to_slot),
+            PurgeType::Exact,
+        );
         if let Err(e) = self.compact_storage(from_slot, to_slot) {
             // This error is not fatal and indicates an internal error?
             error!(
-                "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                "Error: {:?}; Couldn't compact storage from {} to {}",
                 e, from_slot, to_slot
             );
         }
@@ -136,93 +167,92 @@ impl Blockstore {
         to_slot: Slot,
         purge_type: PurgeType,
     ) -> Result<bool> {
-        self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut PurgeStats::default())
+        self.run_purge_with_stats(
+            PurgeRanges::all_columns(from_slot, to_slot),
+            purge_type,
+            &mut PurgeStats::default(),
+        )
     }
 
-    /// A helper function to `purge_slots` that executes the ledger clean up
-    /// from `from_slot` to `to_slot`.
-    pub(crate) fn run_purge_with_stats(
+    fn run_purge_all_slot_columns(
         &self,
+        write_batch: &mut WriteBatch,
+        purge_type: PurgeType,
+        columns_purged: &mut bool,
+        w_active_transaction_status_index: &mut u64,
         from_slot: Slot,
         to_slot: Slot,
-        purge_type: PurgeType,
         purge_stats: &mut PurgeStats,
-    ) -> Result<bool> {
-        let mut write_batch = self
-            .db
-            .batch()
-            .expect("Database Error: Failed to get write batch");
-        // delete range cf is not inclusive
+    ) -> Result<()> {
+        // delete_range_cf is not inclusive on the end of range
         let to_slot = to_slot.saturating_add(1);
 
         let mut delete_range_timer = Measure::start("delete_range");
-        let mut columns_purged = self
+        *columns_purged = self
             .db
-            .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
+            .delete_range_cf::<cf::SlotMeta>(write_batch, from_slot, to_slot)
             .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::BankHash>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::BankHash>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::Root>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::ShredData>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::ShredCode>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::DeadSlots>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::DuplicateSlots>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::DuplicateSlots>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::ErasureMeta>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::Orphans>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::Index>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::Rewards>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::Rewards>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::Blocktime>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::Blocktime>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::PerfSamples>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::PerfSamples>(write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::BlockHeight>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::BlockHeight>(write_batch, from_slot, to_slot)
                 .is_ok();
-        let mut w_active_transaction_status_index =
-            self.active_transaction_status_index.write().unwrap();
         match purge_type {
             PurgeType::Exact => {
-                self.purge_special_columns_exact(&mut write_batch, from_slot, to_slot)?;
+                self.purge_special_columns_exact(write_batch, from_slot, to_slot)?;
             }
             PurgeType::PrimaryIndex => {
                 self.purge_special_columns_with_primary_index(
-                    &mut write_batch,
-                    &mut columns_purged,
-                    &mut w_active_transaction_status_index,
+                    write_batch,
+                    columns_purged,
+                    w_active_transaction_status_index,
                     to_slot,
                 )?;
             }
@@ -235,16 +265,90 @@ impl Blockstore {
             }
         }
         delete_range_timer.stop();
+        purge_stats.delete_range += delete_range_timer.as_us();
+
+        Ok(())
+    }
+
+    /// Purge coding shreds and clear coding shred indices for [`from_slot`, `to_slot`].
+    fn run_purge_coding_shreds(
+        &self,
+        write_batch: &mut WriteBatch,
+        columns_purged: &mut bool,
+        from_slot: Slot,
+        to_slot: Slot,
+        purge_stats: &mut PurgeStats,
+    ) -> Result<()> {
+        // delete_range_cf is not inclusive on the end of range
+        let to_slot = to_slot.saturating_add(1);
+
+        let mut delete_range_timer = Measure::start("delete_range_coding");
+        *columns_purged &= self
+            .db
+            .delete_range_cf::<cf::ShredCode>(write_batch, from_slot, to_slot)
+            .is_ok();
+
+        for (slot, mut index) in self.slot_index_iterator(from_slot)? {
+            if slot >= to_slot {
+                break;
+            }
+            index.coding_mut().clear();
+            *columns_purged &= write_batch.put::<cf::Index>(slot, &index).is_ok();
+        }
+        delete_range_timer.stop();
+        purge_stats.delete_range_coding += delete_range_timer.as_us();
+
+        Ok(())
+    }
+
+    /// A helper function to `purge_slots` that executes the ledger clean up
+    /// from `from_slot` to `to_slot`.
+    pub(crate) fn run_purge_with_stats(
+        &self,
+        purge_ranges: PurgeRanges,
+        purge_type: PurgeType,
+        purge_stats: &mut PurgeStats,
+    ) -> Result<bool> {
+        let mut write_batch = self
+            .db
+            .batch()
+            .expect("Database Error: Failed to get write batch");
+        let mut columns_purged = true;
+
+        if let Some((from_slot, to_slot)) = purge_ranges.coding_cfs_purge_range {
+            self.run_purge_coding_shreds(
+                &mut write_batch,
+                &mut columns_purged,
+                from_slot,
+                to_slot,
+                purge_stats,
+            )?;
+        }
+
+        let mut w_active_transaction_status_index =
+            self.active_transaction_status_index.write().unwrap();
+        if let Some((from_slot, to_slot)) = purge_ranges.all_cfs_purge_range {
+            self.run_purge_all_slot_columns(
+                &mut write_batch,
+                purge_type,
+                &mut columns_purged,
+                &mut w_active_transaction_status_index,
+                from_slot,
+                to_slot,
+                purge_stats,
+            )?;
+        }
+
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
             error!(
-                "Error: {:?} while submitting write batch for slot {:?} retrying...",
-                e, from_slot
+                "Error: {:?} while submitting write batch for ranges {:?}...",
+                e, purge_ranges
             );
             return Err(e);
         }
         write_timer.stop();
-        purge_stats.delete_range += delete_range_timer.as_us();
+
         purge_stats.write_batch += write_timer.as_us();
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between
@@ -429,7 +533,8 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path_auto_delete,
+            blockstore::tests::{make_slot_entries_with_transactions, verify_index_integrity},
+            get_tmp_ledger_path_auto_delete,
         },
         bincode::serialize,
         solana_entry::entry::next_entry_mut,
@@ -464,6 +569,86 @@ pub mod tests {
             .for_each(|(_, _)| {
                 panic!();
             });
+    }
+
+    #[test]
+    fn test_purge_slots_coding_shreds_early() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Create enough entries to ensure there are at least two shreds created
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
+        let entries = create_ticks(num_entries, 0, Hash::default());
+
+        // Populate 10 slots in blockstore
+        let num_slots = 10;
+        for slot in 0..num_slots {
+            let parent_slot = if slot == 0 { 0 } else { slot - 1 };
+            let shredder = Shredder::new(slot, parent_slot, 0, 0).unwrap();
+            let (mut data_shreds, mut coding_shreds) = shredder.entries_to_shreds(
+                &Keypair::new(),
+                &entries,
+                true, // is_full_slot
+                0,    // next_shred_index,
+                0,    // next_code_index
+            );
+            data_shreds.append(&mut coding_shreds);
+            blockstore.insert_shreds(data_shreds, None, false).unwrap();
+        }
+
+        // Purge slots [0, 4] for coding shreds only
+        blockstore.purge_slots(
+            PurgeRanges {
+                all_cfs_purge_range: None,
+                coding_cfs_purge_range: Some((0, 4)),
+            },
+            PurgeType::CompactionFilter,
+        );
+        for slot in 0..4 {
+            assert!(blockstore
+                .slot_coding_iterator(slot, 0)
+                .unwrap()
+                .next()
+                .is_none());
+            verify_index_integrity(&blockstore, slot);
+        }
+
+        // Purge slots [0, 4] for all columns
+        // Purging the range of coding shreds that were already purged is ok
+        blockstore.purge_slots(
+            PurgeRanges {
+                all_cfs_purge_range: Some((0, 4)),
+                coding_cfs_purge_range: None,
+            },
+            PurgeType::CompactionFilter,
+        );
+        test_all_empty_or_min(&blockstore, 5);
+
+        // Purge slot 5 for all columns and slots [5, 8] for coding shreds
+        blockstore.purge_slots(
+            PurgeRanges {
+                all_cfs_purge_range: Some((5, 5)),
+                coding_cfs_purge_range: Some((5, 8)),
+            },
+            PurgeType::CompactionFilter,
+        );
+        test_all_empty_or_min(&blockstore, 6);
+        for slot in 6..8 {
+            assert!(blockstore
+                .slot_coding_iterator(slot, 0)
+                .unwrap()
+                .next()
+                .is_none());
+            verify_index_integrity(&blockstore, slot);
+        }
+
+        // Check that slot 9 remains in the blockstore
+        assert!(blockstore
+            .slot_coding_iterator(9, 0)
+            .unwrap()
+            .next()
+            .is_some());
+        verify_index_integrity(&blockstore, 9);
     }
 
     #[test]

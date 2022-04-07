@@ -154,6 +154,7 @@ impl Index {
     pub(crate) fn data_mut(&mut self) -> &mut ShredIndex {
         &mut self.data
     }
+
     pub(crate) fn coding_mut(&mut self) -> &mut ShredIndex {
         &mut self.coding
     }
@@ -177,6 +178,10 @@ impl ShredIndex {
 
     pub(crate) fn insert(&mut self, index: u64) {
         self.index.insert(index);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.index.clear();
     }
 }
 
