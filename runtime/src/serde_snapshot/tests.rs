@@ -231,7 +231,7 @@ fn test_bank_serialize_style(
     if reserialize_accounts_hash {
         let slot = bank2.slot();
         let temp_dir = TempDir::new().unwrap();
-        let slot_dir = PathBuf::from(temp_dir.path()).join(slot.to_string());
+        let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
         let mut pre_path = post_path.clone();
         pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
