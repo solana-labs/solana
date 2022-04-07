@@ -26,7 +26,7 @@ impl TurbineMerkleHash {
 
 impl TurbineMerkleProof {
     fn compute_root(&self, leaf_hash: &TurbineMerkleHash, leaf_index: usize) -> TurbineMerkleHash {
-        let mut hash = leaf_hash.clone();
+        let mut hash = *leaf_hash;
         let mut idx = leaf_index;
         for i in 0..self.0.len() {
             hash = if idx % 2 == 0 {
@@ -50,13 +50,13 @@ impl TurbineMerkleProof {
 }
 
 impl TurbineMerkleTree {
-    pub fn new_from_leaves(leaves: &Vec<TurbineMerkleHash>) -> Self {
+    pub fn new_from_leaves(leaves: &[TurbineMerkleHash]) -> Self {
         // TODO assert leaves.len() is a power of 2
         let tree_size = leaves.len() * 2 - 1;
         let mut tree = Vec::with_capacity(tree_size);
 
-        for i in 0..leaves.len() {
-            tree.push(leaves[i]);
+        for leaf in leaves {
+            tree.push(*leaf);
         }
 
         let mut base = 0;
@@ -73,11 +73,11 @@ impl TurbineMerkleTree {
         Self { tree }
     }
 
-    pub fn new_from_bufs(bufs: &Vec<&[u8]>) -> Self {
+    pub fn new_from_bufs(bufs: &[&[u8]]) -> Self {
         // TODO assert bufs.len() is power of 2 or pad to power of 2
         let leaves: Vec<_> = bufs
             .iter()
-            .map(|b| TurbineMerkleHash::hash(&[&b]))
+            .map(|b| TurbineMerkleHash::hash(&[b]))
             .collect();
         Self::new_from_leaves(&leaves)
     }
@@ -109,7 +109,7 @@ impl TurbineMerkleTree {
             i /= 2;
             level_leaves /= 2;
         }
-        TurbineMerkleProof { 0: proof }
+        TurbineMerkleProof(proof)
     }
 
     fn _print(&self) {
