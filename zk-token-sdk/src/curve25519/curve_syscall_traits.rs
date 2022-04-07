@@ -53,8 +53,8 @@ pub trait MultiScalarMultiplication {
     /// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md#gas-costs. If not, then we can
     /// consider bounding the length of the input and assigning worst-case cost.
     fn multiscalar_multiply(
-        scalars: Vec<&Self::Scalar>,
-        points: Vec<&Self::Point>,
+        scalars: &[Self::Scalar],
+        points: &[Self::Point],
     ) -> Option<Self::Point>;
 }
 
