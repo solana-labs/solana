@@ -47,8 +47,8 @@ mod target_arch {
     }
 
     pub fn multiscalar_multiply_edwards(
-        scalars: Vec<&PodScalar>,
-        points: Vec<&PodEdwardsPoint>,
+        scalars: &[PodScalar],
+        points: &[PodEdwardsPoint],
     ) -> Option<PodEdwardsPoint> {
         PodEdwardsPoint::multiscalar_multiply(scalars, points)
     }
@@ -113,11 +113,11 @@ mod target_arch {
         type Scalar = PodScalar;
         type Point = Self;
 
-        fn multiscalar_multiply(scalars: Vec<&PodScalar>, points: Vec<&Self>) -> Option<Self> {
+        fn multiscalar_multiply(scalars: &[PodScalar], points: &[Self]) -> Option<Self> {
             EdwardsPoint::optional_multiscalar_mul(
-                scalars.into_iter().map(Scalar::from),
+                scalars.iter().map(Scalar::from),
                 points
-                    .into_iter()
+                    .iter()
                     .map(|point| EdwardsPoint::try_from(point).ok()),
             )
             .map(|result| PodEdwardsPoint::from(&result))
