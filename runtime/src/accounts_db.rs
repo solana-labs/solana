@@ -5600,10 +5600,15 @@ impl AccountsDb {
                 expected_capitalization,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
+        self.set_accounts_hash(slot, hash);
+        (hash, total_lamports)
+    }
+
+    /// update hash for this slot in the 'bank_hashes' map
+    pub(crate) fn set_accounts_hash(&self, slot: Slot, hash: Hash) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
-        (hash, total_lamports)
     }
 
     fn scan_snapshot_stores_with_cache(

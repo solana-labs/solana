@@ -230,7 +230,7 @@ impl<'a> TypeContext<'a> for Context {
                 )
             }));
         let slot = serializable_db.slot;
-        let hash = serializable_db
+        let hash: BankHashInfo = serializable_db
             .accounts_db
             .bank_hashes
             .read()
@@ -286,5 +286,62 @@ impl<'a> TypeContext<'a> for Context {
         R: Read,
     {
         deserialize_from(stream)
+    }
+
+    /// deserialize the bank from 'stream_reader'
+    /// modify the accounts_hash
+    /// reserialize the bank to 'stream_writer'
+    fn reserialize_bank_fields_with_hash<R, W>(
+        stream_reader: &mut BufReader<R>,
+        stream_writer: &mut BufWriter<W>,
+        accounts_hash: &Hash,
+    ) -> std::result::Result<(), Box<bincode::ErrorKind>>
+    where
+        R: Read,
+        W: Write,
+    {
+        let (bank_fields, mut accounts_db_fields) =
+            Self::deserialize_bank_fields(stream_reader).unwrap();
+        accounts_db_fields.3.snapshot_hash = *accounts_hash;
+        let rhs = bank_fields;
+        let blockhash_queue = RwLock::new(rhs.blockhash_queue.clone());
+        let hard_forks = RwLock::new(rhs.hard_forks.clone());
+        let stakes_cache = StakesCache::new(rhs.stakes.clone());
+        let bank = SerializableVersionedBank {
+            blockhash_queue: &blockhash_queue,
+            ancestors: &rhs.ancestors,
+            hash: rhs.hash,
+            parent_hash: rhs.parent_hash,
+            parent_slot: rhs.parent_slot,
+            hard_forks: &hard_forks,
+            transaction_count: rhs.transaction_count,
+            tick_height: rhs.tick_height,
+            signature_count: rhs.signature_count,
+            capitalization: rhs.capitalization,
+            max_tick_height: rhs.max_tick_height,
+            hashes_per_tick: rhs.hashes_per_tick,
+            ticks_per_slot: rhs.ticks_per_slot,
+            ns_per_slot: rhs.ns_per_slot,
+            genesis_creation_time: rhs.genesis_creation_time,
+            slots_per_year: rhs.slots_per_year,
+            accounts_data_len: rhs.accounts_data_len,
+            slot: rhs.slot,
+            epoch: rhs.epoch,
+            block_height: rhs.block_height,
+            collector_id: rhs.collector_id,
+            collector_fees: rhs.collector_fees,
+            fee_calculator: rhs.fee_calculator,
+            fee_rate_governor: rhs.fee_rate_governor,
+            collected_rent: rhs.collected_rent,
+            rent_collector: rhs.rent_collector,
+            epoch_schedule: rhs.epoch_schedule,
+            inflation: rhs.inflation,
+            stakes: &stakes_cache,
+            unused_accounts: UnusedAccounts::default(),
+            epoch_stakes: &rhs.epoch_stakes,
+            is_delta: rhs.is_delta,
+        };
+
+        bincode::serialize_into(stream_writer, &(bank, accounts_db_fields))
     }
 }
