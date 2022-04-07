@@ -150,9 +150,12 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --tpu-use-quic ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --tpu-do-batch ]]; then
-      args+=("$1")
-      shift
+    elif [[ $1 = --rpc-send-batch-ms ]]; then
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --rpc-send-batch-size ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --log ]]; then
       args+=("$1" "$2")
       shift 2
