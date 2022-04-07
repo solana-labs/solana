@@ -55,12 +55,10 @@ pub fn process_instruction(
         }
         VoteInstruction::UpdateValidatorIdentity => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            vote_state::update_validator_identity(
-                me,
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                    .unsigned_key(),
-                &signers,
-            )
+            let node_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
+            )?;
+            vote_state::update_validator_identity(me, node_pubkey, &signers)
         }
         VoteInstruction::UpdateCommission(commission) => {
             vote_state::update_commission(me, commission, &signers)
@@ -137,10 +135,12 @@ pub fn process_instruction(
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 instruction_context.check_number_of_instruction_accounts(4)?;
-                let voter_pubkey =
-                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
-                        .signer_key()
-                        .ok_or(InstructionError::MissingRequiredSignature)?;
+                let voter_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 vote_state::authorize(
