@@ -179,6 +179,7 @@ module.exports = {
           "proposals/block-confirmation",
           "proposals/cluster-test-framework",
           "proposals/embedding-move",
+          "proposals/handle-duplicate-block",
           "proposals/interchain-transaction-verification",
           "proposals/ledger-replication-to-implement",
           "proposals/optimistic-confirmation-and-slashing",
