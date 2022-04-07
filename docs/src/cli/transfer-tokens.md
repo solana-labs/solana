@@ -33,6 +33,14 @@ solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
 public key/wallet address.
 
+A response with the signature of the transaction will be returned. If the balance
+of the address does not change by the expected amount, run the following command
+for more information on what potentially went wrong:
+
+```bash
+solana confirm -v <TRANSACTION_SIGNATURE>
+```
+
 #### Check your balance
 
 Confirm the airdrop was successful by checking the account's balance.
