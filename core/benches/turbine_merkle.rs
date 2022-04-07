@@ -23,7 +23,7 @@ fn bench_merkle_create_tree_64(b: &mut Bencher) {
     b.iter(|| {
         let leaves: Vec<TurbineMerkleHash> = packets
             .iter()
-            .map(|p| TurbineMerkleHash::hash(&[&p]))
+            .map(|p| TurbineMerkleHash::hash(&[p]))
             .collect();
         let _tree = TurbineMerkleTree::new_from_leaves(&leaves);
     });
@@ -36,7 +36,7 @@ fn bench_merkle_create_tree_96(b: &mut Bencher) {
     b.iter(|| {
         let mut leaves: Vec<TurbineMerkleHash> = packets
             .iter()
-            .map(|p| TurbineMerkleHash::hash(&[&p]))
+            .map(|p| TurbineMerkleHash::hash(&[p]))
             .collect();
         leaves.extend(std::iter::repeat(TurbineMerkleHash::default()).take(32));
         let _tree = TurbineMerkleTree::new_from_leaves(&leaves);
@@ -50,7 +50,7 @@ fn bench_merkle_create_tree_128(b: &mut Bencher) {
     b.iter(|| {
         let leaves: Vec<TurbineMerkleHash> = packets
             .iter()
-            .map(|p| TurbineMerkleHash::hash(&[&p]))
+            .map(|p| TurbineMerkleHash::hash(&[p]))
             .collect();
         let _tree = TurbineMerkleTree::new_from_leaves(&leaves);
     });
@@ -62,7 +62,7 @@ fn bench_merkle_create_proofs_96_single(b: &mut Bencher) {
 
     let mut leaves: Vec<TurbineMerkleHash> = packets
         .iter()
-        .map(|p| TurbineMerkleHash::hash(&[&p]))
+        .map(|p| TurbineMerkleHash::hash(&[p]))
         .collect();
     leaves.extend(std::iter::repeat(TurbineMerkleHash::default()).take(32));
     let tree = TurbineMerkleTree::new_from_leaves(&leaves);
@@ -78,7 +78,7 @@ fn bench_merkle_create_proofs_96_batch(b: &mut Bencher) {
 
     let mut leaves: Vec<TurbineMerkleHash> = packets
         .iter()
-        .map(|p| TurbineMerkleHash::hash(&[&p]))
+        .map(|p| TurbineMerkleHash::hash(&[p]))
         .collect();
     leaves.extend(std::iter::repeat(TurbineMerkleHash::default()).take(32));
     let tree = TurbineMerkleTree::new_from_leaves(&leaves);
@@ -94,7 +94,7 @@ fn bench_merkle_verify_proofs_96_single(b: &mut Bencher) {
 
     let mut leaves: Vec<TurbineMerkleHash> = packets
         .iter()
-        .map(|p| TurbineMerkleHash::hash(&[&p]))
+        .map(|p| TurbineMerkleHash::hash(&[p]))
         .collect();
     leaves.extend(std::iter::repeat(TurbineMerkleHash::default()).take(32));
     let tree = TurbineMerkleTree::new_from_leaves(&leaves);
@@ -111,7 +111,7 @@ fn bench_merkle_verify_proofs_96_batch(b: &mut Bencher) {
 
     let mut leaves: Vec<TurbineMerkleHash> = packets
         .iter()
-        .map(|p| TurbineMerkleHash::hash(&[&p]))
+        .map(|p| TurbineMerkleHash::hash(&[p]))
         .collect();
     leaves.extend(std::iter::repeat(TurbineMerkleHash::default()).take(32));
     let tree = TurbineMerkleTree::new_from_leaves(&leaves);
