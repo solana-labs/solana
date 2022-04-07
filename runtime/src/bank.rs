@@ -1748,6 +1748,12 @@ impl Bank {
         let (_, update_epoch_time) = Measure::this(
             |_| {
                 if parent_epoch < new.epoch() {
+                    let _fg_requests_resources = parent
+                        .rc
+                        .accounts
+                        .accounts_db
+                        .foreground_requests_resources
+                        .activate();
                     let (thread_pool, thread_pool_time) = Measure::this(
                         |_| ThreadPoolBuilder::new().build().unwrap(),
                         (),

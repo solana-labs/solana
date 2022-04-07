@@ -1272,6 +1272,7 @@ mod tests {
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig::default()),
             1,
+            Arc::default(),
         ));
         let bin = 0;
         InMemAccountsIndex::new(&holder, bin)
@@ -1285,6 +1286,7 @@ mod tests {
                 ..AccountsIndexConfig::default()
             }),
             1,
+            Arc::default(),
         ));
         let bin = 0;
         let bucket = InMemAccountsIndex::new(&holder, bin);

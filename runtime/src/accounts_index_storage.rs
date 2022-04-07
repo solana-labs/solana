@@ -2,6 +2,7 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, IndexValue},
         bucket_map_holder::BucketMapHolder,
+        foreground_requests_resources::ForegroundRequestsResources,
         in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
     },
@@ -143,13 +144,22 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
     }
 
     /// allocate BucketMapHolder and InMemAccountsIndex[]
-    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> Self {
+    pub fn new(
+        bins: usize,
+        config: &Option<AccountsIndexConfig>,
+        foreground_requests_resources: Arc<ForegroundRequestsResources>,
+    ) -> Self {
         let threads = config
             .as_ref()
             .and_then(|config| config.flush_threads)
             .unwrap_or_else(Self::num_threads);
 
-        let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
+        let storage = Arc::new(BucketMapHolder::new(
+            bins,
+            config,
+            threads,
+            foreground_requests_resources,
+        ));
 
         let in_mem = (0..bins)
             .into_iter()

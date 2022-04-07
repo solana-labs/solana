@@ -4,6 +4,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
+        foreground_requests_resources::ForegroundRequestsResources,
         in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
@@ -695,6 +696,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         }
     }
 
+    pub fn foreground_requests_resources(&self) -> &Arc<ForegroundRequestsResources> {
+        &self.storage.storage.foreground_requests_resources
+    }
+
     fn allocate_accounts_index(
         config: Option<AccountsIndexConfig>,
     ) -> (
@@ -708,7 +713,8 @@ impl<T: IndexValue> AccountsIndex<T> {
             .unwrap_or(BINS_DEFAULT);
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator24::new(bins);
-        let storage = AccountsIndexStorage::new(bins, &config);
+        let foreground_requests_resources = Arc::default();
+        let storage = AccountsIndexStorage::new(bins, &config, foreground_requests_resources);
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| RwLock::new(Arc::clone(&storage.in_mem[bin])))

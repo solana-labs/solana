@@ -40,6 +40,7 @@ use {
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         cache_hash_data::CacheHashData,
         contains::Contains,
+        foreground_requests_resources::ForegroundRequestsResources,
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -1058,6 +1059,9 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
+    /// keep track of whether we should sleep some background processes
+    pub foreground_requests_resources: Arc<ForegroundRequestsResources>,
+
     /// Number of append vecs to create to maximize parallelism when scanning
     /// the accounts
     min_num_stores: usize,
@@ -1608,10 +1612,13 @@ impl AccountsDb {
 
         // validate inside here
         Self::bins_per_pass(num_hash_scan_passes);
+        let foreground_requests_resources =
+            Arc::clone(accounts_index.foreground_requests_resources());
 
         AccountsDb {
             active_stats: ActiveStats::default(),
             accounts_index,
+            foreground_requests_resources,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
@@ -1807,6 +1814,7 @@ impl AccountsDb {
         let reclaim_vecs = purges
             .par_chunks(INDEX_CLEAN_BULK_COUNT)
             .map(|pubkeys: &[Pubkey]| {
+                self.foreground_requests_resources.possibly_sleep();
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
                     self.accounts_index
@@ -3149,6 +3157,7 @@ impl AccountsDb {
             });
         } else {
             for slot in self.all_slots_in_storage() {
+                self.foreground_requests_resources.possibly_sleep();
                 if self.caching_enabled {
                     self.shrink_slot_forced(slot);
                 } else {
@@ -5460,6 +5469,7 @@ impl AccountsDb {
                 }
 
                 for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
+                    self.foreground_requests_resources.possibly_sleep();
                     let valid_slot = sub_storages.is_some();
                     if config.use_write_cache {
                         let ancestors = config.ancestors.as_ref().unwrap();
@@ -5768,6 +5778,7 @@ impl AccountsDb {
                     } else {
                         None
                     },
+                    foreground_requests_resources: Arc::clone(&self.foreground_requests_resources),
                 };
 
                 let result = self.scan_snapshot_stores_with_cache(

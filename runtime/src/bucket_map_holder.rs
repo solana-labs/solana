@@ -2,6 +2,7 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
+        foreground_requests_resources::ForegroundRequestsResources,
         in_mem_accounts_index::{InMemAccountsIndex, SlotT},
         waitable_condvar::WaitableCondvar,
     },
@@ -47,6 +48,8 @@ pub struct BucketMapHolder<T: IndexValue> {
     /// and writing to disk in parallel are.
     /// Note startup is an optimization and is not required for correctness.
     startup: AtomicBool,
+
+    pub foreground_requests_resources: Arc<ForegroundRequestsResources>,
 }
 
 impl<T: IndexValue> Debug for BucketMapHolder<T> {
@@ -144,7 +147,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
         }
     }
 
-    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>, threads: usize) -> Self {
+    pub fn new(
+        bins: usize,
+        config: &Option<AccountsIndexConfig>,
+        threads: usize,
+        foreground_requests_resources: Arc<ForegroundRequestsResources>,
+    ) -> Self {
         const DEFAULT_AGE_TO_STAY_IN_CACHE: Age = 5;
         let ages_to_stay_in_cache = config
             .as_ref()
@@ -188,6 +196,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             startup: AtomicBool::default(),
             mem_budget_mb,
             threads,
+            foreground_requests_resources,
         }
     }
 
@@ -262,6 +271,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let flush = self.disk.is_some();
         let mut throttling_wait_ms = None;
         loop {
+            self.foreground_requests_resources.possibly_sleep();
             if !flush {
                 self.wait_dirty_or_aged.wait_timeout(Duration::from_millis(
                     self.stats.remaining_until_next_interval(),
@@ -323,7 +333,12 @@ pub mod tests {
     fn test_next_bucket_to_flush() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        let test = BucketMapHolder::<u64>::new(
+            bins,
+            &Some(AccountsIndexConfig::default()),
+            1,
+            Arc::default(),
+        );
         let visited = (0..bins)
             .into_iter()
             .map(|_| AtomicUsize::default())
@@ -347,7 +362,12 @@ pub mod tests {
     fn test_age_increment() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        let test = BucketMapHolder::<u64>::new(
+            bins,
+            &Some(AccountsIndexConfig::default()),
+            1,
+            Arc::default(),
+        );
         for age in 0..513 {
             assert_eq!(test.current_age(), (age % 256) as Age);
 
@@ -367,7 +387,12 @@ pub mod tests {
     fn test_throttle() {
         solana_logger::setup();
         let bins = 100;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        let test = BucketMapHolder::<u64>::new(
+            bins,
+            &Some(AccountsIndexConfig::default()),
+            1,
+            Arc::default(),
+        );
         assert!(!test.is_disk_index_enabled());
         let bins = test.bins as u64;
         let interval_ms = test.age_interval_ms();
@@ -400,7 +425,7 @@ pub mod tests {
             index_limit_mb: IndexLimitMb::Limit(0),
             ..AccountsIndexConfig::default()
         };
-        let test = BucketMapHolder::<u64>::new(bins, &Some(config), 1);
+        let test = BucketMapHolder::<u64>::new(bins, &Some(config), 1, Arc::default());
         assert!(test.is_disk_index_enabled());
     }
 
@@ -408,7 +433,12 @@ pub mod tests {
     fn test_age_time() {
         solana_logger::setup();
         let bins = 1;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        let test = BucketMapHolder::<u64>::new(
+            bins,
+            &Some(AccountsIndexConfig::default()),
+            1,
+            Arc::default(),
+        );
         let threads = 2;
         let time = AGE_MS * 5 / 2;
         let expected = (time / AGE_MS) as Age;
@@ -428,7 +458,12 @@ pub mod tests {
     fn test_age_broad() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        let test = BucketMapHolder::<u64>::new(
+            bins,
+            &Some(AccountsIndexConfig::default()),
+            1,
+            Arc::default(),
+        );
         assert_eq!(test.current_age(), 0);
         for _ in 0..bins {
             assert!(!test.all_buckets_flushed_at_current_age());

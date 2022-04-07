@@ -1,5 +1,8 @@
 use {
-    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, rent_collector::RentCollector},
+    crate::{
+        accounts_db::SnapshotStorages, ancestors::Ancestors,
+        foreground_requests_resources::ForegroundRequestsResources, rent_collector::RentCollector,
+    },
     log::*,
     rayon::prelude::*,
     solana_measure::measure::Measure,
@@ -13,7 +16,7 @@ use {
         convert::TryInto,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Mutex,
+            Arc, Mutex,
         },
     },
 };
@@ -307,6 +310,8 @@ impl CumulativeOffsets {
 #[derive(Debug, Default)]
 pub struct AccountsHash {
     pub filler_account_suffix: Option<Pubkey>,
+    /// if non-zero, fg processes request non-critical bg processes sleep some
+    pub foreground_requests_resources: Arc<ForegroundRequestsResources>,
 }
 
 impl AccountsHash {
@@ -714,6 +719,7 @@ impl AccountsHash {
         pubkey_division: &'a [Vec<Vec<CalculateHashIntermediate>>],
         pubkey_bin: usize,
     ) -> (Vec<&'a Hash>, u64, usize) {
+        self.foreground_requests_resources.possibly_sleep();
         let len = pubkey_division.len();
         let mut item_len = 0;
         let mut indexes = vec![0; len];
