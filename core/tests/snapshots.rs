@@ -461,7 +461,9 @@ mod tests {
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
                     snapshot_archives_dir,
                     slot,
-                    &Hash::default(), // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
+                    // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
+                    // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
+                    &Hash::default(),
                     ArchiveFormat::TarBzip2,
                 ));
             }
@@ -782,7 +784,6 @@ mod tests {
             snapshot_config.snapshot_version,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-            bank.get_accounts_hash(),
         )?;
 
         Ok(())
@@ -820,7 +821,6 @@ mod tests {
             snapshot_config.snapshot_version,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-            bank.get_accounts_hash(),
         )?;
 
         Ok(())

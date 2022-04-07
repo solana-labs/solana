@@ -96,7 +96,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
     ) {
-        let accounts_hash = Self::verify_accounts_package_hash(&accounts_package);
+        let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
@@ -117,8 +117,8 @@ impl AccountsHashVerifier {
         );
     }
 
-    /// returns accounts hash
-    fn verify_accounts_package_hash(accounts_package: &AccountsPackage) -> Hash {
+    /// returns calculated accounts hash
+    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> Hash {
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
