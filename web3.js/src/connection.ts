@@ -4154,6 +4154,9 @@ export class Connection {
     Object.values(this._accountChangeSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );
+    Object.values(this._logsSubscriptions).forEach(
+      s => (s.subscriptionId = null),
+    );
     Object.values(this._programAccountChangeSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );

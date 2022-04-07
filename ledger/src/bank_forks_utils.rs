@@ -16,7 +16,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
-        snapshot_package::AccountsPackageSender,
+        snapshot_package::PendingAccountsPackage,
         snapshot_utils,
     },
     solana_sdk::genesis_config::GenesisConfig,
@@ -46,7 +46,7 @@ pub fn load(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    accounts_package_sender: AccountsPackageSender,
+    pending_accounts_package: PendingAccountsPackage,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> LoadResult {
     let (mut bank_forks, leader_schedule_cache, starting_snapshot_hashes, pruned_banks_receiver) =
@@ -69,7 +69,7 @@ pub fn load(
         transaction_status_sender,
         cache_block_meta_sender,
         snapshot_config,
-        accounts_package_sender,
+        pending_accounts_package,
         pruned_banks_receiver,
     )
     .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))

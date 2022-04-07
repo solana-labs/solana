@@ -90,6 +90,7 @@ export interface Details {
   owner: PublicKey;
   space: number;
   data?: ProgramData;
+  rawData?: Buffer;
 }
 
 export interface Account {
@@ -284,11 +285,19 @@ async function fetchAccountInfo(
         }
       }
 
+      // If we cannot parse account layout as native spl account
+      // then keep raw data for other components to decode
+      let rawData: Buffer | undefined;
+      if (!data && !("parsed" in result.data)) {
+        rawData = result.data;
+      }
+
       details = {
         space,
         executable: result.executable,
         owner: result.owner,
         data,
+        rawData,
       };
     }
     data = { pubkey, lamports, details };

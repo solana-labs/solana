@@ -178,7 +178,11 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
 }
 
-fn test_bank_serialize_style(serde_style: SerdeStyle) {
+fn test_bank_serialize_style(
+    serde_style: SerdeStyle,
+    reserialize_accounts_hash: bool,
+    update_accounts_hash: bool,
+) {
     solana_logger::setup();
     let (genesis_config, _) = create_genesis_config(500);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -213,6 +217,52 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         &snapshot_storages,
     )
     .unwrap();
+
+    let accounts_hash = if update_accounts_hash {
+        let hash = Hash::new(&[1; 32]);
+        bank2
+            .accounts()
+            .accounts_db
+            .set_accounts_hash(bank2.slot(), hash);
+        hash
+    } else {
+        bank2.get_accounts_hash()
+    };
+    if reserialize_accounts_hash {
+        let slot = bank2.slot();
+        let temp_dir = TempDir::new().unwrap();
+        let slot_dir = temp_dir.path().join(slot.to_string());
+        let post_path = slot_dir.join(slot.to_string());
+        let mut pre_path = post_path.clone();
+        pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        std::fs::create_dir(&slot_dir).unwrap();
+        {
+            let mut f = std::fs::File::create(&pre_path).unwrap();
+            f.write_all(&buf).unwrap();
+        }
+        assert!(reserialize_bank_with_new_accounts_hash(
+            temp_dir.path(),
+            slot,
+            &accounts_hash
+        ));
+        let previous_len = buf.len();
+        // larger buffer than expected to make sure the file isn't larger than expected
+        let mut buf_reserialized = vec![0; previous_len + 1];
+        {
+            let mut f = std::fs::File::open(post_path).unwrap();
+            let size = f.read(&mut buf_reserialized).unwrap();
+            assert_eq!(size, previous_len);
+            buf_reserialized.truncate(size);
+        }
+        if update_accounts_hash {
+            // We cannot guarantee buffer contents are exactly the same if hash is the same.
+            // Things like hashsets/maps have randomness in their in-mem representations.
+            // This make serialized bytes not deterministic.
+            // But, we can guarantee that the buffer is different if we change the hash!
+            assert_ne!(buf, buf_reserialized);
+            std::mem::swap(&mut buf, &mut buf_reserialized);
+        }
+    }
 
     let rdr = Cursor::new(&buf[..]);
     let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
@@ -250,6 +300,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
+    assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
 }
 
@@ -296,7 +347,15 @@ fn test_accounts_serialize_newer() {
 
 #[test]
 fn test_bank_serialize_newer() {
-    test_bank_serialize_style(SerdeStyle::Newer)
+    for (reserialize_accounts_hash, update_accounts_hash) in
+        [(false, false), (true, false), (true, true)]
+    {
+        test_bank_serialize_style(
+            SerdeStyle::Newer,
+            reserialize_accounts_hash,
+            update_accounts_hash,
+        )
+    }
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]

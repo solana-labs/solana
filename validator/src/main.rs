@@ -36,7 +36,6 @@ use {
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
-    solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
@@ -2268,26 +2267,6 @@ pub fn main() {
     }
     let accounts_db_config = Some(accounts_db_config);
 
-    let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
-        let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
-            solana_net_utils::parse_host(matches.value_of("accountsdb_repl_bind_address").unwrap())
-                .expect("invalid accountsdb_repl_bind_address")
-        } else {
-            bind_address
-        };
-        let accountsdb_repl_port = value_t_or_exit!(matches, "accountsdb_repl_port", u16);
-
-        Some(AccountsDbReplServiceConfig {
-            worker_threads: value_t_or_exit!(matches, "accountsdb_repl_threads", usize),
-            replica_server_addr: SocketAddr::new(
-                accountsdb_repl_bind_address,
-                accountsdb_repl_port,
-            ),
-        })
-    } else {
-        None
-    };
-
     let geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
         Some(
             values_t_or_exit!(matches, "geyser_plugin_config", String)
@@ -2368,7 +2347,6 @@ pub fn main() {
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
-        accountsdb_repl_service_config,
         geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
