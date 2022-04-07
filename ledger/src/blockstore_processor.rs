@@ -1296,6 +1296,7 @@ fn load_frozen_forks(
                         new_root_bank
                             .rc
                             .accounts
+                            .accounts_db
                             .purge_slot(pruned_slot, pruned_bank_id);
                     }
 
