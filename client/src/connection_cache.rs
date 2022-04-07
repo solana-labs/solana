@@ -10,13 +10,14 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
     },
+    async_trait::async_trait,
 };
 
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 64;
 
 #[derive(Clone)]
-enum Connection {
+pub enum Connection {
     Udp(Arc<UdpTpuConnection>),
     Quic(Arc<QuicTpuConnection>),
 }
@@ -50,7 +51,7 @@ pub fn set_use_quic(use_quic: bool) {
 
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> Connection {
+pub fn get_connection(addr: &SocketAddr) -> Connection {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
     match map.map.get(addr) {
@@ -92,6 +93,7 @@ pub fn send_wire_transaction_batch(
         Connection::Quic(conn) => conn.send_wire_transaction_batch(packets),
     }
 }
+
 
 pub fn send_wire_transaction(
     wire_transaction: &[u8],

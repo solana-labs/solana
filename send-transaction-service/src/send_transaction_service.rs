@@ -2,7 +2,7 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::connection_cache,
+    solana_client::{tpu_connection::TpuConnection, connection_cache},
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -14,6 +14,7 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    tokio,
 };
 
 /// Maximum size of the transaction queue
@@ -158,14 +159,22 @@ impl SendTransactionService {
                             let addresses = addresses
                                 .map(|address_list| {
                                     if address_list.is_empty() {
-                                        vec![&tpu_address]
+                                        vec![tpu_address]
                                     } else {
-                                        address_list
+                                        address_list.into_iter().cloned().collect()
                                     }
                                 })
-                                .unwrap_or_else(|| vec![&tpu_address]);
+                                .unwrap_or_else(|| vec![tpu_address]);
                             for address in addresses {
-                                Self::send_transaction(address, &transaction_info.wire_transaction);
+                                let wire_transaction = transaction_info.wire_transaction.clone();
+                                let addr = address.clone();
+                                let _x = tokio::spawn(async move {
+                                    let connection = connection_cache::get_connection(&addr);
+                                    match connection {
+                                        connection_cache::Connection::Udp(conn) => conn.async_send_wire_transaction(&wire_transaction),
+                                        connection_cache::Connection::Quic(conn) => conn.async_send_wire_transaction(&wire_transaction),
+                                    };
+                                });
                             }
                             if transactions_len < MAX_TRANSACTION_QUEUE_SIZE {
                                 inc_new_counter_info!("send_transaction_service-insert-tx", 1);

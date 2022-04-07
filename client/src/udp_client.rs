@@ -7,6 +7,7 @@ use {
     solana_sdk::transport::Result as TransportResult,
     solana_streamer::sendmmsg::batch_send,
     std::net::{SocketAddr, UdpSocket},
+    async_trait::async_trait,
 };
 
 pub struct UdpTpuConnection {
@@ -14,6 +15,7 @@ pub struct UdpTpuConnection {
     addr: SocketAddr,
 }
 
+#[async_trait]
 impl TpuConnection for UdpTpuConnection {
     fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
         Self {
@@ -24,6 +26,12 @@ impl TpuConnection for UdpTpuConnection {
 
     fn tpu_addr(&self) -> &SocketAddr {
         &self.addr
+    }
+
+    async fn async_send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()>
+    {
+        self.socket.send_to(wire_transaction.as_ref(), self.addr)?;
+        Ok(())
     }
 
     fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>

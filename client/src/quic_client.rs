@@ -16,6 +16,7 @@ use {
         sync::Arc,
     },
     tokio::runtime::Runtime,
+    async_trait::async_trait,
 };
 
 struct SkipServerVerification;
@@ -51,6 +52,7 @@ pub struct QuicTpuConnection {
     client: Arc<QuicClient>,
 }
 
+#[async_trait]
 impl TpuConnection for QuicTpuConnection {
     fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
         let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
@@ -61,6 +63,12 @@ impl TpuConnection for QuicTpuConnection {
 
     fn tpu_addr(&self) -> &SocketAddr {
         &self.client.addr
+    }
+
+    async fn async_send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()>
+    {
+        let send_buffer = self.client.send_buffer(wire_transaction).await?;
+        Ok(())
     }
 
     fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>

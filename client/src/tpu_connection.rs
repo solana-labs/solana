@@ -2,8 +2,10 @@ use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
     std::net::{SocketAddr, UdpSocket},
+    async_trait::async_trait,
 };
 
+#[async_trait]
 pub trait TpuConnection {
     fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self;
 
@@ -21,6 +23,8 @@ pub trait TpuConnection {
     fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
     where
         T: AsRef<[u8]>;
+
+    async fn async_send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()>;
 
     fn par_serialize_and_send_transaction_batch(
         &self,

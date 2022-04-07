@@ -5753,6 +5753,7 @@ dependencies = [
  "solana-metrics",
  "solana-runtime",
  "solana-sdk",
+ "tokio",
 ]
 
 [[package]]
