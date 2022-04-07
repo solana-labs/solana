@@ -67,7 +67,7 @@ use {
 };
 
 /// Timeout interval when joining threads during TVU close
-pub const TVU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
+const TVU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
