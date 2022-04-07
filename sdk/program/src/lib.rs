@@ -316,7 +316,7 @@
 //! }
 //! ```
 //!
-//! Solana also includes a mechinasm to let programs control and sign for
+//! Solana also includes a mechanism to let programs control and sign for
 //! accounts without needing to protect a corresponding secret key, called
 //! [_program derived addresses_][pdas]. PDAs are derived with the
 //! [`Pubkey::find_program_address`] function. With a PDA, a program can call
