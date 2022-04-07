@@ -269,6 +269,7 @@ impl SendTransactionService {
         let mut result = ProcessTransactionsResult::default();
 
         let mut batched_transactions = HashSet::new();
+        let retry_rate = Duration::from_millis(config.retry_rate_ms);
 
         transactions.retain(|signature, mut transaction_info| {
             if transaction_info.durable_nonce_info.is_some() {
@@ -314,8 +315,7 @@ impl SendTransactionService {
 
             match working_bank.get_signature_status_slot(signature) {
                 None => {
-                    let now = Instant::now(); // reuse in assignment below
-                    let retry_rate = Duration::from_millis(config.retry_rate_ms): // move outside retain iteration
+                    let now = Instant::now();
                     let need_send = transaction_info
                         .last_sent_time
                         .map(|last| now.duration_since(last) >= retry_rate)
@@ -351,50 +351,35 @@ impl SendTransactionService {
             }
         });
 
-        if batched_transactions.is_empty() {
-            return result;
-        }
+        if !batched_transactions.is_empty() {
+            // Processing the transactions in batch
+            let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
 
-        // Processing the transactions in batch
-        let addresses = leader_info
-            .as_ref()
-            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
-        let addresses = addresses
-            .map(|address_list| {
-                if address_list.is_empty() {
-                    vec![tpu_address]
-                } else {
-                    address_list
+            let wire_transacions = transactions
+                .iter()
+                .filter(|(signature, _)| batched_transactions.contains(signature))
+                .map(|(_, transaction_info)| &transaction_info.wire_transaction as &[u8])
+                .collect::<Vec<&[u8]>>();
+
+            for address in &addresses {
+                let send_result =
+                    connection_cache::send_wire_transaction_batch(&wire_transacions, address);
+                if let Err(err) = send_result {
+                    warn!(
+                        "Failed to send transaction batch to {}: {:?}",
+                        tpu_address, err
+                    );
                 }
-            })
-            .unwrap_or_else(|| vec![tpu_address]);
-
-        let wire_transacions = transactions
-            .iter()
-            .filter(|(signature, _)| batched_transactions.contains(signature))
-            .map(|(_, transaction_info)| &transaction_info.wire_transaction as &[u8])
-            .collect::<Vec<&[u8]>>();
-
-        for address in &addresses {
-            let send_result =
-                connection_cache::send_wire_transaction_batch(&wire_transacions, address);
-            if let Err(err) = send_result {
-                warn!(
-                    "Failed to send transactions in batch to {}: {:?}",
-                    tpu_address, err
-                );
             }
         }
         result
     }
 
-    fn send_single_transaction<T: TpuInfo + std::marker::Send + 'static>(
-        tpu_address: &SocketAddr,
-        leader_info: &Option<T>,
-        config: &Config,
-        transaction_info: &TransactionInfo,
-    ) {
-        // non-batched send
+    fn get_tpu_addressesn<'a, T: TpuInfo>(
+        tpu_address: &'a SocketAddr,
+        leader_info: &'a Option<T>,
+        config: &'a Config,
+    ) -> Vec<&'a SocketAddr> {
         let addresses = leader_info
             .as_ref()
             .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
@@ -407,6 +392,17 @@ impl SendTransactionService {
                 }
             })
             .unwrap_or_else(|| vec![&tpu_address]);
+        addresses
+    }
+
+    fn send_single_transaction<T: TpuInfo + std::marker::Send + 'static>(
+        tpu_address: &SocketAddr,
+        leader_info: &Option<T>,
+        config: &Config,
+        transaction_info: &TransactionInfo,
+    ) {
+        // non-batched send
+        let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
         for address in addresses {
             Self::send_transaction(address, &transaction_info.wire_transaction);
         }

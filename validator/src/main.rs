@@ -14,6 +14,7 @@ use {
         input_validators::{
             is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
             is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+            is_within_range,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -1357,6 +1358,7 @@ pub fn main() {
                 .hidden(true)
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
+                .validator(|s| is_within_range(s, 1, usize::MAX))
                 .default_value(&default_rpc_send_transaction_batch_ms)
                 .help("The rate at which transactions sent via rpc service are sent in batch."),
         )
@@ -1393,6 +1395,7 @@ pub fn main() {
                 .hidden(true)
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
+                .validator(|s| is_within_range(s, 1, usize::MAX))
                 .default_value(&default_rpc_send_transaction_batch_size)
                 .help("The size of transactions to be sent in batch."),
         )
@@ -2357,17 +2360,10 @@ pub fn main() {
     let batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
     let batch_send_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
 
-    if batch_send_rate_ms > retry_rate_ms || batch_send_rate_ms < 1 {
+    if batch_send_rate_ms > retry_rate_ms {
         eprintln!(
-            "The specified rpc-send-batch-ms ({}) is invalid, it must be between 1 and the value of rpc-send-retry-ms ({})",
-            batch_send_rate_ms, retry_rate_ms);
-        exit(1);
-    }
-
-    if batch_size <= 0 {
-        eprintln!(
-            "The specified rpc-send-batch-size ({}) is invalid, it must be a positive number.",
-            batch_size
+            "The specified rpc-send-batch-ms ({}) is invalid, it must be <= rpc-send-retry-ms ({})",
+            batch_send_rate_ms, retry_rate_ms
         );
         exit(1);
     }
