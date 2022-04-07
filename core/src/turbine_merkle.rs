@@ -67,7 +67,7 @@ impl TurbineMerkleTree {
                 tree.push(hash);
             }
             base += level_leaves;
-            level_leaves /= 2;
+            level_leaves >>= 1;
         }
 
         Self { tree }
@@ -100,14 +100,14 @@ impl TurbineMerkleTree {
         let mut i = leaf_index;
         let mut base = 0;
         while level_leaves > 1 {
-            if i % 2 == 0 {
+            if i & 1 == 0 {
                 proof.push(self.tree[base + i + 1]);
             } else {
                 proof.push(self.tree[base + i - 1]);
             }
             base += level_leaves;
-            i /= 2;
-            level_leaves /= 2;
+            i >>= 1;
+            level_leaves >>= 1;
         }
         TurbineMerkleProof(proof)
     }
