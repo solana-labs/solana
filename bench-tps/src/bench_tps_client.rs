@@ -77,3 +77,6 @@ pub trait BenchTpsClient {
         recent_blockhash: &Hash,
     ) -> Result<Signature>;
 }
+
+mod bank_client;
+mod thin_client;
