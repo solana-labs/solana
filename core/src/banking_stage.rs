@@ -1351,31 +1351,21 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
     ) -> ProcessTransactionBatchOutput {
-        let ((transactions_qos_results, cost_model_throttled_transactions_count), cost_model_time) =
-            Measure::this(
-                |_| {
-                    let tx_costs = qos_service.compute_transaction_costs(txs.iter());
+        let mut cost_model_time = Measure::start("cost_model");
+        let tx_costs = qos_service.compute_transaction_costs(txs.iter());
 
-                    let (transactions_qos_results, num_included) =
-                        qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
+        let (transactions_qos_results, num_included) =
+            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
-                    let cost_model_throttled_transactions_count =
-                        txs.len().saturating_sub(num_included);
+        let cost_model_throttled_transactions_count = txs.len().saturating_sub(num_included);
 
-                    qos_service.accumulate_estimated_transaction_costs(
-                        &Self::accumulate_batched_transaction_costs(
-                            tx_costs.iter(),
-                            transactions_qos_results.iter(),
-                        ),
-                    );
-                    (
-                        transactions_qos_results,
-                        cost_model_throttled_transactions_count,
-                    )
-                },
-                (),
-                "cost_model",
-            );
+        qos_service.accumulate_estimated_transaction_costs(
+            &Self::accumulate_batched_transaction_costs(
+                tx_costs.iter(),
+                transactions_qos_results.iter(),
+            ),
+        );
+        cost_model_time.stop();
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -1409,6 +1399,7 @@ impl BankingStage {
 
         Self::commit_or_cancel_transaction_cost(
             txs.iter(),
+            tx_costs.iter(),
             transactions_qos_results.iter(),
             retryable_transaction_indexes,
             qos_service,
@@ -1447,21 +1438,23 @@ impl BankingStage {
     /// being inflated with unsuccessfully executed transactions.
     fn commit_or_cancel_transaction_cost<'a>(
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
+        transactions_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
         retryable_transaction_indexes: &[usize],
         qos_service: &QosService,
         bank: &Arc<Bank>,
     ) {
         transactions
+            .zip(transactions_costs)
             .zip(transaction_results)
             .enumerate()
-            .for_each(|(index, (tx, result))| {
+            .for_each(|(index, ((tx, tx_cost), result))| {
                 if result.is_ok() && retryable_transaction_indexes.contains(&index) {
-                    qos_service.cancel_transaction_cost(bank, tx);
+                    qos_service.cancel_transaction_cost(bank, tx, tx_cost);
                 } else {
                     // TODO the 3rd param is for transaction's actual units. Will have
                     // to plumb it in next; For now, it simply commit estimated units.
-                    qos_service.commit_transaction_cost(bank, tx, None);
+                    qos_service.commit_transaction_cost(bank, tx, tx_cost, None);
                 }
             });
     }

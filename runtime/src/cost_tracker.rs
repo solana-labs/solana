@@ -5,9 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{
-        clock::Slot, pubkey::Pubkey, signature::Signature, transaction::SanitizedTransaction,
-    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction},
     std::collections::HashMap,
 };
 
@@ -45,12 +43,6 @@ pub struct CostTracker {
     /// The amount of total account data size remaining.  If `Some`, then do not add transactions
     /// that would cause `account_data_size` to exceed this limit.
     account_data_size_limit: Option<u64>,
-
-    // Transactions have passed would_fit check, is being executed.
-    // If the execution is successful, it's actual Units can be committed
-    // to cost_tracker; otherwise, it should be removed without impacting
-    // cost_tracker.
-    pending_transactions: HashMap<Signature, TransactionCost>,
 }
 
 impl Default for CostTracker {
@@ -71,7 +63,6 @@ impl Default for CostTracker {
             transaction_count: 0,
             account_data_size: 0,
             account_data_size_limit: None,
-            pending_transactions: HashMap::new(),
         }
     }
 }
@@ -100,31 +91,40 @@ impl CostTracker {
 
     pub fn try_add(
         &mut self,
-        transaction: &SanitizedTransaction,
+        _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
     ) -> Result<u64, CostTrackerError> {
         self.would_fit(tx_cost)?;
-        self.pending_transactions
-            .insert(*transaction.signature(), tx_cost.clone());
+        self.add_transaction(tx_cost);
         Ok(self.block_cost)
     }
 
+    /// Transaction's estimated cost was already applied to cost_tracker during
+    /// `try_add`, if transaction was executed successfully, and its actual_units
+    /// known, should adjust transaction cost.
     pub fn commit_transaction(
         &mut self,
-        transaction: &SanitizedTransaction,
+        _transaction: &SanitizedTransaction,
+        tx_cost: &TransactionCost,
         actual_units: Option<u64>,
     ) {
-        if let Some(mut tx_cost) = self.pending_transactions.remove(transaction.signature()) {
-            if let Some(actual_units) = actual_units {
-                // using actual units to update cost tracker if available
-                tx_cost.execution_cost = actual_units;
-            }
-            self.add_transaction(&tx_cost);
+        if let Some(actual_units) = actual_units {
+            let mut adjustment =
+                TransactionCost::new_with_capacity(tx_cost.writable_accounts.len());
+            adjustment.execution_cost = tx_cost.execution_cost.saturating_sub(actual_units);
+            adjustment.is_simple_vote = tx_cost.is_simple_vote;
+            self.adjust_transaction(&adjustment);
         }
     }
 
-    pub fn cancel_transaction(&mut self, transaction: &SanitizedTransaction) {
-        self.pending_transactions.remove(transaction.signature());
+    /// Transaction's estimated cost was already applied to cost_tracker during
+    /// `try_add`, if transaction was not executed should undo its cost.
+    pub fn cancel_transaction(
+        &mut self,
+        _transaction: &SanitizedTransaction,
+        tx_cost: &TransactionCost,
+    ) {
+        self.remove_transaction(tx_cost);
     }
 
     pub fn report_stats(&self, bank_slot: Slot) {
@@ -166,23 +166,12 @@ impl CostTracker {
     }
 
     fn would_fit(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
-        let mut writable_account = vec![];
-        writable_account.extend(&tx_cost.writable_accounts);
-        let mut cost = tx_cost.sum();
-        let mut account_data_size = tx_cost.account_data_size;
-        let mut vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
-
-        for tx_cost in self.pending_transactions.values() {
-            writable_account.extend(&tx_cost.writable_accounts);
-            cost = cost.saturating_add(tx_cost.sum());
-            account_data_size = account_data_size.saturating_add(tx_cost.account_data_size);
-            vote_cost = vote_cost.saturating_add(if tx_cost.is_simple_vote { cost } else { 0 });
-        }
-
+        let cost = tx_cost.sum();
+        let vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
         self.would_aggregated_transactions_fit(
-            &writable_account,
+            &tx_cost.writable_accounts,
             cost,
-            account_data_size,
+            tx_cost.account_data_size,
             vote_cost,
         )
     }
@@ -256,6 +245,29 @@ impl CostTracker {
             .account_data_size
             .saturating_add(tx_cost.account_data_size);
         self.transaction_count = self.transaction_count.saturating_add(1);
+    }
+
+    fn adjust_transaction(&mut self, tx_cost: &TransactionCost) {
+        let cost = tx_cost.sum();
+        for account_key in tx_cost.writable_accounts.iter() {
+            let account_cost = self
+                .cost_by_writable_accounts
+                .entry(*account_key)
+                .or_insert(0);
+            *account_cost = account_cost.saturating_sub(cost);
+        }
+        self.block_cost = self.block_cost.saturating_sub(cost);
+        if tx_cost.is_simple_vote {
+            self.vote_cost = self.vote_cost.saturating_sub(cost);
+        }
+        self.account_data_size = self
+            .account_data_size
+            .saturating_sub(tx_cost.account_data_size);
+    }
+
+    fn remove_transaction(&mut self, tx_cost: &TransactionCost) {
+        self.adjust_transaction(tx_cost);
+        self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 }
 
@@ -620,11 +632,11 @@ mod tests {
         assert_eq!(0, testee.block_cost);
 
         // assert tx1 cost applied to tracker if committed
-        testee.commit_transaction(&tx1, None);
+        testee.commit_transaction(&tx1, &tx_cost1, None);
         assert_eq!(cost1, testee.block_cost);
 
         // assert tx2 cost will not be applied to tracker if cancelled
-        testee.cancel_transaction(&tx2);
+        testee.cancel_transaction(&tx2, &tx_cost2);
         assert_eq!(cost1, testee.block_cost);
 
         // still can add tx2
@@ -632,7 +644,7 @@ mod tests {
         // cannot add tx1 while tx2 is pending
         assert!(testee.try_add(&tx1, &tx_cost1).is_err());
         // after commit tx2, the block will have both tx1 and tx2
-        testee.commit_transaction(&tx2, None);
+        testee.commit_transaction(&tx2, &tx_cost2, None);
         assert_eq!(cost1 + cost2, testee.block_cost);
     }
 
@@ -640,7 +652,7 @@ mod tests {
     fn test_cost_tracker_try_add_is_atomic() {
         let (mint_keypair, start_hash) = test_setup();
         // build two mocking vote transactions with diff accounts
-        let (tx1, _tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
+        let (tx1, tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
 
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
@@ -663,7 +675,7 @@ mod tests {
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx1, &tx_cost).is_ok());
-            testee.commit_transaction(&tx1, None);
+            testee.commit_transaction(&tx1, &tx_cost1, None);
             let (_costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost, testee.block_cost);
             assert_eq!(3, testee.cost_by_writable_accounts.len());
@@ -682,7 +694,7 @@ mod tests {
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx1, &tx_cost).is_ok());
-            testee.commit_transaction(&tx1, None);
+            testee.commit_transaction(&tx1, &tx_cost1, None);
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost * 2, testee.block_cost);
             assert_eq!(3, testee.cost_by_writable_accounts.len());
@@ -703,7 +715,7 @@ mod tests {
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx1, &tx_cost).is_err());
-            testee.commit_transaction(&tx1, None);
+            testee.commit_transaction(&tx1, &tx_cost1, None);
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost * 2, testee.block_cost);
             assert_eq!(3, testee.cost_by_writable_accounts.len());
