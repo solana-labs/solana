@@ -3720,10 +3720,6 @@ describe('Connection', function () {
       await connection.removeRootChangeListener(subscriptionId);
     });
 
-    /*
-
-    TODO: debug why this test is flaky. Websocket connection issues?
-
     it('logs notification', async () => {
       let listener: number | undefined;
       const owner = Keypair.generate();
@@ -3744,7 +3740,10 @@ describe('Connection', function () {
         (async () => {
           while (!received) {
             // Execute a transaction so that we can pickup its logs.
-            await connection.requestAirdrop(owner.publicKey, 1  * LAMPORTS_PER_SOL);
+            await connection.requestAirdrop(
+              owner.publicKey,
+              1 * LAMPORTS_PER_SOL,
+            );
             await sleep(1000);
           }
         })();
@@ -3759,7 +3758,6 @@ describe('Connection', function () {
       );
       await connection.removeOnLogsListener(listener!);
     }).timeout(60 * 1000);
-    */
 
     it('https request', async () => {
       const connection = new Connection('https://api.mainnet-beta.solana.com');
