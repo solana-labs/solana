@@ -75,10 +75,7 @@ impl TurbineMerkleTree {
 
     pub fn new_from_bufs(bufs: &[&[u8]]) -> Self {
         // TODO assert bufs.len() is power of 2 or pad to power of 2
-        let leaves: Vec<_> = bufs
-            .iter()
-            .map(|b| TurbineMerkleHash::hash(&[b]))
-            .collect();
+        let leaves: Vec<_> = bufs.iter().map(|b| TurbineMerkleHash::hash(&[b])).collect();
         Self::new_from_leaves(&leaves)
     }
 
