@@ -141,7 +141,7 @@ mod tests {
         let packets = create_random_packets(16);
         let leaves: Vec<TurbineMerkleHash> = packets
             .iter()
-            .map(|p| TurbineMerkleHash::hash(&[&p]))
+            .map(|p| TurbineMerkleHash::hash(&[p]))
             .collect();
 
         let tree = TurbineMerkleTree::new_from_leaves(&leaves);
