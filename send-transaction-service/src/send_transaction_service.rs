@@ -69,6 +69,7 @@ impl TransactionInfo {
         last_valid_block_height: u64,
         durable_nonce_info: Option<(Pubkey, Hash)>,
         max_retries: Option<usize>,
+        last_sent_time: Option<Instant>,
     ) -> Self {
         Self {
             signature,
@@ -77,7 +78,7 @@ impl TransactionInfo {
             durable_nonce_info,
             max_retries,
             retries: 0,
-            last_sent_time: None,
+            last_sent_time
         }
     }
 }
@@ -445,6 +446,7 @@ mod test {
             account::AccountSharedData, genesis_config::create_genesis_config, nonce,
             pubkey::Pubkey, signature::Signer, system_program, system_transaction,
         },
+        std::ops::Sub,
     };
 
     #[test]
@@ -516,6 +518,7 @@ mod test {
                 root_bank.block_height() - 1,
                 None,
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -544,6 +547,7 @@ mod test {
                 working_bank.block_height(),
                 None,
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -572,6 +576,7 @@ mod test {
                 working_bank.block_height(),
                 None,
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -600,6 +605,7 @@ mod test {
                 working_bank.block_height(),
                 None,
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -629,8 +635,10 @@ mod test {
                 working_bank.block_height(),
                 None,
                 None,
+                Some(Instant::now().sub(Duration::from_millis(4000)))
             ),
         );
+
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
@@ -658,6 +666,7 @@ mod test {
                 working_bank.block_height(),
                 None,
                 Some(0),
+                Some(Instant::now()),
             ),
         );
         transactions.insert(
@@ -668,6 +677,7 @@ mod test {
                 working_bank.block_height(),
                 None,
                 Some(1),
+                Some(Instant::now().sub(Duration::from_millis(4000))),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -763,6 +773,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, durable_nonce)),
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -790,6 +801,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())),
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -819,6 +831,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())),
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -846,6 +859,7 @@ mod test {
                 root_bank.block_height() - 1,
                 Some((nonce_address, durable_nonce)),
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -874,6 +888,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())), // runtime should advance nonce on failed transactions
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -902,6 +917,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())), // runtime advances nonce when transaction lands
                 None,
+                Some(Instant::now()),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -931,6 +947,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, durable_nonce)),
                 None,
+                Some(Instant::now().sub(Duration::from_millis(4000))),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
