@@ -1,10 +1,12 @@
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::AbiExample;
 use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         instruction::InstructionError,
         pubkey::Pubkey,
-        stake::state::StakeState,
+        stake::state::{Delegation, StakeState},
     },
     thiserror::Error,
 };
@@ -23,8 +25,18 @@ pub(crate) enum Error {
 
 impl StakeAccount {
     #[inline]
+    pub(crate) fn lamports(&self) -> u64 {
+        self.0.lamports()
+    }
+
+    #[inline]
     pub(crate) fn stake_state(&self) -> &StakeState {
         &self.1
+    }
+
+    #[inline]
+    pub(crate) fn delegation(&self) -> Option<Delegation> {
+        self.1.delegation()
     }
 }
 
@@ -44,5 +56,21 @@ impl TryFrom<AccountSharedData> for StakeAccount {
 impl From<StakeAccount> for (AccountSharedData, StakeState) {
     fn from(stake_account: StakeAccount) -> Self {
         (stake_account.0, stake_account.1)
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for StakeAccount {
+    fn example() -> Self {
+        use solana_sdk::{
+            account::Account,
+            stake::state::{Meta, Stake},
+        };
+        let stake_state = StakeState::Stake(Meta::example(), Stake::example());
+        let mut account = Account::example();
+        account.data.resize(196, 0u8);
+        account.owner = solana_stake_program::id();
+        let _ = account.set_state(&stake_state).unwrap();
+        Self::try_from(AccountSharedData::from(account)).unwrap()
     }
 }

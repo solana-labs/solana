@@ -196,6 +196,12 @@ impl From<AccountSharedData> for VoteAccount {
     }
 }
 
+impl From<VoteAccount> for AccountSharedData {
+    fn from(account: VoteAccount) -> Self {
+        Self::from(account.0.account.clone())
+    }
+}
+
 impl From<Account> for VoteAccount {
     fn from(account: Account) -> Self {
         Self(Arc::new(VoteAccountInner::from(account)))

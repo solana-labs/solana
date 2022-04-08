@@ -128,6 +128,7 @@ use {
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
+        stake::state::Delegation,
         system_transaction,
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
@@ -938,7 +939,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) rent_collector: RentCollector,
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
-    pub(crate) stakes: Stakes,
+    pub(crate) stakes: Stakes<Delegation>,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
@@ -1497,10 +1498,12 @@ impl Bank {
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
-            let stakes = bank.stakes_cache.stakes();
+            let stakes = bank.stakes_cache.stakes().clone();
+            let stakes = Stakes::<Delegation>::try_from(stakes).unwrap();
+            let stakes = Arc::new(stakes);
             for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
                 bank.epoch_stakes
-                    .insert(epoch, EpochStakes::new(&stakes, epoch));
+                    .insert(epoch, EpochStakes::new(stakes.clone(), epoch));
             }
             bank.update_stake_history(None);
         }
@@ -1983,6 +1986,23 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_data_len: u64,
     ) -> Self {
+        let now = Instant::now();
+        let ancestors = Ancestors::from(&fields.ancestors);
+        // For backward compatibility, we can only serialize and deserialize
+        // Stakes<Delegation> in BankFieldsTo{Serialize,Deserialize}. But Bank
+        // caches Stakes<StakeAccount>. Below Stakes<StakeAccount> is obtained
+        // from Stakes<Delegation> by reading the full account state from
+        // accounts-db. Note that it is crucial that these accounts are loaded
+        // at the right slot and match precisely with serialized Delegations.
+        let stakes = Stakes::<StakeAccount>::new(&fields.stakes, |pubkey| {
+            let (account, _slot) = bank_rc.accounts.load_with_fixed_root(&ancestors, pubkey)?;
+            Some(account)
+        })
+        .expect(
+            "Stakes cache is inconsistent with accounts-db. This can indicate \
+            a corrupted snapshot or bugs in cached accounts or accounts-db.",
+        );
+        let stakes_accounts_load_duration = now.elapsed();
         fn new<T: Default>() -> T {
             T::default()
         }
@@ -1992,7 +2012,7 @@ impl Bank {
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
-            ancestors: Ancestors::from(&fields.ancestors),
+            ancestors,
             hash: RwLock::new(fields.hash),
             parent_hash: fields.parent_hash,
             parent_slot: fields.parent_slot,
@@ -2023,7 +2043,7 @@ impl Bank {
             rent_collector: Self::get_rent_collector_from(&fields.rent_collector, fields.epoch),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
-            stakes_cache: StakesCache::new(fields.stakes),
+            stakes_cache: StakesCache::new(stakes),
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
@@ -2104,6 +2124,11 @@ impl Bank {
             (
                 "accounts_data_len-from-generate_index",
                 accounts_data_len as i64,
+                i64
+            ),
+            (
+                "stakes_accounts_load_duration_us",
+                stakes_accounts_load_duration.as_micros(),
                 i64
             ),
         );
@@ -2378,9 +2403,9 @@ impl Bank {
             self.epoch_stakes.retain(|&epoch, _| {
                 epoch >= leader_schedule_epoch.saturating_sub(MAX_LEADER_SCHEDULE_STAKES)
             });
-
-            let new_epoch_stakes =
-                EpochStakes::new(&self.stakes_cache.stakes(), leader_schedule_epoch);
+            let stakes = self.stakes_cache.stakes().clone();
+            let stakes = Stakes::<Delegation>::try_from(stakes).unwrap();
+            let new_epoch_stakes = EpochStakes::new(Arc::new(stakes), leader_schedule_epoch);
             {
                 let vote_stakes: HashMap<_, _> = self
                     .stakes_cache
@@ -2612,7 +2637,8 @@ impl Bank {
         thread_pool.install(|| {
             stake_delegations
                 .into_par_iter()
-                .for_each(|(stake_pubkey, delegation)| {
+                .for_each(|(stake_pubkey, stake_account)| {
+                    let delegation = stake_account.delegation().unwrap();
                     let vote_pubkey = &delegation.voter_pubkey;
                     if invalid_vote_keys.contains_key(vote_pubkey) {
                         return;
@@ -2683,7 +2709,7 @@ impl Bank {
                         reward_calc_tracer(&RewardCalculationEvent::Staking(
                             stake_pubkey,
                             &InflationPointCalculationEvent::Delegation(
-                                *delegation,
+                                delegation,
                                 solana_vote_program::id(),
                             ),
                         ));
