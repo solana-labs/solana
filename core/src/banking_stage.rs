@@ -2860,7 +2860,8 @@ mod tests {
             poh_recorder.lock().unwrap().set_bank(&bank);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service =
+                Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default()))));
 
             let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
             let get_tx_count = || bank.read_cost_tracker().unwrap().transaction_count();
