@@ -12,6 +12,7 @@ where
     let result = T::deserialize(d);
     match result {
         Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(T::default()),
+        Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(T::default()),
         result => result,
     }
 }
