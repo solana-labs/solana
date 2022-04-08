@@ -686,7 +686,16 @@ impl BankingStage {
             }
         }
 
+        slot_metrics_tracker.increment_retryable_packets_count(retryable_packets.len() as u64);
+
         if let Some(end_of_slot) = &reached_end_of_slot {
+            // If the processing loop finished because we went through all the packets,
+            // not because the slot ended, we will enter this case.
+            slot_metrics_tracker
+                .set_end_of_slot_retryable_packets_len(retryable_packets.len() as u64);
+            slot_metrics_tracker
+                .set_end_of_slot_unprocessed_buffer_len(buffered_packet_batches.len() as u64);
+
             // We've hit the end of this slot, no need to perform more processing,
             // just filter the remaining packets for the invalid (e.g. too old) ones
             // if the working_bank is available
