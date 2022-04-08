@@ -3,14 +3,17 @@ use {
         quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
-    log::*,
     lru::LruCache,
-    solana_metrics::inc_new_counter_info,
     solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_sdk::{transaction::VersionedTransaction, transport::TransportError},
+    solana_sdk::{
+        timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
+    },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        sync::{Arc, Mutex},
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc, Mutex,
+        },
     },
 };
 
@@ -23,8 +26,78 @@ enum Connection {
     Quic(Arc<QuicTpuConnection>),
 }
 
+#[derive(Default)]
+pub struct MovingStat {
+    last: AtomicU64,
+    now: AtomicU64,
+}
+
+impl MovingStat {
+    pub fn update_stat(&self, new_value: u64) {
+        let diff = new_value - self.last.load(Ordering::Relaxed);
+        self.now.fetch_add(diff, Ordering::Relaxed);
+        self.last.store(new_value, Ordering::Relaxed);
+    }
+
+    pub fn load_and_reset(&self) -> u64 {
+        self.now.swap(0, Ordering::Relaxed)
+    }
+}
+
+#[derive(Default)]
+struct ConnectionStats {
+    cache_hits: AtomicU64,
+    cache_misses: AtomicU64,
+    sent_packets: AtomicU64,
+    total_batches: AtomicU64,
+    batch_success: AtomicU64,
+    batch_failure: AtomicU64,
+    congestion_events: MovingStat,
+    tx_streams_blocked_uni: MovingStat,
+    tx_data_blocked: MovingStat,
+    tx_acks: MovingStat,
+}
+
+const CONNECTION_STAT_INTERVAL: u64 = 2000;
+
+impl ConnectionStats {
+    fn report(&self) {
+        datapoint_info!(
+            "quic-connection-stats",
+            (
+                "cache_hits",
+                self.cache_hits.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "cache_misses",
+                self.cache_misses.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "congestion_events",
+                self.congestion_events.load_and_reset(),
+                i64
+            ),
+            (
+                "tx_streams_blocked_uni",
+                self.tx_streams_blocked_uni.load_and_reset(),
+                i64
+            ),
+            (
+                "tx_data_blocked",
+                self.tx_data_blocked.load_and_reset(),
+                i64
+            ),
+            ("tx_acks", self.tx_acks.load_and_reset(), i64),
+        );
+    }
+}
+
 struct ConnMap {
     map: LruCache<SocketAddr, Connection>,
+    stats: Arc<ConnectionStats>,
+    last_stats: AtomicInterval,
     use_quic: bool,
 }
 
@@ -32,6 +105,8 @@ impl ConnMap {
     pub fn new() -> Self {
         Self {
             map: LruCache::new(MAX_CONNECTIONS),
+            stats: Arc::new(ConnectionStats::default()),
+            last_stats: AtomicInterval::default(),
             use_quic: false,
         }
     }
@@ -52,16 +127,26 @@ pub fn set_use_quic(use_quic: bool) {
 
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> Connection {
+fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionStats>) {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
-    match map.map.get(addr) {
+    if map.last_stats.should_update(CONNECTION_STAT_INTERVAL) {
+        map.stats.report();
+    }
+
+    let (connection, hit, maybe_stats) = match map.map.get(addr) {
         Some(connection) => {
-            inc_new_counter_info!("get_connection-cache-hits", 1);
-            connection.clone()
+            let mut stats = None;
+            // update connection stats
+            match connection {
+                Connection::Quic(conn) => {
+                    stats = conn.client.stats();
+                }
+                _ => {}
+            }
+            (connection.clone(), true, stats)
         }
         None => {
-            inc_new_counter_info!("get_connection-cache-misses", 1);
             let (_, send_socket) = solana_net_utils::bind_in_range(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                 VALIDATOR_PORT_RANGE,
@@ -74,9 +159,29 @@ fn get_connection(addr: &SocketAddr) -> Connection {
             };
 
             map.map.put(*addr, connection.clone());
-            connection
+            (connection, false, None)
         }
+    };
+
+    if let Some(new_stats) = maybe_stats {
+        map.stats
+            .congestion_events
+            .update_stat(new_stats.path.congestion_events);
+        map.stats
+            .tx_streams_blocked_uni
+            .update_stat(new_stats.frame_tx.streams_blocked_uni);
+        map.stats
+            .tx_data_blocked
+            .update_stat(new_stats.frame_tx.data_blocked);
+        map.stats.tx_acks.update_stat(new_stats.frame_tx.acks);
     }
+
+    if hit {
+        map.stats.cache_hits.fetch_add(1, Ordering::Relaxed);
+    } else {
+        map.stats.cache_misses.fetch_add(1, Ordering::Relaxed);
+    }
+    (connection, map.stats.clone())
 }
 
 // TODO: see https://github.com/solana-labs/solana/issues/23851
@@ -92,11 +197,21 @@ pub fn send_wire_transaction_batch(
     packets: &[&[u8]],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let conn = get_connection(addr);
-    match conn {
+    let (conn, stats) = get_connection(addr);
+    let r = match conn {
         Connection::Udp(conn) => conn.send_wire_transaction_batch(packets),
         Connection::Quic(conn) => conn.send_wire_transaction_batch(packets),
+    };
+    stats
+        .sent_packets
+        .fetch_add(packets.len() as u64, Ordering::Relaxed);
+    stats.total_batches.fetch_add(1, Ordering::Relaxed);
+    if r.is_ok() {
+        stats.batch_success.fetch_add(1, Ordering::Relaxed);
+    } else {
+        stats.batch_failure.fetch_add(1, Ordering::Relaxed);
     }
+    r
 }
 
 pub fn send_wire_transaction_async(
@@ -114,18 +229,14 @@ pub fn send_wire_transaction(
     wire_transaction: &[u8],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let conn = get_connection(addr);
-    match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction(wire_transaction),
-        Connection::Quic(conn) => conn.send_wire_transaction(wire_transaction),
-    }
+    send_wire_transaction_batch(&[wire_transaction], addr)
 }
 
 pub fn serialize_and_send_transaction(
     transaction: &VersionedTransaction,
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let conn = get_connection(addr);
+    let (conn, _stats) = get_connection(addr);
     match conn {
         Connection::Udp(conn) => conn.serialize_and_send_transaction(transaction),
         Connection::Quic(conn) => conn.serialize_and_send_transaction(transaction),
@@ -136,7 +247,7 @@ pub fn par_serialize_and_send_transaction_batch(
     transactions: &[VersionedTransaction],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let conn = get_connection(addr);
+    let (conn, _stats) = get_connection(addr);
     match conn {
         Connection::Udp(conn) => conn.par_serialize_and_send_transaction_batch(transactions),
         Connection::Quic(conn) => conn.par_serialize_and_send_transaction_batch(transactions),

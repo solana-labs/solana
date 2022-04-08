@@ -9,6 +9,8 @@ use {
     lazy_static::lazy_static,
     log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
+    quinn_proto::ConnectionStats,
+    solana_measure::measure::Measure,
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
         transport::Result as TransportResult,
@@ -48,14 +50,14 @@ lazy_static! {
         .unwrap();
 }
 
-struct QuicClient {
+pub struct QuicClient {
     endpoint: Endpoint,
-    connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
+    pub connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
     addr: SocketAddr,
 }
 
 pub struct QuicTpuConnection {
-    client: Arc<QuicClient>,
+    pub client: Arc<QuicClient>,
 }
 
 impl TpuConnection for QuicTpuConnection {
@@ -117,9 +119,12 @@ impl QuicClient {
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
 
+        let mut time = Measure::start("endpoint_create");
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
+        time.stop();
+        //stats.endpoint_create_time_us.fetch_add(time.as_us(), Ordering::Relaxed);
 
         endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
 
@@ -127,6 +132,16 @@ impl QuicClient {
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
+        }
+    }
+
+    pub fn stats(&self) -> Option<ConnectionStats> {
+        let conn_guard = self.connection.lock();
+        let x = self.runtime.block_on(conn_guard);
+        if let Some(c) = x.as_ref() {
+            Some(c.connection.stats())
+        } else {
+            None
         }
     }
 
@@ -140,9 +155,11 @@ impl QuicClient {
         data: &[u8],
         connection: &NewConnection,
     ) -> Result<(), WriteError> {
+        let mut send_time = Measure::start("send_data");
         let mut send_stream = connection.connection.open_uni().await?;
         send_stream.write_all(data).await?;
         send_stream.finish().await?;
+        send_time.stop();
         Ok(())
     }
 
