@@ -69,7 +69,7 @@ impl DropCallback for SendDroppedBankCallback {
             Err(TrySendError::Full(_)) => {
                 let last_report_time = BANK_DROP_LAST_REPORT_TIME.load(Ordering::Acquire);
                 if ts.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL {
-                    datapoint_info!("bank_drop_queue_event", ("full", ts, i64));
+                    inc_new_counter_info!("bank_drop_queue_full_event", 1);
                     BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
                 }
                 info!("bank drop signal full");
@@ -77,7 +77,7 @@ impl DropCallback for SendDroppedBankCallback {
             }
 
             Err(TrySendError::Disconnected(_)) => {
-                datapoint_info!("bank_drop_queue_event", ("disconnected", ts, i64));
+                inc_new_counter_info!("bank_drop_queue_disconnected_event", 1);
                 BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
                 warn!("bank drop signal disconnected");
             }
