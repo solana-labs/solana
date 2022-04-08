@@ -1893,7 +1893,7 @@ impl BankingStage {
         let will_still_be_leader = next_leader
             .map(|next_leader| next_leader == *my_pubkey)
             .unwrap_or(false);
-        let should_filter_unprocessed_packets = !will_still_be_leader && bank.is_none();
+        let should_filter_unprocessed_packets = !will_still_be_leader && bank.is_some();
 
         if !should_filter_unprocessed_packets {
             // If we shouldn't filter the packets, then simply merge the
@@ -1946,11 +1946,17 @@ impl BankingStage {
 
         let (unprocessed_packets, retryable_packets) = {
             if !is_unprocessed_packets_bigger {
-                // Ensure `unprocessed_packets` always contains the total unprocessed
-                // items from the bigger queue
+                // This means:
+                // 1) The input `retryable_packets` is the `bigger_queue`
+                // 2) The input `unprocessed_packets` is the `smaller_queue`
+                //
+                // The `bigger_queue` contains all of the merged transactions
+                //
+                // We need to ensure the input `unprocessed_packets` pointer always ends
+                // up pointing to this aggregated data, so we need to swap.
                 std::mem::swap(bigger_queue, smaller_queue);
             };
-            (bigger_queue, smaller_queue)
+            (smaller_queue, bigger_queue)
         };
 
         // Clear the retryable buffer
@@ -3188,7 +3194,7 @@ mod tests {
     #[test]
     fn test_filter_valid_packets() {
         solana_logger::setup();
-        let mut packets: Vec<DeserializedPacket> = (0..512)
+        let mut packets: Vec<DeserializedPacket> = (0..256)
             .map(|packets_id| {
                 // packets are deserialized upon receiving, failed packets will not be
                 // forwarded; Therefore we need to create real packets here.
@@ -3203,29 +3209,21 @@ mod tests {
             .collect_vec();
 
         let result = BankingStage::filter_valid_packets_for_forwarding(packets.iter());
-
         assert_eq!(result.len(), 256);
 
         // packets in a batch are forwarded in arbitrary order; verify the ports match after
         // sorting
-        let expected_ports: Vec<_> = (0..16)
-            .flat_map(|packets_id| {
-                (0..16).map(move |packet_id| {
-                    let packet_id = packet_id * 2 + 1;
-                    (packets_id << 8 | packet_id) as u16
-                })
-            })
-            .collect();
-
+        let expected_ports: Vec<_> = (0..256).collect();
         let mut forwarded_ports: Vec<_> = result.into_iter().map(|p| p.meta.port).collect();
         forwarded_ports.sort_unstable();
         assert_eq!(expected_ports, forwarded_ports);
 
-        for packet in &mut packets[0..expected_ports.len()] {
+        let num_already_forwarded = 16;
+        for packet in &mut packets[0..num_already_forwarded] {
             packet.forwarded = true;
         }
         let result = BankingStage::filter_valid_packets_for_forwarding(packets.iter());
-        assert_eq!(result.len(), 240);
+        assert_eq!(result.len(), packets.len() - num_already_forwarded);
     }
 
     #[test]
@@ -3924,6 +3922,10 @@ mod tests {
                             deserialized_packets.clone().into_iter(),
                             num_conflicting_transactions,
                         );
+                    let all_packet_message_hashes: HashSet<Hash> = buffered_packet_batches
+                        .iter()
+                        .map(|packet| packet.message_hash())
+                        .collect();
                     BankingStage::consume_buffered_packets(
                         &Pubkey::default(),
                         std::u128::MAX,
@@ -3945,16 +3947,9 @@ mod tests {
                         buffered_packet_batches.len(),
                         deserialized_packets[interrupted_iteration + 1..].len()
                     );
-                    let original_packet_hashes: HashSet<Hash> = deserialized_packets
-                        [interrupted_iteration + 1..]
-                        .iter()
-                        .map(|p| p.message_hash())
-                        .collect();
-                    let remaining_buffered_hashes: HashSet<Hash> = buffered_packet_batches
-                        .iter()
-                        .map(|p| p.message_hash())
-                        .collect();
-                    assert_eq!(original_packet_hashes, remaining_buffered_hashes);
+                    for packet in buffered_packet_batches.iter() {
+                        assert!(all_packet_message_hashes.contains(&packet.message_hash()));
+                    }
                 })
                 .unwrap();
 
