@@ -88,6 +88,19 @@ struct LeaderSlotPacketCountMetrics {
     // queue becaus they were retryable errors
     retryable_errored_transaction_count: u64,
 
+    // The number of packets in the retryable buffer in the final iteration
+    // of packet processing the end of the slot. Useful for figuring out
+    // how much end of slot work was done coalesscing and filtering these packets
+    // with the unprocessed queue.
+    end_of_slot_retryable_packets_len: u64,
+
+    // The size of the unprocessed buffer at the end of the slot
+    end_of_slot_unprocessed_buffer_len: u64,
+
+    // total number of transactions that were rebuffered into the queue after not being
+    // executed on a previous pass
+    retryable_packets_count: u64,
+
     // total number of transactions that attempted execution due to some fatal error (too old, duplicate signature, etc.)
     // AND were dropped from the buffered queue
     nonretryable_errored_transactions_count: u64,
@@ -175,6 +188,11 @@ impl LeaderSlotPacketCountMetrics {
                 i64
             ),
             (
+                "retryable_packets_count",
+                self.retryable_packets_count as i64,
+                i64
+            ),
+            (
                 "nonretryable_errored_transactions_count",
                 self.nonretryable_errored_transactions_count as i64,
                 i64
@@ -212,6 +230,16 @@ impl LeaderSlotPacketCountMetrics {
             (
                 "end_of_slot_filtered_invalid_count",
                 self.end_of_slot_filtered_invalid_count as i64,
+                i64
+            ),
+            (
+                "end_of_slot_retryable_packets_len",
+                self.end_of_slot_retryable_packets_len as i64,
+                i64
+            ),
+            (
+                "end_of_slot_unprocessed_buffer_len",
+                self.end_of_slot_unprocessed_buffer_len as i64,
                 i64
             ),
         );
@@ -524,6 +552,17 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
+    pub(crate) fn increment_retryable_packets_count(&mut self, count: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .retryable_packets_count,
+                count
+            );
+        }
+    }
+
     pub(crate) fn increment_end_of_slot_filtered_invalid_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             saturating_add_assign!(
@@ -532,6 +571,22 @@ impl LeaderSlotMetricsTracker {
                     .end_of_slot_filtered_invalid_count,
                 count
             );
+        }
+    }
+
+    pub(crate) fn set_end_of_slot_unprocessed_buffer_len(&mut self, len: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .packet_count_metrics
+                .end_of_slot_unprocessed_buffer_len = len;
+        }
+    }
+
+    pub(crate) fn set_end_of_slot_retryable_packets_len(&mut self, len: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .packet_count_metrics
+                .end_of_slot_retryable_packets_len = len;
         }
     }
 
