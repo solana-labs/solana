@@ -362,7 +362,7 @@ mod tests {
 
         // Test with small step size
         let step_size = 1;
-        for _ in 0..step_size {
+        for _ in 0..num_packets {
             assert_eq!(
                 unprocessed_packet_batches
                     .pop_max_n(step_size)
