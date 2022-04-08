@@ -161,12 +161,11 @@ pub fn process_instruction(
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
             let config_account =
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?;
-            if !config::check_id(config_account.unsigned_key()) {
+                instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
+            if !config::check_id(config_account.get_key()) {
                 return Err(InstructionError::InvalidArgument);
             }
-            let config = config::from(&*config_account.try_account_ref()?)
-                .ok_or(InstructionError::InvalidArgument)?;
+            let config = config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
             delegate(
                 invoke_context,
                 first_instruction_account,
