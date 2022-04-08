@@ -56,6 +56,10 @@ impl VoteAccount {
         self.0.account.lamports()
     }
 
+    pub(crate) fn owner(&self) -> &Pubkey {
+        self.0.account.owner()
+    }
+
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
