@@ -13,10 +13,7 @@ use {
     },
     solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
     std::{
-        collections::{
-            hash_map::{Entry, HashMap},
-            HashSet,
-        },
+        collections::hash_map::{Entry, HashMap},
         fmt,
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -373,20 +370,21 @@ impl LogsSubscriptionsIndex {
     }
 
     fn update_config(&self) {
+        let mentioned_addresses = self.single_count.keys().copied().collect();
         let config = if self.all_with_votes_count > 0 {
             TransactionLogCollectorConfig {
                 filter: TransactionLogCollectorFilter::AllWithVotes,
-                mentioned_addresses: HashSet::new(),
+                mentioned_addresses,
             }
         } else if self.all_count > 0 {
             TransactionLogCollectorConfig {
                 filter: TransactionLogCollectorFilter::All,
-                mentioned_addresses: HashSet::new(),
+                mentioned_addresses,
             }
         } else {
             TransactionLogCollectorConfig {
                 filter: TransactionLogCollectorFilter::OnlyMentionedAddresses,
-                mentioned_addresses: self.single_count.keys().copied().collect(),
+                mentioned_addresses,
             }
         };
 
