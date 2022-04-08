@@ -72,14 +72,13 @@ impl DropCallback for SendDroppedBankCallback {
                     inc_new_counter_info!("bank_drop_queue_full_event", 1);
                     BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
                 }
-                info!("bank drop signal full");
+                // send again and block until success
                 let _ = self.sender.send((bank.slot(), bank.bank_id()));
             }
 
             Err(TrySendError::Disconnected(_)) => {
                 inc_new_counter_info!("bank_drop_queue_disconnected_event", 1);
                 BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
-                warn!("bank drop signal disconnected");
             }
             _ => {}
         }
