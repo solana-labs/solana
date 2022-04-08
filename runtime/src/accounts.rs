@@ -1312,7 +1312,7 @@ pub fn prepare_if_nonce_account<'a>(
 }
 
 /// A set of utility functions used for testing and benchmarking
-mod test_utils {
+pub mod test_utils {
     use super::*;
 
     pub fn create_test_accounts(
