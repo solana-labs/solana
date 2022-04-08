@@ -824,6 +824,9 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
     keypair_count: usize,
     lamports_per_account: u64,
 ) -> Result<Vec<Keypair>> {
+    let rent = client.get_minimum_balance_for_rent_exemption(0)?;
+    let lamports_per_account = lamports_per_account + rent;
+
     info!("Creating {} keypairs...", keypair_count);
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
     info!("Get lamports...");
@@ -862,7 +865,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
             funding_key_balance, max_fee, lamports_per_account, extra, total
         );
 
-        if funding_key_balance < total {
+        if funding_key_balance < total + rent {
             error!(
                 "funder has {}, needed {}",
                 Sol(funding_key_balance),
@@ -872,7 +875,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
             if client
                 .request_airdrop_with_blockhash(
                     &funding_key.pubkey(),
-                    total - funding_key_balance,
+                    total + rent - funding_key_balance,
                     &latest_blockhash,
                 )
                 .is_err()
@@ -903,14 +906,14 @@ mod tests {
         super::*,
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
-            fee_calculator::FeeRateGovernor,
-            genesis_config::create_genesis_config,
+            fee_calculator::FeeRateGovernor, genesis_config::create_genesis_config,
+            native_token::sol_to_lamports,
         },
     };
 
     #[test]
     fn test_bench_tps_bank_client() {
-        let (genesis_config, id) = create_genesis_config(10_000);
+        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let bank = Bank::new_for_tests(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
 
@@ -923,19 +926,19 @@ mod tests {
 
         let keypair_count = config.tx_count * config.keypair_multiplier;
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20)
-                .unwrap();
+            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20).unwrap();
 
         do_bench_tps(client, config, keypairs);
     }
 
     #[test]
     fn test_bench_tps_fund_keys() {
-        let (genesis_config, id) = create_genesis_config(10_000);
+        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let bank = Bank::new_for_tests(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
+        let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
 
         let keypairs =
             generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
@@ -945,26 +948,27 @@ mod tests {
                 client
                     .get_balance_with_commitment(&kp.pubkey(), CommitmentConfig::processed())
                     .unwrap(),
-                lamports
+                lamports + rent
             );
         }
     }
 
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
-        let (mut genesis_config, id) = create_genesis_config(10_000);
+        let (mut genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let fee_rate_governor = FeeRateGovernor::new(11, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
         let bank = Bank::new_for_tests(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
+        let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
 
         let keypairs =
             generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
 
         for kp in &keypairs {
-            assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports);
+            assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports + rent);
         }
     }
 }

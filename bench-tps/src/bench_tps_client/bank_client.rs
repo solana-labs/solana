@@ -65,6 +65,10 @@ impl BenchTpsClient for BankClient {
         SyncClient::get_fee_for_message(self, message).map_err(|err| err.into())
     }
 
+    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64> {
+        SyncClient::get_minimum_balance_for_rent_exemption(self, data_len).map_err(|err| err.into())
+    }
+
     fn addr(&self) -> String {
         "Local BankClient".to_string()
     }

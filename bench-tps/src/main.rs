@@ -139,16 +139,11 @@ fn main() {
         keypairs.sort_by_key(|x| x.pubkey().to_string());
         keypairs
     } else {
-        generate_and_fund_keypairs(
-            client.clone(),
-            id,
-            keypair_count,
-            *num_lamports_per_account,
-        )
-        .unwrap_or_else(|e| {
-            eprintln!("Error could not fund keys: {:?}", e);
-            exit(1);
-        })
+        generate_and_fund_keypairs(client.clone(), id, keypair_count, *num_lamports_per_account)
+            .unwrap_or_else(|e| {
+                eprintln!("Error could not fund keys: {:?}", e);
+                exit(1);
+            })
     };
 
     do_bench_tps(client, cli_config, keypairs);

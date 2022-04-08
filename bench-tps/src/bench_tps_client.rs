@@ -66,6 +66,9 @@ pub trait BenchTpsClient {
     /// Calculate the fee for a `Message`
     fn get_fee_for_message(&self, message: &Message) -> Result<u64>;
 
+    /// Get the rent-exempt minimum for an account
+    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64>;
+
     /// Return the address of client
     fn addr(&self) -> String;
 
