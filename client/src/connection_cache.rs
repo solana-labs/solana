@@ -1,6 +1,8 @@
 use {
     crate::{
-        quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
+        quic_client::QuicTpuConnection,
+        tpu_connection::{ClientStats, TpuConnection},
+        udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
     lru::LruCache,
@@ -27,20 +29,33 @@ enum Connection {
 }
 
 #[derive(Default)]
+struct MovingStatInner {
+    last: u64,
+    now: u64,
+}
+
+#[derive(Default)]
 pub struct MovingStat {
-    last: AtomicU64,
-    now: AtomicU64,
+    stats: Mutex<MovingStatInner>,
 }
 
 impl MovingStat {
     pub fn update_stat(&self, new_value: u64) {
-        let diff = new_value - self.last.load(Ordering::Relaxed);
-        self.now.fetch_add(diff, Ordering::Relaxed);
-        self.last.store(new_value, Ordering::Relaxed);
+        let mut stats = self.stats.lock().unwrap();
+        let diff = new_value.saturating_sub(stats.last);
+        // got an older update
+        if diff == 0 {
+            return;
+        }
+        stats.now = stats.now.saturating_add(diff);
+        stats.last = new_value;
     }
 
     pub fn load_and_reset(&self) -> u64 {
-        self.now.swap(0, Ordering::Relaxed)
+        let mut stats = self.stats.lock().unwrap();
+        let old = stats.now;
+        stats.now = 0;
+        old
     }
 }
 
@@ -52,6 +67,8 @@ struct ConnectionStats {
     total_batches: AtomicU64,
     batch_success: AtomicU64,
     batch_failure: AtomicU64,
+    total_connections: AtomicU64,
+    connection_reuse: AtomicU64,
     congestion_events: MovingStat,
     tx_streams_blocked_uni: MovingStat,
     tx_data_blocked: MovingStat,
@@ -61,6 +78,25 @@ struct ConnectionStats {
 const CONNECTION_STAT_INTERVAL: u64 = 2000;
 
 impl ConnectionStats {
+    fn add_client_stats(&self, client_stats: &ClientStats, num_packets: usize, is_success: bool) {
+        self.total_connections.fetch_add(
+            client_stats.total_connections.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.connection_reuse.fetch_add(
+            client_stats.connection_reuse.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.sent_packets
+            .fetch_add(num_packets as u64, Ordering::Relaxed);
+        self.total_batches.fetch_add(1, Ordering::Relaxed);
+        if is_success {
+            self.batch_success.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.batch_failure.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     fn report(&self) {
         datapoint_info!(
             "quic-connection-stats",
@@ -72,6 +108,16 @@ impl ConnectionStats {
             (
                 "cache_misses",
                 self.cache_misses.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "total_connections",
+                self.total_connections.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_reuse",
+                self.total_connections.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -138,11 +184,8 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionStats>) {
         Some(connection) => {
             let mut stats = None;
             // update connection stats
-            match connection {
-                Connection::Quic(conn) => {
-                    stats = conn.client.stats();
-                }
-                _ => {}
+            if let Connection::Quic(conn) = connection {
+                stats = conn.client.stats();
             }
             (connection.clone(), true, stats)
         }
@@ -198,19 +241,12 @@ pub fn send_wire_transaction_batch(
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
     let (conn, stats) = get_connection(addr);
+    let client_stats = ClientStats::default();
     let r = match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_batch(packets),
-        Connection::Quic(conn) => conn.send_wire_transaction_batch(packets),
+        Connection::Udp(conn) => conn.send_wire_transaction_batch(packets, &client_stats),
+        Connection::Quic(conn) => conn.send_wire_transaction_batch(packets, &client_stats),
     };
-    stats
-        .sent_packets
-        .fetch_add(packets.len() as u64, Ordering::Relaxed);
-    stats.total_batches.fetch_add(1, Ordering::Relaxed);
-    if r.is_ok() {
-        stats.batch_success.fetch_add(1, Ordering::Relaxed);
-    } else {
-        stats.batch_failure.fetch_add(1, Ordering::Relaxed);
-    }
+    stats.add_client_stats(&client_stats, packets.len(), r.is_ok());
     r
 }
 
@@ -218,11 +254,14 @@ pub fn send_wire_transaction_async(
     packets: Vec<u8>,
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let conn = get_connection(addr);
-    match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_async(packets),
-        Connection::Quic(conn) => conn.send_wire_transaction_async(packets),
-    }
+    let (conn, stats) = get_connection(addr);
+    let client_stats = Arc::new(ClientStats::default());
+    let r = match conn {
+        Connection::Udp(conn) => conn.send_wire_transaction_async(packets, client_stats.clone()),
+        Connection::Quic(conn) => conn.send_wire_transaction_async(packets, client_stats.clone()),
+    };
+    stats.add_client_stats(&client_stats, 1, r.is_ok());
+    r
 }
 
 pub fn send_wire_transaction(
@@ -236,22 +275,32 @@ pub fn serialize_and_send_transaction(
     transaction: &VersionedTransaction,
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let (conn, _stats) = get_connection(addr);
-    match conn {
-        Connection::Udp(conn) => conn.serialize_and_send_transaction(transaction),
-        Connection::Quic(conn) => conn.serialize_and_send_transaction(transaction),
-    }
+    let (conn, stats) = get_connection(addr);
+    let client_stats = ClientStats::default();
+    let r = match conn {
+        Connection::Udp(conn) => conn.serialize_and_send_transaction(transaction, &client_stats),
+        Connection::Quic(conn) => conn.serialize_and_send_transaction(transaction, &client_stats),
+    };
+    stats.add_client_stats(&client_stats, 1, r.is_ok());
+    r
 }
 
 pub fn par_serialize_and_send_transaction_batch(
     transactions: &[VersionedTransaction],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let (conn, _stats) = get_connection(addr);
-    match conn {
-        Connection::Udp(conn) => conn.par_serialize_and_send_transaction_batch(transactions),
-        Connection::Quic(conn) => conn.par_serialize_and_send_transaction_batch(transactions),
-    }
+    let (conn, stats) = get_connection(addr);
+    let client_stats = ClientStats::default();
+    let r = match conn {
+        Connection::Udp(conn) => {
+            conn.par_serialize_and_send_transaction_batch(transactions, &client_stats)
+        }
+        Connection::Quic(conn) => {
+            conn.par_serialize_and_send_transaction_batch(transactions, &client_stats)
+        }
+    };
+    stats.add_client_stats(&client_stats, transactions.len(), r.is_ok());
+    r
 }
 
 #[cfg(test)]
@@ -299,7 +348,7 @@ mod tests {
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
         let first_addr = get_addr(&mut rng);
-        assert!(ip(get_connection(&first_addr)) == first_addr.ip());
+        assert!(ip(get_connection(&first_addr).0) == first_addr.ip());
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {

@@ -2,11 +2,11 @@
 //! an interface for sending transactions
 
 use {
-    crate::tpu_connection::TpuConnection,
+    crate::tpu_connection::{ClientStats, TpuConnection},
     core::iter::repeat,
     solana_sdk::transport::Result as TransportResult,
     solana_streamer::sendmmsg::batch_send,
-    std::net::{SocketAddr, UdpSocket},
+    std::{sync::Arc, net::{SocketAddr, UdpSocket}},
 };
 
 pub struct UdpTpuConnection {
@@ -26,7 +26,11 @@ impl TpuConnection for UdpTpuConnection {
         &self.addr
     }
 
-    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    fn send_wire_transaction<T>(
+        &self,
+        wire_transaction: T,
+        _stats: &ClientStats,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
@@ -34,12 +38,12 @@ impl TpuConnection for UdpTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>, _stats: Arc<ClientStats>) -> TransportResult<()> {
         self.socket.send_to(wire_transaction.as_ref(), self.addr)?;
         Ok(())
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    fn send_wire_transaction_batch<T>(&self, buffers: &[T], _stats: &ClientStats) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
