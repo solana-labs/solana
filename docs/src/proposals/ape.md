@@ -1,15 +1,20 @@
 == Asynchronous Program Execution == 
 
-Execution of state for fork choice can run asynchronously w.r.t program execution and computing the BankHash.
-
+Execution of state for fork choice can run asynchronously w.r.t program execution and computing the BankHash. Prior to this change, selecting a fork and voting on it required full evaluation of all the transactions in the bank. With this change only the VoteProgram is evaluated.
 
 === Isolation domains ===
 
-Accounts include an additional field, the isolation domain. Currently only two domains exist. 
+To split the VoteProgram apart from the rest of the bank, the runtime tracks which accounts belong to which isolation domain. A transaction cannot read accounts from multiple domains in the same transaction, any transaction that does so aborts.
+
+VoteProgram accounts are isolated in their own domain. IsolationProgram Accounts have a special instruction that allows them to move between domains. The move is finalized at the end of the next epoch.
+
+IsolationProgramAccount has the following field:
+* domain - The isolation domain.
+
+The isolation domain. Currently only two domains exist.
+
 * 1 - the default domain where all things live
 * 2 - the Vote Program 
-* 3 - moving 2 to 1
-* 4 - moving 1 to 2
 
 ==== IsolationProgram ====
 
@@ -17,19 +22,15 @@ This program id is used to identify accounts with lamports and data that can mov
 
 * IsolationProgram::Withdraw
 
-remove lamports
+Remove lamports.
 
-* IsolationProgram::WriteData
+* IsolationProgram::MoveDomains(in: 1 or 2)
 
-write the data
+Allows an isolation account to move domains. Account can only move once per epoch.  The move is finalized at the end of the next epoch.
 
-* IsolationProgram::MoveDomains(1 or 2)
+* SystemProgram::CreateAccountInDomain(in: IsolationProgramAccount, ...)
 
-Allows an isolation account to move domains. 
-
-* SystemProgram::CreateVoteAccountFromIsolatedAccount
-
-Allow the system program to consume a IsolationProgram account in domain 2 to become a VoteProgram account.
+Allow the system program withdraw lamports from the IsolationProgram account, and create a new account in the isolated domain. 
 
 === Execution ===
 
@@ -41,11 +42,11 @@ Replay of banks is split up into 2 modes ForkHash and BankHash.
 
 === ForkHash ===
 
-Computing the ForkHash only evalutes the VoteProgram instructions.  Transactions that include VoteProgram and any non VoteProgram accounts fail immediatly and are ignored.
+Computing the ForkHash only evalutes the VoteProgram instructions.  Transactions that include VoteProgram and any non VoteProgram accounts fail immediately and are ignored.
 
 === BankHash ===
 
-Computing the BankHash evalutes all the non VoteProgram instructions. Transactions that include VoteProgram and any non VoteProgram accounts fail immediatly and are ignored.  The LS computation and finalizing the IsolationProgram::MoveDomains are done at the epoch boundary for the N+1 epoch.  The BankHash computation must not fall behind the ForkHash by more then 1 epoch or the cluster will halt.
+Computing the BankHash evaluates all the non VoteProgram instructions. Transactions that include VoteProgram and any non VoteProgram accounts fail immediately and are ignored.  The LS computation and finalizing the IsolationProgram::MoveDomains are done at the epoch boundary for the N+1 epoch.  The BankHash computation must not fall behind the ForkHash by more then 1 epoch or the cluster will halt.
 
 === VoteProgram::Vote ===
 
@@ -53,4 +54,4 @@ The Vote instruction contains ForkHashes only. BankHash computation is done outs
 
 === Invalid Fee Payers ===
 
-Transactions that fail due to fee payers unable to pay for the execution are ignored.  This means that leaders could stuff blocks with invalid transactions up to the known compute limit.
+Transactions that fail due to fee payers unable to pay for the execution are ignored.  This means that leaders could stuff blocks with invalid transactions up to the known compute limit. Since the compute used by each transaction is deterministic, the leader cannot exceed the total compute available per block, or per writable account. The leader can only waste ledger space and take up network bandwidth for transmitting the invalid transaction bytes.
