@@ -5505,7 +5505,7 @@ impl AccountsDb {
         }
     }
 
-    fn calculate_accounts_hash_helper(
+    pub(crate) fn calculate_accounts_hash_helper(
         &self,
         use_index: bool,
         slot: Slot,
