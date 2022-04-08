@@ -710,7 +710,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let bpf_tools_version = "v1.23";
+    let bpf_tools_version = "v1.24";
     let version = format!("{}\nbpf-tools {}", crate_version!(), bpf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

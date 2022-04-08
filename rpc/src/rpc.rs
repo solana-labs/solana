@@ -2644,7 +2644,7 @@ pub mod rpc_minimal {
 }
 
 // RPC interface that only depends on immediate Bank data
-// Expected to be provided by both API nodes and (future) accounts replica nodes
+// Expected to be provided by API nodes
 pub mod rpc_bank {
     use super::*;
     #[rpc]

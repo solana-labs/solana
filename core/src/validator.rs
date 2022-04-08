@@ -50,10 +50,6 @@ use {
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
     },
-    solana_replica_lib::{
-        accountsdb_repl_server::{AccountsDbReplService, AccountsDbReplServiceConfig},
-        accountsdb_repl_server_factory,
-    },
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -80,7 +76,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_package::{AccountsPackageSender, PendingSnapshotPackage},
+        snapshot_package::{PendingAccountsPackage, PendingSnapshotPackage},
         snapshot_utils,
     },
     solana_sdk::{
@@ -122,7 +118,6 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
@@ -184,7 +179,6 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            accountsdb_repl_service_config: None,
             geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
@@ -339,7 +333,6 @@ pub struct Validator {
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub blockstore: Arc<Blockstore>,
-    accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
 }
 
@@ -460,8 +453,6 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
-        let accounts_package_channel = unbounded();
-
         let accounts_update_notifier = geyser_plugin_service
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_accounts_update_notifier());
@@ -520,6 +511,7 @@ impl Validator {
             Some(poh_timing_point_sender.clone()),
         );
 
+        let pending_accounts_package = PendingAccountsPackage::default();
         let last_full_snapshot_slot = process_blockstore(
             &blockstore,
             &mut bank_forks,
@@ -528,7 +520,7 @@ impl Validator {
             transaction_status_sender.as_ref(),
             cache_block_meta_sender.as_ref(),
             config.snapshot_config.as_ref(),
-            accounts_package_channel.0.clone(),
+            Arc::clone(&pending_accounts_package),
             blockstore_root_scan,
             pruned_banks_receiver.clone(),
         );
@@ -674,7 +666,6 @@ impl Validator {
             pubsub_service,
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
-            accountsdb_repl_service,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
             if ContactInfo::is_valid_address(&node.info.rpc, &socket_addr_space) {
                 assert!(ContactInfo::is_valid_address(
@@ -687,13 +678,6 @@ impl Validator {
                     &socket_addr_space
                 ));
             }
-
-            let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
-                let (bank_notification_sender, bank_notification_receiver) = unbounded();
-                bank_notification_senders.push(bank_notification_sender);
-                accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
-                    accountsdb_repl_service_config.clone(), bank_notification_receiver, bank_forks.clone())
-            });
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             let confirmed_bank_subscribers = if !bank_notification_senders.is_empty() {
@@ -747,10 +731,9 @@ impl Validator {
                     confirmed_bank_subscribers,
                 )),
                 Some(bank_notification_sender),
-                accountsdb_repl_service,
             )
         } else {
-            (None, None, None, None, None)
+            (None, None, None, None)
         };
 
         if config.dev_halt_at_slot.is_some() {
@@ -934,7 +917,7 @@ impl Validator {
             },
             &max_slots,
             &cost_model,
-            accounts_package_channel,
+            pending_accounts_package,
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
@@ -1000,7 +983,6 @@ impl Validator {
             cluster_info,
             bank_forks,
             blockstore: blockstore.clone(),
-            accountsdb_repl_service,
             geyser_plugin_service,
         }
     }
@@ -1118,12 +1100,6 @@ impl Validator {
             .expect("completed_data_sets_service");
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
-        }
-
-        if let Some(accountsdb_repl_service) = self.accountsdb_repl_service {
-            accountsdb_repl_service
-                .join()
-                .expect("accountsdb_repl_service");
         }
 
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
@@ -1414,7 +1390,7 @@ fn process_blockstore(
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
-    accounts_package_sender: AccountsPackageSender,
+    pending_accounts_package: PendingAccountsPackage,
     blockstore_root_scan: BlockstoreRootScan,
     pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> Option<Slot> {
@@ -1426,7 +1402,7 @@ fn process_blockstore(
         transaction_status_sender,
         cache_block_meta_sender,
         snapshot_config,
-        accounts_package_sender,
+        pending_accounts_package,
         pruned_banks_receiver,
     )
     .unwrap_or_else(|err| {
@@ -1868,7 +1844,20 @@ mod tests {
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
         );
-        validator.close();
+
+        // spawn a new thread to wait for validator close
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            validator.close();
+            sender.send(()).unwrap();
+        });
+
+        // exit can deadlock. put an upper-bound on how long we wait for it
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            panic!("timeout for closing validator");
+        }
+
         remove_dir_all(validator_ledger_path).unwrap();
     }
 

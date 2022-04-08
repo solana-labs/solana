@@ -195,7 +195,7 @@ pub fn get_clients(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -
     nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
-        .map(create_client)
+        .map(|(rpc, tpu)| create_client(rpc, tpu))
         .collect()
 }
 
@@ -206,7 +206,8 @@ pub fn get_client(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) ->
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
         .collect();
     let select = thread_rng().gen_range(0, nodes.len());
-    create_client(nodes[select])
+    let (rpc, tpu) = nodes[select];
+    create_client(rpc, tpu)
 }
 
 pub fn get_multi_client(
