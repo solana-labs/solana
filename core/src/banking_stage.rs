@@ -1351,34 +1351,22 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
     ) -> ProcessTransactionBatchOutput {
-        let (
-            (transactions_qos_results, cost_model_throttled_transactions_count, transaction_costs),
-            cost_model_time,
-        ) = Measure::this(
-            |_| {
-                let tx_costs = qos_service.compute_transaction_costs(txs.iter());
+        let mut cost_model_time = Measure::start("cost_model");
 
-                let (transactions_qos_results, num_included) =
-                    qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
+        let transaction_costs = qos_service.compute_transaction_costs(txs.iter());
 
-                let cost_model_throttled_transactions_count =
-                    txs.len().saturating_sub(num_included);
+        let (transactions_qos_results, num_included) =
+            qos_service.select_transactions_per_cost(txs.iter(), transaction_costs.iter(), bank);
 
-                qos_service.accumulate_estimated_transaction_costs(
-                    &Self::accumulate_batched_transaction_costs(
-                        tx_costs.iter(),
-                        transactions_qos_results.iter(),
-                    ),
-                );
-                (
-                    transactions_qos_results,
-                    cost_model_throttled_transactions_count,
-                    tx_costs,
-                )
-            },
-            (),
-            "cost_model",
+        let cost_model_throttled_transactions_count = txs.len().saturating_sub(num_included);
+
+        qos_service.accumulate_estimated_transaction_costs(
+            &Self::accumulate_batched_transaction_costs(
+                transaction_costs.iter(),
+                transactions_qos_results.iter(),
+            ),
         );
+        cost_model_time.stop();
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -1410,6 +1398,9 @@ impl BankingStage {
             ..
         } = execute_and_commit_transactions_output;
 
+        // TODO: This does not revert the cost tracker changes from all unexecuted transactions
+        // yet: For example tx that are too old will not be included in the block, but are not
+        // retryable.
         QosService::update_or_remove_transaction_costs(
             transaction_costs.iter(),
             transactions_qos_results.iter(),
