@@ -18,7 +18,7 @@ use {
             stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
-        keyed_account::KeyedAccount,
+        keyed_account::{keyed_account_at_index, KeyedAccount},
         pubkey::Pubkey,
         rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
         stake::{
@@ -438,8 +438,9 @@ pub fn authorize(
 }
 
 pub fn authorize_with_seed(
-    stake_account: &KeyedAccount,
-    authority_base: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    stake_account_index: usize,
+    authority_base_index: usize,
     authority_seed: &str,
     authority_owner: &Pubkey,
     new_authority: &Pubkey,
@@ -448,6 +449,8 @@ pub fn authorize_with_seed(
     clock: &Clock,
     custodian: Option<&Pubkey>,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let authority_base = keyed_account_at_index(keyed_accounts, authority_base_index)?;
     let mut signers = HashSet::default();
     if let Some(base_pubkey) = authority_base.signer_key() {
         signers.insert(Pubkey::create_with_seed(
@@ -456,6 +459,8 @@ pub fn authorize_with_seed(
             authority_owner,
         )?);
     }
+    drop(authority_base);
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     authorize(
         stake_account,
         &signers,
@@ -468,17 +473,24 @@ pub fn authorize_with_seed(
 }
 
 pub fn delegate(
-    stake_account: &KeyedAccount,
-    vote_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    stake_account_index: usize,
+    vote_account_index: usize,
     clock: &Clock,
     stake_history: &StakeHistory,
     config: &Config,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let vote_account = keyed_account_at_index(keyed_accounts, vote_account_index)?;
     if vote_account.owner()? != solana_vote_program::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
+    let vote_pubkey = vote_account.unsigned_key();
+    let vote_state = State::<VoteStateVersions>::state(vote_account);
+    drop(vote_account);
 
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     match stake_account.state()? {
         StakeState::Initialized(meta) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
@@ -486,8 +498,8 @@ pub fn delegate(
                 validate_delegated_amount(stake_account, &meta)?;
             let stake = new_stake(
                 stake_amount,
-                vote_account.unsigned_key(),
-                &State::<VoteStateVersions>::state(vote_account)?.convert_to_current(),
+                vote_pubkey,
+                &vote_state?.convert_to_current(),
                 clock.epoch,
                 config,
             );
@@ -500,8 +512,8 @@ pub fn delegate(
             redelegate(
                 &mut stake,
                 stake_amount,
-                vote_account.unsigned_key(),
-                &State::<VoteStateVersions>::state(vote_account)?.convert_to_current(),
+                vote_pubkey,
+                &vote_state?.convert_to_current(),
                 clock,
                 stake_history,
                 config,
@@ -547,12 +559,14 @@ pub fn set_lockup(
 }
 
 pub fn split(
-    stake_account: &KeyedAccount,
     invoke_context: &InvokeContext,
+    stake_account_index: usize,
     lamports: u64,
-    split: &KeyedAccount,
+    split_index: usize,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let split = keyed_account_at_index(keyed_accounts, split_index)?;
     if split.owner()? != id() {
         return Err(InstructionError::IncorrectProgramId);
     }
@@ -562,17 +576,22 @@ pub fn split(
     if !matches!(split.state()?, StakeState::Uninitialized) {
         return Err(InstructionError::InvalidAccountData);
     }
+    let split_lamport_balance = split.lamports()?;
+    drop(split);
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     if lamports > stake_account.lamports()? {
         return Err(InstructionError::InsufficientFunds);
     }
+    let stake_state = stake_account.state()?;
+    drop(stake_account);
 
-    match stake_account.state()? {
+    match stake_state {
         StakeState::Stake(meta, mut stake) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             let validated_split_info = validate_split_amount(
                 invoke_context,
-                stake_account,
-                split,
+                stake_account_index,
+                split_index,
                 lamports,
                 &meta,
                 Some(&stake),
@@ -605,7 +624,7 @@ pub fn split(
                         lamports.saturating_sub(
                             validated_split_info
                                 .destination_rent_exempt_reserve
-                                .saturating_sub(split.lamports()?),
+                                .saturating_sub(split_lamport_balance),
                         ),
                     )
                 };
@@ -613,15 +632,25 @@ pub fn split(
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
 
+            let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
+            drop(stake_account);
+            let split = keyed_account_at_index(keyed_accounts, split_index)?;
             split.set_state(&StakeState::Stake(split_meta, split_stake))?;
         }
         StakeState::Initialized(meta) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
-            let validated_split_info =
-                validate_split_amount(invoke_context, stake_account, split, lamports, &meta, None)?;
+            let validated_split_info = validate_split_amount(
+                invoke_context,
+                stake_account_index,
+                split_index,
+                lamports,
+                &meta,
+                None,
+            )?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
+            let split = keyed_account_at_index(keyed_accounts, split_index)?;
             split.set_state(&StakeState::Initialized(split_meta))?;
         }
         StakeState::Uninitialized => {
@@ -633,13 +662,18 @@ pub fn split(
     }
 
     // Deinitialize state upon zero balance
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     if lamports == stake_account.lamports()? {
         stake_account.set_state(&StakeState::Uninitialized)?;
     }
+    drop(stake_account);
 
+    let split = keyed_account_at_index(keyed_accounts, split_index)?;
     split
         .try_account_ref_mut()?
         .checked_add_lamports(lamports)?;
+    drop(split);
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     stake_account
         .try_account_ref_mut()?
         .checked_sub_lamports(lamports)?;
@@ -647,21 +681,27 @@ pub fn split(
 }
 
 pub fn merge(
-    stake_account: &KeyedAccount,
     invoke_context: &InvokeContext,
-    source_account: &KeyedAccount,
+    stake_account_index: usize,
+    source_account_index: usize,
     clock: &Clock,
     stake_history: &StakeHistory,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let source_account = keyed_account_at_index(keyed_accounts, source_account_index)?;
     // Ensure source isn't spoofed
     if source_account.owner()? != id() {
         return Err(InstructionError::IncorrectProgramId);
     }
+    let source_pubkey = source_account.unsigned_key();
+    drop(source_account);
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     // Close the stake_account-reference loophole
-    if source_account.unsigned_key() == stake_account.unsigned_key() {
+    if source_pubkey == stake_account.unsigned_key() {
         return Err(InstructionError::InvalidArgument);
     }
+    let source_account = keyed_account_at_index(keyed_accounts, source_account_index)?;
 
     ic_msg!(invoke_context, "Checking if destination stake is mergeable");
     let stake_merge_kind = MergeKind::get_if_mergeable(
@@ -671,10 +711,12 @@ pub fn merge(
         clock,
         stake_history,
     )?;
-    let meta = stake_merge_kind.meta();
 
     // Authorized staker is allowed to split/merge accounts
-    meta.authorized.check(signers, StakeAuthorize::Staker)?;
+    stake_merge_kind
+        .meta()
+        .authorized
+        .check(signers, StakeAuthorize::Staker)?;
 
     ic_msg!(invoke_context, "Checking if source stake is mergeable");
     let source_merge_kind = MergeKind::get_if_mergeable(
@@ -705,21 +747,26 @@ pub fn merge(
 }
 
 pub fn withdraw(
-    stake_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+    stake_account_index: usize,
     lamports: u64,
-    to: &KeyedAccount,
+    to_index: usize,
     clock: &Clock,
     stake_history: &StakeHistory,
-    withdraw_authority: &KeyedAccount,
-    custodian: Option<&KeyedAccount>,
+    withdraw_authority_index: usize,
+    custodian_index: Option<usize>,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    let mut signers = HashSet::new();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let withdraw_authority = keyed_account_at_index(keyed_accounts, withdraw_authority_index)?;
     let withdraw_authority_pubkey = withdraw_authority
         .signer_key()
         .ok_or(InstructionError::MissingRequiredSignature)?;
+    drop(withdraw_authority);
+    let mut signers = HashSet::new();
     signers.insert(*withdraw_authority_pubkey);
 
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     let (lockup, reserve, is_staked) = match stake_account.state()? {
         StakeState::Stake(meta, stake) => {
             meta.authorized
@@ -759,10 +806,14 @@ pub fn withdraw(
 
     // verify that lockup has expired or that the withdrawal is signed by
     //   the custodian, both epoch and unix_timestamp must have passed
+    let custodian = custodian_index
+        .map(|custodian_index| keyed_account_at_index(keyed_accounts, custodian_index))
+        .transpose()?;
     let custodian_pubkey = custodian.and_then(|keyed_account| keyed_account.signer_key());
     if lockup.is_in_force(clock, custodian_pubkey) {
         return Err(StakeError::LockupInForce.into());
     }
+    drop(custodian);
 
     let lamports_and_reserve = checked_add(lamports, reserve)?;
     // if the stake is active, we mustn't allow the account to go away
@@ -787,6 +838,8 @@ pub fn withdraw(
     stake_account
         .try_account_ref_mut()?
         .checked_sub_lamports(lamports)?;
+    drop(stake_account);
+    let to = keyed_account_at_index(keyed_accounts, to_index)?;
     to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
     Ok(())
 }
@@ -821,14 +874,21 @@ struct ValidatedSplitInfo {
 /// not, return an error.
 fn validate_split_amount(
     invoke_context: &InvokeContext,
-    source_account: &KeyedAccount,
-    destination_account: &KeyedAccount,
+    source_account_index: usize,
+    destination_account_index: usize,
     lamports: u64,
     source_meta: &Meta,
     source_stake: Option<&Stake>,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let source_account = keyed_account_at_index(keyed_accounts, source_account_index)?;
     let source_lamports = source_account.lamports()?;
+    let source_data_len = source_account.data_len()?;
+    drop(source_account);
+    let destination_account = keyed_account_at_index(keyed_accounts, destination_account_index)?;
     let destination_lamports = destination_account.lamports()?;
+    let destination_data_len = destination_account.data_len()?;
+    drop(destination_account);
 
     // Split amount has to be something
     if lamports == 0 {
@@ -869,12 +929,12 @@ fn validate_split_amount(
         .is_active(&stake_split_uses_rent_sysvar::ID)
     {
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
-        rent.minimum_balance(destination_account.data_len()?)
+        rent.minimum_balance(destination_data_len)
     } else {
         calculate_split_rent_exempt_reserve(
             source_meta.rent_exempt_reserve,
-            source_account.data_len()? as u64,
-            destination_account.data_len()? as u64,
+            source_data_len as u64,
+            destination_data_len as u64,
         )
     };
     let destination_minimum_balance =

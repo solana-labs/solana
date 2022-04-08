@@ -84,12 +84,9 @@ pub fn process_instruction(
         }
         StakeInstruction::AuthorizeWithSeed(args) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let authority_base =
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
@@ -99,8 +96,9 @@ pub fn process_instruction(
                         .map(|ka| ka.unsigned_key());
 
                 authorize_with_seed(
-                    me,
-                    authority_base,
+                    invoke_context,
+                    first_instruction_account,
+                    first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -111,8 +109,9 @@ pub fn process_instruction(
                 )
             } else {
                 authorize_with_seed(
-                    me,
-                    authority_base,
+                    invoke_context,
+                    first_instruction_account,
+                    first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -125,7 +124,6 @@ pub fn process_instruction(
         }
         StakeInstruction::DelegateStake => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let vote = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             let stake_history = get_sysvar_with_account_check::stake_history(
@@ -141,18 +139,28 @@ pub fn process_instruction(
             }
             let config = config::from(&*config_account.try_account_ref()?)
                 .ok_or(InstructionError::InvalidArgument)?;
-            delegate(me, vote, &clock, &stake_history, &config, &signers)
+            delegate(
+                invoke_context,
+                first_instruction_account,
+                first_instruction_account + 1,
+                &clock,
+                &stake_history,
+                &config,
+                &signers,
+            )
         }
         StakeInstruction::Split(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let split_stake =
-                &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            split(me, invoke_context, lamports, split_stake, &signers)
+            split(
+                invoke_context,
+                first_instruction_account,
+                lamports,
+                first_instruction_account + 1,
+                &signers,
+            )
         }
         StakeInstruction::Merge => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let source_stake =
-                &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             let stake_history = get_sysvar_with_account_check::stake_history(
@@ -161,9 +169,9 @@ pub fn process_instruction(
                 3,
             )?;
             merge(
-                me,
                 invoke_context,
-                source_stake,
+                first_instruction_account,
+                first_instruction_account + 1,
                 &clock,
                 &stake_history,
                 &signers,
@@ -171,7 +179,6 @@ pub fn process_instruction(
         }
         StakeInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let to = &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             let stake_history = get_sysvar_with_account_check::stake_history(
@@ -181,13 +188,18 @@ pub fn process_instruction(
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
             withdraw(
-                me,
+                invoke_context,
+                first_instruction_account,
                 lamports,
-                to,
+                first_instruction_account + 1,
                 &clock,
                 &stake_history,
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 5).ok(),
+                first_instruction_account + 4,
+                if instruction_context.get_number_of_instruction_accounts() >= 6 {
+                    Some(first_instruction_account + 5)
+                } else {
+                    None
+                },
                 &invoke_context.feature_set,
             )
         }
@@ -268,8 +280,6 @@ pub fn process_instruction(
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 instruction_context.check_number_of_instruction_accounts(2)?;
-                let authority_base =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
@@ -283,8 +293,9 @@ pub fn process_instruction(
                         .map(|ka| ka.unsigned_key());
 
                 authorize_with_seed(
-                    me,
-                    authority_base,
+                    invoke_context,
+                    first_instruction_account,
+                    first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
                     authorized_pubkey,
