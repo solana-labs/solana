@@ -75,7 +75,15 @@ pub struct GenesisConfigInfo {
 }
 
 pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
-    create_genesis_config_with_leader(mint_lamports, &solana_sdk::pubkey::new_rand(), 0)
+    // Note that zero lamports for validator stake will result in stake account
+    // not being stored in accounts-db but still cached in bank stakes. This
+    // causes discrepancy between cached stakes accounts in bank and
+    // accounts-db which in particular will break snapshots test.
+    create_genesis_config_with_leader(
+        mint_lamports,
+        &solana_sdk::pubkey::new_rand(), // validator_pubkey
+        0,                               // validator_stake_lamports
+    )
 }
 
 pub fn create_genesis_config_with_vote_accounts(
