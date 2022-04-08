@@ -66,18 +66,8 @@ pub fn invoke_signed_unchecked(
 ) -> ProgramResult {
     #[cfg(target_os = "solana")]
     {
-        extern "C" {
-            fn sol_invoke_signed_rust(
-                instruction_addr: *const u8,
-                account_infos_addr: *const u8,
-                account_infos_len: u64,
-                signers_seeds_addr: *const u8,
-                signers_seeds_len: u64,
-            ) -> u64;
-        }
-
         let result = unsafe {
-            sol_invoke_signed_rust(
+            crate::syscalls::sol_invoke_signed_rust(
                 instruction as *const _ as *const u8,
                 account_infos as *const _ as *const u8,
                 account_infos.len() as u64,
@@ -101,13 +91,9 @@ pub const MAX_RETURN_DATA: usize = 1024;
 /// Set a program's return data
 pub fn set_return_data(data: &[u8]) {
     #[cfg(target_os = "solana")]
-    {
-        extern "C" {
-            fn sol_set_return_data(data: *const u8, length: u64);
-        }
-
-        unsafe { sol_set_return_data(data.as_ptr(), data.len() as u64) };
-    }
+    unsafe {
+        crate::syscalls::sol_set_return_data(data.as_ptr(), data.len() as u64)
+    };
 
     #[cfg(not(target_os = "solana"))]
     crate::program_stubs::sol_set_return_data(data)
@@ -119,15 +105,16 @@ pub fn get_return_data() -> Option<(Pubkey, Vec<u8>)> {
     {
         use std::cmp::min;
 
-        extern "C" {
-            fn sol_get_return_data(data: *mut u8, length: u64, program_id: *mut Pubkey) -> u64;
-        }
-
         let mut buf = [0u8; MAX_RETURN_DATA];
         let mut program_id = Pubkey::default();
 
-        let size =
-            unsafe { sol_get_return_data(buf.as_mut_ptr(), buf.len() as u64, &mut program_id) };
+        let size = unsafe {
+            crate::syscalls::sol_get_return_data(
+                buf.as_mut_ptr(),
+                buf.len() as u64,
+                &mut program_id,
+            )
+        };
 
         if size == 0 {
             None

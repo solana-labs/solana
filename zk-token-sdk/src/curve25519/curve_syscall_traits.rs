@@ -83,23 +83,7 @@ pub const MUL: u64 = 2;
 // the associated functions in the appropriate trait instantiation. The `curve_op` function
 // additionally takes in an `op_id` (e.g. `ADD`) that controls which associated functions to run in
 // `GroupOperations`.
-extern "C" {
-    pub fn sol_curve_validate_point(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
-
-    pub fn sol_curve_op(
-        curve_id: u64,
-        op_id: u64,
-        left_point: *const u8,
-        right_point: *const u8,
-        result: *mut u8,
-    ) -> u64;
-
-    pub fn sol_curve_multiscalar_mul(
-        curve_id: u64,
-        scalars: *const u8,
-        points: *const u8,
-        result: *mut u8,
-    ) -> u64;
-
-    pub fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
-}
+#[cfg(target_os = "solana")]
+pub use solana_program::syscalls::{
+    sol_curve_multiscalar_mul, sol_curve_op, sol_curve_pairing_map, sol_curve_validate_point,
+};

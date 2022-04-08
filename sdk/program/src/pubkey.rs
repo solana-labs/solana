@@ -494,19 +494,10 @@ impl Pubkey {
         // Call via a system call to perform the calculation
         #[cfg(target_os = "solana")]
         {
-            extern "C" {
-                fn sol_try_find_program_address(
-                    seeds_addr: *const u8,
-                    seeds_len: u64,
-                    program_id_addr: *const u8,
-                    address_bytes_addr: *const u8,
-                    bump_seed_addr: *const u8,
-                ) -> u64;
-            }
             let mut bytes = [0; 32];
             let mut bump_seed = std::u8::MAX;
             let result = unsafe {
-                sol_try_find_program_address(
+                crate::syscalls::sol_try_find_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
@@ -596,17 +587,9 @@ impl Pubkey {
         // Call via a system call to perform the calculation
         #[cfg(target_os = "solana")]
         {
-            extern "C" {
-                fn sol_create_program_address(
-                    seeds_addr: *const u8,
-                    seeds_len: u64,
-                    program_id_addr: *const u8,
-                    address_bytes_addr: *const u8,
-                ) -> u64;
-            }
             let mut bytes = [0; 32];
             let result = unsafe {
-                sol_create_program_address(
+                crate::syscalls::sol_create_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
@@ -631,12 +614,9 @@ impl Pubkey {
     /// Log a `Pubkey` from a program
     pub fn log(&self) {
         #[cfg(target_os = "solana")]
-        {
-            extern "C" {
-                fn sol_log_pubkey(pubkey_addr: *const u8);
-            }
-            unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
-        }
+        unsafe {
+            crate::syscalls::sol_log_pubkey(self.as_ref() as *const _ as *const u8)
+        };
 
         #[cfg(not(target_os = "solana"))]
         crate::program_stubs::sol_log(&self.to_string());

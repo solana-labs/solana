@@ -684,21 +684,11 @@ pub struct ProcessedSiblingInstruction {
 pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
     #[cfg(target_os = "solana")]
     {
-        extern "C" {
-            fn sol_get_processed_sibling_instruction(
-                index: u64,
-                meta: *mut ProcessedSiblingInstruction,
-                program_id: *mut Pubkey,
-                data: *mut u8,
-                accounts: *mut AccountMeta,
-            ) -> u64;
-        }
-
         let mut meta = ProcessedSiblingInstruction::default();
         let mut program_id = Pubkey::default();
 
         if 1 == unsafe {
-            sol_get_processed_sibling_instruction(
+            crate::syscalls::sol_get_processed_sibling_instruction(
                 index as u64,
                 &mut meta,
                 &mut program_id,
@@ -712,7 +702,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
             accounts.resize_with(meta.accounts_len, AccountMeta::default);
 
             let _ = unsafe {
-                sol_get_processed_sibling_instruction(
+                crate::syscalls::sol_get_processed_sibling_instruction(
                     index as u64,
                     &mut meta,
                     &mut program_id,
@@ -739,12 +729,8 @@ pub const TRANSACTION_LEVEL_STACK_HEIGHT: usize = 1;
 /// TRANSACTION_LEVEL_STACK_HEIGHT + 1, etc...
 pub fn get_stack_height() -> usize {
     #[cfg(target_os = "solana")]
-    {
-        extern "C" {
-            fn sol_get_stack_height() -> u64;
-        }
-
-        unsafe { sol_get_stack_height() as usize }
+    unsafe {
+        crate::syscalls::sol_get_stack_height() as usize
     }
 
     #[cfg(not(target_os = "solana"))]
