@@ -3,16 +3,11 @@ use {
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_runtime::bank::Bank,
     solana_sdk::{
-        feature_set::tx_wide_compute_cap,
         hash::Hash,
-        message::{
-            v0::{self},
-            Message, SanitizedMessage, VersionedMessage,
-        },
-        sanitize::Sanitize,
+        message::{Message, VersionedMessage},
         short_vec::decode_shortu16_len,
         signature::Signature,
-        transaction::{AddressLoader, Transaction, VersionedTransaction},
+        transaction::{Transaction, VersionedTransaction},
     },
     std::{cmp::Ordering, collections::HashMap, mem::size_of, rc::Rc, sync::Arc},
 };
@@ -202,11 +197,7 @@ impl UnprocessedPacketBatches {
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut DeserializedPacket> {
-        self.message_hash_to_transaction.iter_mut().map(|(k, v)| v)
-    }
-
-    pub fn into_iter(self) -> impl Iterator<Item = DeserializedPacket> {
-        self.message_hash_to_transaction.into_iter().map(|(k, v)| v)
+        self.message_hash_to_transaction.iter_mut().map(|(_k, v)| v)
     }
 
     pub fn retain<F>(&mut self, mut f: F)
@@ -321,28 +312,8 @@ pub fn packet_message(packet: &Packet) -> Option<&[u8]> {
     Some(&packet.data[msg_start..msg_end])
 }
 
-fn sanitize_message(
-    versioned_message: &VersionedMessage,
-    address_loader: impl AddressLoader,
-) -> Option<SanitizedMessage> {
-    versioned_message.sanitize().ok()?;
-
-    match versioned_message {
-        VersionedMessage::Legacy(message) => Some(SanitizedMessage::Legacy(message.clone())),
-        VersionedMessage::V0(message) => {
-            let loaded_addresses = address_loader
-                .load_addresses(&message.address_table_lookups)
-                .ok()?;
-            Some(SanitizedMessage::V0(v0::LoadedMessage::new(
-                message.clone(),
-                loaded_addresses,
-            )))
-        }
-    }
-}
-
 /// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
-fn compute_fee_per_cu(message: &VersionedMessage, bank: &Bank) -> u64 {
+fn compute_fee_per_cu(_message: &VersionedMessage, _bank: &Bank) -> u64 {
     1
 }
 
