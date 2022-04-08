@@ -4470,6 +4470,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-version",
+ "thiserror",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 use {
-    crate::cli::Config,
+    crate::{bench_tps_client::*, cli::Config},
     log::*,
     rayon::prelude::*,
     solana_client::perf_utils::{sample_txs, SampleStats},
@@ -37,13 +37,6 @@ use {
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
-
-#[derive(Debug)]
-pub enum BenchTpsError {
-    AirdropFailure,
-}
-
-pub type Result<T> = std::result::Result<T, BenchTpsError>;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
