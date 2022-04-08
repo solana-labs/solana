@@ -1,11 +1,11 @@
 //! `cost_tracker` keeps tracking transaction cost per chained accounts as well as for entire block
 //! The main functions are:
 //! - would_fit(&tx_cost), immutable function to test if tx with tx_cost would fit into current block
-//! - add_transaction(&tx_cost), mutable function to accumulate tx_cost to tracker.
+//! - add_transaction_cost(&tx_cost), mutable function to accumulate tx_cost to tracker.
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::collections::HashMap,
 };
 
@@ -105,6 +105,7 @@ impl CostTracker {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     pub fn would_transaction_fit(
         &self,
         transaction: &SanitizedTransaction,
@@ -133,6 +134,9 @@ impl CostTracker {
         self.would_fit(&tx_cost.writable_accounts, cost, transaction)?;
         self.add_transaction(&tx_cost.writable_accounts, cost, transaction);
 =======
+=======
+    pub fn try_add(&mut self, tx_cost: &TransactionCost) -> Result<u64, CostTrackerError> {
+>>>>>>> a058f348a (Address review comments)
         self.would_fit(tx_cost)?;
 <<<<<<< HEAD
         self.pending_transactions
@@ -149,7 +153,7 @@ impl CostTracker {
         _estimated_tx_cost: &TransactionCost,
         _actual_execution_cost: u64,
     ) {
-        // adjust block_cost / vote_cost / account_cost by (actual_execution_cost - execution_cost)
+        // TODO: adjust block_cost / vote_cost / account_cost by (actual_execution_cost - execution_cost)
     }
 
     pub fn remove(&mut self, tx_cost: &TransactionCost) {
@@ -348,7 +352,13 @@ mod tests {
             hash::Hash,
             signature::{Keypair, Signer},
             system_transaction,
+<<<<<<< HEAD
             transaction::{TransactionError, VersionedTransaction},
+=======
+            transaction::{
+                MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
+            },
+>>>>>>> a058f348a (Address review comments)
         },
         solana_vote_program::vote_transaction,
         std::{cmp, sync::Arc},
@@ -435,8 +445,12 @@ mod tests {
 =======
         let mut testee = CostTracker::new(cost, cost, cost, None);
         assert!(testee.would_fit(&tx_cost).is_ok());
+<<<<<<< HEAD
         testee.add_transaction(&tx_cost);
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
+=======
+        testee.add_transaction_cost(&tx_cost);
+>>>>>>> a058f348a (Address review comments)
         assert_eq!(cost, testee.block_cost);
         assert_eq!(0, testee.vote_cost);
         let (_costliest_account, costliest_account_cost) = testee.find_costliest_account();
@@ -457,8 +471,12 @@ mod tests {
 =======
         let mut testee = CostTracker::new(cost, cost, cost, None);
         assert!(testee.would_fit(&tx_cost).is_ok());
+<<<<<<< HEAD
         testee.add_transaction(&tx_cost);
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
+=======
+        testee.add_transaction_cost(&tx_cost);
+>>>>>>> a058f348a (Address review comments)
         assert_eq!(cost, testee.block_cost);
         assert_eq!(cost, testee.vote_cost);
         let (_ccostliest_account, costliest_account_cost) = testee.find_costliest_account();
@@ -478,7 +496,7 @@ mod tests {
         let mut testee = CostTracker::new(cost, cost, cost, None);
         assert!(testee.would_fit(&tx_cost).is_ok());
         let old = testee.account_data_size;
-        testee.add_transaction(&tx_cost);
+        testee.add_transaction_cost(&tx_cost);
         assert_eq!(old + 1, testee.account_data_size);
     }
 
@@ -504,12 +522,16 @@ mod tests {
             testee.add_transaction(&keys2, cost2, &tx2);
 =======
             assert!(testee.would_fit(&tx_cost1).is_ok());
-            testee.add_transaction(&tx_cost1);
+            testee.add_transaction_cost(&tx_cost1);
         }
         {
             assert!(testee.would_fit(&tx_cost2).is_ok());
+<<<<<<< HEAD
             testee.add_transaction(&tx_cost2);
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
+=======
+            testee.add_transaction_cost(&tx_cost2);
+>>>>>>> a058f348a (Address review comments)
         }
         assert_eq!(cost1 + cost2, testee.block_cost);
         assert_eq!(1, testee.cost_by_writable_accounts.len());
@@ -539,12 +561,16 @@ mod tests {
             testee.add_transaction(&keys2, cost2, &tx2);
 =======
             assert!(testee.would_fit(&tx_cost1).is_ok());
-            testee.add_transaction(&tx_cost1);
+            testee.add_transaction_cost(&tx_cost1);
         }
         {
             assert!(testee.would_fit(&tx_cost2).is_ok());
+<<<<<<< HEAD
             testee.add_transaction(&tx_cost2);
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
+=======
+            testee.add_transaction_cost(&tx_cost2);
+>>>>>>> a058f348a (Address review comments)
         }
         assert_eq!(cost1 + cost2, testee.block_cost);
         assert_eq!(2, testee.cost_by_writable_accounts.len());
@@ -574,7 +600,7 @@ mod tests {
             assert!(testee.would_fit(&keys2, cost2, &tx2).is_err());
 =======
             assert!(testee.would_fit(&tx_cost1).is_ok());
-            testee.add_transaction(&tx_cost1);
+            testee.add_transaction_cost(&tx_cost1);
         }
         // but no more sapce on the same chain (same signer account)
         {
@@ -607,7 +633,7 @@ mod tests {
             assert!(testee.would_fit(&keys2, cost2, &tx2).is_err());
 =======
             assert!(testee.would_fit(&tx_cost1).is_ok());
-            testee.add_transaction(&tx_cost1);
+            testee.add_transaction_cost(&tx_cost1);
         }
         // but no more room for package as whole
         {
@@ -639,7 +665,7 @@ mod tests {
             assert!(testee.would_fit(&keys2, cost2, &tx2).is_err());
 =======
             assert!(testee.would_fit(&tx_cost1).is_ok());
-            testee.add_transaction(&tx_cost1);
+            testee.add_transaction_cost(&tx_cost1);
         }
         // but no more room for package as whole
         {
@@ -717,38 +743,31 @@ mod tests {
     }
 
     #[test]
-    fn test_cost_tracker_commit_and_cancel() {
+    fn test_cost_tracker_remove() {
         let (mint_keypair, start_hash) = test_setup();
         // build two transactions with diff accounts
         let second_account = Keypair::new();
-        let (tx1, tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
-        let (tx2, tx_cost2) = build_simple_transaction(&second_account, &start_hash);
+        let (_tx1, tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
+        let (_tx2, tx_cost2) = build_simple_transaction(&second_account, &start_hash);
         let cost1 = tx_cost1.sum();
         let cost2 = tx_cost2.sum();
         // build testee
         let mut testee = CostTracker::new(cost1 + cost2, cost1 + cost2, cost1 + cost2, None);
 
-        assert!(testee.try_add(&tx1, &tx_cost1).is_ok());
-        assert!(testee.try_add(&tx2, &tx_cost2).is_ok());
-
-        // assert the block cost is still zero
-        assert_eq!(0, testee.block_cost);
-
-        // assert tx1 cost applied to tracker if committed
-        testee.commit_transaction(&tx1, None);
-        assert_eq!(cost1, testee.block_cost);
-
-        // assert tx2 cost will not be applied to tracker if cancelled
-        testee.cancel_transaction(&tx2);
-        assert_eq!(cost1, testee.block_cost);
-
-        // still can add tx2
-        assert!(testee.try_add(&tx2, &tx_cost2).is_ok());
-        // cannot add tx1 while tx2 is pending
-        assert!(testee.try_add(&tx1, &tx_cost1).is_err());
-        // after commit tx2, the block will have both tx1 and tx2
-        testee.commit_transaction(&tx2, None);
+        assert!(testee.try_add(&tx_cost1).is_ok());
+        assert!(testee.try_add(&tx_cost2).is_ok());
         assert_eq!(cost1 + cost2, testee.block_cost);
+
+        // removing a tx_cost affects block_cost
+        testee.remove(&tx_cost1);
+        assert_eq!(cost2, testee.block_cost);
+
+        // add back tx1
+        assert!(testee.try_add(&tx_cost1).is_ok());
+        assert_eq!(cost1 + cost2, testee.block_cost);
+
+        // cannot add tx1 again, cost limit would be exceeded
+        assert!(testee.try_add(&tx_cost1).is_err());
     }
 
     #[test]
@@ -756,7 +775,7 @@ mod tests {
     fn test_cost_tracker_try_add_is_atomic() {
         let (mint_keypair, start_hash) = test_setup();
         // build two mocking vote transactions with diff accounts
-        let (tx1, _tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
+        let (_tx1, _tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
 
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
@@ -778,8 +797,7 @@ mod tests {
                 execution_cost: cost,
                 ..TransactionCost::default()
             };
-            assert!(testee.try_add(&tx1, &tx_cost).is_ok());
-            testee.commit_transaction(&tx1, None);
+            assert!(testee.try_add(&tx_cost).is_ok());
             let (_costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost, testee.block_cost);
             assert_eq!(3, testee.cost_by_writable_accounts.len());
@@ -797,8 +815,7 @@ mod tests {
                 execution_cost: cost,
                 ..TransactionCost::default()
             };
-            assert!(testee.try_add(&tx1, &tx_cost).is_ok());
-            testee.commit_transaction(&tx1, None);
+            assert!(testee.try_add(&tx_cost).is_ok());
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost * 2, testee.block_cost);
             assert_eq!(3, testee.cost_by_writable_accounts.len());
@@ -818,8 +835,7 @@ mod tests {
                 execution_cost: cost,
                 ..TransactionCost::default()
             };
-            assert!(testee.try_add(&tx1, &tx_cost).is_err());
-            testee.commit_transaction(&tx1, None);
+            assert!(testee.try_add(&tx_cost).is_err());
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost * 2, testee.block_cost);
             assert_eq!(3, testee.cost_by_writable_accounts.len());
