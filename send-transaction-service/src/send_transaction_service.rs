@@ -78,7 +78,7 @@ impl TransactionInfo {
             durable_nonce_info,
             max_retries,
             retries: 0,
-            last_sent_time
+            last_sent_time,
         }
     }
 }
@@ -635,7 +635,7 @@ mod test {
                 working_bank.block_height(),
                 None,
                 None,
-                Some(Instant::now().sub(Duration::from_millis(4000)))
+                Some(Instant::now().sub(Duration::from_millis(4000))),
             ),
         );
 
