@@ -17,6 +17,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
+        accounts_background_service::DroppedSlotsReceiver,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -567,16 +568,17 @@ pub fn test_process_blockstore(
     blockstore: &Blockstore,
     opts: ProcessOptions,
 ) -> (BankForks, LeaderScheduleCache) {
-    let (mut bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
-        genesis_config,
-        blockstore,
-        Vec::new(),
-        None,
-        None,
-        &opts,
-        None,
-        None,
-    );
+    let (mut bank_forks, leader_schedule_cache, .., pruned_banks_receiver) =
+        crate::bank_forks_utils::load_bank_forks(
+            genesis_config,
+            blockstore,
+            Vec::new(),
+            None,
+            None,
+            &opts,
+            None,
+            None,
+        );
     let (accounts_package_sender, _) = unbounded();
     process_blockstore_from_root(
         blockstore,
@@ -587,6 +589,7 @@ pub fn test_process_blockstore(
         None,
         None,
         accounts_package_sender,
+        pruned_banks_receiver,
     )
     .unwrap();
     (bank_forks, leader_schedule_cache)
@@ -637,6 +640,7 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
+    pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> result::Result<Option<Slot>, BlockstoreProcessorError> {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -696,6 +700,7 @@ pub fn process_blockstore_from_root(
             accounts_package_sender,
             &mut timing,
             &mut last_full_snapshot_slot,
+            pruned_banks_receiver,
         )?;
     } else {
         // If there's no meta for the input `start_slot`, then we started from a snapshot
@@ -1117,6 +1122,7 @@ fn load_frozen_forks(
     accounts_package_sender: AccountsPackageSender,
     timing: &mut ExecuteTimings,
     last_full_snapshot_slot: &mut Option<Slot>,
+    pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
@@ -1285,6 +1291,17 @@ fn load_frozen_forks(
                 }
 
                 if last_free.elapsed() > Duration::from_secs(10) {
+                    // Purge account state for all dropped banks
+                    for (pruned_slot, pruned_bank_id) in pruned_banks_receiver.try_iter() {
+                        // Simulate this purge being from the AccountsBackgroundService
+                        let is_from_abs = true;
+                        new_root_bank.rc.accounts.purge_slot(
+                            pruned_slot,
+                            pruned_bank_id,
+                            is_from_abs,
+                        );
+                    }
+
                     // Must be called after `squash()`, so that AccountsDb knows what
                     // the roots are for the cache flushing in exhaustively_free_unused_resource().
                     // This could take few secs; so update last_free later
@@ -3147,6 +3164,7 @@ pub mod tests {
 
         // Test process_blockstore_from_root() from slot 1 onwards
         let (accounts_package_sender, _) = unbounded();
+        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         process_blockstore_from_root(
             &blockstore,
             &mut bank_forks,
@@ -3156,6 +3174,7 @@ pub mod tests {
             None,
             None,
             accounts_package_sender,
+            pruned_banks_receiver,
         )
         .unwrap();
 
@@ -3256,6 +3275,7 @@ pub mod tests {
         let (accounts_package_sender, accounts_package_receiver) = unbounded();
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
 
+        let (_pruned_banks_sender, pruned_banks_receiver) = unbounded();
         process_blockstore_from_root(
             &blockstore,
             &mut bank_forks,
@@ -3265,6 +3285,7 @@ pub mod tests {
             None,
             Some(&snapshot_config),
             accounts_package_sender.clone(),
+            pruned_banks_receiver,
         )
         .unwrap();
 

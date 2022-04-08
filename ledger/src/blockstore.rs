@@ -90,6 +90,7 @@ thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::ne
                     .build()
                     .unwrap()));
 
+pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
@@ -179,7 +180,7 @@ pub struct Blockstore {
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
-    slots_stats: Mutex<SlotsStats>,
+    pub slots_stats: SlotsStats,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -451,7 +452,7 @@ impl Blockstore {
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             no_compaction: false,
-            slots_stats: Mutex::<SlotsStats>::default(),
+            slots_stats: SlotsStats::default(),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -464,7 +465,7 @@ impl Blockstore {
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
         let blockstore = Self::open_with_options(ledger_path, options)?;
-        let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
+        let (ledger_signal_sender, ledger_signal_receiver) = bounded(MAX_REPLAY_WAKE_UP_SIGNALS);
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
@@ -1217,10 +1218,10 @@ impl Blockstore {
 
             return false;
         }
+
         self.slots_stats
-            .lock()
-            .unwrap()
-            .add_shred(slot, shred_source);
+            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+
         // insert coding shred into rocks
         let result = self
             .insert_coding_shred(index_meta, &shred, write_batch)
@@ -1652,13 +1653,13 @@ impl Blockstore {
             end_index,
         })
         .collect();
-        {
-            let mut slots_stats = self.slots_stats.lock().unwrap();
-            slots_stats.add_shred(slot_meta.slot, shred_source);
-            if slot_meta.is_full() {
-                slots_stats.set_full(slot_meta);
-            }
-        }
+
+        self.slots_stats.record_shred(
+            shred.slot(),
+            shred.fec_set_index(),
+            shred_source,
+            Some(slot_meta),
+        );
 
         // slot is full, send slot full timing to poh_timing_report service.
         if slot_meta.is_full() {
@@ -3427,7 +3428,15 @@ fn send_signals(
 ) {
     if should_signal {
         for signal in new_shreds_signals {
-            let _ = signal.try_send(true);
+            match signal.try_send(true) {
+                Ok(_) => {}
+                Err(TrySendError::Full(_)) => {
+                    trace!("replay wake up signal channel is full.")
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    trace!("replay wake up signal channel is disconnected.")
+                }
+            }
         }
     }
 

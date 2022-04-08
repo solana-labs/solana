@@ -3727,6 +3727,61 @@ impl RpcClient {
             commitment: Some(self.maybe_map_commitment(commitment_config).await?),
             data_slice: None,
         };
+
+        self.get_account_with_config(pubkey, config).await
+    }
+
+    /// Returns all information associated with the account of the provided pubkey.
+    ///
+    /// If the account does not exist, this method returns `Ok(None)`.
+    ///
+    /// To get multiple accounts at once, use the [`get_multiple_accounts_with_config`] method.
+    ///
+    /// [`get_multiple_accounts_with_config`]: RpcClient::get_multiple_accounts_with_config
+    ///
+    /// # RPC Reference
+    ///
+    /// This method is built on the [`getAccountInfo`] RPC method.
+    ///
+    /// [`getAccountInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getaccountinfo
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     rpc_client::{self, RpcClient},
+    /// #     rpc_config::RpcAccountInfoConfig,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     signature::Signer,
+    /// #     signer::keypair::Keypair,
+    /// #     pubkey::Pubkey,
+    /// #     commitment_config::CommitmentConfig,
+    /// # };
+    /// # use solana_account_decoder::UiAccountEncoding;
+    /// # use std::str::FromStr;
+    /// # let mocks = rpc_client::create_rpc_client_mocks();
+    /// # let rpc_client = RpcClient::new_mock_with_mocks("succeeds".to_string(), mocks);
+    /// let alice_pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
+    /// let commitment_config = CommitmentConfig::processed();
+    /// let config = RpcAccountInfoConfig {
+    ///     encoding: Some(UiAccountEncoding::Base64),
+    ///     commitment: Some(commitment_config),
+    ///     .. RpcAccountInfoConfig::default()
+    /// };
+    /// let account = rpc_client.get_account_with_config(
+    ///     &alice_pubkey,
+    ///     config,
+    /// )?;
+    /// assert!(account.value.is_some());
+    /// # Ok::<(), ClientError>(())
+    /// ```
+    pub async fn get_account_with_config(
+        &self,
+        pubkey: &Pubkey,
+        config: RpcAccountInfoConfig,
+    ) -> RpcResult<Option<Account>> {
         let response = self
             .send(
                 RpcRequest::GetAccountInfo,
