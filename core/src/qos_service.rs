@@ -133,7 +133,7 @@ impl QosService {
         let mut num_included = 0;
         let select_results = transactions
             .zip(transactions_costs)
-            .map(|(tx, cost)| match cost_tracker.try_add(tx, cost) {
+            .map(|(tx, cost)| match cost_tracker.try_add(cost) {
                 Ok(current_block_cost) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
                     self.metrics.stats.selected_txs_count.fetch_add(1, Ordering::Relaxed);
@@ -184,8 +184,10 @@ impl QosService {
         transaction_costs
             .zip(transaction_qos_results)
             .enumerate()
-            .for_each(|(index, (tx_cost, qos_result))| {
-                if qos_result.is_ok() && retryable_transaction_indexes.contains(&index) {
+            .for_each(|(index, (tx_cost, qos_inclusion_result))| {
+                // Only transactions that the qos service incuded have been added to the
+                // cost tracker.
+                if qos_inclusion_result.is_ok() && retryable_transaction_indexes.contains(&index) {
                     cost_tracker.remove(tx_cost);
                 } else {
                     // TODO: Update the cost tracker with the actual execution compute units.
