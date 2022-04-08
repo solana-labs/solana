@@ -10,7 +10,7 @@ use {
         snapshot_package::{AccountsPackageSender, SnapshotType},
         snapshot_utils::{self, SnapshotError},
     },
-    crossbeam_channel::{Receiver, SendError, Sender},
+    crossbeam_channel::{Receiver, SendError, Sender, TrySendError},
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -22,7 +22,7 @@ use {
         boxed::Box,
         fmt::{Debug, Formatter},
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -48,6 +48,13 @@ pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
 pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
 pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
+/// interval to report
+const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
+
+lazy_static! {
+    static ref BANK_DROP_LAST_REPORT_TIME: AtomicU64 = AtomicU64::new(0);
+}
+
 #[derive(Clone)]
 pub struct SendDroppedBankCallback {
     sender: DroppedSlotsSender,
@@ -55,8 +62,25 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        if let Err(e) = self.sender.try_send((bank.slot(), bank.bank_id())) {
-            warn!("Error sending dropped banks: {:?}", e);
+        let ts = solana_sdk::timing::timestamp();
+
+        match self.sender.try_send((bank.slot(), bank.bank_id())) {
+            Err(TrySendError::Full(_)) => {
+                let last_report_time = BANK_DROP_LAST_REPORT_TIME.load(Ordering::Acquire);
+                if ts.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL {
+                    datapoint_info!("bank_drop_queue_event", ("full", ts, i64));
+                    BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
+                }
+                info!("bank drop signal full");
+                let _ = self.sender.send((bank.slot(), bank.bank_id()));
+            }
+
+            Err(TrySendError::Disconnected(_)) => {
+                datapoint_info!("bank_drop_queue_event", ("disconnected", ts, i64));
+                BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
+                warn!("bank drop signal disconnected");
+            }
+            _ => {}
         }
     }
 
