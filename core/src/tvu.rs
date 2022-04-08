@@ -147,7 +147,6 @@ impl Tvu {
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
-        no_serve_snapshots: bool,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -242,7 +241,6 @@ impl Tvu {
                         snapshot_config,
                         snapshot_request_receiver,
                         accounts_package_sender,
-                        no_serve_snapshots,
                     }),
                 )
             }

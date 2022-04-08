@@ -1549,8 +1549,7 @@ pub fn main() {
         .arg(
             Arg::with_name("no_serve_snapshots")
                 .long("no-serve-snapshots")
-                .help("Inhibit serving on snapshots. \
-                      This option is for use during snapshot format transitions. "),
+                .help("Disable serving snapshots."),
         )
         .arg(
             Arg::with_name("accounts_db_cache_limit_mb")

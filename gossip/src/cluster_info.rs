@@ -166,6 +166,7 @@ pub struct ClusterInfo {
     instance: RwLock<NodeInstance>,
     contact_info_path: PathBuf,
     socket_addr_space: SocketAddrSpace,
+    inhibit_snapshot_serving: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
@@ -419,6 +420,7 @@ impl ClusterInfo {
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
             socket_addr_space,
+            inhibit_snapshot_serving: false,
         };
         me.insert_self();
         me.push_self(&HashMap::new(), None);
@@ -454,6 +456,10 @@ impl ClusterInfo {
 
     pub fn set_contact_debug_interval(&mut self, new: u64) {
         self.contact_debug_interval = new;
+    }
+
+    pub fn set_inhibit_snapshot_serving(&mut self, inhibit: bool) {
+        self.inhibit_snapshot_serving = inhibit;
     }
 
     pub fn socket_addr_space(&self) -> &SocketAddrSpace {
@@ -950,6 +956,10 @@ impl ClusterInfo {
     }
 
     pub fn push_snapshot_hashes(&self, snapshot_hashes: Vec<(Slot, Hash)>) {
+        if self.inhibit_snapshot_serving {
+            return;
+        }
+
         if snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
             warn!(
                 "snapshot hashes too large, ignored: {}",
@@ -967,6 +977,10 @@ impl ClusterInfo {
         base: (Slot, Hash),
         hashes: Vec<(Slot, Hash)>,
     ) -> Result<(), ClusterInfoError> {
+        if self.inhibit_snapshot_serving {
+            return;
+        }
+
         if hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
             return Err(ClusterInfoError::TooManyIncrementalSnapshotHashes);
         }

@@ -599,6 +599,7 @@ impl Validator {
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
+        cluster_info.set_inhibit_snapshot_serving(config.no_serve_snapshots);
         let cluster_info = Arc::new(cluster_info);
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(bank.slot(), bank_forks.read().unwrap().root());
@@ -870,8 +871,6 @@ impl Validator {
         let rpc_completed_slots_service =
             RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
 
-        let no_serve_snapshots = config.no_serve_snapshots;
-
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -928,7 +927,6 @@ impl Validator {
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-            no_serve_snapshots,
         );
 
         let tpu = Tpu::new(

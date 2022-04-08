@@ -86,7 +86,6 @@ pub struct SnapshotRequestHandler {
     pub snapshot_config: SnapshotConfig,
     pub snapshot_request_receiver: SnapshotRequestReceiver,
     pub accounts_package_sender: AccountsPackageSender,
-    pub no_serve_snapshots: bool,
 }
 
 impl SnapshotRequestHandler {
@@ -101,9 +100,6 @@ impl SnapshotRequestHandler {
         self.snapshot_request_receiver
             .try_iter()
             .last()
-            .filter(|_snapshot_request| {
-                self.no_serve_snapshots
-                } )
             .map(|snapshot_request| {
                 let mut total_time = Measure::start("snapshot_request_receiver_total_time");
                 let SnapshotRequest {
