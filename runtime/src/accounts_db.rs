@@ -5148,13 +5148,8 @@ impl AccountsDb {
                                     .and_then(
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
-<<<<<<< HEAD
                                             let balance = account_info.lamports;
-                                            if check_hash && !self.is_filler_account(pubkey) {
-=======
-                                            let balance = loaded_account.lamports();
                                             if check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
->>>>>>> f0c596281 (disable 'check_hash' on accounts hash calc (#23873) (#23902))
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey);
                                                 if computed_hash != loaded_hash {
