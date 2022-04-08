@@ -170,21 +170,31 @@ impl QosService {
         (select_results, num_included)
     }
 
-    pub fn commit_transaction_cost(
-        &self,
+    /// Update the transaction cost in the cost_tracker with the real cost for
+    /// transactions that were executed successfully;
+    /// Otherwise remove the cost from the cost tracker, therefore preventing cost_tracker
+    /// being inflated with unsuccessfully executed transactions.
+    pub fn update_or_remove_transaction_costs<'a>(
+        transaction_costs: impl Iterator<Item = &'a TransactionCost>,
+        transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
+        retryable_transaction_indexes: &[usize],
         bank: &Arc<Bank>,
-        transaction: &SanitizedTransaction,
-        actual_units: Option<u64>,
     ) {
-        bank.write_cost_tracker()
-            .unwrap()
-            .commit_transaction(transaction, actual_units);
-    }
-
-    pub fn cancel_transaction_cost(&self, bank: &Arc<Bank>, transaction: &SanitizedTransaction) {
-        bank.write_cost_tracker()
-            .unwrap()
-            .cancel_transaction(transaction);
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        transaction_costs
+            .zip(transaction_qos_results)
+            .enumerate()
+            .for_each(|(index, (tx_cost, qos_result))| {
+                if qos_result.is_ok() && retryable_transaction_indexes.contains(&index) {
+                    cost_tracker.remove(tx_cost);
+                } else {
+                    // TODO: Update the cost tracker with the actual execution compute units.
+                    // Will have to plumb it in next; For now, keep estimated costs.
+                    //
+                    // let actual_execution_cost = 0;
+                    // cost_tracker.update_execution_cost(tx_cost, actual_execution_cost);
+                }
+            });
     }
 
     // metrics are reported by bank slot
