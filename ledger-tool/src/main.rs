@@ -880,7 +880,7 @@ fn main() {
 
     let starting_slot_arg = Arg::with_name("starting_slot")
         .long("starting-slot")
-        .value_name("NUM")
+        .value_name("SLOT")
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
@@ -1119,7 +1119,7 @@ fn main() {
             .arg(
                 Arg::with_name("target_db")
                     .long("target-db")
-                    .value_name("PATH")
+                    .value_name("DIR")
                     .takes_value(true)
                     .help("Target db"),
             )
