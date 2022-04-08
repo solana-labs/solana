@@ -1351,31 +1351,34 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
     ) -> ProcessTransactionBatchOutput {
-        let ((transactions_qos_results, cost_model_throttled_transactions_count), cost_model_time) =
-            Measure::this(
-                |_| {
-                    let tx_costs = qos_service.compute_transaction_costs(txs.iter());
+        let (
+            (transactions_qos_results, cost_model_throttled_transactions_count, transaction_costs),
+            cost_model_time,
+        ) = Measure::this(
+            |_| {
+                let tx_costs = qos_service.compute_transaction_costs(txs.iter());
 
-                    let (transactions_qos_results, num_included) =
-                        qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
+                let (transactions_qos_results, num_included) =
+                    qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
-                    let cost_model_throttled_transactions_count =
-                        txs.len().saturating_sub(num_included);
+                let cost_model_throttled_transactions_count =
+                    txs.len().saturating_sub(num_included);
 
-                    qos_service.accumulate_estimated_transaction_costs(
-                        &Self::accumulate_batched_transaction_costs(
-                            tx_costs.iter(),
-                            transactions_qos_results.iter(),
-                        ),
-                    );
-                    (
-                        transactions_qos_results,
-                        cost_model_throttled_transactions_count,
-                    )
-                },
-                (),
-                "cost_model",
-            );
+                qos_service.accumulate_estimated_transaction_costs(
+                    &Self::accumulate_batched_transaction_costs(
+                        tx_costs.iter(),
+                        transactions_qos_results.iter(),
+                    ),
+                );
+                (
+                    transactions_qos_results,
+                    cost_model_throttled_transactions_count,
+                    tx_costs,
+                )
+            },
+            (),
+            "cost_model",
+        );
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -1407,11 +1410,10 @@ impl BankingStage {
             ..
         } = execute_and_commit_transactions_output;
 
-        Self::commit_or_cancel_transaction_cost(
-            txs.iter(),
+        QosService::update_or_remove_transaction_costs(
+            transaction_costs.iter(),
             transactions_qos_results.iter(),
             retryable_transaction_indexes,
-            qos_service,
             bank,
         );
 
@@ -1440,30 +1442,6 @@ impl BankingStage {
             cost_model_us: cost_model_time.as_us(),
             execute_and_commit_transactions_output,
         }
-    }
-
-    /// To commit transaction cost to cost_tracker if it was executed successfully;
-    /// Otherwise cancel it from being committed, therefore prevents cost_tracker
-    /// being inflated with unsuccessfully executed transactions.
-    fn commit_or_cancel_transaction_cost<'a>(
-        transactions: impl Iterator<Item = &'a SanitizedTransaction>,
-        transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        retryable_transaction_indexes: &[usize],
-        qos_service: &QosService,
-        bank: &Arc<Bank>,
-    ) {
-        transactions
-            .zip(transaction_results)
-            .enumerate()
-            .for_each(|(index, (tx, result))| {
-                if result.is_ok() && retryable_transaction_indexes.contains(&index) {
-                    qos_service.cancel_transaction_cost(bank, tx);
-                } else {
-                    // TODO the 3rd param is for transaction's actual units. Will have
-                    // to plumb it in next; For now, it simply commit estimated units.
-                    qos_service.commit_transaction_cost(bank, tx, None);
-                }
-            });
     }
 
     // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
