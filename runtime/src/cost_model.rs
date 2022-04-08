@@ -16,7 +16,7 @@ use {
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 // costs are stored in number of 'compute unit's
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TransactionCost {
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
