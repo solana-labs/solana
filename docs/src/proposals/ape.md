@@ -42,11 +42,11 @@ Replay of banks is split up into 2 modes ForkHash and BankHash.
 
 === ForkHash ===
 
-Computing the ForkHash only evalutes the VoteProgram instructions.  Transactions that include VoteProgram and any non VoteProgram accounts fail immediately and are ignored.
+Computing the ForkHash only evaluates the VoteProgram instructions.  Transactions that include VoteProgram and any non VoteProgram accounts fail immediately and are ignored.
 
 === BankHash ===
 
-Computing the BankHash evaluates all the non VoteProgram instructions. Transactions that include VoteProgram and any non VoteProgram accounts fail immediately and are ignored.  The LS computation and finalizing the IsolationProgram::MoveDomains are done at the epoch boundary for the N+1 epoch.  The BankHash computation must not fall behind the ForkHash by more then 1 epoch or the cluster will halt.
+Computing the BankHash evaluates all the non VoteProgram instructions. Transactions that include VoteProgram and any non VoteProgram accounts fail immediately and are ignored.  The LS computation and finalizing the IsolationProgram::MoveDomains are done at the end of the next epoch.  The BankHash computation must not fall behind the ForkHash by more than 1 epoch or the cluster will halt.
 
 === VoteProgram::Vote ===
 
