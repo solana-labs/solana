@@ -13,7 +13,11 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
     },
+<<<<<<< HEAD
     crossbeam_channel::unbounded,
+=======
+    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+>>>>>>> e105547c1 (tvu and tpu timeout on joining its microservices (#24111))
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -35,11 +39,29 @@ use {
             Arc, Mutex, RwLock,
         },
         thread,
+        time::Duration,
     },
 };
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
+<<<<<<< HEAD
+=======
+/// Timeout interval when joining threads during TPU close
+const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
+
+// allow multiple connections for NAT and any open/close overlap
+pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
+
+pub struct TpuSockets {
+    pub transactions: Vec<UdpSocket>,
+    pub transaction_forwards: Vec<UdpSocket>,
+    pub vote: Vec<UdpSocket>,
+    pub broadcast: Vec<UdpSocket>,
+    pub transactions_quic: UdpSocket,
+}
+
+>>>>>>> e105547c1 (tvu and tpu timeout on joining its microservices (#24111))
 pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
@@ -172,6 +194,22 @@ impl Tpu {
     }
 
     pub fn join(self) -> thread::Result<()> {
+        // spawn a new thread to wait for tpu close
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            let _ = self.do_join();
+            sender.send(()).unwrap();
+        });
+
+        // exit can deadlock. put an upper-bound on how long we wait for it
+        let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            error!("timeout for closing tvu");
+        }
+        Ok(())
+    }
+
+    fn do_join(self) -> thread::Result<()> {
         let results = vec![
             self.fetch_stage.join(),
             self.sigverify_stage.join(),
