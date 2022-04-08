@@ -15,14 +15,36 @@ use {
         instruction::InstructionError,
         keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
+        pubkey::Pubkey,
         stake::{
             instruction::{LockupArgs, StakeInstruction},
             program::id,
             state::{Authorized, Lockup},
         },
         sysvar::clock::Clock,
+        transaction_context::{InstructionContext, TransactionContext},
     },
 };
+
+fn get_optional_pubkey<'a>(
+    transaction_context: &'a TransactionContext,
+    instruction_context: &'a InstructionContext,
+    index_in_instruction: usize,
+    should_be_signer: bool,
+) -> Result<Option<&'a Pubkey>, InstructionError> {
+    Ok(
+        if instruction_context.get_number_of_accounts() > index_in_instruction {
+            if should_be_signer && !instruction_context.is_signer(index_in_instruction)? {
+                return Err(InstructionError::MissingRequiredSignature);
+            }
+            Some(transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(index_in_instruction)?,
+            )?)
+        } else {
+            None
+        },
+    )
+}
 
 pub fn process_instruction(
     first_instruction_account: usize,
@@ -56,10 +78,12 @@ pub fn process_instruction(
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(3)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 3)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 3,
+                    false,
+                )?;
 
                 authorize(
                     me,
@@ -68,7 +92,7 @@ pub fn process_instruction(
                     stake_authorize,
                     require_custodian_for_locked_stake_authorize,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 authorize(
@@ -90,14 +114,17 @@ pub fn process_instruction(
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 3)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 3,
+                    false,
+                )?;
 
                 authorize_with_seed(
-                    invoke_context,
-                    first_instruction_account,
+                    transaction_context,
+                    instruction_context,
+                    me,
                     first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
@@ -105,12 +132,13 @@ pub fn process_instruction(
                     args.stake_authorize,
                     require_custodian_for_locked_stake_authorize,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 authorize_with_seed(
-                    invoke_context,
-                    first_instruction_account,
+                    transaction_context,
+                    instruction_context,
+                    me,
                     first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
@@ -153,6 +181,8 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(2)?;
             split(
                 invoke_context,
+                transaction_context,
+                instruction_context,
                 first_instruction_account,
                 lamports,
                 first_instruction_account + 1,
@@ -170,6 +200,8 @@ pub fn process_instruction(
             )?;
             merge(
                 invoke_context,
+                transaction_context,
+                instruction_context,
                 first_instruction_account,
                 first_instruction_account + 1,
                 &clock,
@@ -189,6 +221,8 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(5)?;
             withdraw(
                 invoke_context,
+                transaction_context,
+                instruction_context,
                 first_instruction_account,
                 lamports,
                 first_instruction_account + 1,
@@ -218,15 +252,19 @@ pub fn process_instruction(
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 instruction_context.check_number_of_instruction_accounts(4)?;
+                let staker_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 2)?,
+                )?;
+                let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+
                 let authorized = Authorized {
-                    staker: *keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                        .unsigned_key(),
-                    withdrawer: *keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account + 3,
-                    )?
-                    .signer_key()
-                    .ok_or(InstructionError::MissingRequiredSignature)?,
+                    staker: *staker_pubkey,
+                    withdrawer: *withdrawer_pubkey,
                 };
 
                 let rent =
@@ -252,14 +290,18 @@ pub fn process_instruction(
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let _current_authority =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
-                let authorized_pubkey =
-                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
-                        .signer_key()
-                        .ok_or(InstructionError::MissingRequiredSignature)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 4)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 4,
+                    false,
+                )?;
 
                 authorize(
                     me,
@@ -268,7 +310,7 @@ pub fn process_instruction(
                     stake_authorize,
                     true,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
@@ -283,18 +325,23 @@ pub fn process_instruction(
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
-                let authorized_pubkey =
-                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
-                        .signer_key()
-                        .ok_or(InstructionError::MissingRequiredSignature)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 4)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 4,
+                    false,
+                )?;
 
                 authorize_with_seed(
-                    invoke_context,
-                    first_instruction_account,
+                    transaction_context,
+                    instruction_context,
+                    me,
                     first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
@@ -302,7 +349,7 @@ pub fn process_instruction(
                     args.stake_authorize,
                     true,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
@@ -313,22 +360,17 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let custodian = if let Ok(custodian) =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)
-                {
-                    Some(
-                        *custodian
-                            .signer_key()
-                            .ok_or(InstructionError::MissingRequiredSignature)?,
-                    )
-                } else {
-                    None
-                };
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 2,
+                    true,
+                )?;
 
                 let lockup = LockupArgs {
                     unix_timestamp: lockup_checked.unix_timestamp,
                     epoch: lockup_checked.epoch,
-                    custodian,
+                    custodian: custodian_pubkey.cloned(),
                 };
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
                 set_lockup(me, &lockup, &signers, &clock)

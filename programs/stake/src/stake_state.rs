@@ -27,6 +27,7 @@ use {
             program::id,
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
+        transaction_context::{InstructionContext, TransactionContext},
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{collections::HashSet, convert::TryFrom},
@@ -438,8 +439,9 @@ pub fn authorize(
 }
 
 pub fn authorize_with_seed(
-    invoke_context: &InvokeContext,
-    stake_account_index: usize,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
+    stake_account: &KeyedAccount,
     authority_base_index: usize,
     authority_seed: &str,
     authority_owner: &Pubkey,
@@ -449,18 +451,17 @@ pub fn authorize_with_seed(
     clock: &Clock,
     custodian: Option<&Pubkey>,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let authority_base = keyed_account_at_index(keyed_accounts, authority_base_index)?;
     let mut signers = HashSet::default();
-    if let Some(base_pubkey) = authority_base.signer_key() {
+    if instruction_context.is_signer(authority_base_index)? {
+        let base_pubkey = transaction_context.get_key_of_account_at_index(
+            instruction_context.get_index_in_transaction(authority_base_index)?,
+        )?;
         signers.insert(Pubkey::create_with_seed(
             base_pubkey,
             authority_seed,
             authority_owner,
         )?);
     }
-    drop(authority_base);
-    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     authorize(
         stake_account,
         &signers,
@@ -560,6 +561,8 @@ pub fn set_lockup(
 
 pub fn split(
     invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
     stake_account_index: usize,
     lamports: u64,
     split_index: usize,
@@ -654,7 +657,10 @@ pub fn split(
             split.set_state(&StakeState::Initialized(split_meta))?;
         }
         StakeState::Uninitialized => {
-            if !signers.contains(stake_account.unsigned_key()) {
+            let stake_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(stake_account_index)?,
+            )?;
+            if !signers.contains(stake_pubkey) {
                 return Err(InstructionError::MissingRequiredSignature);
             }
         }
@@ -682,6 +688,8 @@ pub fn split(
 
 pub fn merge(
     invoke_context: &InvokeContext,
+    _transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
     stake_account_index: usize,
     source_account_index: usize,
     clock: &Clock,
@@ -694,14 +702,13 @@ pub fn merge(
     if source_account.owner()? != id() {
         return Err(InstructionError::IncorrectProgramId);
     }
-    let source_pubkey = source_account.unsigned_key();
-    drop(source_account);
-    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
     // Close the stake_account-reference loophole
-    if source_pubkey == stake_account.unsigned_key() {
+    if instruction_context.get_index_in_transaction(stake_account_index)?
+        == instruction_context.get_index_in_transaction(source_account_index)?
+    {
         return Err(InstructionError::InvalidArgument);
     }
-    let source_account = keyed_account_at_index(keyed_accounts, source_account_index)?;
+    let stake_account = keyed_account_at_index(keyed_accounts, stake_account_index)?;
 
     ic_msg!(invoke_context, "Checking if destination stake is mergeable");
     let stake_merge_kind = MergeKind::get_if_mergeable(
@@ -748,6 +755,8 @@ pub fn merge(
 
 pub fn withdraw(
     invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
     stake_account_index: usize,
     lamports: u64,
     to_index: usize,
@@ -758,11 +767,12 @@ pub fn withdraw(
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let withdraw_authority = keyed_account_at_index(keyed_accounts, withdraw_authority_index)?;
-    let withdraw_authority_pubkey = withdraw_authority
-        .signer_key()
-        .ok_or(InstructionError::MissingRequiredSignature)?;
-    drop(withdraw_authority);
+    let withdraw_authority_pubkey = transaction_context.get_key_of_account_at_index(
+        instruction_context.get_index_in_transaction(withdraw_authority_index)?,
+    )?;
+    if !instruction_context.is_signer(withdraw_authority_index)? {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
     let mut signers = HashSet::new();
     signers.insert(*withdraw_authority_pubkey);
 
@@ -806,14 +816,20 @@ pub fn withdraw(
 
     // verify that lockup has expired or that the withdrawal is signed by
     //   the custodian, both epoch and unix_timestamp must have passed
-    let custodian = custodian_index
-        .map(|custodian_index| keyed_account_at_index(keyed_accounts, custodian_index))
-        .transpose()?;
-    let custodian_pubkey = custodian.and_then(|keyed_account| keyed_account.signer_key());
+    let custodian_pubkey = if let Some(custodian_index) = custodian_index {
+        if instruction_context.is_signer(custodian_index)? {
+            Some(transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(custodian_index)?,
+            )?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     if lockup.is_in_force(clock, custodian_pubkey) {
         return Err(StakeError::LockupInForce.into());
     }
-    drop(custodian);
 
     let lamports_and_reserve = checked_add(lamports, reserve)?;
     // if the stake is active, we mustn't allow the account to go away
