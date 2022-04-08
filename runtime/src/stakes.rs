@@ -56,6 +56,10 @@ impl StakesCache {
     }
 
     pub fn check_and_store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+        // TODO: If the account is already cached as a vote or stake account
+        // but the owner changes, then this needs to evict the account from
+        // the cache. see:
+        // https://github.com/solana-labs/solana/pull/24200#discussion_r849935444
         if solana_vote_program::check_id(account.owner()) {
             let new_vote_account = if account.lamports() != 0
                 && VoteState::is_correct_size_and_initialized(account.data())
