@@ -111,6 +111,14 @@ impl CostTracker {
         self.remove_transaction_cost(tx_cost);
     }
 
+    pub fn block_cost(&self) -> u64 {
+        self.block_cost
+    }
+
+    pub fn transaction_count(&self) -> u64 {
+        self.transaction_count
+    }
+
     pub fn report_stats(&self, bank_slot: Slot) {
         // skip reporting if block is empty
         if self.transaction_count == 0 {

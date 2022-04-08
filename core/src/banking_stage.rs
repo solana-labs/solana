@@ -2902,6 +2902,131 @@ mod tests {
         Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
+    #[test]
+    fn test_bank_process_and_record_transactions_cost_tracker() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        {
+            let blockstore = Blockstore::open(ledger_path.path())
+                .expect("Expected to be able to open database ledger");
+            let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
+            );
+            let recorder = poh_recorder.recorder();
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
+
+            poh_recorder.lock().unwrap().set_bank(&bank);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+
+            let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
+            let get_tx_count = || bank.read_cost_tracker().unwrap().transaction_count();
+            assert_eq!(get_block_cost(), 0);
+            assert_eq!(get_tx_count(), 0);
+
+            //
+            // TEST: cost tracker's block cost increases when successfully processing a tx
+            //
+
+            let transactions = sanitize_transactions(vec![system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )]);
+
+            let process_transactions_batch_output = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &recorder,
+                0,
+                None,
+                &gossip_vote_sender,
+                &qos_service,
+            );
+
+            let ExecuteAndCommitTransactionsOutput {
+                executed_with_successful_result_count,
+                commit_transactions_result,
+                ..
+            } = process_transactions_batch_output.execute_and_commit_transactions_output;
+            assert_eq!(executed_with_successful_result_count, 1);
+            assert!(commit_transactions_result.is_ok());
+
+            let single_transfer_cost = get_block_cost();
+            assert_ne!(single_transfer_cost, 0);
+            assert_eq!(get_tx_count(), 1);
+
+            //
+            // TEST: When a tx in a batch can't be executed (here because of account
+            // locks), then its cost does not affect the cost tracker.
+            //
+
+            let allocate_keypair = Keypair::new();
+            let transactions = sanitize_transactions(vec![
+                system_transaction::transfer(&mint_keypair, &pubkey, 2, genesis_config.hash()),
+                // intentionally use a tx that has a different cost
+                system_transaction::allocate(
+                    &mint_keypair,
+                    &allocate_keypair,
+                    genesis_config.hash(),
+                    1,
+                ),
+            ]);
+
+            let process_transactions_batch_output = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &recorder,
+                0,
+                None,
+                &gossip_vote_sender,
+                &qos_service,
+            );
+
+            let ExecuteAndCommitTransactionsOutput {
+                executed_with_successful_result_count,
+                commit_transactions_result,
+                retryable_transaction_indexes,
+                ..
+            } = process_transactions_batch_output.execute_and_commit_transactions_output;
+            assert_eq!(executed_with_successful_result_count, 1);
+            assert!(commit_transactions_result.is_ok());
+            assert_eq!(retryable_transaction_indexes, vec![1]);
+
+            assert_eq!(get_block_cost(), 2 * single_transfer_cost);
+            assert_eq!(get_tx_count(), 2);
+
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
+        }
+        Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
     fn simulate_poh(
         record_receiver: CrossbeamReceiver<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
