@@ -129,7 +129,6 @@ pub struct BankingStageStats {
     last_report: AtomicInterval,
     id: u32,
     receive_and_buffer_packets_count: AtomicUsize,
-    dropped_packet_batches_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
@@ -166,7 +165,6 @@ impl BankingStageStats {
         0 == self
             .receive_and_buffer_packets_count
             .load(Ordering::Relaxed) as u64
-            + self.dropped_packet_batches_count.load(Ordering::Relaxed) as u64
             + self.dropped_packets_count.load(Ordering::Relaxed) as u64
             + self
                 .dropped_duplicated_packets_count
@@ -209,11 +207,6 @@ impl BankingStageStats {
                     "receive_and_buffer_packets_count",
                     self.receive_and_buffer_packets_count
                         .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "dropped_packet_batches_count",
-                    self.dropped_packet_batches_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -698,8 +691,8 @@ impl BankingStage {
             // just filter the remaining packets for the invalid (e.g. too old) ones
             // if the working_bank is available
             let mut end_of_slot_filtering_time = Measure::start("end_of_slot_filtering");
-            // TODO: This doesn't have to be done at the end of every slot
-            let original_unprocessed_packets_len = buffered_packet_batches.len();
+            // TODO: This doesn't have to be done at the end of every slot, can instead
+            // hold multiple unbuffered queues without merging them
 
             // TODO: update this here to filter the rest of the packets remaining
             // TODO: this needs to be done even if there is no end_of_slot.working_bank
@@ -2001,7 +1994,6 @@ impl BankingStage {
 
         let packet_batch_iter = packet_batches.into_iter();
         let mut dropped_packets_count = 0;
-        let mut dropped_packet_batches_count = 0;
         let mut newly_buffered_packets_count = 0;
         for packet_batch in packet_batch_iter {
             let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
@@ -2018,7 +2010,6 @@ impl BankingStage {
                 buffered_packet_batches,
                 &packet_batch,
                 &packet_indexes,
-                &mut dropped_packet_batches_count,
                 &mut dropped_packets_count,
                 &mut newly_buffered_packets_count,
                 banking_stage_stats,
@@ -2042,9 +2033,6 @@ impl BankingStage {
             .receive_and_buffer_packets_count
             .fetch_add(packet_count, Ordering::Relaxed);
         banking_stage_stats
-            .dropped_packet_batches_count
-            .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
-        banking_stage_stats
             .dropped_packets_count
             .fetch_add(dropped_packets_count, Ordering::Relaxed);
         banking_stage_stats
@@ -2064,7 +2052,6 @@ impl BankingStage {
         unprocessed_packet_batches: &mut UnprocessedPacketBatches,
         packet_batch: &PacketBatch,
         packet_indexes: &[usize],
-        dropped_packet_batches_count: &mut usize,
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         banking_stage_stats: &mut BankingStageStats,
@@ -2187,7 +2174,6 @@ mod tests {
         std::{
             borrow::Cow,
             collections::HashSet,
-            net::SocketAddr,
             path::Path,
             sync::atomic::{AtomicBool, Ordering},
             thread::sleep,
