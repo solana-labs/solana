@@ -56,6 +56,7 @@ use {
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
+        stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
@@ -1262,7 +1263,7 @@ pub struct Bank {
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
-    delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
+    delegations: Vec<(Pubkey, StakeAccount)>,
 }
 
 struct LoadVoteAndStakeAccountsResult {
@@ -2616,31 +2617,28 @@ impl Bank {
                     if invalid_vote_keys.contains_key(vote_pubkey) {
                         return;
                     }
-
-                    let stake_delegation = match self.get_account_with_fixed_root(stake_pubkey) {
-                        Some(stake_account) => {
-                            if stake_account.owner() != &solana_stake_program::id() {
-                                invalid_stake_keys
-                                    .insert(*stake_pubkey, InvalidCacheEntryReason::WrongOwner);
-                                return;
-                            }
-
-                            match stake_account.state().ok() {
-                                Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
-                                None => {
-                                    invalid_stake_keys
-                                        .insert(*stake_pubkey, InvalidCacheEntryReason::BadState);
-                                    return;
-                                }
-                            }
-                        }
+                    let stake_account = match self.get_account_with_fixed_root(stake_pubkey) {
+                        Some(stake_account) => stake_account,
                         None => {
                             invalid_stake_keys
                                 .insert(*stake_pubkey, InvalidCacheEntryReason::Missing);
                             return;
                         }
                     };
-
+                    let stake_account = match StakeAccount::try_from(stake_account) {
+                        Ok(stake_account) => stake_account,
+                        Err(stake_account::Error::InvalidOwner { .. }) => {
+                            invalid_stake_keys
+                                .insert(*stake_pubkey, InvalidCacheEntryReason::WrongOwner);
+                            return;
+                        }
+                        Err(stake_account::Error::InstructionError(_)) => {
+                            invalid_stake_keys
+                                .insert(*stake_pubkey, InvalidCacheEntryReason::BadState);
+                            return;
+                        }
+                    };
+                    let stake_delegation = (*stake_pubkey, stake_account);
                     let mut vote_delegations = if let Some(vote_delegations) =
                         vote_with_stake_delegations_map.get_mut(vote_pubkey)
                     {
@@ -2754,9 +2752,9 @@ impl Bank {
 
                     delegations
                         .par_iter()
-                        .map(|(_stake_pubkey, (stake_state, _stake_account))| {
+                        .map(|(_stake_pubkey, stake_account)| {
                             stake_state::calculate_points(
-                                stake_state,
+                                stake_account.stake_state(),
                                 vote_state,
                                 Some(&stake_history),
                             )
@@ -2797,66 +2795,62 @@ impl Bank {
         let mut m = Measure::start("redeem_rewards");
         let mut stake_rewards = thread_pool.install(|| {
             stake_delegation_iterator
-                .filter_map(
-                    |(
-                        vote_pubkey,
-                        vote_state,
-                        (stake_pubkey, (stake_state, mut stake_account)),
-                    )| {
-                        // curry closure to add the contextual stake_pubkey
-                        let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
-                            // inner
-                            move |inner_event: &_| {
-                                outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
-                            }
-                        });
-                        let redeemed = stake_state::redeem_rewards(
-                            rewarded_epoch,
-                            stake_state,
-                            &mut stake_account,
-                            &vote_state,
-                            &point_value,
-                            Some(&stake_history),
-                            reward_calc_tracer.as_ref(),
-                            fix_activating_credits_observed,
-                        );
-                        if let Ok((stakers_reward, voters_reward)) = redeemed {
-                            // track voter rewards
-                            if let Some((
-                                _vote_account,
-                                _commission,
-                                vote_rewards_sum,
-                                vote_needs_store,
-                            )) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
-                            {
-                                *vote_needs_store = true;
-                                *vote_rewards_sum = vote_rewards_sum.saturating_add(voters_reward);
-                            }
-
-                            // store stake account even if stakers_reward is 0
-                            // because credits observed has changed
-                            self.store_account(&stake_pubkey, &stake_account);
-
-                            if stakers_reward > 0 {
-                                return Some((
-                                    stake_pubkey,
-                                    RewardInfo {
-                                        reward_type: RewardType::Staking,
-                                        lamports: stakers_reward as i64,
-                                        post_balance: stake_account.lamports(),
-                                        commission: Some(vote_state.commission),
-                                    },
-                                ));
-                            }
-                        } else {
-                            debug!(
-                                "stake_state::redeem_rewards() failed for {}: {:?}",
-                                stake_pubkey, redeemed
-                            );
+                .filter_map(|(vote_pubkey, vote_state, (stake_pubkey, stake_account))| {
+                    // curry closure to add the contextual stake_pubkey
+                    let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
+                        // inner
+                        move |inner_event: &_| {
+                            outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
                         }
-                        None
-                    },
-                )
+                    });
+                    let (mut stake_account, stake_state) =
+                        <(AccountSharedData, StakeState)>::from(stake_account);
+                    let redeemed = stake_state::redeem_rewards(
+                        rewarded_epoch,
+                        stake_state,
+                        &mut stake_account,
+                        &vote_state,
+                        &point_value,
+                        Some(&stake_history),
+                        reward_calc_tracer.as_ref(),
+                        fix_activating_credits_observed,
+                    );
+                    if let Ok((stakers_reward, voters_reward)) = redeemed {
+                        // track voter rewards
+                        if let Some((
+                            _vote_account,
+                            _commission,
+                            vote_rewards_sum,
+                            vote_needs_store,
+                        )) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
+                        {
+                            *vote_needs_store = true;
+                            *vote_rewards_sum = vote_rewards_sum.saturating_add(voters_reward);
+                        }
+
+                        // store stake account even if stakers_reward is 0
+                        // because credits observed has changed
+                        self.store_account(&stake_pubkey, &stake_account);
+
+                        if stakers_reward > 0 {
+                            return Some((
+                                stake_pubkey,
+                                RewardInfo {
+                                    reward_type: RewardType::Staking,
+                                    lamports: stakers_reward as i64,
+                                    post_balance: stake_account.lamports(),
+                                    commission: Some(vote_state.commission),
+                                },
+                            ));
+                        }
+                    } else {
+                        debug!(
+                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            stake_pubkey, redeemed
+                        );
+                    }
+                    None
+                })
                 .collect()
         });
         m.stop();
@@ -9084,9 +9078,13 @@ pub(crate) mod tests {
                 )| {
                     delegations
                         .iter()
-                        .map(move |(_stake_pubkey, (stake_state, _stake_account))| {
-                            stake_state::calculate_points(stake_state, &vote_state, None)
-                                .unwrap_or(0)
+                        .map(move |(_stake_pubkey, stake_account)| {
+                            stake_state::calculate_points(
+                                stake_account.stake_state(),
+                                &vote_state,
+                                None, // stake_history
+                            )
+                            .unwrap_or_default()
                         })
                         .sum::<u128>()
                 },
