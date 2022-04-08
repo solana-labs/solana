@@ -49,7 +49,7 @@ pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
 pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
 pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
-/// interval to report
+/// interval to report 60s
 const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
 
 lazy_static! {
