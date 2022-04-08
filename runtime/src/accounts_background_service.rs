@@ -59,7 +59,8 @@ impl DropCallback for SendDroppedBankCallback {
             panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
         }
 
-        if let Err(e) = self.sender.send((bank.slot(), bank.bank_id())) {
+        let bank_id = bank.bank_id() & 0xefff_ffff_ffff_ffff;
+        if let Err(e) = self.sender.send((bank.slot(), bank_id)) {
             warn!("Error sending dropped banks: {:?}", e);
         }
     }
