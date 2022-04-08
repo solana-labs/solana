@@ -70,6 +70,7 @@ fn make_accounts_txs(
     total_num_transactions: usize,
     hash: Hash,
     same_payer: bool,
+    same_write_account: bool,
 ) -> Vec<Transaction> {
     let to_pubkey = solana_sdk::pubkey::new_rand();
     let payer_key = Keypair::new();
@@ -82,7 +83,9 @@ fn make_accounts_txs(
             if !same_payer {
                 new.message.account_keys[0] = solana_sdk::pubkey::new_rand();
             }
-            new.message.account_keys[1] = solana_sdk::pubkey::new_rand();
+            if !same_write_account {
+                new.message.account_keys[1] = solana_sdk::pubkey::new_rand();
+            }
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
@@ -139,6 +142,12 @@ fn main() {
                 .help("Use the same payer for transfers"),
         )
         .arg(
+            Arg::with_name("same_write_account")
+                .long("same-write-account")
+                .takes_value(false)
+                .help("Use the destination account for transfers"),
+        )
+        .arg(
             Arg::with_name("iterations")
                 .long("iterations")
                 .takes_value(true)
@@ -183,8 +192,13 @@ fn main() {
     info!("threads: {} txs: {}", num_threads, total_num_transactions);
 
     let same_payer = matches.is_present("same_payer");
-    let mut transactions =
-        make_accounts_txs(total_num_transactions, genesis_config.hash(), same_payer);
+    let same_write_account = matches.is_present("same_write_account");
+    let mut transactions = make_accounts_txs(
+        total_num_transactions,
+        genesis_config.hash(),
+        same_payer,
+        same_write_account,
+    );
 
     // fund all the accounts
     transactions.iter().for_each(|tx| {
