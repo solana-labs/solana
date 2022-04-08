@@ -5,9 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{
-        clock::Slot, pubkey::Pubkey, signature::Signature, transaction::SanitizedTransaction,
-    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction},
     std::collections::HashMap,
 };
 
@@ -41,6 +39,7 @@ pub struct CostTracker {
     /// The amount of total account data size remaining.  If `Some`, then do not add transactions
     /// that would cause `account_data_size` to exceed this limit.
     account_data_size_limit: Option<u64>,
+<<<<<<< HEAD
 
     // Transactions have passed would_fit check, is being executed.
     // If the execution is successful, it's actual Units can be committed
@@ -48,6 +47,8 @@ pub struct CostTracker {
     // cost_tracker.
     pending_transactions: HashMap<Signature, TransactionCost>,
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
+=======
+>>>>>>> 924b8ea1e (Adjustments to cost_tracker updates)
 }
 
 impl Default for CostTracker {
@@ -71,7 +72,6 @@ impl Default for CostTracker {
             transaction_count: 0,
             account_data_size: 0,
             account_data_size_limit: None,
-            pending_transactions: HashMap::new(),
         }
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
     }
@@ -125,7 +125,7 @@ impl CostTracker {
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
     pub fn try_add(
         &mut self,
-        transaction: &SanitizedTransaction,
+        _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
     ) -> Result<u64, CostTrackerError> {
 <<<<<<< HEAD
@@ -134,28 +134,26 @@ impl CostTracker {
         self.add_transaction(&tx_cost.writable_accounts, cost, transaction);
 =======
         self.would_fit(tx_cost)?;
+<<<<<<< HEAD
         self.pending_transactions
             .insert(*transaction.signature(), tx_cost.clone());
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
+=======
+        self.add_transaction_cost(tx_cost);
+>>>>>>> 924b8ea1e (Adjustments to cost_tracker updates)
         Ok(self.block_cost)
     }
 
-    pub fn commit_transaction(
+    pub fn update_execution_cost(
         &mut self,
-        transaction: &SanitizedTransaction,
-        actual_units: Option<u64>,
+        _estimated_tx_cost: &TransactionCost,
+        _actual_execution_cost: u64,
     ) {
-        if let Some(mut tx_cost) = self.pending_transactions.remove(transaction.signature()) {
-            if let Some(actual_units) = actual_units {
-                // using actual units to update cost tracker if available
-                tx_cost.execution_cost = actual_units;
-            }
-            self.add_transaction(&tx_cost);
-        }
+        // adjust block_cost / vote_cost / account_cost by (actual_execution_cost - execution_cost)
     }
 
-    pub fn cancel_transaction(&mut self, transaction: &SanitizedTransaction) {
-        self.pending_transactions.remove(transaction.signature());
+    pub fn remove(&mut self, tx_cost: &TransactionCost) {
+        self.remove_transaction_cost(tx_cost);
     }
 
     pub fn report_stats(&self, bank_slot: Slot) {
@@ -196,12 +194,11 @@ impl CostTracker {
     }
 
     fn would_fit(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
-        let mut writable_account = vec![];
-        writable_account.extend(&tx_cost.writable_accounts);
-        let mut cost = tx_cost.sum();
-        let mut account_data_size = tx_cost.account_data_size;
-        let mut vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
+        let writable_accounts = &tx_cost.writable_accounts;
+        let cost = tx_cost.sum();
+        let vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
 
+<<<<<<< HEAD
         for tx_cost in self.pending_transactions.values() {
             writable_account.extend(&tx_cost.writable_accounts);
             cost = cost.saturating_add(tx_cost.sum());
@@ -228,6 +225,8 @@ impl CostTracker {
         vote_cost: u64,
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
     ) -> Result<(), CostTrackerError> {
+=======
+>>>>>>> 924b8ea1e (Adjustments to cost_tracker updates)
         // check against the total package cost
         if self.block_cost.saturating_add(cost) > self.block_cost_limit {
             return Err(CostTrackerError::WouldExceedBlockMaxLimit);
@@ -243,8 +242,26 @@ impl CostTracker {
             return Err(CostTrackerError::WouldExceedAccountMaxLimit);
         }
 
+<<<<<<< HEAD
+=======
+        // NOTE: Check if the total accounts data size is exceeded *before* the block accounts data
+        // size.  This way, transactions are not unnecessarily retried.
+        let account_data_size = self
+            .account_data_size
+            .saturating_add(tx_cost.account_data_size);
+        if let Some(account_data_size_limit) = self.account_data_size_limit {
+            if account_data_size > account_data_size_limit {
+                return Err(CostTrackerError::WouldExceedAccountDataTotalLimit);
+            }
+        }
+
+        if account_data_size > MAX_ACCOUNT_DATA_BLOCK_LEN {
+            return Err(CostTrackerError::WouldExceedAccountDataBlockLimit);
+        }
+
+>>>>>>> 924b8ea1e (Adjustments to cost_tracker updates)
         // check each account against account_cost_limit,
-        for account_key in keys.iter() {
+        for account_key in writable_accounts.iter() {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost.saturating_add(cost) > self.account_cost_limit {
@@ -261,10 +278,14 @@ impl CostTracker {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     fn add_transaction(&mut self, keys: &[Pubkey], cost: u64, transaction: &SanitizedTransaction) {
         for account_key in keys.iter() {
 =======
     fn add_transaction(&mut self, tx_cost: &TransactionCost) {
+=======
+    fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
+>>>>>>> 924b8ea1e (Adjustments to cost_tracker updates)
         let cost = tx_cost.sum();
         for account_key in tx_cost.writable_accounts.iter() {
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
@@ -285,6 +306,25 @@ impl CostTracker {
             .saturating_add(tx_cost.account_data_size);
 >>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
         self.transaction_count = self.transaction_count.saturating_add(1);
+    }
+
+    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
+        let cost = tx_cost.sum();
+        for account_key in tx_cost.writable_accounts.iter() {
+            let account_cost = self
+                .cost_by_writable_accounts
+                .entry(*account_key)
+                .or_insert(0);
+            *account_cost = account_cost.saturating_sub(cost);
+        }
+        self.block_cost = self.block_cost.saturating_sub(cost);
+        if tx_cost.is_simple_vote {
+            self.vote_cost = self.vote_cost.saturating_sub(cost);
+        }
+        self.account_data_size = self
+            .account_data_size
+            .saturating_sub(tx_cost.account_data_size);
+        self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 }
 
