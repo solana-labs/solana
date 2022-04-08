@@ -978,7 +978,7 @@ impl ClusterInfo {
         hashes: Vec<(Slot, Hash)>,
     ) -> Result<(), ClusterInfoError> {
         if self.inhibit_snapshot_serving {
-            return;
+            return Ok(());
         }
 
         if hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
