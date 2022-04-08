@@ -21,11 +21,7 @@ pub struct TransactionCost {
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
     pub execution_cost: u64,
-<<<<<<< HEAD
-=======
-    pub account_data_size: u64,
     pub is_simple_vote: bool,
->>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
 }
 
 impl Default for TransactionCost {
@@ -36,11 +32,7 @@ impl Default for TransactionCost {
             write_lock_cost: 0u64,
             data_bytes_cost: 0u64,
             execution_cost: 0u64,
-<<<<<<< HEAD
-=======
-            account_data_size: 0u64,
             is_simple_vote: false,
->>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
         }
     }
 }
@@ -116,11 +108,7 @@ impl CostModel {
         self.get_write_lock_cost(&mut tx_cost, transaction);
         tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
         tx_cost.execution_cost = self.get_transaction_cost(transaction);
-<<<<<<< HEAD
-=======
-        tx_cost.account_data_size = self.calculate_account_data_size(transaction);
         tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
->>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
         tx_cost

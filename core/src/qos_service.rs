@@ -151,12 +151,6 @@ impl QosService {
         (select_results, num_included)
     }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-    pub fn commit_transaction_cost(
-        &self,
-=======
     /// Update the transaction cost in the cost_tracker with the real cost for
     /// transactions that were executed successfully;
     /// Otherwise remove the cost from the cost tracker, therefore preventing cost_tracker
@@ -165,7 +159,6 @@ impl QosService {
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
         retryable_transaction_indexes: &[usize],
->>>>>>> 924b8ea1e (Adjustments to cost_tracker updates)
         bank: &Arc<Bank>,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
@@ -187,14 +180,6 @@ impl QosService {
             });
     }
 
-    // metrics are reported by bank slot
-    pub fn report_metrics(&self, bank: Arc<Bank>) {
-        self.report_sender
-            .send(QosMetrics::BlockBatchUpdate { bank })
-            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
-    }
-
->>>>>>> 9e07272af (- Only commit successfully executed transactions' cost to cost_tracker;)
     pub fn accumulate_estimated_transaction_costs(
         &self,
         cost_details: &BatchedTransactionCostDetails,
