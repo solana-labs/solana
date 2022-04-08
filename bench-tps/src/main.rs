@@ -28,7 +28,6 @@ fn main() {
 
     let cli::Config {
         entrypoint_addr,
-        faucet_addr,
         id,
         num_nodes,
         tx_count,
@@ -142,7 +141,6 @@ fn main() {
     } else {
         generate_and_fund_keypairs(
             client.clone(),
-            Some(*faucet_addr),
             id,
             keypair_count,
             *num_lamports_per_account,

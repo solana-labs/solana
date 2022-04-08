@@ -61,7 +61,6 @@ fn test_bench_tps_local_cluster(config: Config) {
     let keypair_count = config.tx_count * config.keypair_multiplier;
     let keypairs = generate_and_fund_keypairs(
         client.clone(),
-        Some(faucet_addr),
         &config.id,
         keypair_count,
         lamports_per_account,
