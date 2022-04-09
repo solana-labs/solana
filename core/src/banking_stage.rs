@@ -82,7 +82,7 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
-const UNPROCESSED_BUFFER_STEP_SIZE: usize = 10;
+const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
