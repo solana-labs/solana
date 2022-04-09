@@ -183,6 +183,13 @@ impl UnprocessedPacketBatches {
     }
 
     pub fn push(&mut self, deserialized_packet: DeserializedPacket) -> Option<DeserializedPacket> {
+        if self
+            .message_hash_to_transaction
+            .contains_key(&deserialized_packet.message_hash())
+        {
+            return None;
+        }
+
         if self.len() >= self.batch_limit {
             // Optimized to not allocate by calling `MinMaxHeap::push_pop_min()`
             Some(self.push_pop_min(deserialized_packet))
@@ -353,7 +360,22 @@ mod tests {
     }
 
     #[test]
-    fn test_pop_max_n() {
+    fn test_unprocessed_packet_batches_insert_pop_same_packet() {
+        let packet = packet_with_sender_stake(1, None);
+        let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
+        unprocessed_packet_batches.push(packet.clone());
+        unprocessed_packet_batches.push(packet.clone());
+
+        // There was only one unique packet, so that one should be the
+        // only packet returned
+        assert_eq!(
+            unprocessed_packet_batches.pop_max_n(2).unwrap(),
+            vec![packet]
+        );
+    }
+
+    #[test]
+    fn test_unprocessed_packet_batches_pop_max_n() {
         let num_packets = 10;
         let packets_iter =
             std::iter::repeat_with(|| packet_with_sender_stake(1, None)).take(num_packets);
