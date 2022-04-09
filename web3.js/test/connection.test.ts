@@ -23,6 +23,7 @@ import invariant from '../src/util/assert';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {MOCK_PORT, url} from './url';
 import {
+  AccountInfo,
   BLOCKHASH_CACHE_TIMEOUT_MS,
   BlockResponse,
   BlockSignatures,
@@ -3550,70 +3551,36 @@ describe('Connection', function () {
       );
     });
 
-    // it('account change notification', async () => {
-    //   if (mockServer) {
-    //     console.log('non-live test skipped');
-    //     return;
-    //   }
+    it('account change notification', async () => {
+      if (mockServer) {
+        console.log('non-live test skipped');
+        return;
+      }
+      const connection = new Connection(url, 'confirmed');
+      const owner = Keypair.generate();
 
-    //   const connection = new Connection(url, 'confirmed');
-    //   const owner = Keypair.generate();
-    //   const programAccount = Keypair.generate();
-
-    //   const mockCallback = jest.fn();
-
-    //   const subscriptionId = connection.onAccountChange(
-    //     programAccount.publicKey,
-    //     mockCallback,
-    //     'confirmed',
-    //   );
-
-    //   const balanceNeeded = Math.max(
-    //     await connection.getMinimumBalanceForRentExemption(0),
-    //     1,
-    //   );
-
-    //   let signature = await connection.requestAirdrop(
-    //     owner.publicKey,
-    //     LAMPORTS_PER_SOL,
-    //   );
-    //   await connection.confirmTransaction(signature);
-    //   try {
-    //     const transaction = new Transaction().add(
-    //       SystemProgram.transfer({
-    //         fromPubkey: owner.publicKey,
-    //         toPubkey: programAccount.publicKey,
-    //         lamports: balanceNeeded,
-    //       }),
-    //     );
-    //     await sendAndConfirmTransaction(connection, transaction, [owner], {
-    //       commitment: 'confirmed',
-    //     });
-    //   } catch (err) {
-    //     await connection.removeAccountChangeListener(subscriptionId);
-    //     throw err;
-    //   }
-
-    //   // Wait for mockCallback to receive a call
-    //   let i = 0;
-    //   for (;;) {
-    //     if (mockCallback.mock.calls.length > 0) {
-    //       break;
-    //     }
-
-    //     if (++i === 30) {
-    //       throw new Error('Account change notification not observed');
-    //     }
-    //     // Sleep for a 1/4 of a slot, notifications only occur after a block is
-    //     // processed
-    //     await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
-    //   }
-
-    //   await connection.removeAccountChangeListener(subscriptionId);
-
-    //   expect(mockCallback.mock.calls[0][0].lamports).to.eq(balanceNeeded);
-    //   expect(mockCallback.mock.calls[0][0].owner).to.eq(SystemProgram.programId);
-    // });
+      let subscriptionId;
+      try {
+        const notificationPromise = new Promise<AccountInfo<Buffer>>(
+          resolve => {
+            subscriptionId = connection.onAccountChange(
+              owner.publicKey,
+              resolve,
+              'confirmed',
+            );
+          },
+        );
+        connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
+        const notificationPayload = await notificationPromise;
+        expect(notificationPayload.lamports).to.eq(LAMPORTS_PER_SOL);
+        expect(notificationPayload.owner.equals(SystemProgram.programId)).to.be
+          .true;
+      } finally {
+        if (subscriptionId != null) {
+          connection.removeAccountChangeListener(subscriptionId);
+        }
+      }
+    });
 
     it('program account change notification', async () => {
       connection._commitment = 'confirmed';
