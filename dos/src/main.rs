@@ -81,6 +81,20 @@ struct TransactionGenerator {
     transaction_params: TransactionParams,
 }
 
+enum TransactionType {
+    SingleTransfer,
+    MultiTransfer,
+    AccountCreation,
+}
+
+/// This trait provides functionality to generate several types of transactions:
+/// 1. Without blockhash
+/// 1.1 With valid signatures (number of signatures is configurable)
+/// 1.2 With invalid signatures (number of signatures is configurable)
+/// 2. With blockhash (but still invalid due to high amount to transfer):
+/// 2.1 Transfer payer -> destination (1 instruction per transaction)
+/// 2.2 Transfer payer -> multiple destinations (many instructions per transaction)
+/// 2.3 Create account transaction
 impl TransactionGenerator {
     fn new(transaction_params: TransactionParams) -> Self {
         TransactionGenerator {
@@ -92,11 +106,32 @@ impl TransactionGenerator {
 
     fn generate(
         &mut self,
-        payer: Option<&Keypair>,
+        payer: &Option<Keypair>,
         kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
         rpc_client: &Arc<RpcClient>,
     ) -> Transaction {
+        if self.transaction_params.valid_blockhash {
+            // payer and client must be provided
+            let payer = payer.unwrap();
+            // kpvals must be Some and contain at least one element
+            if kpvals.is_none() || kpvals.unwrap().len() == 0 {
+                panic!("Expected at least one destination keypair to create transaction");
+            }
+            let kpvals = kpvals.unwrap();
+            self.generate_with_blockhash(&payer, kpvals, rpc_client)
+        } else {
+            self.generate_without_blockhash(kpvals)
+        }
+    }
+
+    fn generate_with_blockhash(
+        &mut self,
+        payer: &Keypair,
+        destinations: Vec<&Keypair>,
+        rpc_client: &Arc<RpcClient>,
+    ) -> Transaction {
         // generate a new blockhash every 1sec
+        // TODO use thin client instead?
         if self.transaction_params.valid_blockhash
             && self.last_generated.elapsed().as_millis() > 1000
         {
@@ -104,72 +139,76 @@ impl TransactionGenerator {
             self.last_generated = Instant::now();
         }
 
-        // in order to evaluate the performance implications of the different transactions
-        // we create here transactions which are filtered out on different stages of processing pipeline
+        let transaction_type = TransactionType::SingleTransfer;
+        match transaction_type {
+            TransactionType::SingleTransfer => {
+                self.create_single_transfer_transaction(payer, &destinations[0].pubkey())
+            }
+            TransactionType::MultiTransfer => {
+                self.create_multi_transfer_transaction(payer, &destinations)
+            }
+            TransactionType::AccountCreation => {
+                self.create_account_transaction(payer, destinations[0])
+            }
+        }
+    }
 
+    /// Creates a transaction which transfers some lammports from payer to destination
+    fn create_single_transfer_transaction(&self, payer: &Keypair, to: &Pubkey) -> Transaction {
+        let to_transfer = 500_000_000; // specify amount which will cause error
+        system_transaction::transfer(payer, to, to_transfer, self.blockhash)
+    }
+
+    /// Creates a transaction which transfers some lammports from payer to several destinations
+    fn create_multi_transfer_transaction(
+        &self,
+        payer: &Keypair,
+        to: &Vec<&Keypair>,
+    ) -> Transaction {
+        let to_transfer: u64 = 500_000_000; // specify amount which will cause error
+        let to: Vec<(Pubkey, u64)> = to.iter().map(|to| (to.pubkey(), to_transfer)).collect();
+        let instructions = system_instruction::transfer_many(&payer.pubkey(), to.as_slice());
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[payer], self.blockhash);
+        tx
+    }
+
+    /// Creates a transaction which opens account
+    fn create_account_transaction(&self, payer: &Keypair, to: &Keypair) -> Transaction {
+        let program_id = system_program::id(); // some valid program id
+        let balance = 500_000_000;
+        let space = 1024;
+        let instructions = vec![system_instruction::create_account(
+            &payer.pubkey(),
+            &to.pubkey(),
+            balance,
+            space,
+            &program_id,
+        )];
+
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
+        let signers: Vec<&Keypair> = vec![payer, to];
+        Transaction::new(&signers, message, self.blockhash)
+    }
+
+    fn generate_without_blockhash(
+        &mut self,
+        kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
+    ) -> Transaction {
         // create an arbitrary valid instruction
         let lamports = 5;
         let transfer_instruction = SystemInstruction::Transfer { lamports };
         let program_ids = vec![system_program::id(), stake::program::id()];
+        let instructions = vec![CompiledInstruction::new(
+            0,
+            &transfer_instruction,
+            vec![0, 1],
+        )];
 
-        let payer = Some(kpvals.as_ref().unwrap()[0]);
-        // transaction with payer, in this case signatures are valid and num_signatures is irrelevant
-        // random payer will cause error "attempt to debit an account but found no record of a prior credit"
-        // if payer is correct, it will trigger error with not enough signatures
-        if let Some(payer) = payer {
-            // Option 1: 1->1 transfer
-            //let to = Keypair::new(); //kpvals.as_ref().unwrap()[1];
-            //system_transaction::transfer(payer, &to.pubkey(), 500_000_000, self.blockhash)
-
-            // Option 2: 1->many
-            //let kpvals = kpvals.unwrap();
-            //let t: Vec<(Pubkey, u64)> = kpvals.iter().map(|to| (to.pubkey(), 1) ).collect();
-            //let instructions = system_instruction::transfer_many(&payer.pubkey(), t.as_slice());
-            //let message = Message::new(&instructions, Some(&payer.pubkey()));
-            //let mut tx = Transaction::new_unsigned(message);
-            //tx.sign(&[payer], self.blockhash);
-            //tx
-
-            // Option 3: create account
-            let balance = 10;
-            let space = 1024;
-            let keypair = Keypair::new(); // kpvals.as_ref().unwrap()[1];
-            let instructions = vec![system_instruction::create_account(
-                &payer.pubkey(),
-                &keypair.pubkey(),
-                balance,
-                space,
-                &program_ids[0],
-            )];
-
-            let message = Message::new(&instructions, Some(&payer.pubkey()));
-            let signers: Vec<&Keypair> = vec![payer, &keypair];
-            Transaction::new(&signers, message, self.blockhash)
-
-            /*let instruction = Instruction::new_with_bincode(
-                program_ids[0],
-                &transfer_instruction,
-                vec![
-                    AccountMeta::new(program_ids[0], false),
-                    AccountMeta::new(program_ids[1], false),
-                ],
-            );
-            Transaction::new_signed_with_payer(
-                &[instruction],
-                Some(&payer.pubkey()),
-                &[payer],
-                self.blockhash,
-            )*/
-        } else if self.transaction_params.valid_signatures {
+        if self.transaction_params.valid_signatures {
             // Since we don't provide a payer, this transaction will end up
             // filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
-
-            let instructions = vec![CompiledInstruction::new(
-                0,
-                &transfer_instruction,
-                vec![0, 1],
-            )];
-
             let keypairs = kpvals.unwrap();
             Transaction::new_with_compiled_instructions(
                 &keypairs,
@@ -182,12 +221,6 @@ impl TransactionGenerator {
             // Since we provided invalid signatures
             // this transaction will end up filtered at legacy.rs (banking_stage) because
             // num_required_signatures == 0
-            let instructions = vec![CompiledInstruction::new(
-                0,
-                &transfer_instruction,
-                vec![0, 1],
-            )];
-
             let mut tx = Transaction::new_with_compiled_instructions(
                 &[] as &[&Keypair; 0],
                 &[],
