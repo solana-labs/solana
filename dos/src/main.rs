@@ -106,15 +106,13 @@ impl TransactionGenerator {
 
     fn generate(
         &mut self,
-        payer: &Option<Keypair>,
+        payer: &Keypair,
         kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
         rpc_client: &Arc<RpcClient>,
     ) -> Transaction {
         if self.transaction_params.valid_blockhash {
-            // payer and client must be provided
-            let payer = payer.unwrap();
             // kpvals must be Some and contain at least one element
-            if kpvals.is_none() || kpvals.unwrap().len() == 0 {
+            if kpvals.is_none() || kpvals.as_ref().unwrap().len() == 0 {
                 panic!("Expected at least one destination keypair to create transaction");
             }
             let kpvals = kpvals.unwrap();
@@ -330,36 +328,30 @@ fn create_generator_thread<T: 'static + Client + Send + Sync>(
     tx_sender: &Sender<TransactionMsg>,
     max_iter_per_thread: usize,
     transaction_generator: &mut TransactionGenerator,
-    funding_key: &Arc<Keypair>,
     client: &Arc<T>,
-    faucet_addr: Option<SocketAddr>,
-    payer: &Option<&Keypair>,
+    payer: Keypair,
     rpc_client: &Arc<RpcClient>,
 ) -> thread::JoinHandle<()> {
     let tx_sender = tx_sender.clone();
     let mut transaction_generator = transaction_generator.clone();
     let rpc_client = rpc_client.clone(); // TODO remove later, use thread for blockhashes
-    let payer = payer.clone();
+                                         //let payer = payer.clone();
     let client = client.clone();
 
     let num_signatures = transaction_generator.transaction_params.num_signatures;
     let valid_signatures = transaction_generator.transaction_params.valid_signatures;
 
-    let payer = clone_payer(&payer);
+    //let payer = clone_payer(&payer);
 
-    let mut keypairs_flat: Vec<Keypair> =
-        generate_and_fund_keypairs(client, faucet_addr, funding_key, 10 * num_signatures, 100)
-            .unwrap();
-    info!("FINISHED");
-
+    // TODO makes sense only for valid_signature option
     // Generate n=1000 unique keypairs, which are used to create
     // chunks of keypairs.
     // The number of chunks is described by binomial coefficient
     // and hence 1000 seems to be a reasonable choice
-    //let mut keypairs_flat: Vec<Keypair> = Vec::new();
-    //if valid_signatures {
-    //    keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
-    //}
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    if valid_signatures {
+        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+    }
 
     // TODO, rewrite later: I'm not sure if we need to be precise about message cost etc
     /*let lamports_per_account = 10;
@@ -395,13 +387,7 @@ fn create_generator_thread<T: 'static + Client + Send + Sync>(
                 None
             };
 
-            // TODO clean up later
-            let payer = if payer.is_none() {
-                None
-            } else {
-                Some(payer.as_ref().unwrap())
-            };
-            let tx = transaction_generator.generate(payer, chunk_keypairs, &rpc_client);
+            let tx = transaction_generator.generate(&payer, chunk_keypairs, &rpc_client);
             generation_elapsed =
                 generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
 
@@ -531,7 +517,6 @@ fn run_dos_transactions<T: 'static + Client + Send + Sync>(
     rpc_client: Option<RpcClient>,
     target: SocketAddr,
     iterations: usize,
-    funding_key: Keypair,
     client: Arc<T>,
     faucet_addr: Option<SocketAddr>,
     payer: Option<&Keypair>,
@@ -549,19 +534,32 @@ fn run_dos_transactions<T: 'static + Client + Send + Sync>(
 
     let max_iter_per_thread = iterations / num_gen_threads;
 
+    let funding_key = Keypair::new();
     let funding_key = Arc::new(funding_key);
     let rpc_client = Arc::new(rpc_client); // TODO Replace rpc client with ThinClient since it provides more options
-    let tx_generator_threads: Vec<_> = (0..num_gen_threads)
+
+    // create a new payer for each thread
+    // each payer is used to fund transaction
+    // all the transactions are supposed to be invalid
+    // the amount is arbitrary
+    let payers: Vec<Keypair> = generate_and_fund_keypairs(
+        client.clone(),
+        faucet_addr,
+        &funding_key,
+        num_gen_threads,
+        10_000,
+    )
+    .unwrap();
+
+    let tx_generator_threads: Vec<_> = payers
         .into_iter()
-        .map(|_| {
+        .map(|payer| {
             create_generator_thread(
                 &tx_sender,
                 max_iter_per_thread,
                 &mut transaction_generator,
-                &funding_key,
                 &client,
-                faucet_addr,
-                &payer,
+                payer,
                 &rpc_client,
             )
         })
@@ -595,16 +593,6 @@ fn run_dos<T: 'static + Client + Send + Sync>(
     } else if params.data_type == DataType::Transaction
         && params.transaction_params.unique_transactions
     {
-        let total = 100_000_000;
-        let funding_key = Keypair::new();
-        //if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
-        //    let r = airdrop_lamports(client.as_ref(), faucet_addr.as_ref().unwrap(), &funding_key, total);
-        //    match r {
-        //        Ok(_) => {},
-        //        Err(x) => println!("{:?}", x)
-        //    }
-        //}
-
         let addr = nodes[0].rpc;
 
         run_dos_transactions(
@@ -612,7 +600,6 @@ fn run_dos<T: 'static + Client + Send + Sync>(
             rpc_client,
             target,
             iterations,
-            funding_key,
             client,
             faucet_addr,
             payer,
@@ -650,7 +637,23 @@ fn run_dos<T: 'static + Client + Send + Sync>(
 
                 let mut transaction_generator = TransactionGenerator::new(tp);
                 let rpc_client = Arc::new(rpc_client.unwrap());
-                let tx = transaction_generator.generate(payer, None, &rpc_client);
+                let funding_key = Keypair::new();
+                let funding_key = Arc::new(funding_key);
+
+                let payers: Vec<Keypair> =
+                    generate_and_fund_keypairs(client, faucet_addr, &funding_key, 1, 10_000)
+                        .unwrap();
+                //TODO try replacing with
+                //let total = 100_000_000;
+                //if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
+                //    let r = airdrop_lamports(client.as_ref(), faucet_addr.as_ref().unwrap(), &funding_key, total);
+                //    match r {
+                //        Ok(_) => {},
+                //        Err(x) => println!("{:?}", x)
+                //    }
+                //}
+
+                let tx = transaction_generator.generate(&payers[0], None, &rpc_client);
                 info!("{:?}", tx);
                 bincode::serialize(&tx).unwrap()
             }
