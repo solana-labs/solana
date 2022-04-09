@@ -331,7 +331,7 @@ const getMetaDataJSON = async (
       }
 
       if (extended?.image) {
-        extended.image = extended.image.startsWith("http")
+        extended.image = (extended.image.startsWith("http") || extended.image.startsWith("data:"))
           ? extended.image
           : `${metadata.data.uri}/${extended.image}`;
       }
