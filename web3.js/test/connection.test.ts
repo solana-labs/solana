@@ -32,6 +32,7 @@ import {
   EpochInfo,
   InflationGovernor,
   Logs,
+  SignatureResult,
   SlotInfo,
 } from '../src/connection';
 import {sleep} from '../src/util/sleep';
@@ -3683,6 +3684,20 @@ describe('Connection', function () {
             await connection.removeRootChangeListener(subscriptionId);
           }
         }
+      });
+
+      it('signature notification', async () => {
+        const owner = Keypair.generate();
+        const signature = await connection.requestAirdrop(
+          owner.publicKey,
+          LAMPORTS_PER_SOL,
+        );
+        const signatureResult = await new Promise<SignatureResult>(resolve => {
+          // NOTE: Signature subscriptions auto-remove themselves, so there's no
+          // need to track the subscription id and remove it when the test ends.
+          connection.onSignature(signature, resolve, 'processed');
+        });
+        expect(signatureResult.err).to.be.null;
       });
 
       it('logs notification', async () => {
