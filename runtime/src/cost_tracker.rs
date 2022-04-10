@@ -101,16 +101,14 @@ impl CostTracker {
         actual_execution_units: Option<u64>,
     ) {
         if let Some(actual_execution_units) = actual_execution_units {
-            let mut adjustment =
-                TransactionCost::new_with_capacity(estimated_tx_cost.writable_accounts.len());
-            adjustment
-                .writable_accounts
-                .extend(&estimated_tx_cost.writable_accounts);
-            adjustment.execution_cost = estimated_tx_cost
-                .execution_cost
-                .saturating_sub(actual_execution_units);
-            adjustment.is_simple_vote = estimated_tx_cost.is_simple_vote;
-            self.sub_transaction_cost(&adjustment);
+            let estimated_execution_units = estimated_tx_cost.execution_cost;
+            if actual_execution_units == estimated_execution_units {
+                return;
+            }
+
+            let adjustment =
+                i128::from(actual_execution_units) - i128::from(estimated_execution_units);
+            self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
         }
     }
 
@@ -235,7 +233,7 @@ impl CostTracker {
         self.transaction_count = self.transaction_count.saturating_add(1);
     }
 
-    fn sub_transaction_cost(&mut self, tx_cost: &TransactionCost) {
+    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
@@ -251,11 +249,24 @@ impl CostTracker {
         self.account_data_size = self
             .account_data_size
             .saturating_sub(tx_cost.account_data_size);
+        self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 
-    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
-        self.sub_transaction_cost(tx_cost);
-        self.transaction_count = self.transaction_count.saturating_sub(1);
+    fn adjust_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: i128) {
+        for account_key in tx_cost.writable_accounts.iter() {
+            let account_cost = self
+                .cost_by_writable_accounts
+                .entry(*account_key)
+                .or_insert(0);
+            *account_cost = u64::try_from(i128::from(*account_cost).saturating_add(adjustment))
+                .unwrap_or(*account_cost);
+        }
+        self.block_cost = u64::try_from(i128::from(self.block_cost).saturating_add(adjustment))
+            .unwrap_or(self.block_cost);
+        if tx_cost.is_simple_vote {
+            self.vote_cost = u64::try_from(i128::from(self.vote_cost).saturating_add(adjustment))
+                .unwrap_or(self.vote_cost);
+        }
     }
 }
 
@@ -633,10 +644,6 @@ mod tests {
 
     #[test]
     fn test_cost_tracker_try_add_is_atomic() {
-        let (mint_keypair, start_hash) = test_setup();
-        // build two mocking vote transactions with diff accounts
-        let (_tx1, _tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
-
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
         let acct3 = Pubkey::new_unique();
@@ -701,6 +708,64 @@ mod tests {
             assert_eq!(3, testee.cost_by_writable_accounts.len());
             assert_eq!(cost * 2, costliest_account_cost);
             assert_eq!(acct2, costliest_account);
+        }
+    }
+
+    #[test]
+    fn test_adjust_transaction_execution_cost() {
+        let acct1 = Pubkey::new_unique();
+        let acct2 = Pubkey::new_unique();
+        let acct3 = Pubkey::new_unique();
+        let cost = 100;
+        let account_max = cost * 2;
+        let block_max = account_max * 3; // for three accts
+
+        let mut testee = CostTracker::new(account_max, block_max, block_max, None);
+        let tx_cost = TransactionCost {
+            writable_accounts: vec![acct1, acct2, acct3],
+            execution_cost: cost,
+            ..TransactionCost::default()
+        };
+        let mut expected_block_cost = tx_cost.sum();
+        let expected_tx_count = 1;
+        assert!(testee.try_add(&tx_cost).is_ok());
+        assert_eq!(expected_block_cost, testee.block_cost());
+        assert_eq!(expected_tx_count, testee.transaction_count());
+        testee
+            .cost_by_writable_accounts
+            .iter()
+            .for_each(|(_key, units)| {
+                assert_eq!(expected_block_cost, *units);
+            });
+
+        // adjust up
+        {
+            let adjustment: i128 = 50;
+            testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
+            expected_block_cost += 50;
+            assert_eq!(expected_block_cost, testee.block_cost());
+            assert_eq!(expected_tx_count, testee.transaction_count());
+            testee
+                .cost_by_writable_accounts
+                .iter()
+                .for_each(|(_key, units)| {
+                    assert_eq!(expected_block_cost, *units);
+                });
+        }
+
+        // adjust down
+        {
+            let adjustment: i128 = -50;
+            testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
+            expected_block_cost -= 50;
+            assert_eq!(expected_block_cost, testee.block_cost());
+            assert_eq!(expected_tx_count, testee.transaction_count());
+            testee
+                .cost_by_writable_accounts
+                .iter()
+                .for_each(|(_key, units)| {
+                    assert_eq!(expected_block_cost, *units);
+                });
         }
     }
 }

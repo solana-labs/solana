@@ -188,7 +188,7 @@ impl QosService {
                 // Only transactions that the qos service included have to be
                 // checked for remove or update/commit
                 if qos_inclusion_result.is_ok() {
-                    if execution_result.was_executed_successfully() {
+                    if execution_result.was_executed() {
                         cost_tracker.update_execution_cost(tx_cost, None);
                     } else {
                         cost_tracker.remove(tx_cost);
