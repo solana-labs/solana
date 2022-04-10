@@ -1,12 +1,10 @@
 use {
     crate::crds_gossip::CrdsGossip,
     itertools::Itertools,
-    solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         cmp::Reverse,
         collections::HashMap,
-        ops::{Deref, DerefMut},
         sync::atomic::{AtomicU64, Ordering},
         time::Instant,
     },
@@ -16,22 +14,12 @@ use {
 pub(crate) struct Counter(AtomicU64);
 
 impl Counter {
-    pub(crate) fn add_measure(&self, x: &mut Measure) {
-        x.stop();
-        self.0.fetch_add(x.as_us(), Ordering::Relaxed);
-    }
     pub(crate) fn add_relaxed(&self, x: u64) {
         self.0.fetch_add(x, Ordering::Relaxed);
     }
     fn clear(&self) -> u64 {
         self.0.swap(0, Ordering::Relaxed)
     }
-}
-
-pub(crate) struct TimedGuard<'a, T> {
-    guard: T,
-    timer: Measure,
-    counter: &'a Counter,
 }
 
 pub(crate) struct ScopedTimer<'a> {
@@ -55,35 +43,6 @@ impl Drop for ScopedTimer<'_> {
     fn drop(&mut self) {
         let micros = self.clock.elapsed().as_micros();
         self.metric.fetch_add(micros as u64, Ordering::Relaxed);
-    }
-}
-
-impl<'a, T> TimedGuard<'a, T> {
-    pub(crate) fn new(guard: T, label: &'static str, counter: &'a Counter) -> Self {
-        Self {
-            guard,
-            timer: Measure::start(label),
-            counter,
-        }
-    }
-}
-
-impl<'a, T> Deref for TimedGuard<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.guard
-    }
-}
-
-impl<'a, T> DerefMut for TimedGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.guard
-    }
-}
-
-impl<'a, T> Drop for TimedGuard<'a, T> {
-    fn drop(&mut self) {
-        self.counter.add_measure(&mut self.timer);
     }
 }
 
@@ -186,17 +145,12 @@ pub(crate) fn submit_gossip_stats(
     gossip: &CrdsGossip,
     stakes: &HashMap<Pubkey, u64>,
 ) {
-    let (crds_stats, table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
-        let gossip_crds = gossip.crds.read().unwrap();
-        (
-            gossip_crds.take_stats(),
-            gossip_crds.len(),
-            gossip_crds.num_nodes(),
-            gossip_crds.num_pubkeys(),
-            gossip_crds.num_purged(),
-            gossip.pull.failed_inserts_size(),
-        )
-    };
+    let crds_stats = gossip.crds.take_stats();
+    let table_size = gossip.crds.len();
+    let num_nodes = gossip.crds.num_nodes();
+    let num_pubkeys = gossip.crds.num_pubkeys();
+    let purged_values_size = gossip.crds.num_purged();
+    let failed_inserts_size = gossip.pull.failed_inserts_size();
     let num_nodes_staked = stakes.values().filter(|stake| **stake > 0).count();
     datapoint_info!(
         "cluster_info_stats",

@@ -3204,7 +3204,7 @@ pub(crate) mod tests {
         },
         crossbeam_channel::unbounded,
         solana_entry::entry::{self, Entry},
-        solana_gossip::{cluster_info::Node, crds::Cursor},
+        solana_gossip::{cluster_info::Node, crds_pool::Cursor},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, make_slot_entries, BlockstoreError},
             create_new_tmp_ledger,

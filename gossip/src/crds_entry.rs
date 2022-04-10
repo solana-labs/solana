@@ -18,6 +18,7 @@ type CrdsTable = IndexMap<CrdsValueLabel, VersionedCrdsValue>;
 ///   Pubkey -> ContactInfo, LowestSlot, SnapshotHashes, ...
 pub trait CrdsEntry<'a, 'b>: Sized {
     type Key; // Lookup key.
+    fn pubkey(key: Self::Key) -> Pubkey;
     fn get_entry(table: &'a CrdsTable, key: Self::Key) -> Option<Self>;
 }
 
@@ -26,6 +27,9 @@ macro_rules! impl_crds_entry (
     ($name:ident, |$entry:ident| $body:expr) => (
         impl<'a, 'b> CrdsEntry<'a, 'b> for &'a $name {
             type Key = &'b CrdsValueLabel;
+            fn pubkey(key: Self::Key) -> Pubkey {
+                key.pubkey()
+            }
             fn get_entry(table:&'a CrdsTable, key: Self::Key) -> Option<Self> {
                 let $entry = table.get(key);
                 $body
@@ -36,6 +40,9 @@ macro_rules! impl_crds_entry (
     ($name:ident, $pat:pat, $expr:expr) => (
         impl<'a, 'b> CrdsEntry<'a, 'b> for &'a $name {
             type Key = Pubkey;
+            fn pubkey(key: Self::Key) -> Pubkey {
+                key
+            }
             fn get_entry(table:&'a CrdsTable, key: Self::Key) -> Option<Self> {
                 let key = CrdsValueLabel::$name(key);
                 match &table.get(&key)?.value.data {
@@ -65,6 +72,9 @@ impl_crds_entry!(
 
 impl<'a, 'b> CrdsEntry<'a, 'b> for &'a SnapshotHashes {
     type Key = Pubkey;
+    fn pubkey(key: Self::Key) -> Pubkey {
+        key
+    }
     fn get_entry(table: &'a CrdsTable, key: Self::Key) -> Option<Self> {
         let key = CrdsValueLabel::SnapshotHashes(key);
         match &table.get(&key)?.value.data {

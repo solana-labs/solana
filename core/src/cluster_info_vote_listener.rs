@@ -14,7 +14,7 @@ use {
     log::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-        crds::Cursor,
+        crds_pool::Cursor,
     },
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,

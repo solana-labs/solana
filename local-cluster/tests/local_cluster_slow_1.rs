@@ -14,7 +14,7 @@ use {
         validator::ValidatorConfig,
     },
     solana_gossip::{
-        crds::Cursor,
+        crds_pool::Cursor,
         gossip_service::{self, discover_cluster},
     },
     solana_ledger::ancestor_iterator::AncestorIterator,

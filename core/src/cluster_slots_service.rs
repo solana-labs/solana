@@ -197,10 +197,12 @@ mod test {
         );
         ClusterSlotsService::update_lowest_slot(5, &cluster_info);
         cluster_info.flush_push_queue();
-        let lowest = {
-            let gossip_crds = cluster_info.gossip.crds.read().unwrap();
-            gossip_crds.get::<&LowestSlot>(pubkey).unwrap().clone()
-        };
+        let lowest = cluster_info
+            .gossip
+            .crds
+            .get::<&LowestSlot>(pubkey)
+            .unwrap()
+            .clone();
         assert_eq!(lowest.lowest, 5);
     }
 }

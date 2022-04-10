@@ -7,7 +7,7 @@ use {
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
-        crds::Cursor,
+        crds_pool::Cursor,
         gossip_service::GossipService,
     },
     solana_perf::packet::Packet,

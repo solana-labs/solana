@@ -2393,10 +2393,11 @@ mod tests {
     fn test_banking_stage_entries_only() {
         solana_logger::setup();
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
         } = create_slow_genesis_config(10);
+        genesis_config.ticks_per_slot *= 2;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
@@ -2522,10 +2523,11 @@ mod tests {
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
         } = create_slow_genesis_config(2);
+        genesis_config.ticks_per_slot *= 2;
         let (verified_sender, verified_receiver) = unbounded();
 
         // Process a batch that includes a transaction that receives two lamports.

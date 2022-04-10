@@ -863,8 +863,6 @@ mod tests {
         cluster_info
             .gossip
             .crds
-            .write()
-            .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
                     known_validators[0],
@@ -884,8 +882,6 @@ mod tests {
         cluster_info
             .gossip
             .crds
-            .write()
-            .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
                     known_validators[1],
@@ -901,8 +897,6 @@ mod tests {
         cluster_info
             .gossip
             .crds
-            .write()
-            .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
                     known_validators[2],

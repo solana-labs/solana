@@ -9,10 +9,11 @@ use {
         cluster_info::Ping,
         cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
-        crds::{Crds, GossipRoute},
+        crds::GossipRoute,
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
         crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
+        crds_pool::CrdsPool,
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
         ping_pong::PingCache,
@@ -29,14 +30,14 @@ use {
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
-        sync::{Mutex, RwLock},
+        sync::Mutex,
         time::Duration,
     },
 };
 
 #[derive(Default)]
 pub struct CrdsGossip {
-    pub crds: RwLock<Crds>,
+    pub crds: CrdsPool,
     pub push: CrdsGossipPush,
     pub pull: CrdsGossipPull,
 }
@@ -87,11 +88,9 @@ impl CrdsGossip {
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
-        {
-            let mut crds = self.crds.write().unwrap();
-            for entry in pending_push_messages {
-                let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
-            }
+        // TODO: Should use a batch function.
+        for entry in pending_push_messages {
+            let _ = self.crds.insert(entry, now, GossipRoute::LocalMessage);
         }
         self.push.new_push_messages(&self.crds, now)
     }
@@ -108,8 +107,8 @@ impl CrdsGossip {
         let pubkey = keypair.pubkey();
         // Skip if there are already records of duplicate shreds for this slot.
         let shred_slot = shred.slot();
-        let mut crds = self.crds.write().unwrap();
-        if crds
+        if self
+            .crds
             .get_records(&pubkey)
             .any(|value| match &value.value.data {
                 CrdsData::DuplicateShred(_, value) => value.slot == shred_slot,
@@ -128,7 +127,8 @@ impl CrdsGossip {
         )?;
         // Find the index of oldest duplicate shred.
         let mut num_dup_shreds = 0;
-        let offset = crds
+        let offset = self
+            .crds
             .get_records(&pubkey)
             .filter_map(|value| match &value.value.data {
                 CrdsData::DuplicateShred(ix, value) => {
@@ -152,7 +152,7 @@ impl CrdsGossip {
         });
         let now = timestamp();
         for entry in entries {
-            if let Err(err) = crds.insert(entry, now, GossipRoute::LocalMessage) {
+            if let Err(err) = self.crds.insert(entry, now, GossipRoute::LocalMessage) {
                 error!("push_duplicate_shred faild: {:?}", err);
             }
         }
@@ -190,7 +190,7 @@ impl CrdsGossip {
         gossip_validators: Option<&HashSet<Pubkey>>,
         socket_addr_space: &SocketAddrSpace,
     ) {
-        let network_size = self.crds.read().unwrap().num_nodes();
+        let network_size = self.crds.num_nodes();
         self.push.refresh_push_active_set(
             &self.crds,
             stakes,
@@ -331,8 +331,6 @@ impl CrdsGossip {
             rv = CrdsGossipPull::purge_active(thread_pool, &self.crds, now, timeouts);
         }
         self.crds
-            .write()
-            .unwrap()
             .trim_purged(now.saturating_sub(5 * self.pull.crds_timeout));
         self.pull.purge_failed_inserts(now);
         rv
@@ -340,9 +338,8 @@ impl CrdsGossip {
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
-        let crds = self.crds.read().unwrap().mock_clone();
         Self {
-            crds: RwLock::new(crds),
+            crds: self.crds.mock_clone(),
             push: self.push.mock_clone(),
             pull: self.pull.mock_clone(),
         }
@@ -383,8 +380,6 @@ mod test {
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
             .crds
-            .write()
-            .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
                 0,

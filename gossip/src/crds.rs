@@ -33,7 +33,7 @@ use {
     },
     bincode::serialize,
     indexmap::{
-        map::{rayon::ParValues, Entry, IndexMap},
+        map::{Entry, IndexMap},
         set::IndexSet,
     },
     lru::LruCache,
@@ -367,21 +367,16 @@ impl Crds {
         self.table.is_empty()
     }
 
-    #[cfg(test)]
     pub(crate) fn values(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
         self.table.values()
-    }
-
-    pub(crate) fn par_values(&self) -> ParValues<'_, CrdsValueLabel, VersionedCrdsValue> {
-        self.table.par_values()
     }
 
     pub(crate) fn num_purged(&self) -> usize {
         self.purged.len()
     }
 
-    pub(crate) fn purged(&self) -> impl IndexedParallelIterator<Item = Hash> + '_ {
-        self.purged.par_iter().map(|(hash, _)| *hash)
+    pub(crate) fn purged(&self) -> impl Iterator<Item = Hash> + '_ {
+        self.purged.iter().map(|(hash, _)| *hash)
     }
 
     /// Drops purged value hashes with timestamp less than the given one.
@@ -674,6 +669,32 @@ impl CrdsStats {
             GossipRoute::PushMessage => self.push.record_fail(entry),
             GossipRoute::PullResponse => self.pull.record_fail(entry),
         }
+    }
+}
+
+impl std::iter::Sum for CrdsStats {
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = CrdsStats>,
+    {
+        iter.reduce(|mut stats, other| {
+            for i in 0..11 {
+                stats.pull.counts[i] += other.pull.counts[i];
+                stats.pull.fails[i] += other.pull.fails[i];
+                stats.push.counts[i] += other.push.counts[i];
+                stats.push.fails[i] += other.push.fails[i];
+            }
+            for (slot, mut count) in other.pull.votes {
+                count += stats.pull.votes.get(&slot).copied().unwrap_or_default();
+                stats.pull.votes.put(slot, count);
+            }
+            for (slot, mut count) in other.push.votes {
+                count += stats.push.votes.get(&slot).copied().unwrap_or_default();
+                stats.push.votes.put(slot, count);
+            }
+            stats
+        })
+        .unwrap_or_default()
     }
 }
 
