@@ -4640,6 +4640,7 @@ dependencies = [
  "ed25519-dalek",
  "humantime",
  "indicatif",
+ "semver 1.0.6",
  "serde",
  "serde_json",
  "solana-account-decoder",
