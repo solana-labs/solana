@@ -95,14 +95,6 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    pub fn update_execution_cost(
-        &mut self,
-        _estimated_tx_cost: &TransactionCost,
-        _actual_execution_cost: u64,
-    ) {
-        // TODO: adjust block_cost / vote_cost / account_cost by (actual_execution_cost - execution_cost)
-    }
-
     pub fn remove(&mut self, tx_cost: &TransactionCost) {
         self.remove_transaction_cost(tx_cost);
     }
@@ -618,10 +610,6 @@ mod tests {
 
     #[test]
     fn test_cost_tracker_try_add_is_atomic() {
-        let (mint_keypair, start_hash) = test_setup();
-        // build two mocking vote transactions with diff accounts
-        let (_tx1, _tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
-
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
         let acct3 = Pubkey::new_unique();
