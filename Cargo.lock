@@ -4634,6 +4634,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "pretty-hex",
+ "semver 1.0.6",
  "serde",
  "serde_json",
  "solana-account-decoder",
