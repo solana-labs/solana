@@ -2190,9 +2190,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.4"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
+checksum = "d65bd28f48be7196d222d95b9243287f48d27aca604e08497513019ff0502cc4"
 
 [[package]]
 name = "serde"
@@ -2858,6 +2858,7 @@ dependencies = [
  "console",
  "humantime",
  "indicatif",
+ "semver",
  "serde",
  "serde_json",
  "solana-account-decoder",
