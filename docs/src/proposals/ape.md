@@ -65,9 +65,13 @@ accounts fail immediately and are ignored.
 Computing the BankHash evaluates all the non VoteProgram instructions.
 Transactions that include VoteProgram and any non VoteProgram
 accounts fail immediately and are ignored.  The LS computation and
-finalizing the IsolationProgram::MoveDomains are done at the end
-of the next epoch.  The BankHash computation must not fall behind
-the ForkHash by more than 1 epoch or the cluster will halt.
+finalizing the SystemProgram::MoveDomains are done at the end
+of the next epoch.
+
+The BankHash computation must not fall behind the ForkHash by more
+than 1 epoch or the cluster will halt.  If a validator's BankHash
+falls more than 25% of epoch slots behind ForkHash it should alert
+the operator.
 
 === VoteProgram::Vote ===
 
