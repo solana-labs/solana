@@ -97,10 +97,21 @@ impl CostTracker {
 
     pub fn update_execution_cost(
         &mut self,
-        _estimated_tx_cost: &TransactionCost,
-        _actual_execution_cost: u64,
+        estimated_tx_cost: &TransactionCost,
+        actual_execution_units: Option<u64>,
     ) {
-        // TODO: adjust block_cost / vote_cost / account_cost by (actual_execution_cost - execution_cost)
+        if let Some(actual_execution_units) = actual_execution_units {
+            let mut adjustment =
+                TransactionCost::new_with_capacity(estimated_tx_cost.writable_accounts.len());
+            adjustment
+                .writable_accounts
+                .extend(&estimated_tx_cost.writable_accounts);
+            adjustment.execution_cost = estimated_tx_cost
+                .execution_cost
+                .saturating_sub(actual_execution_units);
+            adjustment.is_simple_vote = estimated_tx_cost.is_simple_vote;
+            self.sub_transaction_cost(&adjustment);
+        }
     }
 
     pub fn remove(&mut self, tx_cost: &TransactionCost) {
@@ -224,7 +235,7 @@ impl CostTracker {
         self.transaction_count = self.transaction_count.saturating_add(1);
     }
 
-    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
+    fn sub_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
@@ -240,6 +251,10 @@ impl CostTracker {
         self.account_data_size = self
             .account_data_size
             .saturating_sub(tx_cost.account_data_size);
+    }
+
+    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
+        self.sub_transaction_cost(tx_cost);
         self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 }
