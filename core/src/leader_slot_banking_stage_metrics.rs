@@ -624,6 +624,13 @@ impl LeaderSlotMetricsTracker {
                     .receive_and_buffer_packets_us,
                 us
             );
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .timing_metrics
+                    .outer_loop_timings
+                    .receive_and_buffer_packets_invoked_count,
+                1
+            );
         }
     }
 
