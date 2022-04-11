@@ -82,6 +82,20 @@ impl TpuConnection for QuicTpuConnection {
         self.client.runtime.block_on(send_batch)?;
         Ok(())
     }
+
+    fn send_wire_transaction_async<T>(&'static self, wire_transaction: T) -> TransportResult<()>
+    where
+        T: AsRef<[u8]> + Send + 'static,
+    {
+        let _guard = self.client.runtime.enter();
+        //drop and detach the task
+        let _ = self.client.runtime.spawn(async move {
+            let send_buffer = self.client.send_buffer(wire_transaction);
+            let _ = self.client.runtime.block_on(send_buffer);
+            ()
+        });
+        Ok(())
+    }
 }
 
 impl QuicClient {

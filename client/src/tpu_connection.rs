@@ -22,6 +22,11 @@ pub trait TpuConnection {
     where
         T: AsRef<[u8]>;
 
+    fn send_wire_transaction_async<T>(&'static self, wire_transaction: T) -> TransportResult<()>
+    where
+        T: AsRef<[u8]> + Send + 'static;
+
+
     fn par_serialize_and_send_transaction_batch(
         &self,
         transactions: &[VersionedTransaction],
