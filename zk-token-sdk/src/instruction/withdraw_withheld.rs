@@ -212,7 +212,6 @@ mod test {
 
         assert!(withdraw_withheld_tokens_data.verify().is_ok());
 
-
         let amount: u64 = 55;
         let withdraw_withheld_authority_ciphertext =
             withdraw_withheld_authority_keypair.public.encrypt(amount);
