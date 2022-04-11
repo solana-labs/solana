@@ -30,7 +30,15 @@ use {
             InstructionAccount, InstructionContext, TransactionAccount, TransactionContext,
         },
     },
-    std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
+    std::{
+        alloc::Layout,
+        borrow::Cow,
+        cell::RefCell,
+        collections::HashMap,
+        fmt::{self, Debug},
+        rc::Rc,
+        sync::Arc,
+    },
 };
 
 pub type ProcessInstructionWithContext =
@@ -150,10 +158,27 @@ impl ComputeMeter {
     }
 }
 
+/// Based loosely on the unstable std::alloc::Alloc trait
+pub trait Alloc {
+    fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr>;
+    fn dealloc(&mut self, addr: u64, layout: Layout);
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct AllocErr;
+
+impl fmt::Display for AllocErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("Error: Memory allocation failed")
+    }
+}
+
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
+    pub orig_account_lengths: Option<Vec<usize>>,
+    pub allocator: Option<Rc<RefCell<dyn Alloc>>>,
 }
 
 impl<'a> StackFrame<'a> {
@@ -166,6 +191,8 @@ impl<'a> StackFrame<'a> {
             number_of_program_accounts,
             keyed_accounts,
             keyed_accounts_range,
+            orig_account_lengths: None,
+            allocator: None,
         }
     }
 
@@ -193,6 +220,8 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
+    pub check_aligned: bool,
+    pub check_size: bool,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -227,6 +256,8 @@ impl<'a> InvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             blockhash,
             lamports_per_signature,
+            check_aligned: true,
+            check_size: true,
         }
     }
 
@@ -1047,6 +1078,63 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<&Pubkey, InstructionError> {
         self.transaction_context
             .get_key_of_account_at_index(index_in_transaction)
+    }
+
+    /// Set the original account lengths
+    pub fn set_orig_account_lengths(
+        &mut self,
+        orig_account_lengths: Vec<usize>,
+    ) -> Result<(), InstructionError> {
+        let stack_frame = &mut self
+            .invoke_stack
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)?;
+        stack_frame.orig_account_lengths = Some(orig_account_lengths);
+        Ok(())
+    }
+
+    /// Get the original account lengths
+    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+        self.invoke_stack
+            .last()
+            .and_then(|frame| frame.orig_account_lengths.as_ref())
+            .ok_or(InstructionError::CallDepth)
+            .map(|orig_account_lengths| orig_account_lengths.as_slice())
+    }
+
+    pub fn set_check_aligned(&mut self, check_aligned: bool) {
+        self.check_aligned = check_aligned;
+    }
+
+    pub fn get_check_aligned(&self) -> bool {
+        self.check_aligned
+    }
+
+    pub fn set_check_size(&mut self, check_size: bool) {
+        self.check_size = check_size;
+    }
+
+    pub fn get_check_size(&self) -> bool {
+        self.check_size
+    }
+
+    pub fn set_allocator(
+        &mut self,
+        allocator: Rc<RefCell<dyn Alloc>>,
+    ) -> Result<(), InstructionError> {
+        let stack_frame = &mut self
+            .invoke_stack
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)?;
+        stack_frame.allocator = Some(allocator);
+        Ok(())
+    }
+
+    pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
+        self.invoke_stack
+            .last()
+            .and_then(|frame| frame.allocator.clone())
+            .ok_or(InstructionError::CallDepth)
     }
 }
 
