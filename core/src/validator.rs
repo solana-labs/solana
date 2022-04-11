@@ -798,8 +798,7 @@ impl Validator {
                 let enable_gossip_push = config
                     .accounts_db_config
                     .as_ref()
-                    .and_then(|config| config.filler_account_count)
-                    .map(|count| count == 0)
+                    .map(|config| config.filler_accounts_config.count == 0)
                     .unwrap_or(true);
 
                 let snapshot_packager_service = SnapshotPackagerService::new(
@@ -1844,7 +1843,20 @@ mod tests {
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
         );
-        validator.close();
+
+        // spawn a new thread to wait for validator close
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            validator.close();
+            sender.send(()).unwrap();
+        });
+
+        // exit can deadlock. put an upper-bound on how long we wait for it
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            panic!("timeout for closing validator");
+        }
+
         remove_dir_all(validator_ledger_path).unwrap();
     }
 

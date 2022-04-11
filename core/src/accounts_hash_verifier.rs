@@ -96,7 +96,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
     ) {
-        Self::verify_accounts_package_hash(&accounts_package);
+        let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
@@ -106,55 +106,63 @@ impl AccountsHashVerifier {
             hashes,
             exit,
             fault_injection_rate_slots,
+            accounts_hash,
         );
 
-        Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config);
+        Self::submit_for_packaging(
+            accounts_package,
+            pending_snapshot_package,
+            snapshot_config,
+            accounts_hash,
+        );
     }
 
-    fn verify_accounts_package_hash(accounts_package: &AccountsPackage) {
+    /// returns calculated accounts hash
+    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> Hash {
         let mut measure_hash = Measure::start("hash");
+        let mut sort_time = Measure::start("sort_storages");
+        let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
+        sort_time.stop();
+
+        let mut timings = HashStats {
+            storage_sort_us: sort_time.as_us(),
+            ..HashStats::default()
+        };
+        timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
+
+        let (accounts_hash, lamports) = accounts_package
+            .accounts
+            .accounts_db
+            .calculate_accounts_hash_without_index(
+                &CalcAccountsHashConfig {
+                    use_bg_thread_pool: true,
+                    check_hash: false,
+                    ancestors: None,
+                    use_write_cache: false,
+                    epoch_schedule: &accounts_package.epoch_schedule,
+                    rent_collector: &accounts_package.rent_collector,
+                },
+                &sorted_storages,
+                timings,
+            )
+            .unwrap();
+
+        assert_eq!(accounts_package.expected_capitalization, lamports);
         if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
-            let mut sort_time = Measure::start("sort_storages");
-            let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
-            sort_time.stop();
-
-            let mut timings = HashStats {
-                storage_sort_us: sort_time.as_us(),
-                ..HashStats::default()
-            };
-            timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
-
-            let (hash, lamports) = accounts_package
-                .accounts
-                .accounts_db
-                .calculate_accounts_hash_without_index(
-                    &CalcAccountsHashConfig {
-                        use_bg_thread_pool: true,
-                        check_hash: false,
-                        ancestors: None,
-                        use_write_cache: false,
-                        epoch_schedule: &accounts_package.epoch_schedule,
-                        rent_collector: &accounts_package.rent_collector,
-                    },
-                    &sorted_storages,
-                    timings,
-                )
-                .unwrap();
-
-            assert_eq!(accounts_package.expected_capitalization, lamports);
-            assert_eq!(expected_hash, hash);
+            assert_eq!(expected_hash, accounts_hash);
         };
 
         measure_hash.stop();
         solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
             accounts_package.snapshot_links.path(),
             accounts_package.slot,
-            &accounts_package.accounts_hash,
+            &accounts_hash,
         );
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
         );
+        accounts_hash
     }
 
     fn push_accounts_hashes_to_cluster(
@@ -165,8 +173,8 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
+        accounts_hash: Hash,
     ) {
-        let hash = accounts_package.accounts_hash;
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -177,10 +185,10 @@ impl AccountsHashVerifier {
             };
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&hash, &[rand]);
+            let hash = extend_and_hash(&accounts_hash, &[rand]);
             hashes.push((accounts_package.slot, hash));
         } else {
-            hashes.push((accounts_package.slot, hash));
+            hashes.push((accounts_package.slot, accounts_hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {
@@ -204,6 +212,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
         snapshot_config: Option<&SnapshotConfig>,
+        accounts_hash: Hash,
     ) {
         if accounts_package.snapshot_type.is_none()
             || pending_snapshot_package.is_none()
@@ -212,7 +221,7 @@ impl AccountsHashVerifier {
             return;
         };
 
-        let snapshot_package = SnapshotPackage::from(accounts_package);
+        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         let pending_snapshot_package = pending_snapshot_package.unwrap();
         let _snapshot_config = snapshot_config.unwrap();
 
@@ -301,6 +310,7 @@ mod tests {
             sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
+        std::str::FromStr,
     };
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
@@ -364,6 +374,7 @@ mod tests {
             ..SnapshotConfig::default()
         };
         let accounts = Arc::new(solana_runtime::accounts::Accounts::default_for_tests());
+        let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {
                 slot: full_snapshot_archive_interval_slots + i as u64,
@@ -371,7 +382,6 @@ mod tests {
                 slot_deltas: vec![],
                 snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: vec![],
-                accounts_hash: hash(&[i as u8]),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_archives_dir: PathBuf::default(),
@@ -409,13 +419,13 @@ mod tests {
         assert_eq!(cluster_hashes.len(), MAX_SNAPSHOT_HASHES);
         assert_eq!(
             cluster_hashes[0],
-            (full_snapshot_archive_interval_slots + 1, hash(&[1]))
+            (full_snapshot_archive_interval_slots + 1, expected_hash)
         );
         assert_eq!(
             cluster_hashes[MAX_SNAPSHOT_HASHES - 1],
             (
                 full_snapshot_archive_interval_slots + MAX_SNAPSHOT_HASHES as u64,
-                hash(&[MAX_SNAPSHOT_HASHES as u8])
+                expected_hash
             )
         );
     }

@@ -68,12 +68,12 @@ use {
     thiserror::Error,
     trees::{Tree, TreeWalk},
 };
+pub mod blockstore_purge;
 pub use {
     crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
+    blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
-
-pub mod blockstore_purge;
 
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
@@ -108,20 +108,6 @@ type CompletedRanges = Vec<(u32, u32)>;
 pub struct SignatureInfosForAddress {
     pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
     pub found_before: bool,
-}
-
-#[derive(Clone, Copy)]
-/// Controls how `blockstore::purge_slots` purges the data.
-pub enum PurgeType {
-    /// A slower but more accurate way to purge slots by also ensuring higher
-    /// level of consistency between data during the clean up process.
-    Exact,
-    /// A faster approximation of `Exact` where the purge process only takes
-    /// care of the primary index and does not update the associated entries.
-    PrimaryIndex,
-    /// The fastest purge mode that relies on the slot-id based TTL
-    /// compaction filter to do the cleanup.
-    CompactionFilter,
 }
 
 #[derive(Error, Debug)]

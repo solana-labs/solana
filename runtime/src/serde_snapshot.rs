@@ -642,7 +642,7 @@ where
         genesis_config,
     );
 
-    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule);
+    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, &genesis_config.rent);
 
     handle.join().unwrap();
     measure_notify.stop();

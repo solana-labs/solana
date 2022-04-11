@@ -288,7 +288,8 @@ mod tests {
             accounts_package.slot,
             &last_bank.get_accounts_hash(),
         );
-        let snapshot_package = SnapshotPackage::from(accounts_package);
+        let snapshot_package =
+            SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
@@ -391,7 +392,6 @@ mod tests {
             let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
-            let accounts_hash = bank.update_accounts_hash();
 
             let pending_accounts_package = {
                 if slot == saved_slot as u64 {
@@ -461,7 +461,9 @@ mod tests {
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
                     snapshot_archives_dir,
                     slot,
-                    &accounts_hash,
+                    // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
+                    // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
+                    &Hash::default(),
                     ArchiveFormat::TarBzip2,
                 ));
             }
@@ -515,7 +517,7 @@ mod tests {
                     accounts_package.slot,
                     &Hash::default(),
                 );
-                let snapshot_package = SnapshotPackage::from(accounts_package);
+                let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
                 pending_snapshot_package
                     .lock()
                     .unwrap()

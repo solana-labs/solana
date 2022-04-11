@@ -1,3 +1,7 @@
+---
+title: Handle Duplicate Block
+---
+
 # Leader Duplicate Block Slashing
 
 This design describes how the cluster slashes leaders that produce duplicate

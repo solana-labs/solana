@@ -1924,7 +1924,7 @@ pub fn package_and_archive_full_snapshot(
         &bank.get_accounts_hash(),
     );
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -1971,7 +1971,7 @@ pub fn package_and_archive_incremental_snapshot(
         &bank.get_accounts_hash(),
     );
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -3443,7 +3443,6 @@ mod tests {
                 slot_deltas: Vec::default(),
                 snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: SnapshotStorages::default(),
-                accounts_hash: Hash::default(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_archives_dir: PathBuf::default(),
