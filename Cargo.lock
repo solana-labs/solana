@@ -4466,10 +4466,12 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
  "solana-version",
+ "thiserror",
 ]
 
 [[package]]

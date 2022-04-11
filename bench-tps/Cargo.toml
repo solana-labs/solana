@@ -15,6 +15,7 @@ log = "0.4.14"
 rayon = "1.5.1"
 serde_json = "1.0.79"
 serde_yaml = "0.8.23"
+<<<<<<< HEAD
 solana-client = { path = "../client", version = "=1.10.9" }
 solana-core = { path = "../core", version = "=1.10.9" }
 solana-faucet = { path = "../faucet", version = "=1.10.9" }
@@ -28,6 +29,23 @@ solana-runtime = { path = "../runtime", version = "=1.10.9" }
 solana-sdk = { path = "../sdk", version = "=1.10.9" }
 solana-streamer = { path = "../streamer", version = "=1.10.9" }
 solana-version = { path = "../version", version = "=1.10.9" }
+=======
+solana-client = { path = "../client", version = "=1.11.0" }
+solana-core = { path = "../core", version = "=1.11.0" }
+solana-faucet = { path = "../faucet", version = "=1.11.0" }
+solana-genesis = { path = "../genesis", version = "=1.11.0" }
+solana-gossip = { path = "../gossip", version = "=1.11.0" }
+solana-logger = { path = "../logger", version = "=1.11.0" }
+solana-measure = { path = "../measure", version = "=1.11.0" }
+solana-metrics = { path = "../metrics", version = "=1.11.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
+solana-rpc = { path = "../rpc", version = "=1.11.0" }
+solana-runtime = { path = "../runtime", version = "=1.11.0" }
+solana-sdk = { path = "../sdk", version = "=1.11.0" }
+solana-streamer = { path = "../streamer", version = "=1.11.0" }
+solana-version = { path = "../version", version = "=1.11.0" }
+thiserror = "1.0"
+>>>>>>> 3871c85fd (Add BenchTpsClient trait (#24208))
 
 [dev-dependencies]
 serial_test = "0.6.0"

@@ -9,7 +9,6 @@ pub(crate) mod http_sender;
 pub(crate) mod mock_sender;
 pub mod nonblocking;
 pub mod nonce_utils;
-pub mod perf_utils;
 pub mod pubsub_client;
 pub mod quic_client;
 pub mod rpc_cache;
