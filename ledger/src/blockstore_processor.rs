@@ -1293,11 +1293,13 @@ fn load_frozen_forks(
                 if last_free.elapsed() > Duration::from_secs(10) {
                     // Purge account state for all dropped banks
                     for (pruned_slot, pruned_bank_id) in pruned_banks_receiver.try_iter() {
-                        new_root_bank
-                            .rc
-                            .accounts
-                            .accounts_db
-                            .purge_slot(pruned_slot, pruned_bank_id);
+                        // Simulate this purge is from AccountBackgroundService
+                        let is_serialized_with_abs = true;
+                        new_root_bank.rc.accounts.accounts_db.purge_slot(
+                            pruned_slot,
+                            pruned_bank_id,
+                            true,
+                        );
                     }
 
                     // Must be called after `squash()`, so that AccountsDb knows what
