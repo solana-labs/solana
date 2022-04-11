@@ -1,27 +1,12 @@
 use {
-    console::style, solana_clap_utils::input_validators::normalize_to_url_if_moniker,
-    solana_cli_config::Config, solana_sdk::commitment_config::CommitmentConfig, std::str::FromStr,
+    solana_clap_utils::input_validators::normalize_to_url_if_moniker, solana_cli_config::Config,
+    solana_sdk::commitment_config::CommitmentConfig, std::str::FromStr,
 };
 
 pub enum SettingType {
     Explicit,
     Computed,
     SystemDefault,
-}
-
-pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
-    let description = match setting_type {
-        SettingType::Explicit => "",
-        SettingType::Computed => "(computed)",
-        SettingType::SystemDefault => "(default)",
-    };
-
-    println!(
-        "{} {} {}",
-        style(name).bold(),
-        style(value),
-        style(description).italic(),
-    );
 }
 
 pub struct ConfigInput {

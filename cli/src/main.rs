@@ -11,8 +11,11 @@ use {
         cli::{parse_command, process_command, CliCommandInfo, CliConfig},
     },
     solana_cli_config::Config,
-    solana_cli_output::{display::println_name_value, OutputFormat},
-    solana_cli_utils::{println_name_value_or, ConfigInput},
+    solana_cli_output::{
+        display::{println_name_value, println_name_value_or},
+        OutputFormat,
+    },
+    solana_cli_utils::ConfigInput,
     solana_client::rpc_config::RpcSendTransactionConfig,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration},

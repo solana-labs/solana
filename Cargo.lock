@@ -4640,6 +4640,7 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
+ "solana-cli-utils",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",
@@ -4652,7 +4653,6 @@ name = "solana-cli-utils"
 version = "1.11.0"
 dependencies = [
  "anyhow",
- "console",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-sdk",
