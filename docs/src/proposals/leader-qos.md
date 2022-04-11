@@ -23,7 +23,7 @@ Leader has multiple banking threads, each thread does:
 
 The aim of this proposal is to enhance the packet selection process for
 "consuming" and "forwarding" within each banking_stage threads; by 
-compartmentalizing hcanges to speed up delivery. A more holistic change 
+compartmentalizing changes to speed up delivery. A more holistic change 
 proposal (#23438) exists. 
 
 It propose to replace linear FIFO buffer traversing with transaction-based 
@@ -58,7 +58,7 @@ Draft PR #23257 demonstrating the implementation of this proposal. High-level
 changes are outlined below, `*` denotes a new/changed step, with its commit #.
 
 #### packet receiving and buffering:
-1. Receives packet_batches from verified_receiver
+1. [Existing] eceives packet_batches from verified_receiver
 
    How multiple banking_stage threads pulls packet batches from single source
    is not changed. There are some built-in randomness to distribute transactions
@@ -67,11 +67,11 @@ changes are outlined below, `*` denotes a new/changed step, with its commit #.
    unlikely it is, to guarantee avoid such unequal distribution, we'd need a 
    central scheduler as #23438 proposes.
  
-2. * Deserialize packets into versioned_transactions upon receiving,
+2. [Merged] Deserialize packets into versioned_transactions upon receiving,
      cache to buffer with packets. Also refactored `buffer` into its own model.
      [commit #e74c5a](https://github.com/solana-labs/solana/pull/23257/commits/e74c5a792284629b242504b12ac5765fac0c773b)
 
-3. * When need to drop packet_batch from buffer to make room for newly received,
+3. [PR#23841, Issue#24069] When need to drop packet_batch from buffer to make room for newly received,
      instead of popping out the oldest packet_batch which may include higher 
      prioritized packets, it drops the lowest prioritized packet (by marking it
      as processed) until an empty batch is found, then swap it with newly 
@@ -79,7 +79,7 @@ changes are outlined below, `*` denotes a new/changed step, with its commit #.
      [commit #88d710](https://github.com/solana-labs/solana/pull/23257/commits/88d71067ef13b02ce1f03b329a7b013ee4f063d8)
  
 #### packet consuming:
-1. * Scan buffer to index unprocessed packets into `Vec<locator>`, also gather 
+1. [Merged] Scan buffer to index unprocessed packets into `Vec<locator>`, also gather 
      each packet's sender stakes.
      [commit #d58a81a](https://github.com/solana-labs/solana/pull/23257/commits/d58a81a748ea9b10ee5b7aeca225fad3aad18e72)
 
@@ -88,13 +88,13 @@ changes are outlined below, `*` denotes a new/changed step, with its commit #.
      is allowing higher-paid transactions to "jump the queue", allow to be 
      considered for processing as soon as they are received.
 
-2. * Add transaction weighting stage to add sender stake in packet meta fields.
+2. [Merged] Add transaction weighting stage to add sender stake in packet meta fields.
      [commit #5900f84](https://github.com/solana-labs/solana/pull/23257/commits/5900f84ac06496625f77efd2a6152b6942ef50af)
 
-3. * Shuffle locators by stake weight;
+3. [Merged] Shuffle locators by stake weight;
      [commit #6092b09](https://github.com/solana-labs/solana/pull/23257/commits/6092b095177f1a29f996aad13f41e7de4674f9eb)
 
-4. * Then apply transaction fee-per-cu prioritization on top, such the locators
+4. [PR drafting] Then apply transaction fee-per-cu prioritization on top, such the locators
      are sorted by fee-per-cu then stake weights. 
      [commit #f8a6c41](https://github.com/solana-labs/solana/pull/23257/commits/f8a6c416eef7429f6af1d05eef241f6da5146a2e)
      [commit #a277cd8](https://github.com/solana-labs/solana/pull/23257/commits/a277cd871ab730d72b2e0cc420bfd5322d0ef939)
@@ -103,16 +103,16 @@ changes are outlined below, `*` denotes a new/changed step, with its commit #.
      between slot boundary. Therefore transaction's  fee-per-cu is calculated 
      with current working-bank, or the last working-bank.
 
-5. * Batches packets from prioritized locators into chunks of sanitized 
+5. [PR drafting] Batches packets from prioritized locators into chunks of sanitized 
      transactions.
      [commit #f30a6d7](https://github.com/solana-labs/solana/pull/23257/commits/f30a6d7c92c48a320aefb6493cbcd955d36ff9e8)
 
 6. send chunk sanitized_transactions to consuming process (largely unchanged)
 
-7. * Update buffer with retryable transactions.
+7. [PR drafting] Update buffer with retryable transactions.
 
 #### forwarding:
-1. * similar to above, scan and sort unprocessed packets of unforwarded batches
+1. [Pending] similar to above, scan and sort unprocessed packets of unforwarded batches
      into prioritized locators, prepare few buckets, fill the buckets with 
      sorted packets, forward buckets of packets.
      [commit #b5998cd](https://github.com/solana-labs/solana/pull/23257/commits/b5998cd161ac3af58be6ba0d3ea7803074cf69ff)
