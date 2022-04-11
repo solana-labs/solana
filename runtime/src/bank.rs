@@ -6754,6 +6754,7 @@ impl Drop for Bank {
         // This indicates that there are no other reference to bank, so that
         // drop_callback can assert it. The downside is that we can only support
         // bank_id range of 63bits.
+        assert!(self.bank_id & 0x1 << 63 == 0);
         self.bank_id |= 0x1 << 63;
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
