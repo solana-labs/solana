@@ -146,6 +146,7 @@ fn verify_reachable_ports(
     }
     if ContactInfo::is_valid_address(&node.info.tpu, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu.iter());
+        udp_sockets.push(&node.sockets.tpu_quic);
     }
     if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
