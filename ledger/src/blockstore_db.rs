@@ -2275,7 +2275,7 @@ mod rocks_metrics_utils {
     };
     const METRIC_SAMPLES_1K: i32 = 1000;
     // The default number of rocksdb perf samples in 1K
-    const ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K_DEFAULT: i32 = 10;
+    const ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K_DEFAULT: i32 = 0;
     lazy_static! {
     // The number of RocksDB performance counter samples in 1000.
     static ref ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K: i32 =
