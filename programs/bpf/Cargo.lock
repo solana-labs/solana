@@ -1202,9 +1202,9 @@ dependencies = [
 
 [[package]]
 name = "goblin"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1800b95efee8ad4ef04517d4d69f8e209e763b1668f1179aeeedd0e454da55"
+checksum = "c955ab4e0ad8c843ea653a3d143048b87490d9be56bd7132a435c2407846ac8f"
 dependencies = [
  "log",
  "plain",
@@ -1232,9 +1232,9 @@ dependencies = [
 
 [[package]]
 name = "hash32"
-version = "0.1.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
 dependencies = [
  "byteorder 1.4.3",
 ]
@@ -1920,7 +1920,7 @@ dependencies = [
  "lazy_static",
  "percent-encoding",
  "pin-project",
- "rand 0.8.2",
+ "rand 0.8.5",
  "thiserror",
 ]
 
@@ -2179,7 +2179,7 @@ checksum = "d2b1562bf4998b0c6d1841a4742b7103bb82cdde61374833de826bab9e8ad498"
 dependencies = [
  "bytes 1.1.0",
  "fxhash",
- "rand 0.8.2",
+ "rand 0.8.5",
  "ring",
  "rustls",
  "rustls-native-certs",
@@ -2234,20 +2234,18 @@ dependencies = [
  "libc",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
- "rand_hc 0.2.0",
- "rand_pcg",
+ "rand_hc",
 ]
 
 [[package]]
 name = "rand"
-version = "0.8.2"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18519b42a40024d661e1714153e9ad0c3de27cd495760ceb09710920f1098b1e"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
  "rand_core 0.6.3",
- "rand_hc 0.3.0",
 ]
 
 [[package]]
@@ -2293,24 +2291,6 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_hc"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
-dependencies = [
- "rand_core 0.6.3",
-]
-
-[[package]]
-name = "rand_pcg"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -2588,18 +2568,18 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
 name = "scroll"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abb2332cb595d33f7edd5700f4cbf94892e680c7f0ae56adab58a35190b66cb1"
+checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
 dependencies = [
  "scroll_derive",
 ]
 
 [[package]]
 name = "scroll_derive"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e367622f934864ffa1c704ba2b82280aab856e3d8213c84c5720257eb34b15b9"
+checksum = "bdbda6ac5cd1321e724fa9cee216f3a61885889b896f073b8f82322789c5250e"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
@@ -4027,9 +4007,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.24"
+version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e138f6d6d4eb6a65f8e9f01ca620bc9907d79648d5038a69dd3f07b6ed3f1f"
+checksum = "ccd266a6c58aa37380b52e6ee627762d794840116d796879867e7419445e6fe5"
 dependencies = [
  "byteorder 1.4.3",
  "combine",
@@ -4037,11 +4017,10 @@ dependencies = [
  "hash32",
  "libc",
  "log",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rustc-demangle",
  "scroll",
  "thiserror",
- "time 0.1.43",
 ]
 
 [[package]]
@@ -4186,7 +4165,7 @@ dependencies = [
  "humantime",
  "opentelemetry",
  "pin-project",
- "rand 0.8.2",
+ "rand 0.8.5",
  "serde",
  "static_assertions",
  "tarpc-plugins",
@@ -4529,7 +4508,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.8.2",
+ "rand 0.8.5",
  "rustls",
  "sha-1",
  "thiserror",

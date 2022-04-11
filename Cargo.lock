@@ -256,7 +256,7 @@ dependencies = [
  "getrandom 0.2.3",
  "instant",
  "pin-project-lite",
- "rand 0.8.4",
+ "rand 0.8.5",
  "tokio",
 ]
 
@@ -1750,9 +1750,9 @@ dependencies = [
 
 [[package]]
 name = "goblin"
-version = "0.4.3"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32401e89c6446dcd28185931a01b1093726d0356820ac744023e6850689bf926"
+checksum = "c955ab4e0ad8c843ea653a3d143048b87490d9be56bd7132a435c2407846ac8f"
 dependencies = [
  "log",
  "plain",
@@ -1786,9 +1786,9 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hash32"
-version = "0.1.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
 dependencies = [
  "byteorder",
 ]
@@ -2824,7 +2824,7 @@ dependencies = [
  "lazy_static",
  "percent-encoding 2.1.0",
  "pin-project",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
 ]
 
@@ -3229,7 +3229,7 @@ dependencies = [
  "lazy_static",
  "num-traits",
  "quick-error 2.0.1",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift",
  "regex-syntax",
@@ -3340,7 +3340,7 @@ checksum = "063dedf7983c8d57db474218f258daa85b627de6f2dbc458b690a93b1de790e8"
 dependencies = [
  "bytes",
  "fxhash",
- "rand 0.8.4",
+ "rand 0.8.5",
  "ring",
  "rustls",
  "rustls-native-certs",
@@ -3414,20 +3414,18 @@ dependencies = [
  "libc",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
- "rand_hc 0.2.0",
- "rand_pcg",
+ "rand_hc",
 ]
 
 [[package]]
 name = "rand"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
  "rand_core 0.6.3",
- "rand_hc 0.3.1",
 ]
 
 [[package]]
@@ -3488,24 +3486,6 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_hc"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d51e9f596de227fda2ea6c84607f5558e196eeaf43c986b724ba4fb8fdf497e7"
-dependencies = [
- "rand_core 0.6.3",
-]
-
-[[package]]
-name = "rand_pcg"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -3889,18 +3869,18 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
 name = "scroll"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fda28d4b4830b807a8b43f7b0e6b5df875311b3e7621d84577188c175b6ec1ec"
+checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
 dependencies = [
  "scroll_derive",
 ]
 
 [[package]]
 name = "scroll_derive"
-version = "0.10.5"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaaae8f38bb311444cfb7f1979af0bc9240d95795f75f9ceddf6a59b79ceffa0"
+checksum = "bdbda6ac5cd1321e724fa9cee216f3a61885889b896f073b8f82322789c5250e"
 dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
@@ -4273,7 +4253,7 @@ dependencies = [
  "futures 0.3.21",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha-1 0.9.8",
 ]
 
@@ -6188,9 +6168,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.24"
+version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e138f6d6d4eb6a65f8e9f01ca620bc9907d79648d5038a69dd3f07b6ed3f1f"
+checksum = "ccd266a6c58aa37380b52e6ee627762d794840116d796879867e7419445e6fe5"
 dependencies = [
  "byteorder",
  "combine",
@@ -6198,11 +6178,10 @@ dependencies = [
  "hash32",
  "libc",
  "log",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rustc-demangle",
  "scroll",
  "thiserror",
- "time 0.1.43",
 ]
 
 [[package]]
@@ -6471,7 +6450,7 @@ dependencies = [
  "humantime",
  "opentelemetry",
  "pin-project",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "static_assertions",
  "tarpc-plugins",
@@ -6898,7 +6877,7 @@ dependencies = [
  "indexmap",
  "pin-project",
  "pin-project-lite",
- "rand 0.8.4",
+ "rand 0.8.5",
  "slab",
  "tokio",
  "tokio-util 0.7.1",
@@ -7028,7 +7007,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rustls",
  "sha-1 0.10.0",
  "thiserror",
