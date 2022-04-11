@@ -6155,8 +6155,8 @@ impl Bank {
         *self.inflation.read().unwrap()
     }
 
-    pub fn rent_collector(&self) -> RentCollector {
-        self.rent_collector.clone()
+    pub fn rent_collector(&self) -> &RentCollector {
+        &self.rent_collector
     }
 
     /// Return the total capitalization of the Bank
