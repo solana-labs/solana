@@ -271,7 +271,11 @@ function DetailsSections({
           account. Please be cautious sending SOL to this account.
         </div>
       )}
-      {<InfoSection account={account} />}
+      <React.Suspense
+        fallback={<LoadingCard message="Loading anchor account IDL" />}
+      >
+        <InfoSection account={account} />
+      </React.Suspense>
       <MoreSection
         account={account}
         tab={moreTab}
@@ -282,6 +286,12 @@ function DetailsSections({
 }
 
 function InfoSection({ account }: { account: Account }) {
+  const { url } = useCluster();
+  const anchorProgram = useAnchorProgram(
+    account.details?.owner.toString() || "", // TODO: fix ugly
+    url
+  );
+
   const data = account?.details?.data;
 
   if (data && data.program === "bpf-upgradeable-loader") {
@@ -315,6 +325,18 @@ function InfoSection({ account }: { account: Account }) {
     return (
       <ConfigAccountSection account={account} configAccount={data.parsed} />
     );
+  } else if (account.details?.rawData && anchorProgram) {
+    return (
+      <React.Suspense
+        fallback={<LoadingCard message="Loading anchor account IDL" />}
+      >
+        <AnchorAccountCard
+          account={account}
+          rawData={account.details.rawData}
+          anchorProgram={anchorProgram}
+        />
+      </React.Suspense>
+    );
   } else {
     return <UnknownAccountCard account={account} />;
   }
@@ -345,8 +367,7 @@ export type MoreTabs =
   | "metadata"
   | "domains"
   | "security"
-  | "anchor-program"
-  | "anchor-account";
+  | "anchor-program";
 
 function MoreSection({
   account,
@@ -412,15 +433,6 @@ function MoreSection({
           fallback={<LoadingCard message="Loading anchor program IDL" />}
         >
           <AnchorProgramCard programId={pubkey} />
-        </React.Suspense>
-      )}
-      {tab === "anchor-account" && (
-        <React.Suspense
-          fallback={
-            <LoadingCard message="Decoding account data using anchor interface" />
-          }
-        >
-          <AnchorAccountCard account={account} />
         </React.Suspense>
       )}
     </>
@@ -517,24 +529,6 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
     ),
   });
 
-  const anchorAccountTab: Tab = {
-    slug: "anchor-account",
-    title: "Anchor Account",
-    path: "/anchor-account",
-  };
-  tabComponents.push({
-    tab: anchorAccountTab,
-    component: (
-      <React.Suspense key={anchorAccountTab.slug} fallback={<></>}>
-        <AnchorAccountLink
-          tab={anchorAccountTab}
-          address={pubkey.toString()}
-          programId={account.details?.owner}
-        />
-      </React.Suspense>
-    ),
-  });
-
   return tabComponents;
 }
 
@@ -551,38 +545,6 @@ function AnchorProgramLink({
   const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
 
   if (!anchorProgram) {
-    return null;
-  }
-
-  return (
-    <li key={tab.slug} className="nav-item">
-      <NavLink
-        className="nav-link"
-        to={clusterPath(`/address/${address}${tab.path}`)}
-        exact
-      >
-        {tab.title}
-      </NavLink>
-    </li>
-  );
-}
-
-function AnchorAccountLink({
-  address,
-  tab,
-  programId,
-}: {
-  address: string;
-  tab: Tab;
-  programId: PublicKey | undefined;
-}) {
-  const { url } = useCluster();
-  const accountAnchorProgram = useAnchorProgram(
-    programId?.toString() ?? "",
-    url
-  );
-
-  if (!accountAnchorProgram) {
     return null;
   }
 

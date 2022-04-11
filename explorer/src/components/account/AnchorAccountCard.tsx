@@ -1,157 +1,136 @@
 import React, { useMemo } from "react";
-
 import { Account } from "providers/accounts";
+import { SolBalance } from "utils";
+import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
-import { BorshAccountsCoder } from "@project-serum/anchor";
-import { capitalizeFirstLetter } from "utils/anchor";
-import { ErrorCard } from "components/common/ErrorCard";
-import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
-
-import ReactJson from "react-json-view";
+import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
-import { useAnchorProgram } from "providers/anchor";
+import { useTokenRegistry } from "providers/mints/token-registry";
+import { BorshAccountsCoder, Program } from "@project-serum/anchor";
+import { IdlTypeDef } from "@project-serum/anchor/dist/cjs/idl";
+import { mapAccountToRows } from "utils/anchor";
+import { ErrorCard } from "components/common/ErrorCard";
 
-export function AnchorAccountCard({ account }: { account: Account }) {
-  const { url } = useCluster();
-  const program = useAnchorProgram(
-    account.details?.owner.toString() ?? "",
-    url
-  );
+export function AnchorAccountCard({
+  account,
+  rawData,
+  anchorProgram,
+}: {
+  account: Account;
+  rawData: Buffer;
+  anchorProgram: Program;
+}) {
+  const { details, lamports } = account;
+  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
 
-  const { foundAccountLayoutName, decodedAnchorAccountData } = useMemo(() => {
-    let foundAccountLayoutName: string | undefined;
-    let decodedAnchorAccountData: { [key: string]: any } | undefined;
-    if (program && account.details && account.details.rawData) {
-      const accountBuffer = account.details.rawData;
-      const discriminator = accountBuffer.slice(0, 8);
-
-      // Iterate all the structs, see if any of the name-hashes match
-      Object.keys(program.account).forEach((accountType) => {
-        const layoutName = capitalizeFirstLetter(accountType);
-        const discriminatorToCheck =
-          BorshAccountsCoder.accountDiscriminator(layoutName);
-
-        if (discriminatorToCheck.equals(discriminator)) {
-          foundAccountLayoutName = layoutName;
-          const accountDecoder = program.account[accountType];
-          decodedAnchorAccountData = accountDecoder.coder.accounts.decode(
-            layoutName,
-            accountBuffer
-          );
-        }
-      });
+  const { decodedAccountData, accountDef } = useMemo(() => {
+    let decodedAccountData: any | null = null;
+    let accountDef: IdlTypeDef | undefined = undefined;
+    if (anchorProgram) {
+      const coder = new BorshAccountsCoder(anchorProgram.idl);
+      const accountDefTmp = anchorProgram.idl.accounts?.find(
+        (accountType: any) =>
+          (rawData as Buffer)
+            .slice(0, 8)
+            .equals(BorshAccountsCoder.accountDiscriminator(accountType.name))
+      );
+      if (accountDefTmp) {
+        accountDef = accountDefTmp;
+        decodedAccountData = coder.decode(accountDef.name, rawData);
+      }
     }
-    return { foundAccountLayoutName, decodedAnchorAccountData };
-  }, [program, account.details]);
 
-  if (!foundAccountLayoutName || !decodedAnchorAccountData) {
+    return {
+      decodedAccountData,
+      accountDef,
+    };
+  }, [anchorProgram, rawData]);
+
+  if (lamports === undefined) return null;
+
+  if (!decodedAccountData || !accountDef) {
     return (
       <ErrorCard text="Failed to decode account data according to its public anchor interface" />
     );
   }
 
+  const label = addressLabel(account.pubkey.toBase58(), cluster, tokenRegistry);
   return (
-    <>
+    <div>
       <div className="card">
-        <div className="card-header">
-          <div className="row align-items-center">
-            <div className="col">
-              <h3 className="card-header-title">{foundAccountLayoutName}</h3>
-            </div>
-          </div>
+        <div className="card-header align-items-center">
+          <h3 className="card-header-title">Overview</h3>
         </div>
 
-        <div className="table-responsive mb-0">
-          <table className="table table-sm table-nowrap card-table">
-            <thead>
-              <tr>
-                <th className="w-1 text-muted">Key</th>
-                <th className="text-muted">Value</th>
-              </tr>
-            </thead>
-            <tbody className="list">
-              {decodedAnchorAccountData &&
-                Object.keys(decodedAnchorAccountData).map((key) => (
-                  <AccountRow
-                    key={key}
-                    valueName={key}
-                    value={decodedAnchorAccountData[key]}
-                  />
-                ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="card-footer">
-          <div className="text-muted text-center">
-            {decodedAnchorAccountData &&
-            Object.keys(decodedAnchorAccountData).length > 0
-              ? `Decoded ${Object.keys(decodedAnchorAccountData).length} Items`
-              : "No decoded data"}
-          </div>
-        </div>
+        <TableCardBody>
+          <tr>
+            <td>Address</td>
+            <td className="text-lg-end">
+              <Address pubkey={account.pubkey} alignRight link />
+            </td>
+          </tr>
+          {label && (
+            <tr>
+              <td>Address Label</td>
+              <td className="text-lg-end">{label}</td>
+            </tr>
+          )}
+          <tr>
+            <td>Balance (SOL)</td>
+            <td className="text-lg-end">
+              <SolBalance lamports={lamports} />
+            </td>
+          </tr>
+
+          {details?.space !== undefined && (
+            <tr>
+              <td>Allocated Data Size</td>
+              <td className="text-lg-end">{details.space} byte(s)</td>
+            </tr>
+          )}
+
+          {details && (
+            <tr>
+              <td>Assigned Program Id</td>
+              <td className="text-lg-end">
+                <Address pubkey={details.owner} alignRight link />
+              </td>
+            </tr>
+          )}
+
+          {details && (
+            <tr>
+              <td>Executable</td>
+              <td className="text-lg-end">
+                {details.executable ? "Yes" : "No"}
+              </td>
+            </tr>
+          )}
+        </TableCardBody>
       </div>
-    </>
-  );
-}
+      {accountDef?.name && (
+        <div className="card">
+          <div className="card-header align-items-center">
+            <h3 className="card-header-title">
+              Data - {accountDef.name} (Anchor)
+            </h3>
+          </div>
 
-function AccountRow({ valueName, value }: { valueName: string; value: any }) {
-  let displayValue: JSX.Element;
-  if (value instanceof PublicKey) {
-    displayValue = <Address pubkey={value} link />;
-  } else if (value instanceof BN) {
-    displayValue = <>{value.toString()}</>;
-  } else if (!(value instanceof Object)) {
-    displayValue = <>{String(value)}</>;
-  } else if (value) {
-    const displayObject = stringifyPubkeyAndBigNums(value);
-    displayValue = (
-      <ReactJson
-        src={JSON.parse(JSON.stringify(displayObject))}
-        collapsed={1}
-        theme="solarized"
-      />
-    );
-  } else {
-    displayValue = <>null</>;
-  }
-  return (
-    <tr>
-      <td className="w-1 text-monospace">{camelToUnderscore(valueName)}</td>
-      <td className="text-monospace">{displayValue}</td>
-    </tr>
-  );
-}
-
-function camelToUnderscore(key: string) {
-  var result = key.replace(/([A-Z])/g, " $1");
-  return result.split(" ").join("_").toLowerCase();
-}
-
-function stringifyPubkeyAndBigNums(object: Object): Object {
-  if (!Array.isArray(object)) {
-    if (object instanceof PublicKey) {
-      return object.toString();
-    } else if (object instanceof BN) {
-      return object.toString();
-    } else if (!(object instanceof Object)) {
-      return object;
-    } else {
-      const parsedObject: { [key: string]: Object } = {};
-      Object.keys(object).map((key) => {
-        let value = (object as { [key: string]: any })[key];
-        if (value instanceof Object) {
-          value = stringifyPubkeyAndBigNums(value);
-        }
-        parsedObject[key] = value;
-        return null;
-      });
-      return parsedObject;
-    }
-  }
-  return object.map((innerObject) =>
-    innerObject instanceof Object
-      ? stringifyPubkeyAndBigNums(innerObject)
-      : innerObject
+          <TableCardBody>
+            <tr className="table-sep">
+              <td className="text-muted w-1">Field</td>
+              <td>Type</td>
+              <td className="text-lg-end">Value</td>
+            </tr>
+            {mapAccountToRows(
+              decodedAccountData,
+              accountDef as IdlTypeDef,
+              anchorProgram.idl
+            )}
+          </TableCardBody>
+        </div>
+      )}
+    </div>
   );
 }
