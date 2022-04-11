@@ -4589,6 +4589,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-cli-output",
+ "solana-cli-utils",
  "solana-client",
  "solana-config-program",
  "solana-faucet",
@@ -4644,6 +4645,17 @@ dependencies = [
  "solana-transaction-status",
  "solana-vote-program",
  "spl-memo",
+]
+
+[[package]]
+name = "solana-cli-utils"
+version = "1.11.0"
+dependencies = [
+ "anyhow",
+ "console",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-sdk",
 ]
 
 [[package]]
