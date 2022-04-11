@@ -709,7 +709,7 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an IntrustionTrace to InnerInstructionsList
+/// Convert from an InstructionTrace to InnerInstructionsList
 pub fn inner_instructions_list_from_instruction_trace(
     instruction_trace: &InstructionTrace,
 ) -> InnerInstructionsList {
