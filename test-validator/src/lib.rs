@@ -711,7 +711,8 @@ impl TestValidator {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
-                snapshot_archives_dir: ledger_path.to_path_buf(),
+                full_snapshot_archives_dir: ledger_path.to_path_buf(),
+                incremental_snapshot_archives_dir: ledger_path.to_path_buf(),
                 ..SnapshotConfig::default()
             }),
             enforce_ulimit_nofile: false,

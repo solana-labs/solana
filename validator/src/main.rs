@@ -721,11 +721,28 @@ pub fn main() {
                 .help("Path to accounts shrink path which can hold a compacted account set."),
         )
         .arg(
-            Arg::with_name("snapshots")
-                .long("snapshots")
+            Arg::with_name("snapshots_path")
+                .alias("snapshots")
+                .long("snapshots-path")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as snapshot location [default: --ledger value]"),
+                .help("Use DIR as snapshots location [default: --ledger value]"),
+        )
+        .arg(
+            Arg::with_name("full_snapshots_path")
+                .long("full-snapshots-path")
+                .conflicts_with("no-incremental-snapshots")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as full snapshots location [default: --snapshots-path value]"),
+        )
+        .arg(
+            Arg::with_name("incremental_snapshots_path")
+                .long("incremental-snapshots-path")
+                .conflicts_with("no-incremental-snapshots")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as incremental snapshots location [default: --snapshots-path value]"),
         )
         .arg(
             Arg::with_name("tower")
@@ -2602,16 +2619,40 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let snapshot_archives_dir = if matches.is_present("snapshots") {
-        PathBuf::from(matches.value_of("snapshots").unwrap())
+    let common_snapshot_dir = if matches.is_present("snapshots_path") {
+        PathBuf::from(matches.value_of("snapshots_path").unwrap())
     } else {
         ledger_path.clone()
     };
-    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
+    let bank_snapshots_dir = common_snapshot_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
             bank_snapshots_dir, err
+        );
+        exit(1);
+    });
+    let full_snapshot_archives_dir = if matches.is_present("full_snapshots_path") {
+        PathBuf::from(matches.value_of("full_snapshots_path").unwrap())
+    } else {
+        common_snapshot_dir.clone()
+    };
+    fs::create_dir_all(&full_snapshot_archives_dir).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to create full snapshot archives directory {:?}: {}",
+            full_snapshot_archives_dir, err
+        );
+        exit(1);
+    });
+    let incremental_snapshot_archives_dir = if matches.is_present("incremental_snapshots_path") {
+        PathBuf::from(matches.value_of("incremental_snapshots_path").unwrap())
+    } else {
+        common_snapshot_dir
+    };
+    fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to create incremental snapshot archives directory {:?}: {}",
+            incremental_snapshot_archives_dir, err
         );
         exit(1);
     });
@@ -2657,7 +2698,8 @@ pub fn main() {
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
-        snapshot_archives_dir: snapshot_archives_dir.clone(),
+        full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
+        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
@@ -2887,7 +2929,8 @@ pub fn main() {
         Some(version)
     });
     solana_entry::entry::init_poh();
-    snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 
@@ -2897,7 +2940,8 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
-            &snapshot_archives_dir,
+            &full_snapshot_archives_dir,
+            &incremental_snapshot_archives_dir,
             &vote_account,
             authorized_voter_keypairs.clone(),
             &cluster_entrypoints,

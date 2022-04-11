@@ -259,8 +259,8 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let snapshot_archives_dir = temp_dir.join("snapshots_output");
-        fs::create_dir_all(&snapshot_archives_dir).unwrap();
+        let full_snapshot_archives_dir = temp_dir.join("snapshots_output");
+        fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
@@ -302,7 +302,7 @@ mod tests {
         let hash = Hash::default();
         let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
             slot,
             &hash,
             archive_format,

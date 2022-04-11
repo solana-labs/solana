@@ -731,6 +731,7 @@ fn load_bank_forks(
     blockstore: &Blockstore,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
+    incremental_snapshot_archive_path: Option<PathBuf>,
 ) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
     let bank_snapshots_dir = blockstore
         .ledger_path()
@@ -742,12 +743,15 @@ fn load_bank_forks(
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
-        let snapshot_archives_dir =
+        let full_snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
+        let incremental_snapshot_archives_dir =
+            incremental_snapshot_archive_path.unwrap_or_else(|| full_snapshot_archives_dir.clone());
         Some(SnapshotConfig {
             full_snapshot_archive_interval_slots: Slot::MAX,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             bank_snapshots_dir,
             ..SnapshotConfig::default()
         })
@@ -1102,7 +1106,15 @@ fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use DIR for ledger location"),
+                .help("Use DIR for snapshot location"),
+        )
+        .arg(
+            Arg::with_name("incremental_snapshot_archive_path")
+                .long("incremental-snapshot-archive-path")
+                .value_name("DIR")
+                .takes_value(true)
+                .global(true)
+                .help("Use DIR for separate incremental snapshot location"),
         )
         .arg(
             Arg::with_name("output_format")
@@ -1713,6 +1725,10 @@ fn main() {
     let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
         .ok()
         .map(PathBuf::from);
+    let incremental_snapshot_archive_path =
+        value_t!(matches, "incremental_snapshot_archive_path", String)
+            .ok()
+            .map(PathBuf::from);
 
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
@@ -1828,6 +1844,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         println!(
@@ -1909,6 +1926,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         println!("{}", &bank_forks.read().unwrap().working_bank().hash());
@@ -2148,6 +2166,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Ledger verification failed: {:?}", err);
@@ -2179,6 +2198,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         let dot = graph_forks(
@@ -2296,6 +2316,7 @@ fn main() {
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, starting_snapshot_hashes)) => {
                         let mut bank = bank_forks
@@ -2530,6 +2551,7 @@ fn main() {
                                     &bank,
                                     full_snapshot_slot,
                                     Some(snapshot_version),
+                                    output_directory.clone(),
                                     output_directory,
                                     ArchiveFormat::TarZstd,
                                     maximum_full_snapshot_archives_to_retain,
@@ -2553,6 +2575,7 @@ fn main() {
                                     ledger_path,
                                     &bank,
                                     Some(snapshot_version),
+                                    output_directory.clone(),
                                     output_directory,
                                     ArchiveFormat::TarZstd,
                                     maximum_full_snapshot_archives_to_retain,
@@ -2603,6 +2626,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to load ledger: {:?}", err);
@@ -2662,6 +2686,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         let bank_forks = bank_forks.read().unwrap();

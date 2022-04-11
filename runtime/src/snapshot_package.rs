@@ -39,7 +39,8 @@ pub struct AccountsPackage {
     pub snapshot_storages: SnapshotStorages,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
-    pub snapshot_archives_dir: PathBuf,
+    pub full_snapshot_archives_dir: PathBuf,
+    pub incremental_snapshot_archives_dir: PathBuf,
     pub expected_capitalization: u64,
     pub accounts_hash_for_testing: Option<Hash>,
     pub cluster_type: ClusterType,
@@ -57,7 +58,8 @@ impl AccountsPackage {
         bank_snapshot_info: &BankSnapshotInfo,
         bank_snapshots_dir: impl AsRef<Path>,
         slot_deltas: Vec<BankSlotDelta>,
-        snapshot_archives_dir: impl AsRef<Path>,
+        full_snapshot_archives_dir: impl AsRef<Path>,
+        incremental_snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -105,7 +107,10 @@ impl AccountsPackage {
             snapshot_storages,
             archive_format,
             snapshot_version,
-            snapshot_archives_dir: snapshot_archives_dir.as_ref().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .as_ref()
+                .to_path_buf(),
             expected_capitalization: bank.capitalization(),
             accounts_hash_for_testing,
             cluster_type: bank.cluster_type(),
@@ -137,7 +142,7 @@ impl SnapshotPackage {
         let mut snapshot_storages = accounts_package.snapshot_storages;
         let snapshot_archive_path = match accounts_package.snapshot_type.unwrap() {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
-                accounts_package.snapshot_archives_dir,
+                accounts_package.full_snapshot_archives_dir,
                 accounts_package.slot,
                 &accounts_hash,
                 accounts_package.archive_format,
@@ -156,7 +161,7 @@ impl SnapshotPackage {
                     "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
                     );
                 snapshot_utils::build_incremental_snapshot_archive_path(
-                    accounts_package.snapshot_archives_dir,
+                    accounts_package.incremental_snapshot_archives_dir,
                     incremental_snapshot_base_slot,
                     accounts_package.slot,
                     &accounts_hash,

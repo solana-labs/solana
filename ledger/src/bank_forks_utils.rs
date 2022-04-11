@@ -98,7 +98,7 @@ pub fn load_bank_forks(
             .expect("Couldn't create snapshot directory");
 
         if snapshot_utils::get_highest_full_snapshot_archive_info(
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
         )
         .is_some()
         {
@@ -188,7 +188,8 @@ fn bank_forks_from_snapshot(
     let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             &account_paths,
             genesis_config,
             process_options.debug_keys.clone(),

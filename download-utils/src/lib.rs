@@ -254,7 +254,8 @@ pub fn download_genesis_if_missing(
 /// a full snapshot or an incremental snapshot.
 pub fn download_snapshot_archive<'a, 'b>(
     rpc_addr: &SocketAddr,
-    snapshot_archives_dir: &Path,
+    full_snapshot_archives_dir: &Path,
+    incremental_snapshot_archives_dir: &Path,
     desired_snapshot_hash: (Slot, Hash),
     snapshot_type: SnapshotType,
     maximum_full_snapshot_archives_to_retain: usize,
@@ -263,13 +264,17 @@ pub fn download_snapshot_archive<'a, 'b>(
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
 ) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
     );
 
     let snapshot_archives_remote_dir =
-        snapshot_utils::build_snapshot_archives_remote_dir(snapshot_archives_dir);
+        snapshot_utils::build_snapshot_archives_remote_dir(match snapshot_type {
+            SnapshotType::FullSnapshot => full_snapshot_archives_dir,
+            SnapshotType::IncrementalSnapshot(_) => incremental_snapshot_archives_dir,
+        });
     fs::create_dir_all(&snapshot_archives_remote_dir).unwrap();
 
     for archive_format in [
