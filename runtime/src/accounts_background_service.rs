@@ -23,7 +23,7 @@ use {
         boxed::Box,
         fmt::{Debug, Formatter},
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
             Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -49,11 +49,58 @@ pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
 pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
 pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
-/// interval to report 60s
+/// interval to report bank_drop queue events: 60s
 const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
 
+/// Bank drop signal queue events
+enum BankDropQueueEvent {
+    Full,
+    Disconnected,
+}
+
+/// Bank drop signal queue event statistics
+#[derive(Debug, Default)]
+struct BankDropQueueStats {
+    report_time: AtomicU64,
+    queue_full: AtomicUsize,
+    queue_disconnected: AtomicUsize,
+}
+
+impl BankDropQueueStats {
+    /// submit bank drop signal queue event counters
+    fn report(&self, event: BankDropQueueEvent) {
+        let counter = match event {
+            BankDropQueueEvent::Full => &self.queue_full,
+            BankDropQueueEvent::Disconnected => &self.queue_disconnected,
+        };
+
+        let name = match event {
+            BankDropQueueEvent::Full => "full",
+            BankDropQueueEvent::Disconnected => "disconnected",
+        };
+
+        let ts = solana_sdk::timing::timestamp();
+
+        counter.fetch_add(1, Ordering::Relaxed);
+        let last_report_time = self.report_time.load(Ordering::Acquire);
+        if ts.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL {
+            let val = counter.load(Ordering::Relaxed);
+
+            if counter
+                .compare_exchange_weak(val, 0, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                if val > 0 {
+                    datapoint_info!("bank_drop_queue_event", (name, val, i64));
+                }
+                self.report_time.store(ts, Ordering::Release);
+            }
+        }
+    }
+}
+
 lazy_static! {
-    static ref BANK_DROP_LAST_REPORT_TIME: AtomicU64 = AtomicU64::new(0);
+    static ref BANK_DROP_QUEUE_STATS: BankDropQueueStats = BankDropQueueStats::default();
 }
 
 #[derive(Clone)]
@@ -63,24 +110,19 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        let ts = solana_sdk::timing::timestamp();
-
         match self.sender.try_send((bank.slot(), bank.bank_id())) {
             Err(TrySendError::Full(_)) => {
-                let last_report_time = BANK_DROP_LAST_REPORT_TIME.load(Ordering::Acquire);
-                if ts.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL {
-                    inc_new_counter_info!("bank_drop_queue_full_event", 1);
-                    BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
-                }
+                BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Full);
+
                 // send again and block until success
                 let _ = self.sender.send((bank.slot(), bank.bank_id()));
             }
 
             Err(TrySendError::Disconnected(_)) => {
-                inc_new_counter_info!("bank_drop_queue_disconnected_event", 1);
-                BANK_DROP_LAST_REPORT_TIME.store(ts, Ordering::Release);
+                BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Disconnected);
             }
-            _ => {}
+            // success
+            Ok(_) => {}
         }
     }
 
