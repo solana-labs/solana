@@ -42,7 +42,6 @@ impl TpuConnection for UdpTpuConnection {
         Ok(())
     }
 
-
     fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
