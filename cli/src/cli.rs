@@ -8,10 +8,10 @@ use {
     num_traits::FromPrimitive,
     serde_json::{self, Value},
     solana_clap_utils::{self, input_parsers::*, keypair::*},
+    solana_cli_config::ConfigInput,
     solana_cli_output::{
         display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
     },
-    solana_cli_utils::ConfigInput,
     solana_client::{
         blockhash_query::BlockhashQuery,
         client_error::{ClientError, Result as ClientResult},

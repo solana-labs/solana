@@ -4589,7 +4589,6 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-cli-output",
- "solana-cli-utils",
  "solana-client",
  "solana-config-program",
  "solana-faucet",
@@ -4619,6 +4618,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_yaml",
+ "solana-clap-utils",
+ "solana-sdk",
  "url 2.2.2",
 ]
 
@@ -4640,22 +4641,12 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
- "solana-cli-utils",
+ "solana-cli-config",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",
  "solana-vote-program",
  "spl-memo",
-]
-
-[[package]]
-name = "solana-cli-utils"
-version = "1.11.0"
-dependencies = [
- "anyhow",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-sdk",
 ]
 
 [[package]]

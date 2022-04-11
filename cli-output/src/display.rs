@@ -3,7 +3,7 @@ use {
     chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
-    solana_cli_utils::SettingType,
+    solana_cli_config::SettingType,
     solana_sdk::{
         clock::UnixTimestamp,
         hash::Hash,
