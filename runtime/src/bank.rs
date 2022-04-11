@@ -61,7 +61,7 @@ use {
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
         },
-        stakes::{InvalidCacheEntryReason, Stakes, StakesCache},
+        stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
@@ -1499,8 +1499,7 @@ impl Bank {
         //  slot = 0 and genesis configuration
         {
             let stakes = bank.stakes_cache.stakes().clone();
-            let stakes = Stakes::<Delegation>::try_from(stakes).unwrap();
-            let stakes = Arc::new(stakes);
+            let stakes = Arc::new(StakesEnum::from(stakes));
             for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
                 bank.epoch_stakes
                     .insert(epoch, EpochStakes::new(stakes.clone(), epoch));
@@ -2404,8 +2403,8 @@ impl Bank {
                 epoch >= leader_schedule_epoch.saturating_sub(MAX_LEADER_SCHEDULE_STAKES)
             });
             let stakes = self.stakes_cache.stakes().clone();
-            let stakes = Stakes::<Delegation>::try_from(stakes).unwrap();
-            let new_epoch_stakes = EpochStakes::new(Arc::new(stakes), leader_schedule_epoch);
+            let stakes = Arc::new(StakesEnum::from(stakes));
+            let new_epoch_stakes = EpochStakes::new(stakes, leader_schedule_epoch);
             {
                 let vote_stakes: HashMap<_, _> = self
                     .stakes_cache
