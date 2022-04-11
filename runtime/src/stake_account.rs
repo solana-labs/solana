@@ -13,10 +13,10 @@ use {
 
 /// An account and a stake state deserialized from the account.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct StakeAccount(AccountSharedData, StakeState);
+pub struct StakeAccount(AccountSharedData, StakeState);
 
 #[derive(Debug, Error)]
-pub(crate) enum Error {
+pub enum Error {
     #[error(transparent)]
     InstructionError(#[from] InstructionError),
     #[error("Invalid stake account owner: {owner:?}")]

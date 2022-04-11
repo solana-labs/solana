@@ -4,7 +4,10 @@ use {
         utils::{serialize_iter_as_map, serialize_iter_as_seq},
         *,
     },
-    crate::ancestors::AncestorsForSerialization,
+    crate::{
+        ancestors::AncestorsForSerialization,
+        stakes::{serde_stakes_enum_compat, StakesEnum},
+    },
     solana_measure::measure::Measure,
     solana_sdk::stake::state::Delegation,
     std::{cell::RefCell, collections::HashSet, sync::RwLock},
@@ -129,7 +132,8 @@ struct SerializableVersionedBank<'a> {
     rent_collector: RentCollector,
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
-    stakes: Stakes<Delegation>,
+    #[serde(serialize_with = "serde_stakes_enum_compat::serialize")]
+    stakes: StakesEnum,
     unused_accounts: UnusedAccounts,
     epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     is_delta: bool,
@@ -166,10 +170,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             rent_collector: rhs.rent_collector,
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
-            stakes: {
-                let stakes = rhs.stakes.stakes().clone();
-                Stakes::<Delegation>::try_from(stakes).unwrap()
-            },
+            stakes: StakesEnum::from(rhs.stakes.stakes().clone()),
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
@@ -339,7 +340,7 @@ impl<'a> TypeContext<'a> for Context {
             rent_collector: rhs.rent_collector,
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
-            stakes: rhs.stakes,
+            stakes: StakesEnum::from(rhs.stakes),
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: &rhs.epoch_stakes,
             is_delta: rhs.is_delta,

@@ -27,7 +27,7 @@ use {
 };
 
 #[derive(Debug, Error)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("Invalid delegation: {0}")]
     InvalidDelegation(Pubkey),
     #[error(transparent)]
@@ -154,6 +154,19 @@ pub struct Stakes<T: Clone> {
 
     /// history of staking levels
     stake_history: StakeHistory,
+}
+
+// For backward compatibility, we can only serialize and deserialize
+// Stakes<Delegation>. However Bank caches Stakes<StakeAccount>. This type
+// mismatch incurs a conversion cost at epoch boundary when updating
+// EpochStakes.
+// Below type allows EpochStakes to include either a Stakes<StakeAccount> or
+// Stakes<Delegation> and so bypass the conversion cost between the two at the
+// epoch boundary.
+#[derive(Debug, AbiExample)]
+pub enum StakesEnum {
+    Accounts(Stakes<StakeAccount>),
+    Delegations(Stakes<Delegation>),
 }
 
 impl<T: Clone> Stakes<T> {
@@ -375,6 +388,22 @@ impl Stakes<StakeAccount> {
     }
 }
 
+impl StakesEnum {
+    pub fn vote_accounts(&self) -> &VoteAccounts {
+        match self {
+            StakesEnum::Accounts(stakes) => stakes.vote_accounts(),
+            StakesEnum::Delegations(stakes) => stakes.vote_accounts(),
+        }
+    }
+
+    pub(crate) fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
+        match self {
+            StakesEnum::Accounts(stakes) => stakes.staked_nodes(),
+            StakesEnum::Delegations(stakes) => stakes.staked_nodes(),
+        }
+    }
+}
+
 impl TryFrom<Stakes<StakeAccount>> for Stakes<Delegation> {
     type Error = Error;
     fn try_from(stakes: Stakes<StakeAccount>) -> Result<Self, Self::Error> {
@@ -396,10 +425,85 @@ impl TryFrom<Stakes<StakeAccount>> for Stakes<Delegation> {
     }
 }
 
+impl From<Stakes<StakeAccount>> for StakesEnum {
+    fn from(stakes: Stakes<StakeAccount>) -> Self {
+        Self::Accounts(stakes)
+    }
+}
+
+impl From<Stakes<Delegation>> for StakesEnum {
+    fn from(stakes: Stakes<Delegation>) -> Self {
+        Self::Delegations(stakes)
+    }
+}
+
+// Two StakesEnums are equal as long as they represent the same delegations;
+// whether these delegations are stored as StakeAccounts or Delegations.
+// Therefore, if one side is Stakes<StakeAccount> and the other is a
+// Stakes<Delegation> we convert the former one to Stakes<Delegation> before
+// comparing for equality.
+impl PartialEq<StakesEnum> for StakesEnum {
+    fn eq(&self, other: &StakesEnum) -> bool {
+        match (self, other) {
+            (Self::Accounts(stakes), Self::Accounts(other)) => stakes == other,
+            (Self::Accounts(stakes), Self::Delegations(other)) => {
+                match Stakes::<Delegation>::try_from(stakes.clone()) {
+                    Ok(stakes) => stakes == *other,
+                    Err(_) => false,
+                }
+            }
+            (Self::Delegations(stakes), Self::Accounts(other)) => {
+                match Stakes::<Delegation>::try_from(other.clone()) {
+                    Ok(other) => *stakes == other,
+                    Err(_) => false,
+                }
+            }
+            (Self::Delegations(stakes), Self::Delegations(other)) => stakes == other,
+        }
+    }
+}
+
+// In order to maintain backward compatibility, the StakesEnum in EpochStakes
+// and SerializableVersionedBank should be serialized as Stakes<Delegation>.
+pub(crate) mod serde_stakes_enum_compat {
+    use {
+        super::*,
+        serde::{Deserialize, Deserializer, Serialize, Serializer},
+    };
+
+    pub(crate) fn serialize<S>(stakes: &StakesEnum, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match stakes {
+            StakesEnum::Accounts(stakes) => {
+                let stakes = match Stakes::<Delegation>::try_from(stakes.clone()) {
+                    Ok(stakes) => stakes,
+                    Err(err) => {
+                        let err = format!("{:?}", err);
+                        return Err(serde::ser::Error::custom(err));
+                    }
+                };
+                stakes.serialize(serializer)
+            }
+            StakesEnum::Delegations(stakes) => stakes.serialize(serializer),
+        }
+    }
+
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Arc<StakesEnum>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let stakes = Stakes::<Delegation>::deserialize(deserializer)?;
+        Ok(Arc::new(StakesEnum::Delegations(stakes)))
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
+        rand::Rng,
         rayon::ThreadPoolBuilder,
         solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent, stake},
         solana_stake_program::stake_state,
@@ -807,5 +911,64 @@ pub mod tests {
                 *expected_warmed_stake
             );
         }
+    }
+
+    #[test]
+    fn test_serde_stakes_enum_compat() {
+        #[derive(Debug, PartialEq, Deserialize, Serialize)]
+        struct Dummy {
+            head: String,
+            #[serde(with = "serde_stakes_enum_compat")]
+            stakes: Arc<StakesEnum>,
+            tail: String,
+        }
+        let mut rng = rand::thread_rng();
+        let stakes_cache = StakesCache::new(Stakes {
+            unused: rng.gen(),
+            epoch: rng.gen(),
+            ..Stakes::default()
+        });
+        for _ in 0..rng.gen_range(5usize, 10) {
+            let vote_pubkey = solana_sdk::pubkey::new_rand();
+            let vote_account = vote_state::create_account(
+                &vote_pubkey,
+                &solana_sdk::pubkey::new_rand(), // node_pubkey
+                rng.gen_range(0, 101),           // commission
+                rng.gen_range(0, 1_000_000),     // lamports
+            );
+            stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+            for _ in 0..rng.gen_range(10usize, 20) {
+                let stake_pubkey = solana_sdk::pubkey::new_rand();
+                let rent = Rent::with_slots_per_epoch(rng.gen());
+                let stake_account = stake_state::create_account(
+                    &stake_pubkey, // authorized
+                    &vote_pubkey,
+                    &vote_account,
+                    &rent,
+                    rng.gen_range(0, 1_000_000), // lamports
+                );
+                stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+            }
+        }
+        let stakes: Stakes<StakeAccount> = stakes_cache.stakes().clone();
+        assert!(stakes.vote_accounts.as_ref().len() >= 5);
+        assert!(stakes.stake_delegations.len() >= 50);
+        let dummy = Dummy {
+            head: String::from("dummy-head"),
+            stakes: Arc::new(StakesEnum::from(stakes.clone())),
+            tail: String::from("dummy-tail"),
+        };
+        assert!(dummy.stakes.vote_accounts().as_ref().len() >= 5);
+        let data = bincode::serialize(&dummy).unwrap();
+        let other: Dummy = bincode::deserialize(&data).unwrap();
+        assert_eq!(other, dummy);
+        let stakes = Stakes::<Delegation>::try_from(stakes).unwrap();
+        assert!(stakes.vote_accounts.as_ref().len() >= 5);
+        assert!(stakes.stake_delegations.len() >= 50);
+        let other = match &*other.stakes {
+            StakesEnum::Accounts(_) => panic!("wrong type!"),
+            StakesEnum::Delegations(delegations) => delegations,
+        };
+        assert_eq!(other, &stakes)
     }
 }
