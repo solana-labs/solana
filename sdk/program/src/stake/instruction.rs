@@ -695,6 +695,21 @@ pub fn get_minimum_delegation() -> Instruction {
     )
 }
 
+pub mod utils {
+    /// Helper function for programs to get the actual data after calling GetMinimumDelegation
+    ///
+    /// This fn handles calling `get_return_data()`, ensures the result is from the correct
+    /// program, and returns the correct type.  Returns `None` otherwise.
+    pub fn get_minimum_delegation_data() -> Option<u64> {
+        solana_program::program::get_return_data()
+            .and_then(|(program_id, return_data)| {
+                (program_id == crate::stake::program::id()).then(|| return_data)
+            })
+            .and_then(|return_data| return_data.try_into().ok())
+            .map(u64::from_le_bytes)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, crate::instruction::InstructionError};
