@@ -104,6 +104,17 @@ pub fn send_wire_transaction(
     }
 }
 
+pub fn send_wire_transaction_async(
+    wire_transaction: &'static [u8],
+    addr: &SocketAddr,
+) -> Result<(), TransportError> {
+    let conn = get_connection(addr);
+    match conn {
+        Connection::Udp(conn) => conn.send_wire_transaction_async(wire_transaction),
+        Connection::Quic(conn) => conn.send_wire_transaction_async(wire_transaction),
+    }
+}
+
 pub fn serialize_and_send_transaction(
     transaction: &VersionedTransaction,
     addr: &SocketAddr,
