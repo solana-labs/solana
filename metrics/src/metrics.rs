@@ -406,7 +406,7 @@ fn get_metrics_config() -> Result<MetricsConfig, String> {
 }
 
 pub fn query(q: &str) -> Result<String, String> {
-    let config = get_metrics_config().map_err(|err| err)?;
+    let config = get_metrics_config()?;
     let query_url = format!(
         "{}/query?u={}&p={}&q={}",
         &config.host, &config.username, &config.password, &q
