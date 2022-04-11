@@ -16,7 +16,7 @@ use {
         blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions, create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
-    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_program_runtime::{compute_budget::ComputeBudget, runtime_config::RuntimeConfig},
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
@@ -674,6 +674,15 @@ impl TestValidator {
             ..AccountsDbConfig::default()
         });
 
+        let runtime_config = RuntimeConfig {
+            bpf_jit: !config.no_bpf_jit,
+            compute_budget: config.max_compute_units.map(|max_units| ComputeBudget {
+                max_units,
+                ..ComputeBudget::default()
+            }),
+            ..RuntimeConfig::default()
+        };
+
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -698,16 +707,12 @@ impl TestValidator {
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
-            bpf_jit: !config.no_bpf_jit,
             validator_exit: config.validator_exit.clone(),
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
-            compute_budget: config.max_compute_units.map(|max_units| ComputeBudget {
-                max_units,
-                ..ComputeBudget::default()
-            }),
+            runtime_config,
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {
