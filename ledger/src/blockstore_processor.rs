@@ -14,10 +14,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
-    solana_program_runtime::{
-        runtime_config::RuntimeConfig,
-        timings::{ExecuteTimingType, ExecuteTimings},
-    },
+    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_background_service::DroppedSlotsReceiver,
@@ -33,6 +30,7 @@ use {
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_package::{PendingAccountsPackage, SnapshotType},
         snapshot_utils,

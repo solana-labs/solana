@@ -36,7 +36,6 @@ use {
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
-    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
@@ -51,6 +50,7 @@ use {
             AccountsIndexConfig,
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,

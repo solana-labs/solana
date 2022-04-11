@@ -31,7 +31,6 @@ use {
         shred::Shred,
     },
     solana_measure::measure::Measure,
-    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_runtime::{
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, ScanConfig},
@@ -40,6 +39,7 @@ use {
         cost_model::CostModel,
         cost_tracker::CostTracker,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
