@@ -1294,7 +1294,6 @@ fn load_frozen_forks(
                     // Purge account state for all dropped banks
                     for (pruned_slot, pruned_bank_id) in pruned_banks_receiver.try_iter() {
                         // Simulate this purge is from AccountBackgroundService
-                        let is_serialized_with_abs = true;
                         new_root_bank.rc.accounts.accounts_db.purge_slot(
                             pruned_slot,
                             pruned_bank_id,
