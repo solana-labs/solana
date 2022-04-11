@@ -1,6 +1,5 @@
 use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    solana_faucet::faucet::FAUCET_PORT,
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
@@ -14,7 +13,6 @@ const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS
 /// Holds the configuration for a single run of the benchmark
 pub struct Config {
     pub entrypoint_addr: SocketAddr,
-    pub faucet_addr: SocketAddr,
     pub id: Keypair,
     pub threads: usize,
     pub num_nodes: usize,
@@ -37,7 +35,6 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            faucet_addr: SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT)),
             id: Keypair::new(),
             threads: 4,
             num_nodes: 1,
@@ -76,7 +73,8 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .long("faucet")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("Location of the faucet; defaults to entrypoint:FAUCET_PORT"),
+                .hidden(true)
+                .help("Deprecated. BenchTps no longer queries the faucet directly"),
         )
         .arg(
             Arg::with_name("identity")
@@ -204,13 +202,6 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
     if let Some(addr) = matches.value_of("entrypoint") {
         args.entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1)
-        });
-    }
-
-    if let Some(addr) = matches.value_of("faucet") {
-        args.faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse faucet address: {}", e);
             exit(1)
         });
     }

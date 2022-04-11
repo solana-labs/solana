@@ -1,6 +1,7 @@
 use {
+    crate::bench_tps_client::BenchTpsClient,
     log::*,
-    solana_sdk::{client::Client, commitment_config::CommitmentConfig, timing::duration_as_s},
+    solana_sdk::{commitment_config::CommitmentConfig, timing::duration_as_s},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -27,7 +28,7 @@ pub fn sample_txs<T>(
     sample_period: u64,
     client: &Arc<T>,
 ) where
-    T: Client,
+    T: BenchTpsClient,
 {
     let mut max_tps = 0.0;
     let mut total_elapsed;
@@ -81,10 +82,7 @@ pub fn sample_txs<T>(
                 elapsed: total_elapsed,
                 txs: total_txs,
             };
-            sample_stats
-                .write()
-                .unwrap()
-                .push((client.tpu_addr(), stats));
+            sample_stats.write().unwrap().push((client.addr(), stats));
             return;
         }
         sleep(Duration::from_secs(sample_period));
