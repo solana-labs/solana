@@ -17,11 +17,11 @@ VoteProgram accounts are isolated in their own domain. Accounts
 have a special system instruction that allows them to move between
 domains. The move is finalized at the end of the next epoch.
 
-AccountInfo domain fields;
+AccountMeta domain fields;
 
 * domain - The isolation domain.
 
-* activation slot - The slot when this account is active in the
+* activation epoch - The epoch when this account is active in the
 domain.
 
 The isolation domain. Currently only two domains exist:
