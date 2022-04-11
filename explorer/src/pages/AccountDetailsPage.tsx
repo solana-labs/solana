@@ -5,7 +5,6 @@ import {
   useFetchAccountInfo,
   useAccountInfo,
   Account,
-  ProgramData,
   TokenProgramData,
   useMintAccountInfo,
 } from "providers/accounts";
@@ -41,6 +40,9 @@ import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import { SecurityCard } from "components/account/SecurityCard";
+import { AnchorAccountCard } from "components/account/AnchorAccountCard";
+import { AnchorProgramCard } from "components/account/AnchorProgramCard";
+import { useAnchorProgram } from "providers/anchor";
 
 const IDENTICON_WIDTH = 64;
 
@@ -246,11 +248,16 @@ function DetailsSections({
   }
 
   const account = info.data;
-  const data = account?.details?.data;
-  const tabs = getTabs(data);
+  const tabComponents = getTabs(pubkey, account).concat(
+    getAnchorTabs(pubkey, account)
+  );
 
   let moreTab: MoreTabs = "history";
-  if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
+  if (
+    tab &&
+    tabComponents.filter((tabComponent) => tabComponent.tab.slug === tab)
+      .length === 0
+  ) {
     return <Redirect to={{ ...location, pathname: `/address/${address}` }} />;
   } else if (tab) {
     moreTab = tab as MoreTabs;
@@ -265,7 +272,11 @@ function DetailsSections({
         </div>
       )}
       {<InfoSection account={account} />}
-      {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
+      <MoreSection
+        account={account}
+        tab={moreTab}
+        tabs={tabComponents.map(({ component }) => component)}
+      />
     </>
   );
 }
@@ -315,6 +326,11 @@ type Tab = {
   path: string;
 };
 
+type TabComponent = {
+  tab: Tab;
+  component: JSX.Element | null;
+};
+
 export type MoreTabs =
   | "history"
   | "tokens"
@@ -328,7 +344,9 @@ export type MoreTabs =
   | "rewards"
   | "metadata"
   | "domains"
-  | "security";
+  | "security"
+  | "anchor-program"
+  | "anchor-account";
 
 function MoreSection({
   account,
@@ -337,29 +355,17 @@ function MoreSection({
 }: {
   account: Account;
   tab: MoreTabs;
-  tabs: Tab[];
+  tabs: (JSX.Element | null)[];
 }) {
   const pubkey = account.pubkey;
-  const address = account.pubkey.toBase58();
   const data = account?.details?.data;
+
   return (
     <>
       <div className="container">
         <div className="header">
           <div className="header-body pt-0">
-            <ul className="nav nav-tabs nav-overflow header-tabs">
-              {tabs.map(({ title, slug, path }) => (
-                <li key={slug} className="nav-item">
-                  <NavLink
-                    className="nav-link"
-                    to={clusterPath(`/address/${address}${path}`)}
-                    exact
-                  >
-                    {title}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
+            <ul className="nav nav-tabs nav-overflow header-tabs">{tabs}</ul>
           </div>
         </div>
       </div>
@@ -401,11 +407,29 @@ function MoreSection({
       {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
         <SecurityCard data={data} />
       )}
+      {tab === "anchor-program" && (
+        <React.Suspense
+          fallback={<LoadingCard message="Loading anchor program IDL" />}
+        >
+          <AnchorProgramCard programId={pubkey} />
+        </React.Suspense>
+      )}
+      {tab === "anchor-account" && (
+        <React.Suspense
+          fallback={
+            <LoadingCard message="Decoding account data using anchor interface" />
+          }
+        >
+          <AnchorAccountCard account={account} />
+        </React.Suspense>
+      )}
     </>
   );
 }
 
-function getTabs(data?: ProgramData): Tab[] {
+function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
+  const address = pubkey.toBase58();
+  const data = account.details?.data;
   const tabs: Tab[] = [
     {
       slug: "history",
@@ -455,5 +479,122 @@ function getTabs(data?: ProgramData): Tab[] {
     });
   }
 
-  return tabs;
+  return tabs.map((tab) => {
+    return {
+      tab,
+      component: (
+        <li key={tab.slug} className="nav-item">
+          <NavLink
+            className="nav-link"
+            to={clusterPath(`/address/${address}${tab.path}`)}
+            exact
+          >
+            {tab.title}
+          </NavLink>
+        </li>
+      ),
+    };
+  });
+}
+
+function getAnchorTabs(pubkey: PublicKey, account: Account) {
+  const tabComponents = [];
+  const anchorProgramTab: Tab = {
+    slug: "anchor-program",
+    title: "Anchor Program IDL",
+    path: "/anchor-program",
+  };
+  tabComponents.push({
+    tab: anchorProgramTab,
+    component: (
+      <React.Suspense key={anchorProgramTab.slug} fallback={<></>}>
+        <AnchorProgramLink
+          tab={anchorProgramTab}
+          address={pubkey.toString()}
+          pubkey={pubkey}
+        />
+      </React.Suspense>
+    ),
+  });
+
+  const anchorAccountTab: Tab = {
+    slug: "anchor-account",
+    title: "Anchor Account",
+    path: "/anchor-account",
+  };
+  tabComponents.push({
+    tab: anchorAccountTab,
+    component: (
+      <React.Suspense key={anchorAccountTab.slug} fallback={<></>}>
+        <AnchorAccountLink
+          tab={anchorAccountTab}
+          address={pubkey.toString()}
+          programId={account.details?.owner}
+        />
+      </React.Suspense>
+    ),
+  });
+
+  return tabComponents;
+}
+
+function AnchorProgramLink({
+  tab,
+  address,
+  pubkey,
+}: {
+  tab: Tab;
+  address: string;
+  pubkey: PublicKey;
+}) {
+  const { url } = useCluster();
+  const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
+
+  if (!anchorProgram) {
+    return null;
+  }
+
+  return (
+    <li key={tab.slug} className="nav-item">
+      <NavLink
+        className="nav-link"
+        to={clusterPath(`/address/${address}${tab.path}`)}
+        exact
+      >
+        {tab.title}
+      </NavLink>
+    </li>
+  );
+}
+
+function AnchorAccountLink({
+  address,
+  tab,
+  programId,
+}: {
+  address: string;
+  tab: Tab;
+  programId: PublicKey | undefined;
+}) {
+  const { url } = useCluster();
+  const accountAnchorProgram = useAnchorProgram(
+    programId?.toString() ?? "",
+    url
+  );
+
+  if (!accountAnchorProgram) {
+    return null;
+  }
+
+  return (
+    <li key={tab.slug} className="nav-item">
+      <NavLink
+        className="nav-link"
+        to={clusterPath(`/address/${address}${tab.path}`)}
+        exact
+      >
+        {tab.title}
+      </NavLink>
+    </li>
+  );
 }

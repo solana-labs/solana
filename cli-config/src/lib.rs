@@ -55,11 +55,15 @@
 extern crate lazy_static;
 
 mod config;
-pub use config::{Config, CONFIG_FILE};
+mod config_input;
 use std::{
     fs::{create_dir_all, File},
     io::{self, Write},
     path::Path,
+};
+pub use {
+    config::{Config, CONFIG_FILE},
+    config_input::{ConfigInput, SettingType},
 };
 
 /// Load a value from a file in YAML format.

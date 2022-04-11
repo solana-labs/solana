@@ -171,7 +171,7 @@ impl ThinClient {
         &self.tpu_addrs[self.optimizer.best()]
     }
 
-    fn rpc_client(&self) -> &RpcClient {
+    pub fn rpc_client(&self) -> &RpcClient {
         &self.rpc_clients[self.optimizer.best()]
     }
 
@@ -612,12 +612,13 @@ impl AsyncClient for ThinClient {
     }
 }
 
-pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr)) -> ThinClient {
+pub fn create_client(rpc: SocketAddr, tpu: SocketAddr) -> ThinClient {
     ThinClient::new(rpc, tpu)
 }
 
 pub fn create_client_with_timeout(
-    (rpc, tpu): (SocketAddr, SocketAddr),
+    rpc: SocketAddr,
+    tpu: SocketAddr,
     timeout: Duration,
 ) -> ThinClient {
     ThinClient::new_socket_with_timeout(rpc, tpu, timeout)

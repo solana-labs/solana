@@ -6,7 +6,7 @@ import { prettyProgramLogs } from "utils/program-logs";
 import { useCluster } from "providers/cluster";
 
 export function ProgramLogSection({ signature }: SignatureProps) {
-  const { cluster } = useCluster();
+  const { cluster, url } = useCluster();
   const details = useTransactionDetails(signature);
 
   const transaction = details?.data?.transaction;
@@ -32,6 +32,7 @@ export function ProgramLogSection({ signature }: SignatureProps) {
             message={message}
             logs={prettyLogs}
             cluster={cluster}
+            url={url}
           />
         ) : (
           <div className="card-body">

@@ -211,7 +211,9 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let tx_client = create_client(non_bootstrap_info.client_facing_addr());
+    let (rpc, tpu) = non_bootstrap_info.client_facing_addr();
+    let tx_client = create_client(rpc, tpu);
+
     let (blockhash, _) = tx_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
@@ -516,7 +518,8 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let client = create_client(cluster.entry_point_info.client_facing_addr());
+    let (rpc, tpu) = cluster.entry_point_info.client_facing_addr();
+    let client = create_client(rpc, tpu);
 
     // Programs that are available at epoch 0
     for program_id in [

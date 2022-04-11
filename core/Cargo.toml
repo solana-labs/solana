@@ -21,12 +21,12 @@ bs58 = "0.4.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
-etcd-client = { version = "0.8.4", features = ["tls"] }
+etcd-client = { version = "0.9.0", features = ["tls"] }
 fs_extra = "1.2.0"
 histogram = "0.6.9"
 itertools = "0.10.3"
 log = "0.4.14"
-lru = "0.7.3"
+lru = "0.7.5"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.1"
@@ -49,7 +49,6 @@ solana-perf = { path = "../perf", version = "=1.11.0" }
 solana-poh = { path = "../poh", version = "=1.11.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
-solana-replica-lib = { path = "../replica-lib", version = "=1.11.0" }
 solana-rpc = { path = "../rpc", version = "=1.11.0" }
 solana-runtime = { path = "../runtime", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }

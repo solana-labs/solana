@@ -3,6 +3,7 @@ use {
     chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
+    solana_cli_config::SettingType,
     solana_sdk::{
         clock::UnixTimestamp,
         hash::Hash,
@@ -102,6 +103,21 @@ pub fn writeln_name_value(f: &mut dyn fmt::Write, name: &str, value: &str) -> fm
         style(value)
     };
     writeln!(f, "{} {}", style(name).bold(), styled_value)
+}
+
+pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
+    let description = match setting_type {
+        SettingType::Explicit => "",
+        SettingType::Computed => "(computed)",
+        SettingType::SystemDefault => "(default)",
+    };
+
+    println!(
+        "{} {} {}",
+        style(name).bold(),
+        style(value),
+        style(description).italic(),
+    );
 }
 
 pub fn format_labeled_address(pubkey: &str, address_labels: &HashMap<String, String>) -> String {
