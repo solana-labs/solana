@@ -2238,6 +2238,9 @@ pub fn main() {
         accounts_index_config.index_limit_mb = Some(limit);
     } else if matches.is_present("disable_accounts_disk_index") {
         accounts_index_config.index_limit_mb = None;
+    } else {
+        // disk acct idx on by default
+        accounts_index_config.index_limit_mb = Some(10_000);
     }
 
     {
