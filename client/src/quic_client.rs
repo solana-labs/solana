@@ -6,6 +6,7 @@ use {
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
+    log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
@@ -91,7 +92,9 @@ impl TpuConnection for QuicTpuConnection {
         //drop and detach the task
         let _ = self.client.runtime.spawn(async move {
             let send_buffer = self.client.send_buffer(wire_transaction);
-            let _ = self.client.runtime.block_on(send_buffer);
+            if let Err(e) = self.client.runtime.block_on(send_buffer) {
+                warn!("Failed to send transaction async to {:?}", e);
+            }
             ()
         });
         Ok(())
