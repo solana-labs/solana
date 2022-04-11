@@ -2,7 +2,7 @@
 use {
     log::*,
     solana_bench_tps::{
-        bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs},
+        bench::{do_bench_tps, fund_keypairs, generate_and_fund_keypairs, generate_keypairs},
         cli,
     },
     solana_genesis::Base64Account,
@@ -28,7 +28,6 @@ fn main() {
 
     let cli::Config {
         entrypoint_addr,
-        faucet_addr,
         id,
         num_nodes,
         tx_count,
@@ -138,19 +137,24 @@ fn main() {
         // This prevents the amount of storage needed for bench-tps accounts from creeping up
         // across multiple runs.
         keypairs.sort_by_key(|x| x.pubkey().to_string());
-        keypairs
-    } else {
-        generate_and_fund_keypairs(
+        fund_keypairs(
             client.clone(),
-            Some(*faucet_addr),
             id,
-            keypair_count,
-            *num_lamports_per_account,
+            &keypairs,
+            keypairs.len().saturating_sub(keypair_count) as u64,
+            last_balance,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {:?}", e);
             exit(1);
-        })
+        });
+        keypairs
+    } else {
+        generate_and_fund_keypairs(client.clone(), id, keypair_count, *num_lamports_per_account)
+            .unwrap_or_else(|e| {
+                eprintln!("Error could not fund keys: {:?}", e);
+                exit(1);
+            })
     };
 
     do_bench_tps(client, cli_config, keypairs);

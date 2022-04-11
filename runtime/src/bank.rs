@@ -3389,7 +3389,7 @@ impl Bank {
         // length is made variable by epoch
         blockhash_queue
             .get_hash_age(blockhash)
-            .map(|age| self.slot + blockhash_queue.len() as u64 - age)
+            .map(|age| self.slot + blockhash_queue.get_max_age() as u64 - age)
     }
 
     pub fn get_blockhash_last_valid_block_height(&self, blockhash: &Hash) -> Option<Slot> {
@@ -3398,7 +3398,7 @@ impl Bank {
         // length is made variable by epoch
         blockhash_queue
             .get_hash_age(blockhash)
-            .map(|age| self.block_height + blockhash_queue.len() as u64 - age)
+            .map(|age| self.block_height + blockhash_queue.get_max_age() as u64 - age)
     }
 
     pub fn confirmed_last_blockhash(&self) -> Hash {
@@ -3542,7 +3542,7 @@ impl Bank {
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(
         &'a self,
         transactions: &'b [SanitizedTransaction],
-        transaction_results: impl Iterator<Item = Result<()>>,
+        transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let lock_results = self.rc.accounts.lock_accounts_with_results(
@@ -6155,8 +6155,8 @@ impl Bank {
         *self.inflation.read().unwrap()
     }
 
-    pub fn rent_collector(&self) -> RentCollector {
-        self.rent_collector.clone()
+    pub fn rent_collector(&self) -> &RentCollector {
+        &self.rent_collector
     }
 
     /// Return the total capitalization of the Bank
@@ -6811,14 +6811,18 @@ impl Drop for Bank {
     }
 }
 
-pub fn goto_end_of_slot(bank: &mut Bank) {
-    let mut tick_hash = bank.last_blockhash();
-    loop {
-        tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
-        bank.register_tick(&tick_hash);
-        if tick_hash == bank.last_blockhash() {
-            bank.freeze();
-            return;
+/// utility function used for testing and benchmarking.
+pub mod test_utils {
+    use {super::Bank, solana_sdk::hash::hashv};
+    pub fn goto_end_of_slot(bank: &mut Bank) {
+        let mut tick_hash = bank.last_blockhash();
+        loop {
+            tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
+            bank.register_tick(&tick_hash);
+            if tick_hash == bank.last_blockhash() {
+                bank.freeze();
+                return;
+            }
         }
     }
 }
@@ -6880,6 +6884,7 @@ pub(crate) mod tests {
             },
         },
         std::{result, thread::Builder, time::Duration},
+        test_utils::goto_end_of_slot,
     };
 
     fn new_sanitized_message(

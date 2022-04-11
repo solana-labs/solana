@@ -195,7 +195,7 @@
 //! In user-written Solana program code, serialization is primarily used for
 //! accessing [`AccountInfo`] data and [`Instruction`] data, both of which are
 //! program-specific binary data. Every program is free to decide their own
-//! serialization format, but data recieved from other sources &mdash;
+//! serialization format, but data received from other sources &mdash;
 //! [sysvars][sysvar] for example &mdash; must be deserialized using the methods
 //! indicated by the documentation for that data or data type.
 //!

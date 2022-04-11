@@ -12,11 +12,12 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         genesis_config::GenesisConfig,
         stake::config::{self, Config},
+        transaction_context::BorrowedAccount,
     },
 };
 
-pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
-    get_config_data(account.data())
+pub fn from(account: &BorrowedAccount) -> Option<Config> {
+    get_config_data(account.get_data())
         .ok()
         .and_then(|data| deserialize(data).ok())
 }
@@ -34,15 +35,4 @@ pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
     genesis_config.add_account(config::id(), account);
 
     lamports
-}
-
-#[cfg(test)]
-mod tests {
-    use {super::*, std::cell::RefCell};
-
-    #[test]
-    fn test() {
-        let account = RefCell::new(create_account(0, &Config::default()));
-        assert_eq!(from(&account.borrow()), Some(Config::default()));
-    }
 }

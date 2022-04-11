@@ -158,7 +158,7 @@ impl SnapshotRequestHandler {
                             ancestors: None,
                             use_write_cache: false,
                             epoch_schedule: snapshot_root_bank.epoch_schedule(),
-                            rent_collector: &snapshot_root_bank.rent_collector(),
+                            rent_collector: snapshot_root_bank.rent_collector(),
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);

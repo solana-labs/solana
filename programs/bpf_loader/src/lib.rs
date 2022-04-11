@@ -1341,14 +1341,22 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let input = &mut [0x00];
+        let config = Config::default();
+        let syscall_registry = SyscallRegistry::default();
         let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
-        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint", false)
-            .unwrap();
+        solana_rbpf::elf::register_bpf_function(
+            &config,
+            &mut bpf_functions,
+            &syscall_registry,
+            0,
+            "entrypoint",
+        )
+        .unwrap();
         let program = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
             program,
             None,
-            Config::default(),
-            SyscallRegistry::default(),
+            config,
+            syscall_registry,
             bpf_functions,
         )
         .unwrap();
