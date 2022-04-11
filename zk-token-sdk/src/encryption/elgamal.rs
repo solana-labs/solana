@@ -460,10 +460,10 @@ impl ElGamalCiphertext {
 impl<'a, 'b> Add<&'b ElGamalCiphertext> for &'a ElGamalCiphertext {
     type Output = ElGamalCiphertext;
 
-    fn add(self, other: &'b ElGamalCiphertext) -> ElGamalCiphertext {
+    fn add(self, ciphertext: &'b ElGamalCiphertext) -> ElGamalCiphertext {
         ElGamalCiphertext {
-            commitment: &self.commitment + &other.commitment,
-            handle: &self.handle + &other.handle,
+            commitment: &self.commitment + &ciphertext.commitment,
+            handle: &self.handle + &ciphertext.handle,
         }
     }
 }
@@ -477,10 +477,10 @@ define_add_variants!(
 impl<'a, 'b> Sub<&'b ElGamalCiphertext> for &'a ElGamalCiphertext {
     type Output = ElGamalCiphertext;
 
-    fn sub(self, other: &'b ElGamalCiphertext) -> ElGamalCiphertext {
+    fn sub(self, ciphertext: &'b ElGamalCiphertext) -> ElGamalCiphertext {
         ElGamalCiphertext {
-            commitment: &self.commitment - &other.commitment,
-            handle: &self.handle - &other.handle,
+            commitment: &self.commitment - &ciphertext.commitment,
+            handle: &self.handle - &ciphertext.handle,
         }
     }
 }
@@ -494,10 +494,10 @@ define_sub_variants!(
 impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCiphertext {
     type Output = ElGamalCiphertext;
 
-    fn mul(self, other: &'b Scalar) -> ElGamalCiphertext {
+    fn mul(self, scalar: &'b Scalar) -> ElGamalCiphertext {
         ElGamalCiphertext {
-            commitment: &self.commitment * other,
-            handle: &self.handle * other,
+            commitment: &self.commitment * scalar,
+            handle: &self.handle * scalar,
         }
     }
 }
@@ -505,6 +505,23 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCiphertext {
 define_mul_variants!(
     LHS = ElGamalCiphertext,
     RHS = Scalar,
+    Output = ElGamalCiphertext
+);
+
+impl<'a, 'b> Mul<&'b ElGamalCiphertext> for &'a Scalar {
+    type Output = ElGamalCiphertext;
+
+    fn mul(self, ciphertext: &'b ElGamalCiphertext) -> ElGamalCiphertext {
+        ElGamalCiphertext {
+            commitment: self * &ciphertext.commitment,
+            handle: self * &ciphertext.handle,
+        }
+    }
+}
+
+define_mul_variants!(
+    LHS = Scalar,
+    RHS = ElGamalCiphertext,
     Output = ElGamalCiphertext
 );
 
@@ -535,8 +552,8 @@ impl DecryptHandle {
 impl<'a, 'b> Add<&'b DecryptHandle> for &'a DecryptHandle {
     type Output = DecryptHandle;
 
-    fn add(self, other: &'b DecryptHandle) -> DecryptHandle {
-        DecryptHandle(&self.0 + &other.0)
+    fn add(self, handle: &'b DecryptHandle) -> DecryptHandle {
+        DecryptHandle(&self.0 + &handle.0)
     }
 }
 
@@ -549,8 +566,8 @@ define_add_variants!(
 impl<'a, 'b> Sub<&'b DecryptHandle> for &'a DecryptHandle {
     type Output = DecryptHandle;
 
-    fn sub(self, other: &'b DecryptHandle) -> DecryptHandle {
-        DecryptHandle(&self.0 - &other.0)
+    fn sub(self, handle: &'b DecryptHandle) -> DecryptHandle {
+        DecryptHandle(&self.0 - &handle.0)
     }
 }
 
@@ -563,12 +580,22 @@ define_sub_variants!(
 impl<'a, 'b> Mul<&'b Scalar> for &'a DecryptHandle {
     type Output = DecryptHandle;
 
-    fn mul(self, other: &'b Scalar) -> DecryptHandle {
-        DecryptHandle(&self.0 * other)
+    fn mul(self, scalar: &'b Scalar) -> DecryptHandle {
+        DecryptHandle(&self.0 * scalar)
     }
 }
 
 define_mul_variants!(LHS = DecryptHandle, RHS = Scalar, Output = DecryptHandle);
+
+impl<'a, 'b> Mul<&'b DecryptHandle> for &'a Scalar {
+    type Output = DecryptHandle;
+
+    fn mul(self, handle: &'b DecryptHandle) -> DecryptHandle {
+        DecryptHandle(self * &handle.0)
+    }
+}
+
+define_mul_variants!(LHS = Scalar, RHS = DecryptHandle, Output = DecryptHandle);
 
 #[cfg(test)]
 mod tests {
@@ -700,6 +727,7 @@ mod tests {
             ElGamal::encrypt_with(amount_0 * amount_1, &public, &(&opening * scalar));
 
         assert_eq!(ciphertext_prod, ciphertext * scalar);
+        assert_eq!(ciphertext_prod, scalar * ciphertext);
     }
 
     #[test]

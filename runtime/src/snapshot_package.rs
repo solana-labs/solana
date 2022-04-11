@@ -112,7 +112,7 @@ impl AccountsPackage {
             snapshot_type,
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
-            rent_collector: bank.rent_collector(),
+            rent_collector: bank.rent_collector().clone(),
         })
     }
 }

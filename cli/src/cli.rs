@@ -7,7 +7,8 @@ use {
     log::*,
     num_traits::FromPrimitive,
     serde_json::{self, Value},
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{self, input_parsers::*, keypair::*},
+    solana_cli_config::ConfigInput,
     solana_cli_output::{
         display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
     },
@@ -456,129 +457,23 @@ impl From<nonce_utils::Error> for CliError {
     }
 }
 
-pub enum SettingType {
-    Explicit,
-    Computed,
-    SystemDefault,
-}
-
 pub struct CliConfig<'a> {
     pub command: CliCommand,
     pub json_rpc_url: String,
     pub websocket_url: String,
-    pub signers: Vec<&'a dyn Signer>,
     pub keypair_path: String,
+    pub commitment: CommitmentConfig,
+    pub signers: Vec<&'a dyn Signer>,
     pub rpc_client: Option<Arc<RpcClient>>,
     pub rpc_timeout: Duration,
     pub verbose: bool,
     pub output_format: OutputFormat,
-    pub commitment: CommitmentConfig,
     pub send_transaction_config: RpcSendTransactionConfig,
     pub confirm_transaction_initial_timeout: Duration,
     pub address_labels: HashMap<String, String>,
 }
 
 impl CliConfig<'_> {
-    fn default_keypair_path() -> String {
-        solana_cli_config::Config::default().keypair_path
-    }
-
-    fn default_json_rpc_url() -> String {
-        solana_cli_config::Config::default().json_rpc_url
-    }
-
-    fn default_websocket_url() -> String {
-        solana_cli_config::Config::default().websocket_url
-    }
-
-    fn default_commitment() -> CommitmentConfig {
-        CommitmentConfig::confirmed()
-    }
-
-    fn first_nonempty_setting(
-        settings: std::vec::Vec<(SettingType, String)>,
-    ) -> (SettingType, String) {
-        settings
-            .into_iter()
-            .find(|(_, value)| !value.is_empty())
-            .expect("no nonempty setting")
-    }
-
-    fn first_setting_is_some<T>(
-        settings: std::vec::Vec<(SettingType, Option<T>)>,
-    ) -> (SettingType, T) {
-        let (setting_type, setting_option) = settings
-            .into_iter()
-            .find(|(_, value)| value.is_some())
-            .expect("all settings none");
-        (setting_type, setting_option.unwrap())
-    }
-
-    pub fn compute_websocket_url_setting(
-        websocket_cmd_url: &str,
-        websocket_cfg_url: &str,
-        json_rpc_cmd_url: &str,
-        json_rpc_cfg_url: &str,
-    ) -> (SettingType, String) {
-        Self::first_nonempty_setting(vec![
-            (SettingType::Explicit, websocket_cmd_url.to_string()),
-            (SettingType::Explicit, websocket_cfg_url.to_string()),
-            (
-                SettingType::Computed,
-                solana_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
-                    json_rpc_cmd_url,
-                )),
-            ),
-            (
-                SettingType::Computed,
-                solana_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
-                    json_rpc_cfg_url,
-                )),
-            ),
-            (SettingType::SystemDefault, Self::default_websocket_url()),
-        ])
-    }
-
-    pub fn compute_json_rpc_url_setting(
-        json_rpc_cmd_url: &str,
-        json_rpc_cfg_url: &str,
-    ) -> (SettingType, String) {
-        let (setting_type, url_or_moniker) = Self::first_nonempty_setting(vec![
-            (SettingType::Explicit, json_rpc_cmd_url.to_string()),
-            (SettingType::Explicit, json_rpc_cfg_url.to_string()),
-            (SettingType::SystemDefault, Self::default_json_rpc_url()),
-        ]);
-        (setting_type, normalize_to_url_if_moniker(&url_or_moniker))
-    }
-
-    pub fn compute_keypair_path_setting(
-        keypair_cmd_path: &str,
-        keypair_cfg_path: &str,
-    ) -> (SettingType, String) {
-        Self::first_nonempty_setting(vec![
-            (SettingType::Explicit, keypair_cmd_path.to_string()),
-            (SettingType::Explicit, keypair_cfg_path.to_string()),
-            (SettingType::SystemDefault, Self::default_keypair_path()),
-        ])
-    }
-
-    pub fn compute_commitment_config(
-        commitment_cmd: &str,
-        commitment_cfg: &str,
-    ) -> (SettingType, CommitmentConfig) {
-        Self::first_setting_is_some(vec![
-            (
-                SettingType::Explicit,
-                CommitmentConfig::from_str(commitment_cmd).ok(),
-            ),
-            (
-                SettingType::Explicit,
-                CommitmentConfig::from_str(commitment_cfg).ok(),
-            ),
-            (SettingType::SystemDefault, Some(Self::default_commitment())),
-        ])
-    }
-
     pub(crate) fn pubkey(&self) -> Result<Pubkey, SignerError> {
         if !self.signers.is_empty() {
             self.signers[0].try_pubkey()
@@ -609,15 +504,15 @@ impl Default for CliConfig<'_> {
                 pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
             },
-            json_rpc_url: Self::default_json_rpc_url(),
-            websocket_url: Self::default_websocket_url(),
+            json_rpc_url: ConfigInput::default().json_rpc_url,
+            websocket_url: ConfigInput::default().websocket_url,
+            keypair_path: ConfigInput::default().keypair_path,
+            commitment: ConfigInput::default().commitment,
             signers: Vec::new(),
-            keypair_path: Self::default_keypair_path(),
             rpc_client: None,
             rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
             verbose: false,
             output_format: OutputFormat::Display,
-            commitment: CommitmentConfig::confirmed(),
             send_transaction_config: RpcSendTransactionConfig::default(),
             confirm_transaction_initial_timeout: Duration::from_secs(
                 u64::from_str(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS).unwrap(),

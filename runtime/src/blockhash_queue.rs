@@ -135,7 +135,7 @@ impl BlockhashQueue {
         })
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) fn get_max_age(&self) -> usize {
         self.max_age
     }
 }
@@ -208,5 +208,89 @@ mod tests {
                 blockhash_queue.check_hash_age(hash, MAX_RECENT_BLOCKHASHES)
             );
         }
+    }
+
+    #[test]
+    fn test_len() {
+        const MAX_AGE: usize = 10;
+        let mut hash_queue = BlockhashQueue::new(MAX_AGE);
+        assert_eq!(hash_queue.ages.len(), 0);
+
+        for _ in 0..MAX_AGE {
+            hash_queue.register_hash(&Hash::new_unique(), 0);
+        }
+        assert_eq!(hash_queue.ages.len(), MAX_AGE);
+
+        // Show that the queue actually holds one more entry than the max age.
+        // This is because the most recent hash is considered to have an age of 0,
+        // which is likely the result of an unintentional off-by-one error in the past.
+        hash_queue.register_hash(&Hash::new_unique(), 0);
+        assert_eq!(hash_queue.ages.len(), MAX_AGE + 1);
+
+        // Ensure that no additional entries beyond `MAX_AGE + 1` are added
+        hash_queue.register_hash(&Hash::new_unique(), 0);
+        assert_eq!(hash_queue.ages.len(), MAX_AGE + 1);
+    }
+
+    #[test]
+    fn test_get_hash_age() {
+        const MAX_AGE: usize = 10;
+        let mut hash_list: Vec<Hash> = Vec::new();
+        hash_list.resize_with(MAX_AGE + 1, Hash::new_unique);
+
+        let mut hash_queue = BlockhashQueue::new(MAX_AGE);
+        for hash in &hash_list {
+            assert!(hash_queue.get_hash_age(hash).is_none());
+        }
+
+        for hash in &hash_list {
+            hash_queue.register_hash(hash, 0);
+        }
+
+        // Note that the "age" of a hash in the queue is 0-indexed. So when processing
+        // transactions in block 50, the hash for block 49 has an age of 0 despite
+        // being one block in the past.
+        for (age, hash) in hash_list.iter().rev().enumerate() {
+            assert_eq!(hash_queue.get_hash_age(hash), Some(age as u64));
+        }
+
+        // When the oldest hash is popped, it should no longer return a hash age
+        hash_queue.register_hash(&Hash::new_unique(), 0);
+        assert!(hash_queue.get_hash_age(&hash_list[0]).is_none());
+    }
+
+    #[test]
+    fn test_check_hash_age() {
+        const MAX_AGE: usize = 10;
+        let mut hash_list: Vec<Hash> = Vec::new();
+        hash_list.resize_with(MAX_AGE + 1, Hash::new_unique);
+
+        let mut hash_queue = BlockhashQueue::new(MAX_AGE);
+        for hash in &hash_list {
+            assert!(hash_queue.check_hash_age(hash, MAX_AGE).is_none());
+        }
+
+        for hash in &hash_list {
+            hash_queue.register_hash(hash, 0);
+        }
+
+        // Note that the "age" of a hash in the queue is 0-indexed. So when checking
+        // the age of a hash is within max age, the hash from 11 slots ago is considered
+        // to be within the max age of 10.
+        for hash in &hash_list {
+            assert_eq!(hash_queue.check_hash_age(hash, MAX_AGE), Some(true));
+        }
+
+        // When max age is 0, the most recent blockhash is still considered valid
+        assert_eq!(
+            hash_queue.check_hash_age(&hash_list[MAX_AGE], 0),
+            Some(true)
+        );
+
+        // Just because a hash is in the queue, doesn't mean it's valid for max age
+        assert_eq!(
+            hash_queue.check_hash_age(&hash_list[0], MAX_AGE - 1),
+            Some(false)
+        );
     }
 }
