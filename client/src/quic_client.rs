@@ -92,16 +92,25 @@ impl TpuConnection for QuicTpuConnection {
 
     fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
-        //drop and detach the task
         let client = self.client.clone();
-        inc_new_counter_info!("send_wire_transaction_async", 1);
+        //drop and detach the task
         let _ = RUNTIME.spawn(async move {
             let send_buffer = client.send_buffer(wire_transaction);
             if let Err(e) = send_buffer.await {
-                inc_new_counter_warn!("send_wire_transaction_async_fail", 1);
                 warn!("Failed to send transaction async to {:?}", e);
-            } else {
-                inc_new_counter_info!("send_wire_transaction_async_pass", 1);
+            }
+        });
+        Ok(())
+    }
+    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>
+    {
+        let _guard = RUNTIME.enter();
+        let client = self.client.clone();
+        //drop and detach the task
+        let _ = RUNTIME.spawn(async move {
+            let send_vecs = client.send_vecs(buffers);
+            if let Err(e) = send_vecs.await {
+                warn!("Failed to send transaction batch async to {:?}", e);
             }
         });
         Ok(())
@@ -228,4 +237,45 @@ impl QuicClient {
         }
         Ok(())
     }
+
+    pub async fn send_vecs(&self, buffers: Vec<Vec<u8>>) -> Result<(), ClientErrorKind>
+    {
+        // Start off by "testing" the connection by sending the first transaction
+        // This will also connect to the server if not already connected
+        // and reconnect and retry if the first send attempt failed
+        // (for example due to a timed out connection), returning an error
+        // or the connection that was used to successfully send the transaction.
+        // We will use the returned connection to send the rest of the transactions in the batch
+        // to avoid touching the mutex in self, and not bother reconnecting if we fail along the way
+        // since testing even in the ideal GCE environment has found no cases
+        // where reconnecting and retrying in the middle of a batch send
+        // (i.e. we encounter a connection error in the middle of a batch send, which presumably cannot
+        // be due to a timed out connection) has succeeded
+        if buffers.is_empty() {
+            return Ok(());
+        }
+        let connection = self._send_buffer(buffers[0].as_ref()).await?;
+
+        // Used to avoid dereferencing the Arc multiple times below
+        // by just getting a reference to the NewConnection once
+        let connection_ref: &NewConnection = &connection;
+
+        let chunks = buffers[1..buffers.len()]
+            .iter()
+            .chunks(QUIC_MAX_CONCURRENT_STREAMS);
+
+        let futures = chunks.into_iter().map(|buffs| {
+            join_all(
+                buffs
+                    .into_iter()
+                    .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
+            )
+        });
+
+        for f in futures {
+            f.await.into_iter().try_for_each(|res| res)?;
+        }
+        Ok(())
+    }
+
 }
