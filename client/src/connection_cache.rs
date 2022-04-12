@@ -256,6 +256,17 @@ pub fn send_wire_transaction_async(
     r
 }
 
+pub fn send_wire_transaction_batch_async(
+    packets: Vec<Vec<u8>>,
+    addr: &SocketAddr,
+) -> Result<(), TransportError> {
+    let conn = get_connection(addr);
+    match conn {
+        Connection::Udp(conn) => conn.send_wire_transaction_batch_async(packets),
+        Connection::Quic(conn) => conn.send_wire_transaction_batch_async(packets),
+    }
+}
+
 pub fn send_wire_transaction(
     wire_transaction: &[u8],
     addr: &SocketAddr,
