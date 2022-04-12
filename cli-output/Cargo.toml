@@ -22,6 +22,7 @@ serde_json = "1.0.79"
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.9" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.9" }
 solana-client = { path = "../client", version = "=1.10.9" }
+solana-cli-config = { path = "../cli-config", version = "=1.10.9" }
 solana-sdk = { path = "../sdk", version = "=1.10.9" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.9" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.9" }
