@@ -126,16 +126,25 @@ pub fn create_executor(
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
+        enable_stack_frame_gaps: true,
+        instruction_meter_checkpoint_distance: 10000,
+        enable_instruction_meter: true,
         enable_instruction_tracing: log_enabled!(Trace),
-        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
-            && invoke_context
-                .feature_set
-                .is_active(&disable_bpf_deprecated_load_instructions::id()),
+        enable_symbol_and_section_labels: false,
         disable_unresolved_symbols_at_runtime: invoke_context
             .feature_set
             .is_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
         reject_broken_elfs: reject_deployment_of_broken_elfs,
-        ..Config::default()
+        noop_instruction_ratio: 1.0 / 256.0,
+        sanitize_user_provided_values: true,
+        encrypt_environment_registers: true,
+        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
+            && invoke_context
+                .feature_set
+                .is_active(&disable_bpf_deprecated_load_instructions::id()),
+        syscall_bpf_function_hash_collision: false,
+        reject_callx_r10: false,
+        // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let mut executable = {
