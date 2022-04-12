@@ -73,6 +73,7 @@ use {
         commitment::BlockCommitmentCache,
         cost_model::CostModel,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
@@ -110,7 +111,6 @@ const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 pub struct ValidatorConfig {
-    pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
     pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
@@ -146,7 +146,6 @@ pub struct ValidatorConfig {
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
     pub contact_save_interval: u64,
-    pub bpf_jit: bool,
     pub send_transaction_service_config: send_transaction_service::Config,
     pub no_poh_speed_test: bool,
     pub no_os_memory_stats_reporting: bool,
@@ -165,12 +164,12 @@ pub struct ValidatorConfig {
     pub accounts_shrink_ratio: AccountShrinkThreshold,
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
+    pub runtime_config: RuntimeConfig,
 }
 
 impl Default for ValidatorConfig {
     fn default() -> Self {
         Self {
-            dev_halt_at_slot: None,
             expected_genesis_hash: None,
             expected_bank_hash: None,
             expected_shred_version: None,
@@ -206,7 +205,6 @@ impl Default for ValidatorConfig {
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
-            bpf_jit: false,
             send_transaction_service_config: send_transaction_service::Config::default(),
             no_poh_speed_test: true,
             no_os_memory_stats_reporting: true,
@@ -225,6 +223,7 @@ impl Default for ValidatorConfig {
             accounts_db_config: None,
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
+            runtime_config: RuntimeConfig::default(),
         }
     }
 }
@@ -736,7 +735,7 @@ impl Validator {
             (None, None, None, None)
         };
 
-        if config.dev_halt_at_slot.is_some() {
+        if config.runtime_config.dev_halt_at_slot.is_some() {
             // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::finalized() and
             // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
             block_commitment_cache
@@ -1308,9 +1307,7 @@ fn load_blockstore(
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
 
     let process_options = blockstore_processor::ProcessOptions {
-        bpf_jit: config.bpf_jit,
         poh_verify: config.poh_verify,
-        dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
@@ -1319,6 +1316,7 @@ fn load_blockstore(
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
+        runtime_config: config.runtime_config.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 

@@ -39,6 +39,7 @@ use {
         cost_model::CostModel,
         cost_tracker::CostTracker,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
@@ -1785,9 +1786,12 @@ fn main() {
             }
             ("shred-version", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: Some(0),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: Some(0),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -1862,9 +1866,12 @@ fn main() {
             }
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: Some(0),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: Some(0),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2089,10 +2096,8 @@ fn main() {
                 });
 
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
-                    bpf_jit: !matches.is_present("no_bpf_jit"),
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
@@ -2106,6 +2111,11 @@ fn main() {
                     accounts_db_test_hash_calculation: arg_matches
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                        bpf_jit: !matches.is_present("no_bpf_jit"),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2142,9 +2152,12 @@ fn main() {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
 
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
 
@@ -2268,9 +2281,12 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
-                        dev_halt_at_slot: Some(snapshot_slot),
                         new_hard_forks,
                         poh_verify: false,
+                        runtime_config: RuntimeConfig {
+                            dev_halt_at_slot: Some(snapshot_slot),
+                            ..RuntimeConfig::default()
+                        },
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
@@ -2565,9 +2581,12 @@ fn main() {
             ("accounts", Some(arg_matches)) => {
                 let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot,
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot,
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2628,9 +2647,12 @@ fn main() {
             ("capitalization", Some(arg_matches)) => {
                 let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot,
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot,
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

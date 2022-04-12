@@ -30,6 +30,7 @@ use {
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_package::{PendingAccountsPackage, SnapshotType},
         snapshot_utils,
@@ -544,10 +545,8 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
-    pub bpf_jit: bool,
     pub poh_verify: bool,
     pub full_leader_cache: bool,
-    pub dev_halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
@@ -561,6 +560,7 @@ pub struct ProcessOptions {
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
+    pub runtime_config: RuntimeConfig,
 }
 
 pub fn test_process_blockstore(
@@ -603,11 +603,11 @@ pub(crate) fn process_blockstore_for_bank_0(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> BankForks {
     // Setup bank for slot 0
-    let bank0 = Bank::new_with_paths(
+    let mut bank0 = Bank::new_with_paths(
         genesis_config,
         account_paths,
         opts.debug_keys.clone(),
-        Some(&crate::builtins::get(opts.bpf_jit)),
+        Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
         opts.account_indexes.clone(),
         opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
@@ -615,6 +615,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
     );
+    bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = BankForks::new(bank0);
 
     info!("processing ledger for slot 0...");
@@ -1147,7 +1148,10 @@ fn load_frozen_forks(
         &mut pending_slots,
     )?;
 
-    let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
+    let dev_halt_at_slot = opts
+        .runtime_config
+        .dev_halt_at_slot
+        .unwrap_or(std::u64::MAX);
     if bank_forks.root() != dev_halt_at_slot {
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
@@ -3084,8 +3088,11 @@ pub mod tests {
         // Specify halting at slot 0
         let opts = ProcessOptions {
             poh_verify: true,
-            dev_halt_at_slot: Some(0),
             accounts_db_test_hash_calculation: true,
+            runtime_config: RuntimeConfig {
+                dev_halt_at_slot: Some(0),
+                ..RuntimeConfig::default()
+            },
             ..ProcessOptions::default()
         };
         let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
