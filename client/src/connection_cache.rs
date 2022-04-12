@@ -3,10 +3,11 @@ use {
         quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
+    solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{transaction::VersionedTransaction, transport::TransportError},
     std::{
         collections::{hash_map::Entry, BTreeMap, HashMap},
-        net::{SocketAddr, UdpSocket},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
     },
 };
@@ -74,10 +75,11 @@ fn get_connection(addr: &SocketAddr) -> Connection {
             (pair.0.clone(), old_ticks)
         }
         Entry::Vacant(entry) => {
-            let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            // TODO: see https://github.com/solana-labs/solana/issues/23659
-            // make it configurable (e.g. via the command line) whether to use UDP or Quic
-
+            let (_, send_socket) = solana_net_utils::bind_in_range(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                VALIDATOR_PORT_RANGE,
+            )
+            .unwrap();
             let conn = if use_quic {
                 Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
             } else {
