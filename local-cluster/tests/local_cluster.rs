@@ -127,8 +127,6 @@ fn test_ledger_cleanup_service() {
         &cluster.entry_point_info,
         &cluster.funding_keypair,
         num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
     );
     cluster.close_preserve_ledgers();
     //check everyone's ledgers and make sure only ~100 slots are stored
@@ -146,6 +144,24 @@ fn test_ledger_cleanup_service() {
 
 #[test]
 #[serial]
+fn test_spend_and_verify_all_nodes_1_quic() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    error!("test_spend_and_verify_all_nodes_1_quic");
+    let num_nodes = 1;
+    let local =
+        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    cluster_tests::spend_and_verify_all_nodes_ext(
+        &local.entry_point_info,
+        &local.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+        SocketAddrSpace::Unspecified,
+        true,
+    );
+}
+
+#[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_1");
@@ -156,8 +172,6 @@ fn test_spend_and_verify_all_nodes_1() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
     );
 }
 
@@ -173,8 +187,6 @@ fn test_spend_and_verify_all_nodes_2() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
     );
 }
 
@@ -190,8 +202,6 @@ fn test_spend_and_verify_all_nodes_3() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
     );
 }
 
@@ -283,8 +293,6 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
     );
 }
 
@@ -1358,13 +1366,7 @@ fn test_snapshot_restart_tower() {
     // Use the restarted node as the discovery point so that we get updated
     // validator's ContactInfo
     let restarted_node_info = cluster.get_contact_info(&validator_id).unwrap();
-    cluster_tests::spend_and_verify_all_nodes(
-        restarted_node_info,
-        &cluster.funding_keypair,
-        1,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
-    );
+    cluster_tests::spend_and_verify_all_nodes(restarted_node_info, &cluster.funding_keypair, 1);
 }
 
 #[test]
@@ -1555,8 +1557,6 @@ fn test_snapshots_restart_validity() {
             &cluster.entry_point_info,
             &cluster.funding_keypair,
             1,
-            HashSet::new(),
-            SocketAddrSpace::Unspecified,
         );
     }
 }

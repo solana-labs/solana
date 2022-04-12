@@ -43,13 +43,29 @@ use {
     },
 };
 
+pub fn spend_and_verify_all_nodes(
+    entry_point_info: &ContactInfo,
+    funding_keypair: &Keypair,
+    nodes: usize,
+) {
+    spend_and_verify_all_nodes_ext(
+        entry_point_info,
+        funding_keypair,
+        nodes,
+        HashSet::new(),
+        SocketAddrSpace::Unspecified,
+        false,
+    );
+}
+
 /// Spend and verify from every node in the network
-pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
+pub fn spend_and_verify_all_nodes_ext<S: ::std::hash::BuildHasher + Sync + Send>(
     entry_point_info: &ContactInfo,
     funding_keypair: &Keypair,
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
     socket_addr_space: SocketAddrSpace,
+    use_quic: bool,
 ) {
     let cluster_nodes =
         discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
@@ -75,9 +91,16 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
         let mut transaction =
             system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
-        let sig = client
-            .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
-            .unwrap();
+        let sig = transaction.signatures[0];
+        if use_quic {
+            let versioned = transaction.into();
+            solana_client::connection_cache::serialize_and_send_transaction(&versioned, &tpu)
+                .unwrap();
+        } else {
+            let _sig = client
+                .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
+                .unwrap();
+        }
         for validator in &cluster_nodes {
             if ignore_nodes.contains(&validator.id) {
                 continue;

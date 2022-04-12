@@ -30,7 +30,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        collections::HashSet,
         fs, iter,
         path::Path,
         sync::{
@@ -328,8 +327,6 @@ pub fn run_cluster_partition<C>(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
         num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
     );
 
     let cluster_nodes = discover_cluster(
