@@ -1212,7 +1212,7 @@ impl Drop for FlushGuard<'_> {
 mod tests {
     use {
         super::*,
-        crate::accounts_index::{AccountsIndexConfig, BINS_FOR_TESTING},
+        crate::accounts_index::{AccountsIndexConfig, IndexLimitMb, BINS_FOR_TESTING},
         itertools::Itertools,
     };
 
@@ -1230,7 +1230,7 @@ mod tests {
         let holder = Arc::new(BucketMapHolder::new(
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig {
-                index_limit_mb: Some(1),
+                index_limit_mb: IndexLimitMb::Limit(1),
                 ..AccountsIndexConfig::default()
             }),
             1,

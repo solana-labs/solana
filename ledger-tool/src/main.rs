@@ -33,8 +33,13 @@ use {
     },
     solana_measure::measure::Measure,
     solana_runtime::{
+<<<<<<< HEAD
         accounts_db::AccountsDbConfig,
         accounts_index::{AccountsIndexConfig, ScanConfig},
+=======
+        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
+        accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
+>>>>>>> 1bc49d219 (IndexLimitMb option adds 'Unspecified' state (#24249))
         bank::{Bank, RewardCalculationEvent},
         bank_forks::BankForks,
         cost_model::CostModel,
@@ -1997,13 +2002,15 @@ fn main() {
                 let system_monitor_service =
                     SystemMonitorService::new(Arc::clone(&exit_signal), true, false);
 
-                if let Some(limit) =
+                accounts_index_config.index_limit_mb = if let Some(limit) =
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
-                    accounts_index_config.index_limit_mb = Some(limit);
+                    IndexLimitMb::Limit(limit)
                 } else if arg_matches.is_present("disable_accounts_disk_index") {
-                    accounts_index_config.index_limit_mb = None;
-                }
+                    IndexLimitMb::InMemOnly
+                } else {
+                    IndexLimitMb::Unspecified
+                };
 
                 {
                     let mut accounts_index_paths: Vec<PathBuf> =
