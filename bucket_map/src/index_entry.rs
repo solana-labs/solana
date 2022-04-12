@@ -58,7 +58,8 @@ impl IndexEntry {
     }
 
     pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
-        (num_slots as f64).log2().ceil() as u64 // use int log here?
+        // Compute the ceiling of log2 for integer
+        64 - ((num_slots - 1).leading_zeros()) as u64
     }
 
     pub fn data_bucket_ix(&self) -> u64 {
@@ -152,5 +153,24 @@ mod tests {
         let too_big = 1 << 56;
         let mut index = IndexEntry::new(Pubkey::new_unique());
         index.set_storage_offset(too_big);
+    }
+
+    #[test]
+    fn test_data_bucket() {
+        for n in 1..512 {
+            assert_eq!(
+                IndexEntry::data_bucket_from_num_slots(n),
+                (n as f64).log2().ceil() as u64
+            );
+        }
+        assert_eq!(IndexEntry::data_bucket_from_num_slots(u32::MAX as u64), 32);
+        assert_eq!(
+            IndexEntry::data_bucket_from_num_slots(u32::MAX as u64 + 1),
+            32
+        );
+        assert_eq!(
+            IndexEntry::data_bucket_from_num_slots(u32::MAX as u64 + 2),
+            33
+        );
     }
 }
