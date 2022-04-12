@@ -12,6 +12,32 @@
 //! These options allow to compose transaction which fails at
 //! a particular stage of the processing pipeline.
 //!
+//! To limit the number of possible options and simplify the usage of the tool,
+//! The following configurations for are suggested:
+//! Let `COMMON="--mode tpu --data-type transaction --unique-transactions"`
+//! 1. Without blockhash and payer:
+//! 1.1 Without valid signatures
+//! ```bash
+//! TODO
+//! ```
+//! 1.2 With valid signatures
+//! ```bash
+//! TODO
+//! ```
+//! 2. With blockhash and payer:
+//! 2.1 Single instruction transaction
+//! ```bash
+//! TODO
+//! ```
+//! 2.2 Multi instruction transaction
+//! ```bash
+//! TODO
+//! ```
+//! 2.3 Account creation transaction
+//! ```bash
+//! TODO
+//! ```
+//!
 //! Example 1: send random transactions to TPU
 //! ```bash
 //! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
@@ -33,7 +59,7 @@ use {
     itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
-    solana_bench_tps::bench::generate_and_fund_keypairs,
+    solana_bench_tps::bench::{airdrop_lamports, generate_and_fund_keypairs},
     solana_client::rpc_client::RpcClient,
     solana_client::transaction_executor::TransactionExecutor,
     solana_core::serve_repair::RepairProtocol,
@@ -106,17 +132,24 @@ impl TransactionGenerator {
 
     fn generate(
         &mut self,
-        payer: &Keypair,
+        payer: &Option<Keypair>,
         kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
         rpc_client: &Arc<RpcClient>,
     ) -> Transaction {
         if self.transaction_params.valid_blockhash {
             // kpvals must be Some and contain at least one element
+            if kpvals.is_none() {
+                info!("NONE");
+            }
+            if kpvals.as_ref().unwrap().is_empty() {
+                info!("EMPTY");
+            }
             if kpvals.is_none() || kpvals.as_ref().unwrap().len() == 0 {
                 panic!("Expected at least one destination keypair to create transaction");
             }
             let kpvals = kpvals.unwrap();
-            self.generate_with_blockhash(&payer, kpvals, rpc_client)
+            let payer = payer.as_ref().unwrap();
+            self.generate_with_blockhash(payer, kpvals, rpc_client)
         } else {
             self.generate_without_blockhash(kpvals)
         }
@@ -310,62 +343,32 @@ fn create_sender_thread(
     })
 }
 
-// Keypair is not clonable, but we need to clone it to pass to threads
-fn clone_payer(payer: &Option<&Keypair>) -> Option<Keypair> {
-    if payer.is_none() {
-        None
-    } else {
-        let bytes = payer.unwrap().to_bytes();
-        match Keypair::from_bytes(&bytes) {
-            Ok(kp) => Some(kp),
-            Err(_) => None,
-        }
-    }
-}
 // TODO use Measure struct from bench instead of manual measuring
-
 fn create_generator_thread<T: 'static + Client + Send + Sync>(
     tx_sender: &Sender<TransactionMsg>,
     max_iter_per_thread: usize,
     transaction_generator: &mut TransactionGenerator,
     client: &Arc<T>,
-    payer: Keypair,
+    payer: Option<Keypair>,
     rpc_client: &Arc<RpcClient>,
 ) -> thread::JoinHandle<()> {
     let tx_sender = tx_sender.clone();
     let mut transaction_generator = transaction_generator.clone();
     let rpc_client = rpc_client.clone(); // TODO remove later, use thread for blockhashes
-                                         //let payer = payer.clone();
     let client = client.clone();
 
     let num_signatures = transaction_generator.transaction_params.num_signatures;
     let valid_signatures = transaction_generator.transaction_params.valid_signatures;
+    let valid_blockhash = transaction_generator.transaction_params.valid_blockhash;
 
-    //let payer = clone_payer(&payer);
-
-    // TODO makes sense only for valid_signature option
     // Generate n=1000 unique keypairs, which are used to create
     // chunks of keypairs.
     // The number of chunks is described by binomial coefficient
     // and hence 1000 seems to be a reasonable choice
     let mut keypairs_flat: Vec<Keypair> = Vec::new();
-    if valid_signatures {
+    if valid_signatures || valid_blockhash {
         keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
     }
-
-    // TODO, rewrite later: I'm not sure if we need to be precise about message cost etc
-    /*let lamports_per_account = 10;
-    let max_fee = 2; //client.get_fee_for_message(&single_sig_message).unwrap();
-    let total_keypairs = keypairs_flat.len() as u64 + 1; // Add one for funding keypair
-    let total = 100; //lamports_per_account * total_keypairs;
-    fund_keys(
-        client,
-        funding_key,
-        &keypairs_flat.as_slice(),
-        total,
-        max_fee,
-        lamports_per_account,
-    );*/
 
     thread::spawn(move || {
         let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
@@ -374,9 +377,10 @@ fn create_generator_thread<T: 'static + Client + Send + Sync>(
         let mut generation_elapsed: u64 = 0;
         loop {
             let generation_start = Instant::now();
-            let chunk_keypairs = if valid_signatures {
+            let chunk_keypairs = if valid_signatures || valid_blockhash {
                 let permut = it.next();
                 if permut.is_none() {
+                    // if ran out of permutations, regenerate keys
                     keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
                     info!("Regenerate keypairs");
                     continue;
@@ -534,22 +538,31 @@ fn run_dos_transactions<T: 'static + Client + Send + Sync>(
 
     let max_iter_per_thread = iterations / num_gen_threads;
 
-    let funding_key = Keypair::new();
-    let funding_key = Arc::new(funding_key);
     let rpc_client = Arc::new(rpc_client); // TODO Replace rpc client with ThinClient since it provides more options
 
-    // create a new payer for each thread
-    // each payer is used to fund transaction
-    // all the transactions are supposed to be invalid
-    // the amount is arbitrary
-    let payers: Vec<Keypair> = generate_and_fund_keypairs(
-        client.clone(),
-        faucet_addr,
-        &funding_key,
-        num_gen_threads,
-        10_000,
-    )
-    .unwrap();
+    // The assumption is that if we use valid blockhash, we also have a payer
+    let payers: Vec<Option<Keypair>> = if transaction_generator.transaction_params.valid_blockhash {
+        // create a new payer for each thread since Keypair is not clonable
+        // each payer is used to fund transaction
+        // transactions are built to be invalid so the the amount here is arbitrary
+        let funding_key = Keypair::new();
+        let funding_key = Arc::new(funding_key);
+        generate_and_fund_keypairs(
+            client.clone(),
+            faucet_addr,
+            &funding_key,
+            num_gen_threads,
+            10_000,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|keypair| Some(keypair))
+        .collect()
+    } else {
+        std::iter::repeat_with(|| None)
+            .take(num_gen_threads)
+            .collect()
+    };
 
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
@@ -635,25 +648,39 @@ fn run_dos<T: 'static + Client + Send + Sync>(
                 let tp = params.transaction_params;
                 info!("{:?}", tp);
 
-                let mut transaction_generator = TransactionGenerator::new(tp);
                 let rpc_client = Arc::new(rpc_client.unwrap());
                 let funding_key = Keypair::new();
-                let funding_key = Arc::new(funding_key);
+                //let funding_key = Arc::new(funding_key);
 
-                let payers: Vec<Keypair> =
-                    generate_and_fund_keypairs(client, faucet_addr, &funding_key, 1, 10_000)
-                        .unwrap();
+                //let payers: Vec<Keypair> =
+                //    generate_and_fund_keypairs(client, faucet_addr, &funding_key, 1, 10_000)
+                //        .unwrap();
                 //TODO try replacing with
-                //let total = 100_000_000;
-                //if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
-                //    let r = airdrop_lamports(client.as_ref(), faucet_addr.as_ref().unwrap(), &funding_key, total);
-                //    match r {
-                //        Ok(_) => {},
-                //        Err(x) => println!("{:?}", x)
-                //    }
-                //}
+                let total = 10_000;
+                if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
+                    let r = airdrop_lamports(
+                        client.as_ref(),
+                        faucet_addr.as_ref().unwrap(),
+                        &funding_key,
+                        total,
+                    );
+                    match r {
+                        Ok(_) => {}
+                        Err(error) => panic!("Airdrop failed with error: {:?}", error),
+                    }
+                }
+                let keypairs: Vec<Keypair> =
+                    (0..tp.num_signatures).map(|_| Keypair::new()).collect();
+                let keypairs_chunk: Option<Vec<&Keypair>> =
+                    if tp.valid_signatures || tp.valid_blockhash {
+                        Some(keypairs.iter().map(|kp| kp).collect())
+                    } else {
+                        None
+                    };
 
-                let tx = transaction_generator.generate(&payers[0], None, &rpc_client);
+                let mut transaction_generator = TransactionGenerator::new(tp);
+                let tx =
+                    transaction_generator.generate(&Some(funding_key), keypairs_chunk, &rpc_client);
                 info!("{:?}", tx);
                 bincode::serialize(&tx).unwrap()
             }
@@ -1036,8 +1063,39 @@ pub mod test {
             );
         }
     */
+    /*#[test]
+    fn test_dos_no_blockhash_invalid_signatures() {
+        solana_logger::setup();
+        let num_nodes = 1;
+        let cluster =
+            LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
+        assert_eq!(cluster.validators.len(), num_nodes);
+
+        let nodes = cluster.get_node_pubkeys();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let nodes_slice = [node];
+
+        // send random transactions to TPU
+        // will be discarded on sigverify stage
+        run_dos(
+            &nodes_slice,
+            100000,
+            None,
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 1024,
+                data_type: DataType::Random,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams::default(),
+            },
+        );
+    }*/
+
     #[test]
-    fn test_dos_unique() {
+    fn test_dos_with_blockhash_and_payer() {
         solana_logger::setup();
         let num_nodes = 1;
         //let cluster =
@@ -1058,10 +1116,10 @@ pub mod test {
         );
         assert_eq!(cluster.validators.len(), num_nodes);
 
-        /// 1. Transfer funds to faucet account
-        /// 2. Create faucet thread
-        /// 3. Fund funding_key using faucet
-        /// 4. Transfer required funds from funding_key account to newly created accounts
+        // 1. Transfer funds to faucet account
+        // 2. Create faucet thread
+        // 3. Fund funding_key using faucet
+        // 4. Transfer required funds from funding_key account to newly created accounts
         // create faucet keypair and fund it
         let faucet_keypair = Keypair::new();
         cluster.transfer(
@@ -1069,33 +1127,18 @@ pub mod test {
             &faucet_keypair.pubkey(),
             100_000_000,
         );
-        //
         let faucet_addr = run_local_faucet(faucet_keypair, None);
 
         let nodes = cluster.get_node_pubkeys();
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
         let nodes_slice = [node];
 
-        // compute amount needed, for now just set
-        // create payer and give it all the money
         let client = Arc::new(create_client(
             (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
             VALIDATOR_PORT_RANGE,
         ));
 
-        //let funding_key = Keypair::new();
-        //let keypair_count = 2000;
-        //let keypairs = generate_and_fund_keypairs(
-        //    client.clone(),
-        //    Some(faucet_addr),
-        //    &funding_key,
-        //    keypair_count,
-        //    100,
-        //)
-        //.unwrap();
-
-        // send unique transaction to TPU with valid blockhash
-        // will fail with error processing Instruction 0: missing required signature for instruction
+        // create one transaction and send it 10 times
         run_dos(
             &nodes_slice,
             10,
@@ -1114,7 +1157,7 @@ pub mod test {
                     num_signatures: 2,
                     valid_blockhash: true,
                     valid_signatures: true,
-                    unique_transactions: true,
+                    unique_transactions: false,
                     payer_filename: None,
                     num_gen_threads: 1,
                 },
