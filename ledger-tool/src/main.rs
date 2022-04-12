@@ -33,13 +33,8 @@ use {
     },
     solana_measure::measure::Measure,
     solana_runtime::{
-<<<<<<< HEAD
         accounts_db::AccountsDbConfig,
-        accounts_index::{AccountsIndexConfig, ScanConfig},
-=======
-        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
->>>>>>> 1bc49d219 (IndexLimitMb option adds 'Unspecified' state (#24249))
         bank::{Bank, RewardCalculationEvent},
         bank_forks::BankForks,
         cost_model::CostModel,
