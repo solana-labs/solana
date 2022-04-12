@@ -6,6 +6,8 @@ use {
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
+    lazy_static::lazy_static,
+    log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
@@ -39,9 +41,14 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
         Ok(rustls::client::ServerCertVerified::assertion())
     }
 }
+lazy_static! {
+    static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+}
 
 struct QuicClient {
-    runtime: Runtime,
     endpoint: Endpoint,
     connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
     addr: SocketAddr,
@@ -67,9 +74,9 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]>,
     {
-        let _guard = self.client.runtime.enter();
+        let _guard = RUNTIME.enter();
         let send_buffer = self.client.send_buffer(wire_transaction);
-        self.client.runtime.block_on(send_buffer)?;
+        RUNTIME.block_on(send_buffer)?;
         Ok(())
     }
 
@@ -77,21 +84,33 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]>,
     {
-        let _guard = self.client.runtime.enter();
+        let _guard = RUNTIME.enter();
         let send_batch = self.client.send_batch(buffers);
-        self.client.runtime.block_on(send_batch)?;
+        RUNTIME.block_on(send_batch)?;
+        Ok(())
+    }
+
+    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+        let _guard = RUNTIME.enter();
+        //drop and detach the task
+        let client = self.client.clone();
+        inc_new_counter_info!("send_wire_transaction_async", 1);
+        let _ = RUNTIME.spawn(async move {
+            let send_buffer = client.send_buffer(wire_transaction);
+            if let Err(e) = send_buffer.await {
+                inc_new_counter_warn!("send_wire_transaction_async_fail", 1);
+                warn!("Failed to send transaction async to {:?}", e);
+            } else {
+                inc_new_counter_info!("send_wire_transaction_async_pass", 1);
+            }
+        });
         Ok(())
     }
 }
 
 impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let _guard = runtime.enter();
+        let _guard = RUNTIME.enter();
 
         let crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -100,12 +119,11 @@ impl QuicClient {
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
-        let mut endpoint = runtime.block_on(create_endpoint);
+        let mut endpoint = RUNTIME.block_on(create_endpoint);
 
         endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
 
         Self {
-            runtime,
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
