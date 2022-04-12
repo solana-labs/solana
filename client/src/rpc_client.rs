@@ -535,6 +535,11 @@ impl RpcClient {
         Self::new_with_timeout(url, timeout)
     }
 
+    /// Get the configured url of the client's sender
+    pub fn url(&self) -> String {
+        self.rpc_client.url()
+    }
+
     /// Get the configured default [commitment level][cl].
     ///
     /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
