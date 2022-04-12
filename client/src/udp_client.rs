@@ -6,7 +6,10 @@ use {
     core::iter::repeat,
     solana_sdk::transport::Result as TransportResult,
     solana_streamer::sendmmsg::batch_send,
-    std::{sync::Arc, net::{SocketAddr, UdpSocket}},
+    std::{
+        net::{SocketAddr, UdpSocket},
+        sync::Arc,
+    },
 };
 
 pub struct UdpTpuConnection {
@@ -38,12 +41,20 @@ impl TpuConnection for UdpTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>, _stats: Arc<ClientStats>) -> TransportResult<()> {
+    fn send_wire_transaction_async(
+        &self,
+        wire_transaction: Vec<u8>,
+        _stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
         self.socket.send_to(wire_transaction.as_ref(), self.addr)?;
         Ok(())
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T], _stats: &ClientStats) -> TransportResult<()>
+    fn send_wire_transaction_batch<T>(
+        &self,
+        buffers: &[T],
+        _stats: &ClientStats,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {

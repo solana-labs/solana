@@ -13,7 +13,6 @@ use {
     log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     quinn_proto::ConnectionStats,
-    solana_measure::measure::Measure,
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
         transport::Result as TransportResult,
@@ -53,14 +52,25 @@ lazy_static! {
         .unwrap();
 }
 
-pub struct QuicClient {
+struct QuicClient {
     endpoint: Endpoint,
-    pub connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
+    connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
     addr: SocketAddr,
+    stats: Arc<ClientStats>,
 }
 
 pub struct QuicTpuConnection {
-    pub client: Arc<QuicClient>,
+    client: Arc<QuicClient>,
+}
+
+impl QuicTpuConnection {
+    pub fn stats(&self) -> Option<ConnectionStats> {
+        self.client.stats()
+    }
+
+    pub fn base_stats(&self) -> Arc<ClientStats> {
+        self.client.stats.clone()
+    }
 }
 
 impl TpuConnection for QuicTpuConnection {
@@ -103,11 +113,14 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>, stats: Arc<ClientStats>) -> TransportResult<()> {
+    fn send_wire_transaction_async(
+        &self,
+        wire_transaction: Vec<u8>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         //drop and detach the task
         let client = self.client.clone();
-        let stats = stats.clone();
         inc_new_counter_info!("send_wire_transaction_async", 1);
         let _ = RUNTIME.spawn(async move {
             let send_buffer = client.send_buffer(wire_transaction, &stats);
@@ -131,12 +144,9 @@ impl QuicClient {
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
 
-        let mut time = Measure::start("endpoint_create");
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
-        time.stop();
-        //stats.endpoint_create_time_us.fetch_add(time.as_us(), Ordering::Relaxed);
 
         endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
 
@@ -144,6 +154,7 @@ impl QuicClient {
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
+            stats: Arc::new(ClientStats::default()),
         }
     }
 

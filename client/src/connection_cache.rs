@@ -29,61 +29,28 @@ enum Connection {
 }
 
 #[derive(Default)]
-struct MovingStatInner {
-    last: u64,
-    now: u64,
-}
-
-#[derive(Default)]
-pub struct MovingStat {
-    stats: Mutex<MovingStatInner>,
-}
-
-impl MovingStat {
-    pub fn update_stat(&self, new_value: u64) {
-        let mut stats = self.stats.lock().unwrap();
-        let diff = new_value.saturating_sub(stats.last);
-        // got an older update
-        if diff == 0 {
-            return;
-        }
-        stats.now = stats.now.saturating_add(diff);
-        stats.last = new_value;
-    }
-
-    pub fn load_and_reset(&self) -> u64 {
-        let mut stats = self.stats.lock().unwrap();
-        let old = stats.now;
-        stats.now = 0;
-        old
-    }
-}
-
-#[derive(Default)]
-struct ConnectionStats {
+struct ConnectionCacheStats {
     cache_hits: AtomicU64,
     cache_misses: AtomicU64,
     sent_packets: AtomicU64,
     total_batches: AtomicU64,
     batch_success: AtomicU64,
     batch_failure: AtomicU64,
-    total_connections: AtomicU64,
-    connection_reuse: AtomicU64,
-    congestion_events: MovingStat,
-    tx_streams_blocked_uni: MovingStat,
-    tx_data_blocked: MovingStat,
-    tx_acks: MovingStat,
+
+    // Need to track these separately per-connection
+    // because we need to track the base stat value from quinn
+    total_client_stats: ClientStats,
 }
 
-const CONNECTION_STAT_INTERVAL: u64 = 2000;
+const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
 
-impl ConnectionStats {
+impl ConnectionCacheStats {
     fn add_client_stats(&self, client_stats: &ClientStats, num_packets: usize, is_success: bool) {
-        self.total_connections.fetch_add(
+        self.total_client_stats.total_connections.fetch_add(
             client_stats.total_connections.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
-        self.connection_reuse.fetch_add(
+        self.total_client_stats.connection_reuse.fetch_add(
             client_stats.connection_reuse.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
@@ -99,7 +66,7 @@ impl ConnectionStats {
 
     fn report(&self) {
         datapoint_info!(
-            "quic-connection-stats",
+            "quic-client-connection-stats",
             (
                 "cache_hits",
                 self.cache_hits.swap(0, Ordering::Relaxed),
@@ -112,37 +79,47 @@ impl ConnectionStats {
             ),
             (
                 "total_connections",
-                self.total_connections.swap(0, Ordering::Relaxed),
+                self.total_client_stats
+                    .total_connections
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "connection_reuse",
-                self.total_connections.swap(0, Ordering::Relaxed),
+                self.total_client_stats
+                    .connection_reuse
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "congestion_events",
-                self.congestion_events.load_and_reset(),
+                self.total_client_stats.congestion_events.load_and_reset(),
                 i64
             ),
             (
                 "tx_streams_blocked_uni",
-                self.tx_streams_blocked_uni.load_and_reset(),
+                self.total_client_stats
+                    .tx_streams_blocked_uni
+                    .load_and_reset(),
                 i64
             ),
             (
                 "tx_data_blocked",
-                self.tx_data_blocked.load_and_reset(),
+                self.total_client_stats.tx_data_blocked.load_and_reset(),
                 i64
             ),
-            ("tx_acks", self.tx_acks.load_and_reset(), i64),
+            (
+                "tx_acks",
+                self.total_client_stats.tx_acks.load_and_reset(),
+                i64
+            ),
         );
     }
 }
 
 struct ConnMap {
     map: LruCache<SocketAddr, Connection>,
-    stats: Arc<ConnectionStats>,
+    stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
 }
@@ -151,7 +128,7 @@ impl ConnMap {
     pub fn new() -> Self {
         Self {
             map: LruCache::new(MAX_CONNECTIONS),
-            stats: Arc::new(ConnectionStats::default()),
+            stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             use_quic: false,
         }
@@ -173,10 +150,13 @@ pub fn set_use_quic(use_quic: bool) {
 
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionStats>) {
+fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
-    if map.last_stats.should_update(CONNECTION_STAT_INTERVAL) {
+    if map
+        .last_stats
+        .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL)
+    {
         map.stats.report();
     }
 
@@ -185,7 +165,7 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionStats>) {
             let mut stats = None;
             // update connection stats
             if let Connection::Quic(conn) = connection {
-                stats = conn.client.stats();
+                stats = conn.stats().map(|s| (conn.base_stats(), s));
             }
             (connection.clone(), true, stats)
         }
@@ -206,17 +186,29 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionStats>) {
         }
     };
 
-    if let Some(new_stats) = maybe_stats {
+    if let Some((connection_stats, new_stats)) = maybe_stats {
+        map.stats.total_client_stats.congestion_events.update_stat(
+            &connection_stats.congestion_events,
+            new_stats.path.congestion_events,
+        );
+
         map.stats
-            .congestion_events
-            .update_stat(new_stats.path.congestion_events);
-        map.stats
+            .total_client_stats
             .tx_streams_blocked_uni
-            .update_stat(new_stats.frame_tx.streams_blocked_uni);
+            .update_stat(
+                &connection_stats.tx_streams_blocked_uni,
+                new_stats.frame_tx.streams_blocked_uni,
+            );
+
+        map.stats.total_client_stats.tx_data_blocked.update_stat(
+            &connection_stats.tx_data_blocked,
+            new_stats.frame_tx.data_blocked,
+        );
+
         map.stats
-            .tx_data_blocked
-            .update_stat(new_stats.frame_tx.data_blocked);
-        map.stats.tx_acks.update_stat(new_stats.frame_tx.acks);
+            .total_client_stats
+            .tx_acks
+            .update_stat(&connection_stats.tx_acks, new_stats.frame_tx.acks);
     }
 
     if hit {

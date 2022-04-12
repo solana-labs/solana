@@ -1,9 +1,10 @@
 use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
+    solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
     std::{
         net::{SocketAddr, UdpSocket},
-        sync::{Arc, atomic::AtomicU64},
+        sync::{atomic::AtomicU64, Arc},
     },
 };
 
@@ -12,6 +13,12 @@ pub struct ClientStats {
     pub total_connections: AtomicU64,
     pub connection_reuse: AtomicU64,
     pub connection_errors: AtomicU64,
+
+    // these will be the last values of these stats
+    pub congestion_events: MovingStat,
+    pub tx_streams_blocked_uni: MovingStat,
+    pub tx_data_blocked: MovingStat,
+    pub tx_acks: MovingStat,
 }
 
 pub trait TpuConnection {
@@ -37,7 +44,11 @@ pub trait TpuConnection {
     where
         T: AsRef<[u8]>;
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>, stats: Arc<ClientStats>) -> TransportResult<()>;
+    fn send_wire_transaction_async(
+        &self,
+        wire_transaction: Vec<u8>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()>;
 
     fn par_serialize_and_send_transaction_batch(
         &self,
