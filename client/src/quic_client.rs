@@ -96,7 +96,7 @@ impl TpuConnection for QuicTpuConnection {
         let client = self.client.clone();
         let _ = RUNTIME.spawn(async move {
             let send_buffer = client.send_buffer(wire_transaction);
-            if let Err(e) = RUNTIME.block_on(send_buffer) {
+            if let Err(e) = send_buffer.await {
                 warn!("Failed to send transaction async to {:?}", e);
             }
             ()
