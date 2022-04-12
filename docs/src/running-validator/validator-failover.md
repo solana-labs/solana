@@ -17,7 +17,7 @@ which is used to store the tower voting record for your validator.
 
 ### etcd cluster setup
 
-There is ample documentation regarding etcd setup and configuration at
+There is sample documentation regarding etcd setup and configuration at
 https://etcd.io/, please generally familiarize yourself with etcd before
 continuing.
 
