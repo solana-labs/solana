@@ -187,7 +187,7 @@ impl SendTransactionService {
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
     ) -> JoinHandle<()> {
-        let mut last_status_check = Instant::now();
+        let mut last_batch_sent = Instant::now();
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
 
@@ -200,7 +200,7 @@ impl SendTransactionService {
         }
         connection_cache::set_use_quic(config.use_quic);
         Builder::new()
-            .name("send-tx-sv3".to_string())
+            .name("send-tx-receive".to_string())
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
                 match receiver.recv_timeout(Duration::from_millis(1000.min(recv_timeout_ms))) {
@@ -209,16 +209,25 @@ impl SendTransactionService {
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
                         let entry = transactions.entry(transaction_info.signature);
+                        let mut new_txn = false;
                         if let Entry::Vacant(_) = entry {
-                            entry.or_insert(transaction_info);
-                        } else {
+                            if !retry_transactions
+                                .lock()
+                                .unwrap()
+                                .contains_key(&transaction_info.signature)
+                            {
+                                entry.or_insert(transaction_info);
+                                new_txn = true;
+                            }
+                        }
+                        if !new_txn {
                             inc_new_counter_info!("send_transaction_service-recv-duplicate", 1);
                         }
                     }
                 }
 
                 if !transactions.is_empty()
-                    && (last_status_check.elapsed().as_millis() as u64 >= config.batch_send_rate_ms
+                    && (last_batch_sent.elapsed().as_millis() as u64 >= config.batch_send_rate_ms
                         || transactions.len() >= config.batch_size)
                 {
                     inc_new_counter_info!(
@@ -231,9 +240,9 @@ impl SendTransactionService {
                         &leader_info,
                         &config,
                     );
-
+                    let last_sent_time = Instant::now();
                     let mut retry_transactions = retry_transactions.lock().unwrap();
-                    for (signature, transaction_info) in transactions.drain() {
+                    for (signature, mut transaction_info) in transactions.drain() {
                         let entry = retry_transactions.entry(signature);
                         if let Entry::Vacant(_) = entry {
                             if retry_transactions.len() >= MAX_TRANSACTION_QUEUE_SIZE {
@@ -241,12 +250,13 @@ impl SendTransactionService {
                                 break;
                             }
                         } else {
+                            transaction_info.last_sent_time = Some(last_sent_time);
                             entry.or_insert(transaction_info);
                         }
                     }
                     drop(retry_transactions);
 
-                    last_status_check = Instant::now();
+                    last_batch_sent = Instant::now();
                     if last_leader_refresh.elapsed().as_millis() > 1000 {
                         if let Some(leader_info) = leader_info.as_mut() {
                             leader_info.refresh_recent_peers();
@@ -278,11 +288,11 @@ impl SendTransactionService {
         }
         connection_cache::set_use_quic(config.use_quic);
         Builder::new()
-            .name("send-tx-sv2".to_string())
+            .name("send-tx-retry".to_string())
             .spawn(move || loop {
                 let recv_timeout_ms = config.retry_rate_ms;
                 sleep(Duration::from_millis(1000.min(recv_timeout_ms)));
-                if exit.load(Ordering::Relaxed) == true {
+                if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 let mut transactions = retry_transactions.lock().unwrap();
