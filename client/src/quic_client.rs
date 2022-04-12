@@ -103,7 +103,6 @@ impl TpuConnection for QuicTpuConnection {
             } else {
                 inc_new_counter_info!("send_wire_transaction_async_pass", 1);
             }
-            ()
         });
         Ok(())
     }
