@@ -4037,7 +4037,7 @@ impl AccountsDb {
         pruned_banks_sender: DroppedSlotsSender,
     ) -> SendDroppedBankCallback {
         self.is_bank_drop_callback_enabled
-            .store(true, Ordering::SeqCst);
+            .store(true, Ordering::Release);
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
@@ -4045,7 +4045,7 @@ impl AccountsDb {
     /// comment below for more explanation.
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
+        if self.is_bank_drop_callback_enabled.load(Ordering::Acquire) && !is_from_abs {
             panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
         }
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
