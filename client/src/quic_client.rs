@@ -90,10 +90,11 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    fn send_wire_transaction_async(&self, wire_transaction: &[u8]) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         //drop and detach the task
         let client = self.client.clone();
+        let wire_transaction = wire_transaction.to_vec();
         inc_new_counter_info!("send_wire_transaction_async", 1);
         let _ = RUNTIME.spawn(async move {
             let send_buffer = client.send_buffer(wire_transaction);

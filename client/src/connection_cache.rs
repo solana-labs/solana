@@ -94,7 +94,7 @@ pub fn send_wire_transaction_batch(
 }
 
 pub fn send_wire_transaction_async(
-    wire_transaction: Vec<u8>,
+    wire_transaction: &[u8],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
     let conn = get_connection(addr);

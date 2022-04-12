@@ -312,7 +312,7 @@ impl SendTransactionService {
         let mut measure = Measure::start("send_transaction_service-us");
 
         if let Err(err) =
-            connection_cache::send_wire_transaction_async(wire_transaction.to_vec(), tpu_address)
+            connection_cache::send_wire_transaction_async(wire_transaction, tpu_address)
         {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
