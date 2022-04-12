@@ -1407,9 +1407,6 @@ impl BankingStage {
             ..
         } = execute_and_commit_transactions_output;
 
-        // TODO: This does not revert the cost tracker changes from all unexecuted transactions
-        // yet: For example tx that are too old will not be included in the block, but are not
-        // retryable.
         QosService::update_or_remove_transaction_costs(
             transaction_costs.iter(),
             transactions_qos_results.iter(),
