@@ -13,7 +13,10 @@ use {
             HashSet,
         },
         net::SocketAddr,
-        sync::{Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, Mutex, RwLock,
+        },
         thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -50,6 +53,7 @@ pub const MAX_BATCH_SEND_RATE_MS: usize = 100_000;
 pub struct SendTransactionService {
     receive_txn_thread: JoinHandle<()>,
     retry_thread: JoinHandle<()>,
+    exit: Arc<AtomicBool>,
 }
 
 pub struct TransactionInfo {
@@ -151,6 +155,7 @@ impl SendTransactionService {
         config: Config,
     ) -> Self {
         let retry_transactions = Arc::new(Mutex::new(HashMap::new()));
+        let exit = Arc::new(AtomicBool::new(false));
         let receive_txn_thread = Self::receive_txn_thread(
             tpu_address,
             receiver,
@@ -165,10 +170,12 @@ impl SendTransactionService {
             leader_info,
             config,
             retry_transactions,
+            exit.clone(),
         );
         Self {
             receive_txn_thread,
             retry_thread,
+            exit,
         }
     }
 
@@ -214,9 +221,9 @@ impl SendTransactionService {
                     && (last_status_check.elapsed().as_millis() as u64 >= config.batch_send_rate_ms
                         || transactions.len() >= config.batch_size)
                 {
-                    datapoint_info!(
-                        "send_transaction_service-queue-size",
-                        ("len", transactions.len(), i64)
+                    inc_new_counter_info!(
+                        "send_transaction_service-batch-size",
+                        transactions.len()
                     );
                     let _result = Self::send_transactions_in_batch(
                         &tpu_address,
@@ -258,6 +265,7 @@ impl SendTransactionService {
         mut leader_info: Option<T>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
+        exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_leader_refresh = Instant::now();
 
@@ -274,6 +282,9 @@ impl SendTransactionService {
             .spawn(move || loop {
                 let recv_timeout_ms = config.retry_rate_ms;
                 sleep(Duration::from_millis(1000.min(recv_timeout_ms)));
+                if exit.load(Ordering::Relaxed) == true {
+                    break;
+                }
                 let mut transactions = retry_transactions.lock().unwrap();
                 if !transactions.is_empty() {
                     datapoint_info!(
@@ -454,13 +465,15 @@ impl SendTransactionService {
                 .collect::<Vec<&[u8]>>();
 
             for address in &addresses {
-                let send_result =
-                    connection_cache::send_wire_transaction_batch(&wire_transacions, address);
-                if let Err(err) = send_result {
-                    warn!(
-                        "Failed to send transaction batch to {}: {:?}",
-                        tpu_address, err
-                    );
+                let iter = wire_transacions.chunks(config.batch_size);
+                for chunk in iter {
+                    let send_result = connection_cache::send_wire_transaction_batch(chunk, address);
+                    if let Err(err) = send_result {
+                        warn!(
+                            "Failed to send transaction batch to {}: {:?}",
+                            tpu_address, err
+                        );
+                    }
                 }
             }
         }
@@ -488,6 +501,7 @@ impl SendTransactionService {
 
     pub fn join(self) -> thread::Result<()> {
         self.receive_txn_thread.join()?;
+        self.exit.store(true, Ordering::Relaxed);
         self.retry_thread.join()
     }
 }
