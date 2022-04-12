@@ -63,6 +63,8 @@ const BufferFromRawAccountData = coerce(
  */
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
+type ClientSubscriptionId = number;
+
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 type RpcBatchRequest = (requests: RpcParams[]) => any;
@@ -2120,10 +2122,13 @@ export type ConnectionConfig = {
   confirmTransactionInitialTimeout?: number;
 };
 
-function createSubscriptionWarningMessage(id: number, label: string): string {
+function createSubscriptionWarningMessage(
+  clientSubscriptionId: number,
+  label: string,
+): string {
   return (
-    'Ignored unsubscribe request because an active subscription ' +
-    `with id \`${id}\` for '${label}' events could not be found.`
+    'Ignored unsubscribe request because an active subscription with id ' +
+    `\`${clientSubscriptionId}\` for '${label}' events could not be found.`
   );
 }
 
@@ -2161,37 +2166,32 @@ export class Connection {
     simulatedSignatures: [],
   };
 
-  /** @internal */ _accountChangeSubscriptionCounter: number = 0;
+  /** @internal */ _nextClientSubscriptionId: ClientSubscriptionId = 0;
+
   /** @internal */ _accountChangeSubscriptions: {
     [id: number]: AccountSubscriptionInfo;
   } = {};
 
-  /** @internal */ _programAccountChangeSubscriptionCounter: number = 0;
   /** @internal */ _programAccountChangeSubscriptions: {
     [id: number]: ProgramAccountSubscriptionInfo;
   } = {};
 
-  /** @internal */ _rootSubscriptionCounter: number = 0;
   /** @internal */ _rootSubscriptions: {
     [id: number]: RootSubscriptionInfo;
   } = {};
 
-  /** @internal */ _signatureSubscriptionCounter: number = 0;
   /** @internal */ _signatureSubscriptions: {
     [id: number]: SignatureSubscriptionInfo;
   } = {};
 
-  /** @internal */ _slotSubscriptionCounter: number = 0;
   /** @internal */ _slotSubscriptions: {
     [id: number]: SlotSubscriptionInfo;
   } = {};
 
-  /** @internal */ _logsSubscriptionCounter: number = 0;
   /** @internal */ _logsSubscriptions: {
     [id: number]: LogsSubscriptionInfo;
   } = {};
 
-  /** @internal */ _slotUpdateSubscriptionCounter: number = 0;
   /** @internal */ _slotUpdateSubscriptions: {
     [id: number]: SlotUpdateSubscriptionInfo;
   } = {};
@@ -4229,27 +4229,35 @@ export class Connection {
    * @internal
    */
   _updateSubscriptions() {
-    const accountKeys = Object.keys(this._accountChangeSubscriptions).map(
-      Number,
-    );
-    const programKeys = Object.keys(
+    const accountClientSubscriptionIds = Object.keys(
+      this._accountChangeSubscriptions,
+    ).map(Number);
+    const programClientSubscriptionIds = Object.keys(
       this._programAccountChangeSubscriptions,
     ).map(Number);
-    const slotKeys = Object.keys(this._slotSubscriptions).map(Number);
-    const slotUpdateKeys = Object.keys(this._slotUpdateSubscriptions).map(
+    const slotClientSubscriptionIds = Object.keys(this._slotSubscriptions).map(
       Number,
     );
-    const signatureKeys = Object.keys(this._signatureSubscriptions).map(Number);
-    const rootKeys = Object.keys(this._rootSubscriptions).map(Number);
-    const logsKeys = Object.keys(this._logsSubscriptions).map(Number);
+    const slotUpdateClientSubscriptionIds = Object.keys(
+      this._slotUpdateSubscriptions,
+    ).map(Number);
+    const signatureClientSubscriptionIds = Object.keys(
+      this._signatureSubscriptions,
+    ).map(Number);
+    const rootClientSubscriptionIds = Object.keys(this._rootSubscriptions).map(
+      Number,
+    );
+    const logsClientSubscriptionIds = Object.keys(this._logsSubscriptions).map(
+      Number,
+    );
     if (
-      accountKeys.length === 0 &&
-      programKeys.length === 0 &&
-      slotKeys.length === 0 &&
-      slotUpdateKeys.length === 0 &&
-      signatureKeys.length === 0 &&
-      rootKeys.length === 0 &&
-      logsKeys.length === 0
+      accountClientSubscriptionIds.length === 0 &&
+      programClientSubscriptionIds.length === 0 &&
+      slotClientSubscriptionIds.length === 0 &&
+      slotUpdateClientSubscriptionIds.length === 0 &&
+      signatureClientSubscriptionIds.length === 0 &&
+      rootClientSubscriptionIds.length === 0 &&
+      logsClientSubscriptionIds.length === 0
     ) {
       if (this._rpcWebSocketConnected) {
         this._rpcWebSocketConnected = false;
@@ -4281,8 +4289,8 @@ export class Connection {
       return;
     }
 
-    for (let id of accountKeys) {
-      const sub = this._accountChangeSubscriptions[id];
+    for (let clientSubscriptionId of accountClientSubscriptionIds) {
+      const sub = this._accountChangeSubscriptions[clientSubscriptionId];
       this._subscribe(
         sub,
         'accountSubscribe',
@@ -4290,8 +4298,8 @@ export class Connection {
       );
     }
 
-    for (let id of programKeys) {
-      const sub = this._programAccountChangeSubscriptions[id];
+    for (let clientSubscriptionId of programClientSubscriptionIds) {
+      const sub = this._programAccountChangeSubscriptions[clientSubscriptionId];
       this._subscribe(
         sub,
         'programSubscribe',
@@ -4301,30 +4309,30 @@ export class Connection {
       );
     }
 
-    for (let id of slotKeys) {
-      const sub = this._slotSubscriptions[id];
+    for (let clientSubscriptionId of slotClientSubscriptionIds) {
+      const sub = this._slotSubscriptions[clientSubscriptionId];
       this._subscribe(sub, 'slotSubscribe', []);
     }
 
-    for (let id of slotUpdateKeys) {
-      const sub = this._slotUpdateSubscriptions[id];
+    for (let clientSubscriptionId of slotUpdateClientSubscriptionIds) {
+      const sub = this._slotUpdateSubscriptions[clientSubscriptionId];
       this._subscribe(sub, 'slotsUpdatesSubscribe', []);
     }
 
-    for (let id of signatureKeys) {
-      const sub = this._signatureSubscriptions[id];
+    for (let clientSubscriptionId of signatureClientSubscriptionIds) {
+      const sub = this._signatureSubscriptions[clientSubscriptionId];
       const args: any[] = [sub.signature];
       if (sub.options) args.push(sub.options);
       this._subscribe(sub, 'signatureSubscribe', args);
     }
 
-    for (let id of rootKeys) {
-      const sub = this._rootSubscriptions[id];
+    for (let clientSubscriptionId of rootClientSubscriptionIds) {
+      const sub = this._rootSubscriptions[clientSubscriptionId];
       this._subscribe(sub, 'rootSubscribe', []);
     }
 
-    for (let id of logsKeys) {
-      const sub = this._logsSubscriptions[id];
+    for (let clientSubscriptionId of logsClientSubscriptionIds) {
+      const sub = this._logsSubscriptions[clientSubscriptionId];
       let filter;
       if (typeof sub.filter === 'object') {
         filter = {mentions: [sub.filter.toString()]};
@@ -4364,31 +4372,38 @@ export class Connection {
     publicKey: PublicKey,
     callback: AccountChangeCallback,
     commitment?: Commitment,
-  ): number {
-    const id = ++this._accountChangeSubscriptionCounter;
-    this._accountChangeSubscriptions[id] = {
+  ): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._accountChangeSubscriptions[clientSubscriptionId] = {
       publicKey: publicKey.toBase58(),
       callback,
       commitment,
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister an account notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeAccountChangeListener(id: number): Promise<void> {
-    if (this._accountChangeSubscriptions[id]) {
-      const subInfo = this._accountChangeSubscriptions[id];
-      delete this._accountChangeSubscriptions[id];
+  async removeAccountChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._accountChangeSubscriptions[clientSubscriptionId]) {
+      const subInfo = this._accountChangeSubscriptions[clientSubscriptionId];
+      delete this._accountChangeSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'accountUnsubscribe');
       this._updateSubscriptions();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'account change'));
+      console.warn(
+        createSubscriptionWarningMessage(
+          clientSubscriptionId,
+          'account change',
+        ),
+      );
     }
   }
 
@@ -4427,9 +4442,9 @@ export class Connection {
     callback: ProgramAccountChangeCallback,
     commitment?: Commitment,
     filters?: GetProgramAccountsFilter[],
-  ): number {
-    const id = ++this._programAccountChangeSubscriptionCounter;
-    this._programAccountChangeSubscriptions[id] = {
+  ): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._programAccountChangeSubscriptions[clientSubscriptionId] = {
       programId: programId.toBase58(),
       callback,
       commitment,
@@ -4437,23 +4452,29 @@ export class Connection {
       filters,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister an account notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeProgramAccountChangeListener(id: number): Promise<void> {
-    if (this._programAccountChangeSubscriptions[id]) {
-      const subInfo = this._programAccountChangeSubscriptions[id];
-      delete this._programAccountChangeSubscriptions[id];
+  async removeProgramAccountChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._programAccountChangeSubscriptions[clientSubscriptionId]) {
+      const subInfo =
+        this._programAccountChangeSubscriptions[clientSubscriptionId];
+      delete this._programAccountChangeSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'programUnsubscribe');
       this._updateSubscriptions();
     } else {
       console.warn(
-        createSubscriptionWarningMessage(id, 'program account change'),
+        createSubscriptionWarningMessage(
+          clientSubscriptionId,
+          'program account change',
+        ),
       );
     }
   }
@@ -4465,31 +4486,35 @@ export class Connection {
     filter: LogsFilter,
     callback: LogsCallback,
     commitment?: Commitment,
-  ): number {
-    const id = ++this._logsSubscriptionCounter;
-    this._logsSubscriptions[id] = {
+  ): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._logsSubscriptions[clientSubscriptionId] = {
       filter,
       callback,
       commitment,
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister a logs callback.
    *
-   * @param id subscription id to deregister.
+   * @param id client subscription id to deregister.
    */
-  async removeOnLogsListener(id: number): Promise<void> {
-    if (this._logsSubscriptions[id]) {
-      const subInfo = this._logsSubscriptions[id];
-      delete this._logsSubscriptions[id];
+  async removeOnLogsListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._logsSubscriptions[clientSubscriptionId]) {
+      const subInfo = this._logsSubscriptions[clientSubscriptionId];
+      delete this._logsSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'logsUnsubscribe');
       this._updateSubscriptions();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'logs'));
+      console.warn(
+        createSubscriptionWarningMessage(clientSubscriptionId, 'logs'),
+      );
     }
   }
 
@@ -4527,29 +4552,33 @@ export class Connection {
    * @param callback Function to invoke whenever the slot changes
    * @return subscription id
    */
-  onSlotChange(callback: SlotChangeCallback): number {
-    const id = ++this._slotSubscriptionCounter;
-    this._slotSubscriptions[id] = {
+  onSlotChange(callback: SlotChangeCallback): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._slotSubscriptions[clientSubscriptionId] = {
       callback,
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister a slot notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeSlotChangeListener(id: number): Promise<void> {
-    if (this._slotSubscriptions[id]) {
-      const subInfo = this._slotSubscriptions[id];
-      delete this._slotSubscriptions[id];
+  async removeSlotChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._slotSubscriptions[clientSubscriptionId]) {
+      const subInfo = this._slotSubscriptions[clientSubscriptionId];
+      delete this._slotSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'slotUnsubscribe');
       this._updateSubscriptions();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'slot change'));
+      console.warn(
+        createSubscriptionWarningMessage(clientSubscriptionId, 'slot change'),
+      );
     }
   }
 
@@ -4573,29 +4602,33 @@ export class Connection {
    * @param callback Function to invoke whenever the slot updates
    * @return subscription id
    */
-  onSlotUpdate(callback: SlotUpdateCallback): number {
-    const id = ++this._slotUpdateSubscriptionCounter;
-    this._slotUpdateSubscriptions[id] = {
+  onSlotUpdate(callback: SlotUpdateCallback): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._slotUpdateSubscriptions[clientSubscriptionId] = {
       callback,
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister a slot update notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeSlotUpdateListener(id: number): Promise<void> {
-    if (this._slotUpdateSubscriptions[id]) {
-      const subInfo = this._slotUpdateSubscriptions[id];
-      delete this._slotUpdateSubscriptions[id];
+  async removeSlotUpdateListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._slotUpdateSubscriptions[clientSubscriptionId]) {
+      const subInfo = this._slotUpdateSubscriptions[clientSubscriptionId];
+      delete this._slotUpdateSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'slotsUpdatesUnsubscribe');
       this._updateSubscriptions();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'slot update'));
+      console.warn(
+        createSubscriptionWarningMessage(clientSubscriptionId, 'slot update'),
+      );
     }
   }
 
@@ -4686,9 +4719,9 @@ export class Connection {
     signature: TransactionSignature,
     callback: SignatureResultCallback,
     commitment?: Commitment,
-  ): number {
-    const id = ++this._signatureSubscriptionCounter;
-    this._signatureSubscriptions[id] = {
+  ): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._signatureSubscriptions[clientSubscriptionId] = {
       signature,
       callback: (notification, context) => {
         if (notification.type === 'status') {
@@ -4699,7 +4732,7 @@ export class Connection {
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
@@ -4716,31 +4749,38 @@ export class Connection {
     signature: TransactionSignature,
     callback: SignatureSubscriptionCallback,
     options?: SignatureSubscriptionOptions,
-  ): number {
-    const id = ++this._signatureSubscriptionCounter;
-    this._signatureSubscriptions[id] = {
+  ): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._signatureSubscriptions[clientSubscriptionId] = {
       signature,
       callback,
       options,
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister a signature notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeSignatureListener(id: number): Promise<void> {
-    if (this._signatureSubscriptions[id]) {
-      const subInfo = this._signatureSubscriptions[id];
-      delete this._signatureSubscriptions[id];
+  async removeSignatureListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._signatureSubscriptions[clientSubscriptionId]) {
+      const subInfo = this._signatureSubscriptions[clientSubscriptionId];
+      delete this._signatureSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'signatureUnsubscribe');
       this._updateSubscriptions();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'signature result'));
+      console.warn(
+        createSubscriptionWarningMessage(
+          clientSubscriptionId,
+          'signature result',
+        ),
+      );
     }
   }
 
@@ -4763,29 +4803,33 @@ export class Connection {
    * @param callback Function to invoke whenever the root changes
    * @return subscription id
    */
-  onRootChange(callback: RootChangeCallback): number {
-    const id = ++this._rootSubscriptionCounter;
-    this._rootSubscriptions[id] = {
+  onRootChange(callback: RootChangeCallback): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    this._rootSubscriptions[clientSubscriptionId] = {
       callback,
       subscriptionId: null,
     };
     this._updateSubscriptions();
-    return id;
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister a root notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeRootChangeListener(id: number): Promise<void> {
-    if (this._rootSubscriptions[id]) {
-      const subInfo = this._rootSubscriptions[id];
-      delete this._rootSubscriptions[id];
+  async removeRootChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    if (this._rootSubscriptions[clientSubscriptionId]) {
+      const subInfo = this._rootSubscriptions[clientSubscriptionId];
+      delete this._rootSubscriptions[clientSubscriptionId];
       await this._unsubscribe(subInfo, 'rootUnsubscribe');
       this._updateSubscriptions();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'root change'));
+      console.warn(
+        createSubscriptionWarningMessage(clientSubscriptionId, 'root change'),
+      );
     }
   }
 }
