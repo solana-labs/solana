@@ -203,7 +203,7 @@ Every highest_root >= 432k * 2 + 80 and < 432k * 3 + 80 is this same result
 [footnote3:]
   when we do a rewrite of account data, only this data changes:
   1. rent_epoch
-  2. computed hash value (which is a function of (data, lamports, executable, owner, rent_epoch) + slot
+  2. computed hash value (which is a function of (data, lamports, executable, owner, rent_epoch, pubkey) + slot
   3. into a new append vec that is associated with the slot#
 
 */
