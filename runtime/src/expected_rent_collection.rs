@@ -1,0 +1,950 @@
+//! Logic for determining when rent should have been collected or a rewrite would have occurred for an account.
+use {
+    crate::{
+        accounts_db::AccountsDb,
+        accounts_hash::HashStats,
+        bank::PartitionIndex,
+        rent_collector::{RentCollector, RentResult},
+    },
+    solana_sdk::{
+        account::ReadableAccount,
+        clock::{Epoch, Slot},
+        epoch_schedule::EpochSchedule,
+        hash::Hash,
+        pubkey::Pubkey,
+    },
+    std::sync::atomic::Ordering,
+};
+
+#[derive(Debug, PartialEq)]
+pub struct ExpectedRentCollection {
+    partition_from_pubkey: PartitionIndex,
+    epoch_of_max_storage_slot: Epoch,
+    partition_index_from_max_slot: PartitionIndex,
+    first_slot_in_max_epoch: Slot,
+    // these are the only 2 fields used by downstream calculations at the moment.
+    // the rest are here for debugging
+    expected_rent_collection_slot_max_epoch: Slot,
+    rent_epoch: Epoch,
+}
+
+/*
+A goal is to skip rewrites to improve performance.
+Reasons this file exists:
+A. When we encounter skipped-rewrite account data as part of a load, we may need to update rent_epoch.
+B. When we encounter skipped-rewrite account data during accounts hash calc, the saved hash will be incorrect if we skipped a rewrite.
+     We need slot and rent_epoch to recalculate a new hash.
+
+cases of rent collection:
+
+setup assumptions:
+pubkey = abc
+slots_per_epoch = 432,000
+pubkey_partition_index of 'abc' = 80
+
+So, rent will be collected or a rewrite is expected to occur:
+ each time a slot's pubkey_partition is == [footnote1] pubkey_partition_index within an epoch. [footnote2]
+
+ If we skip rewrites, then pubkey's account data will not be rewritten when its rent collecion partition index occurs.
+ However, later we need to get a hash value for the most recent update to this account.
+ That leads us to the purpose of this file.
+ To calculate a hash for account data, we need to know:
+   1. the slot the account was written in
+   2. the rent_epoch field of the account, telling us which epoch is the next time we should evaluate rent on this account
+ If we did not perform a rewrite, then the account in the append vec it was last written in has:
+   1. The wrong slot, since the append vec is not associated with the slot that the rewrite would have occurred.
+   2. The wrong rent_epoch since the account was not rewritten with a newer rent_epoch [footnote3]
+
+Reason A for this file's existence:
+When we encounter the skipped-rewrite account data as part of a load, we may need to update rent_epoch.
+Many operations work like this:
+  1. read account
+  2. add lamports (ex: reward was paid)
+  3. write account
+If the account is written with the WRONG rent_epoch field, then we will store an 'incorrect' rent_epoch field and the hash will be incorrect.
+So, at (1. read account), we must FIX the rent_epoch to be as it would be if the rewrite would have occurred.
+
+Reason B for this file's existence:
+When we encounter the skipped-rewrite account data during accounts hash calc, the saved hash will be incorrect if we skipped a rewrite.
+We must compute the correct rent_epoch and slot and recompute the hash that we would have gotten if we would have done the rewrite.
+
+Both reasons result in the need for the same answer.
+Given
+1. pubkey
+2. pubkey's account data
+3. the slot the data was loaded from (storage_slot)
+4. the highest_root caller cares about
+
+We also need a RentCollector and EpochSchedule for the highest root the caller cares about.
+With these:
+1. can calculate partition_index of
+1.a. highest_root (slot)
+1.b. storage_slot
+
+We also need :
+fn find_unskipped_slot(slot) -> root
+which can return the lowest root >= slot - 1 (this is why 'historical_roots' is necessary) Also see [footnote1].
+
+Given these inputs, we can determine the correct slot and rent_epoch where we SHOULD have found this account's data and also compute the hash that we SHOULD have stored at that slot.
+Note that a slot could be (-432k..infinite) slots and (-1..infinite) epochs relative to the expected rent collection slot.
+Examples:
+1.
+storage_slot: 1
+highest_root: 1
+since pubkey_partition_index is 80 and hasn't been reached, the current account's data is CORRECT
+Every highest_root < 80 is this same result.
+
+2.
+storage_slot: 1
+highest_root: 79
+since pubkey_partition_index is 80 and hasn't been reached, the current account's data is CORRECT
+
+3.
+storage_slot: 1  (partition index = 1)
+highest_root: 80 (partition index = 80)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 80
+rent_epoch will be 0
+Every highest_root >= 80 and < 432k + 80 is this same result
+
+4.
+storage_slot: 1  (partition index = 1)
+find_unskipped_slot(80) returns 81 since slot 80 was SKIPPED
+highest_root: 81 (partition index = 81)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 81 (note 81 because 80 was skipped)
+rent_epoch will be 0
+Every highest_root >= 80 and < 432k + 80 is this same result
+
+5.
+storage_slot:        1  (partition index = 1) (epoch 0)
+highest_root: 432k + 1  (partition index = 1) (epoch 1)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 80 in epoch 0
+partition_index 80 has NOT been reached in epoch 1
+so, rent_epoch will be 0
+Every highest_root >= 80 and < 432k + 80 is this same result
+
+6.
+storage_slot:         1  (partition index =  1) (epoch 0)
+highest_root: 432k + 80  (partition index = 80) (epoch 1)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 432k + 80 in epoch 1
+partition_index 80 HAS been reached in epoch 1
+so, rent_epoch will be 1
+Every highest_root >= 432k + 80 and < 432k * 2 + 80 is this same result
+
+7.
+storage_slot:         1  (partition index =  1) (epoch 0)
+find_unskipped_slot(432k + 80) returns 432k + 81 since slot 432k + 80 was SKIPPED
+highest_root: 432k + 81  (partition index = 81) (epoch 1)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 432k + 81 in epoch 1 (slot 432k + 80 was skipped)
+partition_index 80 HAS been reached in epoch 1
+so, rent_epoch will be 1
+Every highest_root >= 432k + 81 and < 432k * 2 + 80 is this same result
+
+8.
+storage_slot:            1  (partition index = 1) (epoch 0)
+highest_root: 432k * 2 + 1  (partition index = 1) (epoch 2)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 432k + 80 in epoch 1
+partition_index 80 has NOT been reached in epoch 2
+so, rent_epoch will 1
+Every highest_root >= 432k + 80 and < 432k * 2 + 80 is this same result
+
+9.
+storage_slot:             1  (partition index =  1) (epoch 0)
+highest_root: 432k * 2 + 80  (partition index = 80) (epoch 2)
+since pubkey_partition_index is 80 and it HAS been reached, but the account data is from slot 1, then the account's data is INcorrect
+the account's hash is incorrect and needs to be recalculated as of slot 432k * 2 + 80 in epoch 2
+partition_index 80 HAS been reached in epoch 2
+so, rent_epoch will be 2
+Every highest_root >= 432k * 2 + 80 and < 432k * 3 + 80 is this same result
+
+[footnote1:]
+  "each time a slot's pubkey_partition is == [footnote1] pubkey_partition_index within an epoch."
+  Due to skipped slots, this is not true.
+  In reality, it is:
+    the first slot where a slot's pubkey_partition >= pubkey_partition_index - 1.
+  So, simply, if the pubkey_partition for our rent is 80, then that slot occurs at these slot #s:
+    Slot:...........     Epoch:
+    0           + 80 for epoch 0
+    432,000     + 80 for epoch 1
+    432,000 * 2 + 80 for epoch 2
+    ...
+  However, sometimes we skip slots. So, just considering epoch 0:
+    Normal, not skipping any slots:
+      slot 78 is a root
+      slot 79 is a root
+      slot 80 is a root (account is rewritten/rent collected here)
+    Scenario 1:
+      slot 78 is a root
+      slot 79 is skipped/not a root
+      slot 80 is a root (account is rewritten/rent collected here along with accounts from slot 79)
+    Scenario 2:
+      slot 78 is a root
+      slot 79 is skipped/not a root
+      slot 80 is skipped/not a root
+      slot 81 is a root (account is rewritten/rent collected here because of slot 80, along with accounts from slots 79 and 81)
+    This gets us to looking for:
+      the first slot where a slot's pubkey_partition >= pubkey_partition_index - 1.
+
+[footnote2:]
+  Describing partition_index within an epoch:
+  example:
+    slot=0       is epoch=0, partition_index=0
+    slot=1       is epoch=0, partition_index=1
+    slot=431,999 is epoch=0, partition_index=431,999
+    slot=432,000 is epoch=1, partition_index=432,000
+    This is NOT technically accurate because of first_normal_slot, but we'll ignore that.
+    EpochSchedule::get_epoch_and_slot_index(slot) calculates epoch and partition_index from slot.
+
+[footnote3:]
+  when we do a rewrite of account data, only this data changes:
+  1. rent_epoch
+  2. computed hash value (which is a function of (data, lamports, executable, owner, rent_epoch) + slot
+  3. into a new append vec that is associated with the slot#
+
+*/
+
+impl ExpectedRentCollection {
+    #![allow(dead_code)]
+    #[allow(clippy::too_many_arguments)]
+    /// it is possible 0.. rewrites were skipped on this account
+    /// if so, return Some(correct hash as of 'storage_slot')
+    /// if 'loaded_hash' is CORRECT, return None
+    pub fn maybe_rehash_skipped_rewrite(
+        loaded_account: &impl ReadableAccount,
+        loaded_hash: &Hash,
+        pubkey: &Pubkey,
+        storage_slot: Slot,
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        stats: &HashStats,
+        max_slot_in_storages_exclusive: Slot,
+        find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
+        filler_account_suffix: Option<&Pubkey>,
+    ) -> Option<Hash> {
+        let expected = match ExpectedRentCollection::new(
+            pubkey,
+            loaded_account,
+            storage_slot,
+            epoch_schedule,
+            rent_collector,
+            max_slot_in_storages_exclusive,
+            find_unskipped_slot,
+            filler_account_suffix,
+        ) {
+            None => {
+                // use the previously calculated hash
+                return None;
+            }
+            Some(expected) => expected,
+        };
+
+        let recalc_hash = AccountsDb::hash_account_with_rent_epoch(
+            expected.expected_rent_collection_slot_max_epoch,
+            loaded_account,
+            pubkey,
+            expected.rent_epoch,
+        );
+        if &recalc_hash == loaded_hash {
+            // unnecessary calculation occurred
+            stats.rehash_unnecessary.fetch_add(1, Ordering::Relaxed);
+            return None;
+        }
+        stats.rehash_required.fetch_add(1, Ordering::Relaxed);
+
+        // recomputed based on rent collection/rewrite slot
+        // Rent would have been collected AT 'expected_rent_collection_slot', so hash according to that slot.
+        // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.
+        Some(recalc_hash)
+    }
+
+    /// figure out whether the account stored at 'storage_slot' would have normally been rewritten at a slot that has already occurred: after 'storage_slot' but before 'max_slot_in_storages_exclusive'
+    /// returns Some(...) if the account would have normally been rewritten
+    /// returns None if the account was updated wrt rent already or if it is known that there must exist a future rewrite of this account (for example, non-zero rent is due)
+    fn new(
+        pubkey: &Pubkey,
+        loaded_account: &impl ReadableAccount,
+        storage_slot: Slot,
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        max_slot_in_storages_exclusive: Slot,
+        find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
+        filler_account_suffix: Option<&Pubkey>,
+    ) -> Option<Self> {
+        let slots_per_epoch = epoch_schedule.get_slots_in_epoch(rent_collector.epoch);
+
+        assert!(max_slot_in_storages_exclusive > 0);
+        let max_slot_in_storages = max_slot_in_storages_exclusive.saturating_sub(1);
+
+        let partition_from_pubkey =
+            crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
+        let (epoch_of_max_storage_slot, partition_index_from_max_slot) =
+            epoch_schedule.get_epoch_and_slot_index(max_slot_in_storages);
+
+        // now, we have to find the root that is >= the slot where this pubkey's rent would have been collected
+        let first_slot_in_max_epoch = max_slot_in_storages - partition_index_from_max_slot;
+        let mut expected_rent_collection_slot_max_epoch =
+            first_slot_in_max_epoch + partition_from_pubkey;
+        let calculated_from_index_expected_rent_collection_slot_max_epoch =
+            expected_rent_collection_slot_max_epoch;
+        if expected_rent_collection_slot_max_epoch <= max_slot_in_storages {
+            // may need to find a valid root
+            if let Some(find) =
+                find_unskipped_slot(calculated_from_index_expected_rent_collection_slot_max_epoch)
+            {
+                // found a root that is >= expected_rent_collection_slot.
+                expected_rent_collection_slot_max_epoch = find;
+            }
+        }
+        if expected_rent_collection_slot_max_epoch > max_slot_in_storages {
+            // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
+            expected_rent_collection_slot_max_epoch =
+                calculated_from_index_expected_rent_collection_slot_max_epoch
+                    .saturating_sub(slots_per_epoch);
+            // since we are looking a different root, we have to call this again
+            if let Some(find) = find_unskipped_slot(expected_rent_collection_slot_max_epoch) {
+                // found a root (because we have a storage) that is >= expected_rent_collection_slot.
+                expected_rent_collection_slot_max_epoch = find;
+            }
+        }
+
+        // the slot we're dealing with is where we expected the rent to be collected for this pubkey, so use what is in this slot
+        // however, there are cases, such as adjusting the clock, where we store the account IN the same slot, but we do so BEFORE we collect rent. We later store the account AGAIN for rewrite/rent collection.
+        // So, if storage_slot == expected_rent_collection_slot..., then we MAY have collected rent or may not have. So, it has to be >
+        // rent_epoch=0 is a special case
+        if storage_slot > expected_rent_collection_slot_max_epoch
+            || loaded_account.rent_epoch() == 0
+        {
+            // no need to update hash
+            return None;
+        }
+
+        // ask the rent collector what rent should be collected.
+        // Rent collector knows the current epoch.
+        let rent_result =
+            rent_collector.calculate_rent_result(pubkey, loaded_account, filler_account_suffix);
+        let current_rent_epoch = loaded_account.rent_epoch();
+        let new_rent_epoch = match rent_result {
+            RentResult::CollectRent((mut next_epoch, rent_due)) => {
+                if next_epoch > current_rent_epoch && rent_due != 0 {
+                    // this is an account that would have had rent collected since this storage slot, so just use the hash we have since there must be a newer version of this account already in a newer slot
+                    // It would be a waste of time to recalcluate a hash.
+                    return None;
+                }
+                if first_slot_in_max_epoch > expected_rent_collection_slot_max_epoch {
+                    // this account won't have had rent collected for the current epoch yet (rent_collector has a current epoch), so our expected next_epoch is for the previous epoch
+                    next_epoch = next_epoch.saturating_sub(1);
+                }
+                std::cmp::max(next_epoch, current_rent_epoch)
+            }
+            RentResult::LeaveAloneNoRent => {
+                // rent_epoch is not updated for this condition
+                // But, a rewrite WOULD HAVE occured at the expected slot.
+                // So, fall through with same rent_epoch, but we will have already calculated 'expected_rent_collection_slot_max_epoch'
+                current_rent_epoch
+            }
+        };
+
+        if expected_rent_collection_slot_max_epoch == storage_slot
+            && new_rent_epoch == loaded_account.rent_epoch()
+        {
+            // no rewrite would have occurred
+            return None;
+        }
+
+        Some(Self {
+            partition_from_pubkey,
+            epoch_of_max_storage_slot,
+            partition_index_from_max_slot,
+            first_slot_in_max_epoch,
+            expected_rent_collection_slot_max_epoch,
+            rent_epoch: new_rent_epoch,
+        })
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use {
+        super::*,
+        solana_sdk::{
+            account::{AccountSharedData, WritableAccount},
+            genesis_config::GenesisConfig,
+        },
+    };
+
+    #[test]
+    fn test_expected_rent_collection() {
+        solana_logger::setup();
+        let pubkey = Pubkey::new(&[5; 32]);
+        let owner = solana_sdk::pubkey::new_rand();
+        let mut account = AccountSharedData::new(1, 0, &owner);
+        let max_slot_in_storages_exclusive = 1;
+        let epoch_schedule = EpochSchedule::default();
+        let first_normal_slot = epoch_schedule.first_normal_slot;
+        let storage_slot = first_normal_slot;
+        let epoch = epoch_schedule.get_epoch(storage_slot);
+        assert_eq!(
+            (epoch, 0),
+            epoch_schedule.get_epoch_and_slot_index(storage_slot)
+        );
+        let genesis_config = GenesisConfig::default();
+        let mut rent_collector = RentCollector::new(
+            epoch,
+            &epoch_schedule,
+            genesis_config.slots_per_year(),
+            &genesis_config.rent,
+        );
+        rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
+        let find_unskipped_slot = Some;
+        // slot in current epoch
+        let expected = ExpectedRentCollection::new(
+            &pubkey,
+            &account,
+            storage_slot,
+            &epoch_schedule,
+            &rent_collector,
+            max_slot_in_storages_exclusive,
+            find_unskipped_slot,
+            None,
+        );
+        assert!(expected.is_none());
+
+        let slots_per_epoch = 432_000;
+        assert_eq!(
+            slots_per_epoch,
+            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(storage_slot))
+        );
+        let partition_index_max_inclusive = slots_per_epoch - 1;
+        account.set_rent_epoch(rent_collector.epoch);
+        // several epochs ahead of now
+        // first slot of new epoch is max slot EXclusive
+        // so last slot of prior epoch is max slot INclusive
+        let max_slot_in_storages_exclusive = slots_per_epoch * 3 + first_normal_slot;
+        // -1 is because get_epoch takes slot and `max_slot_in_storages_exclusive` is EXclusive
+        rent_collector.epoch = epoch_schedule.get_epoch(max_slot_in_storages_exclusive - 1);
+        //let first_slot_in_max_epoch = max_slot_in_storages_exclusive - slots_per_epoch;
+        let partition_from_pubkey = 8470; // function of 432k slots and 'pubkey' above
+        let first_slot_in_max_epoch = 1388256;
+        let expected_rent_collection_slot_max_epoch =
+            first_slot_in_max_epoch + partition_from_pubkey;
+        let expected = ExpectedRentCollection::new(
+            &pubkey,
+            &account,
+            storage_slot,
+            &epoch_schedule,
+            &rent_collector,
+            max_slot_in_storages_exclusive,
+            find_unskipped_slot,
+            None,
+        );
+        assert_eq!(
+            expected,
+            Some(ExpectedRentCollection {
+                partition_from_pubkey,
+                epoch_of_max_storage_slot: rent_collector.epoch,
+                partition_index_from_max_slot: partition_index_max_inclusive,
+                first_slot_in_max_epoch,
+                expected_rent_collection_slot_max_epoch,
+                rent_epoch: rent_collector.epoch,
+            })
+        );
+
+        // LeaveAloneNoRent
+        for leave_alone in [true, false] {
+            account.set_executable(leave_alone);
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                expected_rent_collection_slot_max_epoch,
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive,
+                find_unskipped_slot,
+                None,
+            );
+            assert_eq!(
+                expected,
+                (!leave_alone).then(|| ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch,
+                    partition_index_from_max_slot: partition_index_max_inclusive,
+                    first_slot_in_max_epoch,
+                    expected_rent_collection_slot_max_epoch,
+                    rent_epoch: rent_collector.epoch,
+                }),
+                "leave_alone: {}",
+                leave_alone
+            );
+        }
+
+        // storage_slot > expected_rent_collection_slot_max_epoch
+        // if greater, we return None
+        for greater in [false, true] {
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                expected_rent_collection_slot_max_epoch + if greater { 1 } else { 0 },
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive,
+                find_unskipped_slot,
+                None,
+            );
+            assert_eq!(
+                expected,
+                (!greater).then(|| ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch,
+                    partition_index_from_max_slot: partition_index_max_inclusive,
+                    first_slot_in_max_epoch,
+                    expected_rent_collection_slot_max_epoch,
+                    rent_epoch: rent_collector.epoch,
+                })
+            );
+        }
+
+        // test rewrite would have occurred in previous epoch from max_slot_in_storages_exclusive's epoch
+        // the change is in 'rent_epoch' returned in 'expected'
+        for previous_epoch in [false, true] {
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                expected_rent_collection_slot_max_epoch,
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive + if previous_epoch { slots_per_epoch } else { 0 },
+                find_unskipped_slot,
+                None,
+            );
+            let epoch_delta = if previous_epoch { 1 } else { 0 };
+            let slot_delta = epoch_delta * slots_per_epoch;
+            assert_eq!(
+                expected,
+                Some(ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch + epoch_delta,
+                    partition_index_from_max_slot: partition_index_max_inclusive,
+                    first_slot_in_max_epoch: first_slot_in_max_epoch + slot_delta,
+                    expected_rent_collection_slot_max_epoch: expected_rent_collection_slot_max_epoch
+                        + slot_delta,
+                    rent_epoch: rent_collector.epoch,
+                }),
+                "previous_epoch: {}",
+                previous_epoch,
+            );
+        }
+
+        // if account's rent_epoch is already > our rent epoch, rent was collected already
+        // if greater, we return None
+        let original_rent_epoch = account.rent_epoch();
+        for already_collected in [true, false] {
+            // to consider: maybe if we already collected rent_epoch IN this slot and slot matches what we need, then we should return None here
+            account.set_rent_epoch(original_rent_epoch + if already_collected { 1 } else { 0 });
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                expected_rent_collection_slot_max_epoch,
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive,
+                find_unskipped_slot,
+                None,
+            );
+            assert_eq!(
+                expected,
+                Some(ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch,
+                    partition_index_from_max_slot: partition_index_max_inclusive,
+                    first_slot_in_max_epoch,
+                    expected_rent_collection_slot_max_epoch,
+                    rent_epoch: std::cmp::max(rent_collector.epoch, account.rent_epoch()),
+                }),
+                "rent_collector.epoch: {}, already_collected: {}",
+                rent_collector.epoch,
+                already_collected
+            );
+        }
+        account.set_rent_epoch(original_rent_epoch);
+
+        let storage_slot = max_slot_in_storages_exclusive - slots_per_epoch - 1;
+        // check partition from pubkey code
+        for end_partition_index in [0, 1, 2, 100, slots_per_epoch - 2, slots_per_epoch - 1] {
+            // generate a pubkey range
+            let range = crate::bank::Bank::pubkey_range_from_partition((
+                // start_index:
+                end_partition_index.saturating_sub(1), // this can end up at start=0, end=0 (this is a desired test case)
+                // end_index:
+                end_partition_index,
+                epoch_schedule.get_slots_in_epoch(rent_collector.epoch),
+            ));
+            // use both start and end from INclusive range separately
+            for pubkey in [&range.start(), &range.end()] {
+                let expected = ExpectedRentCollection::new(
+                    pubkey,
+                    &account,
+                    storage_slot,
+                    &epoch_schedule,
+                    &rent_collector,
+                    max_slot_in_storages_exclusive,
+                    find_unskipped_slot,
+                    None,
+                );
+                assert_eq!(
+                    expected,
+                    Some(ExpectedRentCollection {
+                        partition_from_pubkey: end_partition_index,
+                        epoch_of_max_storage_slot: rent_collector.epoch,
+                        partition_index_from_max_slot: partition_index_max_inclusive,
+                        first_slot_in_max_epoch,
+                        expected_rent_collection_slot_max_epoch: first_slot_in_max_epoch + end_partition_index,
+                        rent_epoch: rent_collector.epoch,
+                    }),
+                    "range: {:?}, pubkey: {:?}, end_partition_index: {}, max_slot_in_storages_exclusive: {}",
+                    range,
+                    pubkey,
+                    end_partition_index,
+                    max_slot_in_storages_exclusive,
+                );
+            }
+        }
+
+        // check max_slot_in_storages_exclusive related code
+        // so sweep through max_slot_in_storages_exclusive values within an epoch
+        let first_slot_in_max_epoch = first_normal_slot + slots_per_epoch;
+        rent_collector.epoch = epoch_schedule.get_epoch(first_slot_in_max_epoch);
+        // an epoch in the past so we always collect rent
+        let storage_slot = first_normal_slot;
+        for partition_index in [
+            0,
+            1,
+            2,
+            partition_from_pubkey - 1,
+            partition_from_pubkey,
+            partition_from_pubkey + 1,
+            100,
+            slots_per_epoch - 2,
+            slots_per_epoch - 1,
+        ] {
+            // partition_index=0 means first slot of second normal epoch
+            // second normal epoch because we want to deal with accounts stored in the first normal epoch
+            // + 1 because of exclusive
+            let max_slot_in_storages_exclusive = first_slot_in_max_epoch + partition_index + 1;
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                storage_slot,
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive,
+                find_unskipped_slot,
+                None,
+            );
+            let partition_index_passed_pubkey = partition_from_pubkey <= partition_index;
+            let expected_rent_epoch =
+                rent_collector.epoch - if partition_index_passed_pubkey { 0 } else { 1 };
+            let expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch
+                + partition_from_pubkey
+                - if partition_index_passed_pubkey {
+                    0
+                } else {
+                    slots_per_epoch
+                };
+
+            assert_eq!(
+                expected,
+                Some(ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch,
+                    partition_index_from_max_slot: partition_index,
+                    first_slot_in_max_epoch,
+                    expected_rent_collection_slot_max_epoch,
+                    rent_epoch: expected_rent_epoch,
+                }),
+                "partition_index: {}, max_slot_in_storages_exclusive: {}, storage_slot: {}, first_normal_slot: {}",
+                partition_index,
+                max_slot_in_storages_exclusive,
+                storage_slot,
+                first_normal_slot,
+            );
+        }
+
+        // test account.rent_epoch = 0
+        let first_slot_in_max_epoch = 1388256;
+        for account_rent_epoch in [0, epoch] {
+            account.set_rent_epoch(account_rent_epoch);
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                storage_slot,
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive,
+                find_unskipped_slot,
+                None,
+            );
+            assert_eq!(
+                expected,
+                (account_rent_epoch != 0).then(|| ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch + 1,
+                    partition_index_from_max_slot: partition_index_max_inclusive,
+                    first_slot_in_max_epoch,
+                    expected_rent_collection_slot_max_epoch,
+                    rent_epoch: rent_collector.epoch,
+                })
+            );
+        }
+
+        // test find_unskipped_slot
+        for find_unskipped_slot in [
+            |_| None,
+            Some,                  // identity
+            |slot| Some(slot + 1), // increment
+            |_| Some(Slot::MAX),   // max
+        ] {
+            let test_value = 10;
+            let find_result = find_unskipped_slot(test_value);
+            let increment = find_result.unwrap_or_default() == test_value + 1;
+            let expected = ExpectedRentCollection::new(
+                &pubkey,
+                &account,
+                storage_slot,
+                &epoch_schedule,
+                &rent_collector,
+                max_slot_in_storages_exclusive,
+                find_unskipped_slot,
+                None,
+            );
+            assert_eq!(
+                expected,
+                Some(ExpectedRentCollection {
+                    partition_from_pubkey,
+                    epoch_of_max_storage_slot: rent_collector.epoch + 1,
+                    partition_index_from_max_slot: partition_index_max_inclusive,
+                    first_slot_in_max_epoch,
+                    expected_rent_collection_slot_max_epoch: if find_result.unwrap_or_default()
+                        == Slot::MAX
+                    {
+                        Slot::MAX
+                    } else if increment {
+                        expected_rent_collection_slot_max_epoch + 1
+                    } else {
+                        expected_rent_collection_slot_max_epoch
+                    },
+                    rent_epoch: rent_collector.epoch,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn test_simplified_rent_collection() {
+        solana_logger::setup();
+        let pubkey = Pubkey::new(&[5; 32]);
+        let owner = solana_sdk::pubkey::new_rand();
+        let mut account = AccountSharedData::new(1, 0, &owner);
+        let mut epoch_schedule = EpochSchedule {
+            first_normal_epoch: 0,
+            ..EpochSchedule::default()
+        };
+        epoch_schedule.first_normal_slot = 0;
+        let first_normal_slot = epoch_schedule.first_normal_slot;
+        let slots_per_epoch = 432_000;
+        let partition_from_pubkey = 8470; // function of 432k slots and 'pubkey' above
+                                          // start in epoch=1 because of issues at rent_epoch=1
+        let storage_slot = first_normal_slot + partition_from_pubkey + slots_per_epoch;
+        let epoch = epoch_schedule.get_epoch(storage_slot);
+        assert_eq!(
+            (epoch, partition_from_pubkey),
+            epoch_schedule.get_epoch_and_slot_index(storage_slot)
+        );
+        let genesis_config = GenesisConfig::default();
+        let mut rent_collector = RentCollector::new(
+            epoch,
+            &epoch_schedule,
+            genesis_config.slots_per_year(),
+            &genesis_config.rent,
+        );
+        rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
+
+        assert_eq!(
+            slots_per_epoch,
+            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(storage_slot))
+        );
+        account.set_rent_epoch(1); // has to be not 0
+
+        /*
+        test this:
+        pubkey_partition_index: 8470
+        storage_slot: 8470
+        account.rent_epoch: 1 (has to be not 0)
+
+        max_slot: 8469 + 432k * 1
+        max_slot: 8470 + 432k * 1
+        max_slot: 8471 + 432k * 1
+        max_slot: 8472 + 432k * 1
+        max_slot: 8469 + 432k * 2
+        max_slot: 8470 + 432k * 2
+        max_slot: 8471 + 432k * 2
+        max_slot: 8472 + 432k * 2
+        max_slot: 8469 + 432k * 3
+        max_slot: 8470 + 432k * 3
+        max_slot: 8471 + 432k * 3
+        max_slot: 8472 + 432k * 3
+
+        one run without skipping slot 8470, once WITH skipping slot 8470
+        */
+
+        for skipped_slot in [false, true] {
+            let find_unskipped_slot = if skipped_slot {
+                |slot| Some(slot + 1)
+            } else {
+                Some
+            };
+
+            // starting at epoch = 0 has issues because of rent_epoch=0 special casing
+            for epoch in 1..4 {
+                for partition_index_from_max_slot in
+                    partition_from_pubkey - 1..=partition_from_pubkey + 2
+                {
+                    let max_slot_in_storages_inclusive =
+                        slots_per_epoch * epoch + first_normal_slot + partition_index_from_max_slot;
+                    if storage_slot > max_slot_in_storages_inclusive {
+                        continue; // illegal combination
+                    }
+                    rent_collector.epoch = epoch_schedule.get_epoch(max_slot_in_storages_inclusive);
+                    let first_slot_in_max_epoch = max_slot_in_storages_inclusive
+                        - max_slot_in_storages_inclusive % slots_per_epoch;
+                    let skip_offset = if skipped_slot { 1 } else { 0 };
+                    let mut expected_rent_collection_slot_max_epoch =
+                        first_slot_in_max_epoch + partition_from_pubkey + skip_offset;
+                    let hit_this_epoch =
+                        expected_rent_collection_slot_max_epoch <= max_slot_in_storages_inclusive;
+                    if !hit_this_epoch {
+                        expected_rent_collection_slot_max_epoch -= slots_per_epoch;
+                    }
+
+                    assert_eq!(
+                        (epoch, partition_index_from_max_slot),
+                        epoch_schedule.get_epoch_and_slot_index(max_slot_in_storages_inclusive)
+                    );
+                    assert_eq!(
+                        (epoch, 0),
+                        epoch_schedule.get_epoch_and_slot_index(first_slot_in_max_epoch)
+                    );
+                    account.set_rent_epoch(1);
+                    let max_slot_in_storages_exclusive = max_slot_in_storages_inclusive + 1;
+                    let expected = ExpectedRentCollection::new(
+                        &pubkey,
+                        &account,
+                        storage_slot,
+                        &epoch_schedule,
+                        &rent_collector,
+                        max_slot_in_storages_exclusive,
+                        find_unskipped_slot,
+                        None,
+                    );
+                    let some_expected = if epoch == 1 {
+                        skipped_slot && partition_index_from_max_slot > partition_from_pubkey
+                    } else if epoch == 2 {
+                        partition_index_from_max_slot >= partition_from_pubkey - skip_offset
+                    } else {
+                        true
+                    };
+                    /*
+                    // for logging/debugging
+                    error!(
+                            "partition_index_from_max_slot: {}, epoch: {}, max_slot_in_storages_inclusive: {}, expect none: {}, rent_epoch matches: {}, slot matches: {}, skipped_slot: {}",
+                            partition_index_from_max_slot,
+                            epoch,
+                            max_slot_in_storages_inclusive,
+                            !some_expected,
+                            expected.as_ref().map(|expected| expected.rent_epoch == account.rent_epoch()).unwrap_or(true),
+                            expected.as_ref().map(|expected| expected.expected_rent_collection_slot_max_epoch == storage_slot).unwrap_or(true),
+                            skipped_slot,
+                        );
+                        */
+                    assert_eq!(
+                        expected,
+                        some_expected.then(|| ExpectedRentCollection {
+                            partition_from_pubkey,
+                            epoch_of_max_storage_slot: rent_collector.epoch,
+                            partition_index_from_max_slot,
+                            first_slot_in_max_epoch,
+                            expected_rent_collection_slot_max_epoch,
+                            rent_epoch: rent_collector.epoch - if hit_this_epoch { 0 } else { 1 },
+                        }),
+                        "partition_index_from_max_slot: {}, epoch: {}",
+                        partition_index_from_max_slot,
+                        epoch,
+                    );
+
+                    // test RentResult::LeaveAloneNoRent
+                    {
+                        let expected = ExpectedRentCollection::new(
+                            &pubkey,
+                            &account,
+                            storage_slot,
+                            &epoch_schedule,
+                            &rent_collector,
+                            max_slot_in_storages_exclusive,
+                            find_unskipped_slot,
+                            // treat this pubkey like a filler account so we get a 'LeaveAloneNoRent' result
+                            Some(&pubkey),
+                        );
+                        assert_eq!(
+                            expected,
+                            some_expected.then(|| ExpectedRentCollection {
+                                partition_from_pubkey,
+                                epoch_of_max_storage_slot: rent_collector.epoch,
+                                partition_index_from_max_slot,
+                                first_slot_in_max_epoch,
+                                expected_rent_collection_slot_max_epoch,
+                                // this will not be adjusted for 'LeaveAloneNoRent'
+                                rent_epoch: account.rent_epoch(),
+                            }),
+                            "partition_index_from_max_slot: {}, epoch: {}",
+                            partition_index_from_max_slot,
+                            epoch,
+                        );
+                    }
+
+                    // test maybe_rehash_skipped_rewrite
+                    let hash = AccountsDb::hash_account(storage_slot, &account, &pubkey);
+                    let maybe_rehash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                        &account,
+                        &hash,
+                        &pubkey,
+                        storage_slot,
+                        &epoch_schedule,
+                        &rent_collector,
+                        &HashStats::default(),
+                        max_slot_in_storages_exclusive,
+                        find_unskipped_slot,
+                        None,
+                    );
+                    assert_eq!(
+                        maybe_rehash,
+                        some_expected.then(|| {
+                            AccountsDb::hash_account_with_rent_epoch(
+                                expected
+                                    .as_ref()
+                                    .unwrap()
+                                    .expected_rent_collection_slot_max_epoch,
+                                &account,
+                                &pubkey,
+                                expected.as_ref().unwrap().rent_epoch,
+                            )
+                        })
+                    );
+                }
+            }
+        }
+    }
+}
