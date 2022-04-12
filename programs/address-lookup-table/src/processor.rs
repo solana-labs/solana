@@ -8,11 +8,8 @@ use {
     },
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
-        account_utils::State,
         clock::Slot,
         instruction::InstructionError,
-        keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
         system_instruction,
@@ -60,13 +57,12 @@ pub struct Processor;
 impl Processor {
     fn create_lookup_table(
         invoke_context: &mut InvokeContext,
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
         untrusted_recent_slot: Slot,
         bump_seed: u8,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
@@ -167,11 +163,10 @@ impl Processor {
 
     fn freeze_lookup_table(
         invoke_context: &mut InvokeContext,
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
@@ -222,12 +217,11 @@ impl Processor {
 
     fn extend_lookup_table(
         invoke_context: &mut InvokeContext,
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
         new_addresses: Vec<Pubkey>,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
@@ -343,11 +337,10 @@ impl Processor {
 
     fn deactivate_lookup_table(
         invoke_context: &mut InvokeContext,
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
@@ -396,11 +389,10 @@ impl Processor {
 
     fn close_lookup_table(
         invoke_context: &mut InvokeContext,
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
