@@ -102,8 +102,7 @@ impl TpuConnection for QuicTpuConnection {
         });
         Ok(())
     }
-    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>
-    {
+    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
         //drop and detach the task
@@ -238,8 +237,7 @@ impl QuicClient {
         Ok(())
     }
 
-    pub async fn send_vecs(&self, buffers: Vec<Vec<u8>>) -> Result<(), ClientErrorKind>
-    {
+    pub async fn send_vecs(&self, buffers: Vec<Vec<u8>>) -> Result<(), ClientErrorKind> {
         // Start off by "testing" the connection by sending the first transaction
         // This will also connect to the server if not already connected
         // and reconnect and retry if the first send attempt failed
@@ -264,18 +262,18 @@ impl QuicClient {
             .iter()
             .chunks(QUIC_MAX_CONCURRENT_STREAMS);
 
-        let futures = chunks.into_iter().map(|buffs| {
-            join_all(
+        let futures: Vec<_> = chunks
+            .into_iter()
+            .flat_map(|buffs| {
                 buffs
                     .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
-            )
-        });
+                    .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref))
+            })
+            .collect();
 
         for f in futures {
-            f.await.into_iter().try_for_each(|res| res)?;
+            f.await?;
         }
         Ok(())
     }
-
 }
