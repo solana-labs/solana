@@ -3,11 +3,11 @@ use {
     crate::{
         accounts_db::AccountsDb,
         accounts_hash::HashStats,
-        bank::PartitionIndex,
+        bank::{Bank, PartitionIndex, Rewrites},
         rent_collector::{RentCollector, RentResult},
     },
     solana_sdk::{
-        account::ReadableAccount,
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{Epoch, Slot},
         epoch_schedule::EpochSchedule,
         hash::Hash,
@@ -209,7 +209,114 @@ Every highest_root >= 432k * 2 + 80 and < 432k * 3 + 80 is this same result
 */
 
 impl ExpectedRentCollection {
-    #![allow(dead_code)]
+    #[allow(dead_code)]
+    /// 'account' is being loaded from 'storage_slot' in 'bank_slot'
+    /// adjusts 'account.rent_epoch' if we skipped the last rewrite on this account
+    pub fn maybe_update_rent_epoch_on_load(
+        account: &mut AccountSharedData,
+        storage_slot: Slot,
+        bank_slot: Slot,
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        pubkey: &Pubkey,
+        rewrites_skipped_this_slot: &Rewrites,
+    ) {
+        let result = Self::get_corrected_rent_epoch_on_load(
+            account,
+            storage_slot,
+            bank_slot,
+            epoch_schedule,
+            rent_collector,
+            pubkey,
+            rewrites_skipped_this_slot,
+        );
+        if let Some(rent_epoch) = result {
+            account.set_rent_epoch(rent_epoch);
+        }
+    }
+
+    /// 'account' is being loaded
+    /// we may need to adjust 'account.rent_epoch' if we skipped the last rewrite on this account
+    /// returns Some(rent_epoch) if an adjustment needs to be made
+    /// returns None if the account is up to date
+    fn get_corrected_rent_epoch_on_load(
+        account: &AccountSharedData,
+        storage_slot: Slot,
+        bank_slot: Slot,
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        pubkey: &Pubkey,
+        rewrites_skipped_this_slot: &Rewrites,
+    ) -> Option<Epoch> {
+        if let RentResult::CollectRent((next_epoch, rent_due)) =
+            rent_collector.calculate_rent_result(pubkey, account, None)
+        {
+            if rent_due != 0 {
+                // rent is due on this account in this epoch, so we did not skip a rewrite
+                return None;
+            }
+
+            let (current_epoch, partition_from_current_slot) =
+                epoch_schedule.get_epoch_and_slot_index(bank_slot);
+            let (storage_epoch, storage_slot_partition) =
+                epoch_schedule.get_epoch_and_slot_index(storage_slot);
+            let partition_from_pubkey = Bank::partition_from_pubkey(
+                pubkey,
+                epoch_schedule.get_slots_in_epoch(current_epoch),
+            );
+            let mut possibly_update = true;
+            if current_epoch == storage_epoch {
+                // storage is in same epoch as bank
+                if partition_from_pubkey > partition_from_current_slot {
+                    // we haven't hit the slot's rent collection slot yet, and the storage was within this slot, so do not update
+                    possibly_update = false;
+                }
+            } else if current_epoch == storage_epoch + 1 {
+                // storage is in the previous epoch
+                if storage_slot_partition >= partition_from_pubkey
+                    && partition_from_pubkey > partition_from_current_slot
+                {
+                    // we did a rewrite in last epoch and we have not yet hit the rent collection slot in THIS epoch
+                    possibly_update = false;
+                }
+            } // if more than 1 epoch old, then we need to collect rent because we clearly skipped it.
+            let rent_epoch = account.rent_epoch();
+            if possibly_update
+                && rent_epoch == 0
+                && current_epoch > 1
+                && !rewrites_skipped_this_slot.contains_key(pubkey)
+            {
+                // we know we're done
+                return None;
+            }
+
+            // if an account was written >= its rent collection slot within the last epoch worth of slots, then we don't want to update it here
+            if possibly_update && rent_epoch < current_epoch {
+                let new_rent_epoch = if partition_from_pubkey < partition_from_current_slot
+                    || rewrites_skipped_this_slot.contains_key(pubkey)
+                {
+                    // partition_from_pubkey < partition_from_current_slot:
+                    //  we already would have done a rewrite on this account IN this epoch
+                    next_epoch
+                } else {
+                    // should have done rewrite up to last epoch
+                    // we have not passed THIS epoch's rewrite slot yet, so the correct 'rent_epoch' is previous
+                    next_epoch.saturating_sub(1)
+                };
+                if rent_epoch != new_rent_epoch {
+                    // the point of this function:
+                    // 'new_rent_epoch' is the correct rent_epoch that the account would have if we had done rewrites
+                    return Some(new_rent_epoch);
+                }
+            } else if !possibly_update {
+                // This is a non-trivial lookup. Would be nice to skip this.
+                assert!(!rewrites_skipped_this_slot.contains_key(pubkey), "did not update rent_epoch: {}, new value for rent_epoch: {}, old: {}, current epoch: {}", pubkey, rent_epoch, next_epoch, current_epoch);
+            }
+        }
+        None
+    }
+
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     /// it is possible 0.. rewrites were skipped on this account
     /// if so, return Some(correct hash as of 'storage_slot')
@@ -857,19 +964,6 @@ pub mod tests {
                     } else {
                         true
                     };
-                    /*
-                    // for logging/debugging
-                    error!(
-                            "partition_index_from_max_slot: {}, epoch: {}, max_slot_in_storages_inclusive: {}, expect none: {}, rent_epoch matches: {}, slot matches: {}, skipped_slot: {}",
-                            partition_index_from_max_slot,
-                            epoch,
-                            max_slot_in_storages_inclusive,
-                            !some_expected,
-                            expected.as_ref().map(|expected| expected.rent_epoch == account.rent_epoch()).unwrap_or(true),
-                            expected.as_ref().map(|expected| expected.expected_rent_collection_slot_max_epoch == storage_slot).unwrap_or(true),
-                            skipped_slot,
-                        );
-                        */
                     assert_eq!(
                         expected,
                         some_expected.then(|| ExpectedRentCollection {
@@ -943,6 +1037,140 @@ pub mod tests {
                             )
                         })
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_corrected_rent_epoch_on_load() {
+        solana_logger::setup();
+        let pubkey = Pubkey::new(&[5; 32]);
+        let owner = solana_sdk::pubkey::new_rand();
+        let mut account = AccountSharedData::new(1, 0, &owner);
+        let mut epoch_schedule = EpochSchedule {
+            first_normal_epoch: 0,
+            ..EpochSchedule::default()
+        };
+        epoch_schedule.first_normal_slot = 0;
+        let first_normal_slot = epoch_schedule.first_normal_slot;
+        let slots_per_epoch = 432_000;
+        let partition_from_pubkey = 8470; // function of 432k slots and 'pubkey' above
+                                          // start in epoch=1 because of issues at rent_epoch=1
+        let storage_slot = first_normal_slot + partition_from_pubkey + slots_per_epoch;
+        let epoch = epoch_schedule.get_epoch(storage_slot);
+        assert_eq!(
+            (epoch, partition_from_pubkey),
+            epoch_schedule.get_epoch_and_slot_index(storage_slot)
+        );
+        let genesis_config = GenesisConfig::default();
+        let mut rent_collector = RentCollector::new(
+            epoch,
+            &epoch_schedule,
+            genesis_config.slots_per_year(),
+            &genesis_config.rent,
+        );
+        rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
+
+        assert_eq!(
+            slots_per_epoch,
+            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(storage_slot))
+        );
+        account.set_rent_epoch(1); // has to be not 0
+
+        /*
+        test this:
+        pubkey_partition_index: 8470
+        storage_slot: 8470
+        account.rent_epoch: 1 (has to be not 0)
+
+        max_slot: 8469 + 432k * 1
+        max_slot: 8470 + 432k * 1
+        max_slot: 8471 + 432k * 1
+        max_slot: 8472 + 432k * 1
+        max_slot: 8469 + 432k * 2
+        max_slot: 8470 + 432k * 2
+        max_slot: 8471 + 432k * 2
+        max_slot: 8472 + 432k * 2
+        max_slot: 8469 + 432k * 3
+        max_slot: 8470 + 432k * 3
+        max_slot: 8471 + 432k * 3
+        max_slot: 8472 + 432k * 3
+
+        one run without skipping slot 8470, once WITH skipping slot 8470
+        */
+
+        for rewrite_already in [false, true] {
+            // starting at epoch = 0 has issues because of rent_epoch=0 special casing
+            for epoch in 1..4 {
+                for partition_index_bank_slot in
+                    partition_from_pubkey - 1..=partition_from_pubkey + 2
+                {
+                    let bank_slot =
+                        slots_per_epoch * epoch + first_normal_slot + partition_index_bank_slot;
+                    if storage_slot > bank_slot {
+                        continue; // illegal combination
+                    }
+                    rent_collector.epoch = epoch_schedule.get_epoch(bank_slot);
+                    let first_slot_in_max_epoch = bank_slot - bank_slot % slots_per_epoch;
+
+                    assert_eq!(
+                        (epoch, partition_index_bank_slot),
+                        epoch_schedule.get_epoch_and_slot_index(bank_slot)
+                    );
+                    assert_eq!(
+                        (epoch, 0),
+                        epoch_schedule.get_epoch_and_slot_index(first_slot_in_max_epoch)
+                    );
+                    account.set_rent_epoch(1);
+                    let rewrites = Rewrites::default();
+                    if rewrite_already {
+                        if partition_index_bank_slot != partition_from_pubkey {
+                            // this is an invalid test occurrence.
+                            // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition idnex yet.
+                            continue;
+                        }
+
+                        rewrites.insert(pubkey, Hash::default());
+                    }
+                    let expected_new_rent_epoch = if partition_index_bank_slot
+                        > partition_from_pubkey
+                    {
+                        if epoch > account.rent_epoch() {
+                            Some(rent_collector.epoch)
+                        } else {
+                            None
+                        }
+                    } else if partition_index_bank_slot == partition_from_pubkey && rewrite_already
+                    {
+                        let expected_rent_epoch = rent_collector.epoch;
+                        if expected_rent_epoch == account.rent_epoch() {
+                            None
+                        } else {
+                            Some(expected_rent_epoch)
+                        }
+                    } else if partition_index_bank_slot <= partition_from_pubkey
+                        && epoch > account.rent_epoch()
+                    {
+                        let expected_rent_epoch = rent_collector.epoch.saturating_sub(1);
+                        if expected_rent_epoch == account.rent_epoch() {
+                            None
+                        } else {
+                            Some(expected_rent_epoch)
+                        }
+                    } else {
+                        None
+                    };
+                    let new_rent_epoch = ExpectedRentCollection::get_corrected_rent_epoch_on_load(
+                        &account,
+                        storage_slot,
+                        bank_slot,
+                        &epoch_schedule,
+                        &rent_collector,
+                        &pubkey,
+                        &rewrites,
+                    );
+                    assert_eq!(new_rent_epoch, expected_new_rent_epoch);
                 }
             }
         }
