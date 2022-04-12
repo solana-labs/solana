@@ -7,6 +7,7 @@ use {
         keypairs::get_keypairs,
     },
     solana_client::{
+        connection_cache,
         rpc_client::RpcClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
@@ -45,6 +46,7 @@ fn main() {
         num_lamports_per_account,
         target_node,
         external_client_type,
+        use_quic,
         ..
     } = &cli_config;
 
@@ -88,6 +90,9 @@ fn main() {
                     eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                     exit(1);
                 });
+            if *use_quic {
+                connection_cache::set_use_quic(true);
+            }
             let client = if *multi_client {
                 let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
                 if nodes.len() < num_clients {
@@ -130,6 +135,9 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
+            if *use_quic {
+                connection_cache::set_use_quic(true);
+            }
             let client = Arc::new(
                 TpuClient::new(rpc_client, websocket_url, TpuClientConfig::default())
                     .unwrap_or_else(|err| {
