@@ -14667,7 +14667,9 @@ pub(crate) mod tests {
         // Let threads run for a while, check the scans didn't see any mixed slots
         let min_expected_number_of_scans = 5;
         std::thread::sleep(Duration::new(5, 0));
-        let mut remaining_loops = 1000;
+        // This can be reduced when you are running this test locally to deal with hangs
+        // But, if it is too low, the ci fails intermittently.
+        let mut remaining_loops = 2000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
