@@ -34,9 +34,7 @@ impl TpuConnection for UdpTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_async<T>(&'static self, wire_transaction: T) -> TransportResult<()>
-    where
-        T: AsRef<[u8]> + Send + 'static,
+    fn send_wire_transaction_async<T>(&self, wire_transaction: Vec<u8>) -> TransportResult<()>
     {
         self.socket.send_to(wire_transaction.as_ref(), self.addr)?;
         Ok(())
