@@ -271,9 +271,7 @@ impl QuicClient {
             })
             .collect();
 
-        for f in futures {
-            f.await?;
-        }
+        join_all(futures).await;
         Ok(())
     }
 }
