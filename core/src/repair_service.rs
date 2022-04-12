@@ -30,7 +30,7 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Condvar, RwLock,
+            Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
