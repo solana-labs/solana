@@ -231,6 +231,7 @@ impl Default for ValidatorConfig {
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
         Self {
+            enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
         }
