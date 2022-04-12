@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_index::{AccountsIndexConfig, IndexValue},
+        accounts_index::{AccountsIndexConfig, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
         in_mem_accounts_index::{InMemAccountsIndex, SlotT},
         waitable_condvar::WaitableCondvar,
@@ -153,7 +153,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
         let mut bucket_config = BucketMapConfig::new(bins);
         bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
-        let mut mem_budget_mb = config.as_ref().and_then(|config| config.index_limit_mb);
+        let mut mem_budget_mb = config.as_ref().and_then(|config| {
+            if let IndexLimitMb::Limit(mb) = config.index_limit_mb {
+                Some(mb)
+            } else {
+                None
+            }
+        });
         let bucket_map_tests_allowed = mem_budget_mb.is_none()
             && !config
                 .as_ref()
@@ -391,7 +397,7 @@ pub mod tests {
     fn test_disk_index_enabled() {
         let bins = 1;
         let config = AccountsIndexConfig {
-            index_limit_mb: Some(0),
+            index_limit_mb: IndexLimitMb::Limit(0),
             ..AccountsIndexConfig::default()
         };
         let test = BucketMapHolder::<u64>::new(bins, &Some(config), 1);

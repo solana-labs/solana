@@ -47,7 +47,7 @@ use {
         },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
-            AccountsIndexConfig,
+            AccountsIndexConfig, IndexLimitMb,
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
@@ -2234,11 +2234,14 @@ pub fn main() {
         accounts_index_config.bins = Some(bins);
     }
 
-    if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
-        accounts_index_config.index_limit_mb = Some(limit);
-    } else if matches.is_present("disable_accounts_disk_index") {
-        accounts_index_config.index_limit_mb = None;
-    }
+    accounts_index_config.index_limit_mb =
+        if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+            IndexLimitMb::Limit(limit)
+        } else if matches.is_present("disable_accounts_disk_index") {
+            IndexLimitMb::InMemOnly
+        } else {
+            IndexLimitMb::Unspecified
+        };
 
     {
         let mut accounts_index_paths: Vec<PathBuf> = if matches.is_present("accounts_index_path") {
