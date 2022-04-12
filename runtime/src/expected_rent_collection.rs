@@ -296,7 +296,7 @@ impl ExpectedRentCollection {
             if let Some(find) =
                 find_unskipped_slot(calculated_from_index_expected_rent_collection_slot_max_epoch)
             {
-                // found a root (because we have a storage) that is >= expected_rent_collection_slot.
+                // found a root that is >= expected_rent_collection_slot.
                 expected_rent_collection_slot_max_epoch = find;
             }
         }
@@ -312,16 +312,10 @@ impl ExpectedRentCollection {
             }
         }
 
-        // if we write account a at slot 1 a valid transaction,
-        // but then at slot 2, it is time for a rewrite on account a, then when we find slot 1, we will
-        // not be ancient, BUT, we should do a rewrite on it later, so we can't just bail out when it is
-        // not ancient - we still may have to do a rewrite at a higher slot #
-        // this needs a test case
-
         // the slot we're dealing with is where we expected the rent to be collected for this pubkey, so use what is in this slot
         // however, there are cases, such as adjusting the clock, where we store the account IN the same slot, but we do so BEFORE we collect rent. We later store the account AGAIN for rewrite/rent collection.
         // So, if storage_slot == expected_rent_collection_slot..., then we MAY have collected rent or may not have. So, it has to be >
-        // rent epoch=0 is a special case
+        // rent_epoch=0 is a special case
         if storage_slot > expected_rent_collection_slot_max_epoch
             || loaded_account.rent_epoch() == 0
         {
@@ -329,35 +323,36 @@ impl ExpectedRentCollection {
             return None;
         }
 
-        // this should be conditional since it has some cost
+        // ask the rent collector what rent should be collected.
+        // Rent collector knows the current epoch.
         let rent_result =
             rent_collector.calculate_rent_result(pubkey, loaded_account, filler_account_suffix);
-        let mut new_rent_epoch = loaded_account.rent_epoch();
-        new_rent_epoch = match rent_result {
+        let current_rent_epoch = loaded_account.rent_epoch();
+        let new_rent_epoch = match rent_result {
             RentResult::CollectRent((mut next_epoch, rent_due)) => {
-                if next_epoch > new_rent_epoch && rent_due != 0 {
-                    // this is an account in an ancient append vec that would have had rent collected, so just use the hash we have since there must be a newer version of this account already in a newer slot
-                    // no need to update hash
+                if next_epoch > current_rent_epoch && rent_due != 0 {
+                    // this is an account that would have had rent collected since this storage slot, so just use the hash we have since there must be a newer version of this account already in a newer slot
+                    // It would be a waste of time to recalcluate a hash.
                     return None;
                 }
                 if first_slot_in_max_epoch > expected_rent_collection_slot_max_epoch {
                     // this account won't have had rent collected for the current epoch yet (rent_collector has a current epoch), so our expected next_epoch is for the previous epoch
                     next_epoch = next_epoch.saturating_sub(1);
                 }
-                std::cmp::max(next_epoch, new_rent_epoch)
+                std::cmp::max(next_epoch, current_rent_epoch)
             }
             RentResult::LeaveAloneNoRent => {
-                // does rent epoch get updated for these? Not sure. todo: verify
-                // we may have to recalculate the hash because we would have possibly skipped a rewrite
-                // but, we do not update new_rent_epoch
-                new_rent_epoch
+                // rent_epoch is not updated for this condition
+                // But, a rewrite WOULD HAVE occured at the expected slot.
+                // So, fall through with same rent_epoch, but we will have already calculated 'expected_rent_collection_slot_max_epoch'
+                current_rent_epoch
             }
         };
 
         if expected_rent_collection_slot_max_epoch == storage_slot
             && new_rent_epoch == loaded_account.rent_epoch()
         {
-            // same as requested
+            // no rewrite would have occurred
             return None;
         }
 
