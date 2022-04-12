@@ -4456,6 +4456,8 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "serial_test",
+ "solana-clap-utils",
+ "solana-cli-config",
  "solana-client",
  "solana-core",
  "solana-faucet",
@@ -4470,6 +4472,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-test-validator",
  "solana-version",
  "thiserror",
 ]

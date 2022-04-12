@@ -90,20 +90,49 @@ impl TpuClient {
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     pub fn send_wire_transaction(&self, wire_transaction: &[u8]) -> bool {
-        let mut sent = false;
+        self.try_send_wire_transaction(wire_transaction).is_ok()
+    }
+
+    /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
+    /// size
+    /// Returns the last error if all sends fail
+    pub fn try_send_transaction(
+        &self,
+        transaction: &Transaction,
+    ) -> std::result::Result<(), std::io::Error> {
+        let wire_transaction = serialize(transaction).expect("serialization should succeed");
+        self.try_send_wire_transaction(&wire_transaction)
+    }
+
+    /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
+    /// Returns the last error if all sends fail
+    fn try_send_wire_transaction(
+        &self,
+        wire_transaction: &[u8],
+    ) -> std::result::Result<(), std::io::Error> {
+        let mut last_error: Option<std::io::Error> = None;
+        let mut some_success = false;
+
         for tpu_address in self
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots)
         {
-            if self
-                .send_socket
-                .send_to(wire_transaction, tpu_address)
-                .is_ok()
-            {
-                sent = true;
+            let result = self.send_socket.send_to(wire_transaction, tpu_address);
+            if let Err(err) = result {
+                last_error = Some(err);
+            } else {
+                some_success = true;
             }
         }
-        sent
+        if !some_success {
+            Err(if let Some(err) = last_error {
+                err
+            } else {
+                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted")
+            })
+        } else {
+            Ok(())
+        }
     }
 
     /// Create a new client that disconnects when dropped
@@ -265,6 +294,10 @@ impl TpuClient {
             expired_blockhash_retries -= 1;
         }
         Err(TpuSenderError::Custom("Max retries exceeded".into()))
+    }
+
+    pub fn rpc_client(&self) -> &RpcClient {
+        &self.rpc_client
     }
 }
 
