@@ -27,6 +27,9 @@ pub mod tpu_connection;
 pub mod transaction_executor;
 pub mod udp_client;
 
+#[macro_use]
+extern crate solana_metrics;
+
 pub mod mock_sender_for_cli {
     /// Magic `SIGNATURE` value used by `solana-cli` unit tests.
     /// Please don't use this constant.
