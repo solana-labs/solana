@@ -477,7 +477,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let bpf_tools_version = "v1.24";
+    let bpf_tools_version = "v1.25";
     let package = "bpf-tools";
     let target_path = home_dir
         .join(".cache")
