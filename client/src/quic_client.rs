@@ -9,6 +9,7 @@ use {
     lazy_static::lazy_static,
     log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
+    solana_metrics::datapoint_debug,
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
         transport::Result as TransportResult,
@@ -98,6 +99,7 @@ impl TpuConnection for QuicTpuConnection {
             let send_buffer = client.send_buffer(wire_transaction);
             if let Err(e) = send_buffer.await {
                 warn!("Failed to send transaction async to {:?}", e);
+                datapoint_debug!("send-wire-async", ("failure", 1, i64),);
             }
         });
         Ok(())
@@ -110,6 +112,7 @@ impl TpuConnection for QuicTpuConnection {
             let send_vecs = client.send_vecs(buffers);
             if let Err(e) = send_vecs.await {
                 warn!("Failed to send transaction batch async to {:?}", e);
+                datapoint_debug!("send-wire-batch-async", ("failure", 1, i64),);
             }
         });
         Ok(())
