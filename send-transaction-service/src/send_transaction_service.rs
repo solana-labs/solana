@@ -837,7 +837,7 @@ mod test {
                 last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())),
                 None,
-                Some(Instant::now()),
+                Some(Instant::now().sub(Duration::from_millis(4000))),
             ),
         );
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
@@ -945,6 +945,7 @@ mod test {
         transactions.clear();
 
         info!("Unknown durable-nonce transactions are retried until nonce advances...");
+        // simulate there was a nonce transaction sent 4 seconds ago (> the retry rate which is 2 seconds)
         transactions.insert(
             Signature::default(),
             TransactionInfo::new(
@@ -972,7 +973,11 @@ mod test {
                 ..ProcessTransactionsResult::default()
             }
         );
-        // Advance nonce
+        // Advance nonce, simulate the transaction was again last sent 4 seconds ago.
+        // This time the transaction should have been dropped.
+        for mut transaction in transactions.values_mut() {
+            transaction.last_sent_time = Some(Instant::now().sub(Duration::from_millis(4000)));
+        }
         let new_durable_nonce = Hash::new_unique();
         let new_nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
             nonce::state::Data::new(Pubkey::default(), new_durable_nonce, 42),
