@@ -1,6 +1,9 @@
 import { PublicKey, Connection } from "@solana/web3.js";
 import {
   getFilteredProgramAccounts,
+  getHashedName,
+  getNameAccountKey,
+  NameRegistryState,
   NAME_PROGRAM_ID,
   performReverseLookup,
 } from "@bonfida/spl-name-service";
@@ -11,10 +14,17 @@ import { Cluster, useCluster } from "providers/cluster";
 const SOL_TLD_AUTHORITY = new PublicKey(
   "58PwtjSDuFHuUkYjH9BYnnQKHfwo9reZhC2zMJv9JPkx"
 );
+
 export interface DomainInfo {
   name: string;
   address: PublicKey;
 }
+export const hasDomainSyntax = (value: string) => {
+  if (value.length >= 4 && value.substring(value.length - 4) === ".sol")
+    return true;
+  return false;
+};
+
 
 async function getUserDomainAddresses(
   connection: Connection,

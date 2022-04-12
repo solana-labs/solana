@@ -13,6 +13,8 @@ import {
 import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
+import { Connection } from "@solana/web3.js";
+import { getDomainOwner, hasDomainSyntax } from "utils/name-service";
 
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
@@ -20,7 +22,7 @@ export function SearchBar() {
   const history = useHistory();
   const location = useLocation();
   const { tokenRegistry } = useTokenRegistry();
-  const { cluster, clusterInfo } = useCluster();
+  const { url, cluster, clusterInfo } = useCluster();
 
   const onChange = (
     { pathname }: ValueType<any, false>,
@@ -33,7 +35,22 @@ export function SearchBar() {
   };
 
   const onInputChange = (value: string, { action }: InputActionMeta) => {
-    if (action === "input-change") setSearch(value);
+    const inputChange = action === "input-change";
+    if (inputChange && hasDomainSyntax(value)) {
+      lookupDomain(value);
+    } else if (inputChange) {
+      setSearch(value);
+    }
+  };
+
+  const lookupDomain = async (searchValue: string) => {
+    const connection = new Connection(url);
+    const domainOwner = await getDomainOwner(searchValue, connection);
+    if (domainOwner) {
+      setSearch(domainOwner);
+    } else {
+      setSearch(searchValue);
+    }
   };
 
   const resetValue = "" as any;
