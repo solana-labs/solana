@@ -228,12 +228,10 @@ pub enum StakeInstruction {
     /// # Account references
     ///   None
     ///
-    /// The minimum delegation will be returned via the transaction context's returndata.
-    /// Use [`get_return_data()`] to retrieve the result.  Alternatively, use the
-    /// [`get_minimum_delegation_return_data()`] or [`get_minimum_delegation()`] helper functions.
+    /// The minimum delegation will be returned via the transaction context's returndata.  Programs
+    /// should use the [`get_minimum_delegation()`] helper function instead of calling this
+    /// function directly.
     ///
-    /// [`get_return_data()`]: crate::program::get_return_data
-    /// [`get_minimum_delegation_return_data()`]: super::tools::get_minimum_delegation_return_data
     /// [`get_minimum_delegation()`]: super::tools::get_minimum_delegation
     GetMinimumDelegation,
 }

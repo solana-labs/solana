@@ -1,10 +1,11 @@
-//! Example/test program for calling GetMinimumDelegation and then the
-//! helper function to return the minimum delegation value.
+//! Example/test program to get the minimum stake delegation via the helper function
 
 #![allow(unreachable_code)]
 
 extern crate solana_program;
-use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey, stake};
+use solana_program::{
+    account_info::AccountInfo, entrypoint::ProgramResult, msg, pubkey::Pubkey, stake,
+};
 
 solana_program::entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
@@ -14,6 +15,9 @@ fn process_instruction(
     _instruction_data: &[u8],
 ) -> ProgramResult {
     let minimum_delegation = stake::tools::get_minimum_delegation();
-    assert!(minimum_delegation.is_some());
+    msg!(
+        "The minimum stake delegation is {} lamports",
+        minimum_delegation
+    );
     Ok(())
 }
