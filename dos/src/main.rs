@@ -107,20 +107,17 @@ struct TransactionGenerator {
     transaction_params: TransactionParams,
 }
 
-enum TransactionType {
-    SingleTransfer,
-    MultiTransfer,
-    AccountCreation,
-}
-
-/// This trait provides functionality to generate several types of transactions:
+/// Provides functionality to generate several types of transactions:
+///
 /// 1. Without blockhash
 /// 1.1 With valid signatures (number of signatures is configurable)
 /// 1.2 With invalid signatures (number of signatures is configurable)
+///
 /// 2. With blockhash (but still invalid due to high amount to transfer):
 /// 2.1 Transfer payer -> destination (1 instruction per transaction)
 /// 2.2 Transfer payer -> multiple destinations (many instructions per transaction)
 /// 2.3 Create account transaction
+///
 impl TransactionGenerator {
     fn new(transaction_params: TransactionParams) -> Self {
         TransactionGenerator {
@@ -138,12 +135,6 @@ impl TransactionGenerator {
     ) -> Transaction {
         if self.transaction_params.valid_blockhash {
             // kpvals must be Some and contain at least one element
-            if kpvals.is_none() {
-                info!("NONE");
-            }
-            if kpvals.as_ref().unwrap().is_empty() {
-                info!("EMPTY");
-            }
             if kpvals.is_none() || kpvals.as_ref().unwrap().len() == 0 {
                 panic!("Expected at least one destination keypair to create transaction");
             }
@@ -170,7 +161,8 @@ impl TransactionGenerator {
             self.last_generated = Instant::now();
         }
 
-        let transaction_type = TransactionType::SingleTransfer;
+        // this argument must be present because it is required if blockhash is valid in cli
+        let transaction_type = self.transaction_params.transaction_type.as_ref().unwrap();
         match transaction_type {
             TransactionType::SingleTransfer => {
                 self.create_single_transfer_transaction(payer, &destinations[0].pubkey())
@@ -1120,7 +1112,6 @@ pub mod test {
         // 2. Create faucet thread
         // 3. Fund funding_key using faucet
         // 4. Transfer required funds from funding_key account to newly created accounts
-        // create faucet keypair and fund it
         let faucet_keypair = Keypair::new();
         cluster.transfer(
             &cluster.funding_keypair,
@@ -1139,6 +1130,7 @@ pub mod test {
         ));
 
         // create one transaction and send it 10 times
+        // this is done in single thread
         run_dos(
             &nodes_slice,
             10,
@@ -1160,6 +1152,90 @@ pub mod test {
                     unique_transactions: false,
                     payer_filename: None,
                     num_gen_threads: 1,
+                },
+            },
+        );
+        // creates and sends unique transactions of type SingleTransfer
+        // which tries to send too much lamports from payer to one recipient
+        // it uses several threads
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(faucet_addr),
+            client,
+            Some(&cluster.funding_keypair),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: 2,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    payer_filename: None,
+                    num_gen_threads: 4,
+                    transaction_type: Some(TransactionType::SingleTransfer),
+                },
+            },
+        );
+        // creates and sends unique transactions of type MultiTransfer
+        // which tries to send too much lamports from payer to several recipients
+        // it uses several threads
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(faucet_addr),
+            client,
+            Some(&cluster.funding_keypair),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: 2,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    payer_filename: None,
+                    num_gen_threads: 4,
+                    transaction_type: Some(TransactionType::MultiTransfer),
+                },
+            },
+        );
+        // creates and sends unique transactions of type CreateAccount
+        // which tries to create account with too large balance
+        // it uses several threads
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(faucet_addr),
+            client,
+            Some(&cluster.funding_keypair),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: 2,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    payer_filename: None,
+                    num_gen_threads: 4,
+                    transaction_type: Some(TransactionType::AccountCreation),
                 },
             },
         );
