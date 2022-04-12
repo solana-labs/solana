@@ -4037,7 +4037,7 @@ impl AccountsDb {
         pruned_banks_sender: DroppedSlotsSender,
     ) -> SendDroppedBankCallback {
         self.is_bank_drop_callback_enabled
-            .store(true, Ordering::SeqCst);
+            .store(true, Ordering::Release);
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
@@ -4045,7 +4045,7 @@ impl AccountsDb {
     /// comment below for more explanation.
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
+        if self.is_bank_drop_callback_enabled.load(Ordering::Acquire) && !is_from_abs {
             panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
         }
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
@@ -4761,9 +4761,8 @@ impl AccountsDb {
             // Regardless of whether this slot was *just* flushed from the cache by the above
             // `flush_slot_cache()`, we should update the `max_flush_root`.
             // This is because some rooted slots may be flushed to storage *before* they are marked as root.
-            // This can occur for instance when:
-            // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
-            // 2) Random evictions
+            // This can occur for instance when
+            //  the cache is overwhelmed, we flushed some yet to be rooted frozen slots
             // These slots may then *later* be marked as root, so we still need to handle updating the
             // `max_flush_root` in the accounts cache.
             self.accounts_cache.set_max_flush_root(root);

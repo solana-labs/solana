@@ -112,11 +112,10 @@ impl TransactionContext {
         self.account_keys.iter().rposition(|key| key == pubkey)
     }
 
-    /// Gets an InstructionContext by its nesting level in the stack
-    pub fn get_instruction_context_at(
+    pub fn get_instruction_context_indicies(
         &self,
         level: usize,
-    ) -> Result<&InstructionContext, InstructionError> {
+    ) -> Result<(usize, usize), InstructionError> {
         let top_level_index = *self
             .instruction_stack
             .get(0)
@@ -129,10 +128,34 @@ impl TransactionContext {
                 .get(level)
                 .ok_or(InstructionError::CallDepth)?
         };
+        Ok((top_level_index, cpi_index))
+    }
+
+    /// Gets an InstructionContext by its nesting level in the stack
+    pub fn get_instruction_context_at(
+        &self,
+        level: usize,
+    ) -> Result<&InstructionContext, InstructionError> {
+        let (top_level_index, cpi_index) = self.get_instruction_context_indicies(level)?;
         let instruction_context = self
             .instruction_trace
             .get(top_level_index)
             .and_then(|instruction_trace| instruction_trace.get(cpi_index))
+            .ok_or(InstructionError::CallDepth)?;
+        debug_assert_eq!(instruction_context.nesting_level, level);
+        Ok(instruction_context)
+    }
+
+    /// Gets an InstructionContext by its nesting level in the stack
+    pub fn get_instruction_context_mut_at(
+        &mut self,
+        level: usize,
+    ) -> Result<&mut InstructionContext, InstructionError> {
+        let (top_level_index, cpi_index) = self.get_instruction_context_indicies(level)?;
+        let instruction_context = self
+            .instruction_trace
+            .get_mut(top_level_index)
+            .and_then(|instruction_trace| instruction_trace.get_mut(cpi_index))
             .ok_or(InstructionError::CallDepth)?;
         debug_assert_eq!(instruction_context.nesting_level, level);
         Ok(instruction_context)
@@ -156,6 +179,17 @@ impl TransactionContext {
             .checked_sub(1)
             .ok_or(InstructionError::CallDepth)?;
         self.get_instruction_context_at(level)
+    }
+
+    /// Returns the current InstructionContext
+    pub fn get_current_instruction_context_mut(
+        &mut self,
+    ) -> Result<&mut InstructionContext, InstructionError> {
+        let level = self
+            .get_instruction_context_stack_height()
+            .checked_sub(1)
+            .ok_or(InstructionError::CallDepth)?;
+        self.get_instruction_context_mut_at(level)
     }
 
     /// Pushes a new InstructionContext
@@ -237,6 +271,26 @@ impl TransactionContext {
     pub fn get_instruction_trace(&self) -> &InstructionTrace {
         &self.instruction_trace
     }
+
+    // /// Set the original account lengths
+    // pub fn set_orig_account_lengths(
+    //     &mut self,
+    //     orig_account_lengths: Vec<usize>,
+    // ) -> Result<(), InstructionError> {
+    //     let level = self
+    //         .get_instruction_context_stack_height()
+    //         .checked_sub(1)
+    //         .ok_or(InstructionError::CallDepth)?;
+    //     let (top_level_index, cpi_index) = self.get_instruction_context_indicies(level)?;
+    //     let instruction_context = self
+    //         .instruction_trace
+    //         .get_mut(top_level_index)
+    //         .and_then(|instruction_trace| instruction_trace.get_mut(cpi_index))
+    //         .ok_or(InstructionError::CallDepth)?;
+    //     debug_assert_eq!(instruction_context.nesting_level, level);
+    //     instruction_context.orig_account_lengths = Some(orig_account_lengths);
+    //     Ok(())
+    // }
 }
 
 /// Return data at the end of a transaction

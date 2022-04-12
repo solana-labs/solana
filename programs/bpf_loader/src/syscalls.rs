@@ -1,7 +1,6 @@
 #[allow(deprecated)]
 use {
-    crate::{alloc, BpfError},
-    alloc::Alloc,
+    crate::{allocator_bump::BpfAllocator, BpfError},
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
         invoke_context::{visit_each_account_once, ComputeMeter, InvokeContext},
@@ -22,13 +21,13 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            self, add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
+            add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
             check_physical_overlapping, check_slice_translation_size, disable_fees_sysvar,
             do_support_realloc, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
             prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
             secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            syscall_saturated_math, update_syscall_base_costs,
+            syscall_saturated_math, update_syscall_base_costs, zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -116,14 +115,6 @@ impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
     }
 }
 
-/// Program heap allocators are intended to allocate/free from a given
-/// chunk of memory.  The specific allocator implementation is
-/// selectable at build-time.
-/// Only one allocator is currently supported
-
-/// Simple bump allocator, never frees
-use crate::allocator_bump::BpfAllocator;
-
 pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
@@ -168,7 +159,7 @@ pub fn register_syscalls(
 
     if invoke_context
         .feature_set
-        .is_active(&feature_set::zk_token_sdk_enabled::id())
+        .is_active(&zk_token_sdk_enabled::id())
     {
         syscall_registry
             .register_syscall_by_name(b"sol_zk_token_elgamal_op", SyscallZkTokenElgamalOp::call)?;
@@ -269,7 +260,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm: &mut EbpfVm<'a, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory,
-    orig_data_lens: &'a [usize],
 ) -> Result<(), EbpfError<BpfError>> {
     let is_blake3_syscall_active = invoke_context
         .feature_set
@@ -288,42 +278,55 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         .is_active(&sol_log_data_syscall_enabled::id());
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
-        .is_active(&feature_set::zk_token_sdk_enabled::id());
+        .is_active(&zk_token_sdk_enabled::id());
     let add_get_processed_sibling_instruction_syscall = invoke_context
         .feature_set
         .is_active(&add_get_processed_sibling_instruction_syscall::id());
 
-    let check_aligned = bpf_loader_deprecated::id()
-        != invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .and_then(|instruction_context| {
-                instruction_context.try_borrow_program_account(invoke_context.transaction_context)
-            })
-            .map(|program_account| *program_account.get_owner())
-            .map_err(SyscallError::InstructionError)?;
-    let check_size = invoke_context
-        .feature_set
-        .is_active(&check_slice_translation_size::id());
+    invoke_context.set_check_aligned(
+        bpf_loader_deprecated::id()
+            != invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .and_then(|instruction_context| {
+                    instruction_context
+                        .try_borrow_program_account(invoke_context.transaction_context)
+                })
+                .map(|program_account| *program_account.get_owner())
+                .map_err(SyscallError::InstructionError)?,
+    );
+    invoke_context.set_check_size(
+        invoke_context
+            .feature_set
+            .is_active(&check_slice_translation_size::id()),
+    );
+
+    invoke_context
+        .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
+            heap,
+            ebpf::MM_HEAP_START,
+        ))))
+        .map_err(SyscallError::InstructionError)?;
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
     // Syscall functions common across languages
 
-    vm.bind_syscall_context_object(Box::new(SyscallAbort {}), None)?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallAbort {
+            _invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallPanic {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallLog {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
@@ -343,7 +346,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm.bind_syscall_context_object(
         Box::new(SyscallLogPubkey {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
         None,
     )?;
@@ -351,16 +353,12 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallTryFindProgramAddress {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
@@ -368,16 +366,12 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm.bind_syscall_context_object(
         Box::new(SyscallSha256 {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallKeccak256 {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
@@ -385,32 +379,24 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm.bind_syscall_context_object(
         Box::new(SyscallMemcpy {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallMemmove {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallMemcmp {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallMemset {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
@@ -420,8 +406,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_secp256k1_recover_syscall_active,
         Box::new(SyscallSecp256k1Recover {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
     );
     bind_feature_gated_syscall_context_object!(
@@ -429,8 +413,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_blake3_syscall_active,
         Box::new(SyscallBlake3 {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
     );
 
@@ -439,7 +421,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_zk_token_sdk_enabled,
         Box::new(SyscallZkTokenElgamalOp {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
     );
     bind_feature_gated_syscall_context_object!(
@@ -447,7 +428,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_zk_token_sdk_enabled,
         Box::new(SyscallZkTokenElgamalOpWithLoHi {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
     );
     bind_feature_gated_syscall_context_object!(
@@ -455,21 +435,18 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_zk_token_sdk_enabled,
         Box::new(SyscallZkTokenElgamalOpWithScalar {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
     );
 
     vm.bind_syscall_context_object(
         Box::new(SyscallGetClockSysvar {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallGetEpochScheduleSysvar {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
         None,
     )?;
@@ -478,13 +455,11 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_fee_sysvar_via_syscall_active,
         Box::new(SyscallGetFeesSysvar {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
     );
     vm.bind_syscall_context_object(
         Box::new(SyscallGetRentSysvar {
             invoke_context: invoke_context.clone(),
-            check_aligned,
         }),
         None,
     )?;
@@ -495,8 +470,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_return_data_syscall_active,
         Box::new(SyscallSetReturnData {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
     );
 
@@ -505,8 +478,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_return_data_syscall_active,
         Box::new(SyscallGetReturnData {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
     );
 
@@ -516,8 +487,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         is_sol_log_data_syscall_active,
         Box::new(SyscallLogData {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
     );
 
@@ -527,8 +496,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         add_get_processed_sibling_instruction_syscall,
         Box::new(SyscallGetProcessedSiblingInstruction {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
         }),
     );
 
@@ -545,18 +512,12 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedC {
             invoke_context: invoke_context.clone(),
-            check_aligned,
-            check_size,
-            orig_data_lens,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedRust {
             invoke_context: invoke_context.clone(),
-            orig_data_lens,
-            check_aligned,
-            check_size,
         }),
         None,
     )?;
@@ -564,8 +525,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     // Memory allocator
     vm.bind_syscall_context_object(
         Box::new(SyscallAllocFree {
-            allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
-            check_aligned,
+            invoke_context: invoke_context.clone(),
         }),
         None,
     )?;
@@ -695,8 +655,10 @@ fn translate_string_and_do(
 /// LLVM will insert calls to `abort()` if it detects an untenable situation,
 /// `abort()` is not intended to be called explicitly by the program.
 /// Causes the BPF program to be halted immediately
-pub struct SyscallAbort {}
-impl SyscallObject<BpfError> for SyscallAbort {
+pub struct SyscallAbort<'a, 'b> {
+    _invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallAbort<'a, 'b> {
     fn call(
         &mut self,
         _arg1: u64,
@@ -716,8 +678,6 @@ impl SyscallObject<BpfError> for SyscallAbort {
 /// Log a user's info message
 pub struct SyscallPanic<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
     fn call(
@@ -747,8 +707,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
             memory_mapping,
             file,
             len,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         );
     }
@@ -757,8 +717,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
 /// Log a user's info message
 pub struct SyscallLog<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallLog<'a, 'b> {
     fn call(
@@ -795,8 +753,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLog<'a, 'b> {
                 memory_mapping,
                 addr,
                 len,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
                 &mut |string: &str| {
                     stable_log::program_log(&invoke_context.get_log_collector(), string);
                     Ok(0)
@@ -886,7 +844,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogBpfComputeUnits<'a, 'b> {
 /// Log 5 64-bit values
 pub struct SyscallLogPubkey<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
     fn call(
@@ -909,7 +866,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let pubkey = question_mark!(
-            translate_type::<Pubkey>(memory_mapping, pubkey_addr, self.check_aligned),
+            translate_type::<Pubkey>(
+                memory_mapping,
+                pubkey_addr,
+                invoke_context.get_check_aligned()
+            ),
             result
         );
         stable_log::program_log(&invoke_context.get_log_collector(), &pubkey.to_string());
@@ -923,11 +884,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
-pub struct SyscallAllocFree {
-    allocator: BpfAllocator,
-    check_aligned: bool,
+pub struct SyscallAllocFree<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
 }
-impl SyscallObject<BpfError> for SyscallAllocFree {
+impl<'a, 'b> SyscallObject<BpfError> for SyscallAllocFree<'a, 'b> {
     fn call(
         &mut self,
         size: u64,
@@ -938,7 +898,26 @@ impl SyscallObject<BpfError> for SyscallAllocFree {
         _memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let align = if self.check_aligned {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let allocator = question_mark!(
+            invoke_context
+                .get_allocator()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+        let mut allocator = question_mark!(
+            allocator
+                .try_borrow_mut()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let align = if invoke_context.get_check_aligned() {
             BPF_ALIGN_OF_U128
         } else {
             align_of::<u8>()
@@ -951,12 +930,12 @@ impl SyscallObject<BpfError> for SyscallAllocFree {
             }
         };
         *result = if free_addr == 0 {
-            match self.allocator.alloc(layout) {
+            match allocator.alloc(layout) {
                 Ok(addr) => Ok(addr as u64),
                 Err(_) => Ok(0),
             }
         } else {
-            self.allocator.dealloc(free_addr, layout);
+            allocator.dealloc(free_addr, layout);
             Ok(0)
         };
     }
@@ -1002,8 +981,6 @@ fn translate_and_check_program_address_inputs<'a>(
 /// Create a program address
 struct SyscallCreateProgramAddress<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
     fn call(
@@ -1033,8 +1010,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
                 seeds_len,
                 program_id_addr,
                 memory_mapping,
-                self.check_aligned,
-                self.check_size
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
             ),
             result
         );
@@ -1051,8 +1028,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
                 memory_mapping,
                 address_addr,
                 32,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1064,8 +1041,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
 /// Create a program address
 struct SyscallTryFindProgramAddress<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
     fn call(
@@ -1095,8 +1070,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
                 seeds_len,
                 program_id_addr,
                 memory_mapping,
-                self.check_aligned,
-                self.check_size
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
             ),
             result
         );
@@ -1114,7 +1089,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
                         translate_type_mut::<u8>(
                             memory_mapping,
                             bump_seed_addr,
-                            self.check_aligned
+                            invoke_context.get_check_aligned()
                         ),
                         result
                     );
@@ -1123,8 +1098,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
                             memory_mapping,
                             address_addr,
                             32,
-                            self.check_aligned,
-                            self.check_size,
+                            invoke_context.get_check_aligned(),
+                            invoke_context.get_check_size(),
                         ),
                         result
                     );
@@ -1144,8 +1119,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
 /// SHA256
 pub struct SyscallSha256<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
     fn call(
@@ -1191,8 +1164,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                 memory_mapping,
                 result_addr,
                 HASH_BYTES as u64,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1203,8 +1176,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                     memory_mapping,
                     vals_addr,
                     vals_len,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 ),
                 result
             );
@@ -1214,8 +1187,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                         memory_mapping,
                         val.as_ptr() as u64,
                         val.len() as u64,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     ),
                     result
                 );
@@ -1266,7 +1239,6 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
 /// Get a Clock sysvar
 struct SyscallGetClockSysvar<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
     fn call(
@@ -1288,7 +1260,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
-            self.check_aligned,
+            invoke_context.get_check_aligned(),
             memory_mapping,
             &mut invoke_context,
         );
@@ -1297,7 +1269,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
 /// Get a EpochSchedule sysvar
 struct SyscallGetEpochScheduleSysvar<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
     fn call(
@@ -1319,7 +1290,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
-            self.check_aligned,
+            invoke_context.get_check_aligned(),
             memory_mapping,
             &mut invoke_context,
         );
@@ -1328,7 +1299,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
 /// Get a Fees sysvar
 struct SyscallGetFeesSysvar<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
 #[allow(deprecated)]
 impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
@@ -1351,7 +1321,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_fees(),
             var_addr,
-            self.check_aligned,
+            invoke_context.get_check_aligned(),
             memory_mapping,
             &mut invoke_context,
         );
@@ -1360,7 +1330,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
 /// Get a Rent sysvar
 struct SyscallGetRentSysvar<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
     fn call(
@@ -1382,7 +1351,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
         *result = get_sysvar(
             invoke_context.get_sysvar_cache().get_rent(),
             var_addr,
-            self.check_aligned,
+            invoke_context.get_check_aligned(),
             memory_mapping,
             &mut invoke_context,
         );
@@ -1392,8 +1361,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
 // Keccak256
 pub struct SyscallKeccak256<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
     fn call(
@@ -1439,8 +1406,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                 memory_mapping,
                 result_addr,
                 keccak::HASH_BYTES as u64,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1451,8 +1418,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                     memory_mapping,
                     vals_addr,
                     vals_len,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 ),
                 result
             );
@@ -1462,8 +1429,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                         memory_mapping,
                         val.as_ptr() as u64,
                         val.len() as u64,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     ),
                     result
                 );
@@ -1519,8 +1486,6 @@ fn mem_op_consume<'a, 'b>(
 /// memcpy
 pub struct SyscallMemcpy<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
     fn call(
@@ -1581,8 +1546,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
                 memory_mapping,
                 dst_addr,
                 n,
-                self.check_aligned,
-                self.check_size
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
             ),
             result
         )
@@ -1592,8 +1557,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
                 memory_mapping,
                 src_addr,
                 n,
-                self.check_aligned,
-                self.check_size
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
             ),
             result
         )
@@ -1615,8 +1580,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
 /// memmove
 pub struct SyscallMemmove<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
     fn call(
@@ -1642,8 +1605,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
                 memory_mapping,
                 dst_addr,
                 n,
-                self.check_aligned,
-                self.check_size
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
             ),
             result
         );
@@ -1652,8 +1615,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
                 memory_mapping,
                 src_addr,
                 n,
-                self.check_aligned,
-                self.check_size
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
             ),
             result
         );
@@ -1666,8 +1629,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
 /// memcmp
 pub struct SyscallMemcmp<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
     fn call(
@@ -1693,8 +1654,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
                 memory_mapping,
                 s1_addr,
                 n,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1703,13 +1664,17 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
                 memory_mapping,
                 s2_addr,
                 n,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
         let cmp_result = question_mark!(
-            translate_type_mut::<i32>(memory_mapping, cmp_result_addr, self.check_aligned),
+            translate_type_mut::<i32>(
+                memory_mapping,
+                cmp_result_addr,
+                invoke_context.get_check_aligned()
+            ),
             result
         );
         let mut i = 0;
@@ -1740,8 +1705,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
 /// memset
 pub struct SyscallMemset<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
     fn call(
@@ -1767,8 +1730,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
                 memory_mapping,
                 s_addr,
                 n,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1782,10 +1745,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
 /// secp256k1_recover
 pub struct SyscallSecp256k1Recover<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
-
 impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
     fn call(
         &mut self,
@@ -1811,8 +1771,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
                 memory_mapping,
                 hash_addr,
                 keccak::HASH_BYTES as u64,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1821,8 +1781,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
                 memory_mapping,
                 signature_addr,
                 SECP256K1_SIGNATURE_LENGTH as u64,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1831,8 +1791,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
                 memory_mapping,
                 result_addr,
                 SECP256K1_PUBLIC_KEY_LENGTH as u64,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -1897,9 +1857,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
 
 pub struct SyscallZkTokenElgamalOp<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
-
 impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
     fn call(
         &mut self,
@@ -1923,11 +1881,19 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let ct_0 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_0_addr, self.check_aligned),
+            translate_type::<pod::ElGamalCiphertext>(
+                memory_mapping,
+                ct_0_addr,
+                invoke_context.get_check_aligned()
+            ),
             result
         );
         let ct_1 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_1_addr, self.check_aligned),
+            translate_type::<pod::ElGamalCiphertext>(
+                memory_mapping,
+                ct_1_addr,
+                invoke_context.get_check_aligned()
+            ),
             result
         );
 
@@ -1940,7 +1906,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
                 translate_type_mut::<pod::ElGamalCiphertext>(
                     memory_mapping,
                     ct_result_addr,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 ),
                 result
             ) = ct_result;
@@ -1953,9 +1919,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
 
 pub struct SyscallZkTokenElgamalOpWithLoHi<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
-
 impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b> {
     fn call(
         &mut self,
@@ -1979,14 +1943,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b>
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let ct_0 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_0_addr, self.check_aligned),
+            translate_type::<pod::ElGamalCiphertext>(
+                memory_mapping,
+                ct_0_addr,
+                invoke_context.get_check_aligned()
+            ),
             result
         );
         let ct_1_lo = question_mark!(
             translate_type::<pod::ElGamalCiphertext>(
                 memory_mapping,
                 ct_1_lo_addr,
-                self.check_aligned
+                invoke_context.get_check_aligned()
             ),
             result
         );
@@ -1994,7 +1962,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b>
             translate_type::<pod::ElGamalCiphertext>(
                 memory_mapping,
                 ct_1_hi_addr,
-                self.check_aligned
+                invoke_context.get_check_aligned()
             ),
             result
         );
@@ -2008,7 +1976,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b>
                 translate_type_mut::<pod::ElGamalCiphertext>(
                     memory_mapping,
                     ct_result_addr,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 ),
                 result
             ) = ct_result;
@@ -2021,9 +1989,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b>
 
 pub struct SyscallZkTokenElgamalOpWithScalar<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
 }
-
 impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, 'b> {
     fn call(
         &mut self,
@@ -2047,7 +2013,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, '
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let ct = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_addr, self.check_aligned),
+            translate_type::<pod::ElGamalCiphertext>(
+                memory_mapping,
+                ct_addr,
+                invoke_context.get_check_aligned()
+            ),
             result
         );
 
@@ -2060,7 +2030,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, '
                 translate_type_mut::<pod::ElGamalCiphertext>(
                     memory_mapping,
                     ct_result_addr,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 ),
                 result
             ) = ct_result;
@@ -2074,8 +2044,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, '
 // Blake3
 pub struct SyscallBlake3<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
     fn call(
@@ -2121,8 +2089,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                 memory_mapping,
                 result_addr,
                 blake3::HASH_BYTES as u64,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -2133,8 +2101,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                     memory_mapping,
                     vals_addr,
                     vals_len,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 ),
                 result
             );
@@ -2144,8 +2112,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                         memory_mapping,
                         val.as_ptr() as u64,
                         val.len() as u64,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     ),
                     result
                 );
@@ -2198,8 +2166,6 @@ type TranslatedAccounts<'a> = Vec<(usize, Option<CallerAccount<'a>>)>;
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>>;
-    fn check_aligned(&self) -> bool;
-    fn check_size(&self) -> bool;
     fn translate_instruction(
         &self,
         addr: u64,
@@ -2221,29 +2187,42 @@ trait SyscallInvokeSigned<'a, 'b> {
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &InvokeContext,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>>;
 }
 
-/// Cross-program invocation called from Rust
+/// Cross-SyscallInvokeSignedRust invocation called from Rust
 pub struct SyscallInvokeSignedRust<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    orig_data_lens: &'a [usize],
-    check_aligned: bool,
-    check_size: bool,
 }
+impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
+    fn call(
+        &mut self,
+        instruction_addr: u64,
+        account_infos_addr: u64,
+        account_infos_len: u64,
+        signers_seeds_addr: u64,
+        signers_seeds_len: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = call(
+            self,
+            instruction_addr,
+            account_infos_addr,
+            account_infos_len,
+            signers_seeds_addr,
+            signers_seeds_len,
+            memory_mapping,
+        );
+    }
+}
+
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
         self.invoke_context
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
-    }
-
-    fn check_aligned(&self) -> bool {
-        self.check_aligned
-    }
-
-    fn check_size(&self) -> bool {
-        self.check_size
     }
 
     fn translate_instruction(
@@ -2252,7 +2231,11 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         memory_mapping: &MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>> {
-        let ix = translate_type::<Instruction>(memory_mapping, addr, self.check_aligned)?;
+        let ix = translate_type::<Instruction>(
+            memory_mapping,
+            addr,
+            invoke_context.get_check_aligned(),
+        )?;
 
         check_instruction_size(ix.accounts.len(), ix.data.len(), invoke_context)?;
 
@@ -2260,16 +2243,16 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             memory_mapping,
             ix.accounts.as_ptr() as u64,
             ix.accounts.len() as u64,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?
         .to_vec();
         let data = translate_slice::<u8>(
             memory_mapping,
             ix.data.as_ptr() as u64,
             ix.data.len() as u64,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?
         .to_vec();
         Ok(Instruction {
@@ -2292,8 +2275,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             memory_mapping,
             account_infos_addr,
             account_infos_len,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
         check_account_infos(account_infos.len(), invoke_context)?;
         let account_info_keys = account_infos
@@ -2302,7 +2285,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 translate_type::<Pubkey>(
                     memory_mapping,
                     account_info.key as *const _ as u64,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 )
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
@@ -2315,14 +2298,14 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 let ptr = translate_type::<u64>(
                     memory_mapping,
                     account_info.lamports.as_ptr() as u64,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 )?;
-                translate_type_mut::<u64>(memory_mapping, *ptr, self.check_aligned)?
+                translate_type_mut::<u64>(memory_mapping, *ptr, invoke_context.get_check_aligned())?
             };
             let owner = translate_type_mut::<Pubkey>(
                 memory_mapping,
                 account_info.owner as *const _ as u64,
-                self.check_aligned,
+                invoke_context.get_check_aligned(),
             )?;
 
             let (data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
@@ -2330,7 +2313,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 let data = *translate_type::<&[u8]>(
                     memory_mapping,
                     account_info.data.as_ptr() as *const _ as u64,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 )?;
 
                 invoke_context.get_compute_meter().consume(
@@ -2351,7 +2334,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 let serialized_len_ptr = translate_type_mut::<u64>(
                     memory_mapping,
                     ref_of_len_in_input_buffer,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 )?;
                 let vm_data_addr = data.as_ptr() as u64;
                 (
@@ -2359,8 +2342,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                         memory_mapping,
                         vm_data_addr,
                         data.len() as u64,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     )?,
                     vm_data_addr,
                     ref_to_len_in_vm,
@@ -2387,7 +2370,6 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             &account_info_keys,
             account_infos,
             invoke_context,
-            self.orig_data_lens,
             translate,
         )
     }
@@ -2398,6 +2380,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &InvokeContext,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
@@ -2405,8 +2388,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
                 return Err(SyscallError::TooManySigners.into());
@@ -2416,8 +2399,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                     memory_mapping,
                     signer_seeds.as_ptr() as *const _ as u64,
                     signer_seeds.len() as u64,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 )?;
                 if untranslated_seeds.len() > MAX_SEEDS {
                     return Err(SyscallError::InstructionError(
@@ -2432,8 +2415,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                             memory_mapping,
                             untranslated_seed.as_ptr() as *const _ as u64,
                             untranslated_seed.len() as u64,
-                            self.check_aligned,
-                            self.check_size,
+                            invoke_context.get_check_aligned(),
+                            invoke_context.get_check_size(),
                         )
                     })
                     .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
@@ -2445,28 +2428,6 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         } else {
             Ok(vec![])
         }
-    }
-}
-impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
-    fn call(
-        &mut self,
-        instruction_addr: u64,
-        account_infos_addr: u64,
-        account_infos_len: u64,
-        signers_seeds_addr: u64,
-        signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        *result = call(
-            self,
-            instruction_addr,
-            account_infos_addr,
-            account_infos_len,
-            signers_seeds_addr,
-            signers_seeds_len,
-            memory_mapping,
-        );
     }
 }
 
@@ -2526,23 +2487,35 @@ struct SolSignerSeedsC {
 /// Cross-program invocation called from C
 pub struct SyscallInvokeSignedC<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    orig_data_lens: &'a [usize],
-    check_aligned: bool,
-    check_size: bool,
 }
+impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedC<'a, 'b> {
+    fn call(
+        &mut self,
+        instruction_addr: u64,
+        account_infos_addr: u64,
+        account_infos_len: u64,
+        signers_seeds_addr: u64,
+        signers_seeds_len: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = call(
+            self,
+            instruction_addr,
+            account_infos_addr,
+            account_infos_len,
+            signers_seeds_addr,
+            signers_seeds_len,
+            memory_mapping,
+        );
+    }
+}
+
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
         self.invoke_context
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
-    }
-
-    fn check_aligned(&self) -> bool {
-        self.check_aligned
-    }
-
-    fn check_size(&self) -> bool {
-        self.check_size
     }
 
     fn translate_instruction(
@@ -2551,28 +2524,35 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         memory_mapping: &MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>> {
-        let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.check_aligned)?;
+        let ix_c = translate_type::<SolInstruction>(
+            memory_mapping,
+            addr,
+            invoke_context.get_check_aligned(),
+        )?;
 
         check_instruction_size(
             ix_c.accounts_len as usize,
             ix_c.data_len as usize,
             invoke_context,
         )?;
-        let program_id =
-            translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.check_aligned)?;
+        let program_id = translate_type::<Pubkey>(
+            memory_mapping,
+            ix_c.program_id_addr,
+            invoke_context.get_check_aligned(),
+        )?;
         let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
             ix_c.accounts_len as u64,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
         let data = translate_slice::<u8>(
             memory_mapping,
             ix_c.data_addr,
             ix_c.data_len as u64,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?
         .to_vec();
         let accounts = meta_cs
@@ -2581,7 +2561,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                 let pubkey = translate_type::<Pubkey>(
                     memory_mapping,
                     meta_c.pubkey_addr,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 )?;
                 Ok(AccountMeta {
                     pubkey: *pubkey,
@@ -2611,14 +2591,18 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             memory_mapping,
             account_infos_addr,
             account_infos_len,
-            self.check_aligned,
-            self.check_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
         check_account_infos(account_infos.len(), invoke_context)?;
         let account_info_keys = account_infos
             .iter()
             .map(|account_info| {
-                translate_type::<Pubkey>(memory_mapping, account_info.key_addr, self.check_aligned)
+                translate_type::<Pubkey>(
+                    memory_mapping,
+                    account_info.key_addr,
+                    invoke_context.get_check_aligned(),
+                )
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
@@ -2628,12 +2612,12 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             let lamports = translate_type_mut::<u64>(
                 memory_mapping,
                 account_info.lamports_addr,
-                self.check_aligned,
+                invoke_context.get_check_aligned(),
             )?;
             let owner = translate_type_mut::<Pubkey>(
                 memory_mapping,
                 account_info.owner_addr,
-                self.check_aligned,
+                invoke_context.get_check_aligned(),
             )?;
             let vm_data_addr = account_info.data_addr;
 
@@ -2647,8 +2631,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                 memory_mapping,
                 vm_data_addr,
                 account_info.data_len,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             )?;
 
             let first_info_addr = account_infos.first().ok_or(SyscallError::InstructionError(
@@ -2679,7 +2663,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             let serialized_len_ptr = translate_type_mut::<u64>(
                 memory_mapping,
                 ref_of_len_in_input_buffer,
-                self.check_aligned,
+                invoke_context.get_check_aligned(),
             )?;
 
             Ok(CallerAccount {
@@ -2701,7 +2685,6 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             &account_info_keys,
             account_infos,
             invoke_context,
-            self.orig_data_lens,
             translate,
         )
     }
@@ -2712,14 +2695,15 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &InvokeContext,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice::<SolSignerSeedsC>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
                 return Err(SyscallError::TooManySigners.into());
@@ -2731,8 +2715,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                         memory_mapping,
                         signer_seeds.addr,
                         signer_seeds.len,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     )?;
                     if seeds.len() > MAX_SEEDS {
                         return Err(SyscallError::InstructionError(
@@ -2747,8 +2731,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                                 memory_mapping,
                                 seed.addr,
                                 seed.len,
-                                self.check_aligned,
-                                self.check_size,
+                                invoke_context.get_check_aligned(),
+                                invoke_context.get_check_size(),
                             )
                         })
                         .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
@@ -2761,28 +2745,6 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         }
     }
 }
-impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedC<'a, 'b> {
-    fn call(
-        &mut self,
-        instruction_addr: u64,
-        account_infos_addr: u64,
-        account_infos_len: u64,
-        signers_seeds_addr: u64,
-        signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        *result = call(
-            self,
-            instruction_addr,
-            account_infos_addr,
-            account_infos_len,
-            signers_seeds_addr,
-            signers_seeds_len,
-            memory_mapping,
-        );
-    }
-}
 
 fn get_translated_accounts<'a, T, F>(
     instruction_accounts: &[InstructionAccount],
@@ -2790,7 +2752,6 @@ fn get_translated_accounts<'a, T, F>(
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &mut InvokeContext,
-    orig_data_lens: &[usize],
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
@@ -2844,6 +2805,9 @@ where
                     let orig_data_len_index = instruction_account
                         .index_in_caller
                         .saturating_sub(instruction_context.get_number_of_program_accounts());
+                    let orig_data_lens = invoke_context
+                        .get_orig_account_lengths()
+                        .map_err(SyscallError::InstructionError)?;
                     if orig_data_len_index < orig_data_lens.len() {
                         caller_account.original_data_len = *orig_data_lens
                             .get(orig_data_len_index)
@@ -2979,6 +2943,7 @@ fn call<'a, 'b: 'a>(
         signers_seeds_addr,
         signers_seeds_len,
         memory_mapping,
+        *invoke_context,
     )?;
     let (instruction_accounts, program_indices) = invoke_context
         .prepare_instruction(&instruction, &signers)
@@ -3081,8 +3046,8 @@ fn call<'a, 'b: 'a>(
                     memory_mapping,
                     caller_account.vm_data_addr,
                     new_len as u64,
-                    syscall.check_aligned(),
-                    syscall.check_size(),
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 )?;
                 *caller_account.ref_to_len_in_vm = new_len as u64;
                 *caller_account.serialized_len_ptr = new_len as u64;
@@ -3107,8 +3072,6 @@ fn call<'a, 'b: 'a>(
 // Return data handling
 pub struct SyscallSetReturnData<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
     fn call(
@@ -3156,8 +3119,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
                     memory_mapping,
                     addr,
                     len,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 ),
                 result
             )
@@ -3186,8 +3149,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
 
 pub struct SyscallGetReturnData<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
     fn call(
@@ -3238,8 +3199,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
                     memory_mapping,
                     return_data_addr,
                     length,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 ),
                 result
             );
@@ -3258,7 +3219,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
             to_slice.copy_from_slice(from_slice);
 
             let program_id_result = question_mark!(
-                translate_type_mut::<Pubkey>(memory_mapping, program_id_addr, self.check_aligned),
+                translate_type_mut::<Pubkey>(
+                    memory_mapping,
+                    program_id_addr,
+                    invoke_context.get_check_aligned()
+                ),
                 result
             );
 
@@ -3273,8 +3238,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
 // Log data handling
 pub struct SyscallLogData<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
     fn call(
@@ -3307,8 +3270,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
                 memory_mapping,
                 addr,
                 len,
-                self.check_aligned,
-                self.check_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
             ),
             result
         );
@@ -3338,8 +3301,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
                     memory_mapping,
                     untranslated_field.as_ptr() as *const _ as u64,
                     untranslated_field.len() as u64,
-                    self.check_aligned,
-                    self.check_size,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
                 ),
                 result
             ));
@@ -3355,8 +3318,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 
 pub struct SyscallGetProcessedSiblingInstruction<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
-    check_aligned: bool,
-    check_size: bool,
 }
 impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'a, 'b> {
     fn call(
@@ -3418,7 +3379,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                 translate_type_mut::<ProcessedSiblingInstruction>(
                     memory_mapping,
                     meta_addr,
-                    self.check_aligned,
+                    invoke_context.get_check_aligned(),
                 ),
                 result
             );
@@ -3430,7 +3391,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                     translate_type_mut::<Pubkey>(
                         memory_mapping,
                         program_id_addr,
-                        self.check_aligned
+                        invoke_context.get_check_aligned()
                     ),
                     result
                 );
@@ -3439,8 +3400,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                         memory_mapping,
                         data_addr,
                         *data_len as u64,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     ),
                     result
                 );
@@ -3449,8 +3410,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'
                         memory_mapping,
                         accounts_addr,
                         *accounts_len as u64,
-                        self.check_aligned,
-                        self.check_size,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
                     ),
                     result
                 );
@@ -3829,12 +3790,20 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Abort))")]
     fn test_syscall_abort() {
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
         let config = Config::default();
         let memory_mapping =
             MemoryMapping::new::<UserError>(vec![MemoryRegion::default()], &config).unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         SyscallAbort::call(
-            &mut SyscallAbort {},
+            &mut SyscallAbort {
+                _invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+            },
             0,
             0,
             0,
@@ -3857,8 +3826,6 @@ mod tests {
         );
         let mut syscall_panic = SyscallPanic {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            check_aligned: true,
-            check_size: true,
         };
 
         let string = "Gaggablaghblagh!";
@@ -3931,8 +3898,6 @@ mod tests {
         );
         let mut syscall_sol_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            check_aligned: true,
-            check_size: true,
         };
 
         let string = "Gaggablaghblagh!";
@@ -4070,7 +4035,6 @@ mod tests {
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            check_aligned: true,
         };
 
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
@@ -4143,8 +4107,15 @@ mod tests {
     #[test]
     fn test_syscall_sol_alloc_free() {
         let config = Config::default();
+
         // large alloc
         {
+            prepare_mockup!(
+                invoke_context,
+                transaction_context,
+                program_id,
+                bpf_loader::id(),
+            );
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
@@ -4157,9 +4128,14 @@ mod tests {
                 &config,
             )
             .unwrap();
+            invoke_context
+                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
+                    heap,
+                    ebpf::MM_HEAP_START,
+                ))))
+                .unwrap();
             let mut syscall = SyscallAllocFree {
-                check_aligned: true,
-                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
             syscall.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
@@ -4171,8 +4147,15 @@ mod tests {
             syscall.call(u64::MAX, 0, 0, 0, 0, &memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
         }
+
         // many small unaligned allocs
         {
+            prepare_mockup!(
+                invoke_context,
+                transaction_context,
+                program_id,
+                bpf_loader::id(),
+            );
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
@@ -4185,9 +4168,15 @@ mod tests {
                 &config,
             )
             .unwrap();
+            invoke_context
+                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
+                    heap,
+                    ebpf::MM_HEAP_START,
+                ))))
+                .unwrap();
+            invoke_context.set_check_aligned(false);
             let mut syscall = SyscallAllocFree {
-                check_aligned: false,
-                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             for _ in 0..100 {
                 let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4198,8 +4187,15 @@ mod tests {
             syscall.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
         }
+
         // many small aligned allocs
         {
+            prepare_mockup!(
+                invoke_context,
+                transaction_context,
+                program_id,
+                bpf_loader::id(),
+            );
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
@@ -4212,9 +4208,14 @@ mod tests {
                 &config,
             )
             .unwrap();
+            invoke_context
+                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
+                    heap,
+                    ebpf::MM_HEAP_START,
+                ))))
+                .unwrap();
             let mut syscall = SyscallAllocFree {
-                check_aligned: true,
-                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             for _ in 0..12 {
                 let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4225,9 +4226,16 @@ mod tests {
             syscall.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
         }
+
         // aligned allocs
 
         fn aligned<T>() {
+            prepare_mockup!(
+                invoke_context,
+                transaction_context,
+                program_id,
+                bpf_loader::id(),
+            );
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(
@@ -4241,9 +4249,14 @@ mod tests {
                 &config,
             )
             .unwrap();
+            invoke_context
+                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
+                    heap,
+                    ebpf::MM_HEAP_START,
+                ))))
+                .unwrap();
             let mut syscall = SyscallAllocFree {
-                check_aligned: true,
-                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
             syscall.call(
@@ -4346,8 +4359,6 @@ mod tests {
             );
         let mut syscall = SyscallSha256 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            check_aligned: true,
-            check_size: true,
         };
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4463,7 +4474,6 @@ mod tests {
             .unwrap();
             let mut syscall = SyscallGetClockSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-                check_aligned: true,
             };
 
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4493,7 +4503,6 @@ mod tests {
             .unwrap();
             let mut syscall = SyscallGetEpochScheduleSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-                check_aligned: true,
             };
 
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4531,7 +4540,6 @@ mod tests {
             .unwrap();
             let mut syscall = SyscallGetFeesSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-                check_aligned: true,
             };
 
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4561,7 +4569,6 @@ mod tests {
             .unwrap();
             let mut syscall = SyscallGetRentSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-                check_aligned: true,
             };
 
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -4667,8 +4674,6 @@ mod tests {
     ) -> Result<Pubkey, EbpfError<BpfError>> {
         let mut syscall = SyscallCreateProgramAddress {
             invoke_context: Rc::new(RefCell::new(invoke_context)),
-            check_aligned: true,
-            check_size: true,
         };
         let (address, _) = call_program_address_common(seeds, address, &mut syscall)?;
         Ok(address)
@@ -4681,8 +4686,6 @@ mod tests {
     ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
         let mut syscall = SyscallTryFindProgramAddress {
             invoke_context: Rc::new(RefCell::new(invoke_context)),
-            check_aligned: true,
-            check_size: true,
         };
         call_program_address_common(seeds, address, &mut syscall)
     }

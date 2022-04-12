@@ -22,6 +22,8 @@ pub trait TpuConnection {
     where
         T: AsRef<[u8]>;
 
+    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()>;
+
     fn par_serialize_and_send_transaction_batch(
         &self,
         transactions: &[VersionedTransaction],
