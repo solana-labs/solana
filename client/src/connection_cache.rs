@@ -136,8 +136,8 @@ pub fn send_wire_transaction_async(
 ) -> Result<(), TransportError> {
     let conn = get_connection(addr);
     match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_async::<Vec<u8>>(packets),
-        Connection::Quic(conn) => conn.send_wire_transaction_async::<Vec<u8>>(packets),
+        Connection::Udp(conn) => conn.send_wire_transaction_async(packets),
+        Connection::Quic(conn) => conn.send_wire_transaction_async(packets),
     }
 }
 

@@ -6,6 +6,7 @@ use {
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
+    lazy_static::lazy_static,
     log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     solana_sdk::{
@@ -17,8 +18,6 @@ use {
         sync::Arc,
     },
     tokio::runtime::Runtime,
-    lazy_static::lazy_static,
-
 };
 
 struct SkipServerVerification;
@@ -43,10 +42,10 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 lazy_static! {
-static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+    static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
 }
 
 struct QuicClient {
@@ -91,8 +90,7 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_async<T>(&self, wire_transaction: Vec<u8>) -> TransportResult<()>
-    {
+    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         //drop and detach the task
         let client = self.client.clone();
