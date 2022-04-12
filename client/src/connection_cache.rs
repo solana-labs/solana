@@ -83,24 +83,24 @@ fn get_connection(addr: &SocketAddr) -> Connection {
 // This will be done in a followup to
 // https://github.com/solana-labs/solana/pull/23817
 pub fn send_wire_transaction_batch(
-    packets: &[&[u8]],
+    wire_transactions: &[&[u8]],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
     let conn = get_connection(addr);
     match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_batch(packets),
-        Connection::Quic(conn) => conn.send_wire_transaction_batch(packets),
+        Connection::Udp(conn) => conn.send_wire_transaction_batch(wire_transactions),
+        Connection::Quic(conn) => conn.send_wire_transaction_batch(wire_transactions),
     }
 }
 
 pub fn send_wire_transaction_async(
-    packets: Vec<u8>,
+    wire_transaction: Vec<u8>,
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
     let conn = get_connection(addr);
     match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_async(packets),
-        Connection::Quic(conn) => conn.send_wire_transaction_async(packets),
+        Connection::Udp(conn) => conn.send_wire_transaction_async(wire_transaction),
+        Connection::Quic(conn) => conn.send_wire_transaction_async(wire_transaction),
     }
 }
 
