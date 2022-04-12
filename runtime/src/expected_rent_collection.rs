@@ -885,6 +885,37 @@ pub mod tests {
                         epoch,
                     );
 
+                    // test RentResult::LeaveAloneNoRent
+                    {
+                        let expected = ExpectedRentCollection::new(
+                            &pubkey,
+                            &account,
+                            storage_slot,
+                            &epoch_schedule,
+                            &rent_collector,
+                            max_slot_in_storages_exclusive,
+                            find_unskipped_slot,
+                            // treat this pubkey like a filler account so we get a 'LeaveAloneNoRent' result
+                            Some(&pubkey),
+                        );
+                        assert_eq!(
+                            expected,
+                            some_expected.then(|| ExpectedRentCollection {
+                                partition_from_pubkey,
+                                epoch_of_max_storage_slot: rent_collector.epoch,
+                                partition_index_from_max_slot,
+                                first_slot_in_max_epoch,
+                                expected_rent_collection_slot_max_epoch,
+                                // this will not be adjusted for 'LeaveAloneNoRent'
+                                rent_epoch: account.rent_epoch(),
+                            }),
+                            "partition_index_from_max_slot: {}, epoch: {}",
+                            partition_index_from_max_slot,
+                            epoch,
+                        );
+                    }
+
+                    // test maybe_rehash_skipped_rewrite
                     let hash = AccountsDb::hash_account(storage_slot, &account, &pubkey);
                     let maybe_rehash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
                         &account,
