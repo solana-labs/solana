@@ -343,7 +343,7 @@ function NonFungibleTokenMintAccountCard({
             </td>
           </tr>
         )}
-        {nftData?.metadata.collection?.verified && (
+        {!!nftData?.metadata.collection?.verified && (
           <tr>
             <td>Verified Collection Address</td>
             <td className="text-lg-end">
