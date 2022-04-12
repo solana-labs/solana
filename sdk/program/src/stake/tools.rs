@@ -12,9 +12,18 @@ pub fn get_minimum_delegation() -> u64 {
     // SAFETY: The `.unwrap()` is safe because `invoke_unchecked()` will never actually return an
     // error to a running program because any CPI's that fail will halt the entire program.
     crate::program::invoke_unchecked(&instruction, &[]).unwrap();
-    // SAFETY: The `.unwrap()` is safe because the only way `get_minimum_delegation_return_data()`
-    // can fail after doing the CPI is if the stake program is broken.
-    get_minimum_delegation_return_data().unwrap()
+    let minimum_delegation = get_minimum_delegation_return_data();
+
+    #[cfg(target_arch = "bpf")]
+    {
+        // SAFETY: The `.unwrap()` is safe because the only way `get_minimum_delegation_return_data()`
+        // can fail after doing the CPI is if the stake program is broken.
+        minimum_delegation.unwrap()
+    }
+    #[cfg(not(target_arch = "bpf"))]
+    {
+        minimum_delegation.unwrap_or_default()
+    }
 }
 
 /// Helper function for programs to get the return data after calling [`GetMinimumDelegation`]
