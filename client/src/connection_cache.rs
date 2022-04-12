@@ -3,6 +3,7 @@ use {
         quic_client::QuicTpuConnection, tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
+    log::warn,
     lru::LruCache,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{transaction::VersionedTransaction, transport::TransportError},
@@ -10,6 +11,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
     },
+    tokio::runtime::Runtime,
 };
 
 // Should be non-zero
@@ -24,18 +26,29 @@ enum Connection {
 struct ConnMap {
     map: LruCache<SocketAddr, Connection>,
     use_quic: bool,
+    runtime: Runtime,
 }
 
 impl ConnMap {
     pub fn new() -> Self {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
         Self {
             map: LruCache::new(MAX_CONNECTIONS),
             use_quic: false,
+            runtime,
         }
     }
 
     pub fn set_use_quic(&mut self, use_quic: bool) {
         self.use_quic = use_quic;
+    }
+
+    pub fn runtime<'a>(&'a self) -> &'a Runtime {
+        &self.runtime
     }
 }
 
@@ -104,14 +117,42 @@ pub fn send_wire_transaction(
     }
 }
 
+fn send_quic_wire_transaction_async(
+    wire_transaction: &[u8],
+    addr: &SocketAddr,
+) -> Result<(), TransportError> {
+    let map = (*CONNECTION_MAP).lock().unwrap();
+    let runtime = map.runtime();
+    let _guard = runtime.enter();
+    //drop and detach the task
+    let addr = addr.clone();
+    let wire_transaction = wire_transaction.to_owned();
+    let _ = runtime.spawn(async move {
+        let conn = get_connection(&addr);
+        match conn {
+            Connection::Quic(conn) => {
+                let map = (*CONNECTION_MAP).lock().unwrap();
+                let runtime = map.runtime();
+                let send_buffer = conn.client.send_buffer(wire_transaction);
+                if let Err(e) = runtime.block_on(send_buffer) {
+                    warn!("Failed to send transaction async to {:?}", e);
+                }
+            }
+            _ => {}
+        };
+        ()
+    });
+    Ok(())
+}
+
 pub fn send_wire_transaction_async(
-    wire_transaction: &'static [u8],
+    wire_transaction: &[u8],
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
     let conn = get_connection(addr);
     match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_async(wire_transaction),
-        Connection::Quic(conn) => conn.send_wire_transaction_async(wire_transaction),
+        Connection::Udp(conn) => conn.send_wire_transaction(wire_transaction),
+        Connection::Quic(_conn) => send_quic_wire_transaction_async(wire_transaction, addr),
     }
 }
 

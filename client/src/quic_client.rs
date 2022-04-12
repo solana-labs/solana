@@ -6,7 +6,6 @@ use {
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
-    log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
@@ -41,7 +40,7 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-struct QuicClient {
+pub struct QuicClient {
     runtime: Runtime,
     endpoint: Endpoint,
     connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
@@ -49,7 +48,7 @@ struct QuicClient {
 }
 
 pub struct QuicTpuConnection {
-    client: Arc<QuicClient>,
+    pub client: Arc<QuicClient>,
 }
 
 impl TpuConnection for QuicTpuConnection {
@@ -81,22 +80,6 @@ impl TpuConnection for QuicTpuConnection {
         let _guard = self.client.runtime.enter();
         let send_batch = self.client.send_batch(buffers);
         self.client.runtime.block_on(send_batch)?;
-        Ok(())
-    }
-
-    fn send_wire_transaction_async<T>(&'static self, wire_transaction: T) -> TransportResult<()>
-    where
-        T: AsRef<[u8]> + Send + 'static,
-    {
-        let _guard = self.client.runtime.enter();
-        //drop and detach the task
-        let _ = self.client.runtime.spawn(async move {
-            let send_buffer = self.client.send_buffer(wire_transaction);
-            if let Err(e) = self.client.runtime.block_on(send_buffer) {
-                warn!("Failed to send transaction async to {:?}", e);
-            }
-            ()
-        });
         Ok(())
     }
 }
