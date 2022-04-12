@@ -13,8 +13,8 @@ use {
             HashSet,
         },
         net::SocketAddr,
-        sync::{Arc, RwLock},
-        thread::{self, Builder, JoinHandle},
+        sync::{Arc, Mutex, RwLock},
+        thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
 };
@@ -48,7 +48,8 @@ const DEFAULT_BATCH_SEND_RATE_MS: u64 = 1;
 pub const MAX_BATCH_SEND_RATE_MS: usize = 100_000;
 
 pub struct SendTransactionService {
-    thread: JoinHandle<()>,
+    receive_txn_thread: JoinHandle<()>,
+    retry_thread: JoinHandle<()>,
 }
 
 pub struct TransactionInfo {
@@ -124,7 +125,7 @@ impl Default for Config {
 }
 
 impl SendTransactionService {
-    pub fn new<T: TpuInfo + std::marker::Send + 'static>(
+    pub fn new<T: TpuInfo + std::marker::Send + Clone + 'static>(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
@@ -142,36 +143,49 @@ impl SendTransactionService {
         Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
     }
 
-    pub fn new_with_config<T: TpuInfo + std::marker::Send + 'static>(
+    pub fn new_with_config<T: TpuInfo + std::marker::Send + Clone + 'static>(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
         config: Config,
     ) -> Self {
-        let thread = Self::retry_thread(
+        let retry_transactions = Arc::new(Mutex::new(HashMap::new()));
+        let receive_txn_thread = Self::receive_txn_thread(
             tpu_address,
             receiver,
+            leader_info.clone(),
+            config.clone(),
+            retry_transactions.clone(),
+        );
+
+        let retry_thread = Self::retry_thread(
+            tpu_address,
             bank_forks.clone(),
             leader_info,
             config,
+            retry_transactions,
         );
-        Self { thread }
+        Self {
+            receive_txn_thread,
+            retry_thread,
+        }
     }
 
-    fn retry_thread<T: TpuInfo + std::marker::Send + 'static>(
+    /// Thread responsible for receiving transactions from RPC clients.
+    fn receive_txn_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
-        bank_forks: Arc<RwLock<BankForks>>,
         mut leader_info: Option<T>,
         config: Config,
+        retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
 
         info!(
-            "Starting send-transaction-service thread with config {:?}",
+            "Starting send-transaction-service::receive_txn_thread with config {:?}",
             config
         );
         if let Some(leader_info) = leader_info.as_mut() {
@@ -179,79 +193,52 @@ impl SendTransactionService {
         }
         connection_cache::set_use_quic(config.use_quic);
         Builder::new()
-            .name("send-tx-sv2".to_string())
+            .name("send-tx-sv3".to_string())
             .spawn(move || loop {
-                let mut do_batch = false;
-                let recv_timeout_ms = config.retry_rate_ms.min(config.batch_send_rate_ms);
+                let recv_timeout_ms = config.batch_send_rate_ms;
                 match receiver.recv_timeout(Duration::from_millis(1000.min(recv_timeout_ms))) {
                     Err(RecvTimeoutError::Disconnected) => break,
-                    Err(RecvTimeoutError::Timeout) => {
-                        if !transactions.is_empty() {
-                            // Timed out waiting for the full batch and there is something in the batch
-                            inc_new_counter_info!("send_transaction_service-batch-time-out-tx", 1);
-                            do_batch = true;
-                        }
-                    }
+                    Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
-                        let mut transactions_len = transactions.len();
                         let entry = transactions.entry(transaction_info.signature);
                         if let Entry::Vacant(_) = entry {
-                            if transactions_len >= MAX_TRANSACTION_QUEUE_SIZE {
-                                // queue is already full, no more queueing for retry, just send this txn out.
-                                datapoint_warn!("send_transaction_service-queue-overflow");
-                                Self::send_single_transaction(
-                                    &tpu_address,
-                                    &leader_info,
-                                    &config,
-                                    &transaction_info,
-                                );
-                            } else {
-                                entry.or_insert(transaction_info);
-                                transactions_len += 1;
-
-                                if transactions_len < config.batch_size
-                                    && last_status_check.elapsed().as_millis()
-                                        < config.batch_send_rate_ms as u128
-                                {
-                                    // Not enough transactions in the batch and not long enough time has passed since the last batch
-                                    continue;
-                                }
-                                // reached batch limit
-                                inc_new_counter_info!("send_transaction_service-batch-tx", 1);
-                                do_batch = true;
-                            }
+                            entry.or_insert(transaction_info);
                         } else {
                             inc_new_counter_info!("send_transaction_service-recv-duplicate", 1);
                         }
                     }
                 }
 
-                if last_status_check.elapsed().as_millis() as u64 >= config.retry_rate_ms
-                    || do_batch
+                if !transactions.is_empty()
+                    && (last_status_check.elapsed().as_millis() as u64 >= config.batch_send_rate_ms
+                        || transactions.len() >= config.batch_size)
                 {
-                    if !transactions.is_empty() {
-                        datapoint_info!(
-                            "send_transaction_service-queue-size",
-                            ("len", transactions.len(), i64)
-                        );
-                        let (root_bank, working_bank) = {
-                            let bank_forks = bank_forks.read().unwrap();
-                            (
-                                bank_forks.root_bank().clone(),
-                                bank_forks.working_bank().clone(),
-                            )
-                        };
+                    datapoint_info!(
+                        "send_transaction_service-queue-size",
+                        ("len", transactions.len(), i64)
+                    );
+                    let _result = Self::send_transactions_in_batch(
+                        &tpu_address,
+                        &mut transactions,
+                        &leader_info,
+                        &config,
+                    );
 
-                        let _result = Self::process_transactions(
-                            &working_bank,
-                            &root_bank,
-                            &tpu_address,
-                            &mut transactions,
-                            &leader_info,
-                            &config,
-                        );
+                    let mut retry_transactions = retry_transactions.lock().unwrap();
+                    for (signature, transaction_info) in transactions.drain() {
+                        let entry = retry_transactions.entry(signature);
+                        if let Entry::Vacant(_) = entry {
+                            if retry_transactions.len() >= MAX_TRANSACTION_QUEUE_SIZE {
+                                datapoint_warn!("send_transaction_service-queue-overflow");
+                                break;
+                            }
+                        } else {
+                            entry.or_insert(transaction_info);
+                        }
                     }
+                    drop(retry_transactions);
+
                     last_status_check = Instant::now();
                     if last_leader_refresh.elapsed().as_millis() > 1000 {
                         if let Some(leader_info) = leader_info.as_mut() {
@@ -264,7 +251,99 @@ impl SendTransactionService {
             .unwrap()
     }
 
+    /// Thread responsible for retrying transactions
+    fn retry_thread<T: TpuInfo + std::marker::Send + 'static>(
+        tpu_address: SocketAddr,
+        bank_forks: Arc<RwLock<BankForks>>,
+        mut leader_info: Option<T>,
+        config: Config,
+        retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
+    ) -> JoinHandle<()> {
+        let mut last_leader_refresh = Instant::now();
+
+        info!(
+            "Starting send-transaction-service::retry_thread with config {:?}",
+            config
+        );
+        if let Some(leader_info) = leader_info.as_mut() {
+            leader_info.refresh_recent_peers();
+        }
+        connection_cache::set_use_quic(config.use_quic);
+        Builder::new()
+            .name("send-tx-sv2".to_string())
+            .spawn(move || loop {
+                let recv_timeout_ms = config.retry_rate_ms;
+                sleep(Duration::from_millis(1000.min(recv_timeout_ms)));
+                let mut transactions = retry_transactions.lock().unwrap();
+                if !transactions.is_empty() {
+                    datapoint_info!(
+                        "send_transaction_service-queue-size",
+                        ("len", transactions.len(), i64)
+                    );
+                    let (root_bank, working_bank) = {
+                        let bank_forks = bank_forks.read().unwrap();
+                        (
+                            bank_forks.root_bank().clone(),
+                            bank_forks.working_bank().clone(),
+                        )
+                    };
+
+                    let _result = Self::process_transactions(
+                        &working_bank,
+                        &root_bank,
+                        &tpu_address,
+                        &mut transactions,
+                        &leader_info,
+                        &config,
+                    );
+                }
+                if last_leader_refresh.elapsed().as_millis() > 1000 {
+                    if let Some(leader_info) = leader_info.as_mut() {
+                        leader_info.refresh_recent_peers();
+                    }
+                    last_leader_refresh = Instant::now();
+                }
+            })
+            .unwrap()
+    }
+
     /// Process transactions in batch.
+    fn send_transactions_in_batch<T: TpuInfo>(
+        tpu_address: &SocketAddr,
+        transactions: &mut HashMap<Signature, TransactionInfo>,
+        leader_info: &Option<T>,
+        config: &Config,
+    ) {
+        let mut measure = Measure::start("send_transactions_in_batch-us");
+
+        // Processing the transactions in batch
+        let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
+
+        let wire_transacions = transactions
+            .iter()
+            .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
+            .collect::<Vec<&[u8]>>();
+
+        for address in &addresses {
+            let send_result =
+                connection_cache::send_wire_transaction_batch(&wire_transacions, address);
+            if let Err(err) = send_result {
+                warn!(
+                    "Failed to send transaction batch to {}: {:?}",
+                    tpu_address, err
+                );
+            }
+        }
+        measure.stop();
+        inc_new_counter_info!(
+            "send_transactions_in_batch-us",
+            measure.as_us() as usize,
+            1000,
+            1000
+        );
+    }
+
+    /// Retry transactions sent before.
     fn process_transactions<T: TpuInfo>(
         working_bank: &Arc<Bank>,
         root_bank: &Arc<Bank>,
@@ -407,38 +486,9 @@ impl SendTransactionService {
             .unwrap_or_else(|| vec![tpu_address])
     }
 
-    fn send_single_transaction<T: TpuInfo + std::marker::Send + 'static>(
-        tpu_address: &SocketAddr,
-        leader_info: &Option<T>,
-        config: &Config,
-        transaction_info: &TransactionInfo,
-    ) {
-        // non-batched send
-        let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
-        for address in addresses {
-            Self::send_transaction(address, &transaction_info.wire_transaction);
-        }
-    }
-
-    fn send_transaction(tpu_address: &SocketAddr, wire_transaction: &[u8]) {
-        let mut measure = Measure::start("send_transaction_service-us");
-
-        if let Err(err) =
-            connection_cache::send_wire_transaction_async(wire_transaction.to_vec(), tpu_address)
-        {
-            warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
-        }
-        measure.stop();
-        inc_new_counter_info!(
-            "send_transaction_service-us",
-            measure.as_us() as usize,
-            1000,
-            1000
-        );
-    }
-
     pub fn join(self) -> thread::Result<()> {
-        self.thread.join()
+        self.receive_txn_thread.join()?;
+        self.retry_thread.join()
     }
 }
 
