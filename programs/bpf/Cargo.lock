@@ -3033,7 +3033,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-get-minimum-delegation-data"
+name = "solana-bpf-rust-get-minimum-delegation"
 version = "1.11.0"
 dependencies = [
  "solana-program 1.11.0",

@@ -70,7 +70,7 @@ fn main() {
             "log_data",
             "external_spend",
             "finalize",
-            "get_minimum_delegation_data",
+            "get_minimum_delegation",
             "instruction_introspection",
             "invoke",
             "invoke_and_error",

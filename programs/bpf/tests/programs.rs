@@ -3528,7 +3528,7 @@ fn test_program_fees() {
 
 #[test]
 #[cfg(feature = "bpf_rust")]
-fn test_get_minimum_delegation_data() {
+fn test_get_minimum_delegation() {
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -3546,7 +3546,7 @@ fn test_get_minimum_delegation_data() {
         &bank_client,
         &bpf_loader::id(),
         &mint_keypair,
-        "solana_bpf_rust_get_minimum_delegation_data",
+        "solana_bpf_rust_get_minimum_delegation",
     );
 
     let account_metas = vec![AccountMeta::new_readonly(stake::program::id(), false)];

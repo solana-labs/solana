@@ -1,12 +1,12 @@
 [package]
-name = "solana-bpf-rust-get-minimum-delegation-data"
+name = "solana-bpf-rust-get-minimum-delegation"
 version = "1.11.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-bpf-rust-get-minimum-delegation-data"
+documentation = "https://docs.rs/solana-bpf-rust-get-minimum-delegation"
 edition = "2021"
 
 [dependencies]

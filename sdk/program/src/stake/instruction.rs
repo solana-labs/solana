@@ -229,7 +229,12 @@ pub enum StakeInstruction {
     ///   None
     ///
     /// The minimum delegation will be returned via the transaction context's returndata.
-    /// Use `get_return_data()` to retrieve the result.
+    /// Use [`get_return_data()`] to retrieve the result.  Alternatively, use the
+    /// [`get_minimum_delegation_return_data()`] or [`get_minimum_delegation()`] helper functions.
+    ///
+    /// [`get_return_data()`]: crate::program::get_return_data
+    /// [`get_minimum_delegation_return_data()`]: super::tools::get_minimum_delegation_return_data
+    /// [`get_minimum_delegation()`]: super::tools::get_minimum_delegation
     GetMinimumDelegation,
 }
 
@@ -693,21 +698,6 @@ pub fn get_minimum_delegation() -> Instruction {
         &StakeInstruction::GetMinimumDelegation,
         Vec::default(),
     )
-}
-
-pub mod utils {
-    /// Helper function for programs to get the actual data after calling GetMinimumDelegation
-    ///
-    /// This fn handles calling `get_return_data()`, ensures the result is from the correct
-    /// program, and returns the correct type.  Returns `None` otherwise.
-    pub fn get_minimum_delegation_data() -> Option<u64> {
-        solana_program::program::get_return_data()
-            .and_then(|(program_id, return_data)| {
-                (program_id == crate::stake::program::id()).then(|| return_data)
-            })
-            .and_then(|return_data| return_data.try_into().ok())
-            .map(u64::from_le_bytes)
-    }
 }
 
 #[cfg(test)]
