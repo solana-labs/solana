@@ -162,10 +162,11 @@ impl MetricsAgent {
     fn collect_points(
         points_map: &mut HashMap<log::Level, (CounterMap, Vec<DataPoint>)>,
     ) -> Vec<DataPoint> {
-        // let mut size = points_map.capacity() * size_of::<log::Level>;
-        // for (_, v) in points_map.iter() {
-        //     size += v.1.capacity() * size_of::<DataPoint>();
-        // }
+        let mut size = 0;
+        for (_, v) in points_map.iter() {
+            size += v.0.len() + v.1.len();
+        }
+        error!("haha points_map size: {}", size);
 
         let points: Vec<DataPoint> = [
             Level::Error,
