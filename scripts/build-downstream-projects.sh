@@ -47,7 +47,6 @@ spl() {
 
     $cargo build
     $cargo test
-    $cargo_build_bpf
     $cargo_test_bpf
   )
 }
