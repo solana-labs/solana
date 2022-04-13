@@ -21,6 +21,9 @@ pull_request_rules:
       # Only request reviews from the pr subscribers group if no one
       # has reviewed the community PR yet. These checks only match
       # reviewers with admin, write or maintain permission on the repository.
+      - "#approved-reviews-by=0"
+      - "#commented-reviews-by=0"
+      - "#changes-requested-reviews-by=0"
       - "#review-requested=0"
     actions:
       request_reviews:
