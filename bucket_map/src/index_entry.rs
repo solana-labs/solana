@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_data_bucket_from_num_slots() {
-        for n in 1..512 {
+        for n in 0..512 {
             assert_eq!(
                 IndexEntry::data_bucket_from_num_slots(n),
                 (n as f64).log2().ceil() as u64
