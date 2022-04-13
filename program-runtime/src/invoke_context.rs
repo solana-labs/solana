@@ -1110,7 +1110,7 @@ impl<'a> InvokeContext<'a> {
         self.check_aligned = check_aligned;
     }
 
-    // Sshould alignment be enforced during user pointer translation
+    // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
         self.check_aligned
     }
