@@ -57,6 +57,7 @@ members = [
     "rust/error_handling",
     "rust/log_data",
     "rust/external_spend",
+    "rust/get_minimum_delegation",
     "rust/finalize",
     "rust/instruction_introspection",
     "rust/invoke",
