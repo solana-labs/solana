@@ -5533,6 +5533,7 @@ impl AccountsDb {
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         if !use_index {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
@@ -5576,7 +5577,6 @@ impl AccountsDb {
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         let (hash, total_lamports) =
             self.calculate_accounts_hash_helper(use_index, slot, &config)?;
         if debug_verify {
