@@ -403,6 +403,15 @@ impl<T: AbiExample> AbiExample for Vec<T> {
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
+impl<K: Eq + AbiExample + std::hash::Hash, V: AbiExample> AbiExample for dashmap::DashMap<K, V> {
+    fn example() -> Self {
+        let map = dashmap::DashMap::default();
+        map.insert(K::example(), V::example());
+        map
+    }
+}
+
 lazy_static! {
     /// we need &Vec<u8>, so we need something with a static lifetime
     static ref VEC_U8: Vec<u8> = vec![u8::default()];

@@ -22,6 +22,7 @@ solana-frozen-abi-macro = { path = "macro", version = "=1.11.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
+dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 generic-array = { version = "0.14.5", default-features = false, features = ["serde", "more_lengths"] }
 im = { version = "15.0.0", features = ["rayon", "serde"] }
 memmap2 = "0.5.3"
