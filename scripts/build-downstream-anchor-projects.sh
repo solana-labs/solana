@@ -12,7 +12,6 @@ source scripts/read-cargo-variable.sh
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
 cargo="$solana_dir"/cargo
-cargo_build_bpf="$solana_dir"/cargo-build-bpf
 cargo_test_bpf="$solana_dir"/cargo-test-bpf
 
 mkdir -p target/downstream-projects-anchor
@@ -72,7 +71,6 @@ mango() {
 
     $cargo build
     $cargo test
-    $cargo_build_bpf
     $cargo_test_bpf
   )
 }
@@ -91,7 +89,6 @@ metaplex() {
 
     $cargo build
     $cargo test
-    $cargo_build_bpf
     $cargo_test_bpf
   )
 }
