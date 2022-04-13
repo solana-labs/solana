@@ -119,7 +119,7 @@ impl DropCallback for SendDroppedBankCallback {
             }
 
             Err(TrySendError::Disconnected(_)) => {
-                BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Disconnected);
+                info!("bank DropCallback signal queue disconnected.");
             }
             // success
             Ok(_) => {}
