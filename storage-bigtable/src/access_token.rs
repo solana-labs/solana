@@ -31,10 +31,6 @@ fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
 
 fn load_stringified_credentials(credential: String) -> Result<Credentials, String> {
     Credentials::from_str(&credential).map_err(|err| format!("{}", err))
-    // match credential {
-    //     Some(s) => Credentials::from_str(&s).map_err(|err| format!("{}", err)),
-    //     None => Err("stringified credential is not provided".to_string()),
-    // }
 }
 
 #[derive(Clone)]
@@ -48,7 +44,7 @@ pub struct AccessToken {
 impl AccessToken {
     pub async fn new(scope: Scope, credential_type: CredentialType) -> Result<Self, String> {
         let credentials = match credential_type {
-            CredentialType::Filepath(fp)=> load_credentials(fp)?,
+            CredentialType::Filepath(fp) => load_credentials(fp)?,
             CredentialType::Stringified(s) => load_stringified_credentials(s)?,
         };
 

@@ -36,8 +36,8 @@ use {
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
         native_token::lamports_to_sol, pubkey::Pubkey,
     },
-    solana_storage_bigtable::CredentialType,
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
+    solana_storage_bigtable::CredentialType,
     std::{
         collections::HashSet,
         net::SocketAddr,

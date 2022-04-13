@@ -395,10 +395,7 @@ pub struct LedgerStorage {
 }
 
 impl LedgerStorage {
-    pub async fn new(
-        read_only: bool,
-        timeout: Option<std::time::Duration>,
-    ) -> Result<Self> {
+    pub async fn new(read_only: bool, timeout: Option<std::time::Duration>) -> Result<Self> {
         Self::new_with_config(LedgerStorageConfig {
             read_only,
             timeout,
@@ -406,7 +403,7 @@ impl LedgerStorage {
         })
         .await
     }
-    
+
     pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
         let LedgerStorageConfig {
             read_only,
@@ -426,12 +423,11 @@ impl LedgerStorage {
 
     pub async fn new_with_stringified_credential(credential: String) -> Result<Self> {
         Self::new_with_config(LedgerStorageConfig {
-                credential_type: CredentialType::Stringified(credential),
-                ..LedgerStorageConfig::default()
-            })
-            .await
+            credential_type: CredentialType::Stringified(credential),
+            ..LedgerStorageConfig::default()
+        })
+        .await
     }
-    
 
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
