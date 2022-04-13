@@ -137,10 +137,10 @@ macro_rules! impl_sysvar_get {
                 $syscall_name(var_addr)
             };
             #[cfg(not(target_arch = "bpf"))]
-            let result = crate::program_stubs::$syscall_name(var_addr);
+            let result = $crate::program_stubs::$syscall_name(var_addr);
 
             match result {
-                crate::entrypoint::SUCCESS => Ok(var),
+                $crate::entrypoint::SUCCESS => Ok(var),
                 e => Err(e.into()),
             }
         }

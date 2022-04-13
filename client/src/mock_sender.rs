@@ -470,4 +470,8 @@ impl RpcSender for MockSender {
         };
         Ok(val)
     }
+
+    fn url(&self) -> String {
+        format!("MockSender: {}", self.url)
+    }
 }

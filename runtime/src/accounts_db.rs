@@ -1161,7 +1161,7 @@ struct PurgeStats {
     total_removed_cached_bytes: AtomicU64,
     total_removed_stored_bytes: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
-    scan_storages_elasped: AtomicU64,
+    scan_storages_elapsed: AtomicU64,
     purge_accounts_index_elapsed: AtomicU64,
     handle_reclaims_elapsed: AtomicU64,
 }
@@ -1228,8 +1228,8 @@ impl PurgeStats {
                     i64
                 ),
                 (
-                    "scan_storages_elasped",
-                    self.scan_storages_elasped.swap(0, Ordering::Relaxed) as i64,
+                    "scan_storages_elapsed",
+                    self.scan_storages_elapsed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -4038,16 +4038,21 @@ impl AccountsDb {
         pruned_banks_sender: DroppedSlotsSender,
     ) -> SendDroppedBankCallback {
         self.is_bank_drop_callback_enabled
-            .store(true, Ordering::SeqCst);
+            .store(true, Ordering::Release);
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
-    /// comment below for more explanation.
-    /// * `is_serialized_with_abs` - indicates whehter this call is run sequentially with other calls in account background service
+    /// comment below for more explanation.  
+    ///   * `is_serialized_with_abs` - indicates whehter this call runs sequentially with all other
+    ///        accounts_db relevant calls, such as shrinking, purging etc., in account background
+    ///        service.
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_serialized_with_abs: bool) {
-        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_serialized_with_abs {
-            panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
+        if self.is_bank_drop_callback_enabled.load(Ordering::Acquire) && !is_serialized_with_abs {
+            panic!(
+                "bad drop callpath detected; Bank::drop() must run serially with other logic in
+                ABS like clean_accounts()"
+            )
         }
 
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
@@ -4270,7 +4275,7 @@ impl AccountsDb {
         );
         scan_storages_elasped.stop();
         purge_stats
-            .scan_storages_elasped
+            .scan_storages_elapsed
             .fetch_add(scan_storages_elasped.as_us(), Ordering::Relaxed);
 
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
@@ -4763,9 +4768,8 @@ impl AccountsDb {
             // Regardless of whether this slot was *just* flushed from the cache by the above
             // `flush_slot_cache()`, we should update the `max_flush_root`.
             // This is because some rooted slots may be flushed to storage *before* they are marked as root.
-            // This can occur for instance when:
-            // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
-            // 2) Random evictions
+            // This can occur for instance when
+            //  the cache is overwhelmed, we flushed some yet to be rooted frozen slots
             // These slots may then *later* be marked as root, so we still need to handle updating the
             // `max_flush_root` in the accounts cache.
             self.accounts_cache.set_max_flush_root(root);

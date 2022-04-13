@@ -50,7 +50,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: None,
+    index_limit_mb: IndexLimitMb::Unspecified,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
     started_from_validator: false,
@@ -59,7 +59,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     bins: Some(BINS_FOR_BENCHMARKS),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: None,
+    index_limit_mb: IndexLimitMb::Unspecified,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
     started_from_validator: false,
@@ -157,12 +157,29 @@ pub struct AccountSecondaryIndexesIncludeExclude {
     pub keys: HashSet<Pubkey>,
 }
 
+/// specification of how much memory in-mem portion of account index can use
+#[derive(Debug, Clone)]
+pub enum IndexLimitMb {
+    /// nothing explicit specified, so default
+    Unspecified,
+    /// limit was specified, use disk index for rest
+    Limit(usize),
+    /// in-mem-only was specified, no disk index
+    InMemOnly,
+}
+
+impl Default for IndexLimitMb {
+    fn default() -> Self {
+        Self::Unspecified
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct AccountsIndexConfig {
     pub bins: Option<usize>,
     pub flush_threads: Option<usize>,
     pub drives: Option<Vec<PathBuf>>,
-    pub index_limit_mb: Option<usize>,
+    pub index_limit_mb: IndexLimitMb,
     pub ages_to_stay_in_cache: Option<Age>,
     pub scan_results_limit_bytes: Option<usize>,
     /// true if the accounts index is being created as a result of being started as a validator (as opposed to test, etc.)

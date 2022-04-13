@@ -211,14 +211,16 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
             &account_paths,
             genesis_config,
             process_options.debug_keys.clone(),
-            Some(&crate::builtins::get(process_options.bpf_jit)),
+            Some(&crate::builtins::get(
+                process_options.runtime_config.bpf_jit,
+            )),
             process_options.account_indexes.clone(),
             process_options.accounts_db_caching_enabled,
             process_options.limit_load_slot_count_from_snapshot,
@@ -234,6 +236,8 @@ fn bank_forks_from_snapshot(
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
+
+    deserialized_bank.set_compute_budget(process_options.runtime_config.compute_budget);
 
     let full_snapshot_hash = FullSnapshotHash {
         hash: (

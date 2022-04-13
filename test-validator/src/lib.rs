@@ -16,11 +16,13 @@ use {
         blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions, create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader_ex,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, snapshot_config::SnapshotConfig,
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
+        snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -111,6 +113,7 @@ pub struct TestValidatorGenesis {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+    max_compute_units: Option<u64>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -138,6 +141,7 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
+            max_compute_units: Option::<u64>::default(),
         }
     }
 }
@@ -232,6 +236,11 @@ impl TestValidatorGenesis {
 
     pub fn bind_ip_addr(&mut self, bind_ip_addr: IpAddr) -> &mut Self {
         self.node_config.bind_ip_addr = bind_ip_addr;
+        self
+    }
+
+    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
+        self.max_compute_units = Some(max_compute_units);
         self
     }
 
@@ -666,6 +675,15 @@ impl TestValidator {
             ..AccountsDbConfig::default()
         });
 
+        let runtime_config = RuntimeConfig {
+            bpf_jit: !config.no_bpf_jit,
+            compute_budget: config.max_compute_units.map(|max_units| ComputeBudget {
+                max_units,
+                ..ComputeBudget::default()
+            }),
+            ..RuntimeConfig::default()
+        };
+
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -690,12 +708,12 @@ impl TestValidator {
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
-            bpf_jit: !config.no_bpf_jit,
             validator_exit: config.validator_exit.clone(),
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
+            runtime_config,
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

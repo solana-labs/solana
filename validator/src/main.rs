@@ -47,9 +47,10 @@ use {
         },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
-            AccountsIndexConfig,
+            AccountsIndexConfig, IndexLimitMb,
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -1170,7 +1171,7 @@ pub fn main() {
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
-                .help("When this is set to true, the system will use QUIC to send transactions."),
+                .help("Use QUIC to send transactions."),
         )
         .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
@@ -2233,11 +2234,14 @@ pub fn main() {
         accounts_index_config.bins = Some(bins);
     }
 
-    if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
-        accounts_index_config.index_limit_mb = Some(limit);
-    } else if matches.is_present("disable_accounts_disk_index") {
-        accounts_index_config.index_limit_mb = None;
-    }
+    accounts_index_config.index_limit_mb =
+        if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+            IndexLimitMb::Limit(limit)
+        } else if matches.is_present("disable_accounts_disk_index") {
+            IndexLimitMb::InMemOnly
+        } else {
+            IndexLimitMb::Unspecified
+        };
 
     {
         let mut accounts_index_paths: Vec<PathBuf> = if matches.is_present("accounts_index_path") {
@@ -2326,7 +2330,6 @@ pub fn main() {
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
-        dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(s).unwrap()),
@@ -2403,7 +2406,6 @@ pub fn main() {
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
         contact_debug_interval,
-        bpf_jit: !matches.is_present("no_bpf_jit"),
         send_transaction_service_config: send_transaction_service::Config {
             retry_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
             leader_forward_count: value_t_or_exit!(
@@ -2439,6 +2441,11 @@ pub fn main() {
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
+        runtime_config: RuntimeConfig {
+            dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
+            bpf_jit: !matches.is_present("no_bpf_jit"),
+            ..RuntimeConfig::default()
+        },
         ..ValidatorConfig::default()
     };
 

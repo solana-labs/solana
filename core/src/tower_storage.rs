@@ -11,7 +11,6 @@ use {
         fs::{self, File},
         io::{self, BufReader},
         path::PathBuf,
-        sync::RwLock,
     },
 };
 
@@ -214,7 +213,7 @@ impl TowerStorage for FileTowerStorage {
 }
 
 pub struct EtcdTowerStorage {
-    client: RwLock<etcd_client::Client>,
+    client: tokio::sync::Mutex<etcd_client::Client>,
     instance_id: [u8; 8],
     runtime: tokio::runtime::Runtime,
 }
@@ -260,7 +259,7 @@ impl EtcdTowerStorage {
             .map_err(Self::etdc_to_tower_error)?;
 
         Ok(Self {
-            client: RwLock::new(client),
+            client: tokio::sync::Mutex::new(client),
             instance_id: solana_sdk::timing::timestamp().to_le_bytes(),
             runtime,
         })
@@ -280,7 +279,6 @@ impl EtcdTowerStorage {
 impl TowerStorage for EtcdTowerStorage {
     fn load(&self, node_pubkey: &Pubkey) -> Result<Tower> {
         let (instance_key, tower_key) = Self::get_keys(node_pubkey);
-        let mut client = self.client.write().unwrap();
 
         let txn = etcd_client::Txn::new().and_then(vec![etcd_client::TxnOp::put(
             instance_key.clone(),
@@ -288,7 +286,7 @@ impl TowerStorage for EtcdTowerStorage {
             None,
         )]);
         self.runtime
-            .block_on(async { client.txn(txn).await })
+            .block_on(async { self.client.lock().await.txn(txn).await })
             .map_err(|err| {
                 error!("Failed to acquire etcd instance lock: {}", err);
                 Self::etdc_to_tower_error(err)
@@ -304,7 +302,7 @@ impl TowerStorage for EtcdTowerStorage {
 
         let response = self
             .runtime
-            .block_on(async { client.txn(txn).await })
+            .block_on(async { self.client.lock().await.txn(txn).await })
             .map_err(|err| {
                 error!("Failed to read etcd saved tower: {}", err);
                 Self::etdc_to_tower_error(err)
@@ -336,7 +334,6 @@ impl TowerStorage for EtcdTowerStorage {
 
     fn store(&self, saved_tower: &SavedTowerVersions) -> Result<()> {
         let (instance_key, tower_key) = Self::get_keys(&saved_tower.pubkey());
-        let mut client = self.client.write().unwrap();
 
         let txn = etcd_client::Txn::new()
             .when(vec![etcd_client::Compare::value(
@@ -352,7 +349,7 @@ impl TowerStorage for EtcdTowerStorage {
 
         let response = self
             .runtime
-            .block_on(async { client.txn(txn).await })
+            .block_on(async { self.client.lock().await.txn(txn).await })
             .map_err(|err| {
                 error!("Failed to write etcd saved tower: {}", err);
                 err
