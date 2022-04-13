@@ -56,8 +56,8 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        if bank.bank_id() >> 63 == 1 {
-            panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
+        if bank.bank_id() & (1 << 63) == 0 {
+            panic!("bank DropCallback called when bank is not dropping");
         }
 
         let bank_id = bank.bank_id() & 0xefff_ffff_ffff_ffff;
