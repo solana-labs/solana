@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use {
     crate::{
         bucket::Bucket,
@@ -59,7 +60,7 @@ impl IndexEntry {
 
     pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
         // Compute the ceiling of log2 for integer
-        64 - ((num_slots - 1).leading_zeros()) as u64
+        (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
     }
 
     pub fn data_bucket_ix(&self) -> u64 {
@@ -156,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_data_bucket() {
+    fn test_data_bucket_from_num_slots() {
         for n in 1..512 {
             assert_eq!(
                 IndexEntry::data_bucket_from_num_slots(n),
