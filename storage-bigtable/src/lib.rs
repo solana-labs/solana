@@ -395,7 +395,11 @@ pub struct LedgerStorage {
 }
 
 impl LedgerStorage {
-    pub async fn new(read_only: bool, timeout: Option<std::time::Duration>, credential_path: Option<String>) -> Result<Self> {
+    pub async fn new(
+        read_only: bool,
+        timeout: Option<std::time::Duration>,
+        credential_path: Option<String>,
+    ) -> Result<Self> {
         Self::new_with_config(LedgerStorageConfig {
             read_only,
             timeout,
