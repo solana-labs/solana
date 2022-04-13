@@ -21,6 +21,9 @@ pub type Age = u8;
 
 const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 
+// 10 GB limit for in-mem idx. In practice, we don't get this high. This tunes how aggressively to save items we expect to use soon.
+pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
+
 pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<SlotT<T>>>,
 
@@ -153,25 +156,40 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
         let mut bucket_config = BucketMapConfig::new(bins);
         bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
-        let mut mem_budget_mb = config.as_ref().and_then(|config| {
-            if let IndexLimitMb::Limit(mb) = config.index_limit_mb {
-                Some(mb)
-            } else {
-                None
+        let mem_budget_mb = match config
+            .as_ref()
+            .map(|config| &config.index_limit_mb)
+            .unwrap_or(&IndexLimitMb::Unspecified)
+        {
+            // creator said to use disk idx with a specific limit
+            IndexLimitMb::Limit(mb) => Some(*mb),
+            // creator said InMemOnly, so no disk index
+            IndexLimitMb::InMemOnly => None,
+            // whatever started us didn't specify whether to use the acct idx
+            IndexLimitMb::Unspecified => {
+                // check env var if we were not started from a validator
+                let mut use_default = true;
+                if !config
+                    .as_ref()
+                    .map(|config| config.started_from_validator)
+                    .unwrap_or_default()
+                {
+                    if let Ok(_limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB")
+                    {
+                        // Note this env var means the opposite of the default. The default now is disk index is on.
+                        // So, if this env var is set, DO NOT allocate with disk buckets if mem budget was not set, we were NOT started from validator, and env var was set
+                        // we do not want the env var to have an effect when running the validator (only tests, benches, etc.)
+                        use_default = false;
+                    }
+                }
+                if use_default {
+                    // if validator does not specify disk index limit or specify in mem only, then this is the default
+                    DEFAULT_DISK_INDEX
+                } else {
+                    None
+                }
             }
-        });
-        let bucket_map_tests_allowed = mem_budget_mb.is_none()
-            && !config
-                .as_ref()
-                .map(|config| config.started_from_validator)
-                .unwrap_or_default();
-        if bucket_map_tests_allowed {
-            if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
-                // allocate with disk buckets if mem budget was not set, we were NOT started from validator, and env var was set
-                // we do not want the env var to have an effect when running the validator (only tests, benches, etc.)
-                mem_budget_mb = Some(limit.parse::<usize>().unwrap());
-            }
-        }
+        };
 
         // only allocate if mem_budget_mb is Some
         let disk = mem_budget_mb.map(|_| BucketMap::new(bucket_config));
@@ -366,9 +384,8 @@ pub mod tests {
     #[test]
     fn test_throttle() {
         solana_logger::setup();
-        let bins = 100;
+        let bins = 128;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
-        assert!(!test.is_disk_index_enabled());
         let bins = test.bins as u64;
         let interval_ms = test.age_interval_ms();
         // 90% of time elapsed, all but 1 bins flushed, should not wait since we'll end up right on time
