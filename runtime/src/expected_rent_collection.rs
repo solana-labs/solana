@@ -284,7 +284,10 @@ impl ExpectedRentCollection {
             if possibly_update
                 && rent_epoch == 0
                 && current_epoch > 1
-                && !rewrites_skipped_this_slot.contains_key(pubkey)
+                && !rewrites_skipped_this_slot
+                    .read()
+                    .unwrap()
+                    .contains_key(pubkey)
             {
                 // we know we're done
                 return None;
@@ -293,7 +296,10 @@ impl ExpectedRentCollection {
             // if an account was written >= its rent collection slot within the last epoch worth of slots, then we don't want to update it here
             if possibly_update && rent_epoch < current_epoch {
                 let new_rent_epoch = if partition_from_pubkey < partition_from_current_slot
-                    || rewrites_skipped_this_slot.contains_key(pubkey)
+                    || rewrites_skipped_this_slot
+                        .read()
+                        .unwrap()
+                        .contains_key(pubkey)
                 {
                     // partition_from_pubkey < partition_from_current_slot:
                     //  we already would have done a rewrite on this account IN this epoch
@@ -310,7 +316,7 @@ impl ExpectedRentCollection {
                 }
             } else if !possibly_update {
                 // This is a non-trivial lookup. Would be nice to skip this.
-                assert!(!rewrites_skipped_this_slot.contains_key(pubkey), "did not update rent_epoch: {}, new value for rent_epoch: {}, old: {}, current epoch: {}", pubkey, rent_epoch, next_epoch, current_epoch);
+                assert!(!rewrites_skipped_this_slot.read().unwrap().contains_key(pubkey), "did not update rent_epoch: {}, new value for rent_epoch: {}, old: {}, current epoch: {}", pubkey, rent_epoch, next_epoch, current_epoch);
             }
         }
         None
@@ -1131,7 +1137,7 @@ pub mod tests {
                             continue;
                         }
 
-                        rewrites.insert(pubkey, Hash::default());
+                        rewrites.write().unwrap().insert(pubkey, Hash::default());
                     }
                     let expected_new_rent_epoch = if partition_index_bank_slot
                         > partition_from_pubkey
