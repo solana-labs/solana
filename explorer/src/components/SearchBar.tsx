@@ -16,8 +16,19 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
 import { getDomainOwner, hasDomainSyntax } from "utils/name-service";
 
+interface BuildOptions {
+  label: string;
+  options: {
+    label: string;
+    value: string[];
+    pathname: string;
+  }[];
+}
+
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
+  const [currentBuildOptions, setCurrentBuildOptions] =
+    React.useState<BuildOptions[]>();
   const selectRef = React.useRef<StateManager<any> | null>(null);
   const history = useHistory();
   const location = useLocation();
@@ -35,23 +46,25 @@ export function SearchBar() {
   };
 
   const onInputChange = (value: string, { action }: InputActionMeta) => {
-    const inputChange = action === "input-change";
-    if (inputChange && hasDomainSyntax(value)) {
-      lookupDomain(value);
-    } else if (inputChange) {
+    if (action === "input-change") {
       setSearch(value);
     }
   };
 
-  const lookupDomain = async (searchValue: string) => {
-    const connection = new Connection(url);
-    const domainOwner = await getDomainOwner(searchValue, connection);
-    if (domainOwner) {
-      setSearch(domainOwner);
-    } else {
-      setSearch(searchValue);
-    }
-  };
+  React.useEffect(() => {
+    const _buildOptions = async () => {
+      const options = await buildOptions(
+        search,
+        cluster,
+        tokenRegistry,
+        url,
+        clusterInfo?.epochInfo.epoch
+      );
+      setCurrentBuildOptions(options);
+    };
+    _buildOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const resetValue = "" as any;
   return (
@@ -61,12 +74,7 @@ export function SearchBar() {
           <Select
             autoFocus
             ref={(ref) => (selectRef.current = ref)}
-            options={buildOptions(
-              search,
-              cluster,
-              tokenRegistry,
-              clusterInfo?.epochInfo.epoch
-            )}
+            options={currentBuildOptions}
             noOptionsMessage={() => "No Results"}
             placeholder="Search for blocks, accounts, transactions, programs, and tokens"
             value={resetValue}
@@ -213,10 +221,11 @@ function buildTokenOptions(
   }
 }
 
-function buildOptions(
+async function buildOptions(
   rawSearch: string,
   cluster: Cluster,
   tokenRegistry: TokenInfoMap,
+  url: string,
   currentEpoch?: number
 ) {
   const search = rawSearch.trim();
@@ -304,6 +313,34 @@ function buildOptions(
       });
     }
   } catch (err) {}
+
+  if (hasDomainSyntax(search)) {
+    const connection = new Connection(url);
+    const domainOwner = await getDomainOwner(search, connection);
+    if (domainOwner) {
+      options.push({
+        label: "Domain Owner",
+        options: [
+          {
+            label: domainOwner,
+            value: [search],
+            pathname: "/address/" + domainOwner,
+          },
+        ],
+      });
+      options.push({
+        label: "Name Service Account",
+        options: [
+          {
+            label: search,
+            value: [search],
+            pathname: "/address/" + domainOwner,
+          },
+        ],
+      });
+    }
+  }
+
   return options;
 }
 
