@@ -64,6 +64,7 @@ impl MessageProcessor {
         blockhash: Hash,
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
+        consumed_compute_units: &mut Option<&mut u64>,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
@@ -134,6 +135,10 @@ impl MessageProcessor {
                 timings,
             );
             time.stop();
+            if let Some(consumed_compute_units) = consumed_compute_units {
+                **consumed_compute_units =
+                    consumed_compute_units.saturating_add(compute_units_consumed);
+            }
             timings.details.accumulate_program(
                 program_id,
                 time.as_us(),
@@ -282,6 +287,7 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -330,6 +336,7 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
         assert_eq!(
             result,
@@ -368,6 +375,7 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
         assert_eq!(
             result,
@@ -503,6 +511,7 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
         assert_eq!(
             result,
@@ -536,6 +545,7 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
         assert!(result.is_ok());
 
@@ -566,6 +576,7 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -644,7 +655,9 @@ mod tests {
             Hash::default(),
             0,
             0,
+            &mut None,
         );
+
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
