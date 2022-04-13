@@ -260,11 +260,19 @@ pub fn send_wire_transaction_batch_async(
     packets: Vec<Vec<u8>>,
     addr: &SocketAddr,
 ) -> Result<(), TransportError> {
-    let conn = get_connection(addr);
-    match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_batch_async(packets),
-        Connection::Quic(conn) => conn.send_wire_transaction_batch_async(packets),
-    }
+    let (conn, stats) = get_connection(addr);
+    let client_stats = Arc::new(ClientStats::default());
+    let len = packets.len();
+    let r = match conn {
+        Connection::Udp(conn) => {
+            conn.send_wire_transaction_batch_async(packets, client_stats.clone())
+        }
+        Connection::Quic(conn) => {
+            conn.send_wire_transaction_batch_async(packets, client_stats.clone())
+        }
+    };
+    stats.add_client_stats(&client_stats, len, r.is_ok());
+    r
 }
 
 pub fn send_wire_transaction(

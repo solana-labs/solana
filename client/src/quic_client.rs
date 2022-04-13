@@ -132,13 +132,17 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+    fn send_wire_transaction_batch_async(
+        &self,
+        buffers: Vec<Vec<u8>>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
         //drop and detach the task
         let _ = RUNTIME.spawn(async move {
-            let send_vecs = client.send_batch(&buffers);
-            if let Err(e) = send_vecs.await {
+            let send_batch = client.send_batch(&buffers, &stats);
+            if let Err(e) = send_batch.await {
                 warn!("Failed to send transaction batch async to {:?}", e);
                 datapoint_debug!("send-wire-batch-async", ("failure", 1, i64),);
             }

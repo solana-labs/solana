@@ -71,5 +71,9 @@ pub trait TpuConnection {
     where
         T: AsRef<[u8]>;
 
-    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>;
+    fn send_wire_transaction_batch_async(
+        &self,
+        buffers: Vec<Vec<u8>>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()>;
 }
