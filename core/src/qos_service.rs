@@ -158,18 +158,37 @@ impl QosService {
     pub fn update_or_remove_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        transaction_executed_status: impl Iterator<Item = &'a bool>,
+        transaction_commited_status: Option<&Vec<bool>>,
+        bank: &Arc<Bank>,
+    ) {
+        match transaction_commited_status {
+            Some(transaction_commited_status) => Self::update_transaction_costs(
+                transaction_costs,
+                transaction_qos_results,
+                transaction_commited_status,
+                bank,
+            ),
+            None => {
+                Self::remove_transaction_costs(transaction_costs, transaction_qos_results, bank)
+            }
+        }
+    }
+
+    fn update_transaction_costs<'a>(
+        transaction_costs: impl Iterator<Item = &'a TransactionCost>,
+        transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
+        transaction_commited_status: &Vec<bool>,
         bank: &Arc<Bank>,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_costs
             .zip(transaction_qos_results)
-            .zip(transaction_executed_status)
-            .for_each(|((tx_cost, qos_inclusion_result), executed_status)| {
+            .zip(transaction_commited_status)
+            .for_each(|((tx_cost, qos_inclusion_result), commited_status)| {
                 // Only transactions that the qos service included have to be
-                // checked for remove or update/commit
+                // checked for update
                 if qos_inclusion_result.is_ok() {
-                    if *executed_status {
+                    if *commited_status {
                         cost_tracker.update_execution_cost(tx_cost, None);
                     } else {
                         cost_tracker.remove(tx_cost);
@@ -178,6 +197,33 @@ impl QosService {
             });
     }
 
+<<<<<<< HEAD
+=======
+    fn remove_transaction_costs<'a>(
+        transaction_costs: impl Iterator<Item = &'a TransactionCost>,
+        transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
+        bank: &Arc<Bank>,
+    ) {
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        transaction_costs.zip(transaction_qos_results).for_each(
+            |(tx_cost, qos_inclusion_result)| {
+                // Only transactions that the qos service included have to be
+                // removed
+                if qos_inclusion_result.is_ok() {
+                    cost_tracker.remove(tx_cost);
+                }
+            },
+        );
+    }
+
+    // metrics are reported by bank slot
+    pub fn report_metrics(&self, bank: Arc<Bank>) {
+        self.report_sender
+            .send(QosMetrics::BlockBatchUpdate { bank })
+            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
+    }
+
+>>>>>>> 6bc6384f8 (refactor to consolidate info into single return field)
     pub fn accumulate_estimated_transaction_costs(
         &self,
         cost_details: &BatchedTransactionCostDetails,
@@ -436,6 +482,7 @@ mod tests {
 
     #[test]
 <<<<<<< HEAD
+<<<<<<< HEAD
     fn test_async_report_metrics() {
         solana_logger::setup();
         //solana_logger::setup_with_default("solana=info");
@@ -444,6 +491,9 @@ mod tests {
         let txs_count = 128usize;
 =======
     fn test_update_or_remove_transaction_costs_executed() {
+=======
+    fn test_update_or_remove_transaction_costs_commited() {
+>>>>>>> 6bc6384f8 (refactor to consolidate info into single return field)
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -528,7 +578,7 @@ mod tests {
             .map(|_| transfer_tx.clone())
             .collect();
 
-        // assert all tx_costs should be applied to cost_tracker if all execution_results are all Executed
+        // assert all tx_costs should be applied to cost_tracker if all execution_results are all commited
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
@@ -539,11 +589,11 @@ mod tests {
                 total_txs_costs,
                 bank.read_cost_tracker().unwrap().block_cost()
             );
-            let executed_status: Vec<bool> = (0..transaction_count).map(|_| true).collect();
+            let commited_status: Vec<bool> = (0..transaction_count).map(|_| true).collect();
             QosService::update_or_remove_transaction_costs(
                 txs_costs.iter(),
                 qos_results.iter(),
-                executed_status.iter(),
+                Some(&commited_status),
                 &bank,
             );
             assert_eq!(
@@ -558,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_or_remove_transaction_costs_not_executed() {
+    fn test_update_or_remove_transaction_costs_not_commited() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -580,11 +630,10 @@ mod tests {
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
-            let executed_status: Vec<bool> = (0..transaction_count).map(|_| false).collect();
             QosService::update_or_remove_transaction_costs(
                 txs_costs.iter(),
                 qos_results.iter(),
-                executed_status.iter(),
+                None,
                 &bank,
             );
             assert_eq!(0, bank.read_cost_tracker().unwrap().block_cost());
@@ -609,17 +658,17 @@ mod tests {
             .map(|_| transfer_tx.clone())
             .collect();
 
-        // assert only executed tx_costs are applied cost_tracker
+        // assert only commited tx_costs are applied cost_tracker
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
-            let executed_status: Vec<bool> = (0..transaction_count).map(|n| n != 0).collect();
+            let commited_status: Vec<bool> = (0..transaction_count).map(|n| n != 0).collect();
             QosService::update_or_remove_transaction_costs(
                 txs_costs.iter(),
                 qos_results.iter(),
-                executed_status.iter(),
+                Some(&commited_status),
                 &bank,
             );
             let expected_committed_units: u64 = txs_costs
