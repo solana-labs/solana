@@ -58,9 +58,18 @@ impl IndexEntry {
             .expect("New storage offset must fit into 7 bytes!")
     }
 
+    /// return closest bucket index fit for the slot slice.
+    /// Since bucket size is 2^index, the return value is
+    ///     min index, such that 2^index >= num_slots
+    ///     index = ceiling(log2(num_slots))
+    /// special case, when slot slice empty, return 0th index.
     pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
         // Compute the ceiling of log2 for integer
-        (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
+        if num_slots == 0 {
+            0
+        } else {
+            (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
+        }
     }
 
     pub fn data_bucket_ix(&self) -> u64 {
