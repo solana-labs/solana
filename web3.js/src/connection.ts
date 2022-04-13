@@ -3889,7 +3889,9 @@ export class Connection {
       let disableCache = this._disableBlockhashCaching;
       for (;;) {
         if (!transaction.recentBlockhash) {
-          transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+          transaction.recentBlockhash = await this._recentBlockhash(
+            disableCache,
+          );
         }
 
         if (!signers) break;
