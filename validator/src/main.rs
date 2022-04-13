@@ -1149,7 +1149,7 @@ pub fn main() {
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
-                .help("When this is set to true, the system will use QUIC to send transactions."),
+                .help("Use QUIC to send transactions."),
         )
         .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
