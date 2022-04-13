@@ -228,8 +228,11 @@ pub enum StakeInstruction {
     /// # Account references
     ///   None
     ///
-    /// The minimum delegation will be returned via the transaction context's returndata.
-    /// Use `get_return_data()` to retrieve the result.
+    /// Returns the minimum delegation as a little-endian encoded u64 value.
+    /// Programs can use the [`get_minimum_delegation()`] helper function to invoke and
+    /// retrieve the return value for this instruction.
+    ///
+    /// [`get_minimum_delegation()`]: super::tools::get_minimum_delegation
     GetMinimumDelegation,
 }
 
