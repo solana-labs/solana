@@ -60,7 +60,7 @@ impl DropCallback for SendDroppedBankCallback {
             panic!("bank DropCallback called when bank is not dropping");
         }
 
-        let bank_id = bank.bank_id() & 0xefff_ffff_ffff_ffff;
+        let bank_id = bank.bank_id() & !(1 << 63);
         if let Err(e) = self.sender.send((bank.slot(), bank_id)) {
             warn!("Error sending dropped banks: {:?}", e);
         }
