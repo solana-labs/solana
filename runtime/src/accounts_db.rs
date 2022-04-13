@@ -4043,7 +4043,7 @@ impl AccountsDb {
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
-    /// comment below for more explanation.  
+    /// comment below for more explanation.
     ///   * `is_serialized_with_abs` - indicates whehter this call runs sequentially with all other
     ///        accounts_db relevant calls, such as shrinking, purging etc., in account background
     ///        service.
