@@ -930,18 +930,21 @@ fn process_loader_upgradeable_instruction(
         }
         UpgradeableLoaderInstruction::Close => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let recipient_account = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
-            )?;
-            if close_account.unsigned_key() == recipient_account.unsigned_key() {
+            if instruction_context.get_index_in_transaction(first_instruction_account)?
+                == instruction_context
+                    .get_index_in_transaction(first_instruction_account.saturating_add(1))?
+            {
                 ic_logger_msg!(
                     log_collector,
                     "Recipient is the same as the account being closed"
                 );
                 return Err(InstructionError::InvalidArgument);
             }
+            let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let recipient_account = keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account.saturating_add(1),
+            )?;
 
             match close_account.state()? {
                 UpgradeableLoaderState::Uninitialized => {
