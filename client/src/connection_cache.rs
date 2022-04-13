@@ -150,7 +150,7 @@ pub fn set_use_quic(use_quic: bool) {
 
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
-pub fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
+fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
     let mut map = (*CONNECTION_MAP).lock().unwrap();
 
     if map
