@@ -26,6 +26,13 @@ pub struct DosClientParameters {
     pub entrypoint_addr: SocketAddr,
 
     #[clap(
+        long = "faucet",
+        parse(try_from_str = addr_parser),
+        help = "Faucet address"
+    )]
+    pub faucet_addr: Option<SocketAddr>,
+
+    #[clap(
         long,
         default_value = "128",
         required_if_eq("data-type", "random"),
@@ -56,7 +63,11 @@ pub struct TransactionParams {
     )]
     pub num_signatures: usize,
 
-    #[clap(long, help = "Generate a valid blockhash for transaction")]
+    #[clap(
+        long,
+        requires("transaction-type"),
+        help = "Generate a valid blockhash for transaction"
+    )]
     pub valid_blockhash: bool,
 
     #[clap(long, help = "Generate valid signature(s) for transaction")]
@@ -66,17 +77,19 @@ pub struct TransactionParams {
     pub unique_transactions: bool,
 
     #[clap(
-        long = "payer",
-        help = "Payer's keypair file to fund transactions [Optional]"
-    )]
-    pub payer_filename: Option<String>,
-
-    #[clap(
         long,
         default_value = "2",
         help = "Number of threads generating transactions"
     )]
     pub num_gen_threads: usize,
+
+    #[clap(
+        long,
+        arg_enum,
+        requires("valid-blockhash"),
+        help = "Type of transaction to be sent [Optional]"
+    )]
+    pub transaction_type: Option<TransactionType>,
 }
 
 #[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
@@ -102,10 +115,17 @@ pub enum DataType {
     Transaction,
 }
 
+#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone)]
+pub enum TransactionType {
+    SingleTransfer,
+    MultiTransfer,
+    AccountCreation,
+}
+
 fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
     match solana_net_utils::parse_host_port(addr) {
         Ok(v) => Ok(v),
-        Err(_) => Err("failed to parse entrypoint address"),
+        Err(_) => Err("failed to parse address"),
     }
 }
 
@@ -121,21 +141,10 @@ fn validate_input(params: &DosClientParameters) {
 
     if params.data_type != DataType::Transaction {
         let tp = &params.transaction_params;
-        if tp.valid_blockhash
-            || tp.valid_signatures
-            || tp.unique_transactions
-            || tp.payer_filename.is_some()
-        {
-            eprintln!("Arguments valid-blockhash, valid-sign, unique-trans, payer are ignored if data-type != transaction");
+        if tp.valid_blockhash || tp.valid_signatures || tp.unique_transactions {
+            eprintln!("Arguments valid-blockhash, valid-sign, unique-trans are ignored if data-type != transaction");
             exit(1);
         }
-    }
-
-    if params.transaction_params.payer_filename.is_some()
-        && params.transaction_params.valid_signatures
-    {
-        eprintln!("Arguments valid-signatures is ignored if payer is provided");
-        exit(1);
     }
 }
 
