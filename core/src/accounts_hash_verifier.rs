@@ -139,7 +139,6 @@ impl AccountsHashVerifier {
                     check_hash: false,
                     ancestors: None,
                     use_write_cache: false,
-                    epoch_schedule: &accounts_package.epoch_schedule,
                     rent_collector: &accounts_package.rent_collector,
                 },
                 &sorted_storages,

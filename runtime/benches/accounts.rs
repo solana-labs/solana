@@ -112,7 +112,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(
         0,
         &ancestors,
-        &EpochSchedule::default(),
         &RentCollector::default(),
     );
     let test_hash_calculation = false;
@@ -122,7 +121,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             &ancestors,
             total_lamports,
             test_hash_calculation,
-            &EpochSchedule::default(),
             &RentCollector::default()
         ))
     });
@@ -145,7 +143,6 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
         accounts.accounts_db.update_accounts_hash(
             0,
             &ancestors,
-            &EpochSchedule::default(),
             &RentCollector::default(),
         );
     });

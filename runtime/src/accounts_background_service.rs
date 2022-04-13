@@ -233,7 +233,6 @@ impl SnapshotRequestHandler {
                             check_hash,
                             ancestors: None,
                             use_write_cache: false,
-                            epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
                         },
                     ).unwrap();
