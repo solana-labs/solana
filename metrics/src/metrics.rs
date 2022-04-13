@@ -80,7 +80,7 @@ impl InfluxDbMetricsWriter {
 impl MetricsWriter for InfluxDbMetricsWriter {
     fn write(&self, points: Vec<DataPoint>) {
         if let Some(ref write_url) = self.write_url {
-            debug!("submitting {} points", points.len());
+            error!("haha submitting {} points", points.len());
 
             let host_id = HOST_ID.read().unwrap();
 
@@ -162,6 +162,11 @@ impl MetricsAgent {
     fn collect_points(
         points_map: &mut HashMap<log::Level, (CounterMap, Vec<DataPoint>)>,
     ) -> Vec<DataPoint> {
+        // let mut size = points_map.capacity() * size_of::<log::Level>;
+        // for (_, v) in points_map.iter() {
+        //     size += v.1.capacity() * size_of::<DataPoint>();
+        // }
+
         let points: Vec<DataPoint> = [
             Level::Error,
             Level::Warn,
