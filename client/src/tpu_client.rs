@@ -1,7 +1,7 @@
 use {
     crate::{
         client_error::ClientError,
-        connection_cache::send_wire_transaction,
+        connection_cache::send_wire_transaction_async,
         pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
         rpc_client::RpcClient,
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
@@ -87,11 +87,11 @@ impl TpuClient {
     /// size
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
         let wire_transaction = serialize(transaction).expect("serialization should succeed");
-        self.send_wire_transaction(&wire_transaction)
+        self.send_wire_transaction(wire_transaction)
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
-    pub fn send_wire_transaction(&self, wire_transaction: &[u8]) -> bool {
+    pub fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
         self.try_send_wire_transaction(wire_transaction).is_ok()
     }
 
@@ -100,12 +100,12 @@ impl TpuClient {
     /// Returns the last error if all sends fail
     pub fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
         let wire_transaction = serialize(transaction).expect("serialization should succeed");
-        self.try_send_wire_transaction(&wire_transaction)
+        self.try_send_wire_transaction(wire_transaction)
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
-    fn try_send_wire_transaction(&self, wire_transaction: &[u8]) -> TransportResult<()> {
+    fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         let mut last_error: Option<TransportError> = None;
         let mut some_success = false;
 
@@ -113,7 +113,7 @@ impl TpuClient {
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots)
         {
-            let result = send_wire_transaction(wire_transaction, &tpu_address);
+            let result = send_wire_transaction_async(wire_transaction.clone(), &tpu_address);
             if let Err(err) = result {
                 last_error = Some(err);
             } else {
