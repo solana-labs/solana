@@ -1,6 +1,7 @@
 pub use goauth::scopes::Scope;
 /// A module for managing a Google API access token
 use {
+    crate::CredentialType,
     goauth::{
         auth::{JwtClaims, Token},
         credentials::Credentials,
@@ -8,6 +9,7 @@ use {
     log::*,
     smpl_jwt::Jwt,
     std::{
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
             {Arc, RwLock},
@@ -27,6 +29,10 @@ fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
         .map_err(|err| format!("Failed to read GCP credentials from {}: {}", path, err))
 }
 
+fn load_stringified_credentials(credential: String) -> Result<Credentials, String> {
+    Credentials::from_str(&credential).map_err(|err| format!("{}", err))
+}
+
 #[derive(Clone)]
 pub struct AccessToken {
     credentials: Credentials,
@@ -36,8 +42,12 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
-    pub async fn new(scope: Scope, credential_filepath: Option<String>) -> Result<Self, String> {
-        let credentials = load_credentials(credential_filepath)?;
+    pub async fn new(scope: Scope, credential_type: CredentialType) -> Result<Self, String> {
+        let credentials = match credential_type {
+            CredentialType::Filepath(fp) => load_credentials(fp)?,
+            CredentialType::Stringified(s) => load_stringified_credentials(s)?,
+        };
+
         if let Err(err) = credentials.rsa_key() {
             Err(format!("Invalid rsa key: {}", err))
         } else {
