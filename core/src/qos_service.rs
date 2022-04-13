@@ -177,14 +177,14 @@ impl QosService {
     pub fn update_or_remove_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        transaction_commited_status: Option<&Vec<bool>>,
+        transaction_committed_status: Option<&Vec<bool>>,
         bank: &Arc<Bank>,
     ) {
-        match transaction_commited_status {
-            Some(transaction_commited_status) => Self::update_transaction_costs(
+        match transaction_committed_status {
+            Some(transaction_committed_status) => Self::update_transaction_costs(
                 transaction_costs,
                 transaction_qos_results,
-                transaction_commited_status,
+                transaction_committed_status,
                 bank,
             ),
             None => {
@@ -196,18 +196,18 @@ impl QosService {
     fn update_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        transaction_commited_status: &Vec<bool>,
+        transaction_committed_status: &Vec<bool>,
         bank: &Arc<Bank>,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_costs
             .zip(transaction_qos_results)
-            .zip(transaction_commited_status)
-            .for_each(|((tx_cost, qos_inclusion_result), commited_status)| {
+            .zip(transaction_committed_status)
+            .for_each(|((tx_cost, qos_inclusion_result), was_committed)| {
                 // Only transactions that the qos service included have to be
                 // checked for update
                 if qos_inclusion_result.is_ok() {
-                    if *commited_status {
+                    if *was_committed {
                         cost_tracker.update_execution_cost(tx_cost, None);
                     } else {
                         cost_tracker.remove(tx_cost);
