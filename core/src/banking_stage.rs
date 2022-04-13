@@ -115,10 +115,8 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // A result that indicates whether transactions were successfully
     // committed into the Poh stream. If so, the result tells us
     // how many such transactions were committed
-    commit_transactions_result: Result<(), PohRecorderError>,
+    commit_transactions_result: Result<Vec<bool>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
-    // True if transaction was-executed()
-    transactions_execute_and_record_status: Vec<bool>,
 }
 
 #[derive(Debug, Default)]
@@ -1259,7 +1257,6 @@ impl BankingStage {
                 retryable_transaction_indexes,
                 commit_transactions_result: Err(e),
                 execute_and_commit_timings,
-                transactions_execute_and_record_status,
             };
         }
 
@@ -1344,9 +1341,8 @@ impl BankingStage {
             executed_transactions_count,
             executed_with_successful_result_count,
             retryable_transaction_indexes,
-            commit_transactions_result: Ok(()),
+            commit_transactions_result: Ok(transactions_execute_and_record_status),
             execute_and_commit_timings,
-            transactions_execute_and_record_status,
         }
     }
 
@@ -1403,14 +1399,14 @@ impl BankingStage {
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
             ref execute_and_commit_timings,
-            ref transactions_execute_and_record_status,
+            ref commit_transactions_result,
             ..
         } = execute_and_commit_transactions_output;
 
         QosService::update_or_remove_transaction_costs(
             transaction_costs.iter(),
             transactions_qos_results.iter(),
-            transactions_execute_and_record_status.iter(),
+            commit_transactions_result.as_ref().ok(),
             bank,
         );
 
