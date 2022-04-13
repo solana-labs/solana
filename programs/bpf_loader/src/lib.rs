@@ -442,13 +442,15 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
 
-            let authority = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
-            )?;
+            let authority_key = Some(
+                *transaction_context.get_key_of_account_at_index(
+                    instruction_context
+                        .get_index_in_transaction(first_instruction_account.saturating_add(1))?,
+                )?,
+            );
 
             buffer.set_state(&UpgradeableLoaderState::Buffer {
-                authority_address: Some(*authority.unsigned_key()),
+                authority_address: authority_key,
             })?;
         }
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
@@ -464,7 +466,13 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Buffer is immutable");
                     return Err(InstructionError::Immutable); // TODO better error code
                 }
-                if authority_address != Some(*authority.unsigned_key()) {
+                let authority_key =
+                    Some(*transaction_context.get_key_of_account_at_index(
+                        instruction_context.get_index_in_transaction(
+                            first_instruction_account.saturating_add(1),
+                        )?,
+                    )?);
+                if authority_address != authority_key {
                     ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
                     return Err(InstructionError::IncorrectAuthority);
                 }
@@ -485,10 +493,13 @@ fn process_loader_upgradeable_instruction(
         }
         UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len } => {
             instruction_context.check_number_of_instruction_accounts(4)?;
+            let payer_key = *transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(first_instruction_account)?,
+            )?;
             let payer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let programdata = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
+            let programdata_key = *transaction_context.get_key_of_account_at_index(
+                instruction_context
+                    .get_index_in_transaction(first_instruction_account.saturating_add(1))?,
             )?;
             let program = keyed_account_at_index(
                 keyed_accounts,
@@ -506,7 +517,12 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(7),
             )?;
-            let upgrade_authority_address = Some(*authority.unsigned_key());
+            let authority_key = Some(
+                *transaction_context.get_key_of_account_at_index(
+                    instruction_context
+                        .get_index_in_transaction(first_instruction_account.saturating_add(7))?,
+                )?,
+            );
             let upgrade_authority_signer = authority.signer_key().is_none();
 
             // Verify Program account
@@ -529,7 +545,7 @@ fn process_loader_upgradeable_instruction(
             // Verify Buffer account
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
-                if authority_address != upgrade_authority_address {
+                if authority_address != authority_key {
                     ic_logger_msg!(log_collector, "Buffer and upgrade authority don't match");
                     return Err(InstructionError::IncorrectAuthority);
                 }
@@ -569,7 +585,7 @@ fn process_loader_upgradeable_instruction(
 
             let (derived_address, bump_seed) =
                 Pubkey::find_program_address(&[new_program_id.as_ref()], program_id);
-            if derived_address != *programdata.unsigned_key() {
+            if derived_address != programdata_key {
                 ic_logger_msg!(log_collector, "ProgramData address is not derived");
                 return Err(InstructionError::InvalidArgument);
             }
@@ -586,8 +602,8 @@ fn process_loader_upgradeable_instruction(
             }
 
             let mut instruction = system_instruction::create_account(
-                payer.unsigned_key(),
-                programdata.unsigned_key(),
+                &payer_key,
+                &programdata_key,
                 1.max(rent.minimum_balance(programdata_len)),
                 programdata_len as u64,
                 program_id,
@@ -635,7 +651,7 @@ fn process_loader_upgradeable_instruction(
             // Update the ProgramData account and record the program bits
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
                 slot: clock.slot,
-                upgrade_authority_address,
+                upgrade_authority_address: authority_key,
             })?;
             programdata
                 .try_account_ref_mut()?
@@ -655,7 +671,7 @@ fn process_loader_upgradeable_instruction(
 
             // Update the Program account
             program.set_state(&UpgradeableLoaderState::Program {
-                programdata_address: *programdata.unsigned_key(),
+                programdata_address: programdata_key,
             })?;
             program.try_account_ref_mut()?.set_executable(true);
 
@@ -671,6 +687,9 @@ fn process_loader_upgradeable_instruction(
         }
         UpgradeableLoaderInstruction::Upgrade => {
             instruction_context.check_number_of_instruction_accounts(3)?;
+            let programdata_key = *transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(first_instruction_account)?,
+            )?;
             let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let program = keyed_account_at_index(
                 keyed_accounts,
@@ -684,6 +703,12 @@ fn process_loader_upgradeable_instruction(
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             instruction_context.check_number_of_instruction_accounts(7)?;
+            let authority_key = Some(
+                *transaction_context.get_key_of_account_at_index(
+                    instruction_context
+                        .get_index_in_transaction(first_instruction_account.saturating_add(6))?,
+                )?,
+            );
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(6),
@@ -707,7 +732,7 @@ fn process_loader_upgradeable_instruction(
                 programdata_address,
             } = program.state()?
             {
-                if programdata_address != *programdata.unsigned_key() {
+                if programdata_address != programdata_key {
                     ic_logger_msg!(log_collector, "Program and ProgramData account mismatch");
                     return Err(InstructionError::InvalidArgument);
                 }
@@ -721,7 +746,7 @@ fn process_loader_upgradeable_instruction(
             // Verify Buffer account
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
-                if authority_address != Some(*authority.unsigned_key()) {
+                if authority_address != authority_key {
                     ic_logger_msg!(log_collector, "Buffer and upgrade authority don't match");
                     return Err(InstructionError::IncorrectAuthority);
                 }
@@ -770,7 +795,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Program not upgradeable");
                     return Err(InstructionError::Immutable);
                 }
-                if upgrade_authority_address != Some(*authority.unsigned_key()) {
+                if upgrade_authority_address != authority_key {
                     ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
                     return Err(InstructionError::IncorrectAuthority);
                 }
@@ -803,16 +828,12 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(3),
             )?;
-            let authority = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(6),
-            )?;
 
             // Update the ProgramData account, record the upgraded data, and zero
             // the rest
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
                 slot: clock.slot,
-                upgrade_authority_address: Some(*authority.unsigned_key()),
+                upgrade_authority_address: authority_key,
             })?;
             programdata
                 .try_account_ref_mut()?
@@ -854,14 +875,20 @@ fn process_loader_upgradeable_instruction(
         UpgradeableLoaderInstruction::SetAuthority => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let present_authority_key = transaction_context.get_key_of_account_at_index(
+                instruction_context
+                    .get_index_in_transaction(first_instruction_account.saturating_add(1))?,
+            )?;
             let present_authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(1),
             )?;
-            let new_authority =
-                keyed_account_at_index(keyed_accounts, first_instruction_account.saturating_add(2))
-                    .ok()
-                    .map(|account| account.unsigned_key());
+            let new_authority = instruction_context
+                .get_index_in_transaction(first_instruction_account.saturating_add(2))
+                .and_then(|index_in_transaction| {
+                    transaction_context.get_key_of_account_at_index(index_in_transaction)
+                })
+                .ok();
 
             match account.state()? {
                 UpgradeableLoaderState::Buffer { authority_address } => {
@@ -873,7 +900,7 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(log_collector, "Buffer is immutable");
                         return Err(InstructionError::Immutable);
                     }
-                    if authority_address != Some(*present_authority.unsigned_key()) {
+                    if authority_address != Some(*present_authority_key) {
                         ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
                         return Err(InstructionError::IncorrectAuthority);
                     }
@@ -893,7 +920,7 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(log_collector, "Program not upgradeable");
                         return Err(InstructionError::Immutable);
                     }
-                    if upgrade_authority_address != Some(*present_authority.unsigned_key()) {
+                    if upgrade_authority_address != Some(*present_authority_key) {
                         ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
                         return Err(InstructionError::IncorrectAuthority);
                     }
