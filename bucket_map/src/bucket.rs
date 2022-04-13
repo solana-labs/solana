@@ -242,8 +242,8 @@ impl<T: Clone + Copy> Bucket<T> {
         data: &[T],
         ref_count: u64,
     ) -> Result<(), BucketMapError> {
-        // data must not be empty
-        assert!(data.len() > 0);
+        // data slice must not be empty
+        assert!(!data.is_empty());
         let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data.len() as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
