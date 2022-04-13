@@ -1982,3 +1982,18 @@ fn test_stake_checked_instructions() {
     assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
     assert_eq!(current_lockup.custodian, custodian_pubkey);
 }
+
+#[test]
+fn test_stake_minimum_delegation() {
+    let test_validator =
+        TestValidator::with_no_fees(Pubkey::new_unique(), None, SocketAddrSpace::Unspecified);
+    let mut config = CliConfig::recent_for_tests();
+    config.json_rpc_url = test_validator.rpc_url();
+
+    config.command = CliCommand::StakeMinimumDelegation {
+        use_lamports_unit: true,
+    };
+
+    let result = process_command(&config);
+    assert!(matches!(result, Ok(..)));
+}
