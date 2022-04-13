@@ -364,19 +364,17 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
 
 pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
 
-// stringified = truev, alue is a stringified credential
-// stringified = false, value is a filepath (default)
 #[derive(Debug)]
-pub struct CredentialOption {
-    pub stringified: bool,
-    pub value: String,
+pub enum CredentialType {
+    Filepath(Option<String>),
+    Stringified(String),
 }
 
 #[derive(Debug)]
 pub struct LedgerStorageConfig {
     pub read_only: bool,
     pub timeout: Option<std::time::Duration>,
-    pub credential_option: Option<CredentialOption>,
+    pub credential_type: CredentialType,
     pub instance_name: String,
 }
 
@@ -385,7 +383,7 @@ impl Default for LedgerStorageConfig {
         Self {
             read_only: true,
             timeout: None,
-            credential_option: None,
+            credential_type: CredentialType::Filepath(None),
             instance_name: DEFAULT_INSTANCE_NAME.to_string(),
         }
     }
@@ -400,33 +398,40 @@ impl LedgerStorage {
     pub async fn new(
         read_only: bool,
         timeout: Option<std::time::Duration>,
-        credential_option: Option<CredentialOption>,
     ) -> Result<Self> {
         Self::new_with_config(LedgerStorageConfig {
             read_only,
             timeout,
-            credential_option,
             ..LedgerStorageConfig::default()
         })
         .await
     }
-
+    
     pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
         let LedgerStorageConfig {
             read_only,
             timeout,
-            credential_option,
             instance_name,
+            credential_type,
         } = config;
         let connection = bigtable::BigTableConnection::new(
             instance_name.as_str(),
             read_only,
             timeout,
-            credential_option,
+            credential_type,
         )
         .await?;
         Ok(Self { connection })
     }
+
+    pub async fn new_with_stringified_credential(credential: String) -> Result<Self> {
+        Self::new_with_config(LedgerStorageConfig {
+                credential_type: CredentialType::Stringified(credential),
+                ..LedgerStorageConfig::default()
+            })
+            .await
+    }
+    
 
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {

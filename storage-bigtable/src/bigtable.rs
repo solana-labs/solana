@@ -4,7 +4,7 @@ use {
     crate::{
         access_token::{AccessToken, Scope},
         compression::{compress_best, decompress},
-        root_ca_certificate, CredentialOption,
+        root_ca_certificate, CredentialType,
     },
     backoff::{future::retry, ExponentialBackoff},
     log::*,
@@ -125,7 +125,7 @@ impl BigTableConnection {
         instance_name: &str,
         read_only: bool,
         timeout: Option<Duration>,
-        credential_option: Option<CredentialOption>,
+        credential_option: CredentialType,
     ) -> Result<Self> {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {

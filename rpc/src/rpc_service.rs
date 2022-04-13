@@ -36,6 +36,7 @@ use {
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
         native_token::lamports_to_sol, pubkey::Pubkey,
     },
+    solana_storage_bigtable::CredentialType,
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     std::{
         collections::HashSet,
@@ -385,7 +386,7 @@ impl JsonRpcService {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
                     read_only: !enable_bigtable_ledger_upload,
                     timeout,
-                    credential_option: None,
+                    credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                 };
                 runtime

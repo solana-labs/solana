@@ -1,7 +1,7 @@
 pub use goauth::scopes::Scope;
 /// A module for managing a Google API access token
 use {
-    crate::CredentialOption,
+    crate::CredentialType,
     goauth::{
         auth::{JwtClaims, Token},
         credentials::Credentials,
@@ -29,11 +29,12 @@ fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
         .map_err(|err| format!("Failed to read GCP credentials from {}: {}", path, err))
 }
 
-fn load_stringified_credentials(credential: Option<String>) -> Result<Credentials, String> {
-    match credential {
-        Some(s) => Credentials::from_str(&s).map_err(|err| format!("{}", err)),
-        None => Err("stringified credential is not provided".to_string()),
-    }
+fn load_stringified_credentials(credential: String) -> Result<Credentials, String> {
+    Credentials::from_str(&credential).map_err(|err| format!("{}", err))
+    // match credential {
+    //     Some(s) => Credentials::from_str(&s).map_err(|err| format!("{}", err)),
+    //     None => Err("stringified credential is not provided".to_string()),
+    // }
 }
 
 #[derive(Clone)]
@@ -45,17 +46,12 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
-    pub async fn new(scope: Scope, credentials: Option<CredentialOption>) -> Result<Self, String> {
-        let credentials = match credentials {
-            Some(c) => {
-                if c.stringified {
-                    load_stringified_credentials(Some(c.value))?
-                } else {
-                    load_credentials(Some(c.value))?
-                }
-            }
-            None => load_credentials(None)?,
+    pub async fn new(scope: Scope, credential_type: CredentialType) -> Result<Self, String> {
+        let credentials = match credential_type {
+            CredentialType::Filepath(fp)=> load_credentials(fp)?,
+            CredentialType::Stringified(s) => load_stringified_credentials(s)?,
         };
+
         if let Err(err) = credentials.rsa_key() {
             Err(format!("Invalid rsa key: {}", err))
         } else {
