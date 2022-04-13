@@ -1,4 +1,5 @@
 //! Utility functions
+use crate::program_error::ProgramError;
 
 /// Helper function for programs to call [`GetMinimumDelegation`] and then fetch the return data
 ///
@@ -7,23 +8,10 @@
 ///
 /// [`GetMinimumDelegation`]: super::instruction::StakeInstruction::GetMinimumDelegation
 /// [`get_return_data()`]: crate::program::get_return_data
-pub fn get_minimum_delegation() -> u64 {
+pub fn get_minimum_delegation() -> Result<u64, ProgramError> {
     let instruction = super::instruction::get_minimum_delegation();
-    // SAFETY: The `.unwrap()` is safe because `invoke_unchecked()` will never actually return an
-    // error to a running program because any CPI's that fail will halt the entire program.
-    crate::program::invoke_unchecked(&instruction, &[]).unwrap();
-    let minimum_delegation = get_minimum_delegation_return_data();
-
-    #[cfg(target_arch = "bpf")]
-    {
-        // SAFETY: The `.unwrap()` is safe because the only way `get_minimum_delegation_return_data()`
-        // can fail after doing the CPI is if the stake program is broken.
-        minimum_delegation.unwrap()
-    }
-    #[cfg(not(target_arch = "bpf"))]
-    {
-        minimum_delegation.unwrap_or_default()
-    }
+    crate::program::invoke_unchecked(&instruction, &[])?;
+    get_minimum_delegation_return_data().ok_or(ProgramError::InvalidInstructionData)
 }
 
 /// Helper function for programs to get the return data after calling [`GetMinimumDelegation`]
