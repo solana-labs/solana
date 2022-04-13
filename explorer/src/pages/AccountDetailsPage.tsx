@@ -271,7 +271,7 @@ function DetailsSections({
           account. Please be cautious sending SOL to this account.
         </div>
       )}
-      {<InfoSection account={account} />}
+      <InfoSection account={account} />
       <MoreSection
         account={account}
         tab={moreTab}
@@ -517,17 +517,17 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
     ),
   });
 
-  const anchorAccountTab: Tab = {
+  const accountDataTab: Tab = {
     slug: "anchor-account",
-    title: "Anchor Account",
+    title: "Anchor Data",
     path: "/anchor-account",
   };
   tabComponents.push({
-    tab: anchorAccountTab,
+    tab: accountDataTab,
     component: (
-      <React.Suspense key={anchorAccountTab.slug} fallback={<></>}>
-        <AnchorAccountLink
-          tab={anchorAccountTab}
+      <React.Suspense key={accountDataTab.slug} fallback={<></>}>
+        <AccountDataLink
+          tab={accountDataTab}
           address={pubkey.toString()}
           programId={account.details?.owner}
         />
@@ -567,7 +567,7 @@ function AnchorProgramLink({
   );
 }
 
-function AnchorAccountLink({
+function AccountDataLink({
   address,
   tab,
   programId,

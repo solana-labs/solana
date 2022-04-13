@@ -3,6 +3,7 @@ import { Cluster } from "providers/cluster";
 import { TableCardBody } from "components/common/TableCardBody";
 import { InstructionLogs } from "utils/program-logs";
 import { ProgramName } from "utils/anchor";
+import React from "react";
 
 export function ProgramLogsCardBody({
   message,
