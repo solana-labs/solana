@@ -480,6 +480,7 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Invalid Buffer account");
                 return Err(InstructionError::InvalidAccountData);
             }
+            drop(buffer);
             write_program_data(
                 first_instruction_account,
                 UpgradeableLoaderState::buffer_data_offset()?.saturating_add(offset as usize),
@@ -941,26 +942,25 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
             let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let recipient_account = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
-            )?;
-
+            let close_key = *close_account.unsigned_key();
             match close_account.state()? {
                 UpgradeableLoaderState::Uninitialized => {
+                    let close_lamports = close_account.lamports()?;
+                    close_account.try_account_ref_mut()?.set_lamports(0);
+                    drop(close_account);
+                    let recipient_account = keyed_account_at_index(
+                        keyed_accounts,
+                        first_instruction_account.saturating_add(1),
+                    )?;
                     recipient_account
                         .try_account_ref_mut()?
-                        .checked_add_lamports(close_account.lamports()?)?;
-                    close_account.try_account_ref_mut()?.set_lamports(0);
+                        .checked_add_lamports(close_lamports)?;
 
-                    ic_logger_msg!(
-                        log_collector,
-                        "Closed Uninitialized {}",
-                        close_account.unsigned_key()
-                    );
+                    ic_logger_msg!(log_collector, "Closed Uninitialized {}", close_key);
                 }
                 UpgradeableLoaderState::Buffer { authority_address } => {
                     instruction_context.check_number_of_instruction_accounts(3)?;
+                    drop(close_account);
                     common_close_account(
                         &authority_address,
                         transaction_context,
@@ -968,21 +968,19 @@ fn process_loader_upgradeable_instruction(
                         &log_collector,
                     )?;
 
-                    ic_logger_msg!(
-                        log_collector,
-                        "Closed Buffer {}",
-                        close_account.unsigned_key()
-                    );
+                    ic_logger_msg!(log_collector, "Closed Buffer {}", close_key);
                 }
                 UpgradeableLoaderState::ProgramData {
                     slot: _,
                     upgrade_authority_address: authority_address,
                 } => {
                     instruction_context.check_number_of_instruction_accounts(4)?;
+                    drop(close_account);
                     let program_account = keyed_account_at_index(
                         keyed_accounts,
                         first_instruction_account.saturating_add(3),
                     )?;
+                    let program_key = *program_account.unsigned_key();
 
                     if !program_account.is_writable() {
                         ic_logger_msg!(log_collector, "Program account is not writable");
@@ -997,7 +995,7 @@ fn process_loader_upgradeable_instruction(
                         UpgradeableLoaderState::Program {
                             programdata_address,
                         } => {
-                            if programdata_address != *close_account.unsigned_key() {
+                            if programdata_address != close_key {
                                 ic_logger_msg!(
                                     log_collector,
                                     "ProgramData account does not match ProgramData account"
@@ -1005,6 +1003,7 @@ fn process_loader_upgradeable_instruction(
                                 return Err(InstructionError::InvalidArgument);
                             }
 
+                            drop(program_account);
                             common_close_account(
                                 &authority_address,
                                 transaction_context,
@@ -1018,11 +1017,7 @@ fn process_loader_upgradeable_instruction(
                         }
                     }
 
-                    ic_logger_msg!(
-                        log_collector,
-                        "Closed Program {}",
-                        program_account.unsigned_key()
-                    );
+                    ic_logger_msg!(log_collector, "Closed Program {}", program_key);
                 }
                 _ => {
                     ic_logger_msg!(log_collector, "Account does not support closing");
@@ -1088,9 +1083,11 @@ fn process_loader_instruction(
         );
         return Err(InstructionError::IncorrectProgramId);
     }
+    let is_program_signer = program.signer_key().is_some();
+    drop(program);
     match limited_deserialize(instruction_data)? {
         LoaderInstruction::Write { offset, bytes } => {
-            if program.signer_key().is_none() {
+            if !is_program_signer {
                 ic_msg!(invoke_context, "Program account did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
             }
@@ -1102,11 +1099,10 @@ fn process_loader_instruction(
             )?;
         }
         LoaderInstruction::Finalize => {
-            if program.signer_key().is_none() {
+            if !is_program_signer {
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-
             let executor =
                 create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
