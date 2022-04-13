@@ -67,6 +67,16 @@ struct BankDropQueueStats {
 }
 
 impl BankDropQueueStats {
+    /// increase event counter
+    fn increase(&self, event: BankDropQueueEvent) {
+        let counter = match event {
+            BankDropQueueEvent::Full => &self.queue_full,
+            BankDropQueueEvent::Disconnected => &self.queue_disconnected,
+        };
+
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// submit bank drop signal queue event counters
     fn report(&self, event: BankDropQueueEvent) {
         let counter = match event {
@@ -80,8 +90,6 @@ impl BankDropQueueStats {
         };
 
         let ts = solana_sdk::timing::timestamp();
-
-        counter.fetch_add(1, Ordering::Relaxed);
         let last_report_time = self.report_time.load(Ordering::Acquire);
         if ts.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL {
             let val = counter.load(Ordering::Relaxed);
@@ -110,8 +118,10 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
+        BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Full);
         match self.sender.try_send((bank.slot(), bank.bank_id())) {
             Err(TrySendError::Full(_)) => {
+                BANK_DROP_QUEUE_STATS.increase(BankDropQueueEvent::Full);
                 BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Full);
 
                 // send again and block until success
