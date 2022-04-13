@@ -385,7 +385,7 @@ impl JsonRpcService {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
                     read_only: !enable_bigtable_ledger_upload,
                     timeout,
-                    credential_path: None,
+                    credential_option: None,
                     instance_name: bigtable_instance_name.clone(),
                 };
                 runtime
