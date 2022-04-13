@@ -44,7 +44,8 @@ use {
         feature_set::{
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
             disable_bpf_unresolved_symbols_at_runtime, disable_deprecated_loader,
-            do_support_realloc, reduce_required_deploy_balance, requestable_heap_size,
+            do_support_realloc, error_on_syscall_bpf_function_hash_collisions,
+            reduce_required_deploy_balance, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         keyed_account::keyed_account_at_index,
@@ -142,7 +143,9 @@ pub fn create_executor(
             && invoke_context
                 .feature_set
                 .is_active(&disable_bpf_deprecated_load_instructions::id()),
-        syscall_bpf_function_hash_collision: false,
+        syscall_bpf_function_hash_collision: invoke_context
+            .feature_set
+            .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
         reject_callx_r10: false,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };

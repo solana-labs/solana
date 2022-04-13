@@ -335,6 +335,10 @@ pub mod add_get_minimum_delegation_instruction_to_stake_program {
     solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
 }
 
+pub mod error_on_syscall_bpf_function_hash_collisions {
+    solana_sdk::declare_id!("8199Q2gMD2kwgfopK5qqVWuDbegLgpuFUFHCcUJQDN8b");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -413,6 +417,7 @@ lazy_static! {
         (check_slice_translation_size::id(), "check size when translating slices"),
         (stake_split_uses_rent_sysvar::id(), "stake split instruction uses rent sysvar"),
         (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
+        (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
