@@ -208,14 +208,72 @@ Every highest_root >= 432k * 2 + 80 and < 432k * 3 + 80 is this same result
 
 */
 
+/// specify a slot
+/// and keep track of epoch info for that slot
+/// The idea is that algorithms often iterate over a storage slot or over a max/bank slot.
+/// The epoch info for that slot will be fixed for many pubkeys, so save the calculated results.
+/// There are 2 slots required for rent collection algorithms. Some callers have storage slot fixed
+///  while others have max/bank slot fixed. 'epoch_info' isn't always needed, so it is optionally
+///  specified by caller and only used by callee if necessary.
+#[allow(dead_code)]
+#[derive(Default, Copy, Clone)]
+pub struct SlotInfoInEpoch {
+    /// the slot
+    slot: Slot,
+    /// possible info about this slot
+    epoch_info: Option<SlotInfoInEpochInner>,
+}
+
+/// epoch info for a slot
+#[allow(dead_code)]
+#[derive(Default, Copy, Clone)]
+pub struct SlotInfoInEpochInner {
+    /// epoch of the slot
+    epoch: Epoch,
+    /// partition index of the slot within the epoch
+    partition_index: PartitionIndex,
+    /// number of slots in this epoch
+    slots_in_epoch: Slot,
+}
+
+#[allow(dead_code)]
+impl SlotInfoInEpoch {
+    /// create, populating epoch info
+    pub fn new(slot: Slot, epoch_schedule: &EpochSchedule) -> Self {
+        let mut result = Self::new_small(slot);
+        result.epoch_info = Some(result.get_epoch_info(epoch_schedule));
+        result
+    }
+    /// create, without populating epoch info
+    pub fn new_small(slot: Slot) -> Self {
+        SlotInfoInEpoch {
+            slot,
+            ..SlotInfoInEpoch::default()
+        }
+    }
+    /// get epoch info by returning already calculated or by calculating it now
+    pub fn get_epoch_info(&self, epoch_schedule: &EpochSchedule) -> SlotInfoInEpochInner {
+        if let Some(inner) = &self.epoch_info {
+            *inner
+        } else {
+            let (epoch, partition_index) = epoch_schedule.get_epoch_and_slot_index(self.slot);
+            SlotInfoInEpochInner {
+                epoch,
+                partition_index,
+                slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
+            }
+        }
+    }
+}
+
 impl ExpectedRentCollection {
     #[allow(dead_code)]
     /// 'account' is being loaded from 'storage_slot' in 'bank_slot'
     /// adjusts 'account.rent_epoch' if we skipped the last rewrite on this account
     pub fn maybe_update_rent_epoch_on_load(
         account: &mut AccountSharedData,
-        storage_slot: Slot,
-        bank_slot: Slot,
+        storage_slot: &SlotInfoInEpoch,
+        bank_slot: &SlotInfoInEpoch,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         pubkey: &Pubkey,
@@ -241,8 +299,8 @@ impl ExpectedRentCollection {
     /// returns None if the account is up to date
     fn get_corrected_rent_epoch_on_load(
         account: &AccountSharedData,
-        storage_slot: Slot,
-        bank_slot: Slot,
+        storage_slot: &SlotInfoInEpoch,
+        bank_slot: &SlotInfoInEpoch,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         pubkey: &Pubkey,
@@ -256,14 +314,15 @@ impl ExpectedRentCollection {
                 return None;
             }
 
+            // grab epoch infno for bank slot and storage slot
+            let bank_info = bank_slot.get_epoch_info(epoch_schedule);
             let (current_epoch, partition_from_current_slot) =
-                epoch_schedule.get_epoch_and_slot_index(bank_slot);
+                (bank_info.epoch, bank_info.partition_index);
+            let storage_info = storage_slot.get_epoch_info(epoch_schedule);
             let (storage_epoch, storage_slot_partition) =
-                epoch_schedule.get_epoch_and_slot_index(storage_slot);
-            let partition_from_pubkey = Bank::partition_from_pubkey(
-                pubkey,
-                epoch_schedule.get_slots_in_epoch(current_epoch),
-            );
+                (storage_info.epoch, storage_info.partition_index);
+            let partition_from_pubkey =
+                Bank::partition_from_pubkey(pubkey, bank_info.slots_in_epoch);
             let mut possibly_update = true;
             if current_epoch == storage_epoch {
                 // storage is in same epoch as bank
@@ -1108,77 +1167,87 @@ pub mod tests {
         one run without skipping slot 8470, once WITH skipping slot 8470
         */
 
-        for rewrite_already in [false, true] {
-            // starting at epoch = 0 has issues because of rent_epoch=0 special casing
-            for epoch in 1..4 {
-                for partition_index_bank_slot in
-                    partition_from_pubkey - 1..=partition_from_pubkey + 2
-                {
-                    let bank_slot =
-                        slots_per_epoch * epoch + first_normal_slot + partition_index_bank_slot;
-                    if storage_slot > bank_slot {
-                        continue; // illegal combination
-                    }
-                    rent_collector.epoch = epoch_schedule.get_epoch(bank_slot);
-                    let first_slot_in_max_epoch = bank_slot - bank_slot % slots_per_epoch;
+        for new_small in [false, true] {
+            for rewrite_already in [false, true] {
+                // starting at epoch = 0 has issues because of rent_epoch=0 special casing
+                for epoch in 1..4 {
+                    for partition_index_bank_slot in
+                        partition_from_pubkey - 1..=partition_from_pubkey + 2
+                    {
+                        let bank_slot =
+                            slots_per_epoch * epoch + first_normal_slot + partition_index_bank_slot;
+                        if storage_slot > bank_slot {
+                            continue; // illegal combination
+                        }
+                        rent_collector.epoch = epoch_schedule.get_epoch(bank_slot);
+                        let first_slot_in_max_epoch = bank_slot - bank_slot % slots_per_epoch;
 
-                    assert_eq!(
-                        (epoch, partition_index_bank_slot),
-                        epoch_schedule.get_epoch_and_slot_index(bank_slot)
-                    );
-                    assert_eq!(
-                        (epoch, 0),
-                        epoch_schedule.get_epoch_and_slot_index(first_slot_in_max_epoch)
-                    );
-                    account.set_rent_epoch(1);
-                    let rewrites = Rewrites::default();
-                    if rewrite_already {
-                        if partition_index_bank_slot != partition_from_pubkey {
-                            // this is an invalid test occurrence.
-                            // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition idnex yet.
-                            continue;
-                        }
+                        assert_eq!(
+                            (epoch, partition_index_bank_slot),
+                            epoch_schedule.get_epoch_and_slot_index(bank_slot)
+                        );
+                        assert_eq!(
+                            (epoch, 0),
+                            epoch_schedule.get_epoch_and_slot_index(first_slot_in_max_epoch)
+                        );
+                        account.set_rent_epoch(1);
+                        let rewrites = Rewrites::default();
+                        if rewrite_already {
+                            if partition_index_bank_slot != partition_from_pubkey {
+                                // this is an invalid test occurrence.
+                                // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition idnex yet.
+                                continue;
+                            }
 
-                        rewrites.write().unwrap().insert(pubkey, Hash::default());
+                            rewrites.write().unwrap().insert(pubkey, Hash::default());
+                        }
+                        let expected_new_rent_epoch =
+                            if partition_index_bank_slot > partition_from_pubkey {
+                                if epoch > account.rent_epoch() {
+                                    Some(rent_collector.epoch)
+                                } else {
+                                    None
+                                }
+                            } else if partition_index_bank_slot == partition_from_pubkey
+                                && rewrite_already
+                            {
+                                let expected_rent_epoch = rent_collector.epoch;
+                                if expected_rent_epoch == account.rent_epoch() {
+                                    None
+                                } else {
+                                    Some(expected_rent_epoch)
+                                }
+                            } else if partition_index_bank_slot <= partition_from_pubkey
+                                && epoch > account.rent_epoch()
+                            {
+                                let expected_rent_epoch = rent_collector.epoch.saturating_sub(1);
+                                if expected_rent_epoch == account.rent_epoch() {
+                                    None
+                                } else {
+                                    Some(expected_rent_epoch)
+                                }
+                            } else {
+                                None
+                            };
+                        let get_slot_info = |slot| {
+                            if new_small {
+                                SlotInfoInEpoch::new_small(slot)
+                            } else {
+                                SlotInfoInEpoch::new(slot, &epoch_schedule)
+                            }
+                        };
+                        let new_rent_epoch =
+                            ExpectedRentCollection::get_corrected_rent_epoch_on_load(
+                                &account,
+                                &get_slot_info(storage_slot),
+                                &get_slot_info(bank_slot),
+                                &epoch_schedule,
+                                &rent_collector,
+                                &pubkey,
+                                &rewrites,
+                            );
+                        assert_eq!(new_rent_epoch, expected_new_rent_epoch);
                     }
-                    let expected_new_rent_epoch = if partition_index_bank_slot
-                        > partition_from_pubkey
-                    {
-                        if epoch > account.rent_epoch() {
-                            Some(rent_collector.epoch)
-                        } else {
-                            None
-                        }
-                    } else if partition_index_bank_slot == partition_from_pubkey && rewrite_already
-                    {
-                        let expected_rent_epoch = rent_collector.epoch;
-                        if expected_rent_epoch == account.rent_epoch() {
-                            None
-                        } else {
-                            Some(expected_rent_epoch)
-                        }
-                    } else if partition_index_bank_slot <= partition_from_pubkey
-                        && epoch > account.rent_epoch()
-                    {
-                        let expected_rent_epoch = rent_collector.epoch.saturating_sub(1);
-                        if expected_rent_epoch == account.rent_epoch() {
-                            None
-                        } else {
-                            Some(expected_rent_epoch)
-                        }
-                    } else {
-                        None
-                    };
-                    let new_rent_epoch = ExpectedRentCollection::get_corrected_rent_epoch_on_load(
-                        &account,
-                        storage_slot,
-                        bank_slot,
-                        &epoch_schedule,
-                        &rent_collector,
-                        &pubkey,
-                        &rewrites,
-                    );
-                    assert_eq!(new_rent_epoch, expected_new_rent_epoch);
                 }
             }
         }
