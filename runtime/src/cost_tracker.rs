@@ -5,46 +5,9 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, num_utils::*, pubkey::Pubkey},
     std::collections::HashMap,
 };
-
-/// Copied nightly-only experimental `checked_add_signed` implementation
-/// from https://github.com/rust-lang/rust/pull/87601/files
-/// Should be removed once the feature is added to standard library.
-trait ArithmeticUtil {
-    /// Checked addition with a signed integer. Computes `self + rhs`,
-    /// returning `None` if overflow occurred.
-    fn checked_add_signed(self, rhs: i64) -> Option<Self>
-    where
-        Self: Sized;
-
-    /// Calculates `self` + `rhs` with a signed `rhs`
-    ///
-    /// Returns a tuple of the addition along with a boolean indicating
-    /// whether an arithmetic overflow would occur. If an overflow would
-    /// have occurred then the wrapped value is returned.
-    fn overflowing_add_signed(self, rhs: i64) -> (Self, bool)
-    where
-        Self: Sized;
-}
-impl ArithmeticUtil for u64 {
-    #[inline]
-    fn checked_add_signed(self, rhs: i64) -> Option<Self> {
-        let (a, b) = ArithmeticUtil::overflowing_add_signed(self, rhs);
-        if b {
-            None
-        } else {
-            Some(a)
-        }
-    }
-
-    #[inline]
-    fn overflowing_add_signed(self, rhs: i64) -> (Self, bool) {
-        let (res, overflowed) = self.overflowing_add(rhs as Self);
-        (res, overflowed ^ (rhs < 0))
-    }
-}
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
 
@@ -143,10 +106,22 @@ impl CostTracker {
                 return;
             }
 
-            let (res, _overflowed) =
-                actual_execution_units.overflowing_sub(estimated_execution_units);
-            let adjustment = res as i64;
-            self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
+            if let Some(adjustment) =
+                Self::checked_diff_unsigned(actual_execution_units, estimated_execution_units)
+            {
+                self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
+            } else {
+                // handle adjustment too big to fit in `i64` error, log event as error,
+                // set block_cost to limit to prevent more transactions being added into
+                // curernt block.
+                log::error!(
+                    "cost_tracker detected erroneous attemopt to adjust execution cost, \
+                        estimated transactino cost {:?}, actual execution units {}",
+                    estimated_tx_cost,
+                    actual_execution_units
+                );
+                self.block_cost = self.block_cost_limit;
+            }
         }
     }
 
@@ -299,20 +274,30 @@ impl CostTracker {
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
-            match ArithmeticUtil::checked_add_signed(*account_cost, adjustment) {
+            match UintUtil::checked_add_signed(*account_cost, adjustment) {
                 Some(adjusted_cost) => *account_cost = adjusted_cost,
                 None => *account_cost = self.account_cost_limit,
             }
         }
-        match ArithmeticUtil::checked_add_signed(self.block_cost, adjustment) {
+        match UintUtil::checked_add_signed(self.block_cost, adjustment) {
             Some(adjusted_cost) => self.block_cost = adjusted_cost,
             None => self.block_cost = self.block_cost_limit,
         }
         if tx_cost.is_simple_vote {
-            match ArithmeticUtil::checked_add_signed(self.vote_cost, adjustment) {
+            match UintUtil::checked_add_signed(self.vote_cost, adjustment) {
                 Some(adjusted_cost) => self.vote_cost = adjusted_cost,
                 None => self.vote_cost = self.vote_cost_limit,
             }
+        }
+    }
+
+    /// Checked get deltai as `i64` of two `u64`, computes `lhs - rhs`,
+    /// returning `None` if delta overflows `i64`
+    fn checked_diff_unsigned(lhs: u64, rhs: u64) -> Option<i64> {
+        if lhs >= rhs {
+            IntUtil::checked_add_unsigned(0i64, lhs - rhs)
+        } else {
+            IntUtil::checked_sub_unsigned(0i64, rhs - lhs)
         }
     }
 }
@@ -323,7 +308,6 @@ mod tests {
         super::*,
         crate::{
             bank::Bank,
-            cost_tracker::ArithmeticUtil,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
         solana_sdk::{
@@ -788,7 +772,7 @@ mod tests {
 
         // adjust up
         {
-            let adjustment: i64 = 50;
+            let adjustment = 50i64;
             testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
             expected_block_cost += 50;
             assert_eq!(expected_block_cost, testee.block_cost());
@@ -803,7 +787,7 @@ mod tests {
 
         // adjust down
         {
-            let adjustment: i64 = -50;
+            let adjustment = -50i64;
             testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
             expected_block_cost -= 50;
             assert_eq!(expected_block_cost, testee.block_cost());
@@ -848,23 +832,32 @@ mod tests {
     }
 
     #[test]
-    fn test_checked_add_signed() {
-        assert_eq!(ArithmeticUtil::checked_add_signed(1u64, 2), Some(3));
-        assert_eq!(ArithmeticUtil::checked_add_signed(3u64, -2), Some(1));
-        assert_eq!(ArithmeticUtil::checked_add_signed(1u64, -2), None);
-        assert_eq!(ArithmeticUtil::checked_add_signed(u64::MAX - 2, 3), None);
-    }
+    fn test_checked_diff_unsigned() {
+        solana_logger::setup();
 
-    #[test]
-    fn test_overflowing_add_signed() {
-        assert_eq!(ArithmeticUtil::overflowing_add_signed(1u64, 2), (3, false));
+        // no diff
+        assert_eq!(0, CostTracker::checked_diff_unsigned(10u64, 10u64).unwrap());
         assert_eq!(
-            ArithmeticUtil::overflowing_add_signed(1u64, -2),
-            (u64::MAX, true)
+            0,
+            CostTracker::checked_diff_unsigned(u64::MAX, u64::MAX).unwrap()
         );
+
+        // positive diff
+        assert_eq!(2, CostTracker::checked_diff_unsigned(10u64, 8u64).unwrap());
         assert_eq!(
-            ArithmeticUtil::overflowing_add_signed(u64::MAX - 2, 4),
-            (1, true)
+            8,
+            CostTracker::checked_diff_unsigned(u64::MAX, u64::MAX - 8u64).unwrap()
         );
+
+        // negative diff
+        assert_eq!(-2, CostTracker::checked_diff_unsigned(8u64, 10u64).unwrap());
+        assert_eq!(
+            -10,
+            CostTracker::checked_diff_unsigned(u64::MIN, 10u64).unwrap()
+        );
+
+        // diff too big for i64 (overflow)
+        assert_eq!(None, CostTracker::checked_diff_unsigned(u64::MAX, 0u64));
+        assert_eq!(None, CostTracker::checked_diff_unsigned(0u64, u64::MAX));
     }
 }
