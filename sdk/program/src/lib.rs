@@ -612,7 +612,7 @@ pub mod wasm;
 
 #[cfg(target_arch = "bpf")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
-/// Reexport of [wasm-bindgen].
+/// Re-export of [wasm-bindgen].
 ///
 /// [wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
 #[cfg(not(target_arch = "bpf"))]
