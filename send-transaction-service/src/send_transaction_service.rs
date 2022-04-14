@@ -243,13 +243,13 @@ impl SendTransactionService {
                     let last_sent_time = Instant::now();
                     let mut retry_transactions = retry_transactions.lock().unwrap();
                     for (signature, mut transaction_info) in transactions.drain() {
+                        let retry_len = retry_transactions.len();
                         let entry = retry_transactions.entry(signature);
                         if let Entry::Vacant(_) = entry {
-                            if retry_transactions.len() >= MAX_TRANSACTION_QUEUE_SIZE {
+                            if retry_len >= MAX_TRANSACTION_QUEUE_SIZE {
                                 datapoint_warn!("send_transaction_service-queue-overflow");
                                 break;
-                            }
-                            else {
+                            } else {
                                 transaction_info.last_sent_time = Some(last_sent_time);
                                 entry.or_insert(transaction_info);
                             }
