@@ -456,10 +456,6 @@ fn process_loader_upgradeable_instruction(
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let authority = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
-            )?;
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
                 if authority_address.is_none() {
@@ -476,7 +472,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
                     return Err(InstructionError::IncorrectAuthority);
                 }
-                if authority.signer_key().is_none() {
+                if !instruction_context.is_signer(first_instruction_account.saturating_add(1))? {
                     ic_logger_msg!(log_collector, "Buffer authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
@@ -513,17 +509,12 @@ fn process_loader_upgradeable_instruction(
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             instruction_context.check_number_of_instruction_accounts(8)?;
-            let authority = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(7),
-            )?;
             let authority_key = Some(
                 *transaction_context.get_key_of_account_at_index(
                     instruction_context
                         .get_index_in_transaction(first_instruction_account.saturating_add(7))?,
                 )?,
             );
-            let upgrade_authority_signer = authority.signer_key().is_none();
 
             // Verify Program account
 
@@ -549,7 +540,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Buffer and upgrade authority don't match");
                     return Err(InstructionError::IncorrectAuthority);
                 }
-                if upgrade_authority_signer {
+                if !instruction_context.is_signer(first_instruction_account.saturating_add(7))? {
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
@@ -709,10 +700,6 @@ fn process_loader_upgradeable_instruction(
                         .get_index_in_transaction(first_instruction_account.saturating_add(6))?,
                 )?,
             );
-            let authority = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(6),
-            )?;
 
             // Verify Program account
 
@@ -750,7 +737,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Buffer and upgrade authority don't match");
                     return Err(InstructionError::IncorrectAuthority);
                 }
-                if authority.signer_key().is_none() {
+                if !instruction_context.is_signer(first_instruction_account.saturating_add(6))? {
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
@@ -799,7 +786,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
                     return Err(InstructionError::IncorrectAuthority);
                 }
-                if authority.signer_key().is_none() {
+                if !instruction_context.is_signer(first_instruction_account.saturating_add(6))? {
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
@@ -879,10 +866,6 @@ fn process_loader_upgradeable_instruction(
                 instruction_context
                     .get_index_in_transaction(first_instruction_account.saturating_add(1))?,
             )?;
-            let present_authority = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
-            )?;
             let new_authority = instruction_context
                 .get_index_in_transaction(first_instruction_account.saturating_add(2))
                 .and_then(|index_in_transaction| {
@@ -904,7 +887,9 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
                         return Err(InstructionError::IncorrectAuthority);
                     }
-                    if present_authority.signer_key().is_none() {
+                    if !instruction_context
+                        .is_signer(first_instruction_account.saturating_add(1))?
+                    {
                         ic_logger_msg!(log_collector, "Buffer authority did not sign");
                         return Err(InstructionError::MissingRequiredSignature);
                     }
@@ -924,7 +909,9 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
                         return Err(InstructionError::IncorrectAuthority);
                     }
-                    if present_authority.signer_key().is_none() {
+                    if !instruction_context
+                        .is_signer(first_instruction_account.saturating_add(1))?
+                    {
                         ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                         return Err(InstructionError::MissingRequiredSignature);
                     }
