@@ -266,6 +266,7 @@ impl Stakes {
         // unconditionally remove existing at first; there is no dependent calculated state for
         // votes, not like stakes (stake codepath maintains calculated stake value grouped by
         // delegated vote pubkey)
+        // implement read/modify/write, ie. 'update' on vote_accounts here, using 'entry' as opposed to 'remove' and then 'insert'. would reduce lookups
         let old_entry = self.vote_accounts.remove(vote_pubkey);
         if let Some(new_vote_account) = new_vote_account {
             debug_assert!(new_vote_account.is_deserialized());
