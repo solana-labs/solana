@@ -348,7 +348,23 @@ pub struct RpcSimulateTransactionResult {
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
-    pub return_data: Option<TransactionReturnData>,
+    pub return_data: Option<RpcTransactionReturnData>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTransactionReturnData {
+    pub program_id: String,
+    pub data: Vec<u8>,
+}
+
+impl From<TransactionReturnData> for RpcTransactionReturnData {
+    fn from(return_data: TransactionReturnData) -> Self {
+        Self {
+            program_id: return_data.program_id.to_string(),
+            data: return_data.data,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
