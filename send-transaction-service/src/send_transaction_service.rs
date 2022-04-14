@@ -340,20 +340,13 @@ impl SendTransactionService {
         // Processing the transactions in batch
         let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
 
-        let wire_transacions = transactions
+        let wire_transactions = transactions
             .iter()
             .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
             .collect::<Vec<&[u8]>>();
 
         for address in &addresses {
-            let send_result =
-                connection_cache::send_wire_transaction_batch(&wire_transacions, address);
-            if let Err(err) = send_result {
-                warn!(
-                    "Failed to send transaction batch to {}: {:?}",
-                    tpu_address, err
-                );
-            }
+            Self::send_transactions(address, &wire_transactions);
         }
         measure.stop();
         inc_new_counter_info!(
@@ -468,26 +461,64 @@ impl SendTransactionService {
             // Processing the transactions in batch
             let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
 
-            let wire_transacions = transactions
+            let wire_transactions = transactions
                 .iter()
                 .filter(|(signature, _)| batched_transactions.contains(signature))
                 .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
                 .collect::<Vec<&[u8]>>();
 
             for address in &addresses {
-                let iter = wire_transacions.chunks(config.batch_size);
+                let iter = wire_transactions.chunks(config.batch_size);
                 for chunk in iter {
-                    let send_result = connection_cache::send_wire_transaction_batch(chunk, address);
-                    if let Err(err) = send_result {
-                        warn!(
-                            "Failed to send transaction batch to {}: {:?}",
-                            tpu_address, err
-                        );
-                    }
+                    Self::send_transactions(address, chunk);
                 }
             }
         }
         result
+    }
+
+    fn send_transaction(tpu_address: &SocketAddr, wire_transaction: &[u8]) {
+        let mut measure = Measure::start("send_transaction_service-us");
+        if let Err(err) =
+            connection_cache::send_wire_transaction_async(wire_transaction.to_vec(), tpu_address)
+        {
+            warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
+        }
+        measure.stop();
+        inc_new_counter_info!(
+            "send_transaction_service-us",
+            measure.as_us() as usize,
+            1000,
+            1000
+        );
+    }
+
+    fn send_transactions_with_metrics(tpu_address: &SocketAddr, wire_transactions: &[&[u8]]) {
+        let mut measure = Measure::start("send_transaction_service-batch-us");
+
+        let send_result =
+            connection_cache::send_wire_transaction_batch(wire_transactions, tpu_address);
+        if let Err(err) = send_result {
+            warn!(
+                "Failed to send transaction batch to {}: {:?}",
+                tpu_address, err
+            );
+        }
+        measure.stop();
+        inc_new_counter_info!(
+            "send_transaction_service-batch-us",
+            measure.as_us() as usize,
+            1000,
+            1000
+        );
+    }
+
+    fn send_transactions(tpu_address: &SocketAddr, wire_transactions: &[&[u8]]) {
+        if wire_transactions.len() == 1 {
+            Self::send_transaction(tpu_address, wire_transactions[0])
+        } else {
+            Self::send_transactions_with_metrics(tpu_address, wire_transactions)
+        }
     }
 
     fn get_tpu_addressesn<'a, T: TpuInfo>(
