@@ -706,9 +706,15 @@ dependencies = [
 
 [[package]]
 name = "clap"
+<<<<<<< HEAD
 version = "3.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c167e37342afc5f33fd87bbc870cedd020d2a6dffa05d45ccd9241fbdd146db"
+=======
+version = "3.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71c47df61d9e16dc010b55dba1952a57d8c215dbb533fd13cdd13369aac73b1c"
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
 dependencies = [
  "atty",
  "bitflags",
@@ -3459,12 +3465,16 @@ dependencies = [
 name = "rbpf-cli"
 version = "1.10.12"
 dependencies = [
+<<<<<<< HEAD
  "bv",
  "clap 3.1.12",
  "gimli",
  "goblin 0.5.1",
  "itertools",
  "log",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "serde",
  "serde_json",
  "solana-bpf-loader-program",
@@ -4287,7 +4297,11 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.10.12"
 dependencies = [
+<<<<<<< HEAD
  "clap 2.34.0",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "crossbeam-channel",
  "log",
  "rand 0.7.3",
@@ -4352,7 +4366,11 @@ dependencies = [
 name = "solana-bench-streamer"
 version = "1.10.12"
 dependencies = [
+<<<<<<< HEAD
  "clap 2.34.0",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "crossbeam-channel",
  "solana-net-utils",
  "solana-streamer",
@@ -4449,7 +4467,11 @@ version = "1.10.12"
 dependencies = [
  "bzip2",
  "cargo_metadata",
+<<<<<<< HEAD
  "clap 3.1.12",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "regex",
  "serial_test",
  "solana-download-utils",
@@ -4462,7 +4484,11 @@ name = "solana-cargo-test-bpf"
 version = "1.10.12"
 dependencies = [
  "cargo_metadata",
+<<<<<<< HEAD
  "clap 3.1.12",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
 ]
 
 [[package]]
@@ -4738,7 +4764,11 @@ name = "solana-dos"
 version = "1.10.12"
 dependencies = [
  "bincode",
+<<<<<<< HEAD
  "clap 3.1.12",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "log",
  "rand 0.7.3",
  "serde",
@@ -5167,7 +5197,11 @@ name = "solana-log-analyzer"
 version = "1.10.12"
 dependencies = [
  "byte-unit",
+<<<<<<< HEAD
  "clap 2.34.0",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "serde",
  "serde_json",
  "solana-logger 1.10.12",
@@ -5244,7 +5278,11 @@ dependencies = [
 name = "solana-net-shaper"
 version = "1.10.12"
 dependencies = [
+<<<<<<< HEAD
  "clap 2.34.0",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -5256,7 +5294,11 @@ name = "solana-net-utils"
 version = "1.10.12"
 dependencies = [
  "bincode",
+<<<<<<< HEAD
  "clap 2.34.0",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "crossbeam-channel",
  "log",
  "nix 0.23.1",
@@ -5333,7 +5375,11 @@ dependencies = [
 name = "solana-poh-bench"
 version = "1.10.12"
 dependencies = [
+<<<<<<< HEAD
  "clap 2.34.0",
+=======
+ "clap 3.1.8",
+>>>>>>> 2c7699eb8 (banking-bench: Migrate to clap 3.1.8)
  "log",
  "rand 0.7.3",
  "rayon",
