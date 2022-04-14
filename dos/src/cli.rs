@@ -64,12 +64,6 @@ pub struct TransactionParams {
 
     #[clap(long, help = "Generate unique transactions")]
     pub unique_transactions: bool,
-
-    #[clap(
-        long = "payer",
-        help = "Payer's keypair file to fund transactions [Optional]"
-    )]
-    pub payer_filename: Option<String>,
 }
 
 #[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
@@ -114,21 +108,10 @@ fn validate_input(params: &DosClientParameters) {
 
     if params.data_type != DataType::Transaction {
         let tp = &params.transaction_params;
-        if tp.valid_blockhash
-            || tp.valid_signatures
-            || tp.unique_transactions
-            || tp.payer_filename.is_some()
-        {
-            eprintln!("Arguments valid-blockhash, valid-sign, unique-trans, payer are ignored if data-type != transaction");
+        if tp.valid_blockhash || tp.valid_signatures || tp.unique_transactions {
+            eprintln!("Arguments valid-blockhash, valid-sign, unique-trans are ignored if data-type != transaction");
             exit(1);
         }
-    }
-
-    if params.transaction_params.payer_filename.is_some()
-        && params.transaction_params.valid_signatures
-    {
-        eprintln!("Arguments valid-signatures is ignored if payer is provided");
-        exit(1);
     }
 }
 
