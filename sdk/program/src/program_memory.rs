@@ -91,7 +91,7 @@ pub unsafe fn sol_memmove(dst: *mut u8, src: *mut u8, n: usize) {
 /// # Errors
 ///
 /// When executed within a BPF program, the memory regions spanning `n` bytes
-/// from from the start of `dst` and `src` must be mapped program memory. If not
+/// from from the start of `dst` and `src` must be mapped program memory. If not,
 /// the program will abort.
 ///
 /// # Safety
