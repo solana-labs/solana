@@ -2,6 +2,10 @@
 
 /// 1 Epoch = 400 * 8192 ms ~= 55 minutes
 pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
+use {
+    crate::{clone_zeroed, copy_field},
+    std::mem::MaybeUninit,
+};
 
 /// The number of slots before an epoch starts to calculate the leader schedule.
 ///  Default is an entire epoch, i.e. leader schedule for epoch X is calculated at
@@ -17,7 +21,7 @@ pub const MAX_LEADER_SCHEDULE_EPOCH_OFFSET: u64 = 3;
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, AbiExample)]
+#[derive(Debug, Copy, PartialEq, Deserialize, Serialize, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
@@ -44,6 +48,21 @@ impl Default for EpochSchedule {
             DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET,
             true,
         )
+    }
+}
+
+impl Clone for EpochSchedule {
+    fn clone(&self) -> Self {
+        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
+            let ptr = cloned.as_mut_ptr();
+            unsafe {
+                copy_field!(ptr, self, slots_per_epoch);
+                copy_field!(ptr, self, leader_schedule_slot_offset);
+                copy_field!(ptr, self, warmup);
+                copy_field!(ptr, self, first_normal_epoch);
+                copy_field!(ptr, self, first_normal_slot);
+            }
+        })
     }
 }
 
@@ -228,5 +247,19 @@ mod tests {
             // assert that we got to "normal" mode
             assert!(last_slots_in_epoch == slots_per_epoch);
         }
+    }
+
+    #[test]
+    fn test_clone() {
+        let epoch_schedule = EpochSchedule {
+            slots_per_epoch: 1,
+            leader_schedule_slot_offset: 2,
+            warmup: true,
+            first_normal_epoch: 4,
+            first_normal_slot: 5,
+        };
+        #[allow(clippy::clone_on_copy)]
+        let cloned_epoch_schedule = epoch_schedule.clone();
+        assert_eq!(cloned_epoch_schedule, epoch_schedule);
     }
 }

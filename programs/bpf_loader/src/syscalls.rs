@@ -3980,7 +3980,7 @@ mod tests {
 
             let src_fees = Fees {
                 fee_calculator: FeeCalculator {
-                    lamports_per_signature: 1,
+                lamports_per_signature: 1,
                 },
             };
 
