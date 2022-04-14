@@ -146,13 +146,11 @@ pub struct JsonRpcConfig {
     pub enable_cpi_and_log_storage: bool,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
-    pub enable_bigtable_ledger_storage: bool,
-    pub enable_bigtable_ledger_upload: bool,
+    pub rpc_bigtable_config: Option<RpcBigtableConfig>,
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
     pub rpc_niceness_adj: i8,
-    pub rpc_bigtable_timeout: Option<Duration>,
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
@@ -163,6 +161,24 @@ impl JsonRpcConfig {
         Self {
             full_api: true,
             ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RpcBigtableConfig {
+    pub enable_bigtable_ledger_upload: bool,
+    pub bigtable_instance_name: String,
+    pub timeout: Option<Duration>,
+}
+
+impl Default for RpcBigtableConfig {
+    fn default() -> Self {
+        let bigtable_instance_name = solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string();
+        Self {
+            enable_bigtable_ledger_upload: false,
+            bigtable_instance_name,
+            timeout: None,
         }
     }
 }

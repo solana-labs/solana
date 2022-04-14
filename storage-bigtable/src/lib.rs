@@ -361,6 +361,27 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
     }
 }
 
+pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
+
+#[derive(Debug)]
+pub struct LedgerStorageConfig {
+    pub read_only: bool,
+    pub timeout: Option<std::time::Duration>,
+    pub credential_path: Option<String>,
+    pub instance_name: String,
+}
+
+impl Default for LedgerStorageConfig {
+    fn default() -> Self {
+        Self {
+            read_only: true,
+            timeout: None,
+            credential_path: None,
+            instance_name: DEFAULT_INSTANCE_NAME.to_string(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct LedgerStorage {
     connection: bigtable::BigTableConnection,
@@ -372,9 +393,29 @@ impl LedgerStorage {
         timeout: Option<std::time::Duration>,
         credential_path: Option<String>,
     ) -> Result<Self> {
-        let connection =
-            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout, credential_path)
-                .await?;
+        Self::new_with_config(LedgerStorageConfig {
+            read_only,
+            timeout,
+            credential_path,
+            ..LedgerStorageConfig::default()
+        })
+        .await
+    }
+
+    pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
+        let LedgerStorageConfig {
+            read_only,
+            timeout,
+            credential_path,
+            instance_name,
+        } = config;
+        let connection = bigtable::BigTableConnection::new(
+            instance_name.as_str(),
+            read_only,
+            timeout,
+            credential_path,
+        )
+        .await?;
         Ok(Self { connection })
     }
 

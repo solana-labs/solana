@@ -376,18 +376,26 @@ impl JsonRpcService {
         let exit_bigtable_ledger_upload_service = Arc::new(AtomicBool::new(false));
 
         let (bigtable_ledger_storage, _bigtable_ledger_upload_service) =
-            if config.enable_bigtable_ledger_storage || config.enable_bigtable_ledger_upload {
+            if let Some(RpcBigtableConfig {
+                enable_bigtable_ledger_upload,
+                ref bigtable_instance_name,
+                timeout,
+            }) = config.rpc_bigtable_config
+            {
+                let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
+                    read_only: !enable_bigtable_ledger_upload,
+                    timeout,
+                    credential_path: None,
+                    instance_name: bigtable_instance_name.clone(),
+                };
                 runtime
-                    .block_on(solana_storage_bigtable::LedgerStorage::new(
-                        !config.enable_bigtable_ledger_upload,
-                        config.rpc_bigtable_timeout,
-                        None,
+                    .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(
+                        bigtable_config,
                     ))
                     .map(|bigtable_ledger_storage| {
                         info!("BigTable ledger storage initialized");
 
-                        let bigtable_ledger_upload_service = if config.enable_bigtable_ledger_upload
-                        {
+                        let bigtable_ledger_upload_service = if enable_bigtable_ledger_upload {
                             Some(Arc::new(BigTableUploadService::new(
                                 runtime.clone(),
                                 bigtable_ledger_storage.clone(),
