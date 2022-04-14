@@ -14,7 +14,7 @@
 /// # Errors
 ///
 /// When executed within a BPF program, the memory regions spanning `n` bytes
-/// from from the start of `dst` and `src` must be mapped program memory. If not
+/// from from the start of `dst` and `src` must be mapped program memory. If not,
 /// the program will abort.
 ///
 /// The memory regions spanning `n` bytes from `dst` and `src` from the start
