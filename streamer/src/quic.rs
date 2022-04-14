@@ -571,12 +571,12 @@ mod test {
                 s1.write_all(&[0u8]).await.unwrap();
                 s1.finish().await.unwrap();
                 info!("done {}", i);
-                std::thread::sleep(Duration::from_millis(5_000));
+                std::thread::sleep(Duration::from_millis(1000));
             }
         });
         let mut received = 0;
         loop {
-            if let Ok(_x) = receiver.recv_timeout(Duration::from_millis(1000)) {
+            if let Ok(_x) = receiver.recv_timeout(Duration::from_millis(500)) {
                 received += 1;
                 info!("got {}", received);
             }
