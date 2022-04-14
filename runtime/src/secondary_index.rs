@@ -1,5 +1,6 @@
 use {
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
+    log::*,
     solana_sdk::{pubkey::Pubkey, timing::AtomicInterval},
     std::{
         collections::HashSet,
@@ -222,5 +223,20 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
         } else {
             vec![]
         }
+    }
+
+    /// log top 20 (owner, # accounts) in descending order of # accounts
+    pub fn log_contents(&self) {
+        let mut entries = self
+            .index
+            .iter()
+            .map(|entry| (entry.value().len(), *entry.key()))
+            .collect::<Vec<_>>();
+        entries.sort_unstable();
+        entries
+            .iter()
+            .rev()
+            .take(20)
+            .for_each(|(v, k)| info!("owner: {}, accounts: {}", k, v));
     }
 }
