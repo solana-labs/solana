@@ -24,7 +24,6 @@ impl LeaderExecuteAndCommitTimings {
         saturating_add_assign!(self.record_us, other.record_us);
         saturating_add_assign!(self.commit_us, other.commit_us);
         saturating_add_assign!(self.find_and_send_votes_us, other.find_and_send_votes_us);
-        saturating_add_assign!(self.commit_us, other.commit_us);
         self.record_transactions_timings
             .accumulate(&other.record_transactions_timings);
         self.execute_timings.accumulate(&other.execute_timings);
