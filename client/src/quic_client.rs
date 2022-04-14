@@ -13,7 +13,6 @@ use {
     log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
     quinn_proto::ConnectionStats,
-    solana_metrics::datapoint_debug,
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
         transport::Result as TransportResult,
@@ -126,7 +125,7 @@ impl TpuConnection for QuicTpuConnection {
             let send_buffer = client.send_buffer(wire_transaction, &stats);
             if let Err(e) = send_buffer.await {
                 warn!("Failed to send transaction async to {:?}", e);
-                datapoint_debug!("send-wire-async", ("failure", 1, i64),);
+                datapoint_warn!("send-wire-async", ("failure", 1, i64),);
             }
         });
         Ok(())
@@ -144,7 +143,7 @@ impl TpuConnection for QuicTpuConnection {
             let send_batch = client.send_batch(&buffers, &stats);
             if let Err(e) = send_batch.await {
                 warn!("Failed to send transaction batch async to {:?}", e);
-                datapoint_debug!("send-wire-batch-async", ("failure", 1, i64),);
+                datapoint_warn!("send-wire-batch-async", ("failure", 1, i64),);
             }
         });
         Ok(())
