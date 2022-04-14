@@ -40,6 +40,7 @@ solana-account-decoder = { path = "../account-decoder", version = "=1.10.9" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.9" }
 solana-faucet = { path = "../faucet", version = "=1.10.9" }
 solana-measure = { path = "../measure", version = "=1.10.9" }
+solana-metrics = { path = "../metrics", version = "=1.10.9" }
 solana-net-utils = { path = "../net-utils", version = "=1.10.9" }
 solana-sdk = { path = "../sdk", version = "=1.10.9" }
 solana-streamer = { path = "../streamer", version = "=1.10.9" }

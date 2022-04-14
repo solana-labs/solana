@@ -4689,6 +4689,7 @@ dependencies = [
  "solana-faucet",
  "solana-logger 1.10.9",
  "solana-measure",
+ "solana-metrics",
  "solana-net-utils",
  "solana-sdk",
  "solana-streamer",
