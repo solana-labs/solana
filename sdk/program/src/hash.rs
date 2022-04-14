@@ -1,6 +1,7 @@
-//! Hashing with the [SHA-256] hash function.
+//! Hashing with the [SHA-256] hash function, and a general [`Hash`] type.
 //!
 //! [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
+//! [`Hash`]: struct@Hash
 
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
@@ -15,13 +16,14 @@ pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash.
 const MAX_BASE58_LEN: usize = 44;
 
-/// A SHA-256 hash.
+/// A hash; the 32-byte output of a hashing algorithm.
 ///
-/// _Note_: This type is just a 32-byte blob, which is size-compatible with the
-/// blake3 hashes created by the [`blake3`] module. There are cases where this
-/// type actually contains a blake3 hash, not a SHA-256 hash, particularly as
-/// computed by [`Message::hash`].
+/// This struct is used most often in `solana-sdk` and related crates to contain
+/// a [SHA-256] hash, but may instead contain a [blake3] hash, as created by the
+/// [`blake3`] module (and used in [`Message::hash`]).
 ///
+/// [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
+/// [blake3]: https://github.com/BLAKE3-team/BLAKE3
 /// [`blake3`]: crate::blake3
 /// [`Message::hash`]: crate::message::Message::hash
 #[wasm_bindgen]

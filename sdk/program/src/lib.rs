@@ -160,8 +160,8 @@
 //!   even been disposed of. As running Solana programs can not safely create or
 //!   manage secret keys, the full [`Keypair`] is not defined in
 //!   `solana-program` but in `solana-sdk`.
-//! - [`Hash`] &mdash; A [SHA-256] hash. Used to uniquely identify blocks, and
-//!   also for general purpose hashing.
+//! - [`Hash`] &mdash; A cryptographic hash. Used to uniquely identify blocks,
+//!   and also for general purpose hashing.
 //! - [`AccountInfo`] &mdash; A description of a single Solana account. All accounts
 //!   that might be accessed by a program invocation are provided to the program
 //!   entrypoint as `AccountInfo`.
