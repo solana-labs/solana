@@ -2,20 +2,24 @@
 //! an interface for sending transactions which is restricted by the server's flow control.
 
 use {
-    crate::{client_error::ClientErrorKind, tpu_connection::TpuConnection},
+    crate::{
+        client_error::ClientErrorKind,
+        tpu_connection::{ClientStats, TpuConnection},
+    },
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
     lazy_static::lazy_static,
     log::*,
     quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
+    quinn_proto::ConnectionStats,
     solana_sdk::{
         quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
         transport::Result as TransportResult,
     },
     std::{
         net::{SocketAddr, UdpSocket},
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
     tokio::runtime::Runtime,
 };
@@ -52,10 +56,21 @@ struct QuicClient {
     endpoint: Endpoint,
     connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
     addr: SocketAddr,
+    stats: Arc<ClientStats>,
 }
 
 pub struct QuicTpuConnection {
     client: Arc<QuicClient>,
+}
+
+impl QuicTpuConnection {
+    pub fn stats(&self) -> Option<ConnectionStats> {
+        self.client.stats()
+    }
+
+    pub fn base_stats(&self) -> Arc<ClientStats> {
+        self.client.stats.clone()
+    }
 }
 
 impl TpuConnection for QuicTpuConnection {
@@ -70,33 +85,45 @@ impl TpuConnection for QuicTpuConnection {
         &self.client.addr
     }
 
-    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    fn send_wire_transaction<T>(
+        &self,
+        wire_transaction: T,
+        stats: &ClientStats,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
         let _guard = RUNTIME.enter();
-        let send_buffer = self.client.send_buffer(wire_transaction);
+        let send_buffer = self.client.send_buffer(wire_transaction, stats);
         RUNTIME.block_on(send_buffer)?;
         Ok(())
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    fn send_wire_transaction_batch<T>(
+        &self,
+        buffers: &[T],
+        stats: &ClientStats,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
         let _guard = RUNTIME.enter();
-        let send_batch = self.client.send_batch(buffers);
+        let send_batch = self.client.send_batch(buffers, stats);
         RUNTIME.block_on(send_batch)?;
         Ok(())
     }
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    fn send_wire_transaction_async(
+        &self,
+        wire_transaction: Vec<u8>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         //drop and detach the task
         let client = self.client.clone();
         inc_new_counter_info!("send_wire_transaction_async", 1);
         let _ = RUNTIME.spawn(async move {
-            let send_buffer = client.send_buffer(wire_transaction);
+            let send_buffer = client.send_buffer(wire_transaction, &stats);
             if let Err(e) = send_buffer.await {
                 inc_new_counter_warn!("send_wire_transaction_async_fail", 1);
                 warn!("Failed to send transaction async to {:?}", e);
@@ -127,7 +154,14 @@ impl QuicClient {
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
+            stats: Arc::new(ClientStats::default()),
         }
+    }
+
+    pub fn stats(&self) -> Option<ConnectionStats> {
+        let conn_guard = self.connection.lock();
+        let x = RUNTIME.block_on(conn_guard);
+        x.as_ref().map(|c| c.connection.stats())
     }
 
     // If this function becomes public, it should be changed to
@@ -146,18 +180,35 @@ impl QuicClient {
         Ok(())
     }
 
+    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+        let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        let connecting_result = connecting.await;
+        if connecting_result.is_err() {
+            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+        }
+        let connection = connecting_result?;
+        Ok(Arc::new(connection))
+    }
+
     // Attempts to send data, connecting/reconnecting as necessary
     // On success, returns the connection used to successfully send the data
-    async fn _send_buffer(&self, data: &[u8]) -> Result<Arc<NewConnection>, WriteError> {
+    async fn _send_buffer(
+        &self,
+        data: &[u8],
+        stats: &ClientStats,
+    ) -> Result<Arc<NewConnection>, WriteError> {
         let connection = {
             let mut conn_guard = self.connection.lock().await;
 
             let maybe_conn = (*conn_guard).clone();
             match maybe_conn {
-                Some(conn) => conn.clone(),
+                Some(conn) => {
+                    stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
+                    conn.clone()
+                }
                 None => {
-                    let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-                    let connection = Arc::new(connecting.await?);
+                    let connection = self.make_connection(stats).await?;
                     *conn_guard = Some(connection.clone());
                     connection
                 }
@@ -167,8 +218,7 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-                    let connection = Arc::new(connecting.await?);
+                    let connection = self.make_connection(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
                     *conn_guard = Some(connection.clone());
                     connection
@@ -179,15 +229,19 @@ impl QuicClient {
         }
     }
 
-    pub async fn send_buffer<T>(&self, data: T) -> Result<(), ClientErrorKind>
+    pub async fn send_buffer<T>(&self, data: T, stats: &ClientStats) -> Result<(), ClientErrorKind>
     where
         T: AsRef<[u8]>,
     {
-        self._send_buffer(data.as_ref()).await?;
+        self._send_buffer(data.as_ref(), stats).await?;
         Ok(())
     }
 
-    pub async fn send_batch<T>(&self, buffers: &[T]) -> Result<(), ClientErrorKind>
+    pub async fn send_batch<T>(
+        &self,
+        buffers: &[T],
+        stats: &ClientStats,
+    ) -> Result<(), ClientErrorKind>
     where
         T: AsRef<[u8]>,
     {
@@ -205,7 +259,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self._send_buffer(buffers[0].as_ref()).await?;
+        let connection = self._send_buffer(buffers[0].as_ref(), stats).await?;
 
         // Used to avoid dereferencing the Arc multiple times below
         // by just getting a reference to the NewConnection once
