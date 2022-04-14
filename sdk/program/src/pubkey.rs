@@ -53,8 +53,8 @@ impl From<u64> for PubkeyError {
 /// The address of a [Solana account][acc].
 ///
 /// Some account addresses are [ed25519] public keys, with corresponding secret
-/// keys that are managed off-chain. Often though account addresses do not have
-/// corresponding secret keys, as with [_program derived addresses_][pdas], or
+/// keys that are managed off-chain. Often, though, account addresses do not have
+/// corresponding secret keys &mdash; as with [_program derived addresses_][pdas] &mdash; or
 /// the secret key is not relevant to the operation of a program, and may have
 /// even been disposed of. As running Solana programs can not safely create or
 /// manage secret keys, the full [`Keypair`] is not defined in `solana-program`
