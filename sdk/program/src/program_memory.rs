@@ -58,7 +58,7 @@ pub fn sol_memcpy(dst: &mut [u8], src: &[u8], n: usize) {
 /// # Errors
 ///
 /// When executed within a BPF program, the memory regions spanning `n` bytes
-/// from from `dst` and `src` must be mapped program memory. If not the program
+/// from from `dst` and `src` must be mapped program memory. If not, the program
 /// will abort.
 ///
 /// # Safety
