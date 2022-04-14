@@ -13,6 +13,7 @@ use {
         find_packet_sender_stake_stage::FindPacketSenderStakeStage,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
+        staked_nodes_updater_service::StakedNodesUpdaterService,
     },
     crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
     solana_gossip::cluster_info::ClusterInfo,
@@ -28,7 +29,9 @@ use {
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::signature::Keypair,
+    solana_streamer::quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
     std::{
+        collections::HashMap,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
@@ -62,6 +65,7 @@ pub struct Tpu {
     tpu_quic_t: thread::JoinHandle<()>,
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
+    staked_nodes_updater_service: StakedNodesUpdaterService,
 }
 
 impl Tpu {
@@ -132,13 +136,23 @@ impl Tpu {
 
         let (verified_sender, verified_receiver) = unbounded();
 
-        let tpu_quic_t = solana_streamer::quic::spawn_server(
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes_updater_service = StakedNodesUpdaterService::new(
+            exit.clone(),
+            cluster_info.clone(),
+            bank_forks.clone(),
+            staked_nodes.clone(),
+        );
+        let tpu_quic_t = spawn_server(
             transactions_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
             packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
         )
         .unwrap();
 
@@ -208,6 +222,7 @@ impl Tpu {
             tpu_quic_t,
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
+            staked_nodes_updater_service,
         }
     }
 
@@ -236,6 +251,7 @@ impl Tpu {
             self.banking_stage.join(),
             self.find_packet_sender_stake_stage.join(),
             self.vote_find_packet_sender_stake_stage.join(),
+            self.staked_nodes_updater_service.join(),
         ];
         self.tpu_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();
