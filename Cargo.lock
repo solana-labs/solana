@@ -4673,6 +4673,7 @@ dependencies = [
  "jsonrpc-http-server",
  "lazy_static",
  "log",
+ "lru",
  "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
