@@ -135,7 +135,7 @@ pub fn sol_memcmp(s1: &[u8], s2: &[u8], n: usize) -> i32 {
 /// # Errors
 ///
 /// When executed within a BPF program, the memory region spanning `n` bytes
-/// from from the start of `s` must be mapped program memory. If not the program
+/// from from the start of `s` must be mapped program memory. If not, the program
 /// will abort.
 ///
 /// # Safety
