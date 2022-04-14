@@ -5,24 +5,19 @@ use {
     bincode::deserialize,
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
-        feature_set,
-        instruction::InstructionError,
-        keyed_account::keyed_account_at_index,
-        program_utils::limited_deserialize,
+        feature_set, instruction::InstructionError, program_utils::limited_deserialize,
         pubkey::Pubkey,
     },
     std::collections::BTreeSet,
 };
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let config_account_key =
@@ -152,7 +147,7 @@ mod tests {
         serde_derive::{Deserialize, Serialize},
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
-            account::AccountSharedData,
+            account::{AccountSharedData, ReadableAccount},
             instruction::AccountMeta,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
