@@ -27,6 +27,8 @@ pub fn process_instruction(
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let config_keyed_account =
         &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+    let config_account_key = *config_keyed_account.unsigned_key();
+    let is_config_account_signer = config_keyed_account.signer_key().is_some();
     let current_data: ConfigKeys = {
         let config_account = config_keyed_account.try_account_ref_mut()?;
         if config_account.owner() != &crate::id() {
@@ -42,17 +44,18 @@ pub fn process_instruction(
             InstructionError::InvalidAccountData
         })?
     };
+    drop(config_keyed_account);
+
     let current_signer_keys: Vec<Pubkey> = current_data
         .keys
         .iter()
         .filter(|(_, is_signer)| *is_signer)
         .map(|(pubkey, _)| *pubkey)
         .collect();
-
     if current_signer_keys.is_empty() {
         // Config account keypair must be a signer on account initialization,
         // or when no signers specified in Config data
-        if config_keyed_account.signer_key().is_none() {
+        if !is_config_account_signer {
             return Err(InstructionError::MissingRequiredSignature);
         }
     }
@@ -60,7 +63,7 @@ pub fn process_instruction(
     let mut counter = 0;
     for (signer, _) in key_list.keys.iter().filter(|(_, is_signer)| *is_signer) {
         counter += 1;
-        if signer != config_keyed_account.unsigned_key() {
+        if signer != &config_account_key {
             let signer_account =
                 keyed_account_at_index(keyed_accounts, counter + 1).map_err(|_| {
                     ic_msg!(
@@ -98,7 +101,7 @@ pub fn process_instruction(
                 );
                 return Err(InstructionError::MissingRequiredSignature);
             }
-        } else if config_keyed_account.signer_key().is_none() {
+        } else if !is_config_account_signer {
             ic_msg!(invoke_context, "account[0].signer_key().is_none()");
             return Err(InstructionError::MissingRequiredSignature);
         }
@@ -127,11 +130,12 @@ pub fn process_instruction(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
+    let config_keyed_account =
+        &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if config_keyed_account.data_len()? < data.len() {
         ic_msg!(invoke_context, "instruction data too large");
         return Err(InstructionError::InvalidInstructionData);
     }
-
     config_keyed_account
         .try_account_ref_mut()?
         .data_as_mut_slice()[..data.len()]
