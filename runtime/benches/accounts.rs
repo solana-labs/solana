@@ -21,7 +21,6 @@ use {
         hash::Hash,
         lamports::LamportsError,
         pubkey::Pubkey,
-        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         collections::{HashMap, HashSet},
