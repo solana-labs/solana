@@ -688,7 +688,7 @@ mod tests {
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails {
                     was_committed: true,
-                    executed_units: Some(tx_cost.execution_cost + execute_units_adjustment),
+                    executed_units: Some(tx_cost.bpf_execution_cost + execute_units_adjustment),
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
@@ -787,7 +787,9 @@ mod tests {
                     } else {
                         CommitTransactionDetails {
                             was_committed: true,
-                            executed_units: Some(tx_cost.execution_cost + execute_units_adjustment),
+                            executed_units: Some(
+                                tx_cost.bpf_execution_cost + execute_units_adjustment,
+                            ),
                         }
                     }
                 })
