@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-clap = "3.1.8"
+clap = { version = "3.1.8", features = ["derive"] }
 crossbeam-channel = "0.5"
 log = "0.4.14"
 rand = "0.7.0"
