@@ -133,15 +133,15 @@ impl<'a> AccountInfo<'a> {
             // Then set the new length in the local slice
             let ptr = &mut *(((self.data.as_ptr() as *const u64).offset(1) as u64) as *mut u64);
             *ptr = new_len as u64;
-        }
 
-        // zero-init if requested
-        if zero_init && new_len > orig_len {
-            sol_memset(
-                &mut self.try_borrow_mut_data()?[orig_len..],
-                0,
-                new_len.saturating_sub(orig_len),
-            );
+            // zero-init if requested
+            if zero_init && new_len > orig_len {
+                sol_memset(
+                    &mut self.try_borrow_mut_data()?[orig_len..],
+                    0,
+                    new_len.saturating_sub(orig_len),
+                );
+            }
         }
 
         Ok(())
