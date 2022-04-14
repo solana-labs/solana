@@ -298,8 +298,8 @@ impl MetricsAgent {
     fn send(&self, command: MetricsCommand) {
         error!("haha command queue size: {}", self.sender.len());
         match self.sender.try_send(command) {
-            Err(TrySendError::Full(_)) => {
-                warn!("metric queue full, point dropped.");
+            Err(TrySendError::Full(c)) => {
+                warn!("metric queue full, point dropped: {:?}.", c);
             }
             Err(TrySendError::Disconnected(_)) => {
                 warn!("metric queue disconnected.");
