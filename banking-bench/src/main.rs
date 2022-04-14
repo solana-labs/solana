@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    clap::{crate_description, crate_name, value_t, App, Arg},
+    clap::{crate_description, crate_name, Arg, Command},
     crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
@@ -109,55 +109,58 @@ fn bytes_as_usize(bytes: &[u8]) -> usize {
 fn main() {
     solana_logger::setup();
 
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("num_chunks")
+            Arg::new("num_chunks")
                 .long("num-chunks")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Number of transaction chunks."),
         )
         .arg(
-            Arg::with_name("packets_per_chunk")
+            Arg::new("packets_per_chunk")
                 .long("packets-per-chunk")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Packets per chunk"),
         )
         .arg(
-            Arg::with_name("skip_sanity")
+            Arg::new("skip_sanity")
                 .long("skip-sanity")
                 .takes_value(false)
                 .help("Skip transaction sanity execution"),
         )
         .arg(
-            Arg::with_name("same_payer")
+            Arg::new("same_payer")
                 .long("same-payer")
                 .takes_value(false)
                 .help("Use the same payer for transfers"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .help("Number of iterations"),
         )
         .arg(
-            Arg::with_name("num_threads")
+            Arg::new("num_threads")
                 .long("num-threads")
                 .takes_value(true)
                 .help("Number of iterations"),
         )
         .get_matches();
 
-    let num_threads =
-        value_t!(matches, "num_threads", usize).unwrap_or(BankingStage::num_threads() as usize);
+    let num_threads = matches
+        .value_of_t::<usize>("num_threads")
+        .unwrap_or(BankingStage::num_threads() as usize);
     //   a multiple of packet chunk duplicates to avoid races
-    let num_chunks = value_t!(matches, "num_chunks", usize).unwrap_or(16);
-    let packets_per_chunk = value_t!(matches, "packets_per_chunk", usize).unwrap_or(192);
-    let iterations = value_t!(matches, "iterations", usize).unwrap_or(1000);
+    let num_chunks = matches.value_of_t::<usize>("num_chunks").unwrap_or(16);
+    let packets_per_chunk = matches
+        .value_of_t::<usize>("packets_per_chunk")
+        .unwrap_or(192);
+    let iterations = matches.value_of_t::<usize>("iterations").unwrap_or(1000);
 
     let total_num_transactions = num_chunks * num_threads * packets_per_chunk;
     let mint_total = 1_000_000_000_000;
