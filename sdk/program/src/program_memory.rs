@@ -18,7 +18,7 @@
 /// the program will abort.
 ///
 /// The memory regions spanning `n` bytes from `dst` and `src` from the start
-/// of`dst` and `src` must not overlap. If they do then the program will abort
+/// of `dst` and `src` must not overlap. If they do, then the program will abort
 /// or, if run outside of the BPF VM, will panic.
 ///
 /// # Safety
