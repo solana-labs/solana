@@ -10242,7 +10242,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &RentCollector::default()),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
