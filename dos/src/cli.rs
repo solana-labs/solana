@@ -56,7 +56,11 @@ pub struct TransactionParams {
     )]
     pub num_signatures: usize,
 
-    #[clap(long, help = "Generate a valid blockhash for transaction")]
+    #[clap(
+        long,
+        requires("transaction-type"),
+        help = "Generate a valid blockhash for transaction"
+    )]
     pub valid_blockhash: bool,
 
     #[clap(long, help = "Generate valid signature(s) for transaction")]
@@ -64,6 +68,14 @@ pub struct TransactionParams {
 
     #[clap(long, help = "Generate unique transactions")]
     pub unique_transactions: bool,
+
+    #[clap(
+        long,
+        arg_enum,
+        requires("valid-blockhash"),
+        help = "Type of transaction to be sent [Optional]"
+    )]
+    pub transaction_type: Option<TransactionType>,
 }
 
 #[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
@@ -89,10 +101,17 @@ pub enum DataType {
     Transaction,
 }
 
+#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone)]
+pub enum TransactionType {
+    SingleTransfer,
+    MultiTransfer,
+    AccountCreation,
+}
+
 fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
     match solana_net_utils::parse_host_port(addr) {
         Ok(v) => Ok(v),
-        Err(_) => Err("failed to parse entrypoint address"),
+        Err(_) => Err("failed to parse address"),
     }
 }
 
