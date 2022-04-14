@@ -12,10 +12,10 @@ pub enum SanitizeError {
     InvalidValue,
 }
 
-/// A trait for sanitizing values and members of over the wire messages.
+/// A trait for sanitizing values and members of over-the-wire messages.
 ///
-/// Implementation should recursively decent through the data structure and
-/// sanitize all struct members and enum clauses. Sanitize excludes signature
+/// Implementation should recursively descend through the data structure and
+/// sanitize all struct members and enum clauses. Sanitize excludes signature-
 /// verification checks, those are handled by another pass. Sanitize checks
 /// should include but are not limited to:
 ///
