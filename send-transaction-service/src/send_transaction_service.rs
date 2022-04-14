@@ -249,9 +249,10 @@ impl SendTransactionService {
                                 datapoint_warn!("send_transaction_service-queue-overflow");
                                 break;
                             }
-                        } else {
-                            transaction_info.last_sent_time = Some(last_sent_time);
-                            entry.or_insert(transaction_info);
+                            else {
+                                transaction_info.last_sent_time = Some(last_sent_time);
+                                entry.or_insert(transaction_info);
+                            }
                         }
                     }
                     drop(retry_transactions);
