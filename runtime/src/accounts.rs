@@ -1156,13 +1156,6 @@ impl Accounts {
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
 
-    /// Purge a slot if it is not a root
-    /// Root slots cannot be purged
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
-    }
-
     /// Add a slot to root.  Root slots cannot be purged
     pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
         self.accounts_db.add_root(slot)
