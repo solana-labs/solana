@@ -399,7 +399,7 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn new_num_threads(
+    pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
